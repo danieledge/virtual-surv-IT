@@ -1,0 +1,10 @@
+[project]
+name = "compliance-surveillance"
+version = "0.1.0"
+description = "Reference detection scenarios for the compliance surveillance virtual team"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

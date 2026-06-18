@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(python -m scripts.gen_synthetic:*)",
+      "Bash(python3 -m scripts.gen_synthetic:*)",
+      "Bash(pre-commit run:*)"
+    ]
+  }
+}

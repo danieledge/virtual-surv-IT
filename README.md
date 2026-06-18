@@ -43,6 +43,33 @@ Parallel (optional, experimental, token-heavy): enable agent teams by adding
 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` to your settings.json, then ask Claude to
 spawn a team with a lead.
 
+## Worked example & repo layout
+
+A complete reference scenario ships with the repo so the conventions are concrete:
+
+```
+rules/spoofing.py            # MAR spoofing detection (deterministic, explainable)
+scripts/gen_synthetic.py     # synthetic order-flow generator (§5 — no real data)
+tests/test_spoofing.py       # true-positive + false-positive cases (§4)
+docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
+docs/templates/              # scenario spec, scenario doc, model-validation report
+.claude/commands/new-scenario.md   # /new-scenario — runs the spec→SME→build→review chain
+.github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
+.pre-commit-config.yaml      # local secret / raw-data guardrails
+```
+
+Quickstart:
+
+```bash
+pip install -r requirements-dev.txt
+pytest                                   # 5 passing tests
+python -m scripts.gen_synthetic --kind spoofing --out data/synthetic/spoofing.jsonl
+pre-commit install                       # optional: enable local guardrails
+```
+
+Add a new detection with `/new-scenario <requirement>`, which chains
+requirements-analyst → SME → rules-developer → compliance-reviewer per the handbook.
+
 ## Notes on the config
 
 - Advisory agents are restricted to read-only tools (`Read, Grep, Glob`, sometimes `Bash`)

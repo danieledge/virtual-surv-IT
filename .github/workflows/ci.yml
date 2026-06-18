@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests (detection logic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  no-raw-data:
+    name: No raw data committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if raw data files are present (CLAUDE.md §5)
+        run: |
+          if git ls-files '*.csv' '*.parquet' '*.pcap' | grep -q .; then
+            echo "::error::Raw data files committed. Use synthetic data only (CLAUDE.md §5)."
+            git ls-files '*.csv' '*.parquet' '*.pcap'
+            exit 1
+          fi
+          echo "OK — no raw data files tracked."

@@ -1,0 +1,24 @@
+# Local guardrails enforcing CLAUDE.md §5 (no secrets / no raw data in the repo).
+# Install once:  pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: block-raw-data
+        name: block raw market/comms data files (use synthetic data — CLAUDE.md §5)
+        entry: "Raw data files must not be committed. Generate synthetic data with scripts/gen_synthetic.py."
+        language: fail
+        files: '\.(csv|parquet|pcap)$'
