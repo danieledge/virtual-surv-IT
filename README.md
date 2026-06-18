@@ -1,7 +1,27 @@
-# Compliance Surveillance Virtual Team — Install
+# Compliance Surveillance Virtual Team
 
-A Claude Code subagent set mirroring a compliance development team across transaction
-monitoring, trade surveillance and communications surveillance.
+A **virtual compliance team made of AI assistants** — for catching money laundering, market
+manipulation and trader misconduct. It runs in [Claude Code](https://claude.com/claude-code)
+as a set of 10 focused "subagents": some are subject-matter experts who only advise, others
+write and test the detection code, and the work flows between them like a real team.
+
+> 🟢 **New to AI agents and LLMs? Read [`docs/OVERVIEW.md`](docs/OVERVIEW.md) first** — a
+> plain-English tour of what this is, who the team are, and how it keeps confidential data
+> away from the AI. No prior knowledge needed.
+
+```mermaid
+flowchart LR
+    You([You: describe the need]) --> RA[requirements-analyst]
+    RA --> SME{domain expert<br/>reviews}
+    SME --> Dev[rules-developer<br/>builds + tests]
+    Dev --> Rev[compliance-reviewer<br/>signs off]
+    Rev --> Done([approved detection ✅])
+```
+
+**The safety rule in one line:** real data is never shown to the AI — it's either *masked*
+(identities scrambled, behaviour kept) or fully *synthetic* (made up), and an automatic
+guard blocks any agent from reading raw records. See
+[How real data is handled](#handling-real-data-masking-pipeline).
 
 ## Layout
 
@@ -90,6 +110,10 @@ real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ �
 - **`scripts/validate_masking.py`** — gate that proves a config is safe *and* useful: no
   residual identifiers/PII, k-anonymity over quasi-identifiers, **and** the spoofing rule
   fires identically on masked vs. original data (fidelity).
+- **`scripts/synthesise.py`** — the safest tier: learns the *shape* of masked data
+  (size/timing distributions + the spoofing motif at its observed rate) and emits fully
+  **synthetic** sessions that share no real entity, timestamp or row. This is what's safe
+  to put in front of an agent or to share outside the environment.
 - **`.claude/hooks/guard-raw-data.py`** — PreToolUse hook (wired in `.claude/settings.json`)
   that blocks any agent `Read`/`Bash` touching `data/raw/`.
 
