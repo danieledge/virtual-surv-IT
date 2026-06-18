@@ -70,6 +70,38 @@ pre-commit install                       # optional: enable local guardrails
 Add a new detection with `/new-scenario <requirement>`, which chains
 requirements-analyst → SME → rules-developer → compliance-reviewer per the handbook.
 
+## Handling real data (masking pipeline)
+
+Agents must never see raw records — anything an agent reads goes to the model provider as
+prompt context. So real data only enters through a masking pipeline, and agents sit
+downstream of it:
+
+```
+real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ ─▶ agents / dev
+        (agent-blocked)   schema-driven masking        (governed)
+                                  │
+                                  └─ fit a synthetic generator for anything that leaves the env
+```
+
+- **`scripts/ingest.py`** — schema-driven masking (`config/masking-schema.yaml`). Each field
+  has a role: `token` (keyed HMAC, preserves linkage), `shift` (per-entity time shift,
+  preserves deltas), `keep` (signal-bearing values), `generalise`, `redact` (free text).
+  Key from `MASKING_KEY` in `~/.secrets` — no insecure default.
+- **`scripts/validate_masking.py`** — gate that proves a config is safe *and* useful: no
+  residual identifiers/PII, k-anonymity over quasi-identifiers, **and** the spoofing rule
+  fires identically on masked vs. original data (fidelity).
+- **`.claude/hooks/guard-raw-data.py`** — PreToolUse hook (wired in `.claude/settings.json`)
+  that blocks any agent `Read`/`Bash` touching `data/raw/`.
+
+```bash
+export MASKING_KEY=...                                   # from ~/.secrets
+python -m scripts.ingest --in data/raw/x.jsonl --out data/masked/x.jsonl
+python -m scripts.validate_masking                       # exit 0 = safe + faithful
+```
+
+> Pseudonymised data is still personal data (GDPR). Masking enables local development;
+> prefer fully synthetic data for anything that leaves the environment.
+
 ## Notes on the config
 
 - Advisory agents are restricted to read-only tools (`Read, Grep, Glob`, sometimes `Bash`)

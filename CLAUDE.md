@@ -64,6 +64,22 @@ surveillance setup. Edit any line to match your environment.
 - Use synthetic or masked data for examples and tests.
 - Never write secrets, credentials or connection strings into the repo.
 
+**Real data must never reach an agent.** Anything an agent reads is sent to the model
+provider as prompt context, so the team is structured to sit *downstream* of masking:
+
+- Raw data, if it exists at all, lives under `data/raw/` and is **off-limits to agents** —
+  the `data/raw/` read-guard hook (`.claude/hooks/guard-raw-data.py`) blocks it.
+- The **only** sanctioned path in is `python -m scripts.ingest` (config in
+  `config/masking-schema.yaml`): it destroys the identity layer (tokenise IDs, shift
+  timestamps, redact free text) while preserving the behavioural signal detection needs.
+  The HMAC key comes from `MASKING_KEY` in `~/.secrets` — there is no insecure default.
+- Validate every masking config with `python -m scripts.validate_masking`: it must show
+  no residual identifiers/PII **and** identical detection results on masked vs. original.
+- **Pseudonymised ≠ anonymous.** Masked output is still personal data (GDPR) — keep it
+  governed. For anything leaving the environment, prefer fully **synthetic** data.
+- If asked to analyse real data, **stop** and require it be passed through `scripts/ingest.py`
+  (or replaced with synthetic data) first.
+
 ## 6. How the virtual team works
 
 - **Advisory agents** (`*-sme`, `model-validator`, `compliance-reviewer`) are read-only.

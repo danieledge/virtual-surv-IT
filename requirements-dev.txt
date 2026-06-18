@@ -1,3 +1,5 @@
-# Development tooling only — the detection rules themselves use the Python standard library.
+# Development & pipeline tooling. The detection rules (rules/) use only the standard
+# library; the masking ingest reads its schema with pyyaml.
 pytest>=8.0
 pre-commit>=3.7
+PyYAML>=6.0

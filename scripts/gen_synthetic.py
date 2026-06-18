@@ -126,20 +126,36 @@ _KINDS = {
 }
 
 
+def event_to_record(e: OrderEvent) -> dict:
+    """Serialise an event to a plain dict (the on-the-wire / file schema)."""
+    return {
+        "ts_ms": e.ts_ms,
+        "trader": e.trader,
+        "instrument": e.instrument,
+        "order_id": e.order_id,
+        "side": e.side.value,
+        "price": e.price,
+        "qty": e.qty,
+        "kind": e.kind.value,
+    }
+
+
+def record_to_event(d: dict) -> OrderEvent:
+    """Parse a record dict back into an OrderEvent (side/kind kept as strings by masking)."""
+    return OrderEvent(
+        ts_ms=int(d["ts_ms"]),
+        trader=d["trader"],
+        instrument=d["instrument"],
+        order_id=d["order_id"],
+        side=Side(d["side"]),
+        price=float(d["price"]),
+        qty=float(d["qty"]),
+        kind=EventKind(d["kind"]),
+    )
+
+
 def _to_jsonl(events: list[OrderEvent]) -> str:
-    rows = [
-        {
-            "ts_ms": e.ts_ms,
-            "trader": e.trader,
-            "instrument": e.instrument,
-            "order_id": e.order_id,
-            "side": e.side.value,
-            "price": e.price,
-            "qty": e.qty,
-            "kind": e.kind.value,
-        }
-        for e in sorted(events, key=lambda x: x.ts_ms)
-    ]
+    rows = [event_to_record(e) for e in sorted(events, key=lambda x: x.ts_ms)]
     return "\n".join(json.dumps(r) for r in rows) + "\n"
 
 

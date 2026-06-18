@@ -6,7 +6,23 @@
       "Bash(python3 -m pytest:*)",
       "Bash(python -m scripts.gen_synthetic:*)",
       "Bash(python3 -m scripts.gen_synthetic:*)",
+      "Bash(python -m scripts.ingest:*)",
+      "Bash(python -m scripts.validate_masking:*)",
+      "Bash(python3 -m scripts.validate_masking:*)",
       "Bash(pre-commit run:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-raw-data.py\""
+          }
+        ]
+      }
     ]
   }
 }

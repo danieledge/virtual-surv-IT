@@ -1,0 +1,35 @@
+# Masking policy for trade-surveillance order events (the spoofing scenario schema).
+# Each field maps to a masking ROLE; see scripts/ingest.py for role semantics.
+#
+# Principle: destroy the IDENTITY layer, preserve the BEHAVIOUR layer.
+#   identifiers / links   -> token   (referential integrity preserved across records)
+#   timestamps            -> shift   (intra-trader deltas preserved exactly)
+#   signal-bearing values -> keep    (price/qty/side drive detection — must not change)
+
+on_unknown: drop            # any field not listed below is dropped (safe default)
+
+k_anonymity: 5              # minimum group size for quasi-identifier combinations
+quasi_identifiers: []       # none here (price/qty are signal, not quasi-identifiers)
+
+fields:
+  ts_ms:
+    role: shift
+    entity: trader          # all of a trader's events shift by one constant offset
+    max_shift_ms: 2592000000  # +/- 30 days: breaks absolute dates, preserves deltas
+  trader:
+    role: token
+    domain: party           # a logical party tokenises consistently across datasets
+  order_id:
+    role: token
+    domain: order
+  instrument:
+    role: token
+    domain: instrument
+  side:
+    role: keep              # signal
+  price:
+    role: keep              # signal — never perturb (marking/structuring logic needs it)
+  qty:
+    role: keep              # signal
+  kind:
+    role: keep              # lifecycle event type (NEW/CANCEL/FILL)

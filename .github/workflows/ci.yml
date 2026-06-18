@@ -16,6 +16,8 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements-dev.txt
       - run: pytest
+      - name: Validate masking (safety + detection fidelity)
+        run: python -m scripts.validate_masking
 
   secret-scan:
     name: Secret scan
