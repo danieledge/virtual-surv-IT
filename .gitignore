@@ -1,0 +1,24 @@
+# Secrets — never commit (see CLAUDE.md §5 and host secrets standard)
+.env
+.env.*
+*.secret
+*.pem
+*.key
+secrets/
+
+# Agent project memory — accumulates house typologies/tuning, treat as sensitive
+.claude/agent-memory/
+
+# Synthetic/scratch data — keep raw transaction/trade/comms data out of the repo
+data/
+*.csv
+*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
