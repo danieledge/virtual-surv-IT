@@ -1,9 +1,11 @@
-# Compliance Surveillance Virtual Team
+# Compliance Surveillance Engineering — Virtual Team
 
-A **virtual compliance team made of AI assistants** — for catching money laundering, market
-manipulation and trader misconduct. It runs in [Claude Code](https://claude.com/claude-code)
-as a set of 10 focused "subagents": some are subject-matter experts who only advise, others
-write and test the detection code, and the work flows between them like a real team.
+A **virtual compliance surveillance *engineering* team made of AI assistants** — it doesn't
+*do* compliance, it **builds the surveillance solutions and technology** that detect money
+laundering, market manipulation and trader misconduct. It runs in
+[Claude Code](https://claude.com/claude-code) as a set of 10 focused "subagents": some are
+subject-matter experts who only advise, others engineer and test the detection systems, and
+the work flows between them like a real engineering team.
 
 > 🟢 **New to AI agents and LLMs? Read [`docs/OVERVIEW.md`](docs/OVERVIEW.md) first** — a
 > plain-English tour of what this is, who the team are, and how it keeps confidential data
@@ -39,6 +41,44 @@ CLAUDE.md                     # shared team handbook (example defaults — custo
   cloud-architect.md          # cloud         (advisory + light build)
   compliance-reviewer.md      # review/QA     (advisory, read-only)
 ```
+
+## Meet the agents
+
+Ten specialists, each defined by a short job description in `.claude/agents/`. They split
+into **🧠 advisors** (read-only — they review and recommend but cannot change code, which
+keeps them independent) and **🔧 builders** (they engineer and test the detection systems).
+
+### 🔧 Builders — they engineer the surveillance technology
+
+- **`requirements-analyst`** — turns a regulatory or business need into a clear,
+  implementable spec (user stories, acceptance criteria, true/false-positive cases) before
+  any code is written.
+- **`rules-developer`** — implements and refactors deterministic detection rules and
+  scenario logic for transaction monitoring and trade surveillance, from a validated spec.
+- **`data-analyst`** — tunes the detections: false-positive analysis, threshold calibration,
+  coverage testing, and evidencing the volume/coverage trade-off to a regulator.
+- **`ml-engineer`** — builds ML/AI-based detection where rules aren't enough (anomaly
+  detection, NLP for comms, behavioural scoring, alert triage).
+- **`cloud-architect`** — designs the pipelines and infrastructure the detection runs on
+  (ingestion, streaming/batch, retention/immutability, data residency, resilience).
+
+### 🧠 Advisors — they guide and sign off (read-only)
+
+- **`tm-sme`** — transaction-monitoring / AML expert: detection scenarios, typologies,
+  thresholds, segmentation, SAR/STR rationale.
+- **`trade-surveillance-sme`** — market-abuse expert: spoofing, layering, wash trades,
+  marking the close, insider dealing, front running.
+- **`comms-surveillance-sme`** — communications-surveillance expert: lexicons, NLP risk
+  policies, e-comms and voice monitoring mapped to conduct risk.
+- **`model-validator`** — **independent** validation of any statistical/ML model
+  (soundness, performance, bias, stability, explainability). Independent of `ml-engineer`
+  by design, so it's free to challenge.
+- **`compliance-reviewer`** — final QA after any change: auditability, the
+  alert→logic→obligation trace, secrets/PII, and test coverage.
+
+> Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
+> real independent check. The restriction is enforced by the tools each agent is granted —
+> advisors get `Read, Grep, Glob` only — not by convention.
 
 ## Install
 

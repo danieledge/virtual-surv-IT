@@ -8,14 +8,18 @@ why real data never reaches the AI.
 
 ## 1. The 30-second version
 
-Imagine a small **compliance team** at a bank — the people whose job is to spot money
-laundering, market manipulation and dodgy trader chat. Now imagine that team is made of
-**AI assistants** instead of people: one writes the requirements, a couple are subject
-experts who review the plan, one writes the actual detection code, and one signs it off.
+At a bank there's a team of **engineers who build the systems** that spot money laundering,
+market manipulation and dodgy trader chat. Note the word *build* — these aren't the
+compliance officers who investigate alerts; they're the people who **design, write and test
+the detection technology** those officers rely on.
 
-This repository is the **setup for that virtual team** — the job descriptions, the rules
-they follow, a worked example, and the safety rails that stop confidential data ever
-reaching the AI.
+Now imagine that engineering team is made of **AI assistants** instead of people: one writes
+the requirements, a couple are subject experts who review the plan, one writes the actual
+detection code, one tunes it, and one signs it off.
+
+This repository is the **setup for that virtual engineering team** — the job descriptions,
+the rules they follow, a worked example of a detection they'd build, and the safety rails
+that stop confidential data ever reaching the AI.
 
 ---
 
