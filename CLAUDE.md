@@ -4,7 +4,9 @@ This file is shared context for every agent in this repository. Claude Code load
 into the main session and into every custom subagent at startup. Keep it current — it is
 the single source of truth that keeps the virtual team aligned.
 
-> ⚠️ Edit the `TODO` markers below to match your actual stack, jurisdictions and platforms.
+> ℹ️ Sections 2 and 3 ship with **example defaults** so the team works out of the box.
+> They are illustrative, not prescriptive — replace them with your real jurisdictions,
+> stack and platforms whenever you have them.
 
 ---
 
@@ -20,7 +22,8 @@ We build and maintain detection and surveillance capability across three domains
 
 ## 2. Regulatory scope
 
-Trim this to the jurisdictions you actually operate in.
+_Example scope_ — the obligations below are common starting points. Trim to the
+jurisdictions you actually operate in (and add any others).
 
 - **US:** BSA / FinCEN (AML), SEC & FINRA rules, Dodd-Frank, CFTC, SEC Rule 17a-4 / FINRA
   4511 (recordkeeping & retention).
@@ -31,13 +34,20 @@ Trim this to the jurisdictions you actually operate in.
 
 When designing or reviewing any detection logic, cite the specific obligation it serves.
 
-## 3. Tech stack  <!-- TODO: replace with your real stack -->
+## 3. Tech stack  <!-- Example defaults — replace with your real stack -->
 
-- Languages: Python (rules + ML), SQL (analytics). TODO: others (Scala/Java)?
-- Data: TODO streaming (e.g. Kafka), TODO batch/warehouse (e.g. Spark, Snowflake/BigQuery).
-- Surveillance platform: TODO (e.g. NICE Actimize / Nasdaq / Behavox / in-house).
-- Cloud: TODO (AWS / Azure / GCP). Examples in agents are cloud-agnostic.
-- Orchestration / CI: TODO.
+Until you customise it, the team assumes this **example stack** — a common, cloud-agnostic
+surveillance setup. Edit any line to match your environment.
+
+- Languages: Python (rules + ML), SQL (analytics). _Example:_ add Scala/Java if your
+  streaming jobs use them.
+- Data: _Example:_ Kafka for streaming ingestion, Spark for batch, a columnar warehouse
+  (Snowflake / BigQuery / Redshift) for analytics.
+- Surveillance platform: _Example:_ in-house detection on the above, interoperable with
+  vendor platforms (NICE Actimize / Nasdaq / Behavox) where present.
+- Cloud: _Example:_ cloud-agnostic — agents keep designs portable across AWS / Azure / GCP.
+- Orchestration / CI: _Example:_ Airflow (or similar) for pipelines; Git-based CI with
+  tests gating any change to detection logic.
 
 ## 4. Engineering conventions
 

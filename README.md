@@ -6,7 +6,7 @@ monitoring, trade surveillance and communications surveillance.
 ## Layout
 
 ```
-CLAUDE.md                     # shared team handbook (edit the TODOs)
+CLAUDE.md                     # shared team handbook (example defaults — customise as needed)
 .claude/agents/               # 10 subagents
   requirements-analyst.md     # BA            (build)
   tm-sme.md                   # AML SME       (advisory, read-only)
@@ -25,7 +25,8 @@ CLAUDE.md                     # shared team handbook (edit the TODOs)
 1. Copy `CLAUDE.md` to your repo root (merge if you already have one).
 2. Copy the `.claude/agents/` folder into your repo. Commit both so the whole team shares them.
 3. Restart Claude Code (subagents load at session start), then run `/agents` to confirm they appear.
-4. Edit the `TODO` markers in `CLAUDE.md` and in `cloud-architect.md` / `data-analyst.md`.
+4. (Optional) `CLAUDE.md` §2/§3 ship with example defaults so the team works immediately.
+   Replace the example jurisdictions and stack with your own when you have them.
 
 ## Using them
 
