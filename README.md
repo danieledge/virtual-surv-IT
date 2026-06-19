@@ -25,6 +25,42 @@ flowchart LR
 guard blocks any agent from reading raw records. See
 [How real data is handled](#handling-real-data-masking-pipeline).
 
+## Quick start — using the team
+
+```bash
+# 1. Get it into your project (new project, or merge into an existing repo)
+git clone https://github.com/danieledge/virtual-surv-IT.git
+cd virtual-surv-IT
+pip install -r requirements-dev.txt      # pytest, plus Markdown for .md→.html artifacts
+
+# 2. Open in Claude Code (the 11 agents + slash commands load on start)
+claude
+```
+
+Then just **talk to the PM** — describe whatever you've got:
+
+```
+/engage I need to detect wash trades in our equities flow
+/engage here's a PowerShell script, review it and tell me if it'd survive an audit
+/engage build this from the attached FSD
+```
+
+The PM (the main session) then:
+1. **Asks you clarifying questions** and waits for your answers — it won't guess scope,
+   jurisdiction, data or success criteria.
+2. **Offers a menu of deliverables** to pick from (BRD, FSD, ADRs, RTM, review report,
+   audit pack…).
+3. **Agrees a plan** with you (the Engagement Brief), then **runs the right specialists**.
+4. **Hands back deliverables in both `.md` and `.html`** under `artifacts/`.
+
+Prefer to drive a specific step yourself? Use the focused commands:
+`/write-brd` · `/brd-to-fsd` · `/deep-review` · `/audit-review` · `/build-solution` ·
+`/new-scenario` (see [Using them](#using-them)).
+
+> Don't have Claude Code yet? Install it from <https://claude.com/claude-code>, then run
+> `claude` inside this folder. New to agents/LLMs? Read
+> [`docs/OVERVIEW.md`](docs/OVERVIEW.md) first.
+
 ## Layout
 
 ```
