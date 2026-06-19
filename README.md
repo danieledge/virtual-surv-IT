@@ -1,5 +1,10 @@
 # Compliance Surveillance Engineering — Virtual Team
 
+> ⚗️ **Proof of concept / experiment.** This is an exploratory POC for what an AI
+> "engineering team" could do inside Claude Code — not a production system or regulatory
+> tooling. Treat its outputs as a starting point for real engineers and reviewers, not as
+> assured or accredited work.
+
 A **virtual compliance surveillance *engineering* team made of AI assistants** — it doesn't
 *do* compliance, it **builds the surveillance solutions and technology** behind detecting
 money laundering, market manipulation and trader misconduct. Detection rules are just one
@@ -16,11 +21,12 @@ the work flows between them like a real engineering team.
 
 ```mermaid
 flowchart LR
-    You([You: describe the need]) --> RA[requirements-analyst]
-    RA --> SME{domain expert<br/>reviews}
-    SME --> Dev[rules-developer<br/>builds + tests]
-    Dev --> Rev[compliance-reviewer<br/>signs off]
-    Rev --> Done([approved detection ✅])
+    You([You: a problem,<br/>a review, or a build]) --> PM[PM<br/>clarify + plan]
+    PM --> RA[requirements-analyst<br/>spec]
+    RA --> Build[right builder<br/>rule · pipeline · script · ML]
+    Build --> QA[qa-engineer<br/>independent tests]
+    QA --> Rev[review<br/>code · performance · compliance]
+    Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
 ```
 
 **The safety rule in one line:** real data is never shown to the AI — it's either *masked*
@@ -272,8 +278,10 @@ python -m scripts.validate_masking                       # exit 0 = safe + faith
 - Advisory agents are restricted to read-only tools (`Read, Grep, Glob`, sometimes `Bash`)
   so they physically cannot alter detection logic.
 - Build agents have write access (`Read, Write, Edit, Bash, Grep, Glob`).
-- SMEs and reviewers use `memory: project` to accumulate house typologies and tuning
-  decisions across sessions (stored under `.claude/agent-memory/`).
+- Accumulated knowledge (house typologies, tuning decisions, recurring findings) lives in a
+  committed file, [`docs/house-rules.md`](docs/house-rules.md) — advisory agents recommend
+  additions and the PM commits them. (Claude Code subagents have no per-agent memory; a
+  committed file is the real, auditable mechanism.)
 - Models: deep-reasoning roles use `opus`, build/analysis roles use `sonnet`. Change the
   `model:` field freely.
 

@@ -1,5 +1,13 @@
 {
   "permissions": {
+    "deny": [
+      "Read(./data/raw/**)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)"
+    ],
     "allow": [
       "Bash(pytest:*)",
       "Bash(python -m pytest:*)",

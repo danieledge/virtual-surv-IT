@@ -7,7 +7,6 @@ description: >
   standard profilers/benchmarks; advises only, with evidence. Read-only.
 tools: Read, Grep, Glob, Bash
 model: opus
-memory: project
 ---
 
 You are a performance and scalability reviewer for a regulated surveillance engineering
@@ -48,4 +47,4 @@ When invoked:
 
 Output: use `docs/templates/performance-report.md` — workload & targets, findings with
 evidence and severity, before/after if a fix was profiled, and a verdict (will it scale?).
-Record recurring hotspots in project memory.
+Recommend recurring hotspots for `docs/house-rules.md`.

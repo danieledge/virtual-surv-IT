@@ -6,9 +6,6 @@
 *.key
 secrets/
 
-# Agent project memory — accumulates house typologies/tuning, treat as sensitive
-.claude/agent-memory/
-
 # Synthetic/scratch data — keep raw transaction/trade/comms data out of the repo
 data/
 *.csv

@@ -4,6 +4,10 @@ New to AI agents and LLMs? Start here. No prior knowledge assumed. By the end yo
 understand what this project *is*, who the "team" are, how a job flows through them, and
 why real data never reaches the AI.
 
+> ⚗️ **This is a proof of concept / experiment** — an exploration of what an AI engineering
+> team could do in Claude Code, not a production or accredited system. Its outputs are a
+> starting point for real engineers and reviewers, not a replacement for them.
+
 ---
 
 ## 1. The 30-second version
@@ -83,26 +87,29 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 
 ## 4. How a job flows through the team
 
-You describe what you want. A coordinator (you, or the main AI session acting as a
-project manager) routes it through the right specialists in order:
+You describe what you want — a problem, some code to review, or a build. The **PM** (the
+main AI session, acting as project manager) clarifies, agrees a plan, then routes it through
+the right specialists. The builder depends on the deliverable — a detection rule, a data
+pipeline, a transformation script, an ML model — not always the same person:
 
 ```mermaid
 flowchart TD
-    You([You describe the need]) --> RA[requirements-analyst<br/>writes a clear spec]
-    RA --> SME{Domain expert<br/>reviews the idea}
-    SME --> Dev[rules-developer<br/>writes code + tests]
-    Dev --> Rev[compliance-reviewer<br/>checks it's safe & auditable]
-    Rev --> Done([Approved detection ✅])
-    SME -. can send back .-> RA
-    Rev -. can send back .-> Dev
+    You([You: a problem,<br/>a review, or a build]) --> PM[PM<br/>clarifies + plans]
+    PM --> RA[requirements-analyst<br/>writes a clear spec]
+    RA --> Build[the right builder<br/>rule · pipeline · script · ML]
+    Build --> QA[qa-engineer<br/>independent tests + evidence]
+    QA --> Rev[reviewers<br/>code · performance · compliance]
+    Rev --> Done([Approved delivery ✅<br/>+ handover pack])
+    RA -. can send back .-> PM
+    Rev -. can send back .-> Build
 ```
 
-In this repo there's even a shortcut command, `/new-scenario`, that runs this whole chain
-for you.
+In this repo there are shortcut commands that run these chains for you — `/engage` (the
+front door), and focused ones like `/build-solution`, `/audit-review` and `/new-scenario`.
 
-The golden rule the team follows: **every alert must be explainable**. You can always
-trace *this alert* → *to the exact logic that produced it* → *to the specific regulation
-it enforces*. No black boxes.
+The golden rule the team follows: **everything must be explainable and traceable**. For a
+detection, you can trace *this alert* → *the exact logic* → *the specific regulation*. For
+any delivery, requirement → code → test → obligation. No black boxes.
 
 ---
 
