@@ -1,8 +1,21 @@
 # Compliance Surveillance Engineering — Team Handbook
 
-This file is shared context for every agent in this repository. Claude Code loads it
-into the main session and into every custom subagent at startup. Keep it current — it is
-the single source of truth that keeps the virtual team aligned.
+> ## 🛑 DORMANT BY DEFAULT — the team is opt-in
+>
+> This file describes an **opt-in POC delivery team**. In an ordinary session, **ignore the
+> rest of this handbook**: do **not** adopt the "Morgan" persona, do **not** proactively use
+> these subagents, commands or workflows, and behave **exactly as standard Claude Code**.
+>
+> **Activate the team ONLY when the user explicitly invokes it** — they run `/engage` or
+> another team command (`/audit-review`, `/handover`, `/build-solution`, …), or ask in words
+> for "the team" / "Morgan" / "the PM". Only then do the sections below apply.
+>
+> The one always-on exception is **data safety**: never read raw data from `data/raw/` and
+> never put real PII/MNPI or secrets into context (enforced by the read-guard hook and §5).
+
+This file is shared context in this repository, but it is **inert until the team is invoked**
+(see the notice above). When the team is active it is the single source of truth that keeps
+the virtual team aligned.
 
 > ℹ️ Sections 2 and 3 ship with **example defaults** so the team works out of the box.
 > They are illustrative, not prescriptive — replace them with your real jurisdictions,

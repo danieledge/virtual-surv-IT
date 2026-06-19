@@ -1,7 +1,7 @@
 ---
 name: requirements-analyst
 description: >
-  Use proactively to turn a regulatory or business need into a clear,
+  When the team is engaged, use to turn a regulatory or business need into a clear,
   implementable specification — user stories, acceptance criteria, data and
   detection requirements — before development starts.
 tools: Read, Write, Edit, Grep, Glob

@@ -4,6 +4,11 @@
 > "engineering team" could do inside Claude Code — not a production system or regulatory
 > tooling. Treat its outputs as a starting point for real engineers and reviewers, not as
 > assured or accredited work.
+>
+> 🛑 **Dormant by default.** The team is **opt-in** — it does not take over your sessions.
+> A normal `claude` session behaves like standard Claude Code; the team, the agents and the
+> "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
+> for the team). The one always-on piece is the data-safety guard.
 
 A **virtual compliance surveillance *engineering* team made of AI assistants** — it doesn't
 *do* compliance, it **builds the surveillance solutions and technology** behind detecting

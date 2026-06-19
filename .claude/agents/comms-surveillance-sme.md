@@ -1,7 +1,7 @@
 ---
 name: comms-surveillance-sme
 description: >
-  MUST BE USED for communications surveillance — lexicon design, NLP/risk-flag
+  When the team is engaged, use for communications surveillance — lexicon design, NLP/risk-flag
   policies, e-comms and voice monitoring, and mapping comms signals to conduct
   risks. Advises only; never edits code.
 tools: Read, Grep, Glob
