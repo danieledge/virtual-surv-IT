@@ -195,14 +195,12 @@ QA'd, code- and performance-reviewed, compliance-reviewed, documented for handov
 
 ## 8. Ways of working & artifacts
 
-- **Frameworks (don't reinvent the wheel):** BABOK + **EARS** for requirements, ISO/IEC/IEEE
-  29148 + **Gherkin** for specs, ADRs + C4 for design, OWASP ASVS / CWE / SEI CERT for code
-  review, SR 11-7 / SS1/23 for model risk, and Anthropic's *Building Effective Agents*
-  workflow patterns (chaining, routing, orchestrator-workers, evaluator-optimizer) for
-  orchestration. Details in `docs/WAYS-OF-WORKING.md`.
-- **Traceability spine (audit golden thread):** mint a stable ID in the BRD and carry it
-  through — `BRD-001 → FSD-001 → code → test → obligation` — tracked in the RTM
+- **Frameworks (don't reinvent the wheel):** BABOK+EARS (requirements), ISO/IEC/IEEE 29148 +
+  Gherkin (specs), ADRs+C4 (design), OWASP ASVS / CWE / SEI CERT (review), SR 11-7 / SS1/23
+  (model risk), and Anthropic's *Building Effective Agents* patterns for orchestration. See
+  `docs/WAYS-OF-WORKING.md`; review method in `docs/code-review-method.md`.
+- **Traceability spine:** `BRD-001 → FSD-001 → code → test → obligation`, tracked in the RTM
   (`docs/templates/rtm.md`) and checked by `compliance-reviewer`.
-- **Artifacts in `.md` + `.html`:** author every deliverable as Markdown under `artifacts/`,
-  then render with `python -m scripts.render_html <file>.md` so each exists in both formats
-  for distribution. Templates live in `docs/templates/`. (`artifacts/` is git-ignored.)
+- **Artifacts in `.md` + `.html`:** author under `artifacts/` (git-ignored), then render with
+  `python -m scripts.render_html`. Templates in `docs/templates/`.
+- **Definition of Done:** `docs/DEFINITION-OF-DONE.md` — the evidenced gate before handover.

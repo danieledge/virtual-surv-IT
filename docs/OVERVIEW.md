@@ -49,8 +49,8 @@ safety rails that stop confidential data ever reaching the AI.
   them. Each has a short "job description" (a small text file in `.claude/agents/`) telling
   it what it's responsible for and what it's allowed to touch.
 
-Think of it like hiring 10 specialists instead of one generalist: each is briefed for its
-job, and you (or a coordinating agent) hand the right task to the right specialist.
+Think of it like having a bench of specialists instead of one generalist: each is briefed for
+its job, and the PM hands the right task to the right specialist.
 
 ---
 
@@ -192,8 +192,9 @@ It's the template every other detection in this team would follow.
 
 ## 8. How you'd actually use it
 
-1. Open this project in **Claude Code** (Anthropic's coding tool). The 13 team members load
-   automatically.
+1. Open this project in **Claude Code** (Anthropic's coding tool). The 13 team members are
+   loaded but stay **dormant** — a normal session behaves like ordinary Claude Code until you
+   invoke the team.
 2. **Start with the Project Manager — "Morgan".** Type `/engage` and describe whatever
    you've got — a rough idea, some code to check, or a full set of requirements. Morgan is
    warm and plain-speaking, with a can-do but realistic attitude — it'll find a way forward,
