@@ -1,11 +1,14 @@
 # Compliance Surveillance Engineering — Virtual Team
 
 A **virtual compliance surveillance *engineering* team made of AI assistants** — it doesn't
-*do* compliance, it **builds the surveillance solutions and technology** that detect money
-laundering, market manipulation and trader misconduct. It runs in
+*do* compliance, it **builds the surveillance solutions and technology** behind detecting
+money laundering, market manipulation and trader misconduct. Detection rules are just one
+deliverable: it equally builds **data pipelines / ETL, transformation and utility scripts
+(Python, Scala, Java, PowerShell, Bash), reconciliation and reporting jobs, tooling**, or
+simply **reviews** existing code. It runs in
 [Claude Code](https://claude.com/claude-code) as a set of 11 focused "subagents": some are
-subject-matter experts who only advise, others engineer and test the detection systems, and
-the work flows between them like a real engineering team.
+subject-matter experts who only advise, others engineer and test the solutions, and the work
+flows between them like a real engineering team.
 
 > 🟢 **New to AI agents and LLMs? Read [`docs/OVERVIEW.md`](docs/OVERVIEW.md) first** — a
 > plain-English tour of what this is, who the team are, and how it keeps confidential data
@@ -92,12 +95,17 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
   any code is written.
 - **`rules-developer`** — implements and refactors deterministic detection rules and
   scenario logic for transaction monitoring and trade surveillance, from a validated spec.
-- **`data-analyst`** — tunes the detections: false-positive analysis, threshold calibration,
-  coverage testing, and evidencing the volume/coverage trade-off to a regulator.
+- **`data-analyst`** — tuning, false-positive analysis, threshold calibration, coverage
+  testing, plus data-quality, reconciliation and reporting/MI work.
 - **`ml-engineer`** — builds ML/AI-based detection where rules aren't enough (anomaly
   detection, NLP for comms, behavioural scoring, alert triage).
-- **`cloud-architect`** — designs the pipelines and infrastructure the detection runs on
-  (ingestion, streaming/batch, retention/immutability, data residency, resilience).
+- **`cloud-architect`** — designs **and builds** the data pipelines and platform: ingestion,
+  ETL, streaming/batch transformation, transformation/utility scripts (Python, Scala,
+  PowerShell, Bash), infra/IaC, retention/immutability, data residency, resilience.
+
+> Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
+> a PowerShell transform → `cloud-architect`; a reconciliation/reporting job → `data-analyst`;
+> an ML model → `ml-engineer`. The PM picks; see CLAUDE.md §6.
 
 ### 🧠 Advisors — they guide and sign off (read-only)
 

@@ -12,13 +12,27 @@ the single source of truth that keeps the virtual team aligned.
 
 ## 1. What this team does
 
-We build and maintain detection and surveillance capability across three domains:
+We are a **compliance surveillance engineering team**: we build and maintain the solutions
+and technology that support surveillance across three domains:
 
 - **Transaction Monitoring (TM)** — AML scenario detection, thresholds, typologies, alert
   generation, SAR/STR support.
 - **Trade Surveillance** — market abuse detection (spoofing, layering, wash trades,
   marking the close, insider dealing, front running).
 - **Communications Surveillance** — lexicon and NLP-based monitoring of e-comms and voice.
+
+Detection logic is **one** kind of deliverable, not the only one. The team builds a wide
+range of things across these domains, for example:
+
+- detection rules / scenarios (the worked example in this repo);
+- data **pipelines** — ingestion, ETL, streaming/batch transformation, enrichment;
+- **transformation / utility scripts** (Python, Scala, Java, PowerShell, Bash);
+- data quality, reconciliation, and feed-validation jobs;
+- reporting / MI, extracts, and regulatory submissions;
+- integrations, tooling, migrations and infrastructure;
+- and **reviews** of existing code/solutions for robustness and audit-readiness.
+
+Match the approach to the deliverable — don't assume every task is a detection rule.
 
 ## 2. Regulatory scope
 
@@ -96,8 +110,16 @@ set of requirements to build, and it works out the shape of the work and orchest
   `/build-solution`). Be flexible — run only the stages the request needs.
 - **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `compliance-reviewer`)
   are read-only. Consult them for design, critique and sign-off — they cannot change code.
-- **Build agents** (`requirements-analyst`, `rules-developer`, `data-analyst`,
-  `ml-engineer`, `cloud-architect`) implement.
+- **Build agents** implement. Route by **deliverable type**, not by habit:
+
+  | Deliverable | Owner |
+  |---|---|
+  | Spec / requirements (any deliverable) | `requirements-analyst` |
+  | Detection rule / scenario logic | `rules-developer` |
+  | Data pipeline / ETL / transformation or utility script / infra / IaC | `cloud-architect` |
+  | Analytics, tuning, data-quality, reconciliation, reporting | `data-analyst` |
+  | ML / AI component (then independent `model-validator`) | `ml-engineer` |
+  | Code review (any language) · audit/compliance review | `code-reviewer` · `compliance-reviewer` |
 
 See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
 

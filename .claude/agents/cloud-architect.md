@@ -1,9 +1,10 @@
 ---
 name: cloud-architect
 description: >
-  Use for surveillance data pipeline and infrastructure design — ingestion,
-  streaming/batch processing, scaling, storage, retention, resilience and the
-  security/data-residency posture of the platform.
+  Use to design AND build surveillance data pipelines and platform engineering —
+  ingestion, ETL, streaming/batch transformation, enrichment, transformation/utility
+  scripts (Python, Scala, PowerShell, Bash), infrastructure/IaC, scaling, storage,
+  retention, resilience and the security/data-residency posture.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 ---

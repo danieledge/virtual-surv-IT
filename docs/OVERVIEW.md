@@ -17,9 +17,15 @@ Now imagine that engineering team is made of **AI assistants** instead of people
 the requirements, a couple are subject experts who review the plan, one writes the actual
 detection code, one tunes it, and one signs it off.
 
+And "the systems" means more than detection rules. The same team builds the **data
+pipelines** that feed surveillance, **scripts** that transform or reconcile data (in Python,
+Scala, Java, PowerShell or Bash), **reporting**, **tooling** — or simply **reviews** existing
+code to check it's robust and would survive an audit. A detection rule is just the worked
+example in this repo.
+
 This repository is the **setup for that virtual engineering team** — the job descriptions,
-the rules they follow, a worked example of a detection they'd build, and the safety rails
-that stop confidential data ever reaching the AI.
+the rules they follow, a worked example of one thing they'd build (a detection rule), and the
+safety rails that stop confidential data ever reaching the AI.
 
 ---
 
@@ -60,10 +66,10 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 | `trade-surveillance-sme` | 🧠 Advisor | Market-abuse expert (spoofing, insider dealing…) |
 | `comms-surveillance-sme` | 🧠 Advisor | Trader-chat / email monitoring expert |
 | `rules-developer` | 🔧 Builder | Writes the detection code + tests |
-| `data-analyst` | 🔧 Builder | Tunes the rules so they catch real cases, not noise |
+| `data-analyst` | 🔧 Builder | Tunes the rules; also data-quality, reconciliation, reporting |
 | `ml-engineer` | 🔧 Builder | Builds smarter AI-based detection when needed |
 | `model-validator` | 🧠 Advisor | Independently checks any AI model is sound and fair |
-| `cloud-architect` | 🔧 Builder | Designs the plumbing (where data flows, how it scales) |
+| `cloud-architect` | 🔧 Builder | Builds the data plumbing: pipelines, ETL, transformation scripts, infrastructure |
 | `code-reviewer` | 🧠 Advisor | Reviews code quality & security across Python, Scala, Java, PowerShell, Bash |
 | `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested? |
 

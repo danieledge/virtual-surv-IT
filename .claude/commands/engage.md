@@ -16,7 +16,11 @@ Run the engagement like this:
 - a *problem / idea* → discovery → requirements → build (full SDLC);
 - a *review* → the audit-review loop (`/audit-review`);
 - a *build from requirements* → orchestrator-workers delivery (`/build-solution`).
-Be flexible: skip any stage already satisfied by what the user gave you.
+Be flexible: skip any stage already satisfied by what the user gave you. The deliverable
+could be **any** surveillance-engineering output — a detection rule, a data pipeline / ETL,
+a transformation or utility script (Python/Scala/PowerShell/Bash), a reconciliation or
+reporting job, tooling, or a review. Don't assume it's a detection rule; route by type
+(CLAUDE.md §6).
 
 **2. Clarify — ask, don't guess.** Put your clarifying questions to the user and **wait for
 answers** before planning. Use the question tool (or a clear numbered list) for material
