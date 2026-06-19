@@ -30,11 +30,15 @@ a few enhancements are recommended.
   permission patterns are valid.
 - **Commands** use `description` + `argument-hint` + `$ARGUMENTS` correctly.
 
-## Recommended next (not yet done)
+## Recommended next
 
-1. **Package as a plugin** (highest value for distribution). Add `.claude-plugin/plugin.json`
-   + a `marketplace.json` so the team installs with `/plugin install …` — the same way
-   turingmind ships. Lets others adopt it without cloning into their repo.
+1. **Package as a plugin** — ✅ **done.** `.claude-plugin/plugin.json` +
+   `.claude-plugin/marketplace.json` make the repo its own single-plugin marketplace
+   (`source: "."`), with component paths pointing at the existing `.claude/` dirs (no
+   duplication) and the read-guard shipped as a plugin hook (`hooks/hooks.json`). Validated
+   with `claude plugin validate .`. Install:
+   `/plugin marketplace add danieledge/virtual-surv-IT` then
+   `/plugin install compliance-surveillance-team@virtual-surv-it`.
 2. **Migrate commands → Agent Skills** (`.claude/skills/<name>/SKILL.md`). Slash commands
    still work but skills are the current model and load lazily; `disable-model-invocation`
    can keep destructive ones user-only.

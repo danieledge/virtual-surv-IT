@@ -36,14 +36,23 @@ guard blocks any agent from reading raw records. See
 
 ## Quick start — using the team
 
+**Option A — install as a Claude Code plugin** (no clone; use it in any project):
+
+```
+/plugin marketplace add danieledge/virtual-surv-IT
+/plugin install compliance-surveillance-team@virtual-surv-it
+```
+
+The 13 agents, the workflow commands (namespaced, e.g. `/compliance-surveillance-team:engage`)
+and the raw-data guard hook all load automatically.
+
+**Option B — clone the repo** (to get the worked example, tests and masking pipeline too):
+
 ```bash
-# 1. Get it into your project (new project, or merge into an existing repo)
 git clone https://github.com/danieledge/virtual-surv-IT.git
 cd virtual-surv-IT
 pip install -r requirements-dev.txt      # pytest, plus Markdown for .md→.html artifacts
-
-# 2. Open in Claude Code (the 11 agents + slash commands load on start)
-claude
+claude                                    # the 13 agents + slash commands load on start
 ```
 
 Then just **talk to the PM** — describe whatever you've got:
@@ -73,6 +82,7 @@ Prefer to drive a specific step yourself? Use the focused commands:
 ## Layout
 
 ```
+.claude-plugin/               # plugin + marketplace manifests (installable via /plugin)
 CLAUDE.md                     # shared team handbook (example defaults — customise as needed)
 .claude/agents/               # 13 subagents
   requirements-analyst.md     # BA            (build)

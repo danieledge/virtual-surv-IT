@@ -1,0 +1,14 @@
+{
+  "name": "virtual-surv-it",
+  "owner": { "name": "Daniel Edge" },
+  "metadata": {
+    "description": "A POC virtual compliance-surveillance engineering team for Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "compliance-surveillance-team",
+      "source": ".",
+      "description": "POC virtual compliance-surveillance engineering team (13 subagents + PM workflows + data-safety pipeline)."
+    }
+  ]
+}
