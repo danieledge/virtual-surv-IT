@@ -36,24 +36,38 @@ guard blocks any agent from reading raw records. See
 
 ## Quick start — using the team
 
-**Option A — install as a Claude Code plugin** (no clone; use it in any project):
+### Offline / corporate install (no marketplace needed)
+
+If marketplaces are disabled in your environment, **download the repo and use it locally** —
+no marketplace connection required:
+
+```bash
+# get the code (download the ZIP from GitHub, or clone)
+git clone https://github.com/danieledge/virtual-surv-IT.git
+cd virtual-surv-IT
+
+# (A) simplest — just open it as a project; project-scoped agents/commands load automatically
+claude
+
+# (B) use it as a plugin in ANY other project, from your local copy (no marketplace):
+claude --plugin-dir /path/to/virtual-surv-IT
+```
+
+A third option for persistent local use without a marketplace: copy the folder to
+`~/.claude/skills/compliance-surveillance-team/` — it loads automatically as an
+`@skills-dir` plugin on the next session (unless your admins block that source).
+
+For the worked example, tests and masking pipeline, also:
+`pip install -r requirements-dev.txt` (pytest + Markdown for `.md→.html`).
+
+### Or, where marketplaces are allowed
 
 ```
 /plugin marketplace add danieledge/virtual-surv-IT
 /plugin install compliance-surveillance-team@virtual-surv-it
 ```
 
-The 13 agents, the workflow commands (namespaced, e.g. `/compliance-surveillance-team:engage`)
-and the raw-data guard hook all load automatically.
-
-**Option B — clone the repo** (to get the worked example, tests and masking pipeline too):
-
-```bash
-git clone https://github.com/danieledge/virtual-surv-IT.git
-cd virtual-surv-IT
-pip install -r requirements-dev.txt      # pytest, plus Markdown for .md→.html artifacts
-claude                                    # the 13 agents + slash commands load on start
-```
+Either way you get the 13 agents, the workflow commands and the raw-data guard hook.
 
 Then just **talk to the PM** — describe whatever you've got:
 

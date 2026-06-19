@@ -68,7 +68,14 @@ Pick what you need; each is produced in **`.md` and `.html`** (rendered by
 | Performance Review Report | `performance-report.md` | evidence-backed profiling |
 | Developer Handover | `developer-handover.md` | maintainable by a real developer |
 | QA Handover (test evidence) | `qa-handover.md` | independent QA sign-off evidence |
+| Change Request / RFC | `change-request.md` | feeds your change control / CAB |
+| Ops Runbook + Release Notes | `ops-runbook.md`, `release-notes.md` | feed ops/support + release |
 | Model Validation Report | `model-validation-report.md` | **SR 11-7**, **PRA SS1/23** |
+
+> **Working alongside an IT team that has its own controls?** The team **drafts** these
+> artifacts to feed your existing change approval, deployment and sign-off — it does **not**
+> own or perform those controls. Approval/owner/contact fields are left blank and marked
+> `[IT team]`; the team never self-certifies a human control.
 
 Every delivery is checked against the **[Definition of Done](DEFINITION-OF-DONE.md)** — an
 evidenced gate (traceable, tested, independently QA'd, code/performance/compliance reviewed,

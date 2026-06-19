@@ -21,7 +21,10 @@ it. Apply the items relevant to the deliverable type — not every item fits eve
 - [ ] **Compliance-reviewed** — auditability, data safety (no secrets/PII/raw data, §5),
       documented thresholds (§4).
 - [ ] **Documented for handover** — a **developer handover** (`developer-handover.md`): how
-      to build/run/test, design decisions (ADRs), known limitations and tech debt.
+      to build/run/test, design decisions (ADRs), known limitations and tech debt. When
+      handing to an IT team with its own controls, also draft the artifacts those controls
+      consume (**change request**, **ops runbook + release notes**) with approval/owner
+      fields left for the IT team — the team drafts, it does not approve or deploy.
 - [ ] **Distributable** — all artifacts produced in `.md` **and** `.html`
       (`python -m scripts.render_html`).
 - [ ] **Signed off** — human approval recorded at the gate; nothing touching live systems
