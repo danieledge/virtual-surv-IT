@@ -3,3 +3,6 @@
 pytest>=8.0
 pre-commit>=3.7
 PyYAML>=6.0
+
+# The Python analysers used by the code-reviewer agent live in requirements-review.txt
+# (kept separate so the core dev/test install stays lean).

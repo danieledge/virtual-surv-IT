@@ -127,13 +127,32 @@ Quickstart:
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                                   # 5 passing tests
+pytest                                   # 16 passing tests
 python -m scripts.gen_synthetic --kind spoofing --out data/synthetic/spoofing.jsonl
 pre-commit install                       # optional: enable local guardrails
 ```
 
 Add a new detection with `/new-scenario <requirement>`, which chains
-requirements-analyst → SME → rules-developer → compliance-reviewer per the handbook.
+requirements-analyst → SME → rules-developer → code-reviewer → compliance-reviewer per the
+handbook.
+
+## Code-review tooling
+
+The `code-reviewer` agent drives standard analysers — it doesn't reinvent rules. The Python
+ones are in `requirements-review.txt` (kept separate so the core test install stays lean).
+The rest install via the OS / build tooling:
+
+| Language | Install |
+|---|---|
+| Python | `pip install -r requirements-review.txt` (ruff, black, mypy, bandit, pip-audit, semgrep) |
+| Bash | `apt install shellcheck` · `go install mvdan.cc/sh/v3/cmd/shfmt@latest` |
+| PowerShell | `pwsh -c 'Install-Module PSScriptAnalyzer -Scope CurrentUser'` |
+| Java | `checkstyle`, `pmd`, `spotbugs` via your build tool (Maven/Gradle) or `brew`/`apt` |
+| Scala | `scalafmt`, `scapegoat`/`wartremover` via sbt plugins |
+| Any | Semgrep (`pip`) for multi-language; gitleaks for secrets |
+
+The agent runs whatever is present and reports which analysers were unavailable — nothing is
+silently skipped. None of these are required to *use* the team; they sharpen `code-reviewer`.
 
 ## Handling real data (masking pipeline)
 
