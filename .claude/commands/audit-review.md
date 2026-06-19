@@ -6,6 +6,10 @@ argument-hint: <path/glob of code to review, or a commit range>
 Under the PM (CLAUDE.md §6), review for robustness and whether it would **stand up to audit
 and regulatory scrutiny**: **$ARGUMENTS**
 
+**First, confirm the outcome wanted:** the review + verdict only, or also **fixes/refactor
+applied** as part of the loop, and/or a **handover pack** at the end? Default here is the
+fix→re-review loop, but confirm before changing the user's code.
+
 Run an **evaluator–optimizer loop**:
 
 1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first) — comprehensive review
@@ -22,3 +26,7 @@ Run an **evaluator–optimizer loop**:
    audit/regulatory checks, and a tooling-coverage section (state what couldn't run).
 
 Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
+
+**Close with next steps (don't dead-end).** State the verdict, then offer concrete follow-ups
+with a recommendation — e.g. *"Verdict: conditional. I can fix the 2 remaining warnings,
+add the missing tests, or produce the handover pack for your IT team. Which next?"*

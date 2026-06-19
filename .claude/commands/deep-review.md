@@ -5,6 +5,10 @@ argument-hint: <path/glob, commit range, or nothing for the working diff>
 
 Run a **deep (detailed) code review** of: **$ARGUMENTS** (default: the current `git diff`).
 
+**First, ask what outcome the user wants** (don't assume "review and stop"): just the review,
+or also **fixes/refactor applied**, a **remediation plan/loop** (`/remediate`), and/or a
+**handover pack**? Proceed on their answer.
+
 Drive **code-reviewer** in **deep** mode (CLAUDE.md §6; method in
 `docs/code-review-method.md`):
 
@@ -23,6 +27,11 @@ Drive **code-reviewer** in **deep** mode (CLAUDE.md §6; method in
    (affected files, blast radius, breaking changes).
 
 Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
+
+**Close with next steps (don't dead-end).** Summarise what you found, then present concrete
+options with your recommendation and offer to do them — e.g. *"3 criticals, 5 warnings. I can:
+(a) fix the criticals now, (b) refactor the worst module, (c) run `/remediate` for a full
+assess→fix→re-review loop, or (d) produce a handover pack. Which would you like?"*
 
 > For audit/regulatory sign-off with a fix→re-review loop, use `/audit-review` (which runs
 > this deep review as its first step).

@@ -31,6 +31,11 @@ reporting job, tooling, or a review. Don't assume it's a detection rule; route b
 answers** before planning. Use the question tool (or a clear numbered list) for material
 choices. Never assume scope, jurisdiction, data availability or success criteria.
 
+**2a. Agree the end outcome.** Explicitly ask **what they want delivered at the end**, not
+just the immediate task. For a review, ask: *review only*, or also **fixes/refactor applied**,
+a **remediation loop** (`/remediate`), and/or a **handover pack**? Don't assume "review" means
+"review and stop." Confirm before changing any of the user's code.
+
 **3. Offer the artifact menu.** Ask the user which documentary artifacts they want, to
 select from (see WAYS-OF-WORKING.md):
 - Engagement Brief · Business Requirements (BRD) · Functional Spec (FSD) ·
@@ -51,6 +56,11 @@ test and an obligation.
 **6. Deliver.** Produce the selected artifacts under `artifacts/` as Markdown, then render
 each with `python -m scripts.render_html <file>.md` so every deliverable exists in `.md` and
 `.html`.
+
+**7. Close with next steps — never dead-end.** Finish with a short summary of what was done
+and **concrete next-step options with your recommendation**, then offer to carry them out
+(e.g. *"Review done — 3 criticals. Want me to fix them, run a full `/remediate` loop, or
+produce a handover pack?"*). Always leave the user with a clear, actionable choice.
 
 Specialists: `requirements-analyst`, `tm-sme` / `trade-surveillance-sme` /
 `comms-surveillance-sme`, `rules-developer`, `data-analyst`, `ml-engineer`, `cloud-architect`,
