@@ -6,9 +6,9 @@ money laundering, market manipulation and trader misconduct. Detection rules are
 deliverable: it equally builds **data pipelines / ETL, transformation and utility scripts
 (Python, Scala, Java, PowerShell, Bash), reconciliation and reporting jobs, tooling**, or
 simply **reviews** existing code. It runs in
-[Claude Code](https://claude.com/claude-code) as a set of 11 focused "subagents": some are
-subject-matter experts who only advise, others engineer and test the solutions, and the work
-flows between them like a real engineering team.
+[Claude Code](https://claude.com/claude-code) as a set of 13 focused "subagents": some are
+subject-matter experts who only advise, others engineer, test and review the solutions, and
+the work flows between them like a real engineering team.
 
 > 🟢 **New to AI agents and LLMs? Read [`docs/OVERVIEW.md`](docs/OVERVIEW.md) first** — a
 > plain-English tour of what this is, who the team are, and how it keeps confidential data
@@ -68,23 +68,25 @@ Prefer to drive a specific step yourself? Use the focused commands:
 
 ```
 CLAUDE.md                     # shared team handbook (example defaults — customise as needed)
-.claude/agents/               # 11 subagents
+.claude/agents/               # 13 subagents
   requirements-analyst.md     # BA            (build)
   tm-sme.md                   # AML SME       (advisory, read-only)
   trade-surveillance-sme.md   # SME           (advisory, read-only)
   comms-surveillance-sme.md   # SME           (advisory, read-only)
-  rules-developer.md          # developer     (build)
-  data-analyst.md             # analyst       (build)
+  rules-developer.md          # detection rules (build)
+  cloud-architect.md          # pipelines/ETL/scripts/infra (build)
+  data-analyst.md             # tuning, data-quality, reporting (build)
   ml-engineer.md              # AI/ML         (build)
-  model-validator.md          # independent validation (advisory, read-only)
-  cloud-architect.md          # cloud         (advisory + light build)
+  qa-engineer.md              # independent testing & QA evidence (build)
+  model-validator.md          # independent model validation (advisory, read-only)
   code-reviewer.md            # multi-language code review (advisory, read-only)
-  compliance-reviewer.md      # review/QA     (advisory, read-only)
+  performance-reviewer.md     # performance & scalability review (advisory, read-only)
+  compliance-reviewer.md      # audit/compliance review (advisory, read-only)
 ```
 
 ## Meet the agents
 
-Eleven specialists, each defined by a short job description in `.claude/agents/`. They split
+Thirteen specialists, each defined by a short job description in `.claude/agents/`. They split
 into **🧠 advisors** (read-only — they review and recommend but cannot change code, which
 keeps them independent) and **🔧 builders** (they engineer and test the detection systems).
 
@@ -102,6 +104,9 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 - **`cloud-architect`** — designs **and builds** the data pipelines and platform: ingestion,
   ETL, streaming/batch transformation, transformation/utility scripts (Python, Scala,
   PowerShell, Bash), infra/IaC, retention/immutability, data residency, resilience.
+- **`qa-engineer`** — **independent** testing: designs and runs the test plan, then produces
+  the QA handover evidencing what ran, coverage, gaps and residual risk. Separate from the
+  builder, so it doesn't mark its own homework.
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
 > a PowerShell transform → `cloud-architect`; a reconciliation/reporting job → `data-analyst`;
@@ -121,9 +126,13 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 - **`code-reviewer`** — comprehensive code review across **Python, Scala, Java, PowerShell
   and Bash**. Drives the established linters/analysers for each language (ruff/mypy/bandit,
   Checkstyle/SpotBugs/PMD, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, plus Semgrep) —
-  not reinvented rules — and adds judgment on top.
-- **`compliance-reviewer`** — final QA after any change: auditability, the
-  alert→logic→obligation trace, secrets/PII, and test coverage.
+  not reinvented rules — and adds judgment on top. Quick or deep (detailed) review.
+- **`performance-reviewer`** — performance & scalability review: complexity, hot paths,
+  I/O/queries, memory, concurrency, and behaviour **at surveillance data volumes**. Drives
+  established profilers (cProfile/py-spy/scalene, JMH/async-profiler, hyperfine, EXPLAIN) and
+  reports evidence-backed findings.
+- **`compliance-reviewer`** — final sign-off after any change: auditability, the
+  alert→logic→obligation trace, secrets/PII, test coverage, and the Definition of Done.
 
 > Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
 > real independent check. The restriction is enforced by the tools each agent is granted —
@@ -157,8 +166,11 @@ delivery. Focused commands for each entry point:
 | `/write-brd` | idea → Business Requirements (BABOK + EARS) | prompt chaining |
 | `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
 | `/deep-review` | detailed code review (bugs, security, architecture, impact) | dimension fan-out + scoring |
+| `/performance-review` | performance & scalability vs target data volumes | profiling evidence |
 | `/audit-review` | existing code → robust & audit-ready? | evaluator–optimizer loop |
+| `/remediate` | legacy / poorly-built code → assess, fix, hand over | assess → prioritise → fix loop |
 | `/build-solution` | full requirements → end-to-end build | orchestrator–workers |
+| `/handover` | developer + QA test-evidence handover pack | independent QA + dev docs |
 | `/new-scenario` | a single detection scenario | spec → SME → build → review |
 
 Every deliverable is produced in **`.md` and `.html`** (via `scripts/render_html.py`) for
@@ -179,9 +191,11 @@ scripts/gen_synthetic.py     # synthetic order-flow generator (§5 — no real d
 tests/test_spoofing.py       # true-positive + false-positive cases (§4)
 docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
 docs/WAYS-OF-WORKING.md      # frameworks, workflows, artifact menu, traceability spine
-docs/templates/              # engagement brief, BRD, FSD, ADR, RTM, review report, scenario, model-validation
+docs/DEFINITION-OF-DONE.md   # the evidenced gate every delivery must meet
+docs/code-review-method.md   # confidence scoring, filtering, deep review (adapted from turingmind)
+docs/templates/              # engagement brief, BRD, FSD, ADR, RTM, review/performance reports, dev+QA handover, scenario, model-validation
 scripts/render_html.py       # render any .md artifact to standalone .html for distribution
-.claude/commands/            # /engage, /write-brd, /brd-to-fsd, /audit-review, /build-solution, /new-scenario
+.claude/commands/            # /engage, /write-brd, /brd-to-fsd, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
 .github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
 .pre-commit-config.yaml      # local secret / raw-data guardrails
 ```

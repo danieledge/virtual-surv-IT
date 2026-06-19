@@ -41,7 +41,7 @@ safety rails that stop confidential data ever reaching the AI.
   So an agent can actually *do* work (open files, write code, run it) rather than only
   chatting about it.
 
-- **Subagent** — one agent set up for **a single, focused role**. This project has 11 of
+- **Subagent** — one agent set up for **a single, focused role**. This project has 13 of
   them. Each has a short "job description" (a small text file in `.claude/agents/`) telling
   it what it's responsible for and what it's allowed to touch.
 
@@ -68,10 +68,12 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 | `rules-developer` | 🔧 Builder | Writes the detection code + tests |
 | `data-analyst` | 🔧 Builder | Tunes the rules; also data-quality, reconciliation, reporting |
 | `ml-engineer` | 🔧 Builder | Builds smarter AI-based detection when needed |
+| `qa-engineer` | 🔧 Builder | Independently tests it and evidences what was checked (for a real QA team) |
 | `model-validator` | 🧠 Advisor | Independently checks any AI model is sound and fair |
 | `cloud-architect` | 🔧 Builder | Builds the data plumbing: pipelines, ETL, transformation scripts, infrastructure |
 | `code-reviewer` | 🧠 Advisor | Reviews code quality & security across Python, Scala, Java, PowerShell, Bash |
-| `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested? |
+| `performance-reviewer` | 🧠 Advisor | Checks it's fast enough and will scale to real data volumes |
+| `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |
 
 > Why "read-only" matters: a reviewer who could quietly fix the thing they're reviewing
 > isn't really an independent check. Making advisors read-only is enforced by the tools
@@ -183,7 +185,7 @@ It's the template every other detection in this team would follow.
 
 ## 8. How you'd actually use it
 
-1. Open this project in **Claude Code** (Anthropic's coding tool). The 11 team members load
+1. Open this project in **Claude Code** (Anthropic's coding tool). The 13 team members load
    automatically.
 2. **Start with the Project Manager.** Type `/engage` and describe whatever you've got — a
    rough idea, some code to check, or a full set of requirements. The PM is the single front

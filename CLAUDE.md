@@ -108,20 +108,30 @@ set of requirements to build, and it works out the shape of the work and orchest
   the specialists in small iterations, returning to the user at each gate. Start with
   `/engage` (or the focused commands `/write-brd`, `/brd-to-fsd`, `/audit-review`,
   `/build-solution`). Be flexible — run only the stages the request needs.
-- **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `compliance-reviewer`)
-  are read-only. Consult them for design, critique and sign-off — they cannot change code.
+- **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `performance-reviewer`,
+  `compliance-reviewer`) are read-only. Consult them for design, critique and sign-off — they
+  cannot change code.
 - **Build agents** implement. Route by **deliverable type**, not by habit:
 
-  | Deliverable | Owner |
+  | Deliverable / task | Owner |
   |---|---|
   | Spec / requirements (any deliverable) | `requirements-analyst` |
   | Detection rule / scenario logic | `rules-developer` |
   | Data pipeline / ETL / transformation or utility script / infra / IaC | `cloud-architect` |
   | Analytics, tuning, data-quality, reconciliation, reporting | `data-analyst` |
   | ML / AI component (then independent `model-validator`) | `ml-engineer` |
-  | Code review (any language) · audit/compliance review | `code-reviewer` · `compliance-reviewer` |
+  | Independent testing & QA evidence | `qa-engineer` |
+  | Code review · performance review · audit/compliance review | `code-reviewer` · `performance-reviewer` · `compliance-reviewer` |
 
 See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
+
+## 6a. Definition of Done
+
+Real delivery is handed to this team and **real developers and QA reviewers rely on the
+outputs**, so "done" is an evidenced gate, not a claim. Before handover, the PM checks — and
+`compliance-reviewer` verifies — `docs/DEFINITION-OF-DONE.md`: traceable, tested, independently
+QA'd, code- and performance-reviewed, compliance-reviewed, documented for handover (developer
++ QA handover), all artifacts in `.md` + `.html`, and human sign-off.
 
 ## 7. Guardrails
 

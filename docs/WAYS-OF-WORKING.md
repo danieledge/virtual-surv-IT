@@ -45,8 +45,11 @@ flowchart LR
 | An idea / problem | `/engage` → `/write-brd` | discovery → BRD → FSD → build → review |
 | A BRD | `/brd-to-fsd` | functional spec + traceability |
 | Existing code (detailed review) | `/deep-review` | dimension fan-out + confidence scoring |
+| Performance / will-it-scale | `/performance-review` | profiling evidence vs target volume |
 | Existing code (audit sign-off) | `/audit-review` | evaluator–optimizer review loop |
+| Legacy / poorly-built code | `/remediate` | assess → prioritise → fix loop → handover |
 | A requirements pack | `/build-solution` | orchestrator–workers end-to-end build |
+| Handover pack (dev + QA evidence) | `/handover` | independent QA + developer docs |
 
 ## Documentary artifacts (the menu)
 
@@ -62,7 +65,15 @@ Pick what you need; each is produced in **`.md` and `.html`** (rendered by
 | Requirements Traceability Matrix | `rtm.md` | **RTM** — the audit golden thread |
 | Scenario spec / doc | `scenario-spec.md`, `scenario-doc.md` | repo convention |
 | Code & Compliance Review Report | `review-report.md` | **OWASP ASVS**, **CWE**, **SEI CERT** |
+| Performance Review Report | `performance-report.md` | evidence-backed profiling |
+| Developer Handover | `developer-handover.md` | maintainable by a real developer |
+| QA Handover (test evidence) | `qa-handover.md` | independent QA sign-off evidence |
 | Model Validation Report | `model-validation-report.md` | **SR 11-7**, **PRA SS1/23** |
+
+Every delivery is checked against the **[Definition of Done](DEFINITION-OF-DONE.md)** — an
+evidenced gate (traceable, tested, independently QA'd, code/performance/compliance reviewed,
+documented for handover, all artifacts in `.md` + `.html`, human sign-off) — so real
+developers and QA reviewers can trust what the team hands over.
 
 ## Established frameworks we integrate
 

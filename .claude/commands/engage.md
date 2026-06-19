@@ -30,8 +30,8 @@ choices. Never assume scope, jurisdiction, data availability or success criteria
 select from (see WAYS-OF-WORKING.md):
 - Engagement Brief · Business Requirements (BRD) · Functional Spec (FSD) ·
   Architecture Decision Records (ADRs) · Requirements Traceability Matrix (RTM) ·
-  Code & Compliance Review Report · Test evidence / coverage · Model Validation Report ·
-  Delivery / audit pack (bundle).
+  Code & Compliance Review Report · Performance Review Report · Developer Handover ·
+  QA Handover (test evidence) · Model Validation Report · Delivery / audit pack (bundle).
 Each is delivered in **both `.md` and `.html`**.
 
 **4. Summarise.** Write an Engagement Brief (`docs/templates/engagement-brief.md`) capturing

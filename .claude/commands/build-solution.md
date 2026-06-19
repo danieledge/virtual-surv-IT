@@ -15,14 +15,18 @@ Run the **orchestrator–workers** pattern, agile and iterative:
    / data-quality / reconciliation / reporting → `data-analyst`; ML → `ml-engineer` +
    independent `model-validator`. Then chain each unit through `code-reviewer` →
    `compliance-reviewer`. Independent units can run in parallel.
-3. **Tests mandatory** for every unit, appropriate to the deliverable — true-positive and
-   false-positive cases for detection logic; input/output, schema and edge-case tests for
-   pipelines/transforms; idempotency/error-path tests for scripts. Synthetic data only (§5);
-   any thresholds documented with rationale + date (§4).
-4. **Maintain the RTM** (`docs/templates/rtm.md`): every requirement → code → test →
+3. **Test independently** — `qa-engineer` (not the builder) designs and runs tests
+   appropriate to the deliverable: true-positive and false-positive cases for detection
+   logic; input/output, schema and edge-case tests for pipelines/transforms; idempotency/
+   error-path tests for scripts. Synthetic data only (§5); thresholds documented (§4).
+4. **Review** — `code-reviewer` (deep) and, where it processes data at volume,
+   `performance-reviewer`; then `compliance-reviewer`. Loop fixes until no Critical remains.
+5. **Maintain the RTM** (`docs/templates/rtm.md`): every requirement → code → test →
    obligation. A gap is a blocker — surface it to the user.
-5. **Keep a status log**; return to the user at each gate with decisions and blockers.
-6. **Deliver an audit pack** (RTM, review reports, scenario docs) under `artifacts/`, each as
-   `.md` and rendered `.html` (`python -m scripts.render_html`). Confirm `pytest` passes.
+6. **Keep a status log**; return to the user at each gate with decisions and blockers.
+7. **Meet the Definition of Done** (`docs/DEFINITION-OF-DONE.md`) and run `/handover` to
+   produce the developer + QA handover. Deliver the pack (RTM, review/performance reports,
+   handovers, scenario docs) under `artifacts/`, each as `.md` and rendered `.html`. Confirm
+   `pytest` passes.
 
 Stop for human approval before anything that touches live systems.
