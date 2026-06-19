@@ -8,9 +8,11 @@ and regulatory scrutiny**: **$ARGUMENTS**
 
 Run an **evaluator–optimizer loop**:
 
-1. **code-reviewer** — comprehensive review across the languages present, driving the
-   standard analysers (ruff/mypy/bandit, Checkstyle/PMD/SpotBugs, scalafmt/scapegoat,
-   PSScriptAnalyzer, ShellCheck, Semgrep) and citing OWASP ASVS / CWE / SEI CERT.
+1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first) — comprehensive review
+   across the languages present, driving the standard analysers (ruff/mypy/bandit,
+   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep),
+   citing OWASP ASVS / CWE / SEI CERT, with confidence scoring and filter transparency
+   (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope.
 2. **compliance-reviewer** — auditability, the alert→logic→obligation trace, threshold
    rationale, secrets/PII, test coverage, and change control.
 3. If any **Critical/Warning** findings, route fixes to `rules-developer` / `ml-engineer`,

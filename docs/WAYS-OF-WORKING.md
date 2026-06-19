@@ -44,7 +44,8 @@ flowchart LR
 |---|---|---|
 | An idea / problem | `/engage` → `/write-brd` | discovery → BRD → FSD → build → review |
 | A BRD | `/brd-to-fsd` | functional spec + traceability |
-| Existing code | `/audit-review` | evaluator–optimizer review loop |
+| Existing code (detailed review) | `/deep-review` | dimension fan-out + confidence scoring |
+| Existing code (audit sign-off) | `/audit-review` | evaluator–optimizer review loop |
 | A requirements pack | `/build-solution` | orchestrator–workers end-to-end build |
 
 ## Documentary artifacts (the menu)
@@ -76,6 +77,11 @@ Pick what you need; each is produced in **`.md` and `.html`** (rendered by
 - **Requirements Traceability Matrix** — requirement → design → code → test → obligation.
 - **OWASP ASVS**, **CWE Top 25**, **SEI CERT** secure coding — the review checklists
   `code-reviewer` cites (it drives the standard linters, see the README tooling table).
+- **Confidence-scoring + filter-transparency + deep review** — `docs/code-review-method.md`,
+  adapted from [turingmind-code-review](https://github.com/turingmindai/turingmind-code-review)
+  (MIT). `/deep-review` runs the detailed, multi-dimension review (bugs, security,
+  architecture, impact analysis); regulated findings (secrets, PII, broken traceability) are
+  never filtered.
 - **SR 11-7 / PRA SS1/23** — model-risk governance for any ML detection.
 
 **Agent orchestration** — Anthropic's

@@ -15,20 +15,32 @@
 Plain-language verdict: would this stand up to audit and regulatory scrutiny, and what (if
 anything) must change first.
 
+**Found N · Reported R · Filtered F** (depth: quick / deep · mode: change / audit)
+
 ## 2. Findings
+Confidence score per `docs/code-review-method.md` (Critical 95–100, Warning 80–94, Medium
+70–79 — deep only).
 
 ### 🔴 Critical (must fix)
-| # | File:line | Issue | Standard / rule | Recommended fix |
-|---|-----------|-------|-----------------|-----------------|
-| 1 | `path:42` | … | CWE-89 / OWASP ASVS V5 | … |
+| # | File:line | Issue | Conf. | Standard / rule | Recommended fix |
+|---|-----------|-------|-------|-----------------|-----------------|
+| 1 | `path:42` | … | 97 | CWE-89 / OWASP ASVS V5 | … |
 
 ### 🟠 Warnings (should fix)
-| # | File:line | Issue | Standard / rule | Recommended fix |
-|---|-----------|-------|-----------------|-----------------|
+| # | File:line | Issue | Conf. | Standard / rule | Recommended fix |
+|---|-----------|-------|-------|-----------------|-----------------|
 
-### 🟡 Suggestions
-| # | File:line | Issue | Standard / rule | Recommended fix |
-|---|-----------|-------|-----------------|-----------------|
+### 🟡 Medium *(deep review only)*
+| # | File:line | Issue | Conf. | Standard / rule | Recommended fix |
+|---|-----------|-------|-------|-----------------|-----------------|
+
+### 🔇 Filtered (transparency — show what was not reported)
+| Reason | Count |
+|--------|-------|
+| Pre-existing (not in diff) | |
+| Below confidence threshold | |
+| Linter/formatter territory | |
+| Silenced by comment | |
 
 ## 3. Audit & regulatory checks
 - Auditability: alert → logic → obligation traceable? (RTM present/complete?)
@@ -46,5 +58,16 @@ anything) must change first.
 
 State explicitly which analysers were unavailable — nothing silently skipped.
 
-## 5. Recommendation & next steps
+## 5. Architectural notes *(deep review only)*
+- Pattern consistency: ✅/⚠️/❌ …
+- Coupling & cohesion: …
+- Test coverage: …
+- Dependencies: …
+
+## 6. Impact analysis *(deep review only)*
+- **Affected files / modules:** …
+- **Blast radius:** … (what else could this change break?)
+- **Breaking changes:** …
+
+## 7. Recommendation & next steps
 Fixes routed to `rules-developer` / `ml-engineer`; re-review loop until no Critical remains.

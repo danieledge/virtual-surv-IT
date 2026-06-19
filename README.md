@@ -112,6 +112,7 @@ delivery. Focused commands for each entry point:
 | `/engage` | anything — the front door | PM intake + dynamic routing |
 | `/write-brd` | idea → Business Requirements (BABOK + EARS) | prompt chaining |
 | `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
+| `/deep-review` | detailed code review (bugs, security, architecture, impact) | dimension fan-out + scoring |
 | `/audit-review` | existing code → robust & audit-ready? | evaluator–optimizer loop |
 | `/build-solution` | full requirements → end-to-end build | orchestrator–workers |
 | `/new-scenario` | a single detection scenario | spec → SME → build → review |
@@ -217,3 +218,11 @@ python -m scripts.validate_masking                       # exit 0 = safe + faith
   decisions across sessions (stored under `.claude/agent-memory/`).
 - Models: deep-reasoning roles use `opus`, build/analysis roles use `sonnet`. Change the
   `model:` field freely.
+
+## Credits
+
+- The `code-reviewer`'s **confidence-scoring, false-positive filtering, filter-transparency
+  and deep-review** approach is adapted from
+  [**turingmind-code-review**](https://github.com/turingmindai/turingmind-code-review)
+  (MIT, © 2026 TuringMind). See [`docs/code-review-method.md`](docs/code-review-method.md).
+  Our additions: regulated-domain audit mode and data-safety/traceability weighting.

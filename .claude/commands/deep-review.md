@@ -1,0 +1,28 @@
+---
+description: Detailed multi-dimension code review (bugs, security, architecture, impact) with confidence scoring
+argument-hint: <path/glob, commit range, or nothing for the working diff>
+---
+
+Run a **deep (detailed) code review** of: **$ARGUMENTS** (default: the current `git diff`).
+
+Drive **code-reviewer** in **deep** mode (CLAUDE.md §6; method in
+`docs/code-review-method.md`):
+
+1. Detect languages from the target; load the relevant review dimensions — **bugs & logic**
+   and **security** always, **language** checks by file type, and the **architecture**
+   dimension (deep only). Run the standard analysers per language (ruff/mypy/bandit,
+   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep).
+2. **Score** every candidate finding 0–100 and **filter** noise per the method — but never
+   filter regulated findings (secrets, PII/raw data §5, undocumented thresholds / broken
+   traceability §4).
+3. For anything touching detection logic, hand to **compliance-reviewer** for the
+   audit/traceability dimension.
+4. Produce a detailed report (`docs/templates/review-report.md`) including the **transparency
+   counts** (Found / Reported / Filtered + reasons), per-finding confidence, **Architectural
+   Notes** (patterns, coupling, test coverage, dependencies) and **Impact Analysis**
+   (affected files, blast radius, breaking changes).
+
+Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
+
+> For audit/regulatory sign-off with a fix→re-review loop, use `/audit-review` (which runs
+> this deep review as its first step).
