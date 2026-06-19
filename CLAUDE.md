@@ -54,7 +54,9 @@ surveillance setup. Edit any line to match your environment.
 - Every detection rule/model must be **explainable and auditable**: deterministic inputs,
   documented thresholds, and a traceable link from alert → logic → regulatory obligation.
 - No hard-coded thresholds without a comment recording rationale and tuning date.
-- All changes to detection logic require review by `compliance-reviewer` before merge.
+- All changes to detection logic require review before merge: `code-reviewer` for
+  engineering quality and security (driving the standard linters per language), and
+  `compliance-reviewer` for auditability and the regulatory trail.
 - Tests are mandatory for rule logic, including known true-positive and false-positive cases.
 
 ## 5. Data handling (non-negotiable)

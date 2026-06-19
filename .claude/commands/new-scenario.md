@@ -18,8 +18,10 @@ each step to the right agent and chain them in this session:
    (synthetic data only — §5), thresholds documented with rationale + tuning date (§4).
    If the detection is model-based, route to **ml-engineer** instead, then **model-validator**
    for independent validation before sign-off.
-4. **compliance-reviewer** — check auditability, the alert→logic→obligation trace,
+4. **code-reviewer** — comprehensive code review of the implementation (correctness,
+   security, maintainability) using the standard linters/analysers for the language.
+5. **compliance-reviewer** — check auditability, the alert→logic→obligation trace,
    thresholds rationale, secrets/PII, and test coverage.
-5. Produce the scenario doc from `docs/templates/scenario-doc.md`.
+6. Produce the scenario doc from `docs/templates/scenario-doc.md`.
 
 Confirm `pytest` passes. Stop for human approval before anything that touches live systems.

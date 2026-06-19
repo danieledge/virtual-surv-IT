@@ -35,7 +35,7 @@ that stop confidential data ever reaching the AI.
   So an agent can actually *do* work (open files, write code, run it) rather than only
   chatting about it.
 
-- **Subagent** — one agent set up for **a single, focused role**. This project has 10 of
+- **Subagent** — one agent set up for **a single, focused role**. This project has 11 of
   them. Each has a short "job description" (a small text file in `.claude/agents/`) telling
   it what it's responsible for and what it's allowed to touch.
 
@@ -64,6 +64,7 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 | `ml-engineer` | 🔧 Builder | Builds smarter AI-based detection when needed |
 | `model-validator` | 🧠 Advisor | Independently checks any AI model is sound and fair |
 | `cloud-architect` | 🔧 Builder | Designs the plumbing (where data flows, how it scales) |
+| `code-reviewer` | 🧠 Advisor | Reviews code quality & security across Python, Scala, Java, PowerShell, Bash |
 | `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested? |
 
 > Why "read-only" matters: a reviewer who could quietly fix the thing they're reviewing
@@ -176,7 +177,7 @@ It's the template every other detection in this team would follow.
 
 ## 8. How you'd actually use it
 
-1. Open this project in **Claude Code** (Anthropic's coding tool). The 10 team members load
+1. Open this project in **Claude Code** (Anthropic's coding tool). The 11 team members load
    automatically.
 2. Ask in plain English, e.g. *"Build a detector for wash trades."* The right specialists
    are picked for you — or type `/new-scenario wash trades` to run the full chain.

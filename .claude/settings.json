@@ -9,7 +9,24 @@
       "Bash(python -m scripts.ingest:*)",
       "Bash(python -m scripts.validate_masking:*)",
       "Bash(python3 -m scripts.validate_masking:*)",
-      "Bash(pre-commit run:*)"
+      "Bash(pre-commit run:*)",
+      "Bash(git diff:*)",
+      "Bash(ruff:*)",
+      "Bash(black:*)",
+      "Bash(mypy:*)",
+      "Bash(bandit:*)",
+      "Bash(pip-audit:*)",
+      "Bash(shellcheck:*)",
+      "Bash(shfmt:*)",
+      "Bash(bashate:*)",
+      "Bash(semgrep:*)",
+      "Bash(gitleaks:*)",
+      "Bash(checkstyle:*)",
+      "Bash(pmd:*)",
+      "Bash(spotbugs:*)",
+      "Bash(scalafmt:*)",
+      "Bash(scalafix:*)",
+      "Bash(pwsh -Command Invoke-ScriptAnalyzer:*)"
     ]
   },
   "hooks": {

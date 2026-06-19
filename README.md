@@ -3,7 +3,7 @@
 A **virtual compliance surveillance *engineering* team made of AI assistants** — it doesn't
 *do* compliance, it **builds the surveillance solutions and technology** that detect money
 laundering, market manipulation and trader misconduct. It runs in
-[Claude Code](https://claude.com/claude-code) as a set of 10 focused "subagents": some are
+[Claude Code](https://claude.com/claude-code) as a set of 11 focused "subagents": some are
 subject-matter experts who only advise, others engineer and test the detection systems, and
 the work flows between them like a real engineering team.
 
@@ -29,7 +29,7 @@ guard blocks any agent from reading raw records. See
 
 ```
 CLAUDE.md                     # shared team handbook (example defaults — customise as needed)
-.claude/agents/               # 10 subagents
+.claude/agents/               # 11 subagents
   requirements-analyst.md     # BA            (build)
   tm-sme.md                   # AML SME       (advisory, read-only)
   trade-surveillance-sme.md   # SME           (advisory, read-only)
@@ -39,12 +39,13 @@ CLAUDE.md                     # shared team handbook (example defaults — custo
   ml-engineer.md              # AI/ML         (build)
   model-validator.md          # independent validation (advisory, read-only)
   cloud-architect.md          # cloud         (advisory + light build)
+  code-reviewer.md            # multi-language code review (advisory, read-only)
   compliance-reviewer.md      # review/QA     (advisory, read-only)
 ```
 
 ## Meet the agents
 
-Ten specialists, each defined by a short job description in `.claude/agents/`. They split
+Eleven specialists, each defined by a short job description in `.claude/agents/`. They split
 into **🧠 advisors** (read-only — they review and recommend but cannot change code, which
 keeps them independent) and **🔧 builders** (they engineer and test the detection systems).
 
@@ -73,6 +74,10 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 - **`model-validator`** — **independent** validation of any statistical/ML model
   (soundness, performance, bias, stability, explainability). Independent of `ml-engineer`
   by design, so it's free to challenge.
+- **`code-reviewer`** — comprehensive code review across **Python, Scala, Java, PowerShell
+  and Bash**. Drives the established linters/analysers for each language (ruff/mypy/bandit,
+  Checkstyle/SpotBugs/PMD, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, plus Semgrep) —
+  not reinvented rules — and adds judgment on top.
 - **`compliance-reviewer`** — final QA after any change: auditability, the
   alert→logic→obligation trace, secrets/PII, and test coverage.
 
