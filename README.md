@@ -95,18 +95,34 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 
 ## Using them
 
-Automatic: just describe the task — Claude matches on each agent's `description`.
+It's one **dynamic, agile delivery team** with a single front door: the **PM**. Throw it a
+problem, code to review, or requirements to build, and it clarifies, lets you pick the
+deliverables, then orchestrates the specialists.
 
-Explicit / chained:
 ```
-Use requirements-analyst to turn this MAR spoofing requirement into a spec,
-have trade-surveillance-sme review the detection logic, then rules-developer
-implement it and compliance-reviewer check the audit trail.
+/engage <a problem, code to review, or a set of requirements>
 ```
 
-Parallel (optional, experimental, token-heavy): enable agent teams by adding
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` to your settings.json, then ask Claude to
-spawn a team with a lead.
+The PM asks clarifying questions (and waits for your answers), offers a **menu of documentary
+artifacts** to choose from, summarises everything in an Engagement Brief, then oversees
+delivery. Focused commands for each entry point:
+
+| Command | Use it for | Pattern |
+|---|---|---|
+| `/engage` | anything — the front door | PM intake + dynamic routing |
+| `/write-brd` | idea → Business Requirements (BABOK + EARS) | prompt chaining |
+| `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
+| `/audit-review` | existing code → robust & audit-ready? | evaluator–optimizer loop |
+| `/build-solution` | full requirements → end-to-end build | orchestrator–workers |
+| `/new-scenario` | a single detection scenario | spec → SME → build → review |
+
+Every deliverable is produced in **`.md` and `.html`** (via `scripts/render_html.py`) for
+easy distribution. See **[`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md)** for the
+frameworks, the artifact menu and the traceability spine.
+
+You can also just describe a task in plain English (Claude matches on each agent's
+`description`), or enable experimental agent teams via `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`
+for genuinely parallel workstreams.
 
 ## Worked example & repo layout
 
@@ -117,8 +133,10 @@ rules/spoofing.py            # MAR spoofing detection (deterministic, explainabl
 scripts/gen_synthetic.py     # synthetic order-flow generator (§5 — no real data)
 tests/test_spoofing.py       # true-positive + false-positive cases (§4)
 docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
-docs/templates/              # scenario spec, scenario doc, model-validation report
-.claude/commands/new-scenario.md   # /new-scenario — runs the spec→SME→build→review chain
+docs/WAYS-OF-WORKING.md      # frameworks, workflows, artifact menu, traceability spine
+docs/templates/              # engagement brief, BRD, FSD, ADR, RTM, review report, scenario, model-validation
+scripts/render_html.py       # render any .md artifact to standalone .html for distribution
+.claude/commands/            # /engage, /write-brd, /brd-to-fsd, /audit-review, /build-solution, /new-scenario
 .github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
 .pre-commit-config.yaml      # local secret / raw-data guardrails
 ```

@@ -84,13 +84,22 @@ provider as prompt context, so the team is structured to sit *downstream* of mas
 
 ## 6. How the virtual team works
 
-- **Advisory agents** (`*-sme`, `model-validator`, `compliance-reviewer`) are read-only.
-  Consult them for design, critique and sign-off — they cannot change code.
+This is one **dynamic, agile delivery team**. Throw it a problem, some code to review, or a
+set of requirements to build, and it works out the shape of the work and orchestrates it.
+
+- **You are the Project Manager (PM) and orchestrator** — the single front door. Every
+  engagement starts with you. You **classify** the work, **ask clarifying questions and wait
+  for answers** (never guess material decisions), **offer the user a menu of documentary
+  artifacts** to choose from, **summarise** it all in an Engagement Brief, then **oversee**
+  the specialists in small iterations, returning to the user at each gate. Start with
+  `/engage` (or the focused commands `/write-brd`, `/brd-to-fsd`, `/audit-review`,
+  `/build-solution`). Be flexible — run only the stages the request needs.
+- **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `compliance-reviewer`)
+  are read-only. Consult them for design, critique and sign-off — they cannot change code.
 - **Build agents** (`requirements-analyst`, `rules-developer`, `data-analyst`,
   `ml-engineer`, `cloud-architect`) implement.
-- **You** are the orchestrator/PM. Route work and chain agents, e.g.:
-  *"Have requirements-analyst write the spec, trade-surveillance-sme review the logic,
-  then rules-developer implement it and compliance-reviewer check the audit trail."*
+
+See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
 
 ## 7. Guardrails
 
@@ -99,3 +108,17 @@ provider as prompt context, so the team is structured to sit *downstream* of mas
 - `model-validator` is independent of `ml-engineer` by design — it must be free to challenge.
 - Prefer chaining agents in one session. Use agent teams only for genuinely parallel,
   multi-workstream tasks (they cost significantly more tokens).
+
+## 8. Ways of working & artifacts
+
+- **Frameworks (don't reinvent the wheel):** BABOK + **EARS** for requirements, ISO/IEC/IEEE
+  29148 + **Gherkin** for specs, ADRs + C4 for design, OWASP ASVS / CWE / SEI CERT for code
+  review, SR 11-7 / SS1/23 for model risk, and Anthropic's *Building Effective Agents*
+  workflow patterns (chaining, routing, orchestrator-workers, evaluator-optimizer) for
+  orchestration. Details in `docs/WAYS-OF-WORKING.md`.
+- **Traceability spine (audit golden thread):** mint a stable ID in the BRD and carry it
+  through — `BRD-001 → FSD-001 → code → test → obligation` — tracked in the RTM
+  (`docs/templates/rtm.md`) and checked by `compliance-reviewer`.
+- **Artifacts in `.md` + `.html`:** author every deliverable as Markdown under `artifacts/`,
+  then render with `python -m scripts.render_html <file>.md` so each exists in both formats
+  for distribution. Templates live in `docs/templates/`. (`artifacts/` is git-ignored.)

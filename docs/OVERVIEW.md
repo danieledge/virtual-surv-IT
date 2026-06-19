@@ -179,12 +179,18 @@ It's the template every other detection in this team would follow.
 
 1. Open this project in **Claude Code** (Anthropic's coding tool). The 11 team members load
    automatically.
-2. Ask in plain English, e.g. *"Build a detector for wash trades."* The right specialists
-   are picked for you — or type `/new-scenario wash trades` to run the full chain.
-3. Everything is checked automatically: tests must pass, no secrets or real data can sneak
+2. **Start with the Project Manager.** Type `/engage` and describe whatever you've got — a
+   rough idea, some code to check, or a full set of requirements. The PM is the single front
+   door: it asks you clarifying questions, lets you **pick which documents you want**
+   (a requirements doc? a spec? a review report?), agrees a plan, then runs the right
+   specialists for you. You don't need to know who does what.
+3. You get back proper deliverables — each as both a **Markdown** file and a ready-to-share
+   **HTML** file.
+4. Everything is checked automatically: tests must pass, no secrets or real data can sneak
    into the project, and the masking must prove it's safe.
 
-You never need to know which expert to call or how the safety rails work — they're built in.
+Think of it as a small, flexible delivery team: hand it a problem, a review, or a build, and
+it organises and does the work — you stay in the loop at the decision points.
 
 ---
 

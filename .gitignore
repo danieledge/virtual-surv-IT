@@ -14,6 +14,10 @@ data/
 *.csv
 *.parquet
 
+# Generated deliverables (engagement briefs, BRDs, FSDs, review reports, audit packs).
+# Authored as .md and rendered to .html; may contain engagement specifics — keep out of git.
+artifacts/
+
 # Python
 __pycache__/
 *.py[cod]

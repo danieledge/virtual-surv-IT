@@ -3,6 +3,7 @@
 pytest>=8.0
 pre-commit>=3.7
 PyYAML>=6.0
+Markdown>=3.5    # scripts/render_html.py — artifacts are produced in .md and .html
 
 # The Python analysers used by the code-reviewer agent live in requirements-review.txt
 # (kept separate so the core dev/test install stays lean).
