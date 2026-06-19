@@ -201,7 +201,9 @@ It's the template every other detection in this team would follow.
    single front door: it asks you clarifying questions, lets you **pick which documents you
    want**
    (a requirements doc? a spec? a review report?), agrees a plan, then runs the right
-   specialists for you. You don't need to know who does what.
+   specialists for you. You don't need to know who does what. **Type `/engage` just once** to
+   start — after that, simply chat back and forth; Morgan stays with you for the whole
+   session.
 3. You get back proper deliverables — each as both a **Markdown** file and a ready-to-share
    **HTML** file.
 4. Everything is checked automatically: tests must pass, no secrets or real data can sneak

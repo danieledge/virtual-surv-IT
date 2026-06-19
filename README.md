@@ -77,6 +77,12 @@ Then just **talk to the PM** — describe whatever you've got:
 /engage build this from the attached FSD
 ```
 
+> **You only type `/engage` once** — to kick off a piece of work. After that, just reply in
+> plain English ("yes, go ahead", "add a false-positive test", "now do the handover");
+> Morgan stays in role for the whole session. Use `/engage` again only to start a new,
+> separate piece of work, or a focused command (`/audit-review`, `/handover`, …) to jump
+> straight to a specific workflow.
+
 The PM (the main session) then:
 1. **Asks you clarifying questions** and waits for your answers — it won't guess scope,
    jurisdiction, data or success criteria.
