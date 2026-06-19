@@ -195,8 +195,10 @@ It's the template every other detection in this team would follow.
 1. Open this project in **Claude Code** (Anthropic's coding tool). The 13 team members load
    automatically.
 2. **Start with the Project Manager.** Type `/engage` and describe whatever you've got — a
-   rough idea, some code to check, or a full set of requirements. The PM is the single front
-   door: it asks you clarifying questions, lets you **pick which documents you want**
+   rough idea, some code to check, or a full set of requirements. The PM is warm and
+   plain-speaking, with a can-do but realistic attitude — it'll find a way forward, but tell
+   you honestly if something's hard or risky rather than just saying yes. It's the single
+   front door: it asks you clarifying questions, lets you **pick which documents you want**
    (a requirements doc? a spec? a review report?), agrees a plan, then runs the right
    specialists for you. You don't need to know who does what.
 3. You get back proper deliverables — each as both a **Markdown** file and a ready-to-share
