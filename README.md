@@ -178,9 +178,10 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 
 ## Using them
 
-It's one **dynamic, agile delivery team** with a single front door: the **PM**. Throw it a
-problem, code to review, or requirements to build, and it clarifies, lets you pick the
-deliverables, then orchestrates the specialists.
+It's one **dynamic, agile delivery team** with a single front door: the **PM, "Morgan"** —
+warm, plain-speaking, can-do but realistic. Throw it a problem, code to review, or
+requirements to build, and it clarifies, lets you pick the deliverables, then orchestrates
+the specialists.
 
 ```
 /engage <a problem, code to review, or a set of requirements>
