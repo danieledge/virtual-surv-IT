@@ -19,12 +19,20 @@ anything) must change first.
 
 ## 2. Findings
 Confidence score per `docs/code-review-method.md` (Critical 95–100, Warning 80–94, Medium
-70–79 — deep only).
+70–79 — deep only). **Each finding carries a concrete `diff`-style fix + "why it works".**
+If there are none: *✅ No significant issues found* (still show the filtered counts below).
 
 ### 🔴 Critical (must fix)
-| # | File:line | Issue | Conf. | Standard / rule | Recommended fix |
-|---|-----------|-------|-------|-----------------|-----------------|
-| 1 | `path:42` | … | 97 | CWE-89 / OWASP ASVS V5 | … |
+| # | File:line | Issue | Conf. | Standard / rule |
+|---|-----------|-------|-------|-----------------|
+| 1 | `path:42` | … | 97 | CWE-89 / OWASP ASVS V5 |
+
+> **Fix for #1:**
+> ```diff
+> - vulnerable_line
+> + fixed_line
+> ```
+> *Why this works:* …
 
 ### 🟠 Warnings (should fix)
 | # | File:line | Issue | Conf. | Standard / rule | Recommended fix |

@@ -60,17 +60,26 @@ thresholds or a broken alert→logic→obligation trace (§4).
 
 When invoked:
 1. `git diff` (or the named target); group changed files by language; pick depth.
-2. Run the relevant analysers; read the code in context.
+2. Run the relevant analysers; read the code in context. **Run the review dimensions as
+   parallel lenses** (bugs · security · language · docs · architecture) rather than one long
+   sequential pass — each lens is blind to the others, which catches more; then merge and
+   dedupe. Load only the lenses relevant to the changed files.
 3. Score every candidate finding; filter per the method.
-4. Report using `docs/templates/review-report.md`.
+4. Report (default into the consolidated `docs/templates/delivery-report.md`; standalone
+   `docs/templates/review-report.md` only if asked).
+
+**Model tiering:** use a cheaper tier for the mechanical parts (language detection, running
+analysers, scoring, filtering); reserve deep reasoning for the judgement on findings.
 
 ## Output (always show what was filtered)
 
 `Found N · Reported R · Filtered F`, then findings by severity with `file:line`, the
-tool/rule cited, a confidence score, and a `diff`-style suggested fix. Deep adds
-**Architectural Notes** (patterns, coupling, test coverage, dependencies) and **Impact
-Analysis** (affected files, blast radius, breaking changes). Recommend recurring issues for
-`docs/house-rules.md` so reviews tighten over time.
+tool/rule cited, and a **confidence score**. **Every finding includes a concrete
+`diff`-style suggested fix** (before/after) **and a one-line "why this fix works"** — make it
+directly applicable, not just a description. Deep adds **Architectural Notes** (patterns,
+coupling, test coverage, dependencies) and **Impact Analysis** (affected files, blast radius,
+breaking changes). If nothing qualifies, say so plainly ("✅ no significant issues") and still
+show the filtered counts. Recommend recurring issues for `docs/house-rules.md`.
 
 > Confidence-scoring, filtering and the deep-review shape are adapted from
 > turingmind-code-review (MIT) — see `docs/code-review-method.md`.

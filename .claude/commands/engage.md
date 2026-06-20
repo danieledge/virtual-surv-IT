@@ -51,10 +51,13 @@ Each is delivered in **both `.md` and `.html`**.
 decisions taken, open questions, clarifications, assumptions, the selected artifacts and the
 routing plan. Render it to HTML. Get the user's go-ahead.
 
-**5. Oversee delivery (agile).** Work in small iterations. Route each step to the right
-specialist, review their output against the brief, keep a short decision/status log, and
-return to the user at each gate. Maintain the RTM so every requirement traces to code, a
-test and an obligation.
+**5. Oversee delivery (agile).** Work in small iterations. **Right-size**: use the leanest set
+of agents that fits — don't fan out the whole team for a narrow change. **Delegate with an
+explicit, non-overlapping brief** to each specialist (objective · scope boundaries / what
+another agent owns · inputs & artifacts to read · expected output format) — this prevents the
+duplicate-work/gap failures. Coordinate via the **shared artifacts** (Delivery Report, RTM),
+not conversation. Review each output against the brief, keep a short status log, and return to
+the user at each gate.
 
 **6. Deliver.** Produce the selected artifacts under `artifacts/` as Markdown, then render
 each with `python -m scripts.render_html <file>.md` so every deliverable exists in `.md` and

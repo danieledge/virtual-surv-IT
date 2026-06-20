@@ -165,6 +165,21 @@ set of requirements to build, and it works out the shape of the work and orchest
 
 See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
 
+### Orchestration discipline (evidence-based — see `docs/research-virtual-team.md`)
+
+- **Right-size first — start simple.** Multi-agent costs ~15× the tokens and is a poor fit
+  for tightly-coupled coding. Use the **leanest** set of agents that fits: a one-file edit or
+  narrow change → one builder + one reviewer, *not* the whole team. Reserve full fan-out for
+  **high-value, broad** deliverables. Add agents only where they demonstrably help.
+- **Delegate with explicit, non-overlapping task briefs.** The #1 multi-agent failure is weak
+  delegation (agents duplicate work, leave gaps, or over-spawn). When routing to a subagent,
+  give it: a clear **objective**, **scope boundaries** (what's in/out, and what *another*
+  agent owns), the **inputs/artifacts** to read, and the **expected output format**. Don't
+  spawn more agents than the task needs.
+- **Coordinate through artifacts, not chatter (the "blackboard").** Agents read and write the
+  shared artifact set (the Delivery Report, RTM, specs) rather than relying on conversational
+  context. Each step's output is the next step's input.
+
 ## 6a. Definition of Done
 
 Real delivery is handed to this team and **real developers and QA reviewers rely on the
@@ -192,3 +207,8 @@ QA'd, code- and performance-reviewed, compliance-reviewed, documented for handov
 - **Artifacts in `.md` + `.html`:** author under `artifacts/` (git-ignored), then render with
   `python -m scripts.render_html`. Templates in `docs/templates/`.
 - **Definition of Done:** `docs/DEFINITION-OF-DONE.md` — the evidenced gate before handover.
+- **Model tiering (cost):** token use drives most of the cost, so match the model to the work
+  — a cheaper tier (haiku/sonnet) for mechanical steps (language detection, scoring, filtering,
+  formatting) and opus only for deep judgement. Each agent sets its own `model:`; reviewers
+  use the cheap tier for the mechanical parts of a review and reserve heavy reasoning for the
+  findings.

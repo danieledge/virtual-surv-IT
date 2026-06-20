@@ -29,11 +29,19 @@ scope.
 
 ## 4. Code review
 `Found N · Reported R · Filtered F` (depth, mode — see `docs/code-review-method.md`).
+Each finding gets a `diff`-style fix + "why it works"; if none: *✅ no significant issues*.
 
-| Sev | File:line | Issue | Conf. | Standard | Fix |
-|-----|-----------|-------|-------|----------|-----|
-| 🔴 | | | | CWE-… | |
-| 🟠 | | | | | |
+| Sev | File:line | Issue | Conf. | Standard |
+|-----|-----------|-------|-------|----------|
+| 🔴 | | | | CWE-… |
+| 🟠 | | | | |
+
+Per critical/warning, a suggested fix:
+```diff
+- before
++ after
+```
+*Why this works:* …
 
 Architectural notes & impact (deep): patterns, coupling, blast radius, breaking changes.
 

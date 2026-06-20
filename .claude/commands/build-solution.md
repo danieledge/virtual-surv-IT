@@ -13,7 +13,9 @@ Run the **orchestrator–workers** pattern, agile and iterative:
    the right builder by type** (CLAUDE.md §6): detection logic → `rules-developer`; data
    pipeline / ETL / transformation or utility script / infra → `cloud-architect`; analytics
    / data-quality / reconciliation / reporting → `data-analyst`; ML → `ml-engineer` +
-   independent `model-validator`. Then chain each unit through `code-reviewer` →
+   independent `model-validator`. **Give each unit an explicit, non-overlapping brief**
+   (objective · scope boundaries / what other units own · inputs/artifacts to read · expected
+   output) so units don't duplicate or leave gaps. Then chain each through `code-reviewer` →
    `compliance-reviewer`. Independent units can run in parallel.
 3. **Test independently** — `qa-engineer` (not the builder) designs and runs tests
    appropriate to the deliverable: true-positive and false-positive cases for detection
