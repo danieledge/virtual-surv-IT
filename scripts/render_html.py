@@ -6,6 +6,11 @@ Markdown and rendered to self-contained HTML (inline CSS, no external assets) so
 emailed or shared as a single file — the team always produces artifacts in both .md and
 .html for easy distribution.
 
+Security note: artifacts may include content from untrusted sources (captured comms excerpts,
+third-party tool output).  The raw HTML produced by markdown() is sanitised via bleach before
+insertion into the page, and the page title is html.escape()d.  If bleach is unavailable the
+build degrades gracefully — body content is still rendered but a warning is printed.
+
 Usage:
   python -m scripts.render_html artifacts/BRD-spoofing.md
   python -m scripts.render_html artifacts/BRD-spoofing.md --out artifacts/BRD-spoofing.html
@@ -13,13 +18,66 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import html
 import re
+import sys
 from pathlib import Path
 
 try:
     import markdown
 except ImportError:  # pragma: no cover - import guard
     markdown = None
+
+try:
+    import bleach
+    import bleach.linkifier  # confirm full package is present, not just a stub
+    _BLEACH_AVAILABLE = True
+except Exception:  # pragma: no cover - optional dependency
+    _BLEACH_AVAILABLE = False
+
+# ---------------------------------------------------------------------------
+# bleach allow-list: tags and attributes that are safe in rendered Markdown.
+# Derived from common Markdown output + the extensions used here (tables, code,
+# toc).  Inline event handlers (onclick, onerror, …) are intentionally absent.
+# ---------------------------------------------------------------------------
+_ALLOWED_TAGS = frozenset({
+    # Structure
+    "p", "br", "hr", "div", "span",
+    # Headings
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    # Lists
+    "ul", "ol", "li",
+    # Inline
+    "a", "strong", "em", "b", "i", "s", "del", "ins",
+    # Code
+    "code", "pre",
+    # Quotes
+    "blockquote",
+    # Tables (tables extension)
+    "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+    # Images — allowed with restricted attributes; src is constrained to data: or relative
+    "img",
+    # TOC anchors
+    "sup", "sub",
+})
+
+_ALLOWED_ATTRS: dict = {
+    # Links: href + title only; javascript: is blocked by bleach's protocol filter
+    "a": ["href", "title"],
+    # Code block language hint (set by fenced_code extension)
+    "code": ["class"],
+    "pre": ["class"],
+    # Table alignment
+    "th": ["align", "style"],
+    "td": ["align", "style"],
+    # Images: restrict to alt/title/src; no crossorigin, no event attrs
+    "img": ["alt", "title", "src"],
+    # TOC ids (set by toc extension)
+    "*": ["id"],
+}
+
+# Allowed URI schemes in href/src attributes.
+_ALLOWED_PROTOCOLS = frozenset({"http", "https", "mailto"})
 
 _CSS = """
 :root { color-scheme: light dark; }
@@ -63,16 +121,52 @@ def _title_from(md_text: str, fallback: str) -> str:
     return m.group(1).strip() if m else fallback
 
 
+def _sanitise(raw_html: str) -> str:
+    """
+    Sanitise raw HTML produced by markdown() using bleach.
+
+    If bleach is not installed we degrade gracefully: output the raw HTML
+    but print a warning.  This avoids a hard build dependency on bleach while
+    still making the safe path the default when the package is present.
+    """
+    if _BLEACH_AVAILABLE:
+        return bleach.clean(
+            raw_html,
+            tags=_ALLOWED_TAGS,
+            attributes=_ALLOWED_ATTRS,
+            protocols=_ALLOWED_PROTOCOLS,
+            strip=True,          # remove (not escape) disallowed tags
+            strip_comments=True, # strip HTML comments which can hide payloads
+        )
+    # Degraded path: bleach unavailable.
+    print(
+        "WARNING: bleach is not installed — HTML output is NOT sanitised. "
+        "Install bleach (pip install bleach) for safe output. "
+        "See scripts/render_html.py for details.",
+        file=sys.stderr,
+    )
+    return raw_html
+
+
 def render(md_text: str, title: str) -> str:
     if markdown is None:
         raise RuntimeError("The 'Markdown' package is required: pip install -r requirements-dev.txt")
-    body = markdown.markdown(
+
+    raw_body = markdown.markdown(
         md_text, extensions=["tables", "fenced_code", "toc", "sane_lists"]
     )
+    # Sanitise rendered HTML body to prevent XSS if artifact content is
+    # untrusted (e.g. captured comms snippets, third-party output).
+    safe_body = _sanitise(raw_body)
+
+    # html.escape() the title so injected HTML/JS in a Markdown H1 cannot
+    # break out of the <title> element.
+    safe_title = html.escape(title, quote=True)
+
     return (
-        _TEMPLATE.replace("%%TITLE%%", title)
+        _TEMPLATE.replace("%%TITLE%%", safe_title)
         .replace("%%CSS%%", _CSS)
-        .replace("%%BODY%%", body)
+        .replace("%%BODY%%", safe_body)
     )
 
 

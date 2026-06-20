@@ -14,4 +14,8 @@ Under the PM (CLAUDE.md §6), turn this idea into a BRD: **$ARGUMENTS**
 4. List open questions for the PM to raise with the user.
 5. Save `artifacts/BRD-<slug>.md` and render: `python -m scripts.render_html artifacts/BRD-<slug>.md`.
 
-Hand off: the BRD feeds `/brd-to-fsd`.
+**Close — don't dead-end (CLAUDE.md §6).** Summarise the BRD (what it covers, the key
+requirements, any open questions for the user), then offer the next step with a
+recommendation: proceed to the Functional Spec now (`/brd-to-fsd`), or pause for the user to
+resolve the open questions first. Offer to carry it out and wait for the go-ahead — don't
+leave the user at the BRD with no obvious next move.

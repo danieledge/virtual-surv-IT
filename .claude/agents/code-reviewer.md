@@ -68,8 +68,13 @@ When invoked:
 4. Report (default into the consolidated `docs/templates/delivery-report.md`; standalone
    `docs/templates/review-report.md` only if asked).
 
-**Model tiering:** use a cheaper tier for the mechanical parts (language detection, running
-analysers, scoring, filtering); reserve deep reasoning for the judgement on findings.
+**Model tiering:** this agent runs on `opus` because the judgement on findings — correctness,
+security and audit impact in a regulated codebase — is the deep-reasoning work that justifies
+the top tier (CLAUDE.md §8). Spend that reasoning on the findings, not the mechanics: let the
+linters/analysers do the rote detection so your effort goes to confidence-scoring, filtering
+false positives, and the regulatory impact of what's left. If a caller needs a cheap,
+mechanical-only pass (e.g. just run the analysers), that can be routed to a cheaper-tier agent
+rather than this one.
 
 ## Output (always show what was filtered)
 

@@ -24,7 +24,14 @@ standards.
 -
 
 ## Recurring code-review findings
--
+- 2026-06-20 — **String-matching Bash commands in PreToolUse hooks is advisory only.**
+  Arbitrary shell trivially bypasses lexical checks (`cd data/raw && cat`, indirection,
+  obfuscation). The real raw-data boundary is the `permissions.deny` list in
+  `.claude/settings.json`, `data/raw/` in `.gitignore`, and masking-at-source via
+  `scripts/ingest.py`. Any new file-reading tool must be added to the guard matcher.
+- 2026-06-20 — **Lexical/regex redaction is best-effort and order-sensitive.** Every new PII
+  pattern needs an ordering rationale *and* an overlap test (date vs phone vs account); never
+  rely on it as the sole control — free-text comms needs NER before real data.
 
 ## Recurring performance hotspots
 -

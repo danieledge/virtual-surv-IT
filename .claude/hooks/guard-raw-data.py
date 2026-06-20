@@ -2,44 +2,149 @@
 """
 PreToolUse guard: keep agents structurally downstream of masking.
 
-Blocks Read/Bash tool calls that target raw, un-masked data (anything under a `data/raw/`
-or `/raw/` path). Agents must consume masked output (data/masked/, via scripts/ingest.py)
-or synthetic data — never raw records, which would egress to the model provider as prompt
-context (CLAUDE.md §5).
+Blocks Read / Grep / Glob / Bash tool calls that target raw, un-masked data (anything
+that resolves under a `data/raw/` directory).  Agents must consume masked output
+(data/masked/, via scripts/ingest.py) or synthetic data — never raw records, which
+would egress to the model provider as prompt context (CLAUDE.md §5).
 
-Protocol: read the PreToolUse JSON on stdin; exit 2 to block (stderr is fed back to the
-model); exit 0 to allow. Fails open on any parse error so it can never brick a session.
+Protocol: read the PreToolUse JSON on stdin; exit 2 to block (stderr is fed back to
+the model); exit 0 to allow.  The script errs on the side of blocking on ambiguous
+input (fail-closed for path resolution errors).
+
+FAIL-OPEN RESIDUAL RISK (Bash):
+  String-matching shell commands is advisory only — arbitrary shell can bypass any
+  lexical check (indirection, subshells, heredocs, `cd` etc.).  The real boundary for
+  Bash is:
+    1. The permissions.deny list in .claude/settings.json (file-level OS enforcement).
+    2. data/raw/ being in .gitignore (prevents accidental commit of raw data).
+    3. Masking-at-source: data never leaves the raw/ directory except via scripts/ingest.py.
+  String-matching is belt-and-braces only; do NOT rely on it as the sole control.
+  See docs/house-rules.md for the authoritative note on this.
+
+See CLAUDE.md §5 and scripts/ingest.py for the full data-safety contract.
 """
 import json
+import os
 import sys
+from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Substring markers — belt-and-braces catch (fast path, tool-agnostic).
+# Kept in addition to the normalised path check so that encoded or relative
+# paths that can't be resolved still get a best-effort intercept.
+# ---------------------------------------------------------------------------
 RAW_MARKERS = ("data/raw/", "/raw/")
+
+# ---------------------------------------------------------------------------
+# Canonical raw-data directory.
+# Resolved once at import time; if the env var is absent we fall back to the
+# directory containing this hook file (two levels up from .claude/hooks/).
+# CLAUDE_PLUGIN_ROOT is the variable the Claude Code plugin runtime injects;
+# CLAUDE_PROJECT_DIR is the project-level equivalent — we accept both so the
+# guard works whether the hook is loaded as a plugin hook or a project hook.
+# ---------------------------------------------------------------------------
+_plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT") or os.environ.get(
+    "CLAUDE_PROJECT_DIR"
+)
+if _plugin_root:
+    _REPO_ROOT = Path(_plugin_root).resolve()
+else:
+    # Fallback: two parents up from .claude/hooks/guard-raw-data.py
+    _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+_RAW_DIR = (_REPO_ROOT / "data" / "raw").resolve()
+
+
+def _is_under_raw(candidate: str) -> bool:
+    """
+    Return True if *candidate* resolves to a path inside the raw data directory.
+
+    Strategy:
+      1. Try os.path.realpath to canonicalise symlinks / relative components.
+      2. Compare with _RAW_DIR using Path.is_relative_to (Python 3.9+).
+      3. On any resolution error, fail CLOSED (return True = block).
+    """
+    if not candidate:
+        return False
+    try:
+        resolved = Path(os.path.realpath(candidate)).resolve()
+        return resolved == _RAW_DIR or resolved.is_relative_to(_RAW_DIR)
+    except Exception:
+        # Cannot resolve — err on the side of caution: block.
+        return True
+
+
+def _extract_path_candidates(tool: str, tool_input: dict) -> list[str]:
+    """
+    Return the list of string path tokens to check for a given tool.
+
+    Read     -> file_path
+    Grep     -> path, include (directory/glob the search is rooted in)
+    Glob     -> pattern (the glob itself), path (directory root)
+    Bash     -> command (full shell string — advisory only, see module docstring)
+    """
+    if tool == "Read":
+        return [tool_input.get("file_path") or ""]
+
+    if tool == "Grep":
+        # Grep exposes 'path' (directory to search) and optionally 'include' (glob).
+        # Both are checked; either resolving under raw/ is enough to block.
+        return [
+            tool_input.get("path") or "",
+            tool_input.get("include") or "",
+        ]
+
+    if tool == "Glob":
+        # Glob exposes 'pattern' (glob expression) and optionally 'path' (base dir).
+        return [
+            tool_input.get("pattern") or "",
+            tool_input.get("path") or "",
+        ]
+
+    if tool == "Bash":
+        # Belt-and-braces substring scan of the raw command string.
+        # This is ADVISORY — see module-level docstring for the residual risk note.
+        return [tool_input.get("command") or ""]
+
+    return []
+
+
+def _block(reason: str) -> None:
+    sys.stderr.write(
+        f"Blocked ({reason}): this targets raw, un-masked data (data/raw/). "
+        "Agents must not read raw records into context (CLAUDE.md §5) — they "
+        "would be sent to the model provider. "
+        "Run `python -m scripts.ingest` to produce masked data under data/masked/, "
+        "then use that (or synthetic data from scripts/gen_synthetic.py) instead.\n"
+    )
+    sys.exit(2)
 
 
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
     except Exception:
-        sys.exit(0)  # fail open
+        # Malformed hook payload — fail open so we never brick a session.
+        # The deny list in settings.json remains active as the hard boundary.
+        sys.exit(0)
 
     tool = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
 
-    if tool == "Read":
-        target = tool_input.get("file_path", "") or ""
-    elif tool == "Bash":
-        target = tool_input.get("command", "") or ""
-    else:
+    candidates = _extract_path_candidates(tool, tool_input)
+    if not candidates:
+        # Tool not in scope — allow.
         sys.exit(0)
 
-    if any(marker in target for marker in RAW_MARKERS):
-        sys.stderr.write(
-            "Blocked: this targets raw, un-masked data (data/raw/). Agents must not read raw "
-            "records into context (CLAUDE.md §5) — they would be sent to the model provider. "
-            "Run `python -m scripts.ingest` to produce masked data under data/masked/, then use "
-            "that (or synthetic data from scripts/gen_synthetic.py) instead.\n"
-        )
-        sys.exit(2)
+    for candidate in candidates:
+        if not candidate:
+            continue
+        # 1. Normalised path check (primary for Read / Grep / Glob).
+        if _is_under_raw(candidate):
+            _block(f"resolved path under data/raw/ — tool={tool}")
+        # 2. Substring fallback (catches relative refs and Bash commands).
+        if any(marker in candidate for marker in RAW_MARKERS):
+            _block(f"raw-data marker in input — tool={tool}")
 
     sys.exit(0)
 

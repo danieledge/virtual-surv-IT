@@ -8,8 +8,18 @@ import pytest
 
 from rules.spoofing import EventKind, Side, detect_spoofing
 from scripts.gen_synthetic import event_to_record, record_to_event, spoofing_session
-from scripts.ingest import get_key_from_env, load_schema, mask_record, mask_records
-from scripts.validate_masking import detection_fidelity, run_privacy_checks
+from scripts.ingest import (
+    get_key_from_env,
+    load_schema,
+    mask_record,
+    mask_records,
+    validate_schema,
+)
+from scripts.validate_masking import (
+    _TEST_KEY_CONSTANT,
+    detection_fidelity,
+    run_privacy_checks,
+)
 
 KEY = b"test-key-not-a-secret"
 SCHEMA = load_schema("config/masking-schema.yaml")
@@ -54,7 +64,8 @@ def test_no_original_identifiers_survive():
     checks, _ = run_privacy_checks(_records(), SCHEMA, KEY)
     by_name = {name: (ok, detail) for name, ok, detail in checks}
     assert by_name["no residual identifiers"][0]
-    assert by_name["no residual PII patterns"][0]
+    # Check name was updated in FIX 3 to reflect all-fields scanning scope.
+    assert by_name["no residual PII patterns (all output fields)"][0]
 
 
 def test_detection_fidelity_is_exact():
@@ -83,3 +94,101 @@ def test_redaction_of_free_text():
     assert "900123" not in out
     assert "12345678" not in out
     assert "[EMAIL_" in out and "[PHONE_" in out and "[ACCT_" in out
+
+
+# ---------------------------------------------------------------------------
+# Tests for new behaviour added by the data-safety remediation
+# ---------------------------------------------------------------------------
+
+def test_validate_schema_passes_on_good_schema():
+    """validate_schema() is a no-op on a correctly configured schema."""
+    # The canonical schema has a valid shift->entity reference.
+    validate_schema(SCHEMA)  # must not raise
+
+
+def test_validate_schema_rejects_shift_without_entity():
+    """validate_schema() raises ValueError if a shift field has no entity key."""
+    bad = {
+        "fields": {
+            "ts_ms": {"role": "shift"},   # missing 'entity'
+            "trader": {"role": "token"},
+        }
+    }
+    with pytest.raises(ValueError, match="entity"):
+        validate_schema(bad)
+
+
+def test_validate_schema_rejects_missing_entity_field():
+    """validate_schema() raises ValueError if the shift entity field is not in the schema."""
+    bad = {
+        "fields": {
+            "ts_ms": {"role": "shift", "entity": "nonexistent_field"},
+            "trader": {"role": "token"},
+        }
+    }
+    with pytest.raises(ValueError, match="nonexistent_field"):
+        validate_schema(bad)
+
+
+def test_mask_records_skips_bad_rows_not_abort(capsys):
+    """A bad row (missing entity field) skips that record; the rest are still masked."""
+    # Build a schema with a shift field so a missing entity causes a per-record error.
+    schema = {
+        "on_unknown": "drop",
+        "fields": {
+            "ts_ms": {"role": "shift", "entity": "trader", "max_shift_ms": 1000},
+            "trader": {"role": "token", "domain": "party"},
+        },
+    }
+    records = [
+        {"ts_ms": 1000000, "trader": "T1"},   # good
+        {"ts_ms": 2000000},                   # bad — missing 'trader' (shift entity)
+        {"ts_ms": 3000000, "trader": "T1"},   # good
+    ]
+    out = mask_records(records, schema, KEY)
+    # Two good records survive; the bad one is skipped without aborting.
+    assert len(out) == 2
+    captured = capsys.readouterr()
+    assert "1 record(s) skipped" in captured.err
+    # Row INDEX (1) appears in warning; no record content must appear.
+    assert "1" in captured.err
+
+
+def test_redaction_catches_iban_and_card():
+    """Extended PII patterns (FIX 5): IBAN and payment card numbers are redacted."""
+    schema = {"on_unknown": "drop", "fields": {"body": {"role": "redact"}}}
+    iban = "GB29NWBK60161331926819"
+    card = "4111 1111 1111 1111"
+    rec = {"body": f"IBAN: {iban}, card: {card}"}
+    out = mask_record(rec, schema, KEY)["body"]
+    assert iban not in out, "IBAN must be redacted"
+    assert "4111" not in out or "1111 1111 1111 1111" not in out  # card pattern redacted
+
+
+def test_validate_masking_test_key_is_deterministic(monkeypatch):
+    """validate_masking uses a fixed test key when MASKING_KEY is unset — not os.urandom."""
+    monkeypatch.delenv("MASKING_KEY", raising=False)
+    # Two runs with same inputs must produce identical results (os.urandom would differ).
+    events = spoofing_session(seed=1)
+    records = [event_to_record(e) for e in events]
+    checks1, masked1 = run_privacy_checks(records, SCHEMA, _TEST_KEY_CONSTANT)
+    checks2, masked2 = run_privacy_checks(records, SCHEMA, _TEST_KEY_CONSTANT)
+    assert masked1 == masked2
+    assert [(n, ok) for n, ok, _ in checks1] == [(n, ok) for n, ok, _ in checks2]
+
+
+def test_direct_identifier_passthrough_is_flagged():
+    """FIX 3: run_privacy_checks fails if a direct-identifier field has a keep/generalise role."""
+    bad_schema = {
+        "on_unknown": "drop",
+        "fields": {
+            "trader": {"role": "keep"},      # direct identifier with pass-through role
+            "order_id": {"role": "token", "domain": "order"},
+        },
+    }
+    records = [{"trader": "T1", "order_id": "O1"}]
+    checks, _ = run_privacy_checks(records, bad_schema, KEY)
+    by_name = {name: ok for name, ok, _ in checks}
+    assert not by_name["no direct-identifier passthrough"], (
+        "A trader field with role=keep must fail the direct-identifier passthrough check"
+    )

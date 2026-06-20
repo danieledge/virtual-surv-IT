@@ -95,7 +95,9 @@ provider as prompt context, so the team is structured to sit *downstream* of mas
 - **Pseudonymised ≠ anonymous.** Masked output is still personal data (GDPR) — keep it
   governed. For anything leaving the environment, prefer fully **synthetic** data.
 - If asked to analyse real data, **stop** and require it be passed through `scripts/ingest.py`
-  (or replaced with synthetic data) first.
+  (or replaced with synthetic data) first. The guided on-ramp for this is **`/prepare-data`** —
+  the PM uses it to walk the user through synthetic-vs-mask → validate before any agent sees
+  the data.
 
 ## 6. How the virtual team works
 

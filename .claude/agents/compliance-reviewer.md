@@ -15,6 +15,9 @@ When invoked:
 1. Run `git diff` to see what changed and focus on modified files.
 2. Check the change against the team handbook (CLAUDE.md), especially auditability and
    data-handling rules.
+3. When the work is heading for handover, verify it against `docs/DEFINITION-OF-DONE.md` — you
+   are the named verifier of that gate (CLAUDE.md §6a). Check each DoD item that applies to the
+   deliverable type and record evidence (or the gap) for it, not just a pass/fail claim.
 
 Review checklist:
 - **Auditability:** every threshold/parameter has a recorded rationale and date; logic is
@@ -30,6 +33,9 @@ Output, organised by priority:
 - **Critical (must fix before merge)**
 - **Warnings (should fix)**
 - **Suggestions**
+- **Definition-of-Done status** — per applicable DoD item: met / not met, with the evidence
+  (artifact, test, traceability link) you relied on.
 
-Give specific, actionable fixes with file/line references. Recommend recurring issues for
+Give specific, actionable fixes with file/line references, each tied to the obligation or DoD
+item it serves — assertions without evidence are not sign-off. Recommend recurring issues for
 `docs/house-rules.md` so reviews tighten over time.

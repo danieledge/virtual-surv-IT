@@ -2,6 +2,13 @@
   "permissions": {
     "deny": [
       "Read(./data/raw/**)",
+      "Read(data/raw/**)",
+      "Read(/*/data/raw/**)",
+      "Read(/**/data/raw/**)",
+      "Grep(./data/raw/**)",
+      "Grep(data/raw/**)",
+      "Glob(./data/raw/**)",
+      "Glob(data/raw/**)",
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(./secrets/**)",
@@ -48,11 +55,11 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Bash",
+        "matcher": "Read|Grep|Glob|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-raw-data.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/guard-raw-data.py\""
           }
         ]
       }

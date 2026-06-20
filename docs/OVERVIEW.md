@@ -179,7 +179,7 @@ It's the template every other detection in this team would follow.
 | Path | What it is |
 |---|---|
 | `CLAUDE.md` | The team handbook — shared rules every AI member reads first |
-| `.claude/agents/` | The 10 job descriptions (one file per team member) |
+| `.claude/agents/` | The 13 job descriptions (one file per team member) |
 | `.claude/skills/` | Workflow shortcuts, e.g. `/new-scenario` runs the whole team chain |
 | `.claude/hooks/` | The automatic guard that blocks the AI from real data |
 | `rules/` | The actual detection code (the spoofing example) |
@@ -219,7 +219,7 @@ it organises and does the work — you stay in the loop at the decision points.
 
 - **LLM** — the AI text engine (e.g. Claude). Reads instructions, writes text and code.
 - **Agent** — an LLM given a job and tools so it can actually do work.
-- **Subagent** — one agent set up for a single focused role (this repo has 10).
+- **Subagent** — one agent set up for a single focused role (this repo has 13).
 - **Orchestrator** — whoever hands tasks to the right agent and chains them together.
 - **Masking** — scrambling identities in real data while keeping its behaviour.
 - **Synthetic data** — completely made-up data that behaves realistically.

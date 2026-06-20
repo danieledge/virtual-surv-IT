@@ -143,7 +143,7 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 - **`ml-engineer`** — builds ML/AI-based detection where rules aren't enough (anomaly
   detection, NLP for comms, behavioural scoring, alert triage).
 - **`cloud-architect`** — designs **and builds** the data pipelines and platform: ingestion,
-  ETL, streaming/batch transformation, transformation/utility scripts (Python, Scala,
+  ETL, streaming/batch transformation, transformation/utility scripts (Python, Scala, Java,
   PowerShell, Bash), infra/IaC, retention/immutability, data residency, resilience.
 - **`qa-engineer`** — **independent** testing: designs and runs the test plan, then produces
   the QA handover evidencing what ran, coverage, gaps and residual risk. Separate from the
@@ -181,11 +181,23 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 
 ## Install
 
-1. Copy `CLAUDE.md` to your repo root (merge if you already have one).
-2. Copy the `.claude/agents/` folder into your repo. Commit both so the whole team shares them.
-3. Restart Claude Code (subagents load at session start), then run `/agents` to confirm they appear.
-4. (Optional) `CLAUDE.md` §2/§3 ship with example defaults so the team works immediately.
-   Replace the example jurisdictions and stack with your own when you have them.
+The team is a set of files you commit into your repo. To get the whole team — not just the
+agents — copy these:
+
+1. `CLAUDE.md` to your repo root (merge if you already have one) — the shared handbook.
+2. `.claude/agents/` — the 13 subagents.
+3. `.claude/skills/` — the 11 workflows (`/engage`, `/audit-review`, …); without these you
+   get agents but no front door.
+4. `.claude/hooks/` **and** `.claude/settings.json` — the always-on data-safety guard and its
+   wiring. Don't skip these: they are the §5 control that keeps real data away from the model.
+5. `docs/templates/` — the artifact templates the workflows render.
+6. Restart Claude Code (subagents and skills load at session start), then run `/agents` and
+   `/help` to confirm the team and its commands appear.
+7. (Optional) `CLAUDE.md` §2/§3 ship with example defaults so the team works immediately —
+   replace the example jurisdictions and stack with your own when you have them.
+
+(If you install this repo as a Claude Code **plugin** via `.claude-plugin/`, all of the above
+ships together — see the manifest.)
 
 ## Using them
 
@@ -205,6 +217,7 @@ delivery. Focused commands for each entry point:
 | Command | Use it for | Pattern |
 |---|---|---|
 | `/engage` | anything — the front door | PM intake + dynamic routing |
+| `/prepare-data` | get safe data ready (synthetic or masked) before analysis | guided onboarding + validation |
 | `/write-brd` | idea → Business Requirements (BABOK + EARS) | prompt chaining |
 | `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
 | `/deep-review` | detailed code review (bugs, security, architecture, impact) | dimension fan-out + scoring |
@@ -238,7 +251,7 @@ docs/scope-and-stack.md      # example regulatory scope + tech stack (customise;
 docs/code-review-method.md   # confidence scoring, filtering, deep review (adapted from turingmind)
 docs/templates/              # delivery-report (consolidated default) + BRD, FSD, ADR, RTM, review/performance, dev+QA handover, change/ops, scenario, model-validation
 scripts/render_html.py       # render any .md artifact to standalone .html for distribution
-.claude/skills/              # workflows: /engage, /write-brd, /brd-to-fsd, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
+.claude/skills/              # workflows: /engage, /prepare-data, /write-brd, /brd-to-fsd, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
 .github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
 .pre-commit-config.yaml      # local secret / raw-data guardrails
 ```
@@ -247,7 +260,7 @@ Quickstart:
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                                   # 16 passing tests
+pytest                                   # all tests green
 python -m scripts.gen_synthetic --kind spoofing --out data/synthetic/spoofing.jsonl
 pre-commit install                       # optional: enable local guardrails
 ```

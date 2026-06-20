@@ -24,3 +24,8 @@ Drive **performance-reviewer** (CLAUDE.md §6):
 Fixes route to `rules-developer` / `cloud-architect` / `ml-engineer`, then **re-profile** to
 show the before/after. Save `artifacts/PERF-<slug>.md` and render to `.html`
 (`python -m scripts.render_html`).
+
+**Close — don't dead-end (CLAUDE.md §6).** Give the scale verdict (does it hold at target
+volume?), then offer next steps with a recommendation — apply the fixes and re-profile, run a
+full `/remediate` loop if the findings are deep, or produce a `/handover` pack — and wait for
+the user's choice.

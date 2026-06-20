@@ -42,6 +42,7 @@ flowchart LR
 
 | You bring… | Command | What runs |
 |---|---|---|
+| Data to get ready (real or none) | `/prepare-data` | guided synthetic-or-mask → validate, before any agent sees it |
 | An idea / problem | `/engage` → `/write-brd` | discovery → BRD → FSD → build → review |
 | A BRD | `/brd-to-fsd` | functional spec + traceability |
 | Existing code (detailed review) | `/deep-review` | dimension fan-out + confidence scoring |
