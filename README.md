@@ -234,8 +234,9 @@ tests/test_spoofing.py       # true-positive + false-positive cases (§4)
 docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
 docs/WAYS-OF-WORKING.md      # frameworks, workflows, artifact menu, traceability spine
 docs/DEFINITION-OF-DONE.md   # the evidenced gate every delivery must meet
+docs/scope-and-stack.md      # example regulatory scope + tech stack (customise; kept out of the always-loaded handbook)
 docs/code-review-method.md   # confidence scoring, filtering, deep review (adapted from turingmind)
-docs/templates/              # engagement brief, BRD, FSD, ADR, RTM, review/performance reports, dev+QA handover, scenario, model-validation
+docs/templates/              # delivery-report (consolidated default) + BRD, FSD, ADR, RTM, review/performance, dev+QA handover, change/ops, scenario, model-validation
 scripts/render_html.py       # render any .md artifact to standalone .html for distribution
 .claude/commands/            # /engage, /write-brd, /brd-to-fsd, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
 .github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check

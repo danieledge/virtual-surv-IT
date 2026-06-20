@@ -21,9 +21,11 @@ Run an **evaluator–optimizer loop**:
    rationale, secrets/PII, test coverage, and change control.
 3. If any **Critical/Warning** findings, route fixes to `rules-developer` / `ml-engineer`,
    then **re-review** — loop until no Critical findings remain (or the user calls it).
-4. Produce a **Review Report** (`docs/templates/review-report.md`) with an explicit verdict
-   (✅ audit-ready / ⚠️ conditional / ❌ not yet), findings by severity with standards cited,
-   audit/regulatory checks, and a tooling-coverage section (state what couldn't run).
+4. Produce the report — **by default the consolidated Delivery Report**
+   (`docs/templates/delivery-report.md`), or the standalone `review-report.md` if the user
+   prefers a separate file. Give an explicit verdict (✅ audit-ready / ⚠️ conditional / ❌ not
+   yet), findings by severity with standards cited, audit/regulatory checks, and a
+   tooling-coverage section (state what couldn't run).
 
 Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
 

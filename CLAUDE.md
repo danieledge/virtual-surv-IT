@@ -17,9 +17,9 @@ This file is shared context in this repository, but it is **inert until the team
 (see the notice above). When the team is active it is the single source of truth that keeps
 the virtual team aligned.
 
-> ℹ️ Sections 2 and 3 ship with **example defaults** so the team works out of the box.
-> They are illustrative, not prescriptive — replace them with your real jurisdictions,
-> stack and platforms whenever you have them.
+> ℹ️ The regulatory scope (§2) and tech stack (§3) ship as **example defaults** in
+> `docs/scope-and-stack.md` so the team works out of the box. They are illustrative —
+> replace them with your real jurisdictions, stack and platforms whenever you have them.
 
 ---
 
@@ -49,32 +49,14 @@ Match the approach to the deliverable — don't assume every task is a detection
 
 ## 2. Regulatory scope
 
-_Example scope_ — the obligations below are common starting points. Trim to the
-jurisdictions you actually operate in (and add any others).
+The (example) regulatory scope is in **`docs/scope-and-stack.md`** — read it when an
+engagement needs jurisdiction detail, and always **cite the specific obligation** a detection
+serves. Customise it to where you actually operate.
 
-- **US:** BSA / FinCEN (AML), SEC & FINRA rules, Dodd-Frank, CFTC, SEC Rule 17a-4 / FINRA
-  4511 (recordkeeping & retention).
-- **EU / UK:** MLR 2017 & 6AMLD (AML), Market Abuse Regulation (MAR), MiFID II, FCA
-  SYSC / SUP record-keeping.
-- **Model risk governance:** US SR 11-7, UK PRA SS1/23 — applies to every statistical or
-  ML model used in detection.
+## 3. Tech stack
 
-When designing or reviewing any detection logic, cite the specific obligation it serves.
-
-## 3. Tech stack  <!-- Example defaults — replace with your real stack -->
-
-Until you customise it, the team assumes this **example stack** — a common, cloud-agnostic
-surveillance setup. Edit any line to match your environment.
-
-- Languages: Python (rules + ML), SQL (analytics). _Example:_ add Scala/Java if your
-  streaming jobs use them.
-- Data: _Example:_ Kafka for streaming ingestion, Spark for batch, a columnar warehouse
-  (Snowflake / BigQuery / Redshift) for analytics.
-- Surveillance platform: _Example:_ in-house detection on the above, interoperable with
-  vendor platforms (NICE Actimize / Nasdaq / Behavox) where present.
-- Cloud: _Example:_ cloud-agnostic — agents keep designs portable across AWS / Azure / GCP.
-- Orchestration / CI: _Example:_ Airflow (or similar) for pipelines; Git-based CI with
-  tests gating any change to detection logic.
+The (example, cloud-agnostic) tech stack is in **`docs/scope-and-stack.md`** — read it when an
+engagement needs stack detail, and customise it to your environment.
 
 ## 4. Engineering conventions
 

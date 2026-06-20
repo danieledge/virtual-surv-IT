@@ -21,10 +21,11 @@ Drive **code-reviewer** in **deep** mode (CLAUDE.md §6; method in
    traceability §4).
 3. For anything touching detection logic, hand to **compliance-reviewer** for the
    audit/traceability dimension.
-4. Produce a detailed report (`docs/templates/review-report.md`) including the **transparency
-   counts** (Found / Reported / Filtered + reasons), per-finding confidence, **Architectural
-   Notes** (patterns, coupling, test coverage, dependencies) and **Impact Analysis**
-   (affected files, blast radius, breaking changes).
+4. Produce the report. **By default write into the consolidated Delivery Report**
+   (`docs/templates/delivery-report.md`, the *Code review* + *Performance* + *Compliance*
+   sections); use the standalone `docs/templates/review-report.md` only if the user wants a
+   separate file. Include the **transparency counts** (Found / Reported / Filtered + reasons),
+   per-finding confidence, **Architectural Notes** and **Impact Analysis**.
 
 Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
 

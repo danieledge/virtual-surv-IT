@@ -36,12 +36,15 @@ just the immediate task. For a review, ask: *review only*, or also **fixes/refac
 a **remediation loop** (`/remediate`), and/or a **handover pack**? Don't assume "review" means
 "review and stop." Confirm before changing any of the user's code.
 
-**3. Offer the artifact menu.** Ask the user which documentary artifacts they want, to
-select from (see WAYS-OF-WORKING.md):
-- Engagement Brief · Business Requirements (BRD) · Functional Spec (FSD) ·
-  Architecture Decision Records (ADRs) · Requirements Traceability Matrix (RTM) ·
-  Code & Compliance Review Report · Performance Review Report · Developer Handover ·
-  QA Handover (test evidence) · Model Validation Report · Delivery / audit pack (bundle).
+**3. Offer the artifact menu.** By **default, consolidate everything into a single
+Delivery Report** (`docs/templates/delivery-report.md`) — review, performance, compliance,
+QA evidence, handover and change/ops as sections of one file, not many. Ask the user if they
+instead want **separate artifacts** (e.g. a standalone change request to attach to a ticket);
+the standalone templates in `docs/templates/` are the building blocks. Either way, ask which
+sections/artifacts they need:
+- (Consolidated) Delivery Report · or separate: Engagement Brief · BRD · FSD · ADRs · RTM ·
+  Code & Compliance Review · Performance Review · Developer Handover · QA Handover ·
+  Model Validation Report.
 Each is delivered in **both `.md` and `.html`**.
 
 **4. Summarise.** Write an Engagement Brief (`docs/templates/engagement-brief.md`) capturing

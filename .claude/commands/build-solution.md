@@ -24,9 +24,11 @@ Run the **orchestrator–workers** pattern, agile and iterative:
 5. **Maintain the RTM** (`docs/templates/rtm.md`): every requirement → code → test →
    obligation. A gap is a blocker — surface it to the user.
 6. **Keep a status log**; return to the user at each gate with decisions and blockers.
-7. **Meet the Definition of Done** (`docs/DEFINITION-OF-DONE.md`) and run `/handover` to
-   produce the developer + QA handover. Deliver the pack (RTM, review/performance reports,
-   handovers, scenario docs) under `artifacts/`, each as `.md` and rendered `.html`. Confirm
+7. **Meet the Definition of Done** (`docs/DEFINITION-OF-DONE.md`) and run `/handover`.
+   **By default deliver one consolidated Delivery Report** (`docs/templates/delivery-report.md`
+   — RTM, review, performance, compliance, QA, handover, change/ops as sections); split into
+   separate artifacts only if asked. Save under `artifacts/`, as `.md` and rendered `.html`.
+   Confirm
    `pytest` passes.
 
 Stop for human approval before anything that touches live systems.

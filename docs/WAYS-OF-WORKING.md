@@ -53,11 +53,16 @@ flowchart LR
 
 ## Documentary artifacts (the menu)
 
-Pick what you need; each is produced in **`.md` and `.html`** (rendered by
-`scripts/render_html.py`) for easy distribution.
+**By default the team produces ONE consolidated _Delivery Report_** (`delivery-report.md`)
+that holds review, performance, compliance, QA evidence, handover and change/ops as sections
+of a single file — easier to read and distribute than many separate documents. Ask for
+**separate artifacts** only when a control needs a standalone (e.g. a change request to attach
+to a ticket); the templates below are the building blocks. Everything is produced in **`.md`
+and `.html`** (via `scripts/render_html.py`).
 
 | Artifact | Template | Standard it follows |
 |---|---|---|
+| **Consolidated Delivery Report (default)** | `delivery-report.md` | all sections in one file |
 | Engagement Brief | `engagement-brief.md` | PM intake summary |
 | Business Requirements (BRD) | `brd.md` | **BABOK v3** + **EARS** syntax |
 | Functional Spec (FSD) | `fsd.md` | **ISO/IEC/IEEE 29148** + **Gherkin** acceptance criteria |
