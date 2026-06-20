@@ -15,7 +15,6 @@
     "subagents",
     "data-masking"
   ],
-  "agents": "./.claude/agents/",
-  "skills": "./.claude/skills/",
+  "skills": ["./.claude/skills/"],
   "hooks": "./hooks/hooks.json"
 }
