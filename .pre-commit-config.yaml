@@ -22,3 +22,12 @@ repos:
         entry: "Raw data files must not be committed. Generate synthetic data with scripts/gen_synthetic.py."
         language: fail
         files: '\.(csv|parquet|pcap)$'
+
+      # Definition-of-Done gate: tests must pass before a commit lands (automatic, not
+      # prompt-dependent). Runs on changes to rules/, tests/ or scripts/.
+      - id: pytest
+        name: run tests (Definition of Done)
+        entry: python -m pytest -q
+        language: system
+        pass_filenames: false
+        files: '^(rules|tests|scripts)/.*\.py$'

@@ -1,0 +1,20 @@
+#!/bin/bash
+# Opt-in AI code review on push (compliance-surveillance-team).
+# Runs the team's deep review on the commits being pushed and surfaces findings.
+# Advisory by default — it does NOT block the push. Install via
+# scripts/install-git-hooks.sh; remove with `rm .git/hooks/pre-push`.
+set -e
+
+if ! command -v claude >/dev/null 2>&1; then
+  echo "⚠️  claude CLI not found — skipping AI review (push continues)."
+  exit 0
+fi
+
+echo "🧠 Running team deep-review on this push (advisory, non-blocking)…"
+claude -p "/deep-review the outgoing commits (git diff against the upstream branch). \
+Report only Critical and Warning findings, concisely, each with a diff-style fix." \
+  2>/dev/null || true
+
+# Advisory: never block. To make it blocking on Critical findings, have the review
+# print a sentinel and `exit 1` here when it appears.
+exit 0
