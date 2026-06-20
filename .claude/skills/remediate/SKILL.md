@@ -5,6 +5,9 @@ argument-hint: <path/glob of the legacy code>
 
 Take on existing **legacy / poorly-built code** and bring it up to standard: **$ARGUMENTS**
 
+**If no target was given, first ask the user where the code is** (path/glob, repo/branch, or
+paste it) and wait — don't assume a target.
+
 PM oversees an agile remediation loop (CLAUDE.md §6; gate: `docs/DEFINITION-OF-DONE.md`).
 This is **audit mode** — pre-existing issues are in scope, not filtered out.
 

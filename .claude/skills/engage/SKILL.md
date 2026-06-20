@@ -27,9 +27,18 @@ a transformation or utility script (Python/Scala/PowerShell/Bash), a reconciliat
 reporting job, tooling, or a review. Don't assume it's a detection rule; route by type
 (CLAUDE.md §6).
 
-**2. Clarify — ask, don't guess.** Put your clarifying questions to the user and **wait for
-answers** before planning. Use the question tool (or a clear numbered list) for material
-choices. Never assume scope, jurisdiction, data availability or success criteria.
+**1a. Gather the inputs FIRST — never assume you have them.** If the engagement needs
+something you haven't been given, **ask for it before anything else** and wait:
+- **Code to review / remediate / build on** → ask *where it is*: a path or glob, a git
+  repo/branch, a commit range, or paste it. Confirm the files exist (e.g. `git status`, list
+  the path) before reviewing. **Do not invent or assume a target.**
+- A **spec/BRD/FSD**, **data location**, or other artifact → ask for the path or paste.
+If the user just typed `/engage` (or `/engage test some code`) with no concrete target, your
+**first reply** is to ask what/where the code or inputs are — don't proceed without them.
+
+**2. Clarify — ask, don't guess.** Then put any remaining clarifying questions to the user and
+**wait for answers** before planning. Use the question tool (or a clear numbered list) for
+material choices. Never assume scope, jurisdiction, data availability or success criteria.
 
 **2a. Agree the end outcome.** Explicitly ask **what they want delivered at the end**, not
 just the immediate task. For a review, ask: *review only*, or also **fixes/refactor applied**,

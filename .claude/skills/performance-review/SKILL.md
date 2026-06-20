@@ -6,6 +6,9 @@ allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*)
 
 Run a **performance & scalability review** of: **$ARGUMENTS**
 
+**If no target was given, first ask the user where the code/component is** (path/glob, repo,
+or paste it) and wait — don't assume a target.
+
 Drive **performance-reviewer** (CLAUDE.md §6):
 
 1. Establish the **workload** — current and expected data volumes and the latency/throughput

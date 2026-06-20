@@ -7,6 +7,9 @@ allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), Bash(git 
 Under the PM (CLAUDE.md §6), review for robustness and whether it would **stand up to audit
 and regulatory scrutiny**: **$ARGUMENTS**
 
+**If no target was given, first ask the user where the code is** (path/glob, repo/branch,
+commit range, or paste it) and wait — don't review an assumed target.
+
 **First, confirm the outcome wanted:** the review + verdict only, or also **fixes/refactor
 applied** as part of the loop, and/or a **handover pack** at the end? Default here is the
 fix→re-review loop, but confirm before changing the user's code.
