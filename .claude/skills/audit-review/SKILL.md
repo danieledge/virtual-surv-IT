@@ -1,6 +1,7 @@
 ---
 description: Review existing code for robustness and audit/regulatory defensibility (evaluator-optimizer loop)
 argument-hint: <path/glob of code to review, or a commit range>
+allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git blame:*), Bash(git show:*)
 ---
 
 Under the PM (CLAUDE.md §6), review for robustness and whether it would **stand up to audit

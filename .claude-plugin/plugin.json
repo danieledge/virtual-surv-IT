@@ -16,6 +16,6 @@
     "data-masking"
   ],
   "agents": "./.claude/agents/",
-  "commands": "./.claude/commands/",
+  "skills": "./.claude/skills/",
   "hooks": "./hooks/hooks.json"
 }

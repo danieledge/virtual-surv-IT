@@ -180,7 +180,7 @@ It's the template every other detection in this team would follow.
 |---|---|
 | `CLAUDE.md` | The team handbook — shared rules every AI member reads first |
 | `.claude/agents/` | The 10 job descriptions (one file per team member) |
-| `.claude/commands/` | Shortcuts, e.g. `/new-scenario` runs the whole team chain |
+| `.claude/skills/` | Workflow shortcuts, e.g. `/new-scenario` runs the whole team chain |
 | `.claude/hooks/` | The automatic guard that blocks the AI from real data |
 | `rules/` | The actual detection code (the spoofing example) |
 | `scripts/` | Tools: make fake data, clean real data, double-check the cleaning |

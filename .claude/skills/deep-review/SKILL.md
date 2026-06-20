@@ -1,6 +1,7 @@
 ---
 description: Detailed multi-dimension code review (bugs, security, architecture, impact) with confidence scoring
 argument-hint: <path/glob, commit range, or nothing for the working diff>
+allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git blame:*), Bash(git show:*)
 ---
 
 Run a **deep (detailed) code review** of: **$ARGUMENTS** (default: the current `git diff`).

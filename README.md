@@ -238,7 +238,7 @@ docs/scope-and-stack.md      # example regulatory scope + tech stack (customise;
 docs/code-review-method.md   # confidence scoring, filtering, deep review (adapted from turingmind)
 docs/templates/              # delivery-report (consolidated default) + BRD, FSD, ADR, RTM, review/performance, dev+QA handover, change/ops, scenario, model-validation
 scripts/render_html.py       # render any .md artifact to standalone .html for distribution
-.claude/commands/            # /engage, /write-brd, /brd-to-fsd, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
+.claude/skills/              # workflows: /engage, /write-brd, /brd-to-fsd, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
 .github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
 .pre-commit-config.yaml      # local secret / raw-data guardrails
 ```

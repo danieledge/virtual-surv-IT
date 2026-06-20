@@ -1,6 +1,7 @@
 ---
 description: Performance & scalability review with profiling evidence, against target data volumes
 argument-hint: <path/glob or component to review> [at <volume/SLA> if known]
+allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*)
 ---
 
 Run a **performance & scalability review** of: **$ARGUMENTS**
