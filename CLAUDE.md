@@ -67,6 +67,12 @@ engagement needs stack detail, and customise it to your environment.
   engineering quality and security (driving the standard linters per language), and
   `compliance-reviewer` for auditability and the regulatory trail.
 - Tests are mandatory for rule logic, including known true-positive and false-positive cases.
+- **Code must be properly documented.** Modules, classes and functions have docstrings
+  stating purpose, inputs/outputs and assumptions; non-obvious or complex logic has
+  explanatory comments; every threshold carries its rationale (above). Aim for clear,
+  meaningful comments — not redundant noise that restates the code. `code-reviewer` flags
+  uncommented or thinly-commented code and, when fixes are in scope, adds the missing
+  documentation.
 
 ## 5. Data handling (non-negotiable)
 

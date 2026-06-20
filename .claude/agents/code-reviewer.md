@@ -34,7 +34,13 @@ Load only what's relevant (progressive — keeps signal high):
    deserialisation, path/command injection (especially Bash/PowerShell), secrets.
 3. **Language** (by file type) — the toolchain below.
 4. **Architecture** (deep only) — coupling, cohesion, pattern consistency, dependencies.
-5. **Compliance/audit** — defer to `compliance-reviewer`, but flag §4/§5 issues on sight.
+5. **Documentation & comments** (always) — flag missing docstrings on modules/classes/
+   functions, non-obvious or complex logic with no explanatory comment, and thresholds
+   without a rationale (§4). Always report uncommented or thinly-commented code as a
+   maintainability finding; when fixes are in scope, **add clear, meaningful docstrings and
+   comments** (state purpose, inputs/outputs, assumptions, the *why*) — never redundant noise
+   that just restates the code.
+6. **Compliance/audit** — defer to `compliance-reviewer`, but flag §4/§5 issues on sight.
 
 | Language | Lint / style | Types / bugs | Security |
 |---|---|---|---|
