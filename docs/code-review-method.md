@@ -50,7 +50,7 @@ So **every finding states how we know it** — never let an inference read as a 
 | Basis | Means | How to cite it |
 |---|---|---|
 | **Measured** 📊 | Observed directly — a profiler run, a benchmark, a test failure, or an **explicit** value in the code (e.g. a literal `sleep(5)`, a hard timeout, `LIMIT 100`). | Quote the number/line: *"`time.sleep(5)` at `worker.py:88` → 5s fixed delay per call"* or *"cProfile: 4.2s in `join()` @ 100k rows"*. |
-| **Inferred** 🧠 | Reasoned from the code without executing it — complexity from structure, "this won't scale", likely-null. | Say so and give the reasoning **and the measurement that would confirm it**: *"Inferred O(n²) from the nested scan at `match.py:40`; not benchmarked — confirm with `pytest-benchmark` at 100k rows."* |
+| **Inferred** 🧠 | Reasoned from the code without executing it — complexity from structure, "this won't scale", likely-null. | Say so and give the reasoning **and the measurement that would confirm it**: *"Inferred O(n²) from the nested scan at `match.py:40`; not benchmarked — confirm with the stack's benchmark harness at 100k rows."* |
 
 Rules:
 - A performance or behaviour claim with **no number and no executed evidence is Inferred** — label it, never present it as fact.

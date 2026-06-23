@@ -28,7 +28,7 @@ explicit value in the code — cite it) vs **🧠 inferred** (reasoned from stru
 |---|----------|-------|-------|--------------------------------------|-------------------------|----------|-----|
 | 1 | `path:fn` | O(n²) join in hot path | 📊 measured | `cProfile`: 4.2s @ 100k rows; quadratic | ~hours @ 5M | 🔴 | hash-join / index |
 | 2 | `worker.py:88` | fixed 5s sleep per call | 📊 measured | explicit `time.sleep(5)` in code | 5s × N calls | 🟠 | event/backoff |
-| 3 | `match.py:40` | nested scan, not benchmarked | 🧠 inferred | O(n²) from structure — confirm with `pytest-benchmark` @ 100k | likely hours @ 5M | 🟡 | measure, then hash-join |
+| 3 | `match.py:40` | nested scan, not benchmarked | 🧠 inferred | O(n²) from structure — confirm with the stack's benchmark harness @ 100k | likely hours @ 5M | 🟡 | measure, then hash-join |
 
 ## 4. Potential gains summary (the headline a developer wants)
 
@@ -41,7 +41,7 @@ crucially — **how that number was derived** (so it's defensible, not a guess).
 |---|-------|-----------------|---------------------|------|-------------|
 | 1 | O(n²) join | 📊 4.2s @ 100k (cProfile) | ~0.1s @ 100k | **~40×** @ 100k; hours→minutes @ 5M | measured baseline + hash-join is O(n); 5M figure extrapolated from the quadratic curve (🧠) |
 | 2 | fixed 5s sleep | 📊 5s × N calls (explicit `sleep(5)`) | ~0s (event-driven) | **5s per call** removed | the delay is literal in code — exact, not modelled (📊) |
-| 3 | nested scan | 🧠 not benchmarked | — | **unknown until measured** | inferred O(n²); **run `pytest-benchmark` @ 100k before claiming a number** |
+| 3 | nested scan | 🧠 not benchmarked | — | **unknown until measured** | inferred O(n²); **run the stack's benchmark harness @ 100k before claiming a number** |
 
 **Total execution time saved (the headline number):** sum the per-issue savings into an
 aggregate at the **target volume** — e.g. *"~Xs → ~Ys per run at 5M rows: **~Z saved (≈N%)**"* —

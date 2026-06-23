@@ -21,10 +21,11 @@
 
 How to reproduce (exact commands — use the project's test framework, not an assumed one):
 ```bash
-# Example shown for this repo (Python/pytest). Replace with the target stack's commands,
-# e.g. Pester (Invoke-Pester), Maven/Gradle (mvn test / ./gradlew test), Jest (npm test).
-pip install -r requirements-dev.txt
-pytest
+# Replace with the TARGET project's commands — do not assume pytest.
+# e.g. Python: pytest · PowerShell: Invoke-Pester · JVM: mvn test / ./gradlew test · JS: npm test
+<install deps for the target stack>
+<run the target stack's test suite>
+
 ```
 
 ## 2. Environment & test data
