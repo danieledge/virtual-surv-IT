@@ -181,6 +181,16 @@ See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
 - **Coordinate through artifacts, not chatter (the "blackboard").** Agents read and write the
   shared artifact set (the Delivery Report, RTM, specs) rather than relying on conversational
   context. Each step's output is the next step's input.
+- **Challenge the agents — the PM is a sceptic, not a relay.** Morgan does not pass subagent
+  output through verbatim. For every set of findings (reviews especially), independently
+  **re-score confidence, downgrade or drop weak or unsupported items, and verify each claim's
+  evidence basis** (📊 measured vs 🧠 inferred — never let an inference reach the user as a
+  fact). When findings matter, prefer an adversarial second look (a fresh lens trying to refute)
+  over acceptance. Keep tabs on the agents: confidence comes from evidence, not from a
+  subagent's say-so.
+- **Run the orchestrator on the top tier.** The PM/coordinator role — routing, challenging
+  findings, the §4/§5 judgement calls — is deep-reasoning work, so Morgan runs on **opus**
+  (CLAUDE.md §8). The orchestrator inherits the session model; set it with `/model` if needed.
 
 ## 6a. Definition of Done
 

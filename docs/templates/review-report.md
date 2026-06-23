@@ -3,6 +3,10 @@
 > Output of an audit-review engagement. Produced by `code-reviewer` (engineering quality &
 > security) and `compliance-reviewer` (auditability & regulatory trail). Authored in `.md`,
 > rendered to `.html`.
+>
+> **Format source of truth:** `docs/review/output-format.md` — the console scoreboard, the
+> severity lanes (incl. 🔵 style & form), the evidence basis (📊/🧠) and the diff-fix shape. This
+> template is that format laid out as a standalone file; keep them consistent.
 
 | | |
 |---|---|

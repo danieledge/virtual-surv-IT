@@ -25,11 +25,15 @@ Run an **evaluator–optimizer loop**:
    rationale, secrets/PII, test coverage, and change control.
 3. If any **Critical/Warning** findings, route fixes to `rules-developer` / `ml-engineer`,
    then **re-review** — loop until no Critical findings remain (or the user calls it).
-4. Produce the report — **by default the consolidated Delivery Report**
-   (`docs/templates/delivery-report.md`), or the standalone `review-report.md` if the user
-   prefers a separate file. Give an explicit verdict (✅ audit-ready / ⚠️ conditional / ❌ not
-   yet), findings by severity with standards cited, audit/regulatory checks, and a
-   tooling-coverage section (state what couldn't run).
+4. **Morgan's challenge pass (opus).** Independently re-score the reviewers' findings, downgrade
+   or drop the weak ones, and confirm each **evidence basis** (📊 measured / 🧠 inferred — never
+   present an inference as fact) before presenting. Be a sceptic, not a relay.
+5. Present in the shared `docs/review/output-format.md`: a clean traffic-light **scoreboard to
+   the console**, with the full findings in the **clean artifact**. Give an explicit verdict
+   (✅ audit-ready / ⚠️ conditional / ❌ not yet), standards cited, audit/regulatory checks, the
+   🔵 style & form lane, and a tooling-coverage section (state what couldn't run). Use the
+   standalone clean review artifact by default; fold into the consolidated
+   `delivery-report.md` only when audit is part of a larger handover.
 
 Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
 

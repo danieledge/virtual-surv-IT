@@ -1,0 +1,54 @@
+#!/bin/bash
+# Opt-in AI code-review gate on commit (compliance-surveillance-team).
+#
+# Severity-blocking model adapted from turingmind-code-review (MIT, © 2026 TuringMind) —
+# https://github.com/turingmindai/turingmind-code-review — see THIRD-PARTY-LICENSES.md.
+# Our additions: it ALWAYS blocks on a §5 data-safety finding (secrets / PII / raw data),
+# regardless of severity, because those are regulatory, not stylistic.
+#
+# Behaviour:
+#   🔴 Critical  -> blocks the commit (exit 1)
+#   §5 data-safety (secret / PII / raw data) -> blocks the commit (exit 1), any severity
+#   🟠 Warning   -> advisory, commit proceeds
+#   none         -> silent, commit proceeds
+#
+# OFF BY DEFAULT. Install via scripts/install-git-hooks.sh; remove with `rm .git/hooks/pre-commit`.
+# An LLM in the commit path is slow; bypass a single commit with:  git commit --no-verify
+set -euo pipefail
+
+# Only review staged code; nothing staged -> nothing to do.
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+if ! command -v claude >/dev/null 2>&1; then
+  echo "⚠️  claude CLI not found — skipping AI review gate (commit continues)."
+  exit 0
+fi
+
+echo "🧠 AI review gate on staged changes (quick) — blocks on 🔴 Critical or §5 data-safety…"
+out=$(claude -p "/deep-review the STAGED changes only (git diff --cached). Quick/change mode. \
+Print the console scoreboard from docs/review/output-format.md. If you find any §5 data-safety \
+issue (secret, credential, real PII/MNPI, or raw data), also print a line: DATA-SAFETY-BLOCK." \
+  2>/dev/null || true)
+
+echo "$out"
+
+# Regulated override: §5 data-safety always blocks.
+if grep -qE "DATA-SAFETY-BLOCK" <<<"$out"; then
+  echo "⛔ Commit blocked: a §5 data-safety finding must be resolved (secret / PII / raw data)."
+  echo "   Fix it, or bypass deliberately with: git commit --no-verify"
+  exit 1
+fi
+
+# Critical findings block.
+if grep -qE "🔴|Critical \(95|CRITICAL" <<<"$out"; then
+  echo "⛔ Commit blocked: 🔴 Critical findings. Fix them, or bypass with: git commit --no-verify"
+  exit 1
+fi
+
+# Warnings are advisory.
+if grep -qE "🟠|Warning \(80|WARNING" <<<"$out"; then
+  echo "⚠️  Warnings found (advisory) — commit proceeds. Review the scoreboard above."
+fi
+
+exit 0

@@ -24,23 +24,23 @@ and review manually — never silently skip a language.
   findings, **Architectural Notes** and **Impact Analysis**. Use for `/deep-review`,
   `/audit-review`, and anything non-trivial.
 
-## Review dimensions
+## Review dimensions — modular lenses (progressive loading)
 
-Load only what's relevant (progressive — keeps signal high):
+Dimensions are **modular lenses** in `docs/review/lenses/`, loaded *only* where relevant per
+**`docs/review/agent-router.md`** (keeps signal high). Run the loaded lenses as **parallel
+passes** (each blind to the others → catches more), then merge and dedupe:
 
-1. **Bugs & logic** (always) — null/None access, off-by-one, race conditions, resource
-   leaks, error handling, incorrect detection logic (missed/false alerts).
-2. **Security** (always) — OWASP ASVS / CWE / SEI CERT: injection, unsafe eval/
-   deserialisation, path/command injection (especially Bash/PowerShell), secrets.
-3. **Language** (by file type) — the toolchain below.
-4. **Architecture** (deep only) — coupling, cohesion, pattern consistency, dependencies.
-5. **Documentation & comments** (always) — flag missing docstrings on modules/classes/
-   functions, non-obvious or complex logic with no explanatory comment, and thresholds
-   without a rationale (§4). Always report uncommented or thinly-commented code as a
-   maintainability finding; when fixes are in scope, **add clear, meaningful docstrings and
-   comments** (state purpose, inputs/outputs, assumptions, the *why*) — never redundant noise
-   that just restates the code.
-6. **Compliance/audit** — defer to `compliance-reviewer`, but flag §4/§5 issues on sight.
+- `lenses/bugs.md` (always) — incl. detection-logic missed/false alerts.
+- `lenses/security.md` (always) — OWASP ASVS / CWE / SEI CERT; §5 secrets/PII never filtered.
+- `lenses/language-{python,typescript,scala,java,powershell,bash}.md` — by file type.
+- `lenses/architecture.md` (deep/audit only).
+- **Documentation & comments** (always) — flag missing docstrings, complex logic with no
+  explanatory comment, and thresholds without a rationale (§4); when fixes are in scope, add
+  clear, meaningful docstrings/comments (purpose, inputs/outputs, assumptions, the *why*) —
+  never noise that restates the code.
+- **Compliance/audit** — defer to `compliance-reviewer`, but flag §4/§5 issues on sight.
+
+Each lens uses the standard analysers below and the shared `docs/review/output-format.md`.
 
 | Language | Lint / style | Types / bugs | Security |
 |---|---|---|---|
@@ -60,13 +60,14 @@ thresholds or a broken alert→logic→obligation trace (§4).
 
 When invoked:
 1. `git diff` (or the named target); group changed files by language; pick depth.
-2. Run the relevant analysers; read the code in context. **Run the review dimensions as
-   parallel lenses** (bugs · security · language · docs · architecture) rather than one long
-   sequential pass — each lens is blind to the others, which catches more; then merge and
-   dedupe. Load only the lenses relevant to the changed files.
-3. Score every candidate finding; filter per the method.
-4. Report (default into the consolidated `docs/templates/delivery-report.md`; standalone
-   `docs/templates/review-report.md` only if asked).
+2. Load the relevant lenses per `docs/review/agent-router.md` and run them as **parallel
+   passes** (each blind to the others → catches more); then merge and dedupe.
+3. Score every candidate finding; filter per the method. Tag each with its **evidence basis**
+   (📊 measured / 🧠 inferred — never present an inference as a measurement).
+4. Report in the shared `docs/review/output-format.md`: a clean **console scoreboard**, with the
+   full findings written to the **clean artifact** (`artifacts/REVIEW-<slug>.md` → `.html`).
+   The orchestrator (**Morgan**) then independently challenges and may **downgrade** findings
+   before they reach the user.
 
 **Model tiering:** this agent runs on `opus` because the judgement on findings — correctness,
 security and audit impact in a regulated codebase — is the deep-reasoning work that justifies
@@ -76,15 +77,18 @@ false positives, and the regulatory impact of what's left. If a caller needs a c
 mechanical-only pass (e.g. just run the analysers), that can be routed to a cheaper-tier agent
 rather than this one.
 
-## Output (always show what was filtered)
+## Output
 
-`Found N · Reported R · Filtered F`, then findings by severity with `file:line`, the
-tool/rule cited, and a **confidence score**. **Every finding includes a concrete
-`diff`-style suggested fix** (before/after) **and a one-line "why this fix works"** — make it
-directly applicable, not just a description. Deep adds **Architectural Notes** (patterns,
-coupling, test coverage, dependencies) and **Impact Analysis** (affected files, blast radius,
-breaking changes). If nothing qualifies, say so plainly ("✅ no significant issues") and still
-show the filtered counts. Recommend recurring issues for `docs/house-rules.md`.
+Follow **`docs/review/output-format.md`** exactly — it is the single canonical format:
+- **Console** gets the clean traffic-light **scoreboard** (`🔴/🟠/🟡/🔵/🔇` counts +
+  `Found/Reported/Filtered` + a pointer to the artifact). Never dump a wall of tables.
+- The **clean artifact** (`artifacts/REVIEW-<slug>.md`, rendered to `.html`) holds the full
+  findings: each with `file:line`, confidence, standard/tool, **evidence basis** (📊/🧠), and a
+  `diff`-style fix + "why this works". Deep adds 📐 Architectural notes + 💥 Impact analysis.
+- The **🔵 style & form** lane carries non-blocking "consider in future" suggestions —
+  surfaced, never inflated into Warnings, never affecting the verdict.
+- If nothing qualifies, say so plainly ("✅ no significant issues") and **still** show the
+  filtered counts and tooling coverage. Recommend recurring issues for `docs/house-rules.md`.
 
-> Confidence-scoring, filtering and the deep-review shape are adapted from
-> turingmind-code-review (MIT) — see `docs/code-review-method.md`.
+> Format, scoring, filtering and the deep-review shape are adapted from turingmind-code-review
+> (MIT) — see `docs/code-review-method.md` and `THIRD-PARTY-LICENSES.md`.

@@ -10,6 +10,26 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
+> ## ✨ What's new in 0.2.0
+>
+> **A modular code-review subsystem — leaning heavily on [turingmind-code-review](https://github.com/turingmindai/turingmind-code-review) (MIT, © 2026 TuringMind), with attribution in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md).**
+> - **Review lenses** (`docs/review/lenses/`) — modular per-dimension checks (bugs · security ·
+>   architecture) and per-language lenses for **Python, TypeScript/JS, Scala, Java, PowerShell,
+>   Bash**, loaded progressively by a router so only the relevant ones run.
+> - **Scope menu** — `/deep-review`, `/audit-review` and `/performance-review` now ask what's in
+>   scope (dimensions · breadth · change-vs-audit mode · outcome) before reviewing.
+> - **Clean traffic-light output** — a glanceable 🔴🟠🟡🔵🔇 **scoreboard** to the console, with
+>   full findings written to a **clean artifact** (not a wall of console tables).
+> - **Evidence basis on every claim** — findings are tagged **📊 measured** vs **🧠 inferred**, so
+>   a performance assertion (e.g. an explicit `sleep` vs a derived O(n²)) is never passed off as
+>   fact it isn't.
+> - **🔵 Style & form lane** — meaningful, non-blocking "consider in future" suggestions, kept
+>   separate from blockers and from filtered noise.
+> - **Morgan challenges the agents** — the PM independently re-scores and **downgrades** weak
+>   findings before you see them, and runs on **opus**.
+> - **Opt-in AI-review git-hook gate** — a severity-blocking `pre-commit` (blocks on 🔴 Critical
+>   or any §5 data-safety finding; advisory on 🟠), off by default.
+
 A **virtual compliance surveillance *engineering* team made of AI assistants** — it doesn't
 *do* compliance, it **builds the surveillance solutions and technology** behind detecting
 money laundering, market manipulation and trader misconduct. Detection rules are just one

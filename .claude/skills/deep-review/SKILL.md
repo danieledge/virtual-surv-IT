@@ -6,38 +6,45 @@ allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), Bash(git 
 
 Run a **deep (detailed) code review** of: **$ARGUMENTS**.
 
-**If no target was given** (no path/glob/commit range in `$ARGUMENTS` and no uncommitted
-`git diff`), **ask the user where the code is** — a path/glob, repo/branch, commit range, or
-to paste it — and wait. Don't review an assumed target.
+**1. Confirm the target.** If none was given (no path/glob/commit range and no uncommitted
+`git diff`), ask where the code is — a path/glob, repo/branch, commit range, or to paste it —
+and wait. Don't review an assumed target.
 
-**Then ask what outcome the user wants** (don't assume "review and stop"): just the review,
-or also **fixes/refactor applied**, a **remediation plan/loop** (`/remediate`), and/or a
-**handover pack**? Proceed on their answer.
+**2. Put scope on a menu — ask, don't assume.** Offer the user the review scope and wait:
+- **Dimensions** (multi-select; default = all): 🐛 bugs & logic · 🔐 security · 📐 architecture ·
+  🧰 language-specific · 📝 docs/comments · 🔵 style & form · 📋 compliance/audit.
+- **Breadth**: just the working diff · named files/glob · whole module · whole repo.
+- **Mode**: **change review** (filter pre-existing) or **audit** (keep pre-existing in scope).
+- **Outcome** (don't assume "review & stop"): review only · also **fixes applied** · a
+  **`/remediate` loop** · and/or a **handover pack**.
 
-Drive **code-reviewer** in **deep** mode (CLAUDE.md §6; method in
-`docs/code-review-method.md`):
+**3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
+`docs/review/lenses/`; router `docs/review/agent-router.md`):
 
-1. Detect languages from the target; load the relevant review dimensions — **bugs & logic**
-   and **security** always, **language** checks by file type, and the **architecture**
-   dimension (deep only). Run the standard analysers per language (ruff/mypy/bandit,
-   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep).
-2. **Score** every candidate finding 0–100 and **filter** noise per the method — but never
-   filter regulated findings (secrets, PII/raw data §5, undocumented thresholds / broken
-   traceability §4).
-3. For anything touching detection logic, hand to **compliance-reviewer** for the
-   audit/traceability dimension.
-4. Produce the report. **By default write into the consolidated Delivery Report**
-   (`docs/templates/delivery-report.md`, the *Code review* + *Performance* + *Compliance*
-   sections); use the standalone `docs/templates/review-report.md` only if the user wants a
-   separate file. Include the **transparency counts** (Found / Reported / Filtered + reasons),
-   per-finding confidence, **Architectural Notes** and **Impact Analysis**.
+1. **Context** *(cheap tier)* — detect languages, list changed files/lines, find related files
+   (importers/imports), check for CLAUDE.md.
+2. **Load lenses** progressively via the router — only those the scope + languages require.
+3. **Analyse** — drive `code-reviewer` to run the loaded lenses as **parallel passes** (each
+   blind to the others), plus the standard analysers (ruff/mypy/bandit, Checkstyle/PMD/SpotBugs,
+   scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep). Deep adds the **architecture**
+   lens, **impact analysis**, and test/doc coverage.
+4. **Score & filter** *(cheap tier)* — `docs/code-review-method.md`; tag each finding's
+   **evidence basis** (📊 measured / 🧠 inferred). **Never** filter regulated findings (secrets,
+   PII/raw data §5, undocumented thresholds / broken traceability §4).
+5. For anything touching detection logic, hand to **compliance-reviewer** for the §4/§5 trail.
+6. **Morgan's challenge pass** *(opus)* — independently re-score the lenses' findings, downgrade
+   or drop the weak ones, and confirm each evidence basis before anything reaches the user. You
+   are a sceptic, not a relay.
 
-Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
+**4. Present — scoreboard + clean artifact** (`docs/review/output-format.md`): a glanceable
+traffic-light **scoreboard to the console**, with the **full findings written to the clean
+artifact** `artifacts/REVIEW-<slug>.md`, rendered to `.html` (`python -m scripts.render_html`).
+🔵 style & form is a non-blocking "consider in future" lane. (Fold into the consolidated
+`delivery-report.md` only if this review is part of a larger build/handover.)
 
-**Close with next steps (don't dead-end).** Summarise what you found, then present concrete
-options with your recommendation and offer to do them — e.g. *"3 criticals, 5 warnings. I can:
-(a) fix the criticals now, (b) refactor the worst module, (c) run `/remediate` for a full
-assess→fix→re-review loop, or (d) produce a handover pack. Which would you like?"*
+**5. Close — don't dead-end.** Summarise from the scoreboard, then offer concrete next steps
+with a recommendation — *"3 🔴, 5 🟠. I can fix the criticals, run `/remediate`, or produce a
+handover pack. Which?"* — and offer to carry them out.
 
-> For audit/regulatory sign-off with a fix→re-review loop, use `/audit-review` (which runs
-> this deep review as its first step).
+> For audit/regulatory sign-off with a fix→re-review loop, use `/audit-review` (which runs this
+> deep review as its first step).
