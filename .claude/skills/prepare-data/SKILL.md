@@ -12,16 +12,15 @@ This skill is **guided** — walk the user through each step in plain English, c
 running anything, and never read raw data yourself (the `data/raw/` guard blocks it by design).
 
 ## 1. Gather inputs first — ask, don't assume
-Establish, and **wait for answers**:
-- **What are you trying to do?** (e.g. "find anomalies in order flow", "test a spoofing rule.")
-- **What data do you have?** Three cases — route accordingly:
-  - **No data / don't want to use real data** → **synthetic** (§3). Recommend this by default —
+Establish via the question tool, and **wait for answers**:
+- **What are you trying to do?** (free-text ask with an "Other" path — e.g. "find anomalies in
+  order flow", "test a spoofing rule".)
+- **What data do you have?** — **`multiSelect: false`** (exactly one); route accordingly:
+  - **No data / don't want to use real data** → **synthetic** (§3). Recommended default —
     lowest risk, fully automatable.
-  - **Real data you need the behavioural fidelity of** → **masking** (§4). Confirm the user
-    understands masked output is still personal data (pseudonymised ≠ anonymous, GDPR) and must
-    stay governed.
-  - **Already-masked or already-synthetic data** → skip to validation (§5) / straight to the
-    analysis workflow.
+  - **Real data I need the behavioural fidelity of** → **masking** (§4). Confirm they understand
+    masked output is still personal data (pseudonymised ≠ anonymous, GDPR) and must stay governed.
+  - **Already masked / already synthetic** → skip to validation (§5) / straight to analysis.
 
 ## 2. Recommend the safe default
 Unless real-data fidelity genuinely matters, **recommend synthetic.** State the trade-off

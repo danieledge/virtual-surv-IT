@@ -9,9 +9,15 @@ Run a **performance & scalability review** of: **$ARGUMENTS**
 **If no target was given, first ask the user where the code/component is** (path/glob, repo,
 or paste it) and wait — don't assume a target.
 
-**Put scope on a menu — ask, don't assume:** which concerns (algorithmic complexity · memory ·
-I/O & queries · concurrency · data-shape), the **target data volume / SLA**, batch vs streaming,
-and the outcome (review only · fixes + re-profile · `/remediate` · handover). Wait for answers.
+**Put scope on a menu — ask via the question tool, each axis its own question with the stated
+`multiSelect`:**
+- **Concerns** — **`multiSelect: true`** (default all): algorithmic complexity · memory ·
+  I/O & queries · concurrency · data-shape.
+- **Mode** — **`multiSelect: false`**: batch · streaming · both.
+- **Outcome** — **`multiSelect: true`** (stack): review only · fixes + re-profile · `/remediate` ·
+  handover.
+- **Target data volume / SLA** — free-text ask (the number changes the verdict); offer it as a
+  question with an "Other" path rather than burying it in prose. Wait for answers.
 
 Drive **performance-reviewer** (CLAUDE.md §6):
 

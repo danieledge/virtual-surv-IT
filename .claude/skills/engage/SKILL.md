@@ -56,48 +56,57 @@ If the user just typed `/engage` (or `/engage test some code`) with no concrete 
 
 **1b. If it's a review, offer the review-type menu — don't make the user know the shortcuts.**
 When the user asks for "a review" in plain English (rather than naming `/deep-review` etc.),
-**present the menu via the question tool** (don't silently default, don't bury it in prose).
-Two *separate* questions, because depth and performance are different axes — this avoids the
-illogical "Quick **and** Deep" combination (Quick is a subset of Deep):
+present the menu via the **AskUserQuestion tool**. Use **exactly the two questions below, with
+these exact options and descriptions — do not improvise, merge, or reword them**, because the
+last time this was left loose the model offered "Quick **and** Deep" as a multi-select (illogical
+— Deep already includes Quick) and gave the options inconsistent descriptions.
 
-**Q1 — Depth of code review? (single-select — these are mutually exclusive):**
-- **Quick** — fast pre-commit/diff check: bugs + security + language on the *changed* code only;
-  🔴 Critical / 🟠 Warning. *"Am I OK to commit?"*
-- **Deep** (`/deep-review`) — comprehensive multi-dimension: bugs · security · architecture ·
-  language · docs, plus 🟡 Medium, **impact analysis** and test/doc coverage. *(Deep ⊃ Quick.)*
-  *"Solid before a PR?"*
-- **Audit** (`/audit-review`) — Deep **plus** a fix→re-review loop and the §4/§5 audit trail,
-  until clean; keeps pre-existing issues in scope. *(Audit ⊃ Deep.)* *"Would it survive an
-  auditor?"*
-- **None** — skip the code review (e.g. they only want performance).
+> **Critical construction rules:**
+> - **Q1 (depth) MUST be `multiSelect: false`** — the user picks **exactly one** depth. Quick ⊂
+>   Deep ⊂ Audit, so selecting more than one is nonsense; the tool must not allow it.
+> - **Q2 (performance) is a SEPARATE question**, also single-select (yes/no). **Never merge** the
+>   depth options and the performance option into one multi-select list.
+> - Every depth produces the **same clean findings artifact** (`artifacts/REVIEW-*.md` + `.html`)
+>   — so **do not** mention "a report/artifact" on one option and not another. Keep the option
+>   descriptions parallel: each states *what it checks* and *when you'd use it*, nothing more.
 
-**Q2 — Also run a performance & scalability review? (yes/no — it's a separate axis):**
-`/performance-review` — scalability vs target data volumes, profiling evidence, every claim
-tagged 📊 measured / 🧠 inferred, **with a potential-gains summary**. Can run alongside any depth.
+**Q1 — "What depth of code review?"  (single-select / `multiSelect: false`):**
 
-> Because Audit ⊃ Deep ⊃ Quick, only **one** depth is ever run — no triple-passing. If the user
-> wants "everything", that's **Audit + Performance**: one deep analysis feeds the audit loop, and
-> the perf review runs alongside. (Cost note: that's multiple reviewers — right for a high-value
-> broad deliverable, overkill for a one-file change where Deep alone covers it.)
+| Label | Description (use ~verbatim) |
+|---|---|
+| **Quick** | Fast check on the **changed code only** — bugs, security, language. Reports 🔴 Critical / 🟠 Warning. *Best for "am I OK to commit?"* |
+| **Deep** | Everything in Quick **plus** architecture, 🟡 Medium findings, impact analysis and test/doc coverage — the whole change in context. *Best for "is this solid before a PR?"* |
+| **Audit** | Everything in Deep **plus** a fix→re-review loop and the §4/§5 regulatory audit trail, until clean; keeps pre-existing issues in scope. *Best for "would it survive an auditor?"* |
+| **None** | Skip the code review (e.g. you only want the performance review). |
 
-After the choice, the review skill asks the **scope** (dimensions · breadth · change-vs-audit
-mode) — type *then* scope, never needing a slash command.
+**Q2 — "Also run a performance & scalability review?"  (single-select / `multiSelect: false`):**
 
-**2. Clarify — ask, don't guess.** Then put any remaining clarifying questions to the user and
-**wait for answers** before planning. Use the question tool (or a clear numbered list) for
-material choices. Never assume scope, jurisdiction, data availability or success criteria.
+| Label | Description |
+|---|---|
+| **Yes** | Add a scalability review vs target data volumes — profiling evidence, each claim tagged 📊 measured / 🧠 inferred, with a total-time-saved summary. Runs alongside the chosen depth. |
+| **No** | No performance review. |
 
-**2a. Agree the end outcome.** Explicitly ask **what they want delivered at the end**, not
-just the immediate task. For a review, ask: *review only*, or also **fixes/refactor applied**,
-a **remediation loop** (`/remediate`), and/or a **handover pack**? Don't assume "review" means
-"review and stop." Confirm before changing any of the user's code.
+> Because Audit ⊃ Deep ⊃ Quick, only **one** depth ever runs — no triple-passing. "Everything" =
+> **Audit + performance Yes** (one deep analysis feeds the audit loop; the perf review runs
+> alongside). All reviews write the same clean artifact. After the choice, the review skill asks
+> the finer **scope** (which dimensions · breadth · change-vs-audit mode) — type *then* scope,
+> never needing a slash command.
+
+**2. Clarify — ask, don't guess.** Then put any remaining clarifying questions to the user via
+the **question tool** (always — never a buried numbered list) and **wait for answers** before
+planning. Never assume scope, jurisdiction, data availability or success criteria.
+
+**2a. Agree the end outcome.** Explicitly ask **what they want delivered at the end**, not just
+the immediate task — via the question tool, **`multiSelect: true`** (these stack): *review only*
+· **fixes/refactor applied** · a **remediation loop** (`/remediate`) · a **handover pack**. Don't
+assume "review" means "review and stop." Confirm before changing any of the user's code.
 
 **3. Offer the artifact menu.** By **default, consolidate everything into a single
 Delivery Report** (`docs/templates/delivery-report.md`) — review, performance, compliance,
-QA evidence, handover and change/ops as sections of one file, not many. Ask the user if they
-instead want **separate artifacts** (e.g. a standalone change request to attach to a ticket);
-the standalone templates in `docs/templates/` are the building blocks. Either way, ask which
-sections/artifacts they need:
+QA evidence, handover and change/ops as sections of one file, not many. Ask (question tool,
+**`multiSelect: true`**) whether they want that consolidated report (the default) or specific
+**separate artifacts** (e.g. a standalone change request for a ticket) — the standalone
+templates in `docs/templates/` are the building blocks. Options:
 - (Consolidated) Delivery Report · or separate: Engagement Brief · BRD · FSD · ADRs · RTM ·
   Code & Compliance Review · Performance Review · Developer Handover · QA Handover ·
   Model Validation Report.

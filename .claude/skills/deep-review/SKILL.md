@@ -10,19 +10,22 @@ Run a **deep (detailed) code review** of: **$ARGUMENTS**.
 `git diff`), ask where the code is — a path/glob, repo/branch, commit range, or to paste it —
 and wait. Don't review an assumed target.
 
-**2. Put scope on a menu — ask, don't assume.** Offer the user the review scope and wait:
-- **Dimensions** (multi-select; default = all): 🐛 bugs & logic · 🔐 security · 📐 architecture ·
-  🧰 language-specific · 📝 docs/comments · 🔵 style & form · 📋 compliance/audit. **All are
-  opt-in** — the user can run only the ones they want (e.g. a plain utility script may want bugs
-  + security only, no compliance). Don't force a dimension they didn't pick.
-- **If 📋 compliance/audit is selected, ask the jurisdiction(s)/region** the code will operate in
-  (or use the configured scope in CLAUDE.md §2 / `docs/scope-and-stack.md`) so
-  `compliance-reviewer` derives the **applicable** obligations and states what's applicable vs
-  not — don't apply rules from a region that doesn't apply.
-- **Breadth**: just the working diff · named files/glob · whole module · whole repo.
-- **Mode**: **change review** (filter pre-existing) or **audit** (keep pre-existing in scope).
-- **Outcome** (don't assume "review & stop"): review only · also **fixes applied** · a
-  **`/remediate` loop** · and/or a **handover pack**.
+**2. Put scope on a menu — ask, don't assume.** Use the question tool; each axis below is its
+**own** question with the stated `multiSelect` (don't merge them into one list):
+- **Dimensions** — **`multiSelect: true`**, default = all: 🐛 bugs & logic · 🔐 security ·
+  📐 architecture · 🧰 language-specific · 📝 docs/comments · 🔵 style & form · 📋 compliance/audit.
+  All opt-in — the user can run only the ones they want (a plain utility script may want bugs +
+  security only, no compliance). Don't force a dimension they didn't pick.
+- **Breadth** — **`multiSelect: false`** (exactly one): the working diff · named files/glob ·
+  whole module · whole repo.
+- **Mode** — **`multiSelect: false`**: change review (filter pre-existing) **or** audit (keep
+  pre-existing in scope).
+- **Outcome** — **`multiSelect: true`** (these stack): review only · also **fixes applied** · a
+  **`/remediate` loop** · a **handover pack**.
+- **If 📋 compliance/audit is among the dimensions, then** ask **jurisdiction(s)** —
+  **`multiSelect: true`** (may operate in several) — or use the configured scope (CLAUDE.md §2 /
+  `docs/scope-and-stack.md`), so `compliance-reviewer` assesses only the **applicable** regime(s)
+  and states what's applicable vs not.
 
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
 `docs/review/lenses/`; router `docs/review/agent-router.md`):
