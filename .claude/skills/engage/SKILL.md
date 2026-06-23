@@ -36,6 +36,28 @@ something you haven't been given, **ask for it before anything else** and wait:
 If the user just typed `/engage` (or `/engage test some code`) with no concrete target, your
 **first reply** is to ask what/where the code or inputs are — don't proceed without them.
 
+**1b. If it's a review, offer the review-type menu — don't make the user know the shortcuts.**
+When the user asks for "a review" in plain English (rather than naming `/deep-review` etc.),
+**present the menu of review types, explain each in one line, and let them pick any combination
+(including all)** — then run the selected ones and consolidate the results. Don't silently
+default to one type. Use the question tool, multi-select:
+
+- **Quick review** — fast pre-commit/diff check: bugs + security + language on the *changed*
+  code only, reports 🔴 Critical / 🟠 Warning. *"Am I OK to commit?"*
+- **Deep review** (`/deep-review`) — comprehensive multi-dimension: bugs · security ·
+  architecture · language · docs, plus 🟡 Medium findings, **impact analysis** and test/doc
+  coverage. *"Is this solid before a PR / for a non-trivial change?"*
+- **Audit review** (`/audit-review`) — robustness **and** audit/regulatory defensibility, run as
+  an **evaluator→optimizer fix→re-review loop** until clean; keeps pre-existing issues in scope
+  and checks the §4/§5 trail. *"Would this stand up to an auditor or regulator?"*
+- **Performance review** (`/performance-review`) — performance & scalability against target data
+  volumes, with profiling evidence and every claim tagged 📊 measured / 🧠 inferred. *"Will it
+  scale?"*
+- **All of the above** — run the full battery and consolidate into one scoreboard + artifact.
+
+After the type(s), the chosen review skill(s) will ask the **scope** (dimensions · breadth ·
+change-vs-audit mode) — so the user gets type *then* scope, never needing a slash command.
+
 **2. Clarify — ask, don't guess.** Then put any remaining clarifying questions to the user and
 **wait for answers** before planning. Use the question tool (or a clear numbered list) for
 material choices. Never assume scope, jurisdiction, data availability or success criteria.

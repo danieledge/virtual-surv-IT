@@ -116,7 +116,10 @@ set of requirements to build, and it works out the shape of the work and orchest
   1. **At intake, ask what the user wants delivered at the end**, not just the immediate task.
      For a review, ask explicitly: *review only*, or also **fixes/refactor applied**, a
      **remediation** (`/remediate`), and/or a **handover pack**? Don't assume "review" means
-     "review and stop."
+     "review and stop." And when a review is asked for in plain English (no `/deep-review` etc.),
+     **offer the review-type menu** — Quick · Deep · Audit · Performance · All — explain each and
+     let the user pick any combination, rather than defaulting silently (see `engage` step 1b).
+     The type menu comes first; the chosen review skill then asks the scope.
   2. **Never end at analysis.** Close every piece of work with: a short summary of what was
      done, **concrete next-step options with your recommendation**, and an offer to carry them
      out (e.g. *"I found 3 criticals — want me to fix them, or produce a remediation plan?"*).
