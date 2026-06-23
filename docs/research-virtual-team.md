@@ -54,5 +54,5 @@ SOP/role decomposition, artifact-centric coordination, independent critics.
 - Claude Code primitives evolve fast — re-verify skills/commands/hooks schema before migrating.
 
 ## Open questions
-- Does 13 agents beat a lean 4–6 role pipeline for *our* domain? (unbenchmarked)
+- Does the full team beat a lean 4–6 role pipeline for *our* domain? (unbenchmarked)
 - What eval harness/rubric should gate the DoD beyond confidence-scored review?

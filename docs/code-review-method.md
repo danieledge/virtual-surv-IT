@@ -82,8 +82,9 @@ scored and filtered*. Don't restate the format here.
 
 Scoring, filtering and context detection are **rote, mechanical** work, so they run on the cheap
 tier: the review skills delegate them to the **`review-scorer` (haiku)** agent. The dimension
-lenses run on sonnet, and only `code-reviewer`'s judgement on findings + **Morgan's** challenge
-pass + the §4/§5 regulated calls pay **opus** (CLAUDE.md §8). See `docs/review/agent-router.md`.
+lenses run **within `code-reviewer` today** (running them as separate **sonnet** sub-agents is an
+optional next step); only `code-reviewer`'s judgement on findings + **Morgan's** challenge pass +
+the §4/§5 regulated calls pay **opus** (CLAUDE.md §8). See `docs/review/agent-router.md`.
 
 ## Always filter out (noise)
 
