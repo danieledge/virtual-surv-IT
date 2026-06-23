@@ -19,8 +19,10 @@
 | integration | | | | |
 | performance | | | | |
 
-How to reproduce (exact commands):
+How to reproduce (exact commands — use the project's test framework, not an assumed one):
 ```bash
+# Example shown for this repo (Python/pytest). Replace with the target stack's commands,
+# e.g. Pester (Invoke-Pester), Maven/Gradle (mvn test / ./gradlew test), Jest (npm test).
 pip install -r requirements-dev.txt
 pytest
 ```

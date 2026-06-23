@@ -22,8 +22,12 @@ This is **audit mode** — pre-existing issues are in scope, not filtered out.
    `platform-engineer` / `ml-engineer`); after each batch, **re-review and re-profile** to show
    the finding is closed and nothing regressed. Loop until no Critical remains (or the user
    calls it).
-5. **Evidence the improvement.** Record before/after (findings closed, tests added, perf
-   delta).
+5. **Evidence the improvement — with a clear disposition.** Record before/after per finding:
+   ✅ fixed (what changed) · 🔴 still open · ⚖️ accepted (rationale) · ⏭️ deferred, plus the perf
+   delta (incl. **total time saved**). After a reimplementation, **reconcile** explicitly: which
+   original blockers the rework resolved and which remain — never leave it ambiguous whether the
+   blocking issues still stand. Anything with no straightforward fix → **🔴 Open (needs human
+   developer review)** with the reason and options.
 6. **Hand over.** Run `/handover` to produce the developer + QA handover pack.
 
 Deliver everything under `artifacts/` in `.md` + `.html`. Stop for human sign-off before

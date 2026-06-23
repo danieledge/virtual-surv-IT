@@ -30,12 +30,38 @@ Review — <target>            (deep · audit mode)
 🔵 Style/form  4   (non-blocking — for future consideration)
 🔇 Filtered    7
 Found 21 · Reported 14 · Filtered 7
+Disposition: ✅ 4 fixed · 🔴 2 open · ⚖️ 1 accepted    ← only after a fix/re-review loop
+Verdict: ❌ not yet — 2 criticals still OPEN (see artifact)
 → Full findings + fixes: artifacts/REVIEW-<slug>.md  (.html rendered)
 ```
 
 Then **offer to expand, don't dump** — via the question tool: *"Show full findings inline, the
 🔴 criticals only, or just open the artifact?"* Only print detail to the console if the user
 asks. Default = scoreboard + the pointer.
+
+## Finding status (disposition) — never leave it ambiguous
+
+A Pass/Fail verdict alone is not enough — the user must always be able to see **what was done
+about each finding.** Every finding carries a **status**, and after any fix→re-review loop the
+artifact shows a **disposition summary** (the tally above) and the verdict states **what remains
+open**:
+
+| Status | Meaning |
+|---|---|
+| 🔴 **Open** | not addressed — still stands |
+| ✅ **Fixed** | resolved — say *what changed* (commit/diff/file) and that re-review confirms it |
+| ⚖️ **Accepted** | risk-accepted / won't-fix — **with rationale and who accepted it** |
+| ⏭️ **Deferred** | acknowledged, scheduled later — with a tracking reference |
+
+A **❌ Fail** must explicitly list the **Open** items (what's left to do), not just declare
+failure. If findings were fixed during the engagement, say so per finding — don't make the user
+guess whether anything was actioned.
+
+**No straightforward fix? Say so — don't fudge.** If a finding has no safe, obvious fix (it
+needs a design decision, domain knowledge, or a risky change), **do not invent or hand-wave
+one.** Mark it **🔴 Open — needs human developer review**, state plainly *why* it's not
+auto-fixable and what the options/trade-offs are, and leave it for a human. An honest "this one
+needs a person" beats a confident wrong fix.
 
 **Console cleanliness (hard rule).** Never print **code blocks, `diff` fixes, or large tables**
 to the console — they're noise in a terminal and belong in the artifact. The console gets the

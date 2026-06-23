@@ -28,7 +28,10 @@ named below are the building blocks.
 4. **Ops runbook + release notes** (feed ops/support and release): monitoring/alerting (incl.
    alert-liveness), failure modes & recovery, escalation `[IT team]`; what changed. → *Change
    & ops* section (or `ops-runbook.md`, `release-notes.md`).
-5. **Check the Definition of Done** and note any unmet items explicitly.
+5. **Check the Definition of Done** and note any unmet items explicitly. **Include the findings
+   disposition** (✅ fixed · 🔴 open · ⚖️ accepted · ⏭️ deferred) and reconcile it with the verdict —
+   a pack that mentions blocking findings must make clear whether the rework addressed them or
+   they're still open (🔴 Open / needs human developer review), never ambiguous.
 6. Save under `artifacts/` and render to `.html` (`python -m scripts.render_html`).
 
 Stop for human sign-off — real reviewers will read these, and approval/execution is theirs.

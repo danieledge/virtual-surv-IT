@@ -33,7 +33,9 @@ each step to the right agent and chain them in this session:
    `python -m scripts.render_html artifacts/<scenario>.md` (every artifact ships as `.md` +
    `.html` — §8 / Definition of Done).
 
-Confirm `pytest` passes, and check the result against `docs/DEFINITION-OF-DONE.md` for the
+Confirm the **project's test suite** passes (`pytest` in this repo; Pester / JUnit / ScalaTest /
+Jest / etc. in other stacks — use whatever the target uses), and check the result against
+`docs/DEFINITION-OF-DONE.md` for the
 items that apply to a detection scenario (traceable, tested, reviewed, documented).
 
 **Close — don't dead-end (CLAUDE.md §6).** Summarise what was built (the rule, its tests, the

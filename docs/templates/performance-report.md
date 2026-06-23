@@ -43,7 +43,14 @@ crucially — **how that number was derived** (so it's defensible, not a guess).
 | 2 | fixed 5s sleep | 📊 5s × N calls (explicit `sleep(5)`) | ~0s (event-driven) | **5s per call** removed | the delay is literal in code — exact, not modelled (📊) |
 | 3 | nested scan | 🧠 not benchmarked | — | **unknown until measured** | inferred O(n²); **run `pytest-benchmark` @ 100k before claiming a number** |
 
-**Headline:** *"Fixes 1–2 are measured and remove ~X; fix 3 is a projection pending a benchmark."*
+**Total execution time saved (the headline number):** sum the per-issue savings into an
+aggregate at the **target volume** — e.g. *"~Xs → ~Ys per run at 5M rows: **~Z saved (≈N%)**"* —
+and split it **📊 measured vs 🧠 projected** so the total is honest (don't blend a benchmarked
+saving with an un-benchmarked guess as if both are measured). Note any 🔴 not-yet-measured items
+excluded from the total.
+
+**Headline:** *"Fixes 1–2 (measured) remove ~Xs/run; fix 3 (projected, pending benchmark) a
+further ~Ys. Total at 5M ≈ Z faster."*
 Never present an inferred projection as a measured result; if a gain isn't yet measured, say so.
 
 ## 5. Before / after (where a fix was actually profiled)

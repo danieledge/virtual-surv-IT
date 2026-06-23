@@ -30,7 +30,7 @@ Run the **orchestrator–workers** pattern, agile and iterative:
    **By default deliver one consolidated Delivery Report** (`docs/templates/delivery-report.md`
    — RTM, review, performance, compliance, QA, handover, change/ops as sections); split into
    separate artifacts only if asked. Save under `artifacts/`, as `.md` and rendered `.html`.
-   Confirm
-   `pytest` passes.
+   Confirm the **project's test suite** passes (use the target's framework — `pytest`, Pester,
+   JUnit/ScalaTest, Jest, etc. — not an assumed one) and record the exact command.
 
 Stop for human approval before anything that touches live systems.

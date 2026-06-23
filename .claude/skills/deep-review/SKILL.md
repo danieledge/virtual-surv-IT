@@ -12,7 +12,13 @@ and wait. Don't review an assumed target.
 
 **2. Put scope on a menu — ask, don't assume.** Offer the user the review scope and wait:
 - **Dimensions** (multi-select; default = all): 🐛 bugs & logic · 🔐 security · 📐 architecture ·
-  🧰 language-specific · 📝 docs/comments · 🔵 style & form · 📋 compliance/audit.
+  🧰 language-specific · 📝 docs/comments · 🔵 style & form · 📋 compliance/audit. **All are
+  opt-in** — the user can run only the ones they want (e.g. a plain utility script may want bugs
+  + security only, no compliance). Don't force a dimension they didn't pick.
+- **If 📋 compliance/audit is selected, ask the jurisdiction(s)/region** the code will operate in
+  (or use the configured scope in CLAUDE.md §2 / `docs/scope-and-stack.md`) so
+  `compliance-reviewer` derives the **applicable** obligations and states what's applicable vs
+  not — don't apply rules from a region that doesn't apply.
 - **Breadth**: just the working diff · named files/glob · whole module · whole repo.
 - **Mode**: **change review** (filter pre-existing) or **audit** (keep pre-existing in scope).
 - **Outcome** (don't assume "review & stop"): review only · also **fixes applied** · a

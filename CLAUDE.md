@@ -67,6 +67,10 @@ engagement needs stack detail, and customise it to your environment.
   engineering quality and security (driving the standard linters per language), and
   `compliance-reviewer` for auditability and the regulatory trail.
 - Tests are mandatory for rule logic, including known true-positive and false-positive cases.
+  **Use the project's own test framework — never assume one.** `pytest` is just this repo's
+  worked example; detect and use whatever the target uses (Python `pytest`/`unittest`,
+  PowerShell **Pester**, JVM **JUnit**/**ScalaTest** via Maven/Gradle, JS **Jest**/**Vitest**,
+  Go `go test`, .NET `dotnet test`, …). Record the exact command you ran so it's reproducible.
 - **Code must be properly documented.** Modules, classes and functions have docstrings
   stating purpose, inputs/outputs and assumptions; non-obvious or complex logic has
   explanatory comments; every threshold carries its rationale (above). Aim for clear,

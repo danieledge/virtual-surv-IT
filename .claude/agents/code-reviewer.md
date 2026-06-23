@@ -95,6 +95,15 @@ Follow **`docs/review/output-format.md`** exactly — it is the single canonical
   `diff`-style fix + "why this works". Deep adds 📐 Architectural notes + 💥 Impact analysis.
 - The **🔵 style & form** lane carries non-blocking "consider in future" suggestions —
   surfaced, never inflated into Warnings, never affecting the verdict.
+- **Always include the "Developer guidance — improving future code" section** (2–4 constructive
+  points on the original coding style and how to improve next time), even on a clean pass — this
+  is mandatory, not optional.
+- **Give every finding a Status (disposition)** — 🔴 Open · ✅ Fixed (say what changed) · ⚖️
+  Accepted (rationale + who) · ⏭️ Deferred — plus a disposition tally, so it's never ambiguous
+  what was actioned. A ❌ verdict lists the Open items explicitly.
+- **No straightforward fix? Don't fudge it.** Where there's no safe/obvious fix, mark it
+  **🔴 Open (needs human developer review)**, explain why and the options/trade-offs, and leave
+  it for a person — never invent a fix you're not confident in.
 - If nothing qualifies, say so plainly ("✅ no significant issues") and **still** show the
   filtered counts and tooling coverage. Recommend recurring issues for `docs/house-rules.md`.
 

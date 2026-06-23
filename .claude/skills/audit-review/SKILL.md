@@ -21,8 +21,10 @@ Run an **evaluator–optimizer loop**:
    Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep),
    citing OWASP ASVS / CWE / SEI CERT, with confidence scoring and filter transparency
    (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope.
-2. **compliance-reviewer** — auditability, the alert→logic→obligation trace, threshold
-   rationale, secrets/PII, test coverage, and change control.
+2. **compliance-reviewer** — first establish the **jurisdiction(s)** (from CLAUDE.md §2 /
+   `docs/scope-and-stack.md`, or ask) so it assesses against the **applicable** regime(s) and
+   states what's applicable vs not. Then: auditability, the alert→logic→obligation trace,
+   threshold rationale, secrets/PII, test coverage, and change control.
 3. If any **Critical/Warning** findings, route fixes to `rules-developer` / `ml-engineer`,
    then **re-review** — loop until no Critical findings remain (or the user calls it).
 4. **Morgan's challenge pass (opus).** Independently re-score the reviewers' findings, downgrade
@@ -37,6 +39,11 @@ Run an **evaluator–optimizer loop**:
 
 Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
 
-**Close with next steps (don't dead-end).** State the verdict, then offer concrete follow-ups
-with a recommendation — e.g. *"Verdict: conditional. I can fix the 2 remaining warnings,
-add the missing tests, or produce the handover pack for your IT team. Which next?"*
+**Close with a clear disposition — never leave it ambiguous.** State the verdict **and the
+disposition of every finding**: ✅ fixed (what changed) · 🔴 open · ⚖️ accepted (rationale) ·
+⏭️ deferred. A ❌/conditional verdict must **list the Open items explicitly** — don't just say
+"failed". For anything with no straightforward fix, mark it **🔴 Open (needs human developer
+review)** with the reason and options rather than guessing. Then offer concrete follow-ups with
+a recommendation — e.g. *"Verdict: conditional — 2 fixed, 1 open (needs your call on the
+threshold). I can fix the 2 remaining warnings, escalate the open one, or produce the handover
+pack. Which next?"*

@@ -23,13 +23,18 @@ anything) must change first.
 
 ## 2. Findings
 Confidence score per `docs/code-review-method.md` (Critical 95–100, Warning 80–94, Medium
-70–79 — deep only). **Each finding carries a concrete `diff`-style fix + "why it works".**
-If there are none: *✅ No significant issues found* (still show the filtered counts below).
+70–79 — deep only). **Each finding carries a concrete `diff`-style fix + "why it works"** and a
+**Status** (`docs/review/output-format.md`): 🔴 Open · ✅ Fixed · ⚖️ Accepted · ⏭️ Deferred ·
+**🔴 Open (needs human review)** when there's no straightforward/safe fix. If there are none:
+*✅ No significant issues found* (still show the filtered counts below).
+
+**Disposition summary:** ✅ _N_ fixed · 🔴 _N_ open · ⚖️ _N_ accepted · ⏭️ _N_ deferred — so it's
+never ambiguous what was actioned. A ❌ verdict must list the Open items explicitly.
 
 ### 🔴 Critical (must fix)
-| # | File:line | Issue | Conf. | Standard / rule |
-|---|-----------|-------|-------|-----------------|
-| 1 | `path:42` | … | 97 | CWE-89 / OWASP ASVS V5 |
+| # | File:line | Issue | Conf. | Standard / rule | Status |
+|---|-----------|-------|-------|-----------------|--------|
+| 1 | `path:42` | … | 97 | CWE-89 / OWASP ASVS V5 | ✅ Fixed (commit abc123) / 🔴 Open |
 
 > **Fix for #1:**
 > ```diff
@@ -81,5 +86,15 @@ State explicitly which analysers were unavailable — nothing silently skipped.
 - **Blast radius:** … (what else could this change break?)
 - **Breaking changes:** …
 
-## 7. Recommendation & next steps
-Fixes routed to `rules-developer` / `ml-engineer`; re-review loop until no Critical remains.
+## 7. Developer guidance — improving future code *(always include, even on a clean pass)*
+Constructive, non-blocking guidance on the **original coding style overall** and how the author
+could improve in **future** work — patterns, structure, naming, testing/documentation habits.
+2–4 short points. If the code is strong, say so and name what's done well. The developer should
+always leave with something to learn, not just a pass/fail. (These are 🔵 style/form — they do
+**not** affect the verdict.)
+
+## 8. Recommendation & next steps
+Fixes routed to the relevant builder; re-review loop until no Critical remains. **State the
+disposition** (✅ fixed / 🔴 open / ⚖️ accepted / ⏭️ deferred) — and for anything with no
+straightforward fix, mark it **🔴 Open (needs human developer review)** with the reason and the
+options, rather than guessing a fix.
