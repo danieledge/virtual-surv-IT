@@ -94,6 +94,16 @@ For the worked example, tests and masking pipeline, also:
 
 Either way you get the 15 agents, the workflow commands and the raw-data guard hook.
 
+> **Paths & portability.** The **data-safety guard is fully portable** — it's a hook, so it
+> receives `CLAUDE_PROJECT_DIR` and protects **your project's** `data/raw/` (not the plugin's),
+> wherever the plugin is installed. The bundled Python scripts (`render_html`, `ingest`, …) are
+> cwd-independent (runnable by absolute path). **One platform limitation to know:** Claude Code
+> does **not** expose the plugin's path to the model's shell (only to hooks), so the
+> *script-running* workflow steps resolve cleanest in **repo-as-project** mode (run `claude`
+> inside this repo, or `--plugin-dir`). For a marketplace install into another project, the
+> agents/skills/guard work everywhere; the helper-script steps assume the plugin's `scripts/`
+> are reachable. If in doubt, use repo-as-project.
+
 Then just **talk to the PM** — describe whatever you've got:
 
 ```

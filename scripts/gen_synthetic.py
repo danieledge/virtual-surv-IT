@@ -17,7 +17,12 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import sys
 from pathlib import Path
+
+# Portability: make the repo root importable so this runs standalone by absolute path
+# from any cwd (not only via `python -m scripts.gen_synthetic` from the repo root).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rules.spoofing import EventKind, OrderEvent, Side
 

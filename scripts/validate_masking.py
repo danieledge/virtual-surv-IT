@@ -33,6 +33,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+# Portability: ensure the repo root is importable so this runs standalone by absolute
+# path from ANY cwd (e.g. `python3 /path/to/plugin/scripts/validate_masking.py`), not only
+# via `python -m scripts.validate_masking` from the repo root.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from rules.spoofing import detect_spoofing
 from scripts.gen_synthetic import event_to_record, record_to_event, spoofing_session
 from scripts.ingest import _PII_PATTERNS, load_schema, mask_records

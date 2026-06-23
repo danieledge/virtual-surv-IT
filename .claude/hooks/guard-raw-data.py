@@ -40,23 +40,19 @@ from pathlib import Path
 RAW_MARKERS = ("data/raw/",)
 
 # ---------------------------------------------------------------------------
-# Canonical raw-data directory.
-# Resolved once at import time; if the env var is absent we fall back to the
-# directory containing this hook file (two levels up from .claude/hooks/).
-# CLAUDE_PLUGIN_ROOT is the variable the Claude Code plugin runtime injects;
-# CLAUDE_PROJECT_DIR is the project-level equivalent — we accept both so the
-# guard works whether the hook is loaded as a plugin hook or a project hook.
+# Canonical raw-data directory — the directory we protect.
+#
+# This must be the USER'S PROJECT data/raw (where their real data lives), NOT
+# the plugin's own directory. Claude Code passes `CLAUDE_PROJECT_DIR` to hook
+# subprocesses (the project being worked on), so we resolve against that.
+#   - repo-as-project:   CLAUDE_PROJECT_DIR == this repo        -> repo/data/raw
+#   - plugin install:    CLAUDE_PROJECT_DIR == the user project -> <project>/data/raw
+# We deliberately do NOT use CLAUDE_PLUGIN_ROOT here — that points at the plugin's
+# own files, which is the wrong tree to protect. Fall back to the process cwd
+# (the project dir for a hook subprocess) if the env var is absent.
 # ---------------------------------------------------------------------------
-_plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT") or os.environ.get(
-    "CLAUDE_PROJECT_DIR"
-)
-if _plugin_root:
-    _REPO_ROOT = Path(_plugin_root).resolve()
-else:
-    # Fallback: two parents up from .claude/hooks/guard-raw-data.py
-    _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-
-_RAW_DIR = (_REPO_ROOT / "data" / "raw").resolve()
+_project_root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+_RAW_DIR = (Path(_project_root) / "data" / "raw").resolve()
 
 
 def _is_under_raw(candidate: str) -> bool:
