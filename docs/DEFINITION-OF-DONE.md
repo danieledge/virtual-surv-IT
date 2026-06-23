@@ -15,7 +15,9 @@ it. Apply the items relevant to the deliverable type — not every item fits eve
 - [ ] **Independently QA'd** — `qa-engineer` (not the builder) has produced a **QA handover**
       (`qa-handover.md`) evidencing what ran, results, coverage, gaps and residual risk.
 - [ ] **Code-reviewed (deep)** — `code-reviewer` ran; **no Critical findings open**;
-      filtered/ reported counts recorded.
+      filtered/ reported counts recorded; every finding has a **disposition** (fixed / open /
+      accepted / deferred) and the review carries a **🔵 Developer guidance — improving future
+      code** section (always present, even on a clean pass).
 - [ ] **Performance-reviewed** — where it processes data at volume, `performance-reviewer`
       assessed it against expected volumes with profiling evidence.
 - [ ] **Compliance-reviewed** — auditability, data safety (no secrets/PII/raw data, §5),

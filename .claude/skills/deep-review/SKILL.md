@@ -51,6 +51,12 @@ artifact** `artifacts/REVIEW-<slug>.md`, rendered to `.html` (`python -m scripts
 🔵 style & form is a non-blocking "consider in future" lane. (Fold into the consolidated
 `delivery-report.md` only if this review is part of a larger build/handover.)
 
+   ⚠️ **MANDATORY — the artifact is NOT complete without a `## 🔵 Developer guidance — improving
+   future code` section.** Always write it (2–4 constructive points on the author's coding
+   style and what to improve next time; if the code is strong, say what's done well), **even on
+   a clean pass**. Before you present, check the artifact contains this heading — if it's
+   missing, you are not done; add it. This is a required deliverable, not an optional extra.
+
 **5. Close — don't dead-end.** Summarise from the scoreboard, then offer concrete next steps
 with a recommendation — *"3 🔴, 5 🟠. I can fix the criticals, run `/remediate`, or produce a
 handover pack. Which?"* — and offer to carry them out.

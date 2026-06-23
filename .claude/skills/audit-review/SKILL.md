@@ -33,9 +33,10 @@ Run an **evaluator–optimizer loop**:
 5. Present in the shared `docs/review/output-format.md`: a clean traffic-light **scoreboard to
    the console**, with the full findings in the **clean artifact**. Give an explicit verdict
    (✅ audit-ready / ⚠️ conditional / ❌ not yet), standards cited, audit/regulatory checks, the
-   🔵 style & form lane, and a tooling-coverage section (state what couldn't run). Use the
-   standalone clean review artifact by default; fold into the consolidated
-   `delivery-report.md` only when audit is part of a larger handover.
+   🔵 style & form lane, a tooling-coverage section, **and — MANDATORY — a `## 🔵 Developer
+   guidance — improving future code` section** (2–4 points, even on a clean pass; verify it's in
+   the artifact before presenting). Use the standalone clean review artifact by default; fold
+   into the consolidated `delivery-report.md` only when audit is part of a larger handover.
 
 Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
 
