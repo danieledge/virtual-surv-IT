@@ -22,6 +22,11 @@ When validating a detection model:
 5. Assess explainability — can each alert be justified to a regulator and an investigator?
 6. Check governance artefacts: model inventory entry, documentation, monitoring plan,
    thresholds rationale, and change controls.
+7. **Assess ongoing monitoring & drift, not just point-in-time fitness:** is there a credible
+   plan (and metrics) to detect input/feature drift, score drift and **performance decay** over
+   time, with retraining/recalibration triggers? Validation is not a one-off — confirm the model
+   will be **periodically re-validated** and that decay would actually be caught before it causes
+   missed alerts. Flag the absence of drift monitoring as a finding in its own right.
 
 Output format:
 - **Validation summary** (Pass / Pass-with-conditions / Fail)

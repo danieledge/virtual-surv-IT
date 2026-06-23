@@ -27,6 +27,11 @@ When invoked:
    coverage, stability and bias.
 4. Produce model documentation: data lineage, assumptions, performance, limitations,
    monitoring plan, threshold rationale.
+   **Build the ongoing-monitoring in, not as an afterthought:** define and (where code is in
+   scope) implement **drift/decay detection** — input/feature drift (PSI, KS), score/output
+   drift, and performance decay vs a baseline — with the **retraining/recalibration triggers**
+   and who is alerted. A surveillance model silently decaying = missed alerts; a regulator will
+   ask how you'd know. Document the metrics, thresholds and cadence.
 5. Hand off to `model-validator` for independent validation.
 
 Output: the model code, evaluation results, and the model documentation. Be explicit about

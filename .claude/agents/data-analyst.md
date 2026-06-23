@@ -20,6 +20,15 @@ When invoked:
    properly governed data only — never expose raw PII/MNPI in outputs, commits or logs.
 3. Analyse: alert volumes, true/false-positive rates, precision/recall proxies, coverage,
    segment behaviour, and threshold sensitivity.
+   **Calibrate thresholds with statistical rigour, not round numbers:**
+   - **Distribution-based** — set thresholds from percentiles / tail behaviour of the genuine
+     population (and **EVT** for true tail events like large/rare orders), not arbitrary cut-offs.
+   - **Peer-group segmentation** — calibrate per segment (instrument class, liquidity band,
+     client type, desk); a one-size threshold over-alerts on some segments and misses others.
+   - **Performance curves** — ROC / precision-recall and the volume↔coverage trade-off at each
+     candidate threshold, so the chosen point is an evidenced decision.
+   - **Stability over time** — back-test the threshold across periods; show it isn't overfit to
+     one window and won't drift the alert rate unacceptably as behaviour shifts.
 4. Present findings with the assumptions and data caveats stated explicitly.
 
 Output format:

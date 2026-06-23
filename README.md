@@ -36,7 +36,7 @@ money laundering, market manipulation and trader misconduct. Detection rules are
 deliverable: it equally builds **data pipelines / ETL, transformation and utility scripts
 (Python, Scala, Java, PowerShell, Bash), reconciliation and reporting jobs, tooling**, or
 simply **reviews** existing code. It runs in
-[Claude Code](https://claude.com/claude-code) as a set of 13 focused "subagents": some are
+[Claude Code](https://claude.com/claude-code) as a set of 14 focused "subagents": some are
 subject-matter experts who only advise, others engineer, test and review the solutions, and
 the work flows between them like a real engineering team.
 
@@ -92,7 +92,7 @@ For the worked example, tests and masking pipeline, also:
 /plugin install compliance-surveillance-team@virtual-surv-it
 ```
 
-Either way you get the 13 agents, the workflow commands and the raw-data guard hook.
+Either way you get the 14 agents, the workflow commands and the raw-data guard hook.
 
 Then just **talk to the PM** — describe whatever you've got:
 
@@ -129,7 +129,7 @@ Prefer to drive a specific step yourself? Use the focused commands:
 ```
 .claude-plugin/               # plugin + marketplace manifests (installable via /plugin)
 CLAUDE.md                     # shared team handbook (example defaults — customise as needed)
-.claude/agents/               # 13 subagents
+.claude/agents/               # 14 subagents
   requirements-analyst.md     # BA            (build)
   tm-sme.md                   # AML SME       (advisory, read-only)
   trade-surveillance-sme.md   # SME           (advisory, read-only)
@@ -143,6 +143,7 @@ CLAUDE.md                     # shared team handbook (example defaults — custo
   code-reviewer.md            # multi-language code review (advisory, read-only)
   performance-reviewer.md     # performance & scalability review (advisory, read-only)
   compliance-reviewer.md      # audit/compliance review (advisory, read-only)
+  data-quality-reviewer.md    # data completeness & coverage assurance (advisory, read-only)
 ```
 
 ## Meet the agents
@@ -194,6 +195,10 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
   reports evidence-backed findings.
 - **`compliance-reviewer`** — final sign-off after any change: auditability, the
   alert→logic→obligation trace, secrets/PII, test coverage, and the Definition of Done.
+- **`data-quality-reviewer`** — **independent** assurance that the data feeding surveillance is
+  complete, accurate, timely and reconciled, and that **coverage** is total (every in-scope
+  instrument, venue, account and channel is actually captured and monitored). Surveillance's
+  biggest blind spot: a missing feed means abuse goes undetected and no alert ever fires.
 
 > Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
 > real independent check. The restriction is enforced by the tools each agent is granted —
@@ -205,7 +210,7 @@ The team is a set of files you commit into your repo. To get the whole team — 
 agents — copy these:
 
 1. `CLAUDE.md` to your repo root (merge if you already have one) — the shared handbook.
-2. `.claude/agents/` — the 13 subagents.
+2. `.claude/agents/` — the 14 subagents.
 3. `.claude/skills/` — the 11 workflows (`/engage`, `/audit-review`, …); without these you
    get agents but no front door.
 4. `.claude/hooks/` **and** `.claude/settings.json` — the always-on data-safety guard and its

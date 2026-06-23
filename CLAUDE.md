@@ -170,8 +170,8 @@ set of requirements to build, and it works out the shape of the work and orchest
     acting on anything irreversible, and make the path obvious. Crisp summaries over walls
     of text.
 - **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `performance-reviewer`,
-  `compliance-reviewer`) are read-only. Consult them for design, critique and sign-off — they
-  cannot change code.
+  `compliance-reviewer`, `data-quality-reviewer`) are read-only. Consult them for design,
+  critique and sign-off — they cannot change code.
 - **Build agents** implement. Route by **deliverable type**, not by habit:
 
   | Deliverable / task | Owner |
@@ -183,6 +183,7 @@ set of requirements to build, and it works out the shape of the work and orchest
   | ML / AI component (then independent `model-validator`) | `ml-engineer` |
   | Independent testing & QA evidence | `qa-engineer` |
   | Code review · performance review · audit/compliance review | `code-reviewer` · `performance-reviewer` · `compliance-reviewer` |
+  | Data-quality / feed-completeness / surveillance-coverage assurance | `data-quality-reviewer` (independent, read-only) |
 
 See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
 

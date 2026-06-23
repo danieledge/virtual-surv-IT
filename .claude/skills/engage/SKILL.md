@@ -127,6 +127,6 @@ produce a handover pack?"*). Always leave the user with a clear, actionable choi
 Specialists: `requirements-analyst`, `tm-sme` / `trade-surveillance-sme` /
 `comms-surveillance-sme`, `rules-developer`, `data-analyst`, `ml-engineer`, `platform-engineer`,
 `qa-engineer`, `code-reviewer`, `performance-reviewer`, `model-validator`,
-`compliance-reviewer`. Advisors are read-only.
+`compliance-reviewer`, `data-quality-reviewer`. Advisors are read-only.
 
 Stop for human approval before anything that touches live systems.
