@@ -25,8 +25,10 @@ Run an **evaluator–optimizer loop**:
    `docs/scope-and-stack.md`, or ask) so it assesses against the **applicable** regime(s) and
    states what's applicable vs not. Then: auditability, the alert→logic→obligation trace,
    threshold rationale, secrets/PII, test coverage, and change control.
-3. If any **Critical/Warning** findings, route fixes to `rules-developer` / `ml-engineer`,
-   then **re-review** — loop until no Critical findings remain (or the user calls it).
+3. If any **Critical/Warning** findings (and fixes are in scope), route fixes to the right
+   builder, then **re-review** — and **fix everything you safely can in this pass, don't defer
+   fixable work to a later sprint**. Loop until everything fixable is fixed; the only items left
+   are those needing a **human decision** (mark 🔴 Open / needs human review, not "deferred").
 4. **Morgan's challenge pass (opus).** Independently re-score the reviewers' findings, downgrade
    or drop the weak ones, and confirm each **evidence basis** (📊 measured / 🧠 inferred — never
    present an inference as fact) before presenting. Be a sceptic, not a relay.

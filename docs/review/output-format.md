@@ -51,7 +51,12 @@ open**:
 | 🔴 **Open** | not addressed — still stands |
 | ✅ **Fixed** | resolved — say *what changed* (commit/diff/file) and that re-review confirms it |
 | ⚖️ **Accepted** | risk-accepted / won't-fix — **with rationale and who accepted it** |
-| ⏭️ **Deferred** | acknowledged, scheduled later — with a tracking reference |
+| ⏭️ **Deferred** | last resort only — can't be done now for a stated reason, with a tracking reference. **Not** for work you could fix in this pass |
+
+**Fix-now is the default.** When fixes are in scope, fix everything you safely can *now* — don't
+punt fixable items to a "next sprint". Use ⏭️ Deferred sparingly and only with a concrete reason
+it can't be done in this pass; anything needing a human call is 🔴 Open (needs human review), not
+deferred.
 
 A **❌ Fail** must explicitly list the **Open** items (what's left to do), not just declare
 failure. If findings were fixed during the engagement, say so per finding — don't make the user
