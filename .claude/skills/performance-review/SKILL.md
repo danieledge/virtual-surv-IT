@@ -37,7 +37,7 @@ Drive **performance-reviewer** (CLAUDE.md §6):
    evidence-backed findings (with 📊/🧠 basis) in the **clean artifact**, impact at target
    volume, and a scale verdict.
 
-Fixes route to `rules-developer` / `cloud-architect` / `ml-engineer`, then **re-profile** to
+Fixes route to `rules-developer` / `platform-engineer` / `ml-engineer`, then **re-profile** to
 show the before/after. Save `artifacts/PERF-<slug>.md` and render to `.html`
 (`python -m scripts.render_html`).
 

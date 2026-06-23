@@ -30,7 +30,7 @@ plainly so the user chooses with eyes open, then proceed with their decision.
 ## 3. Synthetic path (automatable)
 - **Built-in generator:** `python -m scripts.gen_synthetic --kind <kind> --out data/synthetic/<name>.jsonl`.
   Check `--kind` choices first; if the user's scenario isn't covered, this is a small build
-  task — route to **cloud-architect** / **data-analyst** to extend the generator, *then* run it.
+  task — route to **platform-engineer** / **data-analyst** to extend the generator, *then* run it.
 - **Fit-and-sample:** for data shaped like an existing non-raw corpus, use `scripts.synthesise`
   (`fit → sample`). The `fit` step reads its input corpus, so only fit on synthetic or
   already-governed data — **never** point it at `data/raw/`.

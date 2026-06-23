@@ -74,7 +74,7 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 | `ml-engineer` | 🔧 Builder | Builds smarter AI-based detection when needed |
 | `qa-engineer` | 🔧 Builder | Independently tests it and evidences what was checked (for a real QA team) |
 | `model-validator` | 🧠 Advisor | Independently checks any AI model is sound and fair |
-| `cloud-architect` | 🔧 Builder | Builds the data plumbing: pipelines, ETL, transformation scripts, infrastructure |
+| `platform-engineer` | 🔧 Builder | Builds the data plumbing: pipelines, ETL, transformation scripts, infrastructure |
 | `code-reviewer` | 🧠 Advisor | Reviews code quality & security across Python, Scala, Java, PowerShell, Bash |
 | `performance-reviewer` | 🧠 Advisor | Checks it's fast enough and will scale to real data volumes |
 | `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |

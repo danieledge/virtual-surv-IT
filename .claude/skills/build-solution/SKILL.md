@@ -11,7 +11,7 @@ Run the **orchestrator–workers** pattern, agile and iterative:
    first; skip whatever the user already provided.
 2. **Decompose** the FSD into discrete, independently buildable units. **Route each unit to
    the right builder by type** (CLAUDE.md §6): detection logic → `rules-developer`; data
-   pipeline / ETL / transformation or utility script / infra → `cloud-architect`; analytics
+   pipeline / ETL / transformation or utility script / infra → `platform-engineer`; analytics
    / data-quality / reconciliation / reporting → `data-analyst`; ML → `ml-engineer` +
    independent `model-validator`. **Give each unit an explicit, non-overlapping brief**
    (objective · scope boundaries / what other units own · inputs/artifacts to read · expected

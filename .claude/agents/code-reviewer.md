@@ -38,7 +38,7 @@ passes** (each blind to the others → catches more), then merge and dedupe:
 
 - `lenses/bugs.md` (always) — incl. detection-logic missed/false alerts.
 - `lenses/security.md` (always) — OWASP ASVS / CWE / SEI CERT; §5 secrets/PII never filtered.
-- `lenses/language-{python,typescript,scala,java,powershell,bash}.md` — by file type.
+- `lenses/language-{python,typescript,scala,java,powershell,bash,sql}.md` — by file type.
 - `lenses/architecture.md` (deep/audit only).
 - **Documentation & comments** (always) — flag missing docstrings, complex logic with no
   explanatory comment, and thresholds without a rationale (§4); when fixes are in scope, add

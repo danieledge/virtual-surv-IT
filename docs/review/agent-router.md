@@ -18,6 +18,7 @@ diff. The review skills (`/deep-review`, `/audit-review`) and `code-reviewer` us
 | `.py` | `lenses/language-python.md` |
 | `.ts .tsx .js .jsx .mjs .cjs` | `lenses/language-typescript.md` |
 | `.scala .sc` | `lenses/language-scala.md` |
+| `.sql` (or embedded SQL) | `lenses/language-sql.md` |
 | `.java` | `lenses/language-java.md` |
 | `.ps1 .psm1 .psd1` | `lenses/language-powershell.md` |
 | `.sh .bash` | `lenses/language-bash.md` |

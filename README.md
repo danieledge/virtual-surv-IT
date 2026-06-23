@@ -15,7 +15,7 @@
 > **A modular code-review subsystem — leaning heavily on [turingmind-code-review](https://github.com/turingmindai/turingmind-code-review) (MIT, © 2026 TuringMind), with attribution in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md).**
 > - **Review lenses** (`docs/review/lenses/`) — modular per-dimension checks (bugs · security ·
 >   architecture) and per-language lenses for **Python, TypeScript/JS, Scala, Java, PowerShell,
->   Bash**, loaded progressively by a router so only the relevant ones run.
+>   Bash, SQL**, loaded progressively by a router so only the relevant ones run.
 > - **Scope menu** — `/deep-review`, `/audit-review` and `/performance-review` now ask what's in
 >   scope (dimensions · breadth · change-vs-audit mode · outcome) before reviewing.
 > - **Clean traffic-light output** — a glanceable 🔴🟠🟡🔵🔇 **scoreboard** to the console, with
@@ -135,7 +135,7 @@ CLAUDE.md                     # shared team handbook (example defaults — custo
   trade-surveillance-sme.md   # SME           (advisory, read-only)
   comms-surveillance-sme.md   # SME           (advisory, read-only)
   rules-developer.md          # detection rules (build)
-  cloud-architect.md          # pipelines/ETL/scripts/infra (build)
+  platform-engineer.md        # pipelines/ETL/scripts/infra (build)
   data-analyst.md             # tuning, data-quality, reporting (build)
   ml-engineer.md              # AI/ML         (build)
   qa-engineer.md              # independent testing & QA evidence (build)
@@ -162,7 +162,7 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
   testing, plus data-quality, reconciliation and reporting/MI work.
 - **`ml-engineer`** — builds ML/AI-based detection where rules aren't enough (anomaly
   detection, NLP for comms, behavioural scoring, alert triage).
-- **`cloud-architect`** — designs **and builds** the data pipelines and platform: ingestion,
+- **`platform-engineer`** — designs **and builds** the data pipelines and platform: ingestion,
   ETL, streaming/batch transformation, transformation/utility scripts (Python, Scala, Java,
   PowerShell, Bash), infra/IaC, retention/immutability, data residency, resilience.
 - **`qa-engineer`** — **independent** testing: designs and runs the test plan, then produces
@@ -170,7 +170,7 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
   builder, so it doesn't mark its own homework.
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
-> a PowerShell transform → `cloud-architect`; a reconciliation/reporting job → `data-analyst`;
+> a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
 > an ML model → `ml-engineer`. The PM picks; see CLAUDE.md §6.
 
 ### 🧠 Advisors — they guide and sign off (read-only)

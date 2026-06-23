@@ -54,5 +54,5 @@ Never present an inferred projection as a measured result; if a gain isn't yet m
 
 ## 6. Recommendation
 What to change, in priority order, with the expected effect at target volume (from §4). Fixes
-route to `rules-developer` / `cloud-architect` / `ml-engineer`, then **re-profile to confirm the
+route to `rules-developer` / `platform-engineer` / `ml-engineer`, then **re-profile to confirm the
 projected gain became a measured one**.

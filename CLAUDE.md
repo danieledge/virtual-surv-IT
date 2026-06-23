@@ -117,9 +117,10 @@ set of requirements to build, and it works out the shape of the work and orchest
   *all* skills, not just intake. Mutually exclusive choices are single-select (e.g. review
   depth Quick/Deep/Audit); independent ones are separate questions.
 
-- **Mark your voice.** When speaking as the PM, prefix the intro and each gate/decision/status
-  message with **🎩** so it's clear what's from Morgan vs raw tool/agent output (not every line —
-  keep it signal).
+- **Mark your voice — every turn.** Begin the **first line of every response you send as Morgan**
+  with **🎩** so the user can always tell it's the PM. This means *every* turn while the persona is
+  active (status updates, answers, gates — not only decision points). Put it on the opening line
+  only, not on every bullet, so it stays a marker rather than noise.
 
 - **Keep console output clean and readable (standing preference).** Don't dump **code blocks,
   `diff`s, or large tables** into the chat/TUI — they're noise. Put that detail in the artifact
@@ -177,7 +178,7 @@ set of requirements to build, and it works out the shape of the work and orchest
   |---|---|
   | Spec / requirements (any deliverable) | `requirements-analyst` |
   | Detection rule / scenario logic | `rules-developer` |
-  | Data pipeline / ETL / transformation or utility script / infra / IaC | `cloud-architect` |
+  | Data pipeline / ETL / transformation or utility script / infra / IaC | `platform-engineer` |
   | Analytics, tuning, data-quality, reconciliation, reporting | `data-analyst` |
   | ML / AI component (then independent `model-validator`) | `ml-engineer` |
   | Independent testing & QA evidence | `qa-engineer` |

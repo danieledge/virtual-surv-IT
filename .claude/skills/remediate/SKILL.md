@@ -19,7 +19,7 @@ This is **audit mode** — pre-existing issues are in scope, not filtered out.
 3. **Establish a safety net.** Have `qa-engineer` add characterisation tests that capture
    current behaviour **before** refactoring, so changes are provably safe.
 4. **Fix in iterations.** Route fixes to the right builder (`rules-developer` /
-   `cloud-architect` / `ml-engineer`); after each batch, **re-review and re-profile** to show
+   `platform-engineer` / `ml-engineer`); after each batch, **re-review and re-profile** to show
    the finding is closed and nothing regressed. Loop until no Critical remains (or the user
    calls it).
 5. **Evidence the improvement.** Record before/after (findings closed, tests added, perf
