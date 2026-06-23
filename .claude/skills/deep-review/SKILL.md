@@ -21,16 +21,16 @@ and wait. Don't review an assumed target.
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
 `docs/review/lenses/`; router `docs/review/agent-router.md`):
 
-1. **Context** *(cheap tier)* — detect languages, list changed files/lines, find related files
-   (importers/imports), check for CLAUDE.md.
+1. **Context** *(keep it mechanical/cheap)* — detect languages, list changed files/lines, find
+   related files (importers/imports), check for CLAUDE.md.
 2. **Load lenses** progressively via the router — only those the scope + languages require.
 3. **Analyse** — drive `code-reviewer` to run the loaded lenses as **parallel passes** (each
    blind to the others), plus the standard analysers (ruff/mypy/bandit, Checkstyle/PMD/SpotBugs,
    scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep). Deep adds the **architecture**
    lens, **impact analysis**, and test/doc coverage.
-4. **Score & filter** *(cheap tier)* — `docs/code-review-method.md`; tag each finding's
-   **evidence basis** (📊 measured / 🧠 inferred). **Never** filter regulated findings (secrets,
-   PII/raw data §5, undocumented thresholds / broken traceability §4).
+4. **Score & filter** *(mechanical — rote, keep it light)* — `docs/code-review-method.md`; tag
+   each finding's **evidence basis** (📊 measured / 🧠 inferred). **Never** filter regulated
+   findings (secrets, PII/raw data §5, undocumented thresholds / broken traceability §4).
 5. For anything touching detection logic, hand to **compliance-reviewer** for the §4/§5 trail.
 6. **Morgan's challenge pass** *(opus)* — independently re-score the lenses' findings, downgrade
    or drop the weak ones, and confirm each evidence basis before anything reaches the user. You

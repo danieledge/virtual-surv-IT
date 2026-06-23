@@ -1,7 +1,7 @@
 ---
 description: Guided data onboarding — get safe, governed data (synthetic or masked) ready before any agent sees it
 argument-hint: <what you want to analyse / the data you have, if any>
-allowed-tools: Read, Write, Edit, Grep, Glob, Bash(python -m scripts.gen_synthetic:*), Bash(python -m scripts.ingest:*), Bash(python -m scripts.validate_masking:*), Bash(python -m scripts.synthesise:*), Bash(echo $MASKING_KEY), Bash(ls:*)
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash(python -m scripts.gen_synthetic:*), Bash(python -m scripts.ingest:*), Bash(python -m scripts.validate_masking:*), Bash(python -m scripts.synthesise:*), Bash(test -n "$MASKING_KEY"), Bash(ls:*)
 ---
 
 Under the PM (CLAUDE.md §6), get **safe, governed data** ready so the team can work without
@@ -38,8 +38,10 @@ plainly so the user chooses with eyes open, then proceed with their decision.
 ## 4. Masking path (run is automatic; config needs a human)
 The mechanics auto-run, but three prerequisites are the user's to supply — confirm each:
 1. **Raw file placed in `data/raw/`** — agents are walled off from it; that's deliberate.
-2. **`MASKING_KEY` set** — `echo $MASKING_KEY`; if empty, source it from `~/.secrets`. There is
-   **no insecure default** — ingest refuses to run without it.
+2. **`MASKING_KEY` set** — check **presence only**, never print the value:
+   `test -n "$MASKING_KEY" && echo "MASKING_KEY: set" || echo "MASKING_KEY: unset"`. If unset,
+   ask the user to source it from `~/.secrets`. There is **no insecure default** — ingest
+   refuses to run without it.
 3. **`config/masking-schema.yaml` mapped to the user's fields.** You cannot derive this by
    reading the raw data (the guard blocks it). Instead **ask the user for their column/field
    list** and, for each field, ask: tokenise (ID), shift (timestamp), redact (free text),

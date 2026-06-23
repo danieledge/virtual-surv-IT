@@ -25,30 +25,35 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 0
 fi
 
-echo "🧠 AI review gate on staged changes (quick) — blocks on 🔴 Critical or §5 data-safety…"
+echo "🧠 AI review gate on staged changes (quick) — blocks on Critical or §5 data-safety…"
+# Gate on explicit sentinels the review is instructed to print, NOT on scoreboard glyphs —
+# the scoreboard shows a "🔴 Critical 0" row even when clean, so grepping the emoji would
+# block every commit. The sentinels are unambiguous and decoupled from presentation.
 out=$(claude -p "/deep-review the STAGED changes only (git diff --cached). Quick/change mode. \
-Print the console scoreboard from docs/review/output-format.md. If you find any §5 data-safety \
-issue (secret, credential, real PII/MNPI, or raw data), also print a line: DATA-SAFETY-BLOCK." \
+Print the console scoreboard from docs/review/output-format.md, THEN on the very last lines print \
+exactly one verdict line — 'REVIEW-VERDICT: CRITICAL' if there is any 🔴 Critical finding, else \
+'REVIEW-VERDICT: CLEAN' — and, if you find any §5 data-safety issue (secret, credential, real \
+PII/MNPI, or raw data), an additional line 'DATA-SAFETY-BLOCK'." \
   2>/dev/null || true)
 
 echo "$out"
 
 # Regulated override: §5 data-safety always blocks.
-if grep -qE "DATA-SAFETY-BLOCK" <<<"$out"; then
+if grep -qE "^DATA-SAFETY-BLOCK" <<<"$out"; then
   echo "⛔ Commit blocked: a §5 data-safety finding must be resolved (secret / PII / raw data)."
   echo "   Fix it, or bypass deliberately with: git commit --no-verify"
   exit 1
 fi
 
-# Critical findings block.
-if grep -qE "🔴|Critical \(95|CRITICAL" <<<"$out"; then
+# Critical findings block (explicit verdict sentinel).
+if grep -qE "^REVIEW-VERDICT: CRITICAL" <<<"$out"; then
   echo "⛔ Commit blocked: 🔴 Critical findings. Fix them, or bypass with: git commit --no-verify"
   exit 1
 fi
 
-# Warnings are advisory.
-if grep -qE "🟠|Warning \(80|WARNING" <<<"$out"; then
-  echo "⚠️  Warnings found (advisory) — commit proceeds. Review the scoreboard above."
+# If the review couldn't produce a verdict at all, fail safe: warn but allow (advisory tool).
+if ! grep -qE "^REVIEW-VERDICT: (CRITICAL|CLEAN)" <<<"$out"; then
+  echo "⚠️  AI review produced no verdict line — gate inconclusive, commit proceeds (advisory)."
 fi
 
 exit 0

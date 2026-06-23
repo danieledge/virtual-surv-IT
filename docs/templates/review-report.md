@@ -1,8 +1,8 @@
 # Code & Compliance Review Report — <TITLE>
 
-> Output of an audit-review engagement. Produced by `code-reviewer` (engineering quality &
-> security) and `compliance-reviewer` (auditability & regulatory trail). Authored in `.md`,
-> rendered to `.html`.
+> Output of a **deep or audit review** (`/deep-review`, `/audit-review`, or `code-reviewer`
+> directly). Produced by `code-reviewer` (engineering quality & security) and, for audit,
+> `compliance-reviewer` (auditability & regulatory trail). Authored in `.md`, rendered to `.html`.
 >
 > **Format source of truth:** `docs/review/output-format.md` — the console scoreboard, the
 > severity lanes (incl. 🔵 style & form), the evidence basis (📊/🧠) and the diff-fix shape. This

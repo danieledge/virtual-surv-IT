@@ -37,9 +37,16 @@ diff. The review skills (`/deep-review`, `/audit-review`) and `code-reviewer` us
 ```
 
 ## Model tiering (per `code-review-method.md` / CLAUDE.md §8)
-- **Haiku** — context detection, scoring, filtering (mechanical).
-- **Sonnet** — the dimension lenses.
-- **Opus** — Morgan's challenge pass + deep judgement on regulated (§4/§5) findings.
+
+**Today (as wired):** `code-reviewer` (opus) runs the lens passes, scoring and filtering in one
+agent; **Morgan** (opus) does the challenge pass. The mechanical steps are kept lightweight, but
+they are *not* yet on a separate cheap tier.
+
+**Target (the real saving — not yet wired):** route the rote steps — language/context detection,
+confidence arithmetic, count/filter bookkeeping — to a dedicated **haiku** context/scorer agent,
+run the dimension lenses as **sonnet** sub-agents, and reserve **opus** for Morgan's challenge
+and the §4/§5 judgement. Until that agent exists, don't claim the split is active — see the
+roadmap note in `code-review-method.md`.
 
 ## Adding a lens
 Create `docs/review/lenses/language-<name>.md` (same shape as the others: frontmatter with

@@ -53,7 +53,12 @@ default to one type. Use the question tool, multi-select:
 - **Performance review** (`/performance-review`) — performance & scalability against target data
   volumes, with profiling evidence and every claim tagged 📊 measured / 🧠 inferred. *"Will it
   scale?"*
-- **All of the above** — run the full battery and consolidate into one scoreboard + artifact.
+- **All of the above** — the full battery, consolidated into one scoreboard + artifact.
+  **Right-size note (cost):** Quick is a subset of Deep, and Audit *runs Deep as its first
+  step* — so don't re-run the lenses three times. Run **one deep analysis**, reuse its findings
+  for the audit fix→re-review loop and the performance pass, and tell the user "All" runs
+  multiple reviewers (more tokens) — recommended only for high-value, broad deliverables; for a
+  single change, **Deep** alone usually covers it.
 
 After the type(s), the chosen review skill(s) will ask the **scope** (dimensions · breadth ·
 change-vs-audit mode) — so the user gets type *then* scope, never needing a slash command.
@@ -101,6 +106,7 @@ produce a handover pack?"*). Always leave the user with a clear, actionable choi
 
 Specialists: `requirements-analyst`, `tm-sme` / `trade-surveillance-sme` /
 `comms-surveillance-sme`, `rules-developer`, `data-analyst`, `ml-engineer`, `cloud-architect`,
-`code-reviewer`, `model-validator`, `compliance-reviewer`. Advisors are read-only.
+`qa-engineer`, `code-reviewer`, `performance-reviewer`, `model-validator`,
+`compliance-reviewer`. Advisors are read-only.
 
 Stop for human approval before anything that touches live systems.

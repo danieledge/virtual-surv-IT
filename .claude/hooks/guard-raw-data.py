@@ -32,8 +32,12 @@ from pathlib import Path
 # Substring markers — belt-and-braces catch (fast path, tool-agnostic).
 # Kept in addition to the normalised path check so that encoded or relative
 # paths that can't be resolved still get a best-effort intercept.
+# Only the specific `data/raw/` is matched: a bare `/raw/` is too broad (it
+# false-positives on unrelated paths like /var/raw/ or foo/raw/bar and on benign
+# commands that merely mention the string). The normalised realpath check in
+# _is_under_raw() remains the primary, precise control for Read/Grep/Glob.
 # ---------------------------------------------------------------------------
-RAW_MARKERS = ("data/raw/", "/raw/")
+RAW_MARKERS = ("data/raw/",)
 
 # ---------------------------------------------------------------------------
 # Canonical raw-data directory.

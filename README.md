@@ -295,6 +295,10 @@ The `code-reviewer` agent drives standard analysers — it doesn't reinvent rule
 ones are in `requirements-review.txt` (kept separate so the core test install stays lean).
 The rest install via the OS / build tooling:
 
+> **Without these installed, reviews still run — but degrade to inference-only (🧠) instead of
+> tool-backed measured (📊) findings.** The review's 🔬 tooling-coverage line will say what
+> couldn't run. Install them before testing if you want analyser-evidenced results.
+
 | Language | Install |
 |---|---|
 | Python | `pip install -r requirements-review.txt` (ruff, black, mypy, bandit, pip-audit, semgrep) |

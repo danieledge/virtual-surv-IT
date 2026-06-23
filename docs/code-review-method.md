@@ -71,27 +71,26 @@ Five lanes, kept distinct so the signal stays clean and nothing important hides 
 
 **🔵 Style & form is not 🔇 filtered.** Filtered = the linter/formatter's job, reported only as a count. Style & form = judgement-level suggestions worth a developer's attention later (clearer naming, better decomposition, a missing docstring, a more idiomatic construct). Surface them in their own section, never inflate them into Warnings, and never let them affect the verdict.
 
-## Console scoreboard (what the user sees first)
+## Console scoreboard & artifact
 
-The console gets a **clean, scannable traffic-light scoreboard** — not a wall of tables. Full
-findings, diffs and rationale go to the **artifact** (see Output). Scoreboard shape:
+The console gets a **clean traffic-light scoreboard**; full findings go to the artifact. The
+exact scoreboard shape and artifact sections are defined once in **`docs/review/output-format.md`**
+— that file is canonical for *what the user sees*; this file is canonical for *how findings are
+scored and filtered*. Don't restate the format here.
 
-```
-Review — <target>            (deep · audit mode)
-🔴 Critical    2
-🟠 Warning     5
-🟡 Medium      3
-🔵 Style/form  4   (non-blocking — for future)
-🔇 Filtered    7
-Found 21 · Reported 14 · Filtered 7
-→ Full findings + fixes: artifacts/REVIEW-<slug>.md  (.md + .html)
-```
+## Model tiering — roadmap (not yet wired)
 
-Optionally list the 🔴/🟠 titles as one line each under the scoreboard, but keep detail
-(tables, diffs, evidence) in the artifact. The point is: glanceable in the terminal,
-complete in the file.
+Scoring, filtering and context detection are **rote, mechanical** work that *should* run on a
+cheap tier (haiku), with the dimension lenses on sonnet and only Morgan's challenge + §4/§5
+judgement on opus (CLAUDE.md §8). **Today this is not wired** — `code-reviewer` (opus) does all
+of it in one agent. The real saving is a dedicated haiku context/scorer agent the review skills
+call for steps 1 and 4; until it exists, treat the tiering as a target, not a claim
+(`docs/review/agent-router.md`).
 
 ## Always filter out (noise)
+
+> The same list, with turingmind's wording and the 🔵 style-vs-filter distinction, is in
+> `docs/review/false-positive-rules.md`. Keep the two consistent; this file leads on scoring.
 
 1. **Linter/formatter territory** — formatting, import order, unused vars (ruff/black/
    prettier handle these). Run the tools; don't hand-report their job.
