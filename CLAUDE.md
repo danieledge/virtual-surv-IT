@@ -72,7 +72,9 @@ engagement needs stack detail, and customise it to your environment.
   explanatory comments; every threshold carries its rationale (above). Aim for clear,
   meaningful comments — not redundant noise that restates the code. `code-reviewer` flags
   uncommented or thinly-commented code and, when fixes are in scope, adds the missing
-  documentation.
+  documentation. The full standard (lean docstrings, comment quality, cleanliness, per-language
+  conventions — and *no* stale `@author`/`@version` banners; git owns those) is in
+  **`docs/coding-standards.md`**.
 
 ## 5. Data handling (non-negotiable)
 

@@ -40,10 +40,12 @@ passes** (each blind to the others → catches more), then merge and dedupe:
 - `lenses/security.md` (always) — OWASP ASVS / CWE / SEI CERT; §5 secrets/PII never filtered.
 - `lenses/language-{python,typescript,scala,java,powershell,bash,sql}.md` — by file type.
 - `lenses/architecture.md` (deep/audit only).
-- **Documentation & comments** (always) — flag missing docstrings, complex logic with no
-  explanatory comment, and thresholds without a rationale (§4); when fixes are in scope, add
-  clear, meaningful docstrings/comments (purpose, inputs/outputs, assumptions, the *why*) —
-  never noise that restates the code.
+- **Documentation & comments** (always) — check against **`docs/coding-standards.md`**: lean
+  docstrings (purpose, inputs/outputs, assumptions) on modules/public classes/functions,
+  comments that explain the *why* not the what, thresholds with a rationale (§4), and clean
+  code (clear names, no dead/commented-out code, no magic numbers). Flag gaps; when fixes are
+  in scope add clear, meaningful docs — never noise that restates the code. (No `@author`/
+  `@version` banners — git owns those.)
 - **Compliance/audit** — defer to `compliance-reviewer`, but flag §4/§5 issues on sight.
 
 Each lens uses the standard analysers below and the shared `docs/review/output-format.md`.
