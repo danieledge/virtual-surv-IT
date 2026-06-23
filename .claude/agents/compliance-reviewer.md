@@ -44,7 +44,7 @@ Output, organised by priority:
 
 Give specific, actionable fixes with file/line references, each tied to the obligation or DoD
 item it serves — assertions without evidence are not sign-off. **Give every finding a Status**
-(🔴 Open · ✅ Fixed · ⚖️ Accepted-with-rationale · ⏭️ Deferred) and a disposition tally, so a
+(🔴 Open · ✅ Fixed · ⚖️ Accepted · ⏭️ Deferred — rationale in the description) and a disposition tally, so a
 **Fail makes clear exactly what is still Open** and what was already addressed — never leave it
 ambiguous. Where there's no straightforward fix, mark it **🔴 Open (needs human review)** with
 the reason. Recommend recurring issues for `docs/house-rules.md` so reviews tighten over time.

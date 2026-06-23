@@ -11,7 +11,7 @@
 | | |
 |---|---|
 | **Scope** | <files / commit range reviewed> |
-| **Languages** | <Python / Scala / Java / PowerShell / Bash> |
+| **Languages** | <Python / TypeScript-JS / Scala / Java / PowerShell / Bash / SQL> |
 | **Date** | <YYYY-MM-DD> |
 | **Verdict** | ✅ audit-ready / ⚠️ conditional / ❌ not yet |
 

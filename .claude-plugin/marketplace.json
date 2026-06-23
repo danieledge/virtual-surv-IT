@@ -8,7 +8,7 @@
     {
       "name": "compliance-surveillance-team",
       "source": ".",
-      "description": "POC virtual compliance-surveillance engineering team (13 subagents + PM workflows + data-safety pipeline)."
+      "description": "POC virtual compliance-surveillance engineering team (15 subagents + PM workflows + data-safety pipeline)."
     }
   ]
 }

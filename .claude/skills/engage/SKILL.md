@@ -107,8 +107,11 @@ Each is delivered in **both `.md` and `.html`**.
 decisions taken, open questions, clarifications, assumptions, the selected artifacts and the
 routing plan. Render it to HTML. Get the user's go-ahead.
 
-**5. Oversee delivery (agile).** Work in small iterations. **Right-size**: use the leanest set
-of agents that fits — don't fan out the whole team for a narrow change. **Delegate with an
+**5. Oversee delivery (agile).** Work in small iterations. **Right-size, and say so out loud:**
+before fanning out, state in one line **how many agents you intend to spawn and why** (e.g.
+*"this is a one-file change — I'll use just rules-developer + code-reviewer, not the full
+team"*). Surfacing the team size at the gate keeps over-spawning visible to the user. Use the
+leanest set that fits — don't fan out the whole team for a narrow change. **Delegate with an
 explicit, non-overlapping brief** to each specialist (objective · scope boundaries / what
 another agent owns · inputs & artifacts to read · expected output format) — this prevents the
 duplicate-work/gap failures. Coordinate via the **shared artifacts** (Delivery Report, RTM),

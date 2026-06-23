@@ -45,7 +45,7 @@ safety rails that stop confidential data ever reaching the AI.
   So an agent can actually *do* work (open files, write code, run it) rather than only
   chatting about it.
 
-- **Subagent** — one agent set up for **a single, focused role**. This project has 14 of
+- **Subagent** — one agent set up for **a single, focused role**. This project has 15 of
   them. Each has a short "job description" (a small text file in `.claude/agents/`) telling
   it what it's responsible for and what it's allowed to touch.
 
@@ -75,10 +75,11 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 | `qa-engineer` | 🔧 Builder | Independently tests it and evidences what was checked (for a real QA team) |
 | `model-validator` | 🧠 Advisor | Independently checks any AI model is sound and fair |
 | `platform-engineer` | 🔧 Builder | Builds the data plumbing: pipelines, ETL, transformation scripts, infrastructure |
-| `code-reviewer` | 🧠 Advisor | Reviews code quality & security across Python, Scala, Java, PowerShell, Bash |
+| `code-reviewer` | 🧠 Advisor | Reviews code quality & security across Python, TypeScript/JS, Scala, Java, PowerShell, Bash, SQL |
 | `performance-reviewer` | 🧠 Advisor | Checks it's fast enough and will scale to real data volumes |
 | `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |
 | `data-quality-reviewer` | 🧠 Advisor | Independently checks the data is complete & accurate, and that nothing in scope goes unmonitored |
+| `review-scorer` | ⚙️ Helper | Cheap-tier (haiku) assistant that does the rote review steps — context detection, scoring, filtering — so the expensive reviewers don't |
 
 > Why "read-only" matters: a reviewer who could quietly fix the thing they're reviewing
 > isn't really an independent check. Making advisors read-only is enforced by the tools
@@ -180,7 +181,7 @@ It's the template every other detection in this team would follow.
 | Path | What it is |
 |---|---|
 | `CLAUDE.md` | The team handbook — shared rules every AI member reads first |
-| `.claude/agents/` | The 14 job descriptions (one file per team member) |
+| `.claude/agents/` | The 15 job descriptions (one file per team member) |
 | `.claude/skills/` | Workflow shortcuts, e.g. `/new-scenario` runs the whole team chain |
 | `.claude/hooks/` | The automatic guard that blocks the AI from real data |
 | `rules/` | The actual detection code (the spoofing example) |
@@ -193,7 +194,7 @@ It's the template every other detection in this team would follow.
 
 ## 8. How you'd actually use it
 
-1. Open this project in **Claude Code** (Anthropic's coding tool). The 14 team members are
+1. Open this project in **Claude Code** (Anthropic's coding tool). The 15 team members are
    loaded but stay **dormant** — a normal session behaves like ordinary Claude Code until you
    invoke the team.
 2. **Start with the Project Manager — "Morgan".** Type `/engage` and describe whatever
@@ -220,7 +221,7 @@ it organises and does the work — you stay in the loop at the decision points.
 
 - **LLM** — the AI text engine (e.g. Claude). Reads instructions, writes text and code.
 - **Agent** — an LLM given a job and tools so it can actually do work.
-- **Subagent** — one agent set up for a single focused role (this repo has 14).
+- **Subagent** — one agent set up for a single focused role (this repo has 15).
 - **Orchestrator** — whoever hands tasks to the right agent and chains them together.
 - **Masking** — scrambling identities in real data while keeping its behaviour.
 - **Synthetic data** — completely made-up data that behaves realistically.

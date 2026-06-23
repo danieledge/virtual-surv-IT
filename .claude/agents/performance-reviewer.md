@@ -2,7 +2,7 @@
 name: performance-reviewer
 description: >
   When the team is engaged, use to review code and pipelines for performance and scalability across Python,
-  Scala, Java, PowerShell and Bash — algorithmic complexity, hot paths, I/O and query
+  TypeScript/JS, Scala, Java, PowerShell, Bash and SQL — algorithmic complexity, hot paths, I/O and query
   efficiency, memory, concurrency, and behaviour at surveillance data volumes. Drives the
   standard profilers/benchmarks; advises only, with evidence. Read-only.
 tools: Read, Grep, Glob, Bash

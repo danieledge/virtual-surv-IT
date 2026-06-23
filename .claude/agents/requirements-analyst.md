@@ -16,7 +16,7 @@ When invoked:
 1. Clarify the underlying obligation or business goal (which regulation, which conduct
    risk, which gap is being closed).
 2. Draft the specification.
-3. Write it to a markdown file under `docs/specs/` unless told otherwise.
+3. Write it to a markdown file under `artifacts/` (rendered to `.html`) unless told otherwise.
 
 A good spec contains:
 - **Context & regulatory driver** (cite the obligation)

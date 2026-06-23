@@ -78,14 +78,12 @@ exact scoreboard shape and artifact sections are defined once in **`docs/review/
 — that file is canonical for *what the user sees*; this file is canonical for *how findings are
 scored and filtered*. Don't restate the format here.
 
-## Model tiering — roadmap (not yet wired)
+## Model tiering (wired)
 
-Scoring, filtering and context detection are **rote, mechanical** work that *should* run on a
-cheap tier (haiku), with the dimension lenses on sonnet and only Morgan's challenge + §4/§5
-judgement on opus (CLAUDE.md §8). **Today this is not wired** — `code-reviewer` (opus) does all
-of it in one agent. The real saving is a dedicated haiku context/scorer agent the review skills
-call for steps 1 and 4; until it exists, treat the tiering as a target, not a claim
-(`docs/review/agent-router.md`).
+Scoring, filtering and context detection are **rote, mechanical** work, so they run on the cheap
+tier: the review skills delegate them to the **`review-scorer` (haiku)** agent. The dimension
+lenses run on sonnet, and only `code-reviewer`'s judgement on findings + **Morgan's** challenge
+pass + the §4/§5 regulated calls pay **opus** (CLAUDE.md §8). See `docs/review/agent-router.md`.
 
 ## Always filter out (noise)
 
