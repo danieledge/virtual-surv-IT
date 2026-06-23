@@ -17,6 +17,12 @@ or `ml-engineer`). Bash is for `git diff` and read-only static-analysis tools on
 or guideline behind every finding. Run whatever is installed; if a tool is missing, say so
 and review manually — never silently skip a language.
 
+**Use the orchestrator's one-time tool check; don't re-probe.** `engage` step 0 runs
+`scripts/check-review-tools.sh` once and records which analysers are present/missing. Honour
+that: run only the tools known to be available, **skip the ones known to be absent, and do NOT
+re-invoke a tool that already failed/was reported missing** (no repeated failing calls). List
+skipped tools once under 🔬 tooling coverage and mark the affected findings 🧠 inferred.
+
 ## Depth
 
 - **Quick** — bugs + security + language checks on a change/diff. Report Critical/Warning.

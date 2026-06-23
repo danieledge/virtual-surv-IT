@@ -16,7 +16,11 @@ this file defines **what the user sees**. Two surfaces:
   `artifacts/REVIEW-<slug>.md` and rendered to `.html`. **Artifact-first**: detail goes to the
   file, the terminal gets the scoreboard + a pointer.
 
-## Console scoreboard (always)
+## Console scoreboard (the ONLY thing shown by default)
+
+By default the console shows **just the scoreboard** — nothing else. Full findings, diffs and
+evidence go to the artifact; the terminal can't collapse our own prose, so we keep it minimal
+and let the user choose to expand. (The harness already collapses noisy *tool* output itself.)
 
 ```
 Review — <target>            (deep · audit mode)
@@ -29,8 +33,19 @@ Found 21 · Reported 14 · Filtered 7
 → Full findings + fixes: artifacts/REVIEW-<slug>.md  (.html rendered)
 ```
 
-Optionally list 🔴/🟠 titles one line each beneath it. Keep tables, diffs and evidence in the
-artifact.
+Then **offer to expand, don't dump** — via the question tool: *"Show full findings inline, the
+🔴 criticals only, or just open the artifact?"* Only print detail to the console if the user
+asks. Default = scoreboard + the pointer.
+
+**Console cleanliness (hard rule).** Never print **code blocks, `diff` fixes, or large tables**
+to the console — they're noise in a terminal and belong in the artifact. The console gets the
+scoreboard and, at most, one-line finding titles (`🔴 file:line — short title`). Clean and
+readable over complete; completeness lives in the file.
+
+**In the `.html` artifact, make heavy sections collapsible** with `<details><summary>…</summary>`
+(filtered issues, architectural notes, per-finding diffs) so a browser reader gets true
+hide-by-default / click-to-expand. (These render as plain text in the terminal — that's fine,
+the terminal only ever sees the scoreboard.)
 
 ## Artifact sections
 
@@ -60,13 +75,20 @@ Same shape as Critical.
 ### 🟡 Medium (70–79) — *deep / audit only*
 Same shape; lighter.
 
-### 🔵 Style & form — non-blocking, **for future consideration**
+### 🔵 Style & form — non-blocking, **for future consideration** *(ALWAYS include this section)*
 Meaningful idiom / readability / naming / decomposition / documentation a senior engineer
 would raise — **never blocks a verdict, never inflated into a Warning.** Distinct from 🔇.
+Per-item:
 ```markdown
 ### 🔵 {{title}}  ·  `{{file}}:{{line}}`
 {{suggestion}} — *consider in future work.*
 ```
+**This section is mandatory even on a clean review.** Always end it with a short
+**"General considerations for future code"** — 2–4 sentences of constructive, developer-friendly
+guidance on the *original coding style overall* (patterns, structure, naming, testing/docs
+habits) and how the author could improve next time. If the code is genuinely strong, say so and
+name what's done well. The point is the developer always leaves with something to learn, not just
+a pass/fail.
 
 ### 🔇 Filtered (transparency — counts, not findings)
 | Reason | Count |

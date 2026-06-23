@@ -16,7 +16,8 @@ You review; you do not modify (hand fixes to `rules-developer` / `cloud-architec
 
 **Measure, don't guess — and don't reinvent the wheel.** Back findings with evidence from
 established profilers, and cite the numbers. State expected/target data volumes up front and
-assess against them.
+assess against them. Use the orchestrator's one-time tool check (`engage` step 0); **skip
+profilers known to be absent and don't re-invoke them** — note them under tooling coverage.
 
 **State the basis of every claim (📊 measured vs 🧠 inferred).** A developer will challenge a
 performance assertion that only *sounds* certain — so make the provenance explicit:
@@ -59,4 +60,8 @@ When invoked:
 
 Output: use `docs/templates/performance-report.md` — workload & targets, findings with
 evidence and severity, before/after if a fix was profiled, and a verdict (will it scale?).
-Recommend recurring hotspots for `docs/house-rules.md`.
+**Always include the §4 potential-gains summary** — per issue: current cost → projected after
+fix, the **gain**, and **how it was derived** (📊 measured before/after or explicit coded value
+vs 🧠 inferred projection with the model named). A developer wants the headline "what do I get,
+and how do you know" — never present an inferred projection as a measured result. Recommend
+recurring hotspots for `docs/house-rules.md`.
