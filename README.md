@@ -61,36 +61,48 @@ guard blocks any agent from reading raw records. See
 
 ## Quick start — using the team
 
-### Offline / corporate install (no marketplace needed)
+### ✅ Simplest — open the repo as a project (no install, no marketplace)
 
-If marketplaces are disabled in your environment, **download the repo and use it locally** —
-no marketplace connection required:
+The most reliable way. Project-scoped skills and agents **auto-load** — nothing to install:
 
 ```bash
-# get the code (download the ZIP from GitHub, or clone)
 git clone https://github.com/danieledge/virtual-surv-IT.git
-cd virtual-surv-IT
-
-# (A) simplest — just open it as a project; project-scoped agents/commands load automatically
+cd virtual-surv-IT     # launch Claude FROM the repo root (discovery doesn't walk up dirs)
 claude
+```
 
-# (B) use it as a plugin in ANY other project, from your local copy (no marketplace):
+Then run `/help` — you should see `/engage`, `/deep-review`, `/audit-review`, …. Run `/engage`
+to start. (Also `pip install -r requirements-dev.txt` for the worked example, tests and the
+`.md→.html` render.)
+
+> ⚠️ **Two gotchas that waste people's time:**
+> - **Claude can't install the plugin for you.** `/plugin …` is a command **you** type — if you
+>   ask the assistant to "install the plugin" it may *say* it did without anything happening.
+> - **Don't copy the repo into `~/.claude/skills/`.** The repo's skills live at
+>   `.claude/skills/<name>/SKILL.md`, so copying the whole folder mis-nests them and they won't
+>   load. Use project mode (above) or a real plugin install (below).
+
+### Use it as a plugin in another project
+
+So the team is available from a *different* repo:
+
+```bash
+# Persistent install from your local copy (no GitHub needed):
+/plugin marketplace add /path/to/virtual-surv-IT       # reads .claude-plugin/marketplace.json
+/plugin install compliance-surveillance-team@virtual-surv-it
+# …then restart Claude. Skills appear as /compliance-surveillance-team:engage, etc.
+
+# Or from GitHub:
+/plugin marketplace add danieledge/virtual-surv-IT
+/plugin install compliance-surveillance-team@virtual-surv-it
+
+# Or for a single session only (ephemeral — not saved):
 claude --plugin-dir /path/to/virtual-surv-IT
 ```
 
-A third option for persistent local use without a marketplace: copy the folder to
-`~/.claude/skills/compliance-surveillance-team/` — it loads automatically as an
-`@skills-dir` plugin on the next session (unless your admins block that source).
-
-For the worked example, tests and masking pipeline, also:
-`pip install -r requirements-dev.txt` (pytest + Markdown for `.md→.html`).
-
-### Or, where marketplaces are allowed
-
-```
-/plugin marketplace add danieledge/virtual-surv-IT
-/plugin install compliance-surveillance-team@virtual-surv-it
-```
+A successful `/plugin install` records the plugin in your Claude config (e.g.
+`enabledPlugins` in `settings.json`). If it's **not** there after installing, the install
+didn't actually run — type the `/plugin` commands yourself (the assistant cannot).
 
 Either way you get the 15 agents, the workflow commands and the raw-data guard hook.
 
