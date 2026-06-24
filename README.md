@@ -82,39 +82,53 @@ to start. (Also `pip install -r requirements-dev.txt` for the worked example, te
 >   `.claude/skills/<name>/SKILL.md`, so copying the whole folder mis-nests them and they won't
 >   load. Use project mode (above) or a real plugin install (below).
 
-### Use it as a plugin in another project
+### Install once — launch the team on demand from *any* project
 
-So the team is available from a *different* repo:
+Install it as a plugin and the team is available in every project, summoned with one command.
 
-```bash
-# Persistent install from your local copy (no GitHub needed):
-/plugin marketplace add /path/to/virtual-surv-IT       # reads .claude-plugin/marketplace.json
-/plugin install compliance-surveillance-team@virtual-surv-it
-# …then restart Claude. Skills appear as /compliance-surveillance-team:engage, etc.
+> 🛑 **You must type the `/plugin` commands yourself.** `/plugin …` is an interactive command —
+> if you *ask the assistant* to "install the plugin" it may claim success without anything
+> happening. And first remove any earlier hand-copy (e.g. `~/.claude/skills/…`) — it conflicts.
 
-# Or from GitHub:
+**1. Add the marketplace and install** (type these in Claude Code yourself):
+```
+# From GitHub (works anywhere, nothing to clone):
 /plugin marketplace add danieledge/virtual-surv-IT
 /plugin install compliance-surveillance-team@virtual-surv-it
 
-# Or for a single session only (ephemeral — not saved):
-claude --plugin-dir /path/to/virtual-surv-IT
+# …or from a local copy instead of GitHub:
+/plugin marketplace add /path/to/virtual-surv-IT
+/plugin install compliance-surveillance-team@virtual-surv-it
 ```
 
-A successful `/plugin install` records the plugin in your Claude config (e.g.
-`enabledPlugins` in `settings.json`). If it's **not** there after installing, the install
-didn't actually run — type the `/plugin` commands yourself (the assistant cannot).
+**2. Restart Claude Code.**
 
-Either way you get the 15 agents, the workflow commands and the raw-data guard hook.
+**3. From any project, summon the team on demand** (commands are namespaced):
+```
+/compliance-surveillance-team:engage
+```
+…and likewise `…:deep-review`, `…:audit-review`, `…:handover`, etc.
 
-> **Paths & portability.** The **data-safety guard is fully portable** — it's a hook, so it
-> receives `CLAUDE_PROJECT_DIR` and protects **your project's** `data/raw/` (not the plugin's),
-> wherever the plugin is installed. The bundled Python scripts (`render_html`, `ingest`, …) are
-> cwd-independent (runnable by absolute path). **One platform limitation to know:** Claude Code
-> does **not** expose the plugin's path to the model's shell (only to hooks), so the
-> *script-running* workflow steps resolve cleanest in **repo-as-project** mode (run `claude`
-> inside this repo, or `--plugin-dir`). For a marketplace install into another project, the
-> agents/skills/guard work everywhere; the helper-script steps assume the plugin's `scripts/`
-> are reachable. If in doubt, use repo-as-project.
+**Verify it installed:** run `/plugin` — it should list **compliance-surveillance-team** as
+enabled (recorded in your config under `enabledPlugins`). **If it's not listed, the install
+didn't run** — re-type the commands above yourself.
+
+*(Just need it for one session? `claude --plugin-dir /path/to/virtual-surv-IT` loads it
+ephemerally, not saved.)*
+
+You get the 15 agents, the workflow commands and the raw-data guard hook in every project.
+
+> **What works from another project vs repo-as-project.** The full **review/advisory** team —
+> `/engage`, all the reviews, the SMEs, Morgan — works everywhere. The helper-**script** steps
+> (the `.md`→`.html` render and the masking pipeline) need the plugin's `scripts/` reachable
+> from the working directory, which Claude Code doesn't expose to the model's shell from a
+> foreign project — so those run cleanest in **repo-as-project** mode. For "summon the team to
+> review/advise on my current project", the plugin install is exactly right.
+
+> **Data-safety guard is fully portable.** It's a hook, so it receives `CLAUDE_PROJECT_DIR` and
+> protects **your project's** `data/raw/` (not the plugin's) wherever the plugin is installed —
+> backed by the OS-level `permissions.deny` in settings. (Note: the hook runs `python3`; the
+> guard is inert without Python — the deny-list still applies.)
 
 Then just **talk to the PM** — describe whatever you've got:
 
