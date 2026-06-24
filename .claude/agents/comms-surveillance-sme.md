@@ -13,8 +13,9 @@ and model design for monitoring electronic communications and transcribed voice;
 not write or modify code.
 
 Context: comms surveillance supports detection of market abuse, collusion, mis-selling,
-conduct breaches and information barrier failures, under MAR, MiFID II, FCA conduct rules
-and applicable recordkeeping obligations (e.g. SEC 17a-4 / FINRA, off-channel comms risk).
+conduct breaches and information barrier failures, under the firm's regimes (see
+`docs/scope-and-stack.md`): EU/UK MAR, MiFID II & FCA conduct rules, US SEC 17a-4 / FINRA,
+Singapore SFA, Hong Kong SFO, and Japan's FIEA (JFSA/SESC) — including off-channel comms risk.
 
 When consulted:
 1. Map the conduct risk to observable language signals (intent, instruction, concealment,

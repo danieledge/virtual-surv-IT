@@ -6,16 +6,28 @@ engagement actually needs jurisdiction or stack detail, and **edit it to match y
 
 ## Regulatory scope (CLAUDE.md §2)
 
-_Example scope_ — common starting points. Trim to the jurisdictions you actually operate in
-(and add any others). When designing or reviewing detection logic, cite the specific
-obligation it serves.
+**Our operating jurisdictions: Europe (EU), UK, US, Singapore, Hong Kong, Japan.** When
+designing or reviewing detection logic, cite the specific obligation it serves, and assess
+against the regime(s) applicable to the data/desk in question — not every rule applies to every
+flow. Key frameworks per jurisdiction:
 
-- **US:** BSA / FinCEN (AML), SEC & FINRA rules, Dodd-Frank, CFTC, SEC Rule 17a-4 / FINRA
-  4511 (recordkeeping & retention).
-- **EU / UK:** MLR 2017 & 6AMLD (AML), Market Abuse Regulation (MAR), MiFID II, FCA
-  SYSC / SUP record-keeping.
-- **Model risk governance:** US SR 11-7, UK PRA SS1/23 — applies to every statistical or
-  ML model used in detection.
+- **EU:** MLR / 6AMLD (AML), Market Abuse Regulation (MAR), MiFID II.
+- **UK:** MLR 2017 / JMLSG (AML), UK MAR, FCA SYSC / SUP record-keeping, PRA SS1/23 (model risk).
+- **US:** BSA / FinCEN (AML), SEC & FINRA rules, Dodd-Frank, CFTC, SEC Rule 17a-4 / FINRA 4511
+  (recordkeeping & retention), SR 11-7 (model risk).
+- **Singapore (MAS):** Securities and Futures Act (SFA) — market manipulation & insider
+  trading; MAS AML/CFT Notices (e.g. 626); MAS guidelines.
+- **Hong Kong (SFC):** Securities and Futures Ordinance (SFO) — market misconduct (manipulation,
+  insider dealing); AMLO (AML); HKMA/SFC guidelines.
+- **Japan (JFSA / SESC):** Financial Instruments and Exchange Act (FIEA) — market manipulation
+  & insider dealing; Act on Prevention of Transfer of Criminal Proceeds (AML, JAFIC); JFSA model
+  risk management principles.
+- **Cross-cutting (AML):** FATF recommendations underpin the AML regimes above.
+- **Cross-cutting (model risk):** apply the applicable model-risk standard to every statistical
+  or ML detection model — SR 11-7 (US), PRA SS1/23 (UK), and the JFSA/MAS equivalents.
+
+> The compliance review assesses against **these** jurisdictions. State explicitly which
+> regime(s) apply to a given deliverable and which don't. Edit this list if your footprint changes.
 
 ## Tech stack (CLAUDE.md §3)
 

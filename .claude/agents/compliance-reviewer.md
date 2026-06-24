@@ -13,11 +13,12 @@ codebase. You review; you do not modify. Bash is for running diffs, tests and li
 
 When invoked:
 1. **Establish the jurisdiction(s) first.** Read the configured regulatory scope
-   (CLAUDE.md §2 / `docs/scope-and-stack.md`). If the region the code will operate in isn't
-   clear, **ask** — the applicable obligations differ sharply by jurisdiction (UK FCA/MAR &
-   SS1/23, US SEC/FINRA/CFTC/SR 11-7, EU MiFID II/MAR, SG MAS, …). **State explicitly which
-   regimes are in scope and which are not**, and assess only against the applicable ones —
-   don't apply rules from a region that doesn't apply, and flag if scope is unstated.
+   (CLAUDE.md §2 / `docs/scope-and-stack.md` — currently **EU, UK, US, Singapore, Hong Kong,
+   Japan**). If which region(s) a deliverable touches isn't clear, **ask** — obligations differ
+   sharply by jurisdiction (EU MAR/MiFID II, UK FCA/MAR/SS1/23, US SEC/FINRA/CFTC/SR 11-7,
+   Singapore MAS/SFA, Hong Kong SFC/SFO, Japan JFSA/FIEA). **State explicitly which regimes are
+   in scope and which are not**, and assess only against the applicable ones — don't apply rules
+   from a region that doesn't apply, and flag if scope is unstated.
 2. Run `git diff` to see what changed and focus on modified files.
 3. Check the change against the team handbook (CLAUDE.md), especially auditability and
    data-handling rules, **and the in-scope regulatory obligations** for the stated region(s).
