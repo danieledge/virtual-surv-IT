@@ -15,7 +15,23 @@
     "subagents",
     "data-masking"
   ],
-  "agents": "./.claude/agents/",
-  "skills": "./.claude/skills/",
+  "agents": [
+    "./.claude/agents/code-reviewer.md",
+    "./.claude/agents/comms-surveillance-sme.md",
+    "./.claude/agents/compliance-reviewer.md",
+    "./.claude/agents/data-analyst.md",
+    "./.claude/agents/data-quality-reviewer.md",
+    "./.claude/agents/ml-engineer.md",
+    "./.claude/agents/model-validator.md",
+    "./.claude/agents/performance-reviewer.md",
+    "./.claude/agents/platform-engineer.md",
+    "./.claude/agents/qa-engineer.md",
+    "./.claude/agents/requirements-analyst.md",
+    "./.claude/agents/review-scorer.md",
+    "./.claude/agents/rules-developer.md",
+    "./.claude/agents/tm-sme.md",
+    "./.claude/agents/trade-surveillance-sme.md"
+  ],
+  "skills": ["./.claude/skills/"],
   "hooks": "./hooks/hooks.json"
 }
