@@ -95,3 +95,9 @@ debt, how to extend.
 |------|------|----------|------|
 | qa-engineer (AI) | | | |
 | Human reviewer | | | |
+
+---
+> **Code-execution note.** Review was **static by default**; any execution of the reviewed code
+> (tests/profiling) happened **only with the user's consent** in a safe environment on
+> synthetic data. **Ensuring code handed over for review is safe to run remains the user's
+> responsibility** (CLAUDE.md §7).

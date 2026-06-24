@@ -35,15 +35,32 @@ ones** (without them, reviews degrade to inference-only 🧠 instead of tool-bac
 tools** — skip them and note them under tooling coverage. Don't repeatedly try a tool that
 isn't there.
 
-**Also ask the execution-permission question once (and record it) — CLAUDE.md §7.** Reviewing
-code is **static by default**; running its tests, the script itself, or a profiler **executes**
-it (e.g. PowerShell `Measure-Command` runs the script). So ask once, via the question tool
-(`multiSelect: false`): *"May the team execute the code under review (to run tests / profile),
-or static analysis only?"* →
-- **Yes — trusted code, safe/dev or sandbox env** (run only on synthetic/masked data, §5);
+**Execution safety — show the disclaimer PROMINENTLY, then ask once (record it) — CLAUDE.md §7.**
+Before any review, display this as a **loud, can't-miss callout** (its own block, ⚠️ header,
+bold) — never buried in a paragraph:
+
+> ⚠️ **SAFETY — running your code.** I review code **statically by default** (reading it +
+> analysers that don't run it). To run its tests or profile it, the team has to **execute** it.
+> I'll keep strictly to static-only if you say so — but I **can't guarantee a mistake never
+> happens**, so please treat anything you hand over as if it **could** be run: **make sure it's
+> safe to execute and don't provide code that would be harmful if run. Ensuring handed-over code
+> is safe is your responsibility.**
+
+Then ask once via the question tool (`multiSelect: false`): *"May the team execute the code
+under review (run tests / profile)?"* →
+- **Yes — trusted code, safe/dev or sandbox env, synthetic data only** (§5);
 - **No — static analysis only** (dynamic/perf findings stay 🧠 inferred).
-Record the answer for the engagement; don't re-ask per command. Default to **No** if unsure, and
-**never** run code of unknown provenance or touch production data/systems.
+
+Record the answer; don't re-ask per command. Default to **No** if unsure; **never** run code of
+unknown provenance or touch production data/systems.
+
+**Enabling/disabling the hook gate:** execution is hard-blocked by `guard-code-execution.py`
+until authorised. On **"Yes"**, record consent by creating the marker file `.claude/.exec-consent`
+(`Write` it with a short note: who consented + that it's trusted code on synthetic data) — the
+hook then allows execution. On **"No"**, **delete** `.claude/.exec-consent` if it exists, so the
+gate stays closed. (A user who wants the *harder* gate can instead set `CST_ALLOW_EXEC=1` in their
+launch environment — the model can't set that, only the marker.) Repeat the responsibility note
+in the final Delivery Report.
 
 **1. Classify the work.** Decide the entry point:
 - a *problem / idea* → discovery → requirements → build (full SDLC);

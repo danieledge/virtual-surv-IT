@@ -23,6 +23,14 @@ standards.
 ## Comms lexicon patterns
 -
 
+## Execution safety
+- 2026-06-24 — **Reviewing code is static by default; executing it is gated.** Running tests,
+  the script, or a profiler *executes* the code (PowerShell `Measure-Command`, `cProfile`/
+  `py-spy`, `JMH`, `hyperfine`, `pytest`/`Pester`). The `guard-code-execution.py` hook blocks
+  these unless authorised by the `.claude/.exec-consent` marker (written on user "yes") or the
+  human-set `CST_ALLOW_EXEC=1`. Static-by-default + a prominent consent disclaimer + the hook;
+  the user is responsible for the safety of code they hand over (CLAUDE.md §7).
+
 ## Recurring code-review findings
 - 2026-06-20 — **String-matching Bash commands in PreToolUse hooks is advisory only.**
   Arbitrary shell trivially bypasses lexical checks (`cd data/raw && cat`, indirection,

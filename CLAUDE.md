@@ -224,7 +224,22 @@ QA'd, code- and performance-reviewed, compliance-reviewed, documented for handov
   measured). **Ask once per engagement and record the decision** (like the one-time tool check) —
   don't re-prompt per command. The default is **static-only**; the user is the only party who
   knows the code's provenance and whether the environment is safe (a trusted **dev/sandbox** env
-  on synthetic data is usually fine — that's exactly what the question establishes).
+  on synthetic data is usually fine — that's exactly what the consent question establishes).
+
+  **Two enforcement layers — soft + hard:**
+  - **Consent + disclaimer (soft, at intake):** at first contact present the safety disclaimer
+    **prominently** (a loud, can't-miss callout — see `engage` step 0) making clear the team is
+    static-by-default, will honour "don't execute", but **cannot guarantee zero mistakes**, so
+    **the user is responsible for ensuring any code they hand over is safe to run.** Put the same
+    one-line note in the Delivery Report / handover so it's on the record.
+  - **Gate (hook):** `.claude/hooks/guard-code-execution.py` (PreToolUse, Bash) **blocks**
+    code-execution commands (tests, the script, profilers) at the harness level regardless of
+    what the model "remembers" — *unless* execution is authorised by **either** the consent
+    marker `.claude/.exec-consent` (written when the user answers "yes" at intake — convenient)
+    **or** the env var `CST_ALLOW_EXEC=1` set by the human in the launch env (the harder
+    override — the model can't set it; also for CI). Static analysers, `git` and the team's own
+    `scripts/` are always allowed. String-matching is advisory for Bash (bypassable) — a strong
+    default, not a perfect sandbox; the disclaimer covers the residual risk.
 - An advisory agent that finds itself wanting to edit code should stop and hand back to the
   orchestrator with a recommendation instead.
 - `model-validator` is independent of `ml-engineer` by design — it must be free to challenge.

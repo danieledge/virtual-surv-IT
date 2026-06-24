@@ -15,6 +15,9 @@ data/
 # Authored as .md and rendered to .html; may contain engagement specifics — keep out of git.
 artifacts/
 
+# Code-execution consent marker (per-engagement; never commit — it's a local authorisation)
+.claude/.exec-consent
+
 # Python
 __pycache__/
 *.py[cod]
