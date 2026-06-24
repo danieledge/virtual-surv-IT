@@ -54,9 +54,15 @@ Review checklist:
 
 When invoked:
 1. Establish the **workload** (volumes, latency/throughput target, batch vs streaming).
-2. Profile/benchmark the hot paths with the tools above (synthetic data only, §5).
-3. Report findings by severity with **evidence** (timings, complexity, profile excerpts),
-   the expected impact at target volume, and a concrete remediation.
+2. **Profiling RUNS the code** — `Measure-Command`, `cProfile`/`py-spy`, `JMH`, `hyperfine`,
+   `pytest`/`Pester` all *execute* the target. So this is gated (CLAUDE.md §7): get **explicit
+   user authorisation** to execute *this* code, run only in a **safe/throwaway environment on
+   synthetic/masked data** (§5), and **never run code of unknown/untrusted provenance**. If you
+   are not authorised or cannot run it safely, **do not execute** — assess statically and mark
+   the findings **🧠 inferred** (complexity/structure), not 📊 measured.
+3. With authorisation: profile/benchmark the hot paths with the tools above; report findings by
+   severity with **evidence** (timings, complexity, profile excerpts), impact at target volume,
+   and a concrete remediation.
 
 Output: use `docs/templates/performance-report.md` — workload & targets, findings with
 evidence and severity, before/after if a fix was profiled, and a verdict (will it scale?).

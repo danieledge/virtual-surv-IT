@@ -14,19 +14,32 @@ or paste it) and wait — don't assume a target.
 - **Concerns** — **`multiSelect: true`** (default all): algorithmic complexity · memory ·
   I/O & queries · concurrency · data-shape.
 - **Mode** — **`multiSelect: false`**: batch · streaming · both.
-- **Outcome** — **`multiSelect: true`** (stack): review only · fixes + re-profile · `/remediate` ·
-  handover.
+- **After findings (fix-cycle)** — **`multiSelect: false`** (one): report only · apply fixes +
+  re-profile · **fix → re-profile loop** until it scales. (Deliverables like a handover pack are
+  chosen separately, not here. Legacy end-to-end overhaul is `/remediate`.)
 - **Target data volume / SLA** — free-text ask (the number changes the verdict); offer it as a
-  question with an "Other" path rather than burying it in prose. Wait for answers.
+  question with an "Other" path rather than burying it in prose.
+- **Execution permission** — see the execution gate below; profiling **runs the code**, so this
+  is required. Wait for answers.
+
+> ⚠️ **Execution gate (CLAUDE.md §7).** Profiling **runs the code** — `Measure-Command` executes
+> the PowerShell script, `cProfile`/`py-spy`/`JMH`/`hyperfine`/`pytest`/`Pester` all execute the
+> target. Use the engagement's **execution permission** (asked once at `engage` step 0); **if it
+> wasn't established** (e.g. `/performance-review` run on its own), ask now (single-select):
+> *"May I execute the code to profile it?"* → **Yes — safe/dev env, synthetic data** · **No —
+> static/inferred only**. Never run untrusted code or touch production data/systems. If "No" (or
+> you can't run it safely), perf findings are **🧠 inferred** from structure, not 📊 measured.
 
 Drive **performance-reviewer** (CLAUDE.md §6):
 
 1. Establish the **workload** — current and expected data volumes and the latency/throughput
    target. Ask the user if not stated (surveillance volumes are large; this changes the
    verdict). Batch or streaming?
-2. **Profile/benchmark** the hot paths with the established tools for the stack (`cProfile`/
-   `py-spy`/`scalene`, `JMH`/`async-profiler`, `Measure-Command`, `hyperfine`, `EXPLAIN`),
-   on **synthetic data only** (§5). Measure — don't guess.
+2. **Only if execution was authorised:** profile/benchmark the hot paths with the established
+   tools (`cProfile`/`py-spy`/`scalene`, `JMH`/`async-profiler`, `Measure-Command`, `hyperfine`,
+   `EXPLAIN`), in a **safe environment on synthetic data only** (§5). Otherwise assess
+   statically and mark findings 🧠 inferred. Measure where you safely can — never guess and call
+   it measured.
 3. Assess **complexity, scaling, I/O/queries, concurrency, memory** and resource hygiene.
 4. **State the basis of every claim** (this is what survives a developer's challenge):
    distinguish **📊 measured** — an explicit value in the code (a literal `sleep`, a fixed

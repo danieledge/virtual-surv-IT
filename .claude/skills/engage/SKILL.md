@@ -35,6 +35,16 @@ ones** (without them, reviews degrade to inference-only 🧠 instead of tool-bac
 tools** — skip them and note them under tooling coverage. Don't repeatedly try a tool that
 isn't there.
 
+**Also ask the execution-permission question once (and record it) — CLAUDE.md §7.** Reviewing
+code is **static by default**; running its tests, the script itself, or a profiler **executes**
+it (e.g. PowerShell `Measure-Command` runs the script). So ask once, via the question tool
+(`multiSelect: false`): *"May the team execute the code under review (to run tests / profile),
+or static analysis only?"* →
+- **Yes — trusted code, safe/dev or sandbox env** (run only on synthetic/masked data, §5);
+- **No — static analysis only** (dynamic/perf findings stay 🧠 inferred).
+Record the answer for the engagement; don't re-ask per command. Default to **No** if unsure, and
+**never** run code of unknown provenance or touch production data/systems.
+
 **1. Classify the work.** Decide the entry point:
 - a *problem / idea* → discovery → requirements → build (full SDLC);
 - a *review* → the audit-review loop (`/audit-review`);
@@ -76,7 +86,7 @@ last time this was left loose the model offered "Quick **and** Deep" as a multi-
 |---|---|
 | **Quick** | Fast check on the **changed code only** — bugs, security, language. Reports 🔴 Critical / 🟠 Warning. *Best for "am I OK to commit?"* |
 | **Deep** | Everything in Quick **plus** architecture, 🟡 Medium findings, impact analysis and test/doc coverage — the whole change in context. *Best for "is this solid before a PR?"* |
-| **Audit** | Everything in Deep **plus** a fix→re-review loop and the §4/§5 regulatory audit trail, until clean; keeps pre-existing issues in scope. *Best for "would it survive an auditor?"* |
+| **Audit** | A Deep review in **audit-readiness mode** — keeps pre-existing issues in scope and checks the §4/§5 regulatory audit trail, for an audit-ready verdict. *Best for "would it survive an auditor?"* (A convenience preset; the fix→re-review loop is a **separate** choice below.) |
 | **None** | Skip the code review (e.g. you only want the performance review). |
 
 **Q2 — "Also run a performance & scalability review?"  (single-select / `multiSelect: false`):**
@@ -86,20 +96,29 @@ last time this was left loose the model offered "Quick **and** Deep" as a multi-
 | **Yes** | Add a scalability review vs target data volumes — profiling evidence, each claim tagged 📊 measured / 🧠 inferred, with a total-time-saved summary. Runs alongside the chosen depth. |
 | **No** | No performance review. |
 
-> Because Audit ⊃ Deep ⊃ Quick, only **one** depth ever runs — no triple-passing. "Everything" =
-> **Audit + performance Yes** (one deep analysis feeds the audit loop; the perf review runs
-> alongside). All reviews write the same clean artifact. After the choice, the review skill asks
-> the finer **scope** (which dimensions · breadth · change-vs-audit mode) — type *then* scope,
-> never needing a slash command.
+**Q3 — "After the review, what should happen to the findings?"  (single-select / `multiSelect: false`) — applies to ANY depth, *including Quick*:**
+
+| Label | Description |
+|---|---|
+| **Report only** | Surface the findings; change nothing. |
+| **Apply fixes** | Fix the findings, then stop. |
+| **Fix → re-review loop** | Fix, re-review, repeat until clean (no Criticals) or you call it. This is the loop "Audit" implies — now available to **Quick/Deep too**. |
+
+> Only **one** depth runs (Audit ⊃ Deep ⊃ Quick — no triple-passing). The fix-cycle (Q3) is
+> independent of depth, so e.g. *Quick + Fix→re-review loop* is valid. For taking on legacy code
+> end-to-end (assess → fix → re-review → handover) use the heavier **`/remediate`**, not this
+> in-review loop. After the choice, the review skill asks the finer **scope** (dimensions ·
+> breadth · change-vs-audit mode) — type *then* scope, never needing a slash command.
 
 **2. Clarify — ask, don't guess.** Then put any remaining clarifying questions to the user via
 the **question tool** (always — never a buried numbered list) and **wait for answers** before
 planning. Never assume scope, jurisdiction, data availability or success criteria.
 
-**2a. Agree the end outcome.** Explicitly ask **what they want delivered at the end**, not just
-the immediate task — via the question tool, **`multiSelect: true`** (these stack): *review only*
-· **fixes/refactor applied** · a **remediation loop** (`/remediate`) · a **handover pack**. Don't
-assume "review" means "review and stop." Confirm before changing any of the user's code.
+**2a. Don't re-ask the outcome as one blurred question.** The *action* on findings is already
+its own question (the Q3 fix-cycle: report / fix / loop) and the *documents* are the artifact
+menu (step 3, where the **handover pack** lives). Keep them separate — do **not** ask a "what do
+you want delivered" question that mixes an action (fix) with a deliverable (handover). Just
+**confirm before changing any of the user's code.**
 
 **3. Offer the artifact menu.** By **default, consolidate everything into a single
 Delivery Report** (`docs/templates/delivery-report.md`) — review, performance, compliance,
@@ -108,8 +127,9 @@ QA evidence, handover and change/ops as sections of one file, not many. Ask (que
 **separate artifacts** (e.g. a standalone change request for a ticket) — the standalone
 templates in `docs/templates/` are the building blocks. Options:
 - (Consolidated) Delivery Report · or separate: Engagement Brief · BRD · FSD · ADRs · RTM ·
-  Code & Compliance Review · Performance Review · Developer Handover · QA Handover ·
+  Code & Compliance Review · Performance Review · **Developer Handover · QA Handover** ·
   Model Validation Report.
+The **handover pack is a deliverable and belongs here** (not in the findings/fix question).
 Each is delivered in **both `.md` and `.html`**.
 
 **4. Summarise.** Write an Engagement Brief (`docs/templates/engagement-brief.md`) capturing

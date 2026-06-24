@@ -20,8 +20,10 @@ and wait. Don't review an assumed target.
   whole module · whole repo.
 - **Mode** — **`multiSelect: false`**: change review (filter pre-existing) **or** audit (keep
   pre-existing in scope).
-- **Outcome** — **`multiSelect: true`** (these stack): review only · also **fixes applied** · a
-  **`/remediate` loop** · a **handover pack**.
+- **After findings (fix-cycle)** — **`multiSelect: false`** (one): report only · apply fixes ·
+  **fix → re-review loop** until clean. Available at any depth. (Deliverables like a **handover
+  pack** are chosen separately in the artifact menu — *not* here; don't mix an action with a
+  document. Legacy end-to-end overhaul is the heavier `/remediate`.)
 - **If 📋 compliance/audit is among the dimensions, then** ask **jurisdiction(s)** —
   **`multiSelect: true`** (may operate in several) — or use the configured scope (CLAUDE.md §2 /
   `docs/scope-and-stack.md`), so `compliance-reviewer` assesses only the **applicable** regime(s)

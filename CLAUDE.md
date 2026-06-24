@@ -209,6 +209,22 @@ QA'd, code- and performance-reviewed, compliance-reviewed, documented for handov
 
 ## 7. Guardrails
 
+- **Never execute the code/script under review (non-negotiable).** Reviewing code means
+  **reading** it and running **static** analysers that *parse* but do not run it (ruff, mypy,
+  bandit, ShellCheck, PSScriptAnalyzer, SpotBugs, Semgrep, `EXPLAIN`). **Executing** the code —
+  running its **tests**, running the **script itself**, or **profiling/benchmarking** (which all
+  *run* the code: `Measure-Command`, `cProfile`/`py-spy`, `JMH`, `hyperfine`, `pytest`/`Pester`)
+  — is **off by default** and requires:
+  1. **Explicit user authorisation** for *this* code (treat provided code as untrusted — it may
+     have side effects, touch live systems, or be hostile);
+  2. a **safe/throwaway environment** and **synthetic or masked data only** (§5) — never
+     production data or systems;
+  3. for unknown/untrusted provenance, **don't run it at all** — review statically.
+  If you can't safely execute, dynamic/performance findings stay **🧠 inferred** (not 📊
+  measured). **Ask once per engagement and record the decision** (like the one-time tool check) —
+  don't re-prompt per command. The default is **static-only**; the user is the only party who
+  knows the code's provenance and whether the environment is safe (a trusted **dev/sandbox** env
+  on synthetic data is usually fine — that's exactly what the question establishes).
 - An advisory agent that finds itself wanting to edit code should stop and hand back to the
   orchestrator with a recommendation instead.
 - `model-validator` is independent of `ml-engineer` by design — it must be free to challenge.
