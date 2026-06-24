@@ -32,9 +32,15 @@ You review; you do not modify (hand fixes to `rules-developer` / `platform-engin
 
 Distinguish *what the code says* (an explicit, coded cost) from *what you derive* (the emergent
 cost). Never upgrade an inference to a fact.
-| Any | flame graphs; wall-clock vs CPU vs I/O breakdown |
 
-Review checklist:
+Review checklist (static-only):
+- **Explicit coded time costs (📊 measurable by *reading*, no execution) — hunt these first.**
+  A literal delay is a hard, quantifiable fact and often the easiest win: `sleep`/`Start-Sleep`/
+  `Thread.sleep`/`setTimeout`/`time.sleep`, **fixed waits**, polling at a fixed interval,
+  redundant or oversized **timeouts** and **retry back-offs**, blocking `WaitForExit`/`.join()`,
+  a hard-coded `LIMIT`/batch size, or a per-iteration delay. **Quantify it from the code**
+  (e.g. "`time.sleep(5)` at `x.py:88` → 5s every call; ×N calls/run = …") and flag any that are
+  **unnecessary** — these are 📊 measured (the number is in the source), not inferred.
 - **Algorithmic complexity** — Big-O of hot paths; nested loops over large inputs; accidental
   O(n²); needless re-computation.
 - **Scaling** — does it hold at 10×/100× volume? Memory growth with input size; unbounded

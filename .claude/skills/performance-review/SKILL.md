@@ -33,9 +33,14 @@ Drive **performance-reviewer** (CLAUDE.md §6):
 1. Establish the **workload** — current and expected data volumes and the latency/throughput
    target. Ask the user if not stated (surveillance volumes are large; this changes the
    verdict). Batch or streaming?
-2. **Assess statically** — complexity / data structures / `EXPLAIN` plan-only / concurrency /
-   memory at the target volume, plus explicit coded costs you can read. **Run nothing.** Findings
-   are 🧠 inferred (name the benchmark that would confirm each), never presented as measured.
+2. **Assess statically — run nothing.** Two kinds of finding:
+   - **📊 Explicit coded costs (hunt these first)** — a literal `sleep`/fixed wait, polling
+     interval, oversized timeout/retry back-off, blocking `WaitForExit`/`join`, hard-coded
+     `LIMIT`/batch. The cost is *in the source*, so it's **measured** (quantify it: "sleep(5) →
+     5s × N calls"); flag any that are unnecessary — usually the easiest, most certain win.
+   - **🧠 Inferred** — complexity / data structures / `EXPLAIN` plan-only / concurrency / memory
+     at target volume. Reasoned from structure; name the benchmark that would confirm each.
+   Never present an inference as measured, but **do** claim 📊 for a delay you read in the code.
 3. Assess **complexity, scaling, I/O/queries, concurrency, memory** and resource hygiene.
 4. **State the basis of every claim** (this is what survives a developer's challenge):
    distinguish **📊 measured** — an explicit value in the code (a literal `sleep`, a fixed
