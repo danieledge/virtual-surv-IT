@@ -25,10 +25,10 @@ TOOLS=(
   "pmd|Java static analysis|via Maven/Gradle or brew/apt"
   "spotbugs|Java bugs/security|via Maven/Gradle or brew/apt"
   "pwsh|PowerShell + PSScriptAnalyzer|install PowerShell, then Install-Module PSScriptAnalyzer"
-  "py-spy|Python profiler|pip install py-spy"
-  "scalene|Python CPU/mem profiler|pip install scalene"
-  "hyperfine|CLI benchmark|apt/brew install hyperfine"
 )
+# NOTE: profilers/benchmarks (py-spy, scalene, hyperfine, cProfile, Measure-Command, JMH) are
+# intentionally NOT listed — the team is STATIC-ONLY for now (it does not execute reviewed code,
+# CLAUDE.md §7). Re-add them here if/when measured profiling is re-enabled via the consent flow.
 
 present=() ; missing=()
 for entry in "${TOOLS[@]}"; do

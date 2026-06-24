@@ -22,24 +22,20 @@ or paste it) and wait — don't assume a target.
 - **Execution permission** — see the execution gate below; profiling **runs the code**, so this
   is required. Wait for answers.
 
-> ⚠️ **Execution gate (CLAUDE.md §7).** Profiling **runs the code** — `Measure-Command` executes
-> the PowerShell script, `cProfile`/`py-spy`/`JMH`/`hyperfine`/`pytest`/`Pester` all execute the
-> target. Use the engagement's **execution permission** (asked once at `engage` step 0); **if it
-> wasn't established** (e.g. `/performance-review` run on its own), ask now (single-select):
-> *"May I execute the code to profile it?"* → **Yes — safe/dev env, synthetic data** · **No —
-> static/inferred only**. Never run untrusted code or touch production data/systems. If "No" (or
-> you can't run it safely), perf findings are **🧠 inferred** from structure, not 📊 measured.
+> ⚙️ **STATIC-ONLY mode (CLAUDE.md §7).** This review does **not execute** the code — profilers
+> and benchmarks *run* it, and the team is configured not to. So assess performance
+> **statically** and mark findings **🧠 inferred** (or 📊 only for an explicit value *read* in the
+> code). Measured profiling is a future opt-in that needs execution re-enabled via the consent
+> flow; until then, **do not run anything** (the `guard-code-execution.py` hook enforces this).
 
 Drive **performance-reviewer** (CLAUDE.md §6):
 
 1. Establish the **workload** — current and expected data volumes and the latency/throughput
    target. Ask the user if not stated (surveillance volumes are large; this changes the
    verdict). Batch or streaming?
-2. **Only if execution was authorised:** profile/benchmark the hot paths with the established
-   tools (`cProfile`/`py-spy`/`scalene`, `JMH`/`async-profiler`, `Measure-Command`, `hyperfine`,
-   `EXPLAIN`), in a **safe environment on synthetic data only** (§5). Otherwise assess
-   statically and mark findings 🧠 inferred. Measure where you safely can — never guess and call
-   it measured.
+2. **Assess statically** — complexity / data structures / `EXPLAIN` plan-only / concurrency /
+   memory at the target volume, plus explicit coded costs you can read. **Run nothing.** Findings
+   are 🧠 inferred (name the benchmark that would confirm each), never presented as measured.
 3. Assess **complexity, scaling, I/O/queries, concurrency, memory** and resource hygiene.
 4. **State the basis of every claim** (this is what survives a developer's challenge):
    distinguish **📊 measured** — an explicit value in the code (a literal `sleep`, a fixed

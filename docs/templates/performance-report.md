@@ -1,7 +1,10 @@
 # Performance Review Report — <TITLE>
 
-> Produced by `performance-reviewer`. Findings are evidence-backed (profiled/benchmarked),
-> not guesses. Authored in `.md`, rendered to `.html`.
+> Produced by `performance-reviewer`. **STATIC-ONLY for now** (CLAUDE.md §7): the team does not
+> execute the reviewed code, so findings are **🧠 inferred** from structure/complexity (or 📊 only
+> for an explicit value *read* in the code) — **not** profiled/benchmarked. The measured columns
+> below apply only if/when execution is re-enabled via the consent flow. Authored in `.md`,
+> rendered to `.html`.
 
 | | |
 |---|---|
