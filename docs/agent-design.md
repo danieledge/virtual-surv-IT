@@ -94,3 +94,47 @@ separate SecOps agent — folded into `code-reviewer` + `platform-engineer`).
 
 *Maintenance: when you add/retier an agent, update §2 and the per-agent `model:` together; the
 `tests/` and this matrix are the guard against drift.*
+
+## 6. Anthropic multi-agent standards — conformance
+
+> Audited against Anthropic's published guidance (links in §7). We arrived at most of these
+> independently. Honest status: ✅ conform · 🟡 partial or a deliberate fit to our *interactive,
+> human-gated* model · ➖ not applicable at our scale.
+
+| Anthropic multi-agent standard | Status | How we meet it (or why it differs) |
+|---|---|---|
+| Simplest thing that works; multi-agent only when it improves outcomes | ✅ | Right-sizing doctrine (CLAUDE.md §6); a narrow change uses 1 builder + 1 reviewer, not the team. |
+| **Orchestrator-worker** (lead plans, workers act as filters) | ✅ | `/engage` — the PM decomposes, delegates, and synthesises. |
+| Delegate with **objective · output format · tools/sources · boundaries** | ✅ | CLAUDE.md §6 + `engage` §5 require exactly those four. |
+| Subagents **inherit no parent history** — put every input in the brief | ✅ | Stated in CLAUDE.md §6 delegation. |
+| Never vague briefs (they cause duplicated work / gaps) | ✅ | "the #1 failure is weak delegation" (CLAUDE.md §6). |
+| **Scale effort to complexity**; state the number of agents | ✅ | PM states intended agent count + why at the gate (`engage` §5). |
+| Budget **~15× tokens**; reserve multi-agent for high value | ✅ | "~15× the tokens" cited verbatim (CLAUDE.md §6). |
+| **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 — 4 opus / 11 sonnet / 1 haiku. |
+| Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | ✅ | Blackboard: agents write the Delivery Report / RTM; the PM synthesises. |
+| **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; all advisors read-only. |
+| Guard the failure modes (over-spawn · duplicate · runaway · premature stop) | ✅ | Right-size + state-count (over-spawn); non-overlapping briefs (duplicate); fix-loop stop conditions (runaway); never-dead-end (premature stop). |
+| Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code — the safe form of it. |
+| Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |
+| **External memory** for long horizons | ✅ | `docs/house-rules.md` — committed, compounding team memory; subagent context isolation. |
+| **LLM-as-judge** rubric for output quality | 🟡 | We use a **reviewer + Definition-of-Done** model (code/compliance/QA + the PM re-challenging findings) rather than a 0–1 judge prompt — a valid equivalent for build/review work; the rubric form suits open-ended research. *Candidate enhancement: an explicit eval harness.* |
+| Subagent **self-assessment** (plan → evaluate → refine) | 🟡 | Agents reason and the PM re-challenges; we don't yet mandate an interleaved-thinking scratchpad. *Candidate enhancement.* |
+| **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
+| **Dozens–hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable — right-sizing keeps us at 2–5 agents per engagement; we never reach that scale. |
+
+**Net:** strong conformance on the high-value lessons. The 🟡s are deliberate fits to our
+*interactive, human-gated* delivery model (vs Anthropic's long-running autonomous research agent),
+plus two optional enhancements noted for the roadmap (self-assessment scratchpads; an LLM-judge
+eval harness).
+
+## 7. References (Anthropic agent guidance)
+
+- **Building Effective Agents** — https://www.anthropic.com/engineering/building-effective-agents
+- **How we built our multi-agent research system** — https://www.anthropic.com/engineering/multi-agent-research-system
+- **Effective context engineering for AI agents** — https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- **Subagents (Claude Agent SDK)** — https://code.claude.com/docs/en/agent-sdk/subagents
+- **Claude Code subagents** — https://code.claude.com/docs/en/subagents
+
+*Evidence note: the "~15×-token" and "90.2% better" figures come from Anthropic's internal research
+eval — directional, not independently reproduced; the effort-scaling numbers are research-domain
+rules of thumb. We cite them as calibration, not law.*

@@ -459,8 +459,19 @@ python -m scripts.validate_masking                       # exit 0 = safe + faith
   committed file, [`docs/house-rules.md`](docs/house-rules.md) — advisory agents recommend
   additions and the PM commits them. (Claude Code subagents have no per-agent memory; a
   committed file is the real, auditable mechanism.)
-- Models: deep-reasoning roles use `opus`, build/analysis roles use `sonnet`. Change the
-  `model:` field freely.
+- Models: **4 opus** (the final/unchecked judgement + novel-design roles) · **11 sonnet** ·
+  **1 haiku** — the per-agent rationale and best-practice conformance live in
+  [`docs/agent-design.md`](docs/agent-design.md). Change the `model:` field freely.
+
+## 📚 Built on — Anthropic agent guidance
+
+This team is designed to follow Anthropic's published best practice for agents and multi-agent
+systems. The conformance audit is in [`docs/agent-design.md`](docs/agent-design.md); the sources:
+
+- [**Building Effective Agents**](https://www.anthropic.com/engineering/building-effective-agents) — patterns + "use the simplest thing that works".
+- [**How we built our multi-agent research system**](https://www.anthropic.com/engineering/multi-agent-research-system) — orchestrator-worker, delegation briefs, ~15× token cost, failure modes.
+- [**Effective context engineering for AI agents**](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — context isolation, compaction, agentic memory.
+- [**Subagents (Claude Agent SDK)**](https://code.claude.com/docs/en/agent-sdk/subagents) · [**Claude Code subagents**](https://code.claude.com/docs/en/subagents) — frontmatter, tools, model tiering, isolation.
 
 ## 🙏 Credits
 

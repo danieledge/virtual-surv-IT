@@ -196,7 +196,10 @@ See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
   high-value, broad deliverables.
 - **Delegate with explicit, non-overlapping briefs** (the #1 failure is weak delegation): give
   each subagent a clear objective, scope boundaries (what *another* agent owns), the
-  inputs/artifacts to read, and the expected output format. Don't over-spawn.
+  inputs/artifacts to read, and the expected output format. Don't over-spawn. **A subagent
+  inherits none of this conversation** — its brief is the *only* channel in, so put every needed
+  input (paths, prior decisions, the artifact to read) in the brief itself; an underspecified
+  brief is what makes two agents duplicate work or leave a gap.
 - **Coordinate through artifacts, not chatter (the "blackboard")** — agents read/write the
   shared set (Delivery Report, RTM, specs); each step's output is the next step's input.
 - **Challenge the agents — the PM is a sceptic, not a relay.** Don't pass findings through
