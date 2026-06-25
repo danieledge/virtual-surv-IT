@@ -10,9 +10,27 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.2.0
+> ## ✨ What's new in 0.3.0
 >
-> **A modular code-review subsystem — leaning heavily on [turingmind-code-review](https://github.com/turingmindai/turingmind-code-review) (MIT, © 2026 TuringMind), with attribution in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md).**
+> **A data-analyst & business-analyst expansion (research-grounded), plus a code-execution safety gate.**
+> - **`tuning-analyst`** (new) — surveillance threshold calibration / alert tuning: risk-based
+>   segmentation, **Above-The-Line / Below-The-Line** testing, dry-run alerts, FP & alert-to-SAR MI;
+>   extended to trade (peer-group, RTS 25 timestamps) and comms (lexicon/NLP) tuning.
+> - **`business-analyst`** (rebranded from `requirements-analyst`) — the full **BABOK** lifecycle:
+>   elicitation, stakeholder & process analysis (BPMN), UAT, traceability, reg-change impact.
+> - **6 new workflows** — `/tune-thresholds`, `/validate-tm-model`, `/assess-coverage`,
+>   `/elicit-requirements`, `/reg-change-impact`, `/analyse-data` — plus **`/meet-the-team`**.
+> - **14 new deliverable templates** (BA + DA + trade/comms), grounded in two deep-research passes
+>   (IIBA BABOK, DAMA-DMBOK; FFIEC/FATF/SR 11-7; MAR Art 16 / RTS 24 / RTS 22 / RTS 25 **verified
+>   against primary sources**). *Comms specifics (Art 16(7), SEC 17a-4) remain unverified — flagged
+>   in `docs/house-rules.md`.*
+> - **Code-execution safety gate** — reviews are **static by default**; running tests/profilers is
+>   blocked by a hook unless authorised (consent marker or `CST_ALLOW_EXEC=1`), behind a prominent
+>   disclaimer. Performance review is static/inferred-only for now.
+>
+> <details><summary>What's new in 0.2.0 — modular code-review subsystem</summary>
+>
+> **Leaning heavily on [turingmind-code-review](https://github.com/turingmindai/turingmind-code-review) (MIT, © 2026 TuringMind), attribution in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md).**
 > - **Review lenses** (`docs/review/lenses/`) — modular per-dimension checks (bugs · security ·
 >   architecture) and per-language lenses for **Python, TypeScript/JS, Scala, Java, PowerShell,
 >   Bash, SQL**, loaded progressively by a router so only the relevant ones run.
@@ -29,6 +47,7 @@
 >   findings before you see them, and runs on **opus**.
 > - **Opt-in AI-review git-hook gate** — a severity-blocking `pre-commit` (blocks on 🔴 Critical
 >   or any §5 data-safety finding; advisory on 🟠), off by default.
+> </details>
 
 A **virtual compliance surveillance *engineering* team made of AI assistants** — it doesn't
 *do* compliance, it **builds the surveillance solutions and technology** behind detecting
