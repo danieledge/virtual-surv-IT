@@ -213,24 +213,24 @@ day but can't lay a finger on the code, which is precisely *why* you trust them 
 
 ### 🔧 Builders — they engineer the surveillance technology
 
-- **`business-analyst`** — asks *"but what does the regulation actually **require**?"* until the
+- **Bea** (`business-analyst`) — asks *"but what does the regulation actually **require**?"* until the
   spec is airtight. The full **BABOK** lifecycle: stakeholder analysis, elicitation, requirements
   (EARS), process modelling (BPMN), user stories, UAT, traceability, and obligation→detection
   translation, control mapping and regulatory-change impact.
-- **`rules-developer`** — turns *"catch the spoofers"* into deterministic, tested detection logic
+- **Devin** (`rules-developer`) — turns *"catch the spoofers"* into deterministic, tested detection logic
   for transaction monitoring and trade surveillance, from a validated spec.
-- **`data-analyst`** — lives in the data and the false positives: exploratory analysis, FP
+- **Ana** (`data-analyst`) — lives in the data and the false positives: exploratory analysis, FP
   investigation, data-quality, reconciliation and reporting/MI. (Hands threshold tuning to the
   specialist below.)
-- **`tuning-analyst`** — the one who can defend a threshold to a regulator with a straight face:
+- **Theo** (`tuning-analyst`) — the one who can defend a threshold to a regulator with a straight face:
   risk-based segmentation, std-dev thresholds, Above-/Below-The-Line testing, dry-run alerts, and
   FP-rate / alert-to-SAR MI. Quantifies the volume↔coverage trade-off so nobody's guessing.
-- **`ml-engineer`** — reaches for ML only when plain rules genuinely aren't enough (and says so):
+- **Mei** (`ml-engineer`) — reaches for ML only when plain rules genuinely aren't enough (and says so):
   anomaly detection, NLP for comms, behavioural scoring, alert triage.
-- **`platform-engineer`** — builds the plumbing nobody thanks them for until it breaks: ingestion,
+- **Pat** (`platform-engineer`) — builds the plumbing nobody thanks them for until it breaks: ingestion,
   ETL, streaming/batch transformation, utility scripts (Python, Scala, Java, PowerShell, Bash),
   infra/IaC, retention, data residency, resilience.
-- **`qa-engineer`** — refuses to mark its own homework: independently designs and runs the test
+- **Quinn** (`qa-engineer`) — refuses to mark its own homework: independently designs and runs the test
   plan, then evidences what ran, the coverage, the gaps and the residual risk.
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
@@ -240,30 +240,30 @@ day but can't lay a finger on the code, which is precisely *why* you trust them 
 
 ### 🧠 Advisors — they guide and sign off (read-only)
 
-- **`tm-sme`** — the money-laundering brain: TM/AML detection scenarios, typologies, thresholds,
+- **Hassan** (`tm-sme`) — the money-laundering brain: TM/AML detection scenarios, typologies, thresholds,
   segmentation, SAR/STR rationale.
-- **`trade-surveillance-sme`** — the market-abuse brain: spoofing, layering, wash trades, marking
+- **Sofia** (`trade-surveillance-sme`) — the market-abuse brain: spoofing, layering, wash trades, marking
   the close, insider dealing, front running.
-- **`comms-surveillance-sme`** — the trader-chat brain: lexicons, NLP risk policies, e-comms and
+- **Cleo** (`comms-surveillance-sme`) — the trader-chat brain: lexicons, NLP risk policies, e-comms and
   voice monitoring mapped to conduct risk.
-- **`model-validator`** — independent of `ml-engineer` *by design*, and entirely willing to tell
+- **Viktor** (`model-validator`) — independent of `ml-engineer` *by design*, and entirely willing to tell
   it the model is wrong: soundness, performance, bias, stability, explainability.
-- **`code-reviewer`** — comprehensive code & security review across **Python, TypeScript/JS,
+- **Ravi** (`code-reviewer`) — comprehensive code & security review across **Python, TypeScript/JS,
   Scala, Java, PowerShell, Bash and SQL**. Drives the established analysers (ruff/mypy/bandit,
   Checkstyle/SpotBugs/PMD, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep) rather than
   reinventing rules — and adds judgement on top. Quick or deep review.
-- **`performance-reviewer`** — *will it survive real surveillance volumes?* **Static by default**
+- **Felix** (`performance-reviewer`) — *will it survive real surveillance volumes?* **Static by default**
   (the team doesn't execute your code, CLAUDE.md §7): complexity, hot paths, I/O/query shape
   (`EXPLAIN` plan-only), memory, concurrency, and explicit coded costs — each finding tagged
   📊 measured / 🧠 inferred. (Profiling is a future opt-in via the consent flow.)
-- **`compliance-reviewer`** — the last gate: auditability, the alert→logic→obligation trace,
+- **Greta** (`compliance-reviewer`) — the last gate: auditability, the alert→logic→obligation trace,
   secrets/PII, test coverage, and the Definition of Done. Auditable or it doesn't ship.
-- **`data-quality-reviewer`** — quietly obsessed with the one missing feed that means abuse goes
+- **Yuki** (`data-quality-reviewer`) — quietly obsessed with the one missing feed that means abuse goes
   undetected: completeness, accuracy, timeliness, reconciliation, and **total coverage** (every
   in-scope instrument, venue, account and channel actually captured). The biggest blind spot in
   surveillance — no feed, no alert, ever.
 
-…and **`review-scorer`**, the haiku-tier intern who does the rote review bookkeeping (context
+…and **Pip** (`review-scorer`), the haiku-tier intern who does the rote review bookkeeping (context
 detection, scoring, filter accounting) so the senior reviewers don't burn opus on arithmetic.
 
 > Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
