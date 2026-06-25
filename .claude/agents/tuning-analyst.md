@@ -42,6 +42,23 @@ Method (grounded in FFIEC BSA/AML, FATF risk-based approach; SR 11-7 for model r
    recall proxies, **alert-to-SAR/STR conversion**, productivity per analyst, and stability over
    time. Flag decay.
 
+**Tuning is not calibration-only (FCA Market Watch 79).** Effective surveillance testing has
+**four** components — parameter **calibration**, model **logic**, model **code**, and **data**
+(comprehensiveness & accuracy). Don't review only the thresholds: a scenario can be perfectly
+calibrated yet fire nothing because a **feed was never wired in** (MW79's news-feed gap → an
+insider-dealing scenario produced zero alerts for 3+ years). So always check the **data substrate**
+(hand to `data-quality-reviewer`; see `/assess-coverage`) alongside the thresholds.
+
+**By domain:**
+- **Transaction monitoring (AML):** segmentation + std-dev thresholds + ATL/BTL as above; alert-to-SAR.
+- **Trade / market abuse:** add **peer-group / benchmark** comparison and **precision/recall** on
+  labelled alerts; scenarios (spoofing, layering, marking-the-close…) depend on a sound **time
+  spine** — accurate timestamps & sequencing (MiFID II **RTS 25** clock-sync), so flag timestamp
+  granularity/quality as a tuning prerequisite. *(Trade evidence is partial — see house-rules.)*
+- **Communications:** tune **lexicons** (precision/recall per term, hit-rate, FP drivers) and
+  **NLP risk scores** (score thresholds, model drift). Lexicon/policy design is the
+  `business-analyst` + `comms-surveillance-sme`'s; you tune the performance.
+
 Output: a **threshold-tuning pack** (`docs/templates/threshold-tuning-pack.md`) — the segments,
 the proposed thresholds with statistical rationale, ATL/BTL evidence, the dry-run volume/coverage
 trade-off, and a clear recommendation with the **expected effect at the firm's volumes**. Make

@@ -17,9 +17,9 @@ how to start. Use roughly this shape (keep it current with `.claude/agents/`; on
   (elicitation, stakeholders, process maps, UAT, reg-change impact). The "what & why" before code.
 - **`rules-developer`** — writes the actual detection logic (spoofing, layering, AML scenarios…)
   with the tests to prove it.
-- **`tuning-analyst`** — calibrates the thresholds so alerts catch the abuse without drowning
-  everyone in false positives (ATL/BTL testing, segmentation). The one who makes the numbers
-  defensible to a regulator.
+- **`tuning-analyst`** — calibrates thresholds (and trade scenario parameters, and comms
+  lexicons/NLP scores) so alerts catch the abuse without drowning everyone in false positives
+  (ATL/BTL testing, segmentation). The one who makes the numbers defensible to a regulator.
 - **`data-analyst`** — exploratory analysis, false-positive hunting, data-quality, reconciliation
   and MI/reporting. Answers "what's actually going on in the data?"
 - **`ml-engineer`** — builds the smarter AI/ML detection when plain rules aren't enough (anomaly

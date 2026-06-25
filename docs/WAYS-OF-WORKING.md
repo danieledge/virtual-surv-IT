@@ -50,6 +50,7 @@ flowchart LR
 | An analytical question (DA) | `/analyse-data` | exploratory analysis → evidenced insight report |
 | Tune a scenario / thresholds | `/tune-thresholds` | ATL-BTL + segmentation + volume↔coverage trade-off |
 | Periodic TM model check | `/validate-tm-model` | coverage / threshold / data-integrity / MI validation |
+| Are we monitoring everything? | `/assess-coverage` | typology→scenario→feed map + feed-health gaps (FCA MW79) |
 | Existing code (detailed review) | `/deep-review` | dimension fan-out + confidence scoring |
 | Performance / will-it-scale | `/performance-review` | profiling evidence vs target volume |
 | Existing code (audit sign-off) | `/audit-review` | evaluator–optimizer review loop |
@@ -87,6 +88,10 @@ and `.html`** (via `scripts/render_html.py`).
 | MI / dashboard spec | `mi-spec.md` | metrics + lineage + access |
 | Segmentation analysis | `segmentation-analysis.md` | risk-based segments → thresholds |
 | Exploratory-analysis report | `exploratory-analysis.md` | 📊 measured / 🧠 inferred basis |
+| Surveillance coverage assessment | `surveillance-coverage-assessment.md` | **FCA MW79** — typology→scenario→feed gaps |
+| Trade-scenario design | `trade-scenario-design.md` | **MAR**/**MiFID II** (RTS 24/25) + STOR |
+| Lexicon spec | `lexicon-spec.md` | comms lexicon + NLP scoring (MiFID Art 16(7)) |
+| Comms-surveillance policy | `comms-surveillance-policy.md` | recordkeeping (Art 16(7), SEC 17a-4) + off-channel |
 | Code & Compliance Review Report | `review-report.md` | **OWASP ASVS**, **CWE**, **SEI CERT** |
 | Performance Review Report | `performance-report.md` | evidence-backed profiling |
 | Developer Handover | `developer-handover.md` | maintainable by a real developer |

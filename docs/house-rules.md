@@ -23,6 +23,19 @@ standards.
 ## Comms lexicon patterns
 -
 
+## Surveillance evidence base (DA/BA expansion)
+- 2026-06-25 — **AML/TM tuning is fully evidenced; trade & comms are only partially.** The DA/BA
+  expansion (tuning-analyst, BA workflows, coverage/trade/comms templates) rests on two deep-
+  research passes. The AML/TM pass verified cleanly (ATL/BTL, segmentation, SR 11-7 validation).
+  The trade/comms pass was **cut short by a session limit** — only **3** claims fully verified:
+  (1) **FCA Market Watch 79** — surveillance testing is **four-component** (parameter calibration ·
+  model logic · model code · **data** comprehensiveness/accuracy), not calibration alone;
+  (2) **MW79** — failures often come from **data-ingestion gaps** (a dead news feed → an insider-
+  dealing scenario fired zero alerts for 3+ years); (3) **MiFID II RTS 25** clock-sync / timestamp
+  granularity. The MAR / MiFID / STOR / SEC 17a-4 / comms-recordkeeping detail in the trade/comms
+  templates is **foundational standard-practice, not freshly machine-verified** — re-run the
+  trade/comms research pass to confirm specifics before relying on them in a real engagement.
+
 ## Execution safety
 - 2026-06-24 — **Reviewing code is static by default; executing it is gated.** Running tests,
   the script, or a profiler *executes* the code (PowerShell `Measure-Command`, `cProfile`/
