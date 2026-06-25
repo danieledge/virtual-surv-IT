@@ -30,7 +30,8 @@
     "./.claude/agents/review-scorer.md",
     "./.claude/agents/rules-developer.md",
     "./.claude/agents/tm-sme.md",
-    "./.claude/agents/trade-surveillance-sme.md"
+    "./.claude/agents/trade-surveillance-sme.md",
+    "./.claude/agents/tuning-analyst.md"
   ],
   "skills": ["./.claude/skills/"]
 }
