@@ -65,7 +65,7 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 
 | Member | Type | What they do (in plain terms) |
 |---|---|---|
-| `requirements-analyst` | 🔧 Builder | Turns a vague ask into a clear, testable spec |
+| `business-analyst` | 🔧 Builder | Full BA: elicitation, stakeholder & process analysis, requirements, UAT, reg-change impact, obligation→detection |
 | `tm-sme` | 🧠 Advisor | Money-laundering expert (transaction monitoring) |
 | `trade-surveillance-sme` | 🧠 Advisor | Market-abuse expert (spoofing, insider dealing…) |
 | `comms-surveillance-sme` | 🧠 Advisor | Trader-chat / email monitoring expert |
@@ -98,7 +98,7 @@ pipeline, a transformation script, an ML model — not always the same person:
 ```mermaid
 flowchart TD
     You([You: a problem,<br/>a review, or a build]) --> PM[PM<br/>clarifies + plans]
-    PM --> RA[requirements-analyst<br/>writes a clear spec]
+    PM --> RA[business-analyst<br/>writes a clear spec]
     RA --> Build[the right builder<br/>rule · pipeline · script · ML]
     Build --> QA[qa-engineer<br/>independent tests + evidence]
     QA --> Rev[reviewers<br/>code · performance · compliance]

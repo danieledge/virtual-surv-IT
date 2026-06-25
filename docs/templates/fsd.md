@@ -1,6 +1,6 @@
 # Functional Specification Document — <TITLE>
 
-> Drafted by `requirements-analyst`, reviewed by the domain SME. Structure follows
+> Drafted by `business-analyst`, reviewed by the domain SME. Structure follows
 > ISO/IEC/IEEE 29148; acceptance criteria in **Gherkin** (Given/When/Then). Authored in
 > `.md`, rendered to `.html`.
 

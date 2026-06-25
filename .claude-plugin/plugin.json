@@ -26,7 +26,7 @@
     "./.claude/agents/performance-reviewer.md",
     "./.claude/agents/platform-engineer.md",
     "./.claude/agents/qa-engineer.md",
-    "./.claude/agents/requirements-analyst.md",
+    "./.claude/agents/business-analyst.md",
     "./.claude/agents/review-scorer.md",
     "./.claude/agents/rules-developer.md",
     "./.claude/agents/tm-sme.md",

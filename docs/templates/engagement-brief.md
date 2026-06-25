@@ -28,7 +28,7 @@ The deliverables the user selected from the menu (see WAYS-OF-WORKING.md), e.g. 
 review report, RTM, audit pack. Each produced in `.md` + `.html`.
 
 ## 6. Proposed approach & routing plan
-The entry point and the chain of specialists, e.g. *requirements-analyst → SME →
+The entry point and the chain of specialists, e.g. *business-analyst → SME →
 rules-developer → code-reviewer → compliance-reviewer*. Be flexible — only the stages this
 engagement needs.
 

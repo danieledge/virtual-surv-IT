@@ -5,7 +5,7 @@ argument-hint: <path to the BRD, or paste it>
 
 Under the PM (CLAUDE.md §6), turn the BRD into an FSD: **$ARGUMENTS**
 
-1. Route to **requirements-analyst** to draft using `docs/templates/fsd.md`; have the
+1. Route to **business-analyst** to draft using `docs/templates/fsd.md`; have the
    relevant **SME** (`trade-surveillance-sme` / `tm-sme` / `comms-surveillance-sme`) review
    the detection logic and thresholds.
 2. Each functional requirement (FSD-001, …) must **trace to a BRD id**. Write acceptance

@@ -171,7 +171,7 @@ set of requirements to build, and it works out the shape of the work and orchest
 
   | Deliverable / task | Owner |
   |---|---|
-  | Spec / requirements (any deliverable) | `requirements-analyst` |
+  | Spec / requirements (any deliverable) | `business-analyst` |
   | Detection rule / scenario logic | `rules-developer` |
   | Data pipeline / ETL / transformation or utility script / infra / IaC | `platform-engineer` |
   | Exploratory analytics, FP analysis, data-quality, reconciliation, reporting/MI | `data-analyst` |

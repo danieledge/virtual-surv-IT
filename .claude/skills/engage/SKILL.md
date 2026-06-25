@@ -173,7 +173,7 @@ and **concrete next-step options with your recommendation**, then offer to carry
 (e.g. *"Review done — 3 criticals. Want me to fix them, run a full `/remediate` loop, or
 produce a handover pack?"*). Always leave the user with a clear, actionable choice.
 
-Specialists: `requirements-analyst`, `tm-sme` / `trade-surveillance-sme` /
+Specialists: `business-analyst`, `tm-sme` / `trade-surveillance-sme` /
 `comms-surveillance-sme`, `rules-developer`, `data-analyst`, `tuning-analyst`, `ml-engineer`, `platform-engineer`,
 `qa-engineer`, `code-reviewer`, `performance-reviewer`, `model-validator`,
 `compliance-reviewer`, `data-quality-reviewer`. Advisors are read-only.

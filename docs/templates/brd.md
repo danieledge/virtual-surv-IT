@@ -1,12 +1,12 @@
 # Business Requirements Document — <TITLE>
 
-> Drafted by `requirements-analyst`, overseen by the PM. Structure follows BABOK v3;
+> Drafted by `business-analyst`, overseen by the PM. Structure follows BABOK v3;
 > requirements are written in **EARS** syntax. Authored in `.md`, rendered to `.html`.
 
 | | |
 |---|---|
 | **Document ID** | BRD-<slug> |
-| **Author / owner** | requirements-analyst / <user> |
+| **Author / owner** | business-analyst / <user> |
 | **Version / date** | 0.1 / <YYYY-MM-DD> |
 | **Status** | draft / approved |
 

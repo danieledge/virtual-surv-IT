@@ -1,6 +1,6 @@
 # Detection Scenario Specification — <NAME>
 
-> Produced by `requirements-analyst` before development. Keep it implementable and testable.
+> Produced by `business-analyst` before development. Keep it implementable and testable.
 
 ## 1. Need / trigger
 What business or regulatory need prompts this? (one paragraph)

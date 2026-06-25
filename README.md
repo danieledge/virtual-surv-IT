@@ -47,7 +47,7 @@ the work flows between them like a real engineering team.
 ```mermaid
 flowchart LR
     You([You: a problem,<br/>a review, or a build]) --> PM[PM<br/>clarify + plan]
-    PM --> RA[requirements-analyst<br/>spec]
+    PM --> RA[business-analyst<br/>spec]
     RA --> Build[right builder<br/>rule · pipeline · script · ML]
     Build --> QA[qa-engineer<br/>independent tests]
     QA --> Rev[review<br/>code · performance · compliance]
@@ -166,7 +166,7 @@ Prefer to drive a specific step yourself? Use the focused commands:
 .claude-plugin/               # plugin + marketplace manifests (installable via /plugin)
 CLAUDE.md                     # shared team handbook (example defaults — customise as needed)
 .claude/agents/               # 16 subagents (15 specialists + review-scorer helper)
-  requirements-analyst.md     # BA            (build)
+  business-analyst.md     # BA            (build)
   tm-sme.md                   # AML SME       (advisory, read-only)
   trade-surveillance-sme.md   # SME           (advisory, read-only)
   comms-surveillance-sme.md   # SME           (advisory, read-only)
@@ -192,7 +192,7 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 
 ### 🔧 Builders — they engineer the surveillance technology
 
-- **`requirements-analyst`** — turns a regulatory or business need into a clear,
+- **`business-analyst`** — turns a regulatory or business need into a clear,
   implementable spec (user stories, acceptance criteria, true/false-positive cases) before
   any code is written.
 - **`rules-developer`** — implements and refactors deterministic detection rules and
@@ -249,7 +249,7 @@ agents — copy these:
 
 1. `CLAUDE.md` to your repo root (merge if you already have one) — the shared handbook.
 2. `.claude/agents/` — the 16 subagents.
-3. `.claude/skills/` — the 13 workflows (`/engage`, `/audit-review`, …); without these you
+3. `.claude/skills/` — the 16 workflows (`/engage`, `/audit-review`, …); without these you
    get agents but no front door.
 4. `.claude/hooks/` **and** `.claude/settings.json` — the always-on data-safety guard and its
    wiring. Don't skip these: they are the §5 control that keeps real data away from the model.
@@ -314,7 +314,7 @@ docs/scope-and-stack.md      # example regulatory scope + tech stack (customise;
 docs/code-review-method.md   # confidence scoring, filtering, deep review (adapted from turingmind)
 docs/templates/              # delivery-report (consolidated default) + BRD, FSD, ADR, RTM, review/performance, dev+QA handover, change/ops, scenario, model-validation
 scripts/render_html.py       # render any .md artifact to standalone .html for distribution
-.claude/skills/              # workflows: /engage, /prepare-data, /write-brd, /brd-to-fsd, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
+.claude/skills/              # workflows: /engage, /prepare-data, /write-brd, /brd-to-fsd, /elicit-requirements, /reg-change-impact, /analyse-data, /tune-thresholds, /validate-tm-model, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
 .github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
 .pre-commit-config.yaml      # local secret / raw-data guardrails
 ```
@@ -329,7 +329,7 @@ pre-commit install                       # optional: enable local guardrails
 ```
 
 Add a new detection with `/new-scenario <requirement>`, which chains
-requirements-analyst → SME → rules-developer → code-reviewer → compliance-reviewer per the
+business-analyst → SME → rules-developer → code-reviewer → compliance-reviewer per the
 handbook.
 
 ## Code-review tooling

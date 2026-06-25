@@ -15,7 +15,7 @@ pack, use `/build-solution` (the full orchestrator-workers fan-out) instead.
 You are the orchestrator (CLAUDE.md §6). Do **not** write detection logic yourself — route
 each step to the right agent and chain them in this session:
 
-1. **requirements-analyst** — turn "$ARGUMENTS" into a spec using
+1. **business-analyst** — turn "$ARGUMENTS" into a spec using
    `docs/templates/scenario-spec.md` (obligation, data, detection requirements,
    true-positive / false-positive acceptance criteria).
 2. **Domain SME** — pick by domain: `trade-surveillance-sme`, `tm-sme`, or
