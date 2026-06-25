@@ -3,6 +3,26 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.3.1] — 2026-06-25
+
+### Fixed
+- **`tuning-analyst` was missing from `plugin.json` `agents`** — the flagship 0.3.0 agent would
+  silently fail to load on a plugin install (project-mode dir-discovery masked it). Now registered.
+
+### Changed — best-practice review remediation
+- **Roster:** resolved the `data-analyst`⇄`tuning-analyst` overlap (data-analyst cedes threshold
+  calibration/ATL-BTL/segmentation to tuning-analyst); added §5 data-safety lines to
+  `model-validator` + `platform-engineer`; fixed `compliance-reviewer`'s Bash line that implied it
+  runs tests (now static-only, §7); dropped "performance" from `code-reviewer`'s description;
+  added opus-tier rationale to the SMEs; standardised the "When the team is engaged" prefix.
+- **Skills:** disambiguated the surveillance-analytics trio (`/tune-thresholds`, `/assess-coverage`,
+  `/validate-tm-model`); brought 7 skills' input-gathering up to the structured-AskUserQuestion
+  standard; cross-referenced `/elicit-requirements` and `/write-brd`.
+- **Safety/config:** `guard-code-execution.py` java regex now allows `-version`/`-help`; added
+  `tests/test_hooks_in_sync.py` to prevent plugin/project hook-config drift.
+- **Docs:** fixed stale counts; rewrote the README "Meet the team" section to be more engaging
+  (and corrected stale performance-reviewer/code-reviewer detail).
+
 ## [0.3.0] — 2026-06-25
 
 ### Added — Data-analyst & business-analyst expansion (research-grounded)
