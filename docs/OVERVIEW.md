@@ -65,20 +65,20 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 
 | Member | Type | What they do (in plain terms) |
 |---|---|---|
-| **Bea** `business-analyst` | 🔧 Builder | Full BA: elicitation, stakeholder & process analysis, requirements, UAT, reg-change impact, obligation→detection |
+| **Amara** `business-analyst` | 🔧 Builder | Full BA: elicitation, stakeholder & process analysis, requirements, UAT, reg-change impact, obligation→detection |
 | **Hassan** `tm-sme` | 🧠 Advisor | Money-laundering expert (transaction monitoring) |
-| **Sofia** `trade-surveillance-sme` | 🧠 Advisor | Market-abuse expert (spoofing, insider dealing…) |
+| **Camila** `trade-surveillance-sme` | 🧠 Advisor | Market-abuse expert (spoofing, insider dealing…) |
 | **Cleo** `comms-surveillance-sme` | 🧠 Advisor | Trader-chat / email monitoring expert |
-| **Devin** `rules-developer` | 🔧 Builder | Writes the detection code + tests |
+| **Mateo** `rules-developer` | 🔧 Builder | Writes the detection code + tests |
 | **Ana** `data-analyst` | 🔧 Builder | Exploratory analysis, false-positive analysis, data-quality, reconciliation, reporting/MI |
 | **Theo** `tuning-analyst` | 🔧 Builder | Calibrates alert thresholds with ATL/BTL testing, segmentation & model-performance MI |
 | **Mei** `ml-engineer` | 🔧 Builder | Builds smarter AI-based detection when needed |
-| **Quinn** `qa-engineer` | 🔧 Builder | Independently tests it and evidences what was checked (for a real QA team) |
+| **Linh** `qa-engineer` | 🔧 Builder | Independently tests it and evidences what was checked (for a real QA team) |
 | **Viktor** `model-validator` | 🧠 Advisor | Independently checks any AI model is sound and fair |
-| **Pat** `platform-engineer` | 🔧 Builder | Builds the data plumbing: pipelines, ETL, transformation scripts, infrastructure |
+| **Kenji** `platform-engineer` | 🔧 Builder | Builds the data plumbing: pipelines, ETL, transformation scripts, infrastructure |
 | **Ravi** `code-reviewer` | 🧠 Advisor | Reviews code quality & security across Python, TypeScript/JS, Scala, Java, PowerShell, Bash, SQL |
-| **Felix** `performance-reviewer` | 🧠 Advisor | Checks it's fast enough and will scale to real data volumes |
-| **Greta** `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |
+| **Thabo** `performance-reviewer` | 🧠 Advisor | Checks it's fast enough and will scale to real data volumes |
+| **Layla** `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |
 | **Yuki** `data-quality-reviewer` | 🧠 Advisor | Independently checks the data is complete & accurate, and that nothing in scope goes unmonitored |
 | **Pip** `review-scorer` | ⚙️ Helper | Cheap-tier (haiku) assistant that does the rote review steps — context detection, scoring, filtering — so the expensive reviewers don't |
 

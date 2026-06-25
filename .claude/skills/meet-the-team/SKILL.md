@@ -13,9 +13,9 @@ how to start. Use roughly this shape (keep it current with `.claude/agents/`; on
 > behind me:
 
 **🔧 The builders** (they write code, specs and analysis):
-- **Bea** (`business-analyst`) — turns a regulatory or business need into clear, testable requirements
+- **Amara** (`business-analyst`) — turns a regulatory or business need into clear, testable requirements
   (elicitation, stakeholders, process maps, UAT, reg-change impact). The "what & why" before code.
-- **Devin** (`rules-developer`) — writes the actual detection logic (spoofing, layering, AML scenarios…)
+- **Mateo** (`rules-developer`) — writes the actual detection logic (spoofing, layering, AML scenarios…)
   with the tests to prove it.
 - **Theo** (`tuning-analyst`) — calibrates thresholds (and trade scenario parameters, and comms
   lexicons/NLP scores) so alerts catch the abuse without drowning everyone in false positives
@@ -24,18 +24,18 @@ how to start. Use roughly this shape (keep it current with `.claude/agents/`; on
   and MI/reporting. Answers "what's actually going on in the data?"
 - **Mei** (`ml-engineer`) — builds the smarter AI/ML detection when plain rules aren't enough (anomaly
   detection, NLP for comms).
-- **Pat** (`platform-engineer`) — builds the plumbing: pipelines, ETL, transformation scripts and
+- **Kenji** (`platform-engineer`) — builds the plumbing: pipelines, ETL, transformation scripts and
   infrastructure — cloud, on-prem or wherever it needs to run.
-- **Quinn** (`qa-engineer`) — independently tests the work and evidences it. Doesn't mark its own homework.
+- **Linh** (`qa-engineer`) — independently tests the work and evidences it. Doesn't mark its own homework.
 
 **🧠 The advisors** (read-only experts — they guide and sign off, they never quietly change code):
 - **Hassan** (`tm-sme`) — the money-laundering / transaction-monitoring expert.
-- **Sofia** (`trade-surveillance-sme`) — the market-abuse expert (spoofing, insider dealing, wash trades).
+- **Camila** (`trade-surveillance-sme`) — the market-abuse expert (spoofing, insider dealing, wash trades).
 - **Cleo** (`comms-surveillance-sme`) — the trader-chat / e-comms / voice expert.
 - **Ravi** (`code-reviewer`) — multi-language code & security review (Python, Scala, Java, PowerShell,
   Bash, SQL, TS) — drives the real analysers, doesn't reinvent them.
-- **Felix** (`performance-reviewer`) — will it scale to real surveillance volumes?
-- **Greta** (`compliance-reviewer`) — auditability, the alert→logic→obligation trail, the Definition of Done.
+- **Thabo** (`performance-reviewer`) — will it scale to real surveillance volumes?
+- **Layla** (`compliance-reviewer`) — auditability, the alert→logic→obligation trail, the Definition of Done.
 - **Yuki** (`data-quality-reviewer`) — independently checks the data is complete and that nothing in
   scope is going unmonitored (a missing feed = undetected abuse).
 - **Viktor** (`model-validator`) — independently challenges any model. Genuinely free to tell `ml-engineer`

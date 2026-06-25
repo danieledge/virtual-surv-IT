@@ -205,33 +205,39 @@ CLAUDE.md                     # shared team handbook (example defaults — custo
 
 ## Meet the team
 
-Fifteen specialists and one tireless haiku-tier intern — each with a day job and strong
-opinions about it. (Inside a session, Morgan can do the introductions live: just type
-`/meet-the-team`.) They split into **🧠 advisors** — read-only, so they'll critique your work all
-day but can't lay a finger on the code, which is precisely *why* you trust them — and
-**🔧 builders**, who actually write the stuff.
+Sixteen specialists, one PM and a tireless intern — each with a day job, a name and strong
+opinions about it. (Inside a session, type `/meet-the-team` and Morgan does the introductions
+live.) **🧠 Advisors** are read-only — they'll critique your work all day but can't lay a finger
+on the code, which is precisely *why* you trust them. **🔧 Builders** write the stuff.
+
+**🎩 Morgan** — *Project Manager & orchestrator.* Your single front door. Translates
+regulator-speak into plain English, leads with "yes, here's how", and physically cannot let a
+piece of work end at "analysis". Runs a tight gate, keeps you in charge — and will ask you a
+question rather than guess, every time.
 
 ### 🔧 Builders — they engineer the surveillance technology
 
-- **Bea** (`business-analyst`) — asks *"but what does the regulation actually **require**?"* until the
-  spec is airtight. The full **BABOK** lifecycle: stakeholder analysis, elicitation, requirements
-  (EARS), process modelling (BPMN), user stories, UAT, traceability, and obligation→detection
-  translation, control mapping and regulatory-change impact.
-- **Devin** (`rules-developer`) — turns *"catch the spoofers"* into deterministic, tested detection logic
-  for transaction monitoring and trade surveillance, from a validated spec.
-- **Ana** (`data-analyst`) — lives in the data and the false positives: exploratory analysis, FP
-  investigation, data-quality, reconciliation and reporting/MI. (Hands threshold tuning to the
-  specialist below.)
-- **Theo** (`tuning-analyst`) — the one who can defend a threshold to a regulator with a straight face:
-  risk-based segmentation, std-dev thresholds, Above-/Below-The-Line testing, dry-run alerts, and
-  FP-rate / alert-to-SAR MI. Quantifies the volume↔coverage trade-off so nobody's guessing.
-- **Mei** (`ml-engineer`) — reaches for ML only when plain rules genuinely aren't enough (and says so):
-  anomaly detection, NLP for comms, behavioural scoring, alert triage.
-- **Pat** (`platform-engineer`) — builds the plumbing nobody thanks them for until it breaks: ingestion,
-  ETL, streaming/batch transformation, utility scripts (Python, Scala, Java, PowerShell, Bash),
-  infra/IaC, retention, data residency, resilience.
-- **Quinn** (`qa-engineer`) — refuses to mark its own homework: independently designs and runs the test
-  plan, then evidences what ran, the coverage, the gaps and the residual risk.
+- **Amara** — *Business Analyst.* Asks "but what does the regulation actually *require*?" until the
+  spec can't be misread. BABOK to her bones: elicitation, BPMN, UAT, traceability,
+  obligation→detection. Allergic to ambiguity and to thresholds that turned up without a reason.
+- **Mateo** — *Detection Rules Developer.* Turns "catch the spoofers" into deterministic, tested
+  logic. Firmly believes a rule without a false-positive test is just a rumour — ships the tests
+  with the rule, no exceptions.
+- **Ana** — *Data Analyst.* Lives in the data and the false positives; trusts nothing until she's
+  seen the distribution. Will name your FP driver before you've finished describing it. Hands the
+  actual threshold-setting to Theo (they get on well).
+- **Theo** — *Tuning Analyst.* Can defend a threshold to a regulator with a straight face. Fluent
+  in ATL/BTL and risk-based segmentation; won't move a number without the evidence behind it.
+  Treats "round number" as a mild personal insult.
+- **Mei** — *ML Engineer.* Reaches for ML only when plain rules genuinely aren't enough — and says
+  so out loud. Anomaly detection, NLP for comms, behavioural scoring. Deeply suspicious of any
+  model she can't explain to Viktor.
+- **Kenji** — *Platform / Data Engineer.* Builds the plumbing nobody thanks him for until it
+  breaks: pipelines, ETL, infra, retention, data residency. Quietly obsessed with the feed that
+  must never silently drop.
+- **Linh** — *QA Engineer.* Refuses to mark her own homework — independent by design. Evidences
+  exactly what ran, what it covered, and the edge case you were hoping nobody would try. Residual
+  risk: stated, not buried.
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
 > a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
@@ -240,31 +246,37 @@ day but can't lay a finger on the code, which is precisely *why* you trust them 
 
 ### 🧠 Advisors — they guide and sign off (read-only)
 
-- **Hassan** (`tm-sme`) — the money-laundering brain: TM/AML detection scenarios, typologies, thresholds,
-  segmentation, SAR/STR rationale.
-- **Sofia** (`trade-surveillance-sme`) — the market-abuse brain: spoofing, layering, wash trades, marking
-  the close, insider dealing, front running.
-- **Cleo** (`comms-surveillance-sme`) — the trader-chat brain: lexicons, NLP risk policies, e-comms and
-  voice monitoring mapped to conduct risk.
-- **Viktor** (`model-validator`) — independent of `ml-engineer` *by design*, and entirely willing to tell
-  it the model is wrong: soundness, performance, bias, stability, explainability.
-- **Ravi** (`code-reviewer`) — comprehensive code & security review across **Python, TypeScript/JS,
-  Scala, Java, PowerShell, Bash and SQL**. Drives the established analysers (ruff/mypy/bandit,
-  Checkstyle/SpotBugs/PMD, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep) rather than
-  reinventing rules — and adds judgement on top. Quick or deep review.
-- **Felix** (`performance-reviewer`) — *will it survive real surveillance volumes?* **Static by default**
-  (the team doesn't execute your code, CLAUDE.md §7): complexity, hot paths, I/O/query shape
-  (`EXPLAIN` plan-only), memory, concurrency, and explicit coded costs — each finding tagged
-  📊 measured / 🧠 inferred. (Profiling is a future opt-in via the consent flow.)
-- **Greta** (`compliance-reviewer`) — the last gate: auditability, the alert→logic→obligation trace,
-  secrets/PII, test coverage, and the Definition of Done. Auditable or it doesn't ship.
-- **Yuki** (`data-quality-reviewer`) — quietly obsessed with the one missing feed that means abuse goes
-  undetected: completeness, accuracy, timeliness, reconciliation, and **total coverage** (every
-  in-scope instrument, venue, account and channel actually captured). The biggest blind spot in
-  surveillance — no feed, no alert, ever.
+- **Hassan** — *Transaction-Monitoring / AML SME.* The money-laundering brain. Knows the
+  typologies, the thresholds and why the SAR matters — and will gently tell you when a "clever"
+  scenario quietly misses the point.
+- **Camila** — *Trade-Surveillance SME.* Thinks like a spoofer so you don't have to. Spoofing,
+  layering, marking the close, insider dealing — she's read the whole playbook and remembers the
+  footnotes.
+- **Cleo** — *Comms-Surveillance SME.* Reads trader chat for a living: lexicons, NLP risk flags,
+  e-comms and voice. Fluent in euphemism and thoroughly unimpressed by the off-channel "quick word".
+- **Viktor** — *Model Validator.* Independent of Mei *by design*, and entirely comfortable telling
+  her the model's wrong. Soundness, bias, stability, explainability — the friendly adversary every
+  model needs.
+- **Ravi** — *Code Reviewer.* Reads code in seven languages (**Python, TypeScript/JS, Scala, Java,
+  PowerShell, Bash, SQL**) and the security flaws in all of them. Drives the real analysers
+  (ruff/mypy/bandit, SpotBugs/PMD, PSScriptAnalyzer, ShellCheck, Semgrep…), adds judgement on top,
+  and is only a *little* opinionated about your naming.
+- **Thabo** — *Performance Reviewer.* Asks one question — *"will it survive real volumes?"* — and
+  answers with evidence, not vibes. **Static by default** (won't run your code uninvited, §7):
+  complexity, hot paths, query shape, memory, concurrency — each finding tagged 📊 measured /
+  🧠 inferred.
+- **Layla** — *Compliance Reviewer.* The last gate before anything ships: auditability, the
+  alert→logic→obligation trail, secrets/PII, the Definition of Done. "Probably fine" does not pass
+  review.
+- **Yuki** — *Data-Quality Reviewer.* Quietly obsessed with the one missing feed that means abuse
+  goes undetected: completeness, timeliness, and **total coverage** (every in-scope instrument,
+  venue, account and channel actually captured). Her motto: no feed, no alert, ever.
 
-…and **Pip** (`review-scorer`), the haiku-tier intern who does the rote review bookkeeping (context
-detection, scoring, filter accounting) so the senior reviewers don't burn opus on arithmetic.
+### ⚙️ …and behind the scenes
+
+- **Pip** — *Review Scorer (the intern).* Haiku-tier and proud of it. Does the rote review
+  bookkeeping — context detection, confidence scoring, the Found/Reported/Filtered tallies — so the
+  senior reviewers never burn opus on arithmetic. Fast, cheap, cheerful.
 
 > Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
 > real independent check. The restriction is enforced by the tools each agent is granted —

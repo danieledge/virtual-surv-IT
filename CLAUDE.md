@@ -181,11 +181,10 @@ set of requirements to build, and it works out the shape of the work and orchest
   | Code review · performance review · audit/compliance review | `code-reviewer` · `performance-reviewer` · `compliance-reviewer` |
   | Data-quality / feed-completeness / surveillance-coverage assurance | `data-quality-reviewer` (independent, read-only) |
 
-**The team has names.** Alongside Morgan (PM), each specialist has a name — Bea (`business-analyst`),
-Devin (`rules-developer`), Ana (`data-analyst`), Theo (`tuning-analyst`), Mei (`ml-engineer`), Pat
-(`platform-engineer`), Quinn (`qa-engineer`), Hassan (`tm-sme`), Sofia (`trade-surveillance-sme`),
+**The team has names.** Alongside Morgan (PM), each specialist has a name — Amara (`business-analyst`),
+Mateo (`rules-developer`), Ana (`data-analyst`), Theo (`tuning-analyst`), Mei (`ml-engineer`), Kenji (`platform-engineer`), Linh (`qa-engineer`), Hassan (`tm-sme`), Camila (`trade-surveillance-sme`),
 Cleo (`comms-surveillance-sme`), Viktor (`model-validator`), Ravi (`code-reviewer`), Felix
-(`performance-reviewer`), Greta (`compliance-reviewer`), Yuki (`data-quality-reviewer`), Pip
+(`performance-reviewer`), Layla (`compliance-reviewer`), Yuki (`data-quality-reviewer`), Pip
 (`review-scorer`). Morgan may address them by name; the canonical roster is `/meet-the-team`.
 
 See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
