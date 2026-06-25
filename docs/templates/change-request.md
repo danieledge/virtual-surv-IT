@@ -1,7 +1,7 @@
-# Change Request / RFC — <TITLE>
+# Change Request / RFC - <TITLE>
 
 > **Drafted by the virtual team to feed your existing change control.** Items marked
-> **[IT team]** are for your team to complete, approve or execute — the team does **not**
+> **[IT team]** are for your team to complete, approve or execute - the team does **not**
 > self-certify or approve changes. Authored in `.md`, rendered to `.html`.
 
 | | |
@@ -10,14 +10,14 @@
 | **Title** | <…> |
 | **Raised by** | <…> · drafted by the virtual team |
 | **Date drafted** | <YYYY-MM-DD> |
-| **Change type** | standard / normal / emergency — [IT team to confirm] |
+| **Change type** | standard / normal / emergency - [IT team to confirm] |
 | **Target environment** | [IT team] |
 
 ## 1. Summary
 What is changing, in one paragraph.
 
 ## 2. Reason / business driver
-Why — link the BRD/FSD and the regulatory driver.
+Why - link the BRD/FSD and the regulatory driver.
 
 ## 3. Scope
 - **In scope:**
@@ -41,7 +41,7 @@ How to revert if the change misbehaves; data considerations; time to roll back.
 - **Window / schedule:** [IT team]
 - **Dependencies / prerequisites:**
 
-## 8. Approvals — [IT team / CAB]
+## 8. Approvals - [IT team / CAB]
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Change owner | | | |

@@ -1,10 +1,10 @@
-# Code review method — confidence scoring, filtering & transparency
+# Code review method - confidence scoring, filtering & transparency
 
 How `code-reviewer` decides what's worth reporting. The goal is high signal: surface what a
 senior engineer (and an auditor) would genuinely flag, filter the noise, and **always show
 what was filtered** so the review is trustworthy and defensible.
 
-> Adapted from **turingmind-code-review** (MIT, © 2026 TuringMind) —
+> Adapted from **turingmind-code-review** (MIT, © 2026 TuringMind) -
 > <https://github.com/turingmindai/turingmind-code-review>. The confidence-scoring and
 > filter-transparency approach is theirs; the regulated-domain adaptations (audit mode,
 > data-safety/traceability weighting) are ours.
@@ -13,8 +13,8 @@ what was filtered** so the review is trustworthy and defensible.
 
 | Mode | When | Pre-existing issues |
 |---|---|---|
-| **Change review** | reviewing a diff / PR (`/new-scenario`, a code change) | filtered out — only flag what the change introduces |
-| **Audit review** | reviewing existing code for audit-readiness (`/audit-review`) | **in scope** — the existing code *is* the subject; never silently drop them |
+| **Change review** | reviewing a diff / PR (`/new-scenario`, a code change) | filtered out - only flag what the change introduces |
+| **Audit review** | reviewing existing code for audit-readiness (`/audit-review`) | **in scope** - the existing code *is* the subject; never silently drop them |
 
 The scoring below is identical in both modes except for the "new vs pre-existing" criterion,
 which only applies in change review.
@@ -40,20 +40,20 @@ Start at 50 and adjust:
 | 95–100 | 🔴 Critical | report | report |
 | 80–94 | 🟠 Warning | report | report |
 | 70–79 | 🟡 Medium | filter | report |
-| < 70 | — | filter | filter |
+| < 70 | - | filter | filter |
 
-## Evidence basis — measured vs inferred (state it for every claim)
+## Evidence basis - measured vs inferred (state it for every claim)
 
 A developer will (rightly) challenge a finding that *sounds* certain but was only reasoned.
-So **every finding states how we know it** — never let an inference read as a measurement:
+So **every finding states how we know it** - never let an inference read as a measurement:
 
 | Basis | Means | How to cite it |
 |---|---|---|
-| **Measured** 📊 | Observed directly — a profiler run, a benchmark, a test failure, or an **explicit** value in the code (e.g. a literal `sleep(5)`, a hard timeout, `LIMIT 100`). | Quote the number/line: *"`time.sleep(5)` at `worker.py:88` → 5s fixed delay per call"* or *"cProfile: 4.2s in `join()` @ 100k rows"*. |
-| **Inferred** 🧠 | Reasoned from the code without executing it — complexity from structure, "this won't scale", likely-null. | Say so and give the reasoning **and the measurement that would confirm it**: *"Inferred O(n²) from the nested scan at `match.py:40`; not benchmarked — confirm with the stack's benchmark harness at 100k rows."* |
+| **Measured** 📊 | Observed directly - a profiler run, a benchmark, a test failure, or an **explicit** value in the code (e.g. a literal `sleep(5)`, a hard timeout, `LIMIT 100`). | Quote the number/line: *"`time.sleep(5)` at `worker.py:88` → 5s fixed delay per call"* or *"cProfile: 4.2s in `join()` @ 100k rows"*. |
+| **Inferred** 🧠 | Reasoned from the code without executing it - complexity from structure, "this won't scale", likely-null. | Say so and give the reasoning **and the measurement that would confirm it**: *"Inferred O(n²) from the nested scan at `match.py:40`; not benchmarked - confirm with the stack's benchmark harness at 100k rows."* |
 
 Rules:
-- A performance or behaviour claim with **no number and no executed evidence is Inferred** — label it, never present it as fact.
+- A performance or behaviour claim with **no number and no executed evidence is Inferred** - label it, never present it as fact.
 - Prefer to **measure** before asserting impact; if you couldn't (tool missing, no rig), say that explicitly in Tooling coverage rather than upgrading a guess to a certainty.
 - Distinguish **what the code says** (explicit: a coded pause, a fixed batch size, a declared timeout) from **what we derive** (the emergent cost). Both are legitimate; conflating them is not.
 
@@ -66,8 +66,8 @@ Five lanes, kept distinct so the signal stays clean and nothing important hides 
 | 🔴 **Critical** | must fix before merge (failure, missed/false alert, §4/§5 breach) | yes |
 | 🟠 **Warning** | should fix | yes (for an audit verdict) |
 | 🟡 **Medium** | worth fixing (deep/audit only) | no |
-| 🔵 **Style & form** | meaningful idiom / readability / naming / structure / documentation a senior dev would suggest — **non-blocking, "for future consideration"** | no |
-| 🔇 **Filtered** | noise the tools own (formatting, import order) or out-of-scope — *shown as counts, not findings* | no |
+| 🔵 **Style & form** | meaningful idiom / readability / naming / structure / documentation a senior dev would suggest - **non-blocking, "for future consideration"** | no |
+| 🔇 **Filtered** | noise the tools own (formatting, import order) or out-of-scope - *shown as counts, not findings* | no |
 
 **🔵 Style & form is not 🔇 filtered.** Filtered = the linter/formatter's job, reported only as a count. Style & form = judgement-level suggestions worth a developer's attention later (clearer naming, better decomposition, a missing docstring, a more idiomatic construct). Surface them in their own section, never inflate them into Warnings, and never let them affect the verdict.
 
@@ -75,7 +75,7 @@ Five lanes, kept distinct so the signal stays clean and nothing important hides 
 
 The console gets a **clean traffic-light scoreboard**; full findings go to the artifact. The
 exact scoreboard shape and artifact sections are defined once in **`docs/review/output-format.md`**
-— that file is canonical for *what the user sees*; this file is canonical for *how findings are
+- that file is canonical for *what the user sees*; this file is canonical for *how findings are
 scored and filtered*. Don't restate the format here.
 
 ## Model tiering (wired)
@@ -91,13 +91,13 @@ the §4/§5 regulated calls pay **opus** (CLAUDE.md §8). See `docs/review/agent
 > The same list, with turingmind's wording and the 🔵 style-vs-filter distinction, is in
 > `docs/review/false-positive-rules.md`. Keep the two consistent; this file leads on scoring.
 
-1. **Linter/formatter territory** — formatting, import order, unused vars (ruff/black/
+1. **Linter/formatter territory** - formatting, import order, unused vars (ruff/black/
    prettier handle these). Run the tools; don't hand-report their job.
-2. **Pedantic nitpicks** — "could be nicer" with no behavioural impact.
-3. **Silenced issues** — explicit ignore comments (unless the silenced issue is a §5
+2. **Pedantic nitpicks** - "could be nicer" with no behavioural impact.
+3. **Silenced issues** - explicit ignore comments (unless the silenced issue is a §5
    data-safety violation; see exception).
-4. **Intentional changes** — deliberate functionality or style matching existing patterns.
-5. **Style not in CLAUDE.md** — preferences not actually required.
+4. **Intentional changes** - deliberate functionality or style matching existing patterns.
+5. **Style not in CLAUDE.md** - preferences not actually required.
 
 ## Never filter (regulated exceptions)
 
@@ -106,7 +106,7 @@ Even if pre-existing, silenced, or "minor", **always report**:
 - Real PII/MNPI or raw records used as data (CLAUDE.md §5).
 - An undocumented detection threshold, or a broken alert→logic→obligation trace (§4).
 
-These are regulatory findings, not style — a secret doesn't become acceptable because it
+These are regulatory findings, not style - a secret doesn't become acceptable because it
 predates the diff.
 
 ## Transparency (always)

@@ -1,8 +1,8 @@
-# User Stories — <TITLE>
+# User Stories - <TITLE>
 
 > Produced by `business-analyst`. Agile-format stories with Gherkin acceptance criteria and
 > MoSCoW priority, feeding the FSD and build. Authored in `.md`, rendered to `.html`.
-> Synthetic illustrations only — no real data (§5).
+> Synthetic illustrations only - no real data (§5).
 
 | | |
 |---|---|
@@ -20,26 +20,26 @@ Each story has a stable ID, the canonical "As a … I want … so that …" form
 and Gherkin acceptance criteria. Surveillance stories must include a **true-positive** and a
 **false-positive** criterion.
 
-### US-001 — <short title>  ·  Priority: **Must**
+### US-001 - <short title>  ·  Priority: **Must**
 **As a** surveillance analyst
 **I want** <capability>
 **so that** <outcome / obligation served>.
 
 *Acceptance criteria:*
 ```gherkin
-Scenario: True positive — abuse is detected
+Scenario: True positive - abuse is detected
   Given <synthetic account/market state>
   When <the suspicious behaviour occurs>
   Then an alert of type <X> is raised with <evidence>
 
-Scenario: False positive — benign activity is not flagged
+Scenario: False positive - benign activity is not flagged
   Given <legitimate look-alike activity>
   When <it occurs>
   Then no alert is raised
 ```
 *Traces to:* REQ-F-001 · *Driver:* MAR Art.12 / … (§2)
 
-### US-002 — <short title>  ·  Priority: **Should**
+### US-002 - <short title>  ·  Priority: **Should**
 **As a** <role> **I want** <capability> **so that** <outcome>.
 ```gherkin
 Scenario: <…>
@@ -61,7 +61,7 @@ Scenario: <…>
 - **Ready:** story is independent, valued, estimable, small, testable (INVEST); acceptance
   criteria written incl. TP & FP cases; data source identified; driver cited; no blocking
   open questions.
-- **Done:** see `docs/DEFINITION-OF-DONE.md` — implemented, tested (TP & FP pass),
+- **Done:** see `docs/DEFINITION-OF-DONE.md` - implemented, tested (TP & FP pass),
   independently QA'd, reviewed (code/compliance), documented, RTM updated, human sign-off.
 
 > Traceability: each US-### maps to REQ-F-###/FSD-### and an RTM row through to a passing test

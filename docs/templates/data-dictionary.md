@@ -1,8 +1,8 @@
-# Data Dictionary — <DATASET / FEED>
+# Data Dictionary - <DATASET / FEED>
 
 > Produced by `data-analyst`. The authoritative field-level reference for a dataset/feed feeding
-> surveillance — what each field means, where it comes from, how it's classified and masked.
-> Documents **synthetic/masked data only — no real PII/MNPI** (§5); masking treatment per
+> surveillance - what each field means, where it comes from, how it's classified and masked.
+> Documents **synthetic/masked data only - no real PII/MNPI** (§5); masking treatment per
 > `config/masking-schema.yaml`. Authored in `.md`, rendered to `.html`. Aligns to DAMA-DMBOK
 > metadata-management practice.
 
@@ -28,7 +28,7 @@ are **synthetic** only.
 | Field | Source / system | Type | Description | Allowed values / domain | PII/MNPI | Masking treatment | Nullable | Example (synthetic) |
 |---|---|---|---|---|---|---|---|---|
 | `<field>` | `<system.table.col>` | string | <what it means> | <enum / range / regex> | none / PII / MNPI | token(domain) / shift / keep / dropped | N | `<synthetic>` |
-| `<field>` | `<...>` | timestamp(ms) | <event time> | epoch ms | indirect | shift(entity) — deltas preserved | N | `<synthetic>` |
+| `<field>` | `<...>` | timestamp(ms) | <event time> | epoch ms | indirect | shift(entity) - deltas preserved | N | `<synthetic>` |
 | `<field>` | `<...>` | decimal | <signal value> | > 0 | none (signal) | keep | N | `<synthetic>` |
 
 ## 3. Keys & relationships
@@ -39,7 +39,7 @@ referential integrity across feeds (e.g. `party`, `order`, `instrument`).
 |---|---|---|---|---|
 
 ## 4. Data-quality expectations
-The rules a feed-validation/DQ job should enforce — completeness, uniqueness, range, referential
+The rules a feed-validation/DQ job should enforce - completeness, uniqueness, range, referential
 integrity, timeliness. Ties to any reconciliation job and surveillance coverage.
 
 | Field / rule | Expectation | Severity if breached |

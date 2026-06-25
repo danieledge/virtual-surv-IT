@@ -5,7 +5,7 @@ applies_to: ["*.py"]
 ---
 
 > Vendored from **turingmind-code-review** (MIT, © 2026 TuringMind) and lightly adapted. This
-> is the **preferred Python lens** — it's mature; keep it close to upstream. See THIRD-PARTY-LICENSES.md.
+> is the **preferred Python lens** - it's mature; keep it close to upstream. See THIRD-PARTY-LICENSES.md.
 
 Language-specific checks for Python.
 

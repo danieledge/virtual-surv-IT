@@ -1,8 +1,8 @@
-# UAT Plan & Results — <TITLE>
+# UAT Plan & Results - <TITLE>
 
 > Produced by `business-analyst` with `qa-engineer`. User-acceptance test plan and evidence,
 > derived from the acceptance criteria. Authored in `.md`, rendered to `.html`.
-> **Synthetic or masked data only — no real PII/MNPI/secrets (§5).**
+> **Synthetic or masked data only - no real PII/MNPI/secrets (§5).**
 
 | | |
 |---|---|
@@ -45,7 +45,7 @@ One row per acceptance scenario; include true-positive (should alert) and false-
 | | | | | % |
 
 Plain-language outcome, residual risk, and **next-step options with a recommendation** (never a
-dead end) — e.g. fix the failures, re-test, then proceed to handover.
+dead end) - e.g. fix the failures, re-test, then proceed to handover.
 
 ## 7. Sign-off
 | Role | Name | Decision (accept / accept w/ conditions / reject) | Date |

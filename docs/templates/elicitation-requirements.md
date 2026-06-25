@@ -1,8 +1,8 @@
-# Elicitation & Requirements — <TITLE>
+# Elicitation & Requirements - <TITLE>
 
 > Produced by `business-analyst` (BABOK *Elicitation* + *Requirements Analysis*). Business
 > requirements in **EARS**, acceptance criteria in **Gherkin**. The bridge from a need to the
-> FSD. Authored in `.md`, rendered to `.html`. Synthetic illustrations only — no real data (§5).
+> FSD. Authored in `.md`, rendered to `.html`. Synthetic illustrations only - no real data (§5).
 
 | | |
 |---|---|
@@ -13,12 +13,12 @@
 | **Related** | BRD-<slug> · STK-<slug> · RTM-<slug> |
 
 ## 1. Context & regulatory driver
-The business situation and the obligation(s) it serves (§2) — e.g. MAR Art.12 (market
+The business situation and the obligation(s) it serves (§2) - e.g. MAR Art.12 (market
 manipulation), 6AMLD / BSA (AML), FCA SYSC record-keeping. Cite the specific obligation.
 
 ## 2. Scope
 - **In scope:** <instruments / venues / accounts / comms channels / behaviours covered>
-- **Out of scope:** <explicitly excluded — note the residual risk owner>
+- **Out of scope:** <explicitly excluded - note the residual risk owner>
 
 ## 3. Elicitation method & sources
 | Technique | Source / participant | Date | Output |
@@ -36,7 +36,7 @@ Stable IDs; "When `<trigger>`, the system shall `<response>`" (or ubiquitous for
 | REQ-B-002 | The system shall … | … | Should |
 
 ## 5. Functional / detection requirements
-What the solution must do — detection logic, scenario behaviour, alerting, workflow outputs.
+What the solution must do - detection logic, scenario behaviour, alerting, workflow outputs.
 
 | ID | Functional requirement | Traces to | Priority |
 |----|------------------------|-----------|----------|
@@ -45,7 +45,7 @@ What the solution must do — detection logic, scenario behaviour, alerting, wor
 
 ## 6. Data requirements
 Feeds, fields, granularity, quality and lineage the logic depends on. Flag any feed not yet
-captured — a missing feed is undetected abuse.
+captured - a missing feed is undetected abuse.
 
 | Data element | Source feed | Granularity | Quality / completeness need |
 |--------------|-------------|-------------|-----------------------------|
@@ -56,12 +56,12 @@ captured — a missing feed is undetected abuse.
 Each functional requirement needs at least one **true-positive** (should alert) and one
 **false-positive** (should *not* alert) case.
 ```gherkin
-Scenario: <true positive — abuse is detected>
+Scenario: <true positive - abuse is detected>
   Given <synthetic market/account state>
   When <the behaviour occurs>
   Then an alert of type <X> is raised with <evidence fields>
 
-Scenario: <false positive — benign activity is not flagged>
+Scenario: <false positive - benign activity is not flagged>
   Given <legitimate but superficially similar activity>
   When <it occurs>
   Then no alert is raised

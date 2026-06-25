@@ -1,4 +1,4 @@
-# Detection Scenario Specification — <NAME>
+# Detection Scenario Specification - <NAME>
 
 > Produced by `business-analyst` before development. Keep it implementable and testable.
 
@@ -17,7 +17,7 @@ The conduct to detect, in plain terms.
 
 ## 5. Detection requirements
 - Signals and the proposed logic at a conceptual level.
-- Candidate thresholds and the rationale for each (no undocumented thresholds — §4).
+- Candidate thresholds and the rationale for each (no undocumented thresholds - §4).
 
 ## 6. Acceptance criteria
 - [ ] Known true-positive cases that MUST alert.

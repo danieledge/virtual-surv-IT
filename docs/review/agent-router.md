@@ -2,12 +2,12 @@
 name: Review Lens Router
 ---
 
-> **Source & licence.** Adapted from **turingmind-code-review** (MIT, © 2026 TuringMind) —
+> **Source & licence.** Adapted from **turingmind-code-review** (MIT, © 2026 TuringMind) -
 > <https://github.com/turingmindai/turingmind-code-review>. The progressive-loading router
 > pattern is theirs; the regulated lenses and language set are ours. See `THIRD-PARTY-LICENSES.md`.
 
 Selects which **review lenses** (`docs/review/lenses/*`) to load for a given target. Loading
-*only* the relevant lenses keeps signal high and cost low — don't run the Java lens on a Python
+*only* the relevant lenses keeps signal high and cost low - don't run the Java lens on a Python
 diff. The review skills (`/deep-review`, `/audit-review`) and `code-reviewer` use this.
 
 ## Selection matrix
@@ -39,10 +39,10 @@ diff. The review skills (`/deep-review`, `/audit-review`) and `code-reviewer` us
 
 ## Model tiering (per `code-review-method.md` / CLAUDE.md §8)
 
-- **Haiku** — `review-scorer` does the rote steps: language/context detection, lens selection,
+- **Haiku** - `review-scorer` does the rote steps: language/context detection, lens selection,
   confidence arithmetic, and the Found/Reported/Filtered bookkeeping.
-- **Sonnet** — the dimension lenses (the per-language/per-dimension review passes).
-- **Opus** — `code-reviewer`'s judgement on findings + **Morgan's** challenge pass and the
+- **Sonnet** - the dimension lenses (the per-language/per-dimension review passes).
+- **Opus** - `code-reviewer`'s judgement on findings + **Morgan's** challenge pass and the
   §4/§5 regulated calls.
 
 So the cheap, high-volume steps run cheap and only the genuine judgement pays opus. (Running the
@@ -52,4 +52,4 @@ lenses as separate sonnet sub-agents is the next optional step; today they run w
 ## Adding a lens
 Create `docs/review/lenses/language-<name>.md` (same shape as the others: frontmatter with
 `applies_to`, a Checks list, and "use the shared `docs/review/output-format.md`"), then add a
-row to the matrix above. Don't duplicate the output format in the lens — reference it.
+row to the matrix above. Don't duplicate the output format in the lens - reference it.

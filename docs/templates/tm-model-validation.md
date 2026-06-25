@@ -1,7 +1,7 @@
-# TM Model Validation Pack — <TM SYSTEM / SCENARIO SET>
+# TM Model Validation Pack - <TM SYSTEM / SCENARIO SET>
 
 > Produced by `/validate-tm-model` (`tuning-analyst` data work + independent `model-validator`
-> verdict). Periodic "is the detection still fit for purpose" review — SR 11-7 + FFIEC BSA/AML.
+> verdict). Periodic "is the detection still fit for purpose" review - SR 11-7 + FFIEC BSA/AML.
 > Synthetic/masked data only (§5). Authored in `.md`, rendered to `.html`.
 
 | | |
@@ -13,7 +13,7 @@
 | **Verdict** | ✅ fit for purpose / ⚠️ conditional / ❌ revalidate |
 | **Disposition** | ✅ _N_ fixed · 🔴 _N_ open · ⚖️ _N_ accepted · ⏭️ _N_ deferred |
 
-## 1. Coverage — are the firm's risks & typologies all detected?
+## 1. Coverage - are the firm's risks & typologies all detected?
 Map in-scope typologies/obligations → scenarios. Flag gaps (a typology with no scenario = an
 undetected-abuse blind spot). *(Coverage of the data feeds → `data-quality-reviewer`.)*
 

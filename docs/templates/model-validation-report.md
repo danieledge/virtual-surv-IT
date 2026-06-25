@@ -1,4 +1,4 @@
-# Model Validation Report — <MODEL NAME / VERSION>
+# Model Validation Report - <MODEL NAME / VERSION>
 
 > Produced by `model-validator`, **independent** of `ml-engineer` (CLAUDE.md §7).
 > Aligned to model-risk governance: US SR 11-7, UK PRA SS1/23.

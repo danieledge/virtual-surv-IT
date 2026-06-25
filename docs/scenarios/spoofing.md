@@ -11,12 +11,12 @@
 | **Owner / SME** | `trade-surveillance-sme` |
 | **Implementation** | `rules/spoofing.py` |
 | **Tests** | `tests/test_spoofing.py` |
-| **Data** | `scripts/gen_synthetic.py` (synthetic only — §5) |
+| **Data** | `scripts/gen_synthetic.py` (synthetic only - §5) |
 | **Last tuned** | 2026-06-18 |
 
 ## 1. Regulatory obligation
 
-- **MAR (EU) No 596/2014, Art.12(1)(a) and Annex I** — market manipulation through
+- **MAR (EU) No 596/2014, Art.12(1)(a) and Annex I** - market manipulation through
   placing orders with no intention to execute ("non-bona-fide" orders) that give, or are
   likely to give, false or misleading signals as to supply, demand or price.
 - **UK:** FCA MAR / Art.15 prohibition on market manipulation.
@@ -35,9 +35,9 @@ after, having allowed it to barely (or never) execute.
 For each `(trader, instrument)` with enough orders to form a baseline, flag a **spoof
 order** that is:
 
-1. **Outsized** — qty ≥ `large_qty_multiple` × the trader's median order size;
-2. **Cancelled** and **short-lived** — lifetime ≤ `max_spoof_lifetime_ms`;
-3. **Near-unfilled** — fill ratio ≤ `max_fill_ratio`;
+1. **Outsized** - qty ≥ `large_qty_multiple` × the trader's median order size;
+2. **Cancelled** and **short-lived** - lifetime ≤ `max_spoof_lifetime_ms`;
+3. **Near-unfilled** - fill ratio ≤ `max_fill_ratio`;
 
 **and** coincides with a **benefiting genuine execution on the opposite side** within
 `opposite_exec_window_ms` of the spoof order being live.
@@ -73,11 +73,11 @@ volume/coverage trade-off without touching detection logic.
 - Single-account heuristic; does not yet detect **layering** (multiple orders at
   successive price levels) or **cross-account** coordination.
 - Median baseline is per-session; production should use a rolling per-trader baseline.
-- No price-context check (distance from touch) — a candidate enhancement.
+- No price-context check (distance from touch) - a candidate enhancement.
 
 ## 7. Review trail
 
 - [ ] `trade-surveillance-sme` reviewed detection logic
 - [ ] `compliance-reviewer` confirmed auditability, thresholds rationale, no secrets/PII,
       test coverage
-- Tuning history: 2026-06-18 — initial calibration on synthetic set.
+- Tuning history: 2026-06-18 - initial calibration on synthetic set.

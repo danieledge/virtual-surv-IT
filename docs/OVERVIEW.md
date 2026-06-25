@@ -1,10 +1,10 @@
-# How this all works — a plain-English overview
+# How this all works - a plain-English overview
 
 New to AI agents and LLMs? Start here. No prior knowledge assumed. By the end you'll
 understand what this project *is*, who the "team" are, how a job flows through them, and
 why real data never reaches the AI.
 
-> ⚗️ **This is a proof of concept / experiment** — an exploration of what an AI engineering
+> ⚗️ **This is a proof of concept / experiment** - an exploration of what an AI engineering
 > team could do in Claude Code, not a production or accredited system. Its outputs are a
 > starting point for real engineers and reviewers, not a replacement for them.
 
@@ -13,7 +13,7 @@ why real data never reaches the AI.
 ## 1. The 30-second version
 
 At a bank there's a team of **engineers who build the systems** that spot money laundering,
-market manipulation and dodgy trader chat. Note the word *build* — these aren't the
+market manipulation and dodgy trader chat. Note the word *build* - these aren't the
 compliance officers who investigate alerts; they're the people who **design, write and test
 the detection technology** those officers rely on.
 
@@ -23,11 +23,11 @@ detection code, one tunes it, and one signs it off.
 
 And "the systems" means more than detection rules. The same team builds the **data
 pipelines** that feed surveillance, **scripts** that transform or reconcile data (in Python,
-Scala, Java, PowerShell or Bash), **reporting**, **tooling** — or simply **reviews** existing
+Scala, Java, PowerShell or Bash), **reporting**, **tooling** - or simply **reviews** existing
 code to check it's robust and would survive an audit. A detection rule is just the worked
 example in this repo.
 
-This repository is the **setup for that virtual engineering team** — the job descriptions,
+This repository is the **setup for that virtual engineering team** - the job descriptions,
 the rules they follow, a worked example of one thing they'd build (a detection rule), and the
 safety rails that stop confidential data ever reaching the AI.
 
@@ -35,17 +35,17 @@ safety rails that stop confidential data ever reaching the AI.
 
 ## 2. Two words you need: "LLM" and "agent"
 
-- **LLM (Large Language Model)** — the technology behind tools like Claude or ChatGPT. In
+- **LLM (Large Language Model)** - the technology behind tools like Claude or ChatGPT. In
   plain terms: a very capable text assistant that has read an enormous amount and can
   understand instructions, explain things, and write code. On its own it just produces
   text.
 
-- **Agent** — an LLM that's been given **a job, some tools, and the ability to work in
+- **Agent** - an LLM that's been given **a job, some tools, and the ability to work in
   steps**. The "tools" are things like *read a file*, *run a test*, *search the code*.
   So an agent can actually *do* work (open files, write code, run it) rather than only
   chatting about it.
 
-- **Subagent** — one agent set up for **a single, focused role**. This project has 16 of
+- **Subagent** - one agent set up for **a single, focused role**. This project has 16 of
   them. Each has a short "job description" (a small text file in `.claude/agents/`) telling
   it what it's responsible for and what it's allowed to touch.
 
@@ -58,7 +58,7 @@ its job, and the PM hands the right task to the right specialist.
 
 There are two kinds of team member.
 
-**🧠 Advisors** can only *read and recommend* — they literally cannot change any code.
+**🧠 Advisors** can only *read and recommend* - they literally cannot change any code.
 They're your experts and reviewers, kept "read-only" on purpose so they stay independent.
 
 **🔧 Builders** can *write code and tests*.
@@ -80,20 +80,20 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 | **Thabo** `performance-reviewer` | 🧠 Advisor | Checks it's fast enough and will scale to real data volumes |
 | **Layla** `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |
 | **Yuki** `data-quality-reviewer` | 🧠 Advisor | Independently checks the data is complete & accurate, and that nothing in scope goes unmonitored |
-| **Pip** `review-scorer` | ⚙️ Helper | Cheap-tier (haiku) assistant that does the rote review steps — context detection, scoring, filtering — so the expensive reviewers don't |
+| **Pip** `review-scorer` | ⚙️ Helper | Cheap-tier (haiku) assistant that does the rote review steps - context detection, scoring, filtering - so the expensive reviewers don't |
 
 > Why "read-only" matters: a reviewer who could quietly fix the thing they're reviewing
 > isn't really an independent check. Making advisors read-only is enforced by the tools
-> each one is given — not just a polite request.
+> each one is given - not just a polite request.
 
 ---
 
 ## 4. How a job flows through the team
 
-You describe what you want — a problem, some code to review, or a build. The **PM** (the
+You describe what you want - a problem, some code to review, or a build. The **PM** (the
 main AI session, acting as project manager) clarifies, agrees a plan, then routes it through
-the right specialists. The builder depends on the deliverable — a detection rule, a data
-pipeline, a transformation script, an ML model — not always the same person:
+the right specialists. The builder depends on the deliverable - a detection rule, a data
+pipeline, a transformation script, an ML model - not always the same person:
 
 ```mermaid
 flowchart TD
@@ -107,7 +107,7 @@ flowchart TD
     Rev -. can send back .-> Build
 ```
 
-In this repo there are shortcut commands that run these chains for you — `/engage` (the
+In this repo there are shortcut commands that run these chains for you - `/engage` (the
 front door), and focused ones like `/build-solution`, `/audit-review` and `/new-scenario`.
 
 The golden rule the team follows: **everything must be explainable and traceable**. For a
@@ -121,8 +121,8 @@ any delivery, requirement → code → test → obligation. No black boxes.
 This is the most important idea, and it's simpler than it sounds.
 
 **The problem:** anything you show an AI agent is sent off to the AI provider to be
-processed. For an ordinary app that's fine. For **bank records** — real customers, real
-trades, confidential information — it absolutely is not.
+processed. For an ordinary app that's fine. For **bank records** - real customers, real
+trades, confidential information - it absolutely is not.
 
 **The solution:** the AI is never allowed to see real data. Instead, real data goes
 through a one-way cleaning process first, and the AI only ever works with the cleaned or
@@ -150,7 +150,7 @@ Three layers, from most to least sensitive:
    the cleaned data, then generates **completely made-up** records that behave the same way
    but correspond to nobody real. This is what's safe to put in front of the AI.
 
-> Important honesty: "masked" is safer but **not** anonymous — scrambled bank data is still
+> Important honesty: "masked" is safer but **not** anonymous - scrambled bank data is still
 > sensitive and stays locked down. "Synthetic" (made-up) data is the safe one to share.
 
 ---
@@ -164,13 +164,13 @@ before it ever trades. It's illegal market manipulation.
 
 This repo includes a complete, working detector for it:
 
-- `rules/spoofing.py` — the detection logic. It flags an order that is **unusually large**,
+- `rules/spoofing.py` - the detection logic. It flags an order that is **unusually large**,
   **cancelled very quickly**, **barely traded**, and lines up with a **real trade on the
   opposite side**. Every number it uses (how large? how quickly?) is written down with the
   reason and the date it was set.
-- `tests/test_spoofing.py` — proof it works: examples it *should* catch, and innocent cases
+- `tests/test_spoofing.py` - proof it works: examples it *should* catch, and innocent cases
   it must *not* wrongly flag.
-- `docs/scenarios/spoofing.md` — the paper trail linking the alert to the actual EU
+- `docs/scenarios/spoofing.md` - the paper trail linking the alert to the actual EU
   regulation (MAR) it enforces.
 
 It's the template every other detection in this team would follow.
@@ -181,7 +181,7 @@ It's the template every other detection in this team would follow.
 
 | Path | What it is |
 |---|---|
-| `CLAUDE.md` | The team handbook — shared rules every AI member reads first |
+| `CLAUDE.md` | The team handbook - shared rules every AI member reads first |
 | `.claude/agents/` | The 16 job descriptions (one file per team member) |
 | `.claude/skills/` | Workflow shortcuts, e.g. `/new-scenario` runs the whole team chain |
 | `.claude/hooks/` | The automatic guard that blocks the AI from real data |
@@ -196,35 +196,35 @@ It's the template every other detection in this team would follow.
 ## 8. How you'd actually use it
 
 1. Open this project in **Claude Code** (Anthropic's coding tool). The 16 team members are
-   loaded but stay **dormant** — a normal session behaves like ordinary Claude Code until you
+   loaded but stay **dormant** - a normal session behaves like ordinary Claude Code until you
    invoke the team.
-2. **Start with the Project Manager — "Morgan".** Type `/engage` and describe whatever
-   you've got — a rough idea, some code to check, or a full set of requirements. Morgan is
-   warm and plain-speaking, with a can-do but realistic attitude — it'll find a way forward,
+2. **Start with the Project Manager - "Morgan".** Type `/engage` and describe whatever
+   you've got - a rough idea, some code to check, or a full set of requirements. Morgan is
+   warm and plain-speaking, with a can-do but realistic attitude - it'll find a way forward,
    but tell you honestly if something's hard or risky rather than just saying yes. It's the
    single front door: it asks you clarifying questions, lets you **pick which documents you
    want**
    (a requirements doc? a spec? a review report?), agrees a plan, then runs the right
    specialists for you. You don't need to know who does what. **Type `/engage` just once** to
-   start — after that, simply chat back and forth; Morgan stays with you for the whole
+   start - after that, simply chat back and forth; Morgan stays with you for the whole
    session.
-3. You get back proper deliverables — each as both a **Markdown** file and a ready-to-share
+3. You get back proper deliverables - each as both a **Markdown** file and a ready-to-share
    **HTML** file.
 4. Everything is checked automatically: tests must pass, no secrets or real data can sneak
    into the project, and the masking must prove it's safe.
 
 Think of it as a small, flexible delivery team: hand it a problem, a review, or a build, and
-it organises and does the work — you stay in the loop at the decision points.
+it organises and does the work - you stay in the loop at the decision points.
 
 ---
 
 ## Mini-glossary
 
-- **LLM** — the AI text engine (e.g. Claude). Reads instructions, writes text and code.
-- **Agent** — an LLM given a job and tools so it can actually do work.
-- **Subagent** — one agent set up for a single focused role (this repo has 16).
-- **Orchestrator** — whoever hands tasks to the right agent and chains them together.
-- **Masking** — scrambling identities in real data while keeping its behaviour.
-- **Synthetic data** — completely made-up data that behaves realistically.
-- **Hook** — a small script that runs automatically at a set moment (here: to block real data).
-- **Spoofing** — placing fake orders to manipulate a market; our worked example.
+- **LLM** - the AI text engine (e.g. Claude). Reads instructions, writes text and code.
+- **Agent** - an LLM given a job and tools so it can actually do work.
+- **Subagent** - one agent set up for a single focused role (this repo has 16).
+- **Orchestrator** - whoever hands tasks to the right agent and chains them together.
+- **Masking** - scrambling identities in real data while keeping its behaviour.
+- **Synthetic data** - completely made-up data that behaves realistically.
+- **Hook** - a small script that runs automatically at a set moment (here: to block real data).
+- **Spoofing** - placing fake orders to manipulate a market; our worked example.

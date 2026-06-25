@@ -38,4 +38,4 @@ Known gaps and candidate enhancements.
 ## 7. Review trail
 - [ ] SME reviewed detection logic
 - [ ] `compliance-reviewer` confirmed auditability, thresholds, no secrets/PII, tests
-- Tuning history: <date — change — rationale>
+- Tuning history: <date - change - rationale>

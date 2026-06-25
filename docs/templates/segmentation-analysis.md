@@ -1,9 +1,9 @@
-# Segmentation Analysis — <SCENARIO / POPULATION>
+# Segmentation Analysis - <SCENARIO / POPULATION>
 
 > Produced by `data-analyst`. A risk-based segmentation of a surveillance population so detection
 > is calibrated per segment rather than one global threshold. Statistical analysis on
-> **synthetic/masked data only — no real PII/MNPI** (§5). Authored in `.md`, rendered to `.html`.
-> Feeds the **Threshold Tuning Pack** (`docs/templates/threshold-tuning-pack.md`) — segments here
+> **synthetic/masked data only - no real PII/MNPI** (§5). Authored in `.md`, rendered to `.html`.
+> Feeds the **Threshold Tuning Pack** (`docs/templates/threshold-tuning-pack.md`) - segments here
 > become its per-segment rows. Every figure carries its basis: 📊 measured vs 🧠 inferred.
 
 | | |
@@ -29,7 +29,7 @@ The segments, their precise membership rule (so a record lands in exactly one), 
 | <S2> | <e.g. illiquid / small-cap> | <n> | <%> | 📊 |
 
 ## 3. Per-segment behaviour profile
-The distribution of the signal metric per segment — this is what makes a per-segment threshold
+The distribution of the signal metric per segment - this is what makes a per-segment threshold
 defensible. Use robust stats (median/IQR), not just the mean.
 
 | Segment | Metric | Median | IQR / spread | P90 | P95 | P99 | Basis |
@@ -42,7 +42,7 @@ tail), and why it differs from neighbours. These rows hand directly to the tunin
 | Segment | Suggested basis | Indicative threshold | Why it differs |
 |---|---|---|---|
 
-## 5. Validation — segments are stable & meaningful
+## 5. Validation - segments are stable & meaningful
 Evidence the segmentation is sound, not arbitrary: segments are **distinct** (behaviour profiles
 differ materially), **stable** (hold over time / sub-periods), and **populated** (no thin
 segments that can't be calibrated; respects `k_anonymity` in `config/masking-schema.yaml`).

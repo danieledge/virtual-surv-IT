@@ -17,20 +17,20 @@ Run the **orchestrator–workers** pattern, agile and iterative:
    (objective · scope boundaries / what other units own · inputs/artifacts to read · expected
    output) so units don't duplicate or leave gaps. Then chain each through `code-reviewer` →
    `compliance-reviewer`. Independent units can run in parallel.
-3. **Test independently** — `qa-engineer` (not the builder) designs and runs tests
+3. **Test independently** - `qa-engineer` (not the builder) designs and runs tests
    appropriate to the deliverable: true-positive and false-positive cases for detection
    logic; input/output, schema and edge-case tests for pipelines/transforms; idempotency/
    error-path tests for scripts. Synthetic data only (§5); thresholds documented (§4).
-4. **Review** — `code-reviewer` (deep) and, where it processes data at volume,
+4. **Review** - `code-reviewer` (deep) and, where it processes data at volume,
    `performance-reviewer`; then `compliance-reviewer`. Loop fixes until no Critical remains.
 5. **Maintain the RTM** (`docs/templates/rtm.md`): every requirement → code → test →
-   obligation. A gap is a blocker — surface it to the user.
+   obligation. A gap is a blocker - surface it to the user.
 6. **Keep a status log**; return to the user at each gate with decisions and blockers.
 7. **Meet the Definition of Done** (`docs/DEFINITION-OF-DONE.md`) and run `/handover`.
    **By default deliver one consolidated Delivery Report** (`docs/templates/delivery-report.md`
-   — RTM, review, performance, compliance, QA, handover, change/ops as sections); split into
+   - RTM, review, performance, compliance, QA, handover, change/ops as sections); split into
    separate artifacts only if asked. Save under `artifacts/`, as `.md` and rendered `.html`.
-   Confirm the **project's test suite** passes (use the target's framework — `pytest`, Pester,
-   JUnit/ScalaTest, Jest, etc. — not an assumed one) and record the exact command.
+   Confirm the **project's test suite** passes (use the target's framework - `pytest`, Pester,
+   JUnit/ScalaTest, Jest, etc. - not an assumed one) and record the exact command.
 
 Stop for human approval before anything that touches live systems.

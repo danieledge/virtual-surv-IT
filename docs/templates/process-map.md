@@ -1,8 +1,8 @@
-# Process Map — <PROCESS NAME>
+# Process Map - <PROCESS NAME>
 
 > Produced by `business-analyst` (BPMN-style). Captures current- and target-state flow,
 > actors, decisions, controls and hand-offs for a surveillance process. Authored in `.md`,
-> rendered to `.html`. Synthetic illustrations only — no real data (§5).
+> rendered to `.html`. Synthetic illustrations only - no real data (§5).
 
 | | |
 |---|---|
@@ -14,7 +14,7 @@
 | **Outcome** | <what "done" looks like> |
 
 ## 1. Overview
-One paragraph: what the process does and why it exists (link the obligation it supports, §2 —
+One paragraph: what the process does and why it exists (link the obligation it supports, §2 -
 e.g. alert triage feeding SAR/STR decisioning).
 
 ## 2. Actors / swimlanes
@@ -45,7 +45,7 @@ flowchart TD
     C -- No --> X[/Raise data-quality exception/]
     C -- Yes --> D[Run detection scenarios]
     D --> E{Alert raised?}
-    E -- No --> Z([End — no action])
+    E -- No --> Z([End - no action])
     E -- Yes --> F[Analyst triage]
     F --> G{Escalate?}
     G -- No --> H[Close with rationale]

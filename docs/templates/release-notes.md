@@ -1,4 +1,4 @@
-# Release Notes — <TITLE> <VERSION>
+# Release Notes - <TITLE> <VERSION>
 
 > Drafted by the virtual team. Publish/distribute per your normal release process.
 > Authored in `.md`, rendered to `.html`.

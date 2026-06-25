@@ -10,12 +10,12 @@ model: sonnet
 
 ## Checks
 
-- **Pattern consistency** — does this follow existing patterns, or solve a solved problem a new way?
-- **Abstraction** — reaching into private internals; inappropriate coupling between modules.
-- **Duplication** — logic that should be a shared utility; near-duplicates to consolidate.
-- **Dependencies** — are new deps justified? Any circular dependency introduced?
-- **Separation of concerns** — business/detection logic mixed with infrastructure; layering violations.
-- **Auditability (this domain)** — is the alert→logic→obligation trace still clear after the
+- **Pattern consistency** - does this follow existing patterns, or solve a solved problem a new way?
+- **Abstraction** - reaching into private internals; inappropriate coupling between modules.
+- **Duplication** - logic that should be a shared utility; near-duplicates to consolidate.
+- **Dependencies** - are new deps justified? Any circular dependency introduced?
+- **Separation of concerns** - business/detection logic mixed with infrastructure; layering violations.
+- **Auditability (this domain)** - is the alert→logic→obligation trace still clear after the
   change, or has the restructure obscured it? (Flag for `compliance-reviewer` to confirm.)
 
 ## Output

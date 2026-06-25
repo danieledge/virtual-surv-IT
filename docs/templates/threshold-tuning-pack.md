@@ -1,9 +1,9 @@
-# Threshold Tuning Pack — <SCENARIO / RULE>
+# Threshold Tuning Pack - <SCENARIO / RULE>
 
 > Produced by `tuning-analyst`. Evidence for a threshold/parameter change, defensible to a
 > regulator. Statistical analysis on **synthetic/masked data only** (§5). Authored in `.md`,
 > rendered to `.html`. Threshold changes to live logic are implemented by `rules-developer` and
-> signed off by `model-validator` — this pack is the recommendation, not the production change.
+> signed off by `model-validator` - this pack is the recommendation, not the production change.
 
 | | |
 |---|---|
@@ -24,26 +24,26 @@ Calibrate per segment, not one global threshold. State the segments and why.
 |---|---|---|---|
 
 ## 3. Candidate thresholds & statistical rationale
-Derived from the genuine population's distribution — percentile / **std-dev multiple** / tail
+Derived from the genuine population's distribution - percentile / **std-dev multiple** / tail
 (EVT for rare large events). Record the rationale + date (§4); no round numbers without it.
 
 | Segment | Current | Candidate | Basis (e.g. P95 / μ+3σ) | Rationale |
 |---|---|---|---|---|
 
-## 4. Above-The-Line (ATL) test — precision among flagged
+## 4. Above-The-Line (ATL) test - precision among flagged
 Sample flagged activity at the candidate threshold; label true vs false positive.
 
 | Segment | Sampled | True positives | False positives | Precision |
 |---|---|---|---|---|
 
-## 5. Below-The-Line (BTL) test — what's missed just under the line
+## 5. Below-The-Line (BTL) test - what's missed just under the line
 Sample activity just below the candidate; estimate false negatives / coverage gaps. **This is
 what stops tuning creating blind spots.**
 
 | Segment | Sampled (sub-threshold) | Looks suspicious (missed) | Coverage risk |
 |---|---|---|---|
 
-## 6. Dry-run — projected volume & population change
+## 6. Dry-run - projected volume & population change
 Candidate parameters over the historical (masked/synthetic) window.
 
 | Segment | Alerts now | Alerts (candidate) | Δ volume | Population added / dropped |

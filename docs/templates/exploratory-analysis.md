@@ -1,8 +1,8 @@
-# Exploratory Analysis — <QUESTION>
+# Exploratory Analysis - <QUESTION>
 
-> Produced by `data-analyst`. An evidenced answer to a specific question — the exploratory loop of
+> Produced by `data-analyst`. An evidenced answer to a specific question - the exploratory loop of
 > question → analysis → insight, with every finding traceable to figures. Analysis on
-> **synthetic/masked data only — no real PII/MNPI** (§5). Authored in `.md`, rendered to `.html`.
+> **synthetic/masked data only - no real PII/MNPI** (§5). Authored in `.md`, rendered to `.html`.
 > Every finding states its basis: **📊 measured** (a number computed from the data) vs **🧠
 > inferred** (a judgement/projection beyond what the data directly shows). Never present 🧠 as 📊.
 
@@ -15,13 +15,13 @@
 | **Headline finding** | <one-line answer> |
 
 ## 1. Question & motivation
-The precise question and why it matters now — the decision or risk it bears on (§2 where
+The precise question and why it matters now - the decision or risk it bears on (§2 where
 regulatory).
 
 ## 2. Approach & data used
 The datasets (with dictionary pointers), the masking applied (`config/masking-schema.yaml`), the
 method (aggregation / distribution / correlation / cohort), and the tools. State scope boundaries
-— what this analysis does **not** cover.
+- what this analysis does **not** cover.
 
 | Dataset | Dictionary | Grain | Records | Masking |
 |---|---|---|---|---|
@@ -36,7 +36,7 @@ what would change the conclusion (small n, synthetic artefacts, confounders).
 | 2 | <e.g. likely indicates layering pattern> | <reasoned from #1> | 🧠 | <not yet confirmed; needs labelled cases> |
 
 ## 4. Interpretation
-What the findings mean together — the story behind the numbers. Be explicit where you cross from
+What the findings mean together - the story behind the numbers. Be explicit where you cross from
 📊 measured into 🧠 inferred interpretation.
 
 ## 5. Recommendation & next action

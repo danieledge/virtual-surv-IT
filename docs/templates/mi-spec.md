@@ -1,8 +1,8 @@
-# MI / Dashboard Specification — <DASHBOARD / REPORT>
+# MI / Dashboard Specification - <DASHBOARD / REPORT>
 
 > Produced by `data-analyst`. The build-ready specification for a management-information report or
-> dashboard — what it answers, the metrics and their exact calculations, sources and lineage,
-> refresh and access. Built and populated on **synthetic/masked data only — no real PII/MNPI**
+> dashboard - what it answers, the metrics and their exact calculations, sources and lineage,
+> refresh and access. Built and populated on **synthetic/masked data only - no real PII/MNPI**
 > (§5). Authored in `.md`, rendered to `.html`. Every figure carries its basis: 📊 measured (a
 > real number computed from the data) vs 🧠 inferred (estimate/projection).
 
@@ -55,13 +55,13 @@ masking config. Refresh dependencies/SLAs.
 
 ## 7. Access, retention & governance
 Who can see it (least privilege), retention period, and the reminder that masked output is still
-personal data (§5) — keep it governed.
+personal data (§5) - keep it governed.
 
 | Aspect | Value |
 |---|---|
 | Access / roles | <...> |
 | Retention | <...> |
-| Classification | masked — still personal data (§5) |
+| Classification | masked - still personal data (§5) |
 
 ## 8. Next steps
 Build → `platform-engineer` / `data-analyst`; sign-off → business owner. Define the acceptance

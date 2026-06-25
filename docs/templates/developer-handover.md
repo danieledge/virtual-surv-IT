@@ -1,4 +1,4 @@
-# Developer Handover — <TITLE>
+# Developer Handover - <TITLE>
 
 > Everything a developer needs to take this over, run it, and extend it safely. Authored in
 > `.md`, rendered to `.html`.
@@ -28,7 +28,7 @@ their responsibilities. Diagram welcome.
 Exact, copy-pasteable commands. Note any prerequisites.
 
 ## 4. Configuration & dependencies
-Config options, environment variables (secrets via env only — never in code), external
+Config options, environment variables (secrets via env only - never in code), external
 dependencies and versions.
 
 ## 5. Key design decisions
@@ -38,7 +38,7 @@ Link the ADRs (`docs/templates/adr.md`) and summarise the important trade-offs a
 Inputs/outputs, classification, and how synthetic/masked data is used (CLAUDE.md §5).
 
 ## 7. Known limitations & technical debt
-Honest list of what's incomplete, fragile, or deliberately deferred — with severity.
+Honest list of what's incomplete, fragile, or deliberately deferred - with severity.
 
 ## 8. How to extend
 Where to add a new rule / pipeline stage / script; conventions to follow; what tests to add.

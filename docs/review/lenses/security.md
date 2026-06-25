@@ -11,17 +11,17 @@ on the changed code (audit mode: pre-existing too).
 ## Checks
 
 ### Injection
-- SQL injection (string interpolation in queries) — CWE-89.
+- SQL injection (string interpolation in queries) - CWE-89.
 - **Command injection** (user/data input into `exec`/`subprocess`/`spawn`; especially
-  **Bash/PowerShell** glue) — CWE-78. Path traversal — CWE-22.
+  **Bash/PowerShell** glue) - CWE-78. Path traversal - CWE-22.
 - LDAP/XPath/template injection.
 
 ### Deserialisation & parsing
-- Insecure deserialisation (`pickle`, Java native, unsafe YAML `load`) — CWE-502.
+- Insecure deserialisation (`pickle`, Java native, unsafe YAML `load`) - CWE-502.
 - XXE / unsafe XML.
 
-### Secrets & data exposure  *(regulated — never filtered, §5)*
-- Hardcoded API keys, passwords, tokens, connection strings, private keys — CWE-798.
+### Secrets & data exposure  *(regulated - never filtered, §5)*
+- Hardcoded API keys, passwords, tokens, connection strings, private keys - CWE-798.
 - **Real PII/MNPI or raw records** in code, logs, errors, or fixtures (CLAUDE.md §5).
 - Sensitive data in logs / verbose stack traces / PII in error messages.
 
@@ -31,7 +31,7 @@ on the changed code (audit mode: pre-existing too).
 ### Other
 - SSRF, mass assignment, weak crypto / weak randomness for security use.
 
-> **Never filter** secrets or real-data exposure even if pre-existing or silenced — they are
+> **Never filter** secrets or real-data exposure even if pre-existing or silenced - they are
 > regulatory findings (`docs/review/false-positive-rules.md`).
 
 ## Output

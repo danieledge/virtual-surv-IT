@@ -17,7 +17,7 @@ decision necessary now.
 What we are doing, stated plainly.
 
 ## Consequences
-The trade-offs — positive and negative — that follow from the decision, including any new
+The trade-offs - positive and negative - that follow from the decision, including any new
 risks or obligations.
 
 ## Alternatives considered

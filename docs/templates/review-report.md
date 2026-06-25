@@ -1,10 +1,10 @@
-# Code & Compliance Review Report — <TITLE>
+# Code & Compliance Review Report - <TITLE>
 
 > Output of a **deep or audit review** (`/deep-review`, `/audit-review`, or `code-reviewer`
 > directly). Produced by `code-reviewer` (engineering quality & security) and, for audit,
 > `compliance-reviewer` (auditability & regulatory trail). Authored in `.md`, rendered to `.html`.
 >
-> **Format source of truth:** `docs/review/output-format.md` — the console scoreboard, the
+> **Format source of truth:** `docs/review/output-format.md` - the console scoreboard, the
 > severity lanes (incl. 🔵 style & form), the evidence basis (📊/🧠) and the diff-fix shape. This
 > template is that format laid out as a standalone file; keep them consistent.
 
@@ -23,12 +23,12 @@ anything) must change first.
 
 ## 2. Findings
 Confidence score per `docs/code-review-method.md` (Critical 95–100, Warning 80–94, Medium
-70–79 — deep only). **Each finding carries a concrete `diff`-style fix + "why it works"** and a
+70–79 - deep only). **Each finding carries a concrete `diff`-style fix + "why it works"** and a
 **Status** (`docs/review/output-format.md`): 🔴 Open · ✅ Fixed · ⚖️ Accepted · ⏭️ Deferred ·
 **🔴 Open (needs human review)** when there's no straightforward/safe fix. If there are none:
 *✅ No significant issues found* (still show the filtered counts below).
 
-**Disposition summary:** ✅ _N_ fixed · 🔴 _N_ open · ⚖️ _N_ accepted · ⏭️ _N_ deferred — so it's
+**Disposition summary:** ✅ _N_ fixed · 🔴 _N_ open · ⚖️ _N_ accepted · ⏭️ _N_ deferred - so it's
 never ambiguous what was actioned. A ❌ verdict must list the Open items explicitly.
 
 ### 🔴 Critical (must fix)
@@ -51,7 +51,7 @@ never ambiguous what was actioned. A ❌ verdict must list the Open items explic
 | # | File:line | Issue | Conf. | Standard / rule | Recommended fix |
 |---|-----------|-------|-------|-----------------|-----------------|
 
-### 🔇 Filtered (transparency — show what was not reported)
+### 🔇 Filtered (transparency - show what was not reported)
 | Reason | Count |
 |--------|-------|
 | Pre-existing (not in diff) | |
@@ -73,7 +73,7 @@ never ambiguous what was actioned. A ❌ verdict must list the Open items explic
 | ShellCheck / PSScriptAnalyzer / SpotBugs / … | | |
 | Semgrep / gitleaks | | |
 
-State explicitly which analysers were unavailable — nothing silently skipped.
+State explicitly which analysers were unavailable - nothing silently skipped.
 
 ## 5. Architectural notes *(deep review only)*
 - Pattern consistency: ✅/⚠️/❌ …
@@ -86,15 +86,15 @@ State explicitly which analysers were unavailable — nothing silently skipped.
 - **Blast radius:** … (what else could this change break?)
 - **Breaking changes:** …
 
-## 7. Developer guidance — improving future code *(always include, even on a clean pass)*
+## 7. Developer guidance - improving future code *(always include, even on a clean pass)*
 Constructive, non-blocking guidance on the **original coding style overall** and how the author
-could improve in **future** work — patterns, structure, naming, testing/documentation habits.
+could improve in **future** work - patterns, structure, naming, testing/documentation habits.
 2–4 short points. If the code is strong, say so and name what's done well. The developer should
-always leave with something to learn, not just a pass/fail. (These are 🔵 style/form — they do
+always leave with something to learn, not just a pass/fail. (These are 🔵 style/form - they do
 **not** affect the verdict.)
 
 ## 8. Recommendation & next steps
 Fixes routed to the relevant builder; re-review loop until no Critical remains. **State the
-disposition** (✅ fixed / 🔴 open / ⚖️ accepted / ⏭️ deferred) — and for anything with no
+disposition** (✅ fixed / 🔴 open / ⚖️ accepted / ⏭️ deferred) - and for anything with no
 straightforward fix, mark it **🔴 Open (needs human developer review)** with the reason and the
 options, rather than guessing a fix.

@@ -1,8 +1,8 @@
-# Regulatory-Change Impact Assessment — <CHANGE NAME>
+# Regulatory-Change Impact Assessment - <CHANGE NAME>
 
 > Produced by `business-analyst` with the relevant SME (`tm-sme` / `trade-surveillance-sme` /
 > `comms-surveillance-sme`). Assesses what a changed obligation means for scenarios, controls,
-> data and specs. Authored in `.md`, rendered to `.html`. Synthetic illustrations only — no
+> data and specs. Authored in `.md`, rendered to `.html`. Synthetic illustrations only - no
 > real data (§5).
 
 | | |
@@ -56,7 +56,7 @@ Where the current solution does **not** yet meet the new obligation, and the ris
 
 ## 6. Risk & timeline
 Overall delivery risk vs. the effective date, key dependencies, and a recommendation
-(e.g. phased delivery, interim manual control). **Close with next-step options** — never a
+(e.g. phased delivery, interim manual control). **Close with next-step options** - never a
 dead end.
 
 ## 7. Sign-off

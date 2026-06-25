@@ -1,4 +1,4 @@
-# Engagement Brief — <TITLE>
+# Engagement Brief - <TITLE>
 
 > The PM's intake summary. Produced at the start of every engagement, before work begins,
 > and updated as decisions are made. Authored in `.md`, rendered to `.html`.
@@ -29,7 +29,7 @@ review report, RTM, audit pack. Each produced in `.md` + `.html`.
 
 ## 6. Proposed approach & routing plan
 The entry point and the chain of specialists, e.g. *business-analyst → SME →
-rules-developer → code-reviewer → compliance-reviewer*. Be flexible — only the stages this
+rules-developer → code-reviewer → compliance-reviewer*. Be flexible - only the stages this
 engagement needs.
 
 ## 7. Risks & dependencies

@@ -1,4 +1,4 @@
-# Functional Specification Document — <TITLE>
+# Functional Specification Document - <TITLE>
 
 > Drafted by `business-analyst`, reviewed by the domain SME. Structure follows
 > ISO/IEC/IEEE 29148; acceptance criteria in **Gherkin** (Given/When/Then). Authored in
@@ -24,11 +24,11 @@ Each traces back to a BRD requirement.
 
 ## 3. Data requirements
 Inputs, fields, sources, frequency, classification (PII/MNPI). **Synthetic/masked only in
-this repo — see CLAUDE.md §5 and the masking pipeline.**
+this repo - see CLAUDE.md §5 and the masking pipeline.**
 
 ## 4. Detection logic / behaviour
 The intended logic at a functional level; thresholds and their rationale (no undocumented
-magic numbers — §4).
+magic numbers - §4).
 
 ## 5. Interfaces & integration
 Upstream/downstream systems, formats, contracts.

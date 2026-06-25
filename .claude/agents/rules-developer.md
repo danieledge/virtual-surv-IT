@@ -21,7 +21,7 @@ When invoked:
 1. Confirm the spec and the acceptance criteria.
 2. Implement the rule logic following the stack and conventions in CLAUDE.md.
 3. Write tests covering known true-positive and false-positive cases, using synthetic or
-   masked data only — never real records.
+   masked data only - never real records.
 4. Run the tests and report results.
 5. Summarise what you built and hand off to `compliance-reviewer`.
 

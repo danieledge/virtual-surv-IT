@@ -1,8 +1,8 @@
-# Comms Surveillance Lexicon Specification — <LEXICON / RISK NAME>
+# Comms Surveillance Lexicon Specification - <LEXICON / RISK NAME>
 
 > Produced by `business-analyst` with `comms-surveillance-sme`. Specifies and governs a comms
 > lexicon / risk-flag set for e-comms and voice monitoring. Terms and examples use
-> **synthetic/masked data only** — never paste real comms (§5). Authored in `.md`, rendered to
+> **synthetic/masked data only** - never paste real comms (§5). Authored in `.md`, rendered to
 > `.html`. NLP/risk-model build is owned by `ml-engineer` (then `model-validator`); this is the
 > specification, not the production model.
 
@@ -16,25 +16,25 @@
 
 ## 1. Risk / behaviour targeted
 The conduct this lexicon is meant to surface, in plain terms, and the obligation it supports
-(cite the article/rule, CLAUDE.md §2 — e.g. market abuse detection under **MAR**; comms recording
-under **MiFID II Art 16(7)** / CDR (EU) 2017/565 Art 76, or US **17a-4 / FINRA 4511** — *citations
+(cite the article/rule, CLAUDE.md §2 - e.g. market abuse detection under **MAR**; comms recording
+under **MiFID II Art 16(7)** / CDR (EU) 2017/565 Art 76, or US **17a-4 / FINRA 4511** - *citations
 verified, see the comms-surveillance policy §3*).
 
 > *Note: the lexicon **design/tuning practice** below (term selection, scoring, FP reduction) is
-> grounded in industry practice, not yet verified against a primary source — treat as guidance.*
+> grounded in industry practice, not yet verified against a primary source - treat as guidance.*
 
 ## 2. Terms & phrases
-Each term with rationale, language and channel — no opaque keyword lists.
+Each term with rationale, language and channel - no opaque keyword lists.
 
 | Term / phrase | Rationale (why it signals risk) | Language | Channel(s) | Match type (exact / stem / regex / proximity) |
 |---|---|---|---|---|
 
 ## 3. Scoring / weighting
-How term hits combine into an alert score — weights, proximity/co-occurrence boosts, thresholds.
+How term hits combine into an alert score - weights, proximity/co-occurrence boosts, thresholds.
 Record the rationale for each weight (§4).
 
 ## 4. NLP / risk-model notes
-Beyond keywords — negation handling, context windows, sentiment/intent classification,
+Beyond keywords - negation handling, context windows, sentiment/intent classification,
 multilingual handling, voice-to-text confidence. Note model dependencies for `ml-engineer`.
 
 ## 5. Expected performance

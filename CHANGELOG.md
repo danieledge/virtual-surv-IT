@@ -3,13 +3,13 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [0.3.2] — 2026-06-25
+## [0.3.2] - 2026-06-25
 
 ### Added
-- **`docs/agent-design.md`** — the team as a worked example of a well-built Claude Code agent
+- **`docs/agent-design.md`** - the team as a worked example of a well-built Claude Code agent
   set-up: design principles, per-agent model-tiering rationale, deliberate deviations, the
   16-agent justification, and a best-practice **conformance matrix**.
-- **`docs/prepare-data-roadmap.md`** — the credible "throw anything at it" path for `/prepare-data`
+- **`docs/prepare-data-roadmap.md`** - the credible "throw anything at it" path for `/prepare-data`
   (schema-inference profiler, NER/Presidio redaction, format adapters, real synthetic), with the
   assisted-not-blind framing and non-negotiable safety gates.
 
@@ -21,20 +21,20 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 - **Every agent has a human name** (Morgan PM + 16 specialists), **globally + gender-diverse**;
   README "Meet the team" rewritten as playful, compliance/IT-flavoured staff profiles with
   Slack-status one-liners. `review-scorer` retitled **Review Coordinator**.
-- **README navigation overhaul** — badges, a jump-nav, emoji section headers.
+- **README navigation overhaul** - badges, a jump-nav, emoji section headers.
 
 ### Verified
 - **Comms-surveillance regulatory citations VERIFIED** against primary sources (MiFID II Art 16(7)
-  / CDR 2017/565 Art 76, SEC 17a-4(b)(4) / FINRA 4511, the off-channel enforcement sweep) — folded
+  / CDR 2017/565 Art 76, SEC 17a-4(b)(4) / FINRA 4511, the off-channel enforcement sweep) - folded
   into the comms templates; comms *practice* detail remains foundational (flagged).
 
-## [0.3.1] — 2026-06-25
+## [0.3.1] - 2026-06-25
 
 ### Fixed
-- **`tuning-analyst` was missing from `plugin.json` `agents`** — the flagship 0.3.0 agent would
+- **`tuning-analyst` was missing from `plugin.json` `agents`** - the flagship 0.3.0 agent would
   silently fail to load on a plugin install (project-mode dir-discovery masked it). Now registered.
 
-### Changed — best-practice review remediation
+### Changed - best-practice review remediation
 - **Roster:** resolved the `data-analyst`⇄`tuning-analyst` overlap (data-analyst cedes threshold
   calibration/ATL-BTL/segmentation to tuning-analyst); added §5 data-safety lines to
   `model-validator` + `platform-engineer`; fixed `compliance-reviewer`'s Bash line that implied it
@@ -48,29 +48,29 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 - **Docs:** fixed stale counts; rewrote the README "Meet the team" section to be more engaging
   (and corrected stale performance-reviewer/code-reviewer detail).
 
-## [0.3.0] — 2026-06-25
+## [0.3.0] - 2026-06-25
 
-### Added — Data-analyst & business-analyst expansion (research-grounded)
-- **`tuning-analyst`** agent — surveillance threshold calibration / alert tuning: risk-based
+### Added - Data-analyst & business-analyst expansion (research-grounded)
+- **`tuning-analyst`** agent - surveillance threshold calibration / alert tuning: risk-based
   segmentation, Above-The-Line / Below-The-Line testing, dry-run alerts, FP-rate & alert-to-SAR MI.
   Extended to trade (peer-group/benchmark, RTS 25 timestamp prerequisite) and comms (lexicon/NLP)
   tuning, with the FCA MW79 "four-component, not calibration-only" rule.
-- **Workflows** — `/tune-thresholds`, `/validate-tm-model`, `/assess-coverage`,
+- **Workflows** - `/tune-thresholds`, `/validate-tm-model`, `/assess-coverage`,
   `/elicit-requirements`, `/reg-change-impact`, `/analyse-data`, and `/meet-the-team`.
-- **Templates (16)** — threshold-tuning-pack, tm-model-validation, surveillance-coverage-assessment,
+- **Templates (16)** - threshold-tuning-pack, tm-model-validation, surveillance-coverage-assessment,
   trade-scenario-design, lexicon-spec, comms-surveillance-policy; stakeholder-analysis,
   elicitation-requirements, process-map (BPMN), user-stories, uat-plan, reg-change-impact,
   data-dictionary, mi-spec, segmentation-analysis, exploratory-analysis.
 
 ### Changed
-- **`requirements-analyst` → `business-analyst`** — rebranded and broadened from spec-writer to the
+- **`requirements-analyst` → `business-analyst`** - rebranded and broadened from spec-writer to the
   full BABOK lifecycle (elicitation, stakeholder/process analysis, UAT, traceability, reg-change
   impact, obligation→detection). All references updated repo-wide.
-- **Performance review is static-only** for now — profilers/benchmarks removed; findings are
+- **Performance review is static-only** for now - profilers/benchmarks removed; findings are
   inference-only (📊 only for explicit coded costs read in source). Re-enable via the consent flow.
 
-### Added — Safety
-- **Code-execution gate** (`guard-code-execution.py`) — reviews are static by default; running
+### Added - Safety
+- **Code-execution gate** (`guard-code-execution.py`) - reviews are static by default; running
   tests/profilers is blocked unless authorised by the `.claude/.exec-consent` marker (written on
   user consent) or `CST_ALLOW_EXEC=1`, behind a prominent intake disclaimer (CLAUDE.md §7).
 
@@ -79,7 +79,7 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   (MAR Art 16(2) / CDR 2016/957 / RTS 24 (2017/580) / RTS 22 (2017/590) / RTS 25) are **verified
   against primary sources** (EUR-Lex, legislation.gov.uk, ESMA).
 - **Unverified (flagged):** comms specifics (MiFID II Art 16(7), SEC 17a-4 / FINRA 4511, the
-  off-channel sweep), per-scenario tuning practice, and the DA/BA boundary — see `docs/house-rules.md`.
+  off-channel sweep), per-scenario tuning practice, and the DA/BA boundary - see `docs/house-rules.md`.
 
 ## [0.2.0]
 

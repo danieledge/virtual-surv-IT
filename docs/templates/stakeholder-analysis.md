@@ -1,8 +1,8 @@
-# Stakeholder Analysis — <TITLE>
+# Stakeholder Analysis - <TITLE>
 
 > Produced by `business-analyst` as part of elicitation (BABOK *Stakeholder Analysis*).
 > Maps who is affected, who decides, and how we keep each party engaged. Authored in `.md`,
-> rendered to `.html`. Names are illustrative — synthetic illustrations only, no real data (§5).
+> rendered to `.html`. Names are illustrative - synthetic illustrations only, no real data (§5).
 
 | | |
 |---|---|
@@ -41,12 +41,12 @@ before, I is informed after.
 | Deploy & operate | IT team | IT team | business-analyst | … |
 
 ## 4. Power / interest grid
-Place each STK-ID in a quadrant — it sets the engagement posture.
+Place each STK-ID in a quadrant - it sets the engagement posture.
 
 | | **Low interest** | **High interest** |
 |---|---|---|
-| **High influence** | Keep satisfied — <IDs> | Manage closely — <IDs> |
-| **Low influence** | Monitor — <IDs> | Keep informed — <IDs> |
+| **High influence** | Keep satisfied - <IDs> | Manage closely - <IDs> |
+| **Low influence** | Monitor - <IDs> | Keep informed - <IDs> |
 
 ## 5. Communication & engagement plan
 | Stakeholder | What they need | Format | Cadence | Owner |
@@ -55,7 +55,7 @@ Place each STK-ID in a quadrant — it sets the engagement posture.
 | STK-003 | change impact | walkthrough | at UAT | business-analyst |
 
 ## 6. Open questions & assumptions
-- <unknown stakeholder, undecided approver, assumed authority…> — the PM is clarifying.
+- <unknown stakeholder, undecided approver, assumed authority…> - the PM is clarifying.
 
 > Traceability: stakeholder needs become BRD-### requirements; approvers here appear in the
 > BRD §11 approvals and the RTM sign-off.

@@ -1,4 +1,4 @@
-# Business Requirements Document — <TITLE>
+# Business Requirements Document - <TITLE>
 
 > Drafted by `business-analyst`, overseen by the PM. Structure follows BABOK v3;
 > requirements are written in **EARS** syntax. Authored in `.md`, rendered to `.html`.
@@ -27,7 +27,7 @@ Who is affected / consulted / signs off.
 - **Out of scope:**
 
 ## 6. Business requirements (EARS)
-Each requirement has a stable ID and uses EARS — "When `<trigger>`, the system shall
+Each requirement has a stable ID and uses EARS - "When `<trigger>`, the system shall
 `<response>`" (or "The system shall `<response>`" for ubiquitous ones). Cite the driver.
 
 | ID | Requirement (EARS) | Regulatory / business driver | Priority |
