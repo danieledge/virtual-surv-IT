@@ -3,6 +3,31 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.3.2] — 2026-06-25
+
+### Added
+- **`docs/agent-design.md`** — the team as a worked example of a well-built Claude Code agent
+  set-up: design principles, per-agent model-tiering rationale, deliberate deviations, the
+  16-agent justification, and a best-practice **conformance matrix**.
+- **`docs/prepare-data-roadmap.md`** — the credible "throw anything at it" path for `/prepare-data`
+  (schema-inference profiler, NER/Presidio redaction, format adapters, real synthetic), with the
+  assisted-not-blind framing and non-negotiable safety gates.
+
+### Changed
+- **Model tiering scrutinised + rebalanced → 4 opus / 11 sonnet / 1 haiku.** opus reserved for
+  final/unchecked judgement or novel design (`model-validator`, `compliance-reviewer`,
+  `code-reviewer`, `ml-engineer`); SMEs + `performance-reviewer` (now static-only) downgraded to
+  sonnet; `compliance-reviewer` upgraded to opus. Rationale centralised in `docs/agent-design.md`.
+- **Every agent has a human name** (Morgan PM + 16 specialists), **globally + gender-diverse**;
+  README "Meet the team" rewritten as playful, compliance/IT-flavoured staff profiles with
+  Slack-status one-liners. `review-scorer` retitled **Review Coordinator**.
+- **README navigation overhaul** — badges, a jump-nav, emoji section headers.
+
+### Verified
+- **Comms-surveillance regulatory citations VERIFIED** against primary sources (MiFID II Art 16(7)
+  / CDR 2017/565 Art 76, SEC 17a-4(b)(4) / FINRA 4511, the off-channel enforcement sweep) — folded
+  into the comms templates; comms *practice* detail remains foundational (flagged).
+
 ## [0.3.1] — 2026-06-25
 
 ### Fixed
