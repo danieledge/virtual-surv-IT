@@ -174,7 +174,8 @@ set of requirements to build, and it works out the shape of the work and orchest
   | Spec / requirements (any deliverable) | `requirements-analyst` |
   | Detection rule / scenario logic | `rules-developer` |
   | Data pipeline / ETL / transformation or utility script / infra / IaC | `platform-engineer` |
-  | Analytics, tuning, data-quality, reconciliation, reporting | `data-analyst` |
+  | Exploratory analytics, FP analysis, data-quality, reconciliation, reporting/MI | `data-analyst` |
+  | Threshold calibration / alert tuning (ATL-BTL, segmentation) · TM model validation | `tuning-analyst` |
   | ML / AI component (then independent `model-validator`) | `ml-engineer` |
   | Independent testing & QA evidence | `qa-engineer` |
   | Code review · performance review · audit/compliance review | `code-reviewer` · `performance-reviewer` · `compliance-reviewer` |

@@ -36,7 +36,7 @@ money laundering, market manipulation and trader misconduct. Detection rules are
 deliverable: it equally builds **data pipelines / ETL, transformation and utility scripts
 (Python, Scala, Java, PowerShell, Bash), reconciliation and reporting jobs, tooling**, or
 simply **reviews** existing code. It runs in
-[Claude Code](https://claude.com/claude-code) as a set of 15 focused "subagents": some are
+[Claude Code](https://claude.com/claude-code) as a set of 16 focused "subagents": some are
 subject-matter experts who only advise, others engineer, test and review the solutions, and
 the work flows between them like a real engineering team.
 
@@ -116,7 +116,7 @@ didn't run** — re-type the commands above yourself.
 *(Just need it for one session? `claude --plugin-dir /path/to/virtual-surv-IT` loads it
 ephemerally, not saved.)*
 
-You get the 15 agents, the workflow commands and the raw-data guard hook in every project.
+You get the 16 agents, the workflow commands and the raw-data guard hook in every project.
 
 > **What works from another project vs repo-as-project.** The full **review/advisory** team —
 > `/engage`, all the reviews, the SMEs, Morgan — works everywhere. The helper-**script** steps
@@ -165,14 +165,15 @@ Prefer to drive a specific step yourself? Use the focused commands:
 ```
 .claude-plugin/               # plugin + marketplace manifests (installable via /plugin)
 CLAUDE.md                     # shared team handbook (example defaults — customise as needed)
-.claude/agents/               # 15 subagents (14 specialists + review-scorer helper)
+.claude/agents/               # 16 subagents (15 specialists + review-scorer helper)
   requirements-analyst.md     # BA            (build)
   tm-sme.md                   # AML SME       (advisory, read-only)
   trade-surveillance-sme.md   # SME           (advisory, read-only)
   comms-surveillance-sme.md   # SME           (advisory, read-only)
   rules-developer.md          # detection rules (build)
   platform-engineer.md        # pipelines/ETL/scripts/infra (build)
-  data-analyst.md             # tuning, data-quality, reporting (build)
+  data-analyst.md             # analysis, FP analysis, data-quality, reporting/MI (build)
+  tuning-analyst.md           # threshold calibration / alert tuning (ATL-BTL) (build)
   ml-engineer.md              # AI/ML         (build)
   qa-engineer.md              # independent testing & QA evidence (build)
   model-validator.md          # independent model validation (advisory, read-only)
@@ -247,8 +248,8 @@ The team is a set of files you commit into your repo. To get the whole team — 
 agents — copy these:
 
 1. `CLAUDE.md` to your repo root (merge if you already have one) — the shared handbook.
-2. `.claude/agents/` — the 15 subagents.
-3. `.claude/skills/` — the 11 workflows (`/engage`, `/audit-review`, …); without these you
+2. `.claude/agents/` — the 16 subagents.
+3. `.claude/skills/` — the 13 workflows (`/engage`, `/audit-review`, …); without these you
    get agents but no front door.
 4. `.claude/hooks/` **and** `.claude/settings.json` — the always-on data-safety guard and its
    wiring. Don't skip these: they are the §5 control that keeps real data away from the model.

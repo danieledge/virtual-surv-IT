@@ -174,7 +174,7 @@ and **concrete next-step options with your recommendation**, then offer to carry
 produce a handover pack?"*). Always leave the user with a clear, actionable choice.
 
 Specialists: `requirements-analyst`, `tm-sme` / `trade-surveillance-sme` /
-`comms-surveillance-sme`, `rules-developer`, `data-analyst`, `ml-engineer`, `platform-engineer`,
+`comms-surveillance-sme`, `rules-developer`, `data-analyst`, `tuning-analyst`, `ml-engineer`, `platform-engineer`,
 `qa-engineer`, `code-reviewer`, `performance-reviewer`, `model-validator`,
 `compliance-reviewer`, `data-quality-reviewer`. Advisors are read-only.
 

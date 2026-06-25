@@ -45,7 +45,7 @@ safety rails that stop confidential data ever reaching the AI.
   So an agent can actually *do* work (open files, write code, run it) rather than only
   chatting about it.
 
-- **Subagent** — one agent set up for **a single, focused role**. This project has 15 of
+- **Subagent** — one agent set up for **a single, focused role**. This project has 16 of
   them. Each has a short "job description" (a small text file in `.claude/agents/`) telling
   it what it's responsible for and what it's allowed to touch.
 
@@ -70,7 +70,8 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 | `trade-surveillance-sme` | 🧠 Advisor | Market-abuse expert (spoofing, insider dealing…) |
 | `comms-surveillance-sme` | 🧠 Advisor | Trader-chat / email monitoring expert |
 | `rules-developer` | 🔧 Builder | Writes the detection code + tests |
-| `data-analyst` | 🔧 Builder | Tunes the rules; also data-quality, reconciliation, reporting |
+| `data-analyst` | 🔧 Builder | Exploratory analysis, false-positive analysis, data-quality, reconciliation, reporting/MI |
+| `tuning-analyst` | 🔧 Builder | Calibrates alert thresholds with ATL/BTL testing, segmentation & model-performance MI |
 | `ml-engineer` | 🔧 Builder | Builds smarter AI-based detection when needed |
 | `qa-engineer` | 🔧 Builder | Independently tests it and evidences what was checked (for a real QA team) |
 | `model-validator` | 🧠 Advisor | Independently checks any AI model is sound and fair |
@@ -181,7 +182,7 @@ It's the template every other detection in this team would follow.
 | Path | What it is |
 |---|---|
 | `CLAUDE.md` | The team handbook — shared rules every AI member reads first |
-| `.claude/agents/` | The 15 job descriptions (one file per team member) |
+| `.claude/agents/` | The 16 job descriptions (one file per team member) |
 | `.claude/skills/` | Workflow shortcuts, e.g. `/new-scenario` runs the whole team chain |
 | `.claude/hooks/` | The automatic guard that blocks the AI from real data |
 | `rules/` | The actual detection code (the spoofing example) |
@@ -194,7 +195,7 @@ It's the template every other detection in this team would follow.
 
 ## 8. How you'd actually use it
 
-1. Open this project in **Claude Code** (Anthropic's coding tool). The 15 team members are
+1. Open this project in **Claude Code** (Anthropic's coding tool). The 16 team members are
    loaded but stay **dormant** — a normal session behaves like ordinary Claude Code until you
    invoke the team.
 2. **Start with the Project Manager — "Morgan".** Type `/engage` and describe whatever
@@ -221,7 +222,7 @@ it organises and does the work — you stay in the loop at the decision points.
 
 - **LLM** — the AI text engine (e.g. Claude). Reads instructions, writes text and code.
 - **Agent** — an LLM given a job and tools so it can actually do work.
-- **Subagent** — one agent set up for a single focused role (this repo has 15).
+- **Subagent** — one agent set up for a single focused role (this repo has 16).
 - **Orchestrator** — whoever hands tasks to the right agent and chains them together.
 - **Masking** — scrambling identities in real data while keeping its behaviour.
 - **Synthetic data** — completely made-up data that behaves realistically.
