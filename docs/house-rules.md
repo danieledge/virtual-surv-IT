@@ -40,12 +40,20 @@ standards.
     events (NEWO/CAME/FILL…) are the spoofing/layering substrate; **RTS 22 (CDR 2017/590**, MiFIR
     Art 26) is the *separate* T+1 transaction report; **RTS 25** clock-sync. Folded into
     `trade-scenario-design.md`.
-  - 🟡 **STILL UNVERIFIED — treat as foundational, not confirmed**: **comms** surveillance
-    (MiFID II **Art 16(7)** recording/retention, **SEC 17a-4 / FINRA 4511**, the off-channel /
-    WhatsApp sweep — `lexicon-spec.md`, `comms-surveillance-policy.md`); per-scenario **detection-
-    tuning practice** (spoofing/layering/etc. approaches; trade-vs-AML tuning); and the **DA-vs-BA
-    boundary** in trade/comms. Run a dedicated pass before relying on these specifics in a real
-    engagement.
+  - ✅ **Comms-surveillance regulatory spine — VERIFIED (primary sources: ESMA, EUR-Lex,
+    legislation.gov.uk, SEC, FINRA, CFTC)**: **MiFID II Art 16(7)** (record own-account + client-
+    order comms, incl. *intended* transactions even if none results; **5yr / up-to-7yr** retention)
+    detailed by **CDR (EU) 2017/565 Art 76** (written recording policy incl. internal comms; UK →
+    FCA **SYSC 10A**); **Exchange Act 17a-4(b)(4)** (business comms ≥3yr, first 2 readily accessible)
+    + **FINRA 4511(b)** (6yr default); **WORM or the Oct-2022 audit-trail alternative**; the
+    **off-channel sweep** (SEC Sep'22 16 firms >$1.1bn, Aug'23 11/$289m, Sep'23 10/$79m; CFTC Aug'23
+    4/$260m) — core failing = failure to **preserve/supervise** business comms on personal-device
+    channels. Folded into `comms-surveillance-policy.md` + `lexicon-spec.md`.
+  - 🟡 **STILL UNVERIFIED — treat as foundational**: comms-surveillance **practice** (lexicon
+    design/tuning, NLP risk-scoring, voice transcription, FP reduction) and **coverage-assurance
+    methodology**; per-scenario **detection-tuning practice** (spoofing/layering approaches; trade-
+    vs-AML tuning); the **DA-vs-BA boundary** in trade/comms. Run a dedicated pass before relying on
+    these in a real engagement.
 
 ## Execution safety
 - 2026-06-25 — **Hooks are declared in TWO files by design — keep them in sync.** The PreToolUse

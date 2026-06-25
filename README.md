@@ -31,8 +31,9 @@
 >   `/elicit-requirements`, `/reg-change-impact`, `/analyse-data` — plus **`/meet-the-team`**.
 > - **16 new deliverable templates** (BA + DA + trade/comms), grounded in two deep-research passes
 >   (IIBA BABOK, DAMA-DMBOK; FFIEC/FATF/SR 11-7; MAR Art 16 / RTS 24 / RTS 22 / RTS 25 **verified
->   against primary sources**). *Comms specifics (Art 16(7), SEC 17a-4) remain unverified — flagged
->   in `docs/house-rules.md`.*
+>   against primary sources**, as are the **comms** citations — MiFID II Art 16(7) / CDR 2017/565
+>   Art 76, SEC 17a-4(b)(4) / FINRA 4511, the off-channel sweep). *Lexicon/NLP **practice** detail
+>   remains foundational — flagged in `docs/house-rules.md`.*
 > - **Code-execution safety gate** — reviews are **static by default**; running tests/profilers is
 >   blocked by a hook unless authorised (consent marker or `CST_ALLOW_EXEC=1`), behind a prominent
 >   disclaimer. Performance review is static/inferred-only for now.

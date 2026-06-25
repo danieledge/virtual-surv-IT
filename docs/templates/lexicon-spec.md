@@ -16,8 +16,12 @@
 
 ## 1. Risk / behaviour targeted
 The conduct this lexicon is meant to surface, in plain terms, and the obligation it supports
-(cite the article/rule, CLAUDE.md §2 — e.g. market abuse detection under **MAR**, comms
-monitoring under **MiFID II Art 16(7)**).
+(cite the article/rule, CLAUDE.md §2 — e.g. market abuse detection under **MAR**; comms recording
+under **MiFID II Art 16(7)** / CDR (EU) 2017/565 Art 76, or US **17a-4 / FINRA 4511** — *citations
+verified, see the comms-surveillance policy §3*).
+
+> *Note: the lexicon **design/tuning practice** below (term selection, scoring, FP reduction) is
+> grounded in industry practice, not yet verified against a primary source — treat as guidance.*
 
 ## 2. Terms & phrases
 Each term with rationale, language and channel — no opaque keyword lists.
