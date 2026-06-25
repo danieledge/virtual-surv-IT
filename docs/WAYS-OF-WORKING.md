@@ -45,6 +45,11 @@ flowchart LR
 | Data to get ready (real or none) | `/prepare-data` | guided synthetic-or-mask → validate, before any agent sees it |
 | An idea / problem | `/engage` → `/write-brd` | discovery → BRD → FSD → build → review |
 | A BRD | `/brd-to-fsd` | functional spec + traceability |
+| A need to elicit (BA) | `/elicit-requirements` | stakeholder analysis → requirements → RTM (BABOK) |
+| A regulatory change | `/reg-change-impact` | obligation Δ → affected scenarios/controls/data → plan |
+| An analytical question (DA) | `/analyse-data` | exploratory analysis → evidenced insight report |
+| Tune a scenario / thresholds | `/tune-thresholds` | ATL-BTL + segmentation + volume↔coverage trade-off |
+| Periodic TM model check | `/validate-tm-model` | coverage / threshold / data-integrity / MI validation |
 | Existing code (detailed review) | `/deep-review` | dimension fan-out + confidence scoring |
 | Performance / will-it-scale | `/performance-review` | profiling evidence vs target volume |
 | Existing code (audit sign-off) | `/audit-review` | evaluator–optimizer review loop |
@@ -70,6 +75,18 @@ and `.html`** (via `scripts/render_html.py`).
 | Architecture Decision Record | `adr.md` | **ADR** (Nygard) |
 | Requirements Traceability Matrix | `rtm.md` | **RTM** — the audit golden thread |
 | Scenario spec / doc | `scenario-spec.md`, `scenario-doc.md` | repo convention |
+| Stakeholder analysis | `stakeholder-analysis.md` | **BABOK** (RACI, power/interest) |
+| Elicitation / requirements doc | `elicitation-requirements.md` | **BABOK** + **EARS** |
+| Process map | `process-map.md` | **BPMN** (Mermaid) |
+| User stories | `user-stories.md` | **INVEST** + **Gherkin** + MoSCoW |
+| UAT plan & results | `uat-plan.md` | acceptance-criteria-driven UAT |
+| Reg-change impact assessment | `reg-change-impact.md` | traced obligation→scenario/control/data |
+| Threshold-tuning pack | `threshold-tuning-pack.md` | **FFIEC/FATF** — ATL/BTL + segmentation |
+| TM model-validation pack | `tm-model-validation.md` | **SR 11-7** + FFIEC BSA/AML |
+| Data dictionary | `data-dictionary.md` | **DAMA-DMBOK** field-level |
+| MI / dashboard spec | `mi-spec.md` | metrics + lineage + access |
+| Segmentation analysis | `segmentation-analysis.md` | risk-based segments → thresholds |
+| Exploratory-analysis report | `exploratory-analysis.md` | 📊 measured / 🧠 inferred basis |
 | Code & Compliance Review Report | `review-report.md` | **OWASP ASVS**, **CWE**, **SEI CERT** |
 | Performance Review Report | `performance-report.md` | evidence-backed profiling |
 | Developer Handover | `developer-handover.md` | maintainable by a real developer |

@@ -192,13 +192,17 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 
 ### 🔧 Builders — they engineer the surveillance technology
 
-- **`business-analyst`** — turns a regulatory or business need into a clear,
-  implementable spec (user stories, acceptance criteria, true/false-positive cases) before
-  any code is written.
+- **`business-analyst`** — the full **BABOK** BA lifecycle: stakeholder analysis, elicitation,
+  requirements (EARS), process modelling (BPMN), user stories + acceptance criteria, UAT,
+  traceability, and surveillance BA (obligation→detection translation, control mapping,
+  regulatory-change impact).
 - **`rules-developer`** — implements and refactors deterministic detection rules and
   scenario logic for transaction monitoring and trade surveillance, from a validated spec.
-- **`data-analyst`** — tuning, false-positive analysis, threshold calibration, coverage
-  testing, plus data-quality, reconciliation and reporting/MI work.
+- **`data-analyst`** — exploratory analysis, false-positive analysis, coverage testing, plus
+  data-quality, reconciliation and reporting/MI work.
+- **`tuning-analyst`** — surveillance **threshold calibration / alert tuning**: risk-based
+  segmentation, std-dev thresholds, Above-The-Line/Below-The-Line testing, dry-run alerts, and
+  model-performance MI (FP rate, alert-to-SAR). Quantifies the volume↔coverage trade-off.
 - **`ml-engineer`** — builds ML/AI-based detection where rules aren't enough (anomaly
   detection, NLP for comms, behavioural scoring, alert triage).
 - **`platform-engineer`** — designs **and builds** the data pipelines and platform: ingestion,
@@ -210,6 +214,7 @@ keeps them independent) and **🔧 builders** (they engineer and test the detect
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
 > a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
+> **threshold tuning → `tuning-analyst`**; **requirements/elicitation/reg-change → `business-analyst`**;
 > an ML model → `ml-engineer`. The PM picks; see CLAUDE.md §6.
 
 ### 🧠 Advisors — they guide and sign off (read-only)
