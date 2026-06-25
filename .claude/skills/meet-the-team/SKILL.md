@@ -42,8 +42,9 @@ how to start. Use roughly this shape (keep it current with `.claude/agents/`; on
   it's wrong — that's the point of keeping them separate.
 
 **⚙️ Behind the scenes:**
-- **Pip** (`review-scorer`) — the cheap, fast helper that does the rote review legwork so the senior
-  reviewers spend their effort on judgement.
+- **Pip** (`review-scorer`) — the **Review Coordinator**: the cheap, fast helper that preps and
+  triages each review (context, lenses, scoring, tallies) so the senior reviewers spend their
+  effort on judgement.
 
 > The golden rules: **real data never reaches us** (we work on masked or synthetic data), and
 > everything is **explainable and traceable** — alert → logic → obligation.

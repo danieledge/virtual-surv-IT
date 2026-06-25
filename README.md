@@ -290,10 +290,10 @@ get it past the reviewers **and** the change board. · 🟢 *Slack:* "happy to t
 
 ### ⚙️ …and behind the scenes
 
-- **Pip** — *Review Scorer (the intern).* Haiku-tier and proud of it. Does the rote review
-  bookkeeping — context detection, confidence scoring, the Found/Reported/Filtered tallies — so the
+- **Pip** — *Review Coordinator.* Haiku-tier and proud of it. Preps every review — detects the
+  context, picks the lenses, scores findings and keeps the Found/Reported/Filtered tallies — so the
   senior reviewers never burn opus on arithmetic. Will absolutely raise a ticket for it. · 🟢
-  *Slack:* "tallying… ▓▓▓░░ (JIRA raised)"
+  *Slack:* "review prepped & triaged ▓▓▓░░ (JIRA raised)"
 
 > Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
 > real independent check. The restriction is enforced by the tools each agent is granted —
