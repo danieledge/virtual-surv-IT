@@ -264,8 +264,10 @@ QA'd, code- and performance-reviewed, compliance-reviewed, documented for handov
 - **Artifacts in `.md` + `.html`:** author under `artifacts/` (git-ignored), then render with
   `python -m scripts.render_html`. Templates in `docs/templates/`.
 - **Definition of Done:** `docs/DEFINITION-OF-DONE.md` — the evidenced gate before handover.
-- **Model tiering (cost):** token use drives most of the cost, so match the model to the work
-  — a cheaper tier (haiku/sonnet) for mechanical steps (language detection, scoring, filtering,
-  formatting) and opus only for deep judgement. Each agent sets its own `model:`; reviewers
-  use the cheap tier for the mechanical parts of a review and reserve heavy reasoning for the
-  findings.
+- **Model tiering (cost):** token use drives most of the cost, so match the model to the work.
+  The orchestrator (opus) re-challenges every agent's findings, so reserve **opus** only for
+  judgement that is final-and-unchecked, deep/subtle, or novel design (**`model-validator`,
+  `compliance-reviewer`, `code-reviewer`, `ml-engineer`** — 4); **sonnet** for build + advisory +
+  static review (incl. the SMEs); **haiku** for the mechanical helper (`review-scorer`). The
+  per-agent rationale and the **best-practice conformance matrix** live in
+  **`docs/agent-design.md`** — keep `model:` and that doc in sync when you retier an agent.

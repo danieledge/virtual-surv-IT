@@ -367,6 +367,8 @@ scripts/gen_synthetic.py     # synthetic order-flow generator (§5 — no real d
 tests/test_spoofing.py       # true-positive + false-positive cases (§4)
 docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
 docs/WAYS-OF-WORKING.md      # frameworks, workflows, artifact menu, traceability spine
+docs/agent-design.md         # how the team is built to agent best-practice + model-tiering rationale + conformance matrix
+docs/prepare-data-roadmap.md # path to make /prepare-data accept more data safely ("throw anything at it")
 docs/DEFINITION-OF-DONE.md   # the evidenced gate every delivery must meet
 docs/scope-and-stack.md      # example regulatory scope + tech stack (customise; kept out of the always-loaded handbook)
 docs/code-review-method.md   # confidence scoring, filtering, deep review (adapted from turingmind)
