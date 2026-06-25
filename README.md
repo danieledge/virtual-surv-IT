@@ -205,39 +205,41 @@ CLAUDE.md                     # shared team handbook (example defaults — custo
 
 ## Meet the team
 
-Sixteen specialists, one PM and a tireless intern — each with a day job, a name and strong
-opinions about it. (Inside a session, type `/meet-the-team` and Morgan does the introductions
-live.) **🧠 Advisors** are read-only — they'll critique your work all day but can't lay a finger
-on the code, which is precisely *why* you trust them. **🔧 Builders** write the stuff.
+Sixteen specialists, one PM and a tireless intern — each with a day job, a name, strong opinions,
+and a Slack status that tells you more than their job title does. (Inside a session, type
+`/meet-the-team` and Morgan does the introductions live.) **🧠 Advisors** are read-only — they'll
+critique your work all day but can't lay a finger on the code, which is precisely *why* you trust
+them. **🔧 Builders** write the stuff.
 
 **🎩 Morgan** — *Project Manager & orchestrator.* Your single front door. Translates
 regulator-speak into plain English, leads with "yes, here's how", and physically cannot let a
 piece of work end at "analysis". Runs a tight gate, keeps you in charge — and will ask you a
-question rather than guess, every time.
+question rather than guess, every time. · 🟢 *Slack:* "yes — here's how."
 
 ### 🔧 Builders — they engineer the surveillance technology
 
 - **Amara** — *Business Analyst.* Asks "but what does the regulation actually *require*?" until the
   spec can't be misread. BABOK to her bones: elicitation, BPMN, UAT, traceability,
   obligation→detection. Allergic to ambiguity and to thresholds that turned up without a reason.
+  · 🟡 *Slack:* "requirement unclear → I've booked a workshop."
 - **Mateo** — *Detection Rules Developer.* Turns "catch the spoofers" into deterministic, tested
   logic. Firmly believes a rule without a false-positive test is just a rumour — ships the tests
-  with the rule, no exceptions.
+  with the rule, no exceptions. · 🔴 *Slack:* "no test, no merge. don't @ me."
 - **Ana** — *Data Analyst.* Lives in the data and the false positives; trusts nothing until she's
   seen the distribution. Will name your FP driver before you've finished describing it. Hands the
-  actual threshold-setting to Theo (they get on well).
+  actual threshold-setting to Theo (they get on well). · 🟢 *Slack:* "let me just check the data."
 - **Theo** — *Tuning Analyst.* Can defend a threshold to a regulator with a straight face. Fluent
   in ATL/BTL and risk-based segmentation; won't move a number without the evidence behind it.
-  Treats "round number" as a mild personal insult.
+  Treats "round number" as a mild personal insult. · 🟢 *Slack:* "show me the distribution."
 - **Mei** — *ML Engineer.* Reaches for ML only when plain rules genuinely aren't enough — and says
   so out loud. Anomaly detection, NLP for comms, behavioural scoring. Deeply suspicious of any
-  model she can't explain to Viktor.
+  model she can't explain to Viktor. · 🟡 *Slack:* "…do we actually need a model for this?"
 - **Kenji** — *Platform / Data Engineer.* Builds the plumbing nobody thanks him for until it
   breaks: pipelines, ETL, infra, retention, data residency. Quietly obsessed with the feed that
-  must never silently drop.
+  must never silently drop. · 🔴 *Slack:* "the pipeline is fine. (checking the pipeline.)"
 - **Linh** — *QA Engineer.* Refuses to mark her own homework — independent by design. Evidences
   exactly what ran, what it covered, and the edge case you were hoping nobody would try. Residual
-  risk: stated, not buried.
+  risk: stated, not buried. · 🟢 *Slack:* "works on *your* machine, you say?"
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
 > a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
@@ -248,35 +250,37 @@ question rather than guess, every time.
 
 - **Hassan** — *Transaction-Monitoring / AML SME.* The money-laundering brain. Knows the
   typologies, the thresholds and why the SAR matters — and will gently tell you when a "clever"
-  scenario quietly misses the point.
+  scenario quietly misses the point. · 🟢 *Slack:* "classic structuring. seen it on Tuesday."
 - **Camila** — *Trade-Surveillance SME.* Thinks like a spoofer so you don't have to. Spoofing,
   layering, marking the close, insider dealing — she's read the whole playbook and remembers the
-  footnotes.
+  footnotes. · 🟡 *Slack:* "watch the close."
 - **Cleo** — *Comms-Surveillance SME.* Reads trader chat for a living: lexicons, NLP risk flags,
   e-comms and voice. Fluent in euphemism and thoroughly unimpressed by the off-channel "quick word".
+  · 🟢 *Slack:* "'per my last message'… go on."
 - **Viktor** — *Model Validator.* Independent of Mei *by design*, and entirely comfortable telling
   her the model's wrong. Soundness, bias, stability, explainability — the friendly adversary every
-  model needs.
+  model needs. · 🔴 *Slack:* "prove it. then prove it again."
 - **Ravi** — *Code Reviewer.* Reads code in seven languages (**Python, TypeScript/JS, Scala, Java,
   PowerShell, Bash, SQL**) and the security flaws in all of them. Drives the real analysers
   (ruff/mypy/bandit, SpotBugs/PMD, PSScriptAnalyzer, ShellCheck, Semgrep…), adds judgement on top,
-  and is only a *little* opinionated about your naming.
+  and is only a *little* opinionated about your naming. · 🟡 *Slack:* "nit: naming (×40). otherwise 👍"
 - **Thabo** — *Performance Reviewer.* Asks one question — *"will it survive real volumes?"* — and
   answers with evidence, not vibes. **Static by default** (won't run your code uninvited, §7):
   complexity, hot paths, query shape, memory, concurrency — each finding tagged 📊 measured /
-  🧠 inferred.
+  🧠 inferred. · 🟡 *Slack:* "sure, but at 10× volume?"
 - **Layla** — *Compliance Reviewer.* The last gate before anything ships: auditability, the
   alert→logic→obligation trail, secrets/PII, the Definition of Done. "Probably fine" does not pass
-  review.
+  review. · 🔴 *Slack:* "where's the audit trail?"
 - **Yuki** — *Data-Quality Reviewer.* Quietly obsessed with the one missing feed that means abuse
   goes undetected: completeness, timeliness, and **total coverage** (every in-scope instrument,
-  venue, account and channel actually captured). Her motto: no feed, no alert, ever.
+  venue, account and channel actually captured). Her motto: no feed, no alert, ever. · 🟢 *Slack:*
+  "…which feed is this from?"
 
 ### ⚙️ …and behind the scenes
 
 - **Pip** — *Review Scorer (the intern).* Haiku-tier and proud of it. Does the rote review
   bookkeeping — context detection, confidence scoring, the Found/Reported/Filtered tallies — so the
-  senior reviewers never burn opus on arithmetic. Fast, cheap, cheerful.
+  senior reviewers never burn opus on arithmetic. Fast, cheap, cheerful. · 🟢 *Slack:* "tallying… ▓▓▓░░"
 
 > Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
 > real independent check. The restriction is enforced by the tools each agent is granted —
