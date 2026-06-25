@@ -24,17 +24,28 @@ standards.
 -
 
 ## Surveillance evidence base (DA/BA expansion)
-- 2026-06-25 — **AML/TM tuning is fully evidenced; trade & comms are only partially.** The DA/BA
-  expansion (tuning-analyst, BA workflows, coverage/trade/comms templates) rests on two deep-
-  research passes. The AML/TM pass verified cleanly (ATL/BTL, segmentation, SR 11-7 validation).
-  The trade/comms pass was **cut short by a session limit** — only **3** claims fully verified:
-  (1) **FCA Market Watch 79** — surveillance testing is **four-component** (parameter calibration ·
-  model logic · model code · **data** comprehensiveness/accuracy), not calibration alone;
-  (2) **MW79** — failures often come from **data-ingestion gaps** (a dead news feed → an insider-
-  dealing scenario fired zero alerts for 3+ years); (3) **MiFID II RTS 25** clock-sync / timestamp
-  granularity. The MAR / MiFID / STOR / SEC 17a-4 / comms-recordkeeping detail in the trade/comms
-  templates is **foundational standard-practice, not freshly machine-verified** — re-run the
-  trade/comms research pass to confirm specifics before relying on them in a real engagement.
+- 2026-06-25 — **Evidence state by area (three deep-research passes).**
+  - ✅ **AML/TM tuning — VERIFIED**: ATL/BTL, risk-based segmentation, SR 11-7 model validation,
+    FFIEC BSA/AML.
+  - ✅ **FCA Market Watch 79 — VERIFIED**: surveillance testing is **four-component** (parameter
+    calibration · model logic · model code · **data** comprehensiveness/accuracy), not calibration
+    alone; failures often from **data-ingestion gaps** (a dead news feed → an insider-dealing
+    scenario fired zero alerts for 3+ years). Drives `/assess-coverage`.
+  - ✅ **Trade / market-abuse regulatory spine — VERIFIED (primary sources: EUR-Lex,
+    legislation.gov.uk, ESMA)**: **MAR Art 16(2)** STOR obligation on PPAETs (statute says
+    "notify"; "STOR" is RTS terminology); **CDR (EU) 2016/957** (Art 3 analyse every order
+    placed/modified/cancelled/rejected + alerts; Art 6 file "without delay" on **reasonable
+    suspicion** of actual/attempted abuse; Art 7 + Annex content; 5-yr retention of reasons to
+    file *or not*); **RTS 24 (CDR 2017/580**, MiFIR Art 25) order-book records — Field 21 lifecycle
+    events (NEWO/CAME/FILL…) are the spoofing/layering substrate; **RTS 22 (CDR 2017/590**, MiFIR
+    Art 26) is the *separate* T+1 transaction report; **RTS 25** clock-sync. Folded into
+    `trade-scenario-design.md`.
+  - 🟡 **STILL UNVERIFIED — treat as foundational, not confirmed**: **comms** surveillance
+    (MiFID II **Art 16(7)** recording/retention, **SEC 17a-4 / FINRA 4511**, the off-channel /
+    WhatsApp sweep — `lexicon-spec.md`, `comms-surveillance-policy.md`); per-scenario **detection-
+    tuning practice** (spoofing/layering/etc. approaches; trade-vs-AML tuning); and the **DA-vs-BA
+    boundary** in trade/comms. Run a dedicated pass before relying on these specifics in a real
+    engagement.
 
 ## Execution safety
 - 2026-06-24 — **Reviewing code is static by default; executing it is gated.** Running tests,
