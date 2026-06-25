@@ -90,7 +90,7 @@ guard blocks any agent from reading raw records. See
 
 ---
 
-**📑 Jump to** — [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [🙏 Credits](#-credits)
+**📑 Jump to** — [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🗺️ Roadmap](#-roadmap) · [🔧 Config](#-notes-on-the-config) · [🙏 Credits](#-credits)
 
 ---
 
@@ -462,6 +462,38 @@ python -m scripts.validate_masking                       # exit 0 = safe + faith
 - Models: **4 opus** (the final/unchecked judgement + novel-design roles) · **11 sonnet** ·
   **1 haiku** — the per-agent rationale and best-practice conformance live in
   [`docs/agent-design.md`](docs/agent-design.md). Change the `model:` field freely.
+
+## 🗺️ Roadmap
+
+Tracked enhancements, with the rationale for each. *(Done this cycle: **subagent self-assessment** —
+agents now self-verify against their brief and flag gaps before returning, CLAUDE.md §6.)*
+
+**Quality & evaluation**
+- **LLM-as-judge eval harness** — golden cases + a rubric (0–1 + pass/fail: correctness ·
+  completeness · traceability · evidence-basis) scoring the team's *generated artifacts* (reviews,
+  specs, tuning packs). *Why:* the 27 tests check the **code**, not the **quality of what the team
+  produces** — this is the regression net for a prompt-heavy system that keeps evolving (an
+  Anthropic multi-agent standard). **Highest-value open item.**
+
+**Data onboarding** — detail in [`docs/prepare-data-roadmap.md`](docs/prepare-data-roadmap.md)
+- **Local schema-inference profiler** — propose a masking schema from a local profile (no agent
+  reads raw data). *Why:* removes the biggest `/prepare-data` friction.
+- **NER/Presidio redaction** — replace regex-only free-text masking. *Why:* makes **comms/chat**
+  data viable (regex misses names / obfuscated IDs).
+- **Format adapters** (CSV/Parquet/Excel/nested) + **real synthetic (SDV)**. *Why:* "throw any
+  structured file at it", safely; synthetic is the genuine trust-the-output path.
+
+**Evidence — move foundational → verified** — detail in [`docs/house-rules.md`](docs/house-rules.md)
+- **Comms-surveillance *practice*** (lexicon/NLP/voice/coverage methodology), **per-scenario
+  detection-tuning practice**, and the **DA/BA boundary**. *Why:* the *regulatory* citations are
+  verified; these *practice* details are industry-grounded, not primary-sourced — verify before
+  relying on them in a real engagement.
+
+**Worked example**
+- **Larger labelled synthetic calibration set** for the spoofing scenario (the shipped fixture is
+  12 events). *Why:* enables a *measured* `/tune-thresholds` demo (ATL/BTL, real FP reduction)
+  rather than an illustrative one. Plus the price-context (distance-from-touch) check noted in
+  [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md).
 
 ## 📚 Built on — Anthropic agent guidance
 

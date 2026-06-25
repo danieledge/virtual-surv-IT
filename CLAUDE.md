@@ -206,6 +206,11 @@ See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
   verbatim: independently re-score, downgrade/drop weak items, and verify each claim's evidence
   basis (📊 measured vs 🧠 inferred — never let an inference reach the user as fact). Prefer an
   adversarial second look when findings matter.
+- **Agents self-verify before returning (don't claim done if it isn't).** Every subagent should
+  plan, then **check its output against its own brief before handing back**: is the full objective
+  covered? what did it assume, skip, or remain uncertain about? It **states the gap** rather than
+  hiding it — a flagged gap is cheap; a silent one is a defect the PM and reviewers must then catch.
+  (Anthropic multi-agent guidance; see `docs/agent-design.md` §6.)
 - **Run the orchestrator on opus** — routing, challenging findings and §4/§5 calls are
   deep-reasoning work. Inherits the session model; set with `/model` if needed.
 

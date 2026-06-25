@@ -118,14 +118,14 @@ separate SecOps agent — folded into `code-reviewer` + `platform-engineer`).
 | Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |
 | **External memory** for long horizons | ✅ | `docs/house-rules.md` — committed, compounding team memory; subagent context isolation. |
 | **LLM-as-judge** rubric for output quality | 🟡 | We use a **reviewer + Definition-of-Done** model (code/compliance/QA + the PM re-challenging findings) rather than a 0–1 judge prompt — a valid equivalent for build/review work; the rubric form suits open-ended research. *Candidate enhancement: an explicit eval harness.* |
-| Subagent **self-assessment** (plan → evaluate → refine) | 🟡 | Agents reason and the PM re-challenges; we don't yet mandate an interleaved-thinking scratchpad. *Candidate enhancement.* |
+| Subagent **self-assessment** (plan → evaluate → refine) | ✅ | Team-wide convention (CLAUDE.md §6): every agent self-verifies against its brief and **flags gaps** before returning, rather than implying completeness it doesn't have. |
 | **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
 | **Dozens–hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable — right-sizing keeps us at 2–5 agents per engagement; we never reach that scale. |
 
-**Net:** strong conformance on the high-value lessons. The 🟡s are deliberate fits to our
-*interactive, human-gated* delivery model (vs Anthropic's long-running autonomous research agent),
-plus two optional enhancements noted for the roadmap (self-assessment scratchpads; an LLM-judge
-eval harness).
+**Net:** strong conformance on the high-value lessons. The remaining 🟡s are deliberate fits to our
+*interactive, human-gated* delivery model (vs Anthropic's long-running autonomous research agent).
+The one open enhancement is an **LLM-judge eval harness** (see the README roadmap) — self-assessment
+is now a team convention (CLAUDE.md §6).
 
 ## 7. References (Anthropic agent guidance)
 
