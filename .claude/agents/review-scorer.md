@@ -1,7 +1,7 @@
 ---
 name: review-scorer
 description: >
-  The cheap-tier mechanical helper for the review pipeline. Use for the rote, low-judgement
+  The cheap-tier mechanical helper for the review pipeline. When the team is engaged, use for the rote, low-judgement
   steps so the expensive reviewers don't pay opus rates for bookkeeping: context/language
   detection, lens selection (per the router), confidence scoring of candidate findings, and
   filter accounting (the Found/Reported/Filtered counts). Read-only; it does the arithmetic and

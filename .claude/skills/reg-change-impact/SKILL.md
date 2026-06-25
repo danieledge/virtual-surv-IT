@@ -7,7 +7,9 @@ Assess the impact of a regulatory change: **$ARGUMENTS**
 
 Under the PM (CLAUDE.md §6), drive **business-analyst** (with the relevant **`*-sme`** for the
 regulatory reading, and `data-quality-reviewer`/`tuning-analyst` where data or thresholds are
-touched). **Establish the change and the jurisdiction(s) first** (CLAUDE.md §2 — ask if unclear).
+touched). **Establish the change and the jurisdiction(s) first — ask via the question tool, one
+question per axis; make any mutually-exclusive axis (e.g. a single jurisdiction) single-select**
+(CLAUDE.md §2).
 
 1. **Understand the change** — what obligation changed, effective date, the new/amended
    requirement (get the `*-sme` to read it; don't interpret regulation unaided).

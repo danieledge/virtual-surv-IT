@@ -1,7 +1,7 @@
 ---
 name: data-quality-reviewer
 description: >
-  Use for INDEPENDENT assurance of the data feeding surveillance — completeness, accuracy,
+  When the team is engaged, use for INDEPENDENT assurance of the data feeding surveillance — completeness, accuracy,
   timeliness, reconciliation, and surveillance COVERAGE (is every in-scope instrument, venue,
   account and comms channel actually captured and monitored?). The biggest blind spot in
   surveillance: a missing or partial feed means abuse goes undetected and no alert ever fires.

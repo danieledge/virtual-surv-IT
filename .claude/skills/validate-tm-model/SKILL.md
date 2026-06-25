@@ -8,9 +8,18 @@ Run a periodic **transaction-monitoring model validation** of: **$ARGUMENTS**
 This is the recurring "is the detection still fit for purpose" review (grounded in SR 11-7 +
 FFIEC BSA/AML). It is **independent** of whoever tuned/built the model.
 
-**1. Gather inputs (question tool)** — which scenario set / TM system; where the alert + outcome
-data is (**synthetic/masked only**, §5 — else `/prepare-data` first); the in-scope
-**jurisdiction(s)** (CLAUDE.md §2); and the validation period.
+> **When to use this vs the others.** This is the **periodic umbrella** review. It **invokes**
+> coverage (`/assess-coverage`), threshold tuning (`/tune-thresholds`) and data-quality as
+> *components*, then adds the **independent `model-validator` verdict** (SR 11-7) on top — it is
+> not a parallel re-implementation of them. Reach for the components directly when you only need
+> that one slice: `/tune-thresholds` to calibrate one scenario's numbers, `/assess-coverage` to
+> map typology→scenario→feed gaps. Use this skill for the whole periodic validation pack.
+
+**1. Gather inputs — ask via the question tool, one question per axis; don't assume.** Ask as
+discrete, structured questions: which **scenario set / TM system**; where the **alert + outcome
+data** is (**synthetic/masked only**, §5 — else `/prepare-data` first); the in-scope
+**jurisdiction(s)** (CLAUDE.md §2); and the **validation period**. Where an axis is mutually
+exclusive (e.g. a single jurisdiction or a fixed period), make that question **single-select**.
 
 **2. Assess (drive `tuning-analyst` for the data work + `model-validator` for the independent
 verdict; `tm-sme` for typology coverage):**

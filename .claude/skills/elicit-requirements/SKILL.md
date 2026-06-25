@@ -6,8 +6,11 @@ argument-hint: <the need / obligation / problem to elicit requirements for>
 Run a Business-Analysis **elicitation** for: **$ARGUMENTS**
 
 Under the PM (CLAUDE.md §6), drive **business-analyst** through the BABOK elicitation → analysis
-→ specification flow. **Ask material questions via the question tool and wait** — never invent
-scope, stakeholders or thresholds.
+→ specification flow. **Ask material questions via the question tool, one question per axis, and
+wait** — single-select where the axis is mutually exclusive; never invent scope, stakeholders or
+thresholds.
+
+> If the need is already clear and you just need the BRD, use `/write-brd`.
 
 1. **Stakeholder analysis** — who's affected / consulted / decides (RACI), and their needs and
    concerns (`docs/templates/stakeholder-analysis.md`).

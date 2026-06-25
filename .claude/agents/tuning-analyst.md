@@ -1,7 +1,7 @@
 ---
 name: tuning-analyst
 description: >
-  Use for surveillance alert tuning and threshold calibration — the data-analyst specialism for
+  When the team is engaged, use for surveillance alert tuning and threshold calibration — the data-analyst specialism for
   transaction monitoring (and, once evidenced, trade/comms): set and justify thresholds, run
   Above-The-Line / Below-The-Line testing, risk-based segmentation, dry-run/test-alert analysis,
   false-positive reduction, and model-performance MI (alert volumes, FP rate, alert-to-SAR).

@@ -65,7 +65,7 @@ _EXEC_PATTERNS = [
     r"\bgo\s+test\b|\bgo\s+run\b",       # Go
     r"\bdotnet\s+(run|test)\b",          # .NET
     r"\bmvn\b|\bgradle\b|\./gradlew\b",  # JVM build/test (executes)
-    r"\bjava\s+(-jar\b|-cp\b|\S+\b)",    # run Java
+    r"\bjava\s+(?!-version\b|--version\b|-help\b|--help\b|-h\b)(-jar\b|-cp\b|\S+\b)",  # run Java (allow -version/-help)
     r"\bruby\s+\S+\.rb\b|\bperl\s+\S+\.pl\b",  # run Ruby/Perl scripts
     r"(^|\s|;|&&|\|)\./\S+",             # executing a file by path (./foo, ./x.sh)
     r"\b(bash|sh|zsh)\s+\S+\.(sh|bash)\b",      # running a shell script file

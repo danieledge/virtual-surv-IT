@@ -12,7 +12,7 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   tuning, with the FCA MW79 "four-component, not calibration-only" rule.
 - **Workflows** — `/tune-thresholds`, `/validate-tm-model`, `/assess-coverage`,
   `/elicit-requirements`, `/reg-change-impact`, `/analyse-data`, and `/meet-the-team`.
-- **Templates (14)** — threshold-tuning-pack, tm-model-validation, surveillance-coverage-assessment,
+- **Templates (16)** — threshold-tuning-pack, tm-model-validation, surveillance-coverage-assessment,
   trade-scenario-design, lexicon-spec, comms-surveillance-policy; stakeholder-analysis,
   elicitation-requirements, process-map (BPMN), user-stories, uat-plan, reg-change-impact,
   data-dictionary, mi-spec, segmentation-analysis, exploratory-analysis.

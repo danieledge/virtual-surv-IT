@@ -48,6 +48,10 @@ standards.
     engagement.
 
 ## Execution safety
+- 2026-06-25 — **Hooks are declared in TWO files by design — keep them in sync.** The PreToolUse
+  guards live in both `hooks/hooks.json` (plugin-install mode) and `.claude/settings.json`
+  (repo-as-project mode); JSON can't carry a comment, so this note + `tests/test_hooks_in_sync.py`
+  are the guard against drift. Edit one → edit the other identically.
 - 2026-06-24 — **Reviewing code is static by default; executing it is gated.** Running tests,
   the script, or a profiler *executes* the code (PowerShell `Measure-Command`, `cProfile`/
   `py-spy`, `JMH`, `hyperfine`, `pytest`/`Pester`). The `guard-code-execution.py` hook blocks

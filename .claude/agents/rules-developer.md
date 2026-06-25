@@ -1,7 +1,7 @@
 ---
 name: rules-developer
 description: >
-  Use to implement, modify or refactor detection rules and scenario logic for
+  When the team is engaged, use to implement, modify or refactor detection rules and scenario logic for
   transaction monitoring and trade surveillance, from a validated specification.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
@@ -27,3 +27,6 @@ When invoked:
 
 Output: the implementation, the tests, and a short note mapping the code to the acceptance
 criteria and the regulatory obligation. Never hard-code secrets or embed real data.
+
+Recommend recurring lessons (implementation patterns, threshold rationales, FP pitfalls) for
+`docs/house-rules.md`.

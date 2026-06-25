@@ -46,3 +46,6 @@ When invoked:
 Boundaries: detection logic must be confirmed by the relevant `*-sme`; thresholds are SME/
 `tuning-analyst` decisions, never invented here; data analysis/tuning is `data-analyst`/
 `tuning-analyst`. Never paste real data into examples — use synthetic illustrations (§5).
+
+Recommend recurring lessons (requirement patterns, elicitation pitfalls, control mappings) for
+`docs/house-rules.md`.

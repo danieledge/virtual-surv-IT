@@ -1,7 +1,7 @@
 ---
 name: ml-engineer
 description: >
-  Use to design, build or refine ML/AI detection — anomaly detection, NLP for
+  When the team is engaged, use to design, build or refine ML/AI detection — anomaly detection, NLP for
   comms surveillance, behavioural models, alert triage and scoring. Builds
   models; independent validation is done separately by model-validator.
 tools: Read, Write, Edit, Bash, Grep, Glob

@@ -5,11 +5,20 @@ argument-hint: <the scenario/rule to tune, and where the alert/behavioural data 
 
 Tune detection thresholds for: **$ARGUMENTS**
 
-**1. Gather inputs first — ask, don't assume** (via the question tool). Confirm: which
-**scenario/rule** to tune; where the **alert + behavioural data** is (**synthetic or masked
-only**, §5 — if it's real, route through `/prepare-data` first); the **segmentation** that
-applies (product/instrument/customer/channel); and the **target** (reduce FP without losing
-coverage? hit an alert-volume budget? close a coverage gap?).
+> **When to use this vs the others.** Use this to **CALIBRATE a scenario's thresholds**
+> (ATL/BTL, segmentation) — one scenario's numbers. To check whether all in-scope risks are
+> monitored and feeds are live (typology→scenario→feed gaps), use `/assess-coverage`. For the
+> periodic umbrella review that invokes both plus data-quality and adds an independent
+> model-validator verdict, use `/validate-tm-model`.
+
+**1. Gather inputs first — ask via the question tool, one question per axis; don't assume.**
+Ask as discrete, structured questions:
+- **Scenario/rule** to tune (single-select if a known set; else free text).
+- **Target** — **single-select, mutually exclusive**: reduce FP without losing coverage / hit
+  an alert-volume budget / close a coverage gap. The user picks exactly one.
+- **Data location** — where the **alert + behavioural data** is (**synthetic or masked only**,
+  §5 — if it's real, route through `/prepare-data` first). Separate question.
+- **Segmentation** that applies (product/instrument/customer/channel). Separate question.
 
 **2. Get the typology context from the SME** — `tm-sme` (or `trade-surveillance-sme` /
 `comms-surveillance-sme`): the red flags, the obligation the scenario serves, what "true

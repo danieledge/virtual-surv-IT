@@ -5,9 +5,10 @@ argument-hint: <the analytical question, and where the data is>
 
 Run an exploratory data analysis for: **$ARGUMENTS**
 
-Under the PM (CLAUDE.md §6), drive **data-analyst**. **Gather inputs first (question tool):** the
-precise question, where the data is (**synthetic/masked only**, §5 — else `/prepare-data` first),
-and what a useful answer looks like.
+Under the PM (CLAUDE.md §6), drive **data-analyst**. **Gather inputs first — ask via the question
+tool, one question per axis; don't assume:** the precise question; where the data is
+(**synthetic/masked only**, §5 — else `/prepare-data` first); and what a useful answer looks like.
+Make any mutually-exclusive axis **single-select**.
 
 1. **Frame** the question and the assumptions/caveats up front.
 2. **Analyse** — efficient, well-commented SQL/Python on synthetic/masked data: distributions,
