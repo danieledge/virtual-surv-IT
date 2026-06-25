@@ -4,7 +4,7 @@
 > compliance-surveillance technology inside Claude Code, while real data never reaches the model.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.3.2](https://img.shields.io/badge/version-0.3.2-blue)
+![Version 0.3.3](https://img.shields.io/badge/version-0.3.3-blue)
 ![Tests 27 passing](https://img.shields.io/badge/tests-27%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)

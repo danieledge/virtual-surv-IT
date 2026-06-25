@@ -3,6 +3,24 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.3.3] - 2026-06-25
+
+### Added
+- **Anthropic multi-agent conformance audit** (`docs/agent-design.md` §6) - the team mapped
+  honestly against Anthropic's published multi-agent standards, with the **source links** (§7 +
+  a README "Built on" section): Building Effective Agents, the multi-agent research system,
+  context engineering, and the Subagents docs.
+- **README Roadmap** - the outstanding enhancements with the rationale for each (LLM-judge eval
+  harness; `/prepare-data` universality; evidence gaps to verify; a larger spoofing calibration set).
+
+### Changed
+- **Subagent self-assessment** is now a team convention (CLAUDE.md §6): every agent self-verifies
+  against its brief and flags gaps before returning, rather than implying false completeness.
+- **Delegation rule made explicit**: a subagent inherits none of the conversation - put every
+  needed input in the brief (the documented cause of duplicated work / gaps).
+- **Style:** removed all em-dashes across the README and every markdown file (docs, agents,
+  skills, CLAUDE.md, CHANGELOG) for consistency.
+
 ## [0.3.2] - 2026-06-25
 
 ### Added
