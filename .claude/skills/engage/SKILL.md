@@ -69,6 +69,25 @@ gate stays closed. (A user who wants the *harder* gate can instead set `CST_ALLO
 launch environment - the model can't set that, only the marker.) Repeat the responsibility note
 in the final Delivery Report.
 
+**Data safety - show this disclaimer at startup too, right next to the execution one (both are
+punchy, can't-miss callouts at first contact - CLAUDE.md §5):**
+
+> 🛡️ **DATA SAFETY - what you share.** 📡 Everything you point me at goes to the model provider.
+> 🔴 Raw data in `data/raw/` is **hard-blocked** - I can't read it. 🟠 For **any other data you
+> share**, by giving me access you **confirm it carries no PII/MNPI or anything your data policy
+> prohibits - or that you've anonymised/masked it appropriately.** 🤖 I **can't verify that for
+> you** - keeping shared data safe and compliant is **your responsibility.** 🟢 Unsure? Go
+> synthetic or run **`/prepare-data`** first.
+
+Take the **data attestation** in the **same question-tool call** as the execution question above
+(both at startup, `multiSelect: false`): *"Any data you'll share - is it safe to use?"* →
+- **Yes - synthetic / masked / anonymised, no prohibited PII** (proceed);
+- **No / unsure - help me prepare it** (route to `/prepare-data`; don't analyse real data until confirmed);
+- **No data involved** (e.g. a pure code review).
+
+Record it; don't re-ask per file. **`data/raw/` stays hard-blocked regardless** (always-on guard).
+Repeat the data-responsibility note in the final Delivery Report.
+
 **1. Classify the work.** Decide the entry point:
 - a *problem / idea* → discovery → requirements → build (full SDLC);
 - a *review* → the audit-review loop (`/audit-review`);

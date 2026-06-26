@@ -2,7 +2,7 @@
 
 New to AI agents and LLMs? Start here. No prior knowledge assumed. By the end you'll
 understand what this project *is*, who the "team" are, how a job flows through them, and
-why real data never reaches the AI.
+how it keeps confidential data away from the AI.
 
 > ⚗️ **This is a proof of concept / experiment** - an exploration of what an AI engineering
 > team could do in Claude Code, not a production or accredited system. Its outputs are a
@@ -116,7 +116,7 @@ any delivery, requirement → code → test → obligation. No black boxes.
 
 ---
 
-## 5. The safety story: real data never reaches the AI
+## 5. The safety story: keeping real data out of the AI
 
 This is the most important idea, and it's simpler than it sounds.
 
@@ -124,8 +124,12 @@ This is the most important idea, and it's simpler than it sounds.
 processed. For an ordinary app that's fine. For **bank records** - real customers, real
 trades, confidential information - it absolutely is not.
 
-**The solution:** the AI is never allowed to see real data. Instead, real data goes
-through a one-way cleaning process first, and the AI only ever works with the cleaned or
+**The solution:** the most sensitive data - anything in the `data/raw/` folder - is
+**hard-blocked**: a guard physically stops any agent from reading it. For anything else, you
+either **clean it first** (mask or synthesise, below) or, if it's already safe, **confirm that**
+via a startup disclaimer (*"this is masked / synthetic / anonymised, no prohibited PII"*). The
+team can't verify that for you, so the confirmation is **your responsibility**. And whatever you
+share, what gets written **into the repo** (examples, tests, reports) is *always* the cleaned or
 made-up version.
 
 ```mermaid

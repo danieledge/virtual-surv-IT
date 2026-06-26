@@ -17,7 +17,8 @@ FFIEC BSA/AML). It is **independent** of whoever tuned/built the model.
 
 **1. Gather inputs - ask via the question tool, one question per axis; don't assume.** Ask as
 discrete, structured questions: which **scenario set / TM system**; where the **alert + outcome
-data** is (**synthetic/masked only**, §5 - else `/prepare-data` first); the in-scope
+data** is (synthetic, masked, or data **attested safe** at intake, §5 - if raw/unprepared use
+`/prepare-data`; `data/raw/` is hard-blocked); the in-scope
 **jurisdiction(s)** (CLAUDE.md §2); and the **validation period**. Where an axis is mutually
 exclusive (e.g. a single jurisdiction or a fixed period), make that question **single-select**.
 

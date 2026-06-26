@@ -46,8 +46,9 @@ how to start. Use roughly this shape (keep it current with `.claude/agents/`; on
   triages each review (context, lenses, scoring, tallies) so the senior reviewers spend their
   effort on judgement.
 
-> The golden rules: **real data never reaches us** (we work on masked or synthetic data), and
-> everything is **explainable and traceable** - alert → logic → obligation.
+> The golden rules: **raw data is walled off** (`data/raw/` is hard-blocked; we work on masked,
+> synthetic, or data you've confirmed is safe), and everything is **explainable and traceable** -
+> alert → logic → obligation.
 
 Then close - **don't dead-end**: invite them to start, e.g. *"Want to put us to work? Type
 `/engage` and describe what you've got - a problem, some code to review, or a build - and I'll

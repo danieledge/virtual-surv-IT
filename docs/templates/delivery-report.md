@@ -101,3 +101,7 @@ debt, how to extend.
 > (tests/profiling) happened **only with the user's consent** in a safe environment on
 > synthetic data. **Ensuring code handed over for review is safe to run remains the user's
 > responsibility** (CLAUDE.md §7).
+>
+> **Data note.** `data/raw/` is hard-blocked from agents. Any other data analysed was provided on
+> the user's **attestation** that it is masked/synthetic/anonymised with no prohibited PII/MNPI;
+> **ensuring shared data is safe and policy-compliant remains the user's responsibility** (CLAUDE.md §5).

@@ -1,7 +1,8 @@
 # Compliance Surveillance Engineering - Virtual Team
 
 > *An AI engineering team - PM, builders, reviewers and SMEs - that builds and reviews
-> compliance-surveillance technology inside Claude Code, while real data never reaches the model.*
+> compliance-surveillance technology inside Claude Code, with raw data hard-blocked from the model
+> and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Version 0.3.3](https://img.shields.io/badge/version-0.3.3-blue)
@@ -83,16 +84,98 @@ flowchart LR
     Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
 ```
 
-**The safety rule in one line:** real data is never shown to the AI - it's either *masked*
-(identities scrambled, behaviour kept) or fully *synthetic* (made up), and an automatic
-guard blocks any agent from reading raw records. See
+**The safety rule in one line:** raw data under `data/raw/` is **hard-blocked** - an automatic
+guard stops any agent reading it. Anything else you share, **you confirm is masked, synthetic, or
+anonymised** (a startup disclaimer makes this explicit; the responsibility is yours). Prefer
+*masked* (identities scrambled, behaviour kept) or *synthetic* (made up). See
 [How real data is handled](#-handling-real-data).
 
 ---
 
-**📑 Jump to** - [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🗺️ Roadmap](#-roadmap) · [🔧 Config](#-notes-on-the-config) · [🙏 Credits](#-credits)
+**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🗺️ Roadmap](#-roadmap) · [🔧 Config](#-notes-on-the-config) · [🙏 Credits](#-credits)
 
 ---
+
+## 👥 Meet the team
+
+Sixteen specialists, one PM and a tireless intern - each with a day job, a name, strong opinions,
+and a Slack status that tells you more than their job title does. (Inside a session, type
+`/meet-the-team` and Morgan does the introductions live.) **🧠 Advisors** are read-only - your
+*independent* check, so they can critique all day but can't touch the code (segregation of duties,
+basically). **🔧 Builders** write the stuff.
+
+**🎩 Morgan** - *Project Manager & orchestrator.* Translates regulator-speak into plain English,
+leads with "yes, here's how", and physically cannot let a piece of work end at "analysis". Will
+get it past the reviewers **and** the change board. · *Slack:* "happy to take that as an action."
+
+### 🔧 Builders - they engineer the surveillance technology
+
+- **Amara** - *Business Analyst.* Asks "but what does the regulation *actually require*?" until the
+  spec can't be misread. BABOK to her bones; allergic to ambiguity and to thresholds that turned up
+  without a rationale. · *Slack:* "requirement unclear → workshop booked (recurring)."
+- **Mateo** - *Detection Rules Developer.* Turns "catch the spoofers" into deterministic, tested
+  logic - second line of defence, in code form. A rule without a false-positive test is, to him,
+  just a rumour. · *Slack:* "no test, no merge. it's in the SDLC."
+- **Ana** - *Data Analyst.* Lives in the data and the false positives; trusts nothing until she's
+  seen the distribution. Will name your FP driver before you've finished writing the ticket. ·
+  *Slack:* "the data says otherwise."
+- **Theo** - *Tuning Analyst.* Can defend a threshold to a regulator with a straight face - ATL/BTL,
+  segmentation, the lot. Treats "let's just round it to 10k" as a personal insult. · *Slack:*
+  "show me the below-the-line sample."
+- **Mei** - *ML Engineer.* Reaches for ML only when plain rules genuinely aren't enough - and says
+  so out loud, because she knows Viktor's coming. Won't ship a model she can't explain to a
+  regulator. · *Slack:* "…do we actually need a model for this?"
+- **Kenji** - *Platform / Data Engineer.* Builds the plumbing nobody thanks him for until a feed
+  drops at quarter-end. Pipelines, ETL, retention, lineage - and a deep, personal grudge against
+  silent failures. · *Slack:* "have you tried the runbook?"
+- **Linh** - *QA Engineer.* Refuses to mark her own homework - independent by design. Finds the
+  edge case you were hoping nobody would raise in UAT. Residual risk: stated, not buried. ·
+  *Slack:* "reopening - it's a finding, not a nit."
+
+> Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
+> a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
+> **threshold tuning → `tuning-analyst`**; **requirements/elicitation/reg-change → `business-analyst`**;
+> an ML model → `ml-engineer`. The PM picks; see CLAUDE.md §6.
+
+### 🧠 Advisors - they guide and sign off (read-only)
+
+- **Hassan** - *Transaction-Monitoring / AML SME.* The money-laundering brain. Structuring,
+  smurfing, layering - usually spotted before lunch. Will gently warn you when a "clever" scenario
+  would file a thousand defensive SARs and catch nothing. · *Slack:* "that's structuring. and
+  that. and that."
+- **Camila** - *Trade-Surveillance SME.* Thinks like a spoofer so you don't have to. Spoofing,
+  layering, marking the close, insider dealing - reads an order book like a crime novel. ·
+  *Slack:* "…and there's the cancel. classic."
+- **Cleo** - *Comms-Surveillance SME.* Reads trader chat for a living: lexicons, NLP risk flags,
+  e-comms and voice. Fluent in euphemism; deeply unimpressed by "let's take this to my personal
+  phone". · *Slack:* "'per my last message' is doing a lot of work here."
+- **Viktor** - *Model Validator.* Independent of Mei *by design*, and entirely comfortable telling
+  her the model's wrong. Lives in **SR 11-7**; the friendly adversary every model needs. ·
+  *Slack:* "prove it. then prove it again. then document it."
+- **Ravi** - *Code Reviewer.* Reads seven languages (**Python, TypeScript/JS, Scala, Java,
+  PowerShell, Bash, SQL**) and the security flaws in all of them. Drives the real analysers
+  (ruff/bandit/SpotBugs/ShellCheck/Semgrep…), adds judgement on top - and, sorry, there's a
+  hard-coded secret on line 42. · *Slack:* "nit: naming (×40). also: CRITICAL, line 42."
+- **Thabo** - *Performance Reviewer.* Asks one question - *"will it survive month-end?"* - and
+  answers with evidence, not vibes. **Static by default** (won't run your code uninvited, §7). ·
+  *Slack:* "fine in dev. now do it at 10× and T+1."
+- **Layla** - *Compliance Reviewer.* The last gate before anything ships: auditability, the
+  alert→logic→obligation trail, secrets/PII, the Definition of Done. "Probably fine" does not pass
+  review. · *Slack:* "if it isn't documented, it didn't happen."
+- **Yuki** - *Data-Quality Reviewer.* Quietly obsessed with the one missing feed that means abuse
+  goes undetected - completeness, timeliness, **total coverage**. Knows a silent feed gap *is* the
+  control failure. · *Slack:* "no feed, no alert, no idea."
+
+### ⚙️ …and behind the scenes
+
+- **Pip** - *Review Coordinator.* Haiku-tier and proud of it. Preps every review - detects the
+  context, picks the lenses, scores findings and keeps the Found/Reported/Filtered tallies - so the
+  senior reviewers never burn opus on arithmetic. Will absolutely raise a ticket for it. ·
+  *Slack:* "review prepped & triaged ▓▓▓░░ (JIRA raised)"
+
+> Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
+> real independent check. The restriction is enforced by the tools each agent is granted -
+> advisors get `Read, Grep, Glob` only - not by convention.
 
 ## 🚀 Quick start
 
@@ -219,87 +302,6 @@ CLAUDE.md                     # shared team handbook (example defaults - customi
   review-scorer.md            # cheap-tier (haiku) helper: context/scoring/filtering (read-only)
 ```
 
-## 👥 Meet the team
-
-Sixteen specialists, one PM and a tireless intern - each with a day job, a name, strong opinions,
-and a Slack status that tells you more than their job title does. (Inside a session, type
-`/meet-the-team` and Morgan does the introductions live.) **🧠 Advisors** are read-only - your
-*independent* check, so they can critique all day but can't touch the code (segregation of duties,
-basically). **🔧 Builders** write the stuff.
-
-**🎩 Morgan** - *Project Manager & orchestrator.* Translates regulator-speak into plain English,
-leads with "yes, here's how", and physically cannot let a piece of work end at "analysis". Will
-get it past the reviewers **and** the change board. · *Slack:* "happy to take that as an action."
-
-### 🔧 Builders - they engineer the surveillance technology
-
-- **Amara** - *Business Analyst.* Asks "but what does the regulation *actually require*?" until the
-  spec can't be misread. BABOK to her bones; allergic to ambiguity and to thresholds that turned up
-  without a rationale. · *Slack:* "requirement unclear → workshop booked (recurring)."
-- **Mateo** - *Detection Rules Developer.* Turns "catch the spoofers" into deterministic, tested
-  logic - second line of defence, in code form. A rule without a false-positive test is, to him,
-  just a rumour. · *Slack:* "no test, no merge. it's in the SDLC."
-- **Ana** - *Data Analyst.* Lives in the data and the false positives; trusts nothing until she's
-  seen the distribution. Will name your FP driver before you've finished writing the ticket. ·
-  *Slack:* "the data says otherwise."
-- **Theo** - *Tuning Analyst.* Can defend a threshold to a regulator with a straight face - ATL/BTL,
-  segmentation, the lot. Treats "let's just round it to 10k" as a personal insult. · *Slack:*
-  "show me the below-the-line sample."
-- **Mei** - *ML Engineer.* Reaches for ML only when plain rules genuinely aren't enough - and says
-  so out loud, because she knows Viktor's coming. Won't ship a model she can't explain to a
-  regulator. · *Slack:* "…do we actually need a model for this?"
-- **Kenji** - *Platform / Data Engineer.* Builds the plumbing nobody thanks him for until a feed
-  drops at quarter-end. Pipelines, ETL, retention, lineage - and a deep, personal grudge against
-  silent failures. · *Slack:* "have you tried the runbook?"
-- **Linh** - *QA Engineer.* Refuses to mark her own homework - independent by design. Finds the
-  edge case you were hoping nobody would raise in UAT. Residual risk: stated, not buried. ·
-  *Slack:* "reopening - it's a finding, not a nit."
-
-> Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
-> a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
-> **threshold tuning → `tuning-analyst`**; **requirements/elicitation/reg-change → `business-analyst`**;
-> an ML model → `ml-engineer`. The PM picks; see CLAUDE.md §6.
-
-### 🧠 Advisors - they guide and sign off (read-only)
-
-- **Hassan** - *Transaction-Monitoring / AML SME.* The money-laundering brain. Structuring,
-  smurfing, layering - usually spotted before lunch. Will gently warn you when a "clever" scenario
-  would file a thousand defensive SARs and catch nothing. · *Slack:* "that's structuring. and
-  that. and that."
-- **Camila** - *Trade-Surveillance SME.* Thinks like a spoofer so you don't have to. Spoofing,
-  layering, marking the close, insider dealing - reads an order book like a crime novel. ·
-  *Slack:* "…and there's the cancel. classic."
-- **Cleo** - *Comms-Surveillance SME.* Reads trader chat for a living: lexicons, NLP risk flags,
-  e-comms and voice. Fluent in euphemism; deeply unimpressed by "let's take this to my personal
-  phone". · *Slack:* "'per my last message' is doing a lot of work here."
-- **Viktor** - *Model Validator.* Independent of Mei *by design*, and entirely comfortable telling
-  her the model's wrong. Lives in **SR 11-7**; the friendly adversary every model needs. ·
-  *Slack:* "prove it. then prove it again. then document it."
-- **Ravi** - *Code Reviewer.* Reads seven languages (**Python, TypeScript/JS, Scala, Java,
-  PowerShell, Bash, SQL**) and the security flaws in all of them. Drives the real analysers
-  (ruff/bandit/SpotBugs/ShellCheck/Semgrep…), adds judgement on top - and, sorry, there's a
-  hard-coded secret on line 42. · *Slack:* "nit: naming (×40). also: CRITICAL, line 42."
-- **Thabo** - *Performance Reviewer.* Asks one question - *"will it survive month-end?"* - and
-  answers with evidence, not vibes. **Static by default** (won't run your code uninvited, §7). ·
-  *Slack:* "fine in dev. now do it at 10× and T+1."
-- **Layla** - *Compliance Reviewer.* The last gate before anything ships: auditability, the
-  alert→logic→obligation trail, secrets/PII, the Definition of Done. "Probably fine" does not pass
-  review. · *Slack:* "if it isn't documented, it didn't happen."
-- **Yuki** - *Data-Quality Reviewer.* Quietly obsessed with the one missing feed that means abuse
-  goes undetected - completeness, timeliness, **total coverage**. Knows a silent feed gap *is* the
-  control failure. · *Slack:* "no feed, no alert, no idea."
-
-### ⚙️ …and behind the scenes
-
-- **Pip** - *Review Coordinator.* Haiku-tier and proud of it. Preps every review - detects the
-  context, picks the lenses, scores findings and keeps the Found/Reported/Filtered tallies - so the
-  senior reviewers never burn opus on arithmetic. Will absolutely raise a ticket for it. ·
-  *Slack:* "review prepped & triaged ▓▓▓░░ (JIRA raised)"
-
-> Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
-> real independent check. The restriction is enforced by the tools each agent is granted -
-> advisors get `Read, Grep, Glob` only - not by convention.
-
 ## 📦 Install
 
 The team is a set of files you commit into your repo. To get the whole team - not just the
@@ -416,9 +418,19 @@ silently skipped. None of these are required to *use* the team; they sharpen `co
 
 ## 🔒 Handling real data
 
-Agents must never see raw records - anything an agent reads goes to the model provider as
-prompt context. So real data only enters through a masking pipeline, and agents sit
-downstream of it:
+**Raw data under `data/raw/` is hard-blocked** - the guard stops any agent reading it, and
+anything an agent reads goes to the model provider as context. Two safe ways to get data to the
+team:
+
+1. **Mask it** through the pipeline below (recommended for real data) → point agents at
+   `data/masked/`; or **synthesise** it (safest, shareable).
+2. **Provide already-safe data** (synthetic / masked / anonymised). A **startup disclaimer** has
+   you confirm it carries no prohibited PII/MNPI - that's your responsibility, not the team's.
+
+Either way, **committed examples, tests, artifacts and logs stay synthetic/masked only** (§5) -
+the attestation covers the analysis *inputs* you point at, not what gets written into the repo.
+An **automatic masking workflow** (so you don't have to self-attest) is on the [roadmap](#-roadmap).
+The pipeline:
 
 ```
 real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ ─▶ agents / dev
@@ -475,13 +487,21 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
   produces** - this is the regression net for a prompt-heavy system that keeps evolving (an
   Anthropic multi-agent standard). **Highest-value open item.**
 
-**Data onboarding** - detail in [`docs/prepare-data-roadmap.md`](docs/prepare-data-roadmap.md)
+**🚧 TODO - Automatic data-masking workflow** - detail in [`docs/prepare-data-roadmap.md`](docs/prepare-data-roadmap.md)
+
+> **The goal:** *"throw a dataset at it and it masks/anonymises it safely"* - so the team can take
+> real data **without the user having to self-attest** it's clean. **Until that ships, the interim
+> control is the startup data-safety disclaimer** (you confirm shared data is masked/synthetic/
+> anonymised; `data/raw/` stays hard-blocked). This workflow is what *replaces* that disclaimer.
+
 - **Local schema-inference profiler** - propose a masking schema from a local profile (no agent
-  reads raw data). *Why:* removes the biggest `/prepare-data` friction.
+  reads raw data). *Why:* removes the biggest `/prepare-data` friction and the manual schema step.
 - **NER/Presidio redaction** - replace regex-only free-text masking. *Why:* makes **comms/chat**
   data viable (regex misses names / obfuscated IDs).
 - **Format adapters** (CSV/Parquet/Excel/nested) + **real synthetic (SDV)**. *Why:* "throw any
   structured file at it", safely; synthetic is the genuine trust-the-output path.
+- **Auto-validation gate** - run the masking/NER check over the output and **block on residual
+  PII**, so "auto-masked" is *proven* safe, not just attempted.
 
 **Evidence - move foundational → verified** - detail in [`docs/house-rules.md`](docs/house-rules.md)
 - **Comms-surveillance *practice*** (lexicon/NLP/voice/coverage methodology), **per-scenario

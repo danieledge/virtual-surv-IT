@@ -16,8 +16,9 @@ Ask as discrete, structured questions:
 - **Scenario/rule** to tune (single-select if a known set; else free text).
 - **Target** - **single-select, mutually exclusive**: reduce FP without losing coverage / hit
   an alert-volume budget / close a coverage gap. The user picks exactly one.
-- **Data location** - where the **alert + behavioural data** is (**synthetic or masked only**,
-  §5 - if it's real, route through `/prepare-data` first). Separate question.
+- **Data location** - where the **alert + behavioural data** is (synthetic, masked, or data the
+  user **attested is safe** at intake, §5 - if it's raw/unprepared, route through `/prepare-data`;
+  `data/raw/` is hard-blocked). Separate question.
 - **Segmentation** that applies (product/instrument/customer/channel). Separate question.
 
 **2. Get the typology context from the SME** - `tm-sme` (or `trade-surveillance-sme` /

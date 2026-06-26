@@ -74,8 +74,12 @@ engagement needs stack detail, and customise it to your environment.
 - Use synthetic or masked data for examples and tests.
 - Never write secrets, credentials or connection strings into the repo.
 
-**Real data must never reach an agent.** Anything an agent reads is sent to the model
-provider as prompt context, so the team is structured to sit *downstream* of masking:
+**`data/raw/` must never reach an agent; other data is the user's attested responsibility.**
+Anything an agent reads is sent to the model provider as prompt context. So: raw data is
+**hard-blocked**, and for any other data the user provides, the team proceeds **only on the
+user's attestation** (the startup data-safety disclaimer, `engage` step 0) that it is
+anonymised/masked or carries no prohibited PII/MNPI - that responsibility is the **user's**, not
+the team's. Prefer synthetic; the team still sits *downstream* of masking wherever it can:
 
 - Raw data, if it exists at all, lives under `data/raw/` and is **off-limits to agents** -
   the `data/raw/` read-guard hook (`.claude/hooks/guard-raw-data.py`) blocks it.
@@ -87,10 +91,12 @@ provider as prompt context, so the team is structured to sit *downstream* of mas
   no residual identifiers/PII **and** identical detection results on masked vs. original.
 - **Pseudonymised ≠ anonymous.** Masked output is still personal data (GDPR) - keep it
   governed. For anything leaving the environment, prefer fully **synthetic** data.
-- If asked to analyse real data, **stop** and require it be passed through `scripts/ingest.py`
-  (or replaced with synthetic data) first. The guided on-ramp for this is **`/prepare-data`** -
-  the PM uses it to walk the user through synthetic-vs-mask → validate before any agent sees
-  the data.
+- Real data the user provides **outside** `data/raw/` may be analysed **after the startup
+  data-safety attestation** - but **recommend** `/prepare-data` (mask) or synthetic first whenever
+  the user is unsure, and **route there on a "no/unsure" attestation**. `data/raw/` is never
+  analysable (hard-blocked). `/prepare-data` remains the guided on-ramp (synthetic-vs-mask →
+  validate). An **automatic masking workflow** that removes the need to self-attest is on the
+  roadmap (README · `docs/prepare-data-roadmap.md`).
 
 ## 6. How the virtual team works
 
