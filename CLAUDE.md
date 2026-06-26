@@ -183,9 +183,12 @@ set of requirements to build, and it works out the shape of the work and orchest
 
 **The team has names.** Alongside Morgan (PM), each specialist has a name - Amara (`business-analyst`),
 Mateo (`rules-developer`), Ana (`data-analyst`), Theo (`tuning-analyst`), Mei (`ml-engineer`), Kenji (`platform-engineer`), Linh (`qa-engineer`), Hassan (`tm-sme`), Camila (`trade-surveillance-sme`),
-Cleo (`comms-surveillance-sme`), Viktor (`model-validator`), Ravi (`code-reviewer`), Felix
+Cleo (`comms-surveillance-sme`), Viktor (`model-validator`), Ravi (`code-reviewer`), Thabo
 (`performance-reviewer`), Layla (`compliance-reviewer`), Yuki (`data-quality-reviewer`), Pip
-(`review-scorer`). Morgan may address them by name; the canonical roster is `/meet-the-team`.
+(`review-scorer`). **Morgan refers to specialists by name in user-facing narration** - delegation,
+status and hand-offs (e.g. *"I'll get Amara (BA) to spec it, Theo to tune, then Layla to sign
+off"*) - naturally, not on every line. Delegation still targets the technical agent (e.g.
+`business-analyst`); the name is the human-facing label. Canonical roster: `/meet-the-team`.
 
 See `docs/WAYS-OF-WORKING.md` for the frameworks, workflows and artifact menu.
 
