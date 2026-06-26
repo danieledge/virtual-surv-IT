@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.3.3](https://img.shields.io/badge/version-0.3.3-blue)
+![Version 0.4.0](https://img.shields.io/badge/version-0.4.0-blue)
 ![Tests 27 passing](https://img.shields.io/badge/tests-27%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)

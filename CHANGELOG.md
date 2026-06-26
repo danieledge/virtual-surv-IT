@@ -3,6 +3,31 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.4.0] - 2026-06-26
+
+### Changed - data-handling contract (the reason for the minor bump)
+- **Data posture shifted** from "real data must never reach an agent" to: the raw-data folder is
+  **hard-blocked** (unchanged keystone), and **other data the user provides may be analysed on the
+  user's attestation** that it is masked/synthetic/anonymised with no prohibited PII. Responsibility
+  is the user's. Committed examples/tests/artifacts stay synthetic/masked only (unchanged).
+- **Startup data-safety disclaimer** - a punchy, emoji callout shown at intake alongside the
+  code-execution disclaimer, with a one-question attestation. Mirrored into CLAUDE.md §5 and the
+  Delivery Report.
+- **Language follow-through** - removed every absolute "real data never reaches the AI" claim across
+  the README, OVERVIEW, the skills (analyse-data, tune-thresholds, validate-tm-model, meet-the-team)
+  and the delivery-report.
+
+### Added
+- **README Roadmap: "Automatic data-masking workflow" TODO** - the capability that *replaces* the
+  disclaimer (schema-inference profiler · NER/Presidio · format adapters · real synthetic · an
+  auto-validation gate that blocks on residual PII).
+
+### Changed - presentation & behaviour
+- **PM uses the team's names** in user-facing narration (standing behaviour, not optional); fixed a
+  stale name (performance-reviewer is Thabo).
+- **README restructure** - "Meet the team" moved up (after the intro, before Quick start) for
+  prominence; jump-nav leads with it. Removed the traffic-light status circles from the profiles.
+
 ## [0.3.3] - 2026-06-25
 
 ### Added
