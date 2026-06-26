@@ -53,8 +53,8 @@ bold) - never buried in a paragraph:
 > safe to execute and don't provide code that would be harmful if run. Ensuring handed-over code
 > is safe is your responsibility.**
 
-Then ask once via the question tool (`multiSelect: false`): *"May the team execute the code
-under review (run tests / profile)?"* →
+Ask this once (`multiSelect: false`), **batched in the opening screen below** when code is involved:
+*"May the team execute the code under review (run tests / profile)?"* →
 - **Yes - trusted code, safe/dev or sandbox env, synthetic data only** (§5);
 - **No - static analysis only** (dynamic/perf findings stay 🧠 inferred).
 
@@ -79,14 +79,18 @@ punchy, can't-miss callouts at first contact - CLAUDE.md §5):**
 > you** - keeping shared data safe and compliant is **your responsibility.** 🟢 Unsure? Go
 > synthetic or run **`/prepare-data`** first.
 
-Take the **data attestation** in the **same question-tool call** as the execution question above
-(both at startup, `multiSelect: false`): *"Any data you'll share - is it safe to use?"* →
-- **Yes - synthetic / masked / anonymised, no prohibited PII** (proceed);
-- **No / unsure - help me prepare it** (route to `/prepare-data`; don't analyse real data until confirmed);
-- **No data involved** (e.g. a pure code review).
+**Batch the safety questions with the opening work-type question (step 1) - one screen, not three
+round-trips.** Show both disclaimers (text) at startup, then ask in a **single `AskUserQuestion`
+call** (up to 4 questions per call): the **work-type** question (step 1), the **execution** consent,
+and the **data attestation**. Gating to avoid premature asks:
+- **Execution consent** - *only include it when code is/looks involved* (review / build / remediate).
+  For a pure problem-scoping engagement with no code, skip it; default **No** if unsure.
+- **Data attestation** (`multiSelect: false`): *"Any data you'll share - is it safe to use?"* →
+  **Yes - synthetic/masked/anonymised, no prohibited PII** · **No / unsure - help me prepare it**
+  (→ `/prepare-data`) · **No data involved**. Always offer the "no data" option so it's one tap.
 
-Record it; don't re-ask per file. **`data/raw/` stays hard-blocked regardless** (always-on guard).
-Repeat the data-responsibility note in the final Delivery Report.
+Record both; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.** Repeat
+the execution- and data-responsibility notes in the final Delivery Report.
 
 **1. Classify the work.** Decide the entry point:
 - a *problem / idea* → discovery → requirements → build (full SDLC);
@@ -115,10 +119,13 @@ last time this was left loose the model offered "Quick **and** Deep" as a multi-
 - Deep already includes Quick) and gave the options inconsistent descriptions.
 
 > **Critical construction rules:**
-> - **Q1 (depth) MUST be `multiSelect: false`** - the user picks **exactly one** depth. Quick ⊂
->   Deep ⊂ Audit, so selecting more than one is nonsense; the tool must not allow it.
-> - **Q2 (performance) is a SEPARATE question**, also single-select (yes/no). **Never merge** the
->   depth options and the performance option into one multi-select list.
+> - **Ask Q1, Q2 and Q3 below in ONE `AskUserQuestion` call** (the tool takes up to 4 questions
+>   per call) - one screen, not three round-trips. They remain **three distinct questions**, each
+>   `multiSelect: false`; batching the *call* is not the same as merging the *lists*.
+> - **Q1 (depth) is single-select** - the user picks **exactly one** depth. Quick ⊂ Deep ⊂ Audit,
+>   so selecting more than one is nonsense; the tool must not allow it.
+> - **Q2 (performance) is a SEPARATE question** (yes/no). **Never merge** the depth options and the
+>   performance option into one list.
 > - Every depth produces the **same clean findings artifact** (`artifacts/REVIEW-*.md` + `.html`)
 >   - so **do not** mention "a report/artifact" on one option and not another. Keep the option
 >   descriptions parallel: each states *what it checks* and *when you'd use it*, nothing more.
@@ -153,9 +160,12 @@ last time this was left loose the model offered "Quick **and** Deep" as a multi-
 > in-review loop. After the choice, the review skill asks the finer **scope** (dimensions ·
 > breadth · change-vs-audit mode) - type *then* scope, never needing a slash command.
 
-**2. Clarify - ask, don't guess.** Then put any remaining clarifying questions to the user via
-the **question tool** (always - never a buried numbered list) and **wait for answers** before
-planning. Never assume scope, jurisdiction, data availability or success criteria.
+**2. Clarify only if genuinely needed - no ceremony.** Don't ask a standalone "any other
+clarifications?" round by default. **Fold** any remaining material unknown (jurisdiction, success
+criteria) **into the batched calls above**, or ask a single targeted question **only if** something
+material is genuinely missing. Never assume scope, jurisdiction, data availability or success
+criteria - but don't manufacture a question to fill a step. **The fix-cycle (Q3) is captured here
+and is the single source of truth - the review skill must NOT re-ask it** (it inherits this answer).
 
 **2a. Don't re-ask the outcome as one blurred question.** The *action* on findings is already
 its own question (the Q3 fix-cycle: report / fix / loop) and the *documents* are the artifact

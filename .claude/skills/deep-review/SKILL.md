@@ -10,8 +10,9 @@ Run a **deep (detailed) code review** of: **$ARGUMENTS**.
 `git diff`), ask where the code is - a path/glob, repo/branch, commit range, or to paste it -
 and wait. Don't review an assumed target.
 
-**2. Put scope on a menu - ask, don't assume.** Use the question tool; each axis below is its
-**own** question with the stated `multiSelect` (don't merge them into one list):
+**2. Put scope on a menu - ask, don't assume.** Ask the three axes below **in ONE `AskUserQuestion`
+call** (one screen, not three round-trips); they stay distinct questions with the stated
+`multiSelect` (don't merge them into one list):
 - **Dimensions** - **`multiSelect: true`**, default = all: 🐛 bugs & logic · 🔐 security ·
   📐 architecture · 🧰 language-specific · 📝 docs/comments · 🔵 style & form · 📋 compliance/audit.
   All opt-in - the user can run only the ones they want (a plain utility script may want bugs +
@@ -20,14 +21,15 @@ and wait. Don't review an assumed target.
   whole module · whole repo.
 - **Mode** - **`multiSelect: false`**: change review (filter pre-existing) **or** audit (keep
   pre-existing in scope).
-- **After findings (fix-cycle)** - **`multiSelect: false`** (one): report only · apply fixes ·
-  **fix → re-review loop** until clean. Available at any depth. (Deliverables like a **handover
-  pack** are chosen separately in the artifact menu - *not* here; don't mix an action with a
-  document. Legacy end-to-end overhaul is the heavier `/remediate`.)
-- **If 📋 compliance/audit is among the dimensions, then** ask **jurisdiction(s)** -
-  **`multiSelect: true`** (may operate in several) - or use the configured scope (CLAUDE.md §2 /
-  `docs/scope-and-stack.md`), so `compliance-reviewer` assesses only the **applicable** regime(s)
-  and states what's applicable vs not.
+
+> **Do NOT re-ask the fix-cycle (report / fix / loop) here** - `engage` already captured it
+> (its Q3) and it is the single source of truth; inherit that answer. If this skill was invoked
+> **directly** (not via `engage`), *then* ask it once, batched in the same call as the three axes.
+
+**If 📋 compliance/audit is among the dimensions**, ask **jurisdiction(s)** as a follow-up -
+**`multiSelect: true`** (may operate in several) - or use the configured scope (CLAUDE.md §2 /
+`docs/scope-and-stack.md`), so `compliance-reviewer` assesses only the **applicable** regime(s)
+and states what's applicable vs not.
 
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
 `docs/review/lenses/`; router `docs/review/agent-router.md`):

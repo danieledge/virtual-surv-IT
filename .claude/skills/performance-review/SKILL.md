@@ -9,16 +9,18 @@ Run a **performance & scalability review** of: **$ARGUMENTS**
 **If no target was given, first ask the user where the code/component is** (path/glob, repo,
 or paste it) and wait - don't assume a target.
 
-**Put scope on a menu - ask via the question tool, each axis its own question with the stated
-`multiSelect`:**
+**Put scope on a menu - ask the axes below in ONE `AskUserQuestion` call** (one screen), each a
+distinct question with the stated `multiSelect`:
 - **Concerns** - **`multiSelect: true`** (default all): algorithmic complexity · memory ·
   I/O & queries · concurrency · data-shape.
 - **Mode** - **`multiSelect: false`**: batch · streaming · both.
-- **After findings (fix-cycle)** - **`multiSelect: false`** (one): report only · apply fixes +
-  re-profile · **fix → re-profile loop** until it scales. (Deliverables like a handover pack are
-  chosen separately, not here. Legacy end-to-end overhaul is `/remediate`.)
 - **Target data volume / SLA** - free-text ask (the number changes the verdict); offer it as a
   question with an "Other" path rather than burying it in prose.
+
+> **Do NOT re-ask the fix-cycle (report / fix / loop) here** - `engage` already captured it (Q3);
+> inherit that answer. Only ask it (batched in the same call) if this skill was invoked **directly**,
+> not via `engage`. Deliverables like a handover pack are chosen separately. Legacy end-to-end
+> overhaul is `/remediate`.
 - **Execution permission** - see the execution gate below; profiling **runs the code**, so this
   is required. Wait for answers.
 
