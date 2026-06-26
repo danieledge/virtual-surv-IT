@@ -137,7 +137,7 @@ get it past the reviewers **and** the change board. · *Slack:* "happy to take t
 - **Theo** - *Tuning Analyst.* Can defend a threshold to a regulator with a straight face - ATL/BTL,
   segmentation, the lot. Treats "let's just round it to 10k" as a personal insult. · *Slack:*
   "show me the below-the-line sample."
-- **Mei** - *ML Engineer.* Reaches for ML only when plain rules genuinely aren't enough - and says
+- <a id="mei"></a>**Mei** - *ML Engineer.* Reaches for ML only when plain rules genuinely aren't enough - and says
   so out loud, because she knows [Viktor](#viktor)'s coming. Won't ship a model she can't explain to a
   regulator. · *Slack:* "…do we actually need a model for this?"
 - **Kenji** - *Platform / Data Engineer.* Builds the plumbing nobody thanks him for until a feed
@@ -164,7 +164,7 @@ get it past the reviewers **and** the change board. · *Slack:* "happy to take t
 - **Cleo** - *Comms-Surveillance SME.* Reads trader chat for a living: lexicons, NLP risk flags,
   e-comms and voice. Fluent in euphemism; deeply unimpressed by "let's take this to my personal
   phone". · *Slack:* "'per my last message' is doing a lot of work here."
-- <a id="viktor"></a>**Viktor** - *Model Validator.* Independent of Mei *by design*, and entirely comfortable telling
+- <a id="viktor"></a>**Viktor** - *Model Validator.* Independent of [Mei](#mei) *by design*, and entirely comfortable telling
   her the model's wrong. Lives in **SR 11-7**; the friendly adversary every model needs. ·
   *Slack:* "prove it. then prove it again. then document it."
 - **Ravi** - *Code Reviewer.* Reads seven languages (**Python, TypeScript/JS, Scala, Java,
