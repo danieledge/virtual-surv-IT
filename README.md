@@ -20,7 +20,19 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.3.0
+> ## ✨ What's new in 0.4.0
+>
+> - **🛡️ Data-handling contract** - the raw folder stays hard-blocked; *other* data is analysed on
+>   your **attestation** that it's masked/synthetic/anonymised (a startup disclaimer); an
+>   **automatic data-masking workflow** is on the roadmap to replace it.
+> - **👥 A named, globally- & gender-diverse team** with playful staff profiles - and the PM
+>   (Morgan) addresses specialists by name.
+> - **📐 Built to agent best-practice** - per-agent **model tiering** (4 opus / 11 sonnet / 1 haiku)
+>   with rationale, and a **conformance matrix vs Anthropic's multi-agent guidance**
+>   ([`docs/agent-design.md`](docs/agent-design.md)).
+> - **🔒 Code-execution safety gate** - reviews static by default; execution behind a consent gate.
+>
+> <details><summary>What's new in 0.3.0 - data-analyst &amp; business-analyst expansion</summary>
 >
 > **A data-analyst & business-analyst expansion (research-grounded), plus a code-execution safety gate.**
 > - **`tuning-analyst`** (new) - surveillance threshold calibration / alert tuning: risk-based
@@ -38,6 +50,7 @@
 > - **Code-execution safety gate** - reviews are **static by default**; running tests/profilers is
 >   blocked by a hook unless authorised (consent marker or `CST_ALLOW_EXEC=1`), behind a prominent
 >   disclaimer. Performance review is static/inferred-only for now.
+> </details>
 >
 > <details><summary>What's new in 0.2.0 - modular code-review subsystem</summary>
 >
@@ -59,6 +72,8 @@
 > - **Opt-in AI-review git-hook gate** - a severity-blocking `pre-commit` (blocks on 🔴 Critical
 >   or any §5 data-safety finding; advisory on 🟠), off by default.
 > </details>
+>
+> 📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
 
 A **virtual compliance surveillance *engineering* team made of AI assistants** - it doesn't
 *do* compliance, it **builds the surveillance solutions and technology** behind detecting
