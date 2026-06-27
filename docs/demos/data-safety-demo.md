@@ -3,6 +3,11 @@
 *A real `/demo` transcript: Morgan shows the §5 keystone - real data never reaches the model - and
 deliberately triggers the raw-data guard so you watch it block. [Back to demos](README.md).*
 
+> 📖 **Reading key:** blockquotes that begin with **🎩** are **Morgan, the AI PM, speaking live in
+> the session** (his words, generated at the moment - not the repo author's). Plain text is editorial
+> framing; ` ``` ` blocks are real commands/output and verbatim agent findings.
+> [Full key](README.md#how-to-read-a-transcript-whos-speaking).
+
 ---
 
 > 🎩 **Data-safety demo - the keystone.** This is the most important thing the team does: **real data

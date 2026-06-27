@@ -3,6 +3,11 @@
 *A real `/demo` transcript: Morgan builds a new detection from scratch, chaining specialists
 (orchestrator-workers). [Back to demos](README.md).*
 
+> 📖 **Reading key:** blockquotes that begin with **🎩** are **Morgan, the AI PM, speaking live in
+> the session** (his words, generated at the moment - not the repo author's). Plain text is editorial
+> framing; ` ``` ` blocks are real commands/output and verbatim agent findings.
+> [Full key](README.md#how-to-read-a-transcript-whos-speaking).
+
 > 📂 **The actual documents produced are downloadable** in
 > [**`build-artifacts/`**](build-artifacts/): the full [scenario spec](build-artifacts/wash-trade-scenario-spec.md),
 > the [SME validation](build-artifacts/wash-trade-sme-validation.md), and Mateo's

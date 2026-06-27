@@ -3,6 +3,11 @@
 *A real `/demo` transcript: Morgan reviews a small synthetic Python file end-to-end, narrating every
 decision. [Back to demos](README.md).*
 
+> 📖 **Reading key:** blockquotes that begin with **🎩** are **Morgan, the AI PM, speaking live in
+> the session** (his words, generated at the moment - not the repo author's). Plain text is editorial
+> framing; ` ``` ` blocks are real commands/output and verbatim agent findings.
+> [Full key](README.md#how-to-read-a-transcript-whos-speaking).
+
 ---
 
 > 🎩 **Review demo it is.** I'll review a small synthetic Python file end-to-end. Let me walk you
