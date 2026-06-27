@@ -25,8 +25,19 @@ The conduct to detect, in plain terms.
 - [ ] Explainability: every alert traces alert → logic → obligation.
 
 ## 7. Out of scope / assumptions / open questions
-List explicitly. Flag anything needing SME input.
+List explicitly. Flag anything needing SME input. **Each open question must be formally
+dispositioned by its owner before sign-off** (§9) - don't leave them dangling (DoD gate).
 
 ## 8. Hand-off
 SME for review: `<trade-surveillance-sme | tm-sme | comms-surveillance-sme>`
 Implementer: `rules-developer` (or `ml-engineer` if model-based → `model-validator`).
+
+## 9. Open-questions disposition (decision log)
+The §7 open questions, formally closed by their owner (the SME). Don't finalise the obligation
+mapping / sign off while a blocker is open.
+
+| # | Question | Owner | Disposition |
+|---|---|---|---|
+| Q1 | <…> | <sme> | ✅ answered / ⏭️ needs deployment input / 🔴 open-decision-required - <one line> |
+
+**Bottom line:** is the obligation mapping safe to finalise? If not, the minimum still required.

@@ -32,7 +32,9 @@ a { color: #0969da; }
 snapshot of what was caught). Synthetic only (§5); demo artifact, not production detection logic.</p>
 <p><strong>Status in one line:</strong> the <strong>7 review defects are ✅ Fixed</strong> (tests green); what remains open is by
 design - <strong>3 deploy-gates ⏭️ Deferred</strong> (re-calibrate on real data, the O(n²) fix, a missing-mid
-metric) and <strong>human sign-off ⛔ Pending</strong> (a demo can't produce one). Detail in §3 and §5.</p>
+metric), the <strong>obligation mapping not finalised</strong> (SME-dispositioned: Q1 jurisdiction + Q3 exemption
+governance need firm input - <a href="wash-trade-scenario-spec.md">spec §9</a>), and <strong>human sign-off ⛔ Pending</strong>
+(a demo can't produce one). Detail in §3 and §5.</p>
 </blockquote>
 <table>
 <thead>
@@ -191,6 +193,12 @@ RTM, handover). The only gate not closed is <strong>human sign-off</strong> (a d
 <td>compliance</td>
 <td>✅ Calibrated (<a href="threshold-tuning-pack.md">tuning pack</a>): measured ATL/BTL on synthetic data → <code>price_tolerance_pct</code> 0.10-0.50%. Real labelled set still needed pre-deploy.</td>
 </tr>
+<tr>
+<td>11</td>
+<td>BA's 5 open questions to the SME never dispositioned (obligation mapping treated as final without confirmation)</td>
+<td>SME (the BA's flag)</td>
+<td>✅ Dispositioned (<a href="wash-trade-scenario-spec.md">spec §9</a>): Q4/Q5 answered; Q2 needs deployment input; <strong>Q1 (jurisdiction) + Q3 (exemption governance) are go-live blockers</strong> → obligation mapping ⏭️ not yet final.</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Re-review result:</strong> dev tests 2/2 pass; QA suite <strong>33/33 pass</strong> (DEF-001 resolved).</p>
@@ -211,8 +219,13 @@ missing-mid. Residual (deferred): real UBO-provider integration, volume performa
 <tbody>
 <tr>
 <td>Traceable (RTM)</td>
+<td>⚠️ Partial</td>
+<td>§2 spine + alert carries obligation/UBO ID, <strong>but</strong> the obligation <em>mapping</em> isn't finalised - SME open-questions Q1/Q3 are blockers (<a href="wash-trade-scenario-spec.md">spec §9</a>).</td>
+</tr>
+<tr>
+<td>Upstream open questions dispositioned</td>
 <td>✅ Met</td>
-<td>§2 above; alert now carries obligation + UBO ID</td>
+<td>The BA's 5 questions are formally closed by the SME (<a href="wash-trade-scenario-spec.md">spec §9</a>) - 2 answered, 1 pre-UAT, 2 go-live blockers.</td>
 </tr>
 <tr>
 <td>Tested (TP + FP)</td>

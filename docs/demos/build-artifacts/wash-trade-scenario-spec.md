@@ -144,3 +144,19 @@ Scenario: Alert traces to obligation
 
 **Hand-off:** trade-surveillance-sme (review and sign off §2, §5, and the open questions), then
 rules-developer for implementation.
+
+### 9. Open-questions disposition (decision log) - by `trade-surveillance-sme` (Camila), 2026-06-27
+
+The §8 open questions, formally dispositioned (closing the BA→SME loop):
+
+| # | Question | Disposition |
+|---|---|---|
+| Q1 | Jurisdiction scope + safe-harbours | ⏭️ **Needs deployment input** - depends on where the firm trades / is domiciled. RTS 3 / FINRA 5320 designated-MM + ETF create/redeem carve-outs are real but which apply needs the in-scope desks. **Blocks the obligation mapping.** |
+| Q2 | UBO linkage source | ⏭️ **Needs deployment input** - firm data-architecture. Firm-independent constraints recorded (UBO not legal-entity; as-of date in evidence pack; DQ gate). Resolve before UAT. |
+| Q3 | Exemption list + governance | 🔴 **Open-decision-required** - categories advisable (designated-MM, riskless-principal, treasury), but the specific list + a **named approver** + review cadence is a **go-live gate** (an unapproved list is itself a MAR Art 16(2) finding). |
+| Q4 | Cross-venue scope | ✅ **Answered** - detection *should* span venues (a buy on-exchange + sell OTC to an affiliate is a known evasion); match on instrument + UBO + window across venues. Constraint = OTC data availability (a coverage gap to document, not a reason to narrow). |
+| Q5 | Price-tolerance rationale | ✅ **Answered** - cover **both** variants: near-mid (within prevailing spread, not a fixed bps) **and** deliberate off-market (necessary condition, early-continue). Document the two trigger branches. |
+
+**Bottom line (SME):** the **obligation mapping is NOT yet safe to finalise.** Minimum before sign-off:
+**Q1** (confirm jurisdiction/venue scope - blocks the mapping) and **Q3** (named approver + governance
+for the exemption list - a go-live gate). Q2 before UAT. Q4/Q5 closed.
