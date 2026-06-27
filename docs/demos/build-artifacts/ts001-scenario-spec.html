@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenario Spec - TS-001 Wash Trade / Self-Match (DEMO, Run 2)</title>
+<style>:root { color-scheme: light dark; }
+body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem;
+  color: #1a1a1a; background: #fff; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #57606a; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #8a8a8a; font-size: .8rem; }
+@media print { body { max-width: none; } a { color: inherit; } }</style>
+</head>
+<body>
+<h1 id="scenario-spec-ts-001-wash-trade-self-match-demo-run-2">Scenario Spec - TS-001 Wash Trade / Self-Match (DEMO, Run 2)</h1>
+<blockquote>
+<p>Produced by <code>business-analyst</code> (Amara). Obligation: <strong>MAR Art 12(1)(a)</strong>. Synthetic only (§5).
+Status: <strong>SME-validated; open questions dispositioned (§9); obligation mapping PROVISIONAL.</strong></p>
+</blockquote>
+<h2 id="1-behaviour">1. Behaviour</h2>
+<p>A trader or connected group submits offsetting buy/sell orders in the same instrument that match
+against each other, creating artificial volume or a false price signal with no genuine change in
+economic exposure.</p>
+<h2 id="2-regulatory-obligation">2. Regulatory obligation</h2>
+<p>Primary: <strong>EU MAR Art 12(1)(a)</strong> (false/misleading signals as to supply, demand or price), with
+Art 12(2)(c) "no change in beneficial ownership" indicator. Equivalents: UK MAR Art 12; US SEC 10b-5 /
+FINRA 6140; CFTC CEA s.4c(a); SG SFA s.197; HK SFO s.274; JP FIEA Art 159.</p>
+<blockquote>
+<p><strong>FLAG (resolved in §9):</strong> the obligation mapping above is illustrative - the SME must confirm
+which desks/venues fall under which regime and which safe-harbours apply <strong>before</strong> the mapping is
+finalised. Until then the detector carries <code>obligation_status = PROVISIONAL</code>.</p>
+</blockquote>
+<h2 id="3-data-required">3. Data required</h2>
+<p>Trade/order id, instrument id, side, price, quantity/notional, timestamps, trader/desk id, account &amp;
+legal-entity id, counterparty id, venue, strategy/algo tag. Plus: UBO/connected-party graph (with
+as-of date) and a market snapshot (mid + prevailing spread) per instrument/date. <em>Contains PII/MNPI -
+fixtures are synthetic only (§5).</em></p>
+<h2 id="4-detection-logic-outline-no-thresholds">4. Detection-logic outline (no thresholds)</h2>
+<ol>
+<li>Pair opposing buy/sell legs in the same instrument where accounts share a <strong>UBO / connected-party
+   group</strong>, within a lookback window.</li>
+<li><strong>Off-market price is a NECESSARY condition</strong> (SME-confirmed) - the average leg price must deviate
+   from the prevailing mid beyond a (spread-normalised) threshold; implement as an early-continue.</li>
+<li>Apply a <strong>safe-harbour exemption</strong> set (designated market-makers) <em>before</em> pairing.</li>
+<li>Raise an explainable alert carrying the matched pair, UBO id, deviation, and the obligation (+status).</li>
+</ol>
+<h2 id="5-parameters-sme-tuning-decisions-no-invented-values">5. Parameters (SME / tuning decisions - no invented values)</h2>
+<p><code>lookback_days</code> · <code>off_market_threshold_bps</code> (spread-normalised) · <code>min_notional</code> (required - see tuning
+pack) · <code>ubo_graph_max_age_days</code> (data-quality gate) · connected-party definition · safe-harbour list.</p>
+<h2 id="6-examples-synthetic">6. Examples (synthetic)</h2>
+<ul>
+<li><strong>True-positive:</strong> ACCT-A buys, ACCT-B sells SYNTH-EQ-001 (same UBO-X) at 100.60 vs mid 100.00 (60bps
+  off-market), same day → alert.</li>
+<li><strong>False-positive:</strong> designated MM (MM-ACCT-001) two-sided quote fills at mid → suppressed (off-market
+  necessary condition + exemption).</li>
+</ul>
+<h2 id="7-acceptance-criteria-gherkin">7. Acceptance criteria (Gherkin)</h2>
+<pre><code class="language-gherkin">Scenario: Cross-account self-match, off-market, same UBO -&gt; alert
+  Given opposing legs in one instrument from two accounts sharing a UBO group
+  And the price is off-market beyond the threshold within the lookback window
+  And neither account is exempt
+  Then an alert is raised carrying both trade ids, the UBO id, the deviation and the obligation
+
+Scenario: At-market price -&gt; no alert (necessary condition)
+  Given the same UBO-linked opposing legs priced at mid
+  Then no alert is raised
+</code></pre>
+<h2 id="8-open-questions-for-the-sme">8. Open questions for the SME</h2>
+<p>Q1 jurisdiction scope + safe-harbours · Q2 safe-harbour operationalisation · Q3 intra-group/treasury
+treatment · Q4 connected-party definition · Q5 implied-match where no fill confirmation · Q6 cover the
+pre-arranged-via-connected-counterparty variant?</p>
+<h2 id="9-open-questions-disposition-decision-log-trade-surveillance-sme-camila-2026-06-27">9. Open-questions disposition (decision log) - <code>trade-surveillance-sme</code> (Camila), 2026-06-27</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Disposition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q1</td>
+<td>⏭️ <strong>Needs deployment input</strong> - depends on venues/domicile; safe-harbours are venue-specific. <strong>Blocks the mapping.</strong></td>
+</tr>
+<tr>
+<td>Q2</td>
+<td>⏭️ Needs deployment input - MM-designation feed + buyback register, applied as a pre-filter.</td>
+</tr>
+<tr>
+<td>Q3</td>
+<td>🔴 <strong>Open-decision-required</strong> - intra-group/treasury is a firm-policy call (exclude vs separate queue); Legal/Compliance sign-off.</td>
+</tr>
+<tr>
+<td>Q4</td>
+<td>🔴 <strong>Open-decision-required</strong> - UBO is the right anchor, but the <em>width</em> (entity / group / acting-in-concert) must be chosen; drives BO-graph + alert volume.</td>
+</tr>
+<tr>
+<td>Q5</td>
+<td>✅ Answered - implied match is a valid <em>lower-confidence tier</em>: tighter window, distinct confidence label, higher review threshold.</td>
+</tr>
+<tr>
+<td>Q6</td>
+<td>✅ Answered - real typology but materially harder (needs comms/network analysis); scope as a <strong>separate TS-002</strong>, do not fold in.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bottom line:</strong> obligation mapping <strong>not safe to finalise</strong> - Q1 + Q3/Q4 are go-live blockers.</p>
+<div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
+</body>
+</html>

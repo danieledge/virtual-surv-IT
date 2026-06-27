@@ -1,58 +1,38 @@
-# Threshold-Tuning Pack - Wash Trade / Self-Match (DEMO)
+# Threshold-Tuning Pack - TS-001 Wash Trade (DEMO, Run 2)
 
-> Produced by `tuning-analyst` (Theo). Calibration for SS-TS-001. Obligation: MAR Art. 12(1)(a).
-> **Now with MEASURED results** - a labelled synthetic set ([`calibrate_wash_trade.py`](calibrate_wash_trade.py))
-> lets us run real ATL/BTL instead of guessing. Synthetic only (§5).
+> Produced by `tuning-analyst` (Theo). Obligation: MAR Art 12(1)(a). Synthetic only.
+> No labelled production data here - values are **🧠 inferred** (illustrative), to be re-calibrated
+> via ATL/BTL on a real labelled set. Run 1 proved the measured-sweep-on-synthetic-labelled-data
+> method works (it found a 0-FP plateau); apply the same per segment.
 
-## 0. Measured calibration (📊 - the headline)
-Ran the detector over a synthetic set of **600 trades with 60 injected wash pairs** (known ground
-truth) + 240 legit-activity pairs (the SME's FP drivers: unaffiliated, affiliated-but-competitive,
-market-maker). Swept `price_tolerance_pct`:
+## Method (per parameter)
+- **`off_market_threshold_bps`** - the natural unit is **deviation ÷ prevailing spread**
+  (spread-normalised), not flat bps. Set per liquidity segment where the true-positive ratio
+  distribution separates from the FP distribution (sweep, P5-TP subject to P95-FP below it).
+- **`lookback_days`** - P90-P95 of the legitimate same-UBO round-trip lag.
+- **`ubo_graph_max_age_days`** - a **data-quality gate**, not a stat threshold: the UBO feed refresh
+  SLA + a grace day (confirm with the data owner).
+- **`min_notional`** *(required, currently absent - QA DEF-003)* - a de-minimis floor; an
+  immaterial-notional pair can't give a "false or misleading signal" under MAR Art 12(1)(a). A
+  **compliance risk-appetite** decision, not pure stats.
 
-| price_tol % | alerts | TP | FP | precision (ATL) | recall (coverage) | missed (BTL) |
-|---|---|---|---|---|---|---|
-| 0.05 | 117 | 60 | 57 | 51.3% | 100% | 0 |
-| **0.10** | **60** | **60** | **0** | **100%** | **100%** | **0** |
-| 0.20 | 60 | 60 | 0 | 100% | 100% | 0 |
-| 0.50 | 60 | 60 | 0 | 100% | 100% | 0 |
-| 1.00 | 50 | 50 | 0 | 100% | 83.3% | 10 |
-| 2.00 | 24 | 24 | 0 | 100% | 40.0% | 36 |
+## Illustrative starting values (🧠 inferred - NOT measured)
+| Parameter | Segment | Value | Rationale |
+|---|---|---|---|
+| off-market (spread ratio) | liquid large-cap | 1.5× spread | abuse hides at tight prices |
+| off-market (spread ratio) | mid/small-cap | 2.0× spread | wider natural spread |
+| off-market (spread ratio) | illiquid/OTC | 3.0× spread | high spread variance |
+| off-market (abs fallback) | no spread data | 50 bps | only with a coverage-gap flag |
+| `lookback_days` | exchange equities | 3 | same-day/T+1 typical |
+| `ubo_graph_max_age_days` | all | feed SLA + 1 | data-quality, confirm with owner |
+| `min_notional` | all | *firm STOR materiality* | compliance decision, placeholder only |
 
-**Measured recommendation:** `price_tolerance_pct` in **0.10-0.50%** for this segment - 100%
-precision *and* recall. Below it (0.05%) the off-market test admits competitive-price noise (57 FPs);
-above it (≥1%) the **BTL "missed" column climbs** as genuine washes priced 0.3-1% off mid slip below
-the line. 📊 measured on synthetic ground truth - reproduce with `python3 calibrate_wash_trade.py`.
+## Volume↔coverage trade-off
+Tightening off-market catches at-market evasion but floods on affiliated-fund flow; loosening cuts
+load but blinds the scenario to near-market washes. **Two highest-value moves:** add `min_notional`
+(precision gain, negligible coverage cost) and switch to **spread-normalised** thresholds per segment
+(improves precision in illiquid names and recall in liquid ones simultaneously).
 
-> **Honest caveat (do not skip).** These numbers are measured on a **synthetic distribution we
-> control** (washes injected at 0.3-3% off-mid, legit at <0.1%), so the clean 0-FP plateau is partly
-> by construction - real markets are messier. This **validates the calibration *method* and the
-> volume↔coverage curve**; the deployment value still needs ATL/BTL on a **real labelled set**. The
-> label "measured on synthetic data" is not a regulatory defence.
-
-## 1. Methodology (how each parameter is set)
-- **Segment first** (calibrate per segment, not globally): instrument **liquidity band**, **venue
-  type** (lit/dark/OTC - OTC has no exchange mid), **account type** (retail vs prop changes the noise floor).
-- **`price_tolerance_pct`** - from the empirical bid/ask **spread distribution**: set above the 97.5th
-  percentile / mean+2σ of normal spread so a competitive price is never flagged. *(Measured above.)*
-- **`lookback_seconds`** - from the distribution of legitimate same-UBO round-trip times; 90-95th pct.
-- **`min_notional`** - a percentile (5-10th) of the segment's trade-size distribution; never a round number.
-- **`ubo_staleness_days`** - a **data-governance** bound: the firm's KYC refresh SLA (e.g. 180d
-  higher-risk / 365d standard), per FATF R.10. Not an independent tuning choice.
-- **repetition floor** - the tail of the legitimate per-UBO pair-count distribution (Poisson/neg-binomial).
-- **`market_mid`** - a *feed*, not a threshold: source/latency/coverage gated by `data-quality-reviewer`
-  via `/assess-coverage`. Missing mid = silent miss (the FCA MW79 failure mode).
-
-## 2. Illustrative starting points (🧠 - for un-measured segments)
-For segments without a labelled set yet: large-cap liquid equities ~0.10% (10bps); mid-cap ~0.50%;
-illiquid ~1%+. `lookback` 300s lit / 1800s OTC. `min_notional` ~GBP 10k institutional. `ubo_staleness`
-180d. repetition floor 2. All 🧠 inferred - replace via §0 measurement per segment.
-
-## 3. Data needed to calibrate the *real* scenario
-12m masked trade feed (RTS 25 timestamps), the UBO table with as-of dates, per-instrument spread
-series, a labelled alert/SAR set (even n=100-200), legitimate round-trip distribution, and the
-`market_mid` coverage inventory. (Masked/synthetic only, §5.)
-
-## 4. MI & cadence
-Track monthly: alert volume/segment, FP rate (ATL), alert-to-SAR conversion, analyst-minutes/alert;
-flag >20% volume drift (decay or feed problem). Re-calibrate annually or on universe change.
-House-rules lessons recorded in [`../../house-rules.md`](../../house-rules.md).
+## To actually calibrate
+Need: labelled/SME-assessed pairs (50-100/segment); populated `spread_bps`; UBO feed SLA; the notional
+distribution; alert-to-STOR history; a verified exempt-account list. (Masked/synthetic only, §5.)

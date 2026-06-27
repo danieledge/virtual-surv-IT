@@ -1,162 +1,126 @@
 # 🏗️ Build demo
 
-*A real `/demo` transcript: Morgan builds a new detection from scratch, chaining specialists
-(orchestrator-workers). [Back to demos](README.md).*
+*A real `/demo` transcript: Morgan builds a new detection from scratch and takes it through the full
+Definition-of-Done chain - 8 specialists, the blackboard, the fix→re-review loop. [Back to demos](README.md).*
 
 > 📖 **Reading key:** blockquotes that begin with **🎩** are **Morgan, the AI PM, speaking live in
 > the session** (his words, generated at the moment - not the repo author's). Plain text is editorial
 > framing; ` ``` ` blocks are real commands/output and verbatim agent findings.
 > [Full key](README.md#how-to-read-a-transcript-whos-speaking).
 
-> 📂 **The actual documents produced are downloadable** in
-> [**`build-artifacts/`**](build-artifacts/): the full [scenario spec](build-artifacts/wash-trade-scenario-spec.md),
-> the [SME validation](build-artifacts/wash-trade-sme-validation.md), and Mateo's
-> [`wash_trade.py`](build-artifacts/wash_trade.py) + [`test_wash_trade.py`](build-artifacts/test_wash_trade.py).
-> Not summaries - the real deliverables.
+> 📂 **The actual deliverables are downloadable** - every artifact below is committed in
+> [`build-artifacts/`](build-artifacts/). And this run is compared head-to-head with an earlier run in
+> the [🔁 run comparison](build-run-comparison.md) - which shows the team *getting better each time*.
 
 ---
 
-> 🎩 **Build demo - the orchestrator-workers pattern.** A build *chains* specialists, each one's
-> output feeding the next (the blackboard).
+> 🎩 **Build demo - let's make something.** I'll spec, build and fully review a new **wash-trade /
+> self-match** detection (TS-001), on synthetic data. The intake gates first - I answer them, on a
+> real job *you* would:
+> - ⚠️ **Execution?** → **Yes**, but only this trusted demo repo on synthetic data (so I can *run*
+>   the tests - that's how review earns its keep).
+> - 🛡️ **Data?** → **Synthetic, no real data.**
 >
-> **The intake (I answer):** A build from scratch. **Execution? No** - I'll produce a spec and a rule
-> *sketch* + test statically. **Data? Synthetic only.** Output goes to a **demo artifact**, not your
-> live `rules/`.
->
-> **Right-sizing, out loud - and notice it's *different* from the review:** a 1-file review was 1
-> agent. A *build* genuinely needs a chain - so I'll use **three**: **Amara** (spec) → **Camila** (SME
-> validation) → **Mateo** (build). Still not all 16. The idea: a small **wash-trade / self-match**
-> detector (a trader on both sides of the same instrument in a short window - classic market abuse).
+> **Right-sizing, out loud:** this is the *heavy* demo - a full DoD delivery is **8 agents** (build +
+> 3 reviews + tuning + performance), ~170k tokens. A lighter ask would be far less.
 
 ### → Step 1: Amara (`business-analyst`, sonnet) writes the spec
 
-> Why her, why sonnet: turning an obligation into a precise, testable spec is structured BA work that
-> gets re-checked downstream - it doesn't need opus.
+> 🎩 Why her, why sonnet: turning a regulatory need into a testable spec is structured BA work, not
+> novel judgement. She cites the obligation and **flags every threshold as a tuning decision** rather
+> than inventing numbers.
 
-Amara produced a concise scenario spec (`SS-TS-001`) -
-[**read the full document**](build-artifacts/wash-trade-scenario-spec.md). Highlights:
-- **Behaviour:** a party buys and sells the same instrument in offsetting trades attributable to the
-  same beneficial owner, with no genuine change in economic exposure.
-- **Obligation:** **EU MAR Article 12(1)(a)** (false/misleading signals as to supply/demand/price);
-  jurisdiction equivalents noted (UK MAR, SEC Exchange Act s.9(a)(1), SFA s.197, SFO s.274). *Flagged
-  for SME to confirm in-scope jurisdictions + safe-harbour carve-outs.*
-- **Data required:** trade/order ID, instrument, direction, price, qty, timestamp, account ID,
-  **beneficial-owner (UBO) ID**, venue, counterparty. (UBO linkage marked the critical field.)
-- **Detection outline:** link accounts → find opposite-direction pairs in the same instrument within
-  a lookback window → offset test → exemption filter → score → alert.
-- **Parameters:** lookback, price/qty tolerance, repetition threshold - **all flagged as SME/tuning
-  decisions; no values invented** (CLAUDE.md §4).
-- One synthetic **true-positive** + one **false-positive** example, and **Gherkin acceptance
-  criteria** (incl. the obligation-trace AC), plus 5 open questions for the SME.
+Amara produced [**`ts001-scenario-spec.md`**](build-artifacts/ts001-scenario-spec.md): behaviour,
+**MAR Art 12(1)(a)**, the data fields, a detection outline, parameters-to-tune, Gherkin ACs, and **6
+open questions** - with an explicit *"don't finalise the obligation mapping until Q1-Q3 are
+dispositioned."*
 
-> 🎩 **Amara delivered a real spec** - and did exactly right: cited the article, **flagged every
-> threshold as an SME/tuning decision instead of inventing numbers**, and surfaced the open questions.
-> The **blackboard handoff:** her spec is now the *input* to the next agent.
+### → Step 2: Camila (`trade-surveillance-sme`, sonnet) validates + dispositions
 
-### → Step 2: Camila (`trade-surveillance-sme`, sonnet, READ-ONLY) validates the typology
+> 🎩 Camila advises only - she never touches code. She confirms the typology, names the
+> false-positive drivers, and **formally closes the open questions** so nothing dangles.
 
-> Why her: the market-abuse expert who validates the *typology*. Read-only by design - she advises,
-> can't edit.
+She validated the typology (UBO linkage is the right entry point; **off-market price must be a
+*necessary* condition**, not a score), named the FP drivers (affiliated-fund flow, market-making,
+coincident liquid orders), and **dispositioned all 6 questions** ([validation](build-artifacts/ts001-sme-validation.md)):
+Q5/Q6 answered (Q6 → a separate TS-002), Q2 needs deployment input, and **Q1 + Q3/Q4 are go-live
+blockers** → the obligation mapping is **not** safe to finalise.
 
-Camila's advisory ([**full document**](build-artifacts/wash-trade-sme-validation.md); condensed here):
-- **Typology sound?** Yes - beneficial-owner linkage is the right entry point, opposite-direction
-  pairs in a window is the standard signature, MAR Art 12(1)(a) is correct and jurisdiction-portable.
-- **Top false-positive drivers:** (1) **legitimate two-way business between affiliated funds** under
-  one manager - the highest-volume FP source; (2) **market-making / riskless-principal** activity;
-  (3) **coincident independent orders** at a liquid price level.
-- **Single biggest pitfall:** **beneficial-owner graph completeness & freshness** - stale linkage
-  causes both false negatives *and* false positives; it's the most common reason a wash-trade
-  scenario fails audit. Require a refresh cadence + a data-quality gate.
-- **Sharp correction:** *"price must be **off-market** as a **necessary** condition, not just
-  convergence with a tolerance."*
-- **One thing the spec got right:** deferring all thresholds to SME/tuning with placeholders.
+### → Step 3: Mateo (`rules-developer`, sonnet) builds it - and the team's memory pays off
 
-> 🎩 **That's why the SME isn't optional.** Camila - pure advice - caught the thing that sinks real
-> wash-trade scenarios *before a line of code was written.* She can recommend house-rules entries;
-> committing them is mine.
+> 🎩 Here's the bit I'm proud of. Mateo **read `house-rules.md` first** - the lessons the team
+> recorded from earlier builds - and applied them *up front*.
 
-### → Step 3: Mateo (`rules-developer`, sonnet) builds the sketch + tests
+Mateo produced [**`ts001_wash_trade.py`**](build-artifacts/ts001_wash_trade.py) + tests, applying:
+UBO keystone + **staleness gate**, off-market as an **early-continue necessary condition**, obligation
+**and** UBO id as **alert fields**, and an **injected `as_of_date`** (deterministic - no wall clock).
 
-> Why him, why sonnet: he implements the validated spec into deterministic, tested logic; it's then
-> independently reviewed, so it doesn't need opus. He inherits Amara's spec **and** Camila's caveats.
-
-Mateo produced a real `detect_wash_trades()` sketch + tests
-([**`wash_trade.py`**](build-artifacts/wash_trade.py) ·
-[**`test_wash_trade.py`**](build-artifacts/test_wash_trade.py)) honouring every caveat - core (abridged):
-
-```python
-def detect_wash_trades(trades, params, ubo_link, exemptions) -> list[WashTradeAlert]:
-    """Flag a pair only when ALL three conditions hold:
-       1. Both accounts share a confirmed, NON-STALE UBO link (data-quality gate).
-       2. At least one leg is priced OFF-MARKET (necessary condition).
-       3. Neither account is in the active exemption set."""
-    # Fail loudly if a threshold is missing - no silent defaults (coding-standards §4).
-    required = {"price_tolerance_pct","ubo_staleness_days","min_notional","lookback_seconds","market_mid"}
-    if required - params.keys():
-        raise KeyError(f"Missing required params: {required - params.keys()}")
-    ...
-    for buy in buys:
-        if buy["account_id"] in exemptions: continue          # condition 3
-        for sell in candidate_sells(buy):
-            link = ubo_link(buy["account_id"], sell["account_id"])
-            if not link or not link["linked"]: continue        # condition 1: UBO gate
-            if link["as_of"] < staleness_cutoff: continue       # 1: skip STALE UBO data
-            deviation = abs(sell["price"] - mid) / mid * 100
-            if deviation <= params["price_tolerance_pct"]: continue   # condition 2: necessary
-            alerts.append(WashTradeAlert(...))                  # off-market + UBO-linked + not exempt
-    return alerts
+```console
+$ cd docs/demos/build-artifacts && python3 -m pytest test_ts001_wash_trade.py -q
+...                                                                      [100%]
+3 passed
 ```
 
-…plus a pytest with **one true-positive** (UBO-linked, 6%-off-market → alerts) and **one
-false-positive guard** (same pair but competitive 0.5% price → must NOT alert), proving price is a
-*necessary* condition. All thresholds are `PLACEHOLDER` values left for `tuning-analyst`.
+> 🎩 **Three for three, first run.** That matters more than it looks: in an earlier run of this same
+> demo, the equivalent test **failed** the first time - the code had used the wall clock for UBO
+> staleness, a non-deterministic bug. That lesson became a house-rule, and this time Mateo never made
+> it. The team's memory is **measured, not decorative** - see the [run comparison](build-run-comparison.md).
 
-> 🎩 **Mateo nailed it.** He implemented Camila's "off-market price as a *necessary* condition" as an
-> **early-continue, not a weighted score** (exactly as she demanded), gated on a fresh UBO link, and
-> made missing thresholds **fail loud** (`KeyError`) so nobody can ship undocumented numbers.
->
-### → Step 4: the review + calibration chain (this actually ran - not narrated)
+### → Step 4: the independent reviews (Ravi + Linh + Layla, in parallel)
 
-Mateo's code went through the full chain, and it **earned its keep** - independent review found
-**real defects the build missed**, all fixed and re-tested:
+> 🎩 Now the adversarial pass - three independents, no chatter, findings onto the blackboard. With the
+> old bugs already designed-out, did review still earn its keep? **Yes - it found newer, subtler things.**
 
-- **Ravi (`code-reviewer`):** deviation checked the *sell leg only* (a buy-side wash slipped through);
-  buy-before-sell loop ordering; no `mid==0` guard → **fixed**.
-- **Linh (`qa-engineer`):** wrote a **33-test** independent suite that caught **DEF-001**, a UBO-staleness
-  off-by-one (`<` should be `<=`) → **fixed**.
-- **Layla (`compliance-reviewer`):** the alert **didn't carry its own obligation citation** - it violated
-  acceptance criterion AC3 → added `obligation` + `ubo_id` fields; spec/code divergence → spec **Rev B**.
-- **Theo (`tuning-analyst`):** turned the `PLACEHOLDER` thresholds into **📊 measured** values by
-  *synthesising a labelled dataset* and running real ATL/BTL → `price_tolerance_pct` **0.10-0.50%**
-  (100% precision *and* recall). Reproduce: `python3 build-artifacts/calibrate_wash_trade.py`.
-- **Thabo (`performance-reviewer`):** static review - **won't scale as-is** (O(n²)); fix = group by
-  instrument+window.
+- **Ravi (`code-reviewer`, opus):** the off-market test and the *reported* deviation came from two
+  separate computations (drift risk); the alert didn't record *which* snapshot date it judged against
+  (auditability); same-account self-match silently excluded (a scope call).
+- **Linh (`qa-engineer`, sonnet):** wrote an independent QA suite and caught **DEF-001** - a missing
+  market snapshot **silently dropped** pairs (an invisible surveillance gap); quantity never matched.
+- **Layla (`compliance-reviewer`, opus):** the standout. The code hard-coded `obligation="MAR Art
+  12(1)(a)"` as if **finalised** - while the SME had flagged the mapping as **blocked**. The alert
+  *asserted a regulatory trace that didn't yet exist* - the most dangerous failure mode for a control.
 
-> 🎩 **The bonus that proves the point:** when I first *ran* Mateo's test it **failed** - a
-> non-deterministic time bug (UBO staleness vs the wall clock). Exactly what review/QA exists to
-> catch. The chain is **not a rubber stamp.** Final result: dev tests **2/2**, QA suite **33/33** green;
-> every gate ran; only **human sign-off** is outstanding (a demo can't produce one).
+> 🎩 **That's the chain working.** None of these are the old bugs - they're harder, and they only
+> surfaced *because* the basics were already right. I routed them back: single-source the deviation,
+> record the snapshot date, log the missing-snapshot gap, and carry an explicit
+> **`obligation_status = PROVISIONAL`** so a blocked mapping can't masquerade as done. Re-tested - green.
 
-**📂 The complete, downloadable delivery:** [**`build-artifacts/`**](build-artifacts/) - the
-[delivery report](build-artifacts/delivery-report.md) (RTM, dispositions, DoD, **token usage**), the
-[spec](build-artifacts/wash-trade-scenario-spec.md), [SME validation](build-artifacts/wash-trade-sme-validation.md),
-[code](build-artifacts/wash_trade.py) + [tests](build-artifacts/test_wash_trade.py) +
-[QA suite](build-artifacts/test_wash_trade_qa.py) + [QA handover](build-artifacts/qa-handover.md),
-[tuning pack](build-artifacts/threshold-tuning-pack.md), and [performance review](build-artifacts/performance-review.md).
+```console
+$ python3 -m pytest test_ts001_wash_trade.py test_ts001_qa.py -q
+................                                                         [100%]
+16 passed
+```
 
-### 💰 What it cost
-The full delivery - build + 3 independent reviews + tuning + performance - used **8 agents,
-~182k tokens** (table in the [delivery report](build-artifacts/delivery-report.md) §7). Right-sized
-to 8, not 16; a lighter touch (spec + build + one review) is ~a third of that.
+### → Step 5: Theo (tuning) + Thabo (performance)
+
+> 🎩 Two more, in parallel, before I sign anything off.
+
+- **Theo (`tuning-analyst`):** thresholds stay un-invented; the [tuning pack](build-artifacts/threshold-tuning-pack.md)
+  gives the **method** + illustrative values, and two new rules - **spread-normalise** the off-market
+  threshold, and **`min_notional` is required** (an immaterial pair can't give a false signal).
+- **Thabo (`performance-reviewer`):** [won't scale as-is](build-artifacts/performance-review.md) -
+  O(buys×sells); fix is to pre-group by instrument+UBO. Deferred to productionisation (a demo has no volume).
+
+### → The delivery
+
+The consolidated [**delivery report**](build-artifacts/delivery-report.md) ties it together: RTM,
+every finding dispositioned, the DoD gate, developer handover, and the token/runtime/cost capture
+(**8 agents, ~171k tokens, ~9 min, ~$3-6**).
+
+> 🎩 **And here's the honest verdict.** This is **demo-complete** - every stage ran. But it is **NOT
+> deployable**, and I'll say exactly why: the obligation mapping is provisional (SME blockers), the
+> thresholds need real-data calibration, the O(n²) needs fixing, and a **human still has to sign off**
+> - which a demo cannot do. A report that hid those to look "all green" would be the failure. Saying
+> them is the job.
 
 ---
 
 ## What this demo showed
-- **Orchestrator-workers** end-to-end: Amara → Camila → Mateo → Ravi/Linh/Layla → Theo/Thabo → delivery.
-- **The blackboard** - each output is the next step's input; no agent-to-agent chatter.
-- **The SME caught a real flaw** (the UBO graph; off-market-as-necessary) *before* code existed.
-- **Review is not a rubber stamp** - it found 7 real defects (a false-negative, an off-by-one, a broken
-  audit field) and the fix→re-review loop closed them.
-- **Measured, not guessed** - thresholds calibrated by synthesising labelled data and running ATL/BTL.
-- **Honest gates** - the delivery is demo-complete but **says NOT deployable** until re-calibrated on
-  real data, the O(n²) is fixed, and a human signs off.
+- **Orchestrator-workers, end to end** - 8 specialists, each output feeding the next via the blackboard.
+- **The team learns** - codified house-rules stopped this build reintroducing the prior run's defects
+  (measured in the [run comparison](build-run-comparison.md)), and Run 2's review *added* new rules.
+- **Review is not a rubber stamp** - it found new, subtler issues, including a compliance trap (an
+  obligation literal masquerading as a finalised mapping).
+- **No invented thresholds; measured, not guessed** - flagged in the spec, calibrated by method.
+- **Honest gates** - demo-complete, but plainly **not deployable** until the mapping is finalised,
+  calibration is done on real data, the O(n²) is fixed, and a human signs off.

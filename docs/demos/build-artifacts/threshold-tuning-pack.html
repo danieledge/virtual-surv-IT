@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Threshold-Tuning Pack - Wash Trade / Self-Match (DEMO)</title>
+<title>Threshold-Tuning Pack - TS-001 Wash Trade (DEMO, Run 2)</title>
 <style>:root { color-scheme: light dark; }
 body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem;
@@ -24,122 +24,88 @@ a { color: #0969da; }
 @media print { body { max-width: none; } a { color: inherit; } }</style>
 </head>
 <body>
-<h1 id="threshold-tuning-pack-wash-trade-self-match-demo">Threshold-Tuning Pack - Wash Trade / Self-Match (DEMO)</h1>
+<h1 id="threshold-tuning-pack-ts-001-wash-trade-demo-run-2">Threshold-Tuning Pack - TS-001 Wash Trade (DEMO, Run 2)</h1>
 <blockquote>
-<p>Produced by <code>tuning-analyst</code> (Theo). Calibration for SS-TS-001. Obligation: MAR Art. 12(1)(a).
-<strong>Now with MEASURED results</strong> - a labelled synthetic set (<a href="calibrate_wash_trade.py"><code>calibrate_wash_trade.py</code></a>)
-lets us run real ATL/BTL instead of guessing. Synthetic only (§5).</p>
+<p>Produced by <code>tuning-analyst</code> (Theo). Obligation: MAR Art 12(1)(a). Synthetic only.
+No labelled production data here - values are <strong>🧠 inferred</strong> (illustrative), to be re-calibrated
+via ATL/BTL on a real labelled set. Run 1 proved the measured-sweep-on-synthetic-labelled-data
+method works (it found a 0-FP plateau); apply the same per segment.</p>
 </blockquote>
-<h2 id="0-measured-calibration-the-headline">0. Measured calibration (📊 - the headline)</h2>
-<p>Ran the detector over a synthetic set of <strong>600 trades with 60 injected wash pairs</strong> (known ground
-truth) + 240 legit-activity pairs (the SME's FP drivers: unaffiliated, affiliated-but-competitive,
-market-maker). Swept <code>price_tolerance_pct</code>:</p>
+<h2 id="method-per-parameter">Method (per parameter)</h2>
+<ul>
+<li><strong><code>off_market_threshold_bps</code></strong> - the natural unit is <strong>deviation ÷ prevailing spread</strong>
+  (spread-normalised), not flat bps. Set per liquidity segment where the true-positive ratio
+  distribution separates from the FP distribution (sweep, P5-TP subject to P95-FP below it).</li>
+<li><strong><code>lookback_days</code></strong> - P90-P95 of the legitimate same-UBO round-trip lag.</li>
+<li><strong><code>ubo_graph_max_age_days</code></strong> - a <strong>data-quality gate</strong>, not a stat threshold: the UBO feed refresh
+  SLA + a grace day (confirm with the data owner).</li>
+<li><strong><code>min_notional</code></strong> <em>(required, currently absent - QA DEF-003)</em> - a de-minimis floor; an
+  immaterial-notional pair can't give a "false or misleading signal" under MAR Art 12(1)(a). A
+  <strong>compliance risk-appetite</strong> decision, not pure stats.</li>
+</ul>
+<h2 id="illustrative-starting-values-inferred-not-measured">Illustrative starting values (🧠 inferred - NOT measured)</h2>
 <table>
 <thead>
 <tr>
-<th>price_tol %</th>
-<th>alerts</th>
-<th>TP</th>
-<th>FP</th>
-<th>precision (ATL)</th>
-<th>recall (coverage)</th>
-<th>missed (BTL)</th>
+<th>Parameter</th>
+<th>Segment</th>
+<th>Value</th>
+<th>Rationale</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>0.05</td>
-<td>117</td>
-<td>60</td>
-<td>57</td>
-<td>51.3%</td>
-<td>100%</td>
-<td>0</td>
+<td>off-market (spread ratio)</td>
+<td>liquid large-cap</td>
+<td>1.5× spread</td>
+<td>abuse hides at tight prices</td>
 </tr>
 <tr>
-<td><strong>0.10</strong></td>
-<td><strong>60</strong></td>
-<td><strong>60</strong></td>
-<td><strong>0</strong></td>
-<td><strong>100%</strong></td>
-<td><strong>100%</strong></td>
-<td><strong>0</strong></td>
+<td>off-market (spread ratio)</td>
+<td>mid/small-cap</td>
+<td>2.0× spread</td>
+<td>wider natural spread</td>
 </tr>
 <tr>
-<td>0.20</td>
-<td>60</td>
-<td>60</td>
-<td>0</td>
-<td>100%</td>
-<td>100%</td>
-<td>0</td>
+<td>off-market (spread ratio)</td>
+<td>illiquid/OTC</td>
+<td>3.0× spread</td>
+<td>high spread variance</td>
 </tr>
 <tr>
-<td>0.50</td>
-<td>60</td>
-<td>60</td>
-<td>0</td>
-<td>100%</td>
-<td>100%</td>
-<td>0</td>
+<td>off-market (abs fallback)</td>
+<td>no spread data</td>
+<td>50 bps</td>
+<td>only with a coverage-gap flag</td>
 </tr>
 <tr>
-<td>1.00</td>
-<td>50</td>
-<td>50</td>
-<td>0</td>
-<td>100%</td>
-<td>83.3%</td>
-<td>10</td>
+<td><code>lookback_days</code></td>
+<td>exchange equities</td>
+<td>3</td>
+<td>same-day/T+1 typical</td>
 </tr>
 <tr>
-<td>2.00</td>
-<td>24</td>
-<td>24</td>
-<td>0</td>
-<td>100%</td>
-<td>40.0%</td>
-<td>36</td>
+<td><code>ubo_graph_max_age_days</code></td>
+<td>all</td>
+<td>feed SLA + 1</td>
+<td>data-quality, confirm with owner</td>
+</tr>
+<tr>
+<td><code>min_notional</code></td>
+<td>all</td>
+<td><em>firm STOR materiality</em></td>
+<td>compliance decision, placeholder only</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Measured recommendation:</strong> <code>price_tolerance_pct</code> in <strong>0.10-0.50%</strong> for this segment - 100%
-precision <em>and</em> recall. Below it (0.05%) the off-market test admits competitive-price noise (57 FPs);
-above it (≥1%) the <strong>BTL "missed" column climbs</strong> as genuine washes priced 0.3-1% off mid slip below
-the line. 📊 measured on synthetic ground truth - reproduce with <code>python3 calibrate_wash_trade.py</code>.</p>
-<blockquote>
-<p><strong>Honest caveat (do not skip).</strong> These numbers are measured on a <strong>synthetic distribution we
-control</strong> (washes injected at 0.3-3% off-mid, legit at &lt;0.1%), so the clean 0-FP plateau is partly
-by construction - real markets are messier. This <strong>validates the calibration <em>method</em> and the
-volume↔coverage curve</strong>; the deployment value still needs ATL/BTL on a <strong>real labelled set</strong>. The
-label "measured on synthetic data" is not a regulatory defence.</p>
-</blockquote>
-<h2 id="1-methodology-how-each-parameter-is-set">1. Methodology (how each parameter is set)</h2>
-<ul>
-<li><strong>Segment first</strong> (calibrate per segment, not globally): instrument <strong>liquidity band</strong>, <strong>venue
-  type</strong> (lit/dark/OTC - OTC has no exchange mid), <strong>account type</strong> (retail vs prop changes the noise floor).</li>
-<li><strong><code>price_tolerance_pct</code></strong> - from the empirical bid/ask <strong>spread distribution</strong>: set above the 97.5th
-  percentile / mean+2σ of normal spread so a competitive price is never flagged. <em>(Measured above.)</em></li>
-<li><strong><code>lookback_seconds</code></strong> - from the distribution of legitimate same-UBO round-trip times; 90-95th pct.</li>
-<li><strong><code>min_notional</code></strong> - a percentile (5-10th) of the segment's trade-size distribution; never a round number.</li>
-<li><strong><code>ubo_staleness_days</code></strong> - a <strong>data-governance</strong> bound: the firm's KYC refresh SLA (e.g. 180d
-  higher-risk / 365d standard), per FATF R.10. Not an independent tuning choice.</li>
-<li><strong>repetition floor</strong> - the tail of the legitimate per-UBO pair-count distribution (Poisson/neg-binomial).</li>
-<li><strong><code>market_mid</code></strong> - a <em>feed</em>, not a threshold: source/latency/coverage gated by <code>data-quality-reviewer</code>
-  via <code>/assess-coverage</code>. Missing mid = silent miss (the FCA MW79 failure mode).</li>
-</ul>
-<h2 id="2-illustrative-starting-points-for-un-measured-segments">2. Illustrative starting points (🧠 - for un-measured segments)</h2>
-<p>For segments without a labelled set yet: large-cap liquid equities ~0.10% (10bps); mid-cap ~0.50%;
-illiquid ~1%+. <code>lookback</code> 300s lit / 1800s OTC. <code>min_notional</code> ~GBP 10k institutional. <code>ubo_staleness</code>
-180d. repetition floor 2. All 🧠 inferred - replace via §0 measurement per segment.</p>
-<h2 id="3-data-needed-to-calibrate-the-real-scenario">3. Data needed to calibrate the <em>real</em> scenario</h2>
-<p>12m masked trade feed (RTS 25 timestamps), the UBO table with as-of dates, per-instrument spread
-series, a labelled alert/SAR set (even n=100-200), legitimate round-trip distribution, and the
-<code>market_mid</code> coverage inventory. (Masked/synthetic only, §5.)</p>
-<h2 id="4-mi-cadence">4. MI &amp; cadence</h2>
-<p>Track monthly: alert volume/segment, FP rate (ATL), alert-to-SAR conversion, analyst-minutes/alert;
-flag &gt;20% volume drift (decay or feed problem). Re-calibrate annually or on universe change.
-House-rules lessons recorded in <a href="../../house-rules.md"><code>../../house-rules.md</code></a>.</p>
+<h2 id="volumecoverage-trade-off">Volume↔coverage trade-off</h2>
+<p>Tightening off-market catches at-market evasion but floods on affiliated-fund flow; loosening cuts
+load but blinds the scenario to near-market washes. <strong>Two highest-value moves:</strong> add <code>min_notional</code>
+(precision gain, negligible coverage cost) and switch to <strong>spread-normalised</strong> thresholds per segment
+(improves precision in illiquid names and recall in liquid ones simultaneously).</p>
+<h2 id="to-actually-calibrate">To actually calibrate</h2>
+<p>Need: labelled/SME-assessed pairs (50-100/segment); populated <code>spread_bps</code>; UBO feed SLA; the notional
+distribution; alert-to-STOR history; a verified exempt-account list. (Masked/synthetic only, §5.)</p>
 <div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
 </body>
 </html>
