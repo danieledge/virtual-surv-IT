@@ -27,6 +27,10 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       handing to an IT team with its own controls, also draft the artifacts those controls
       consume (**change request**, **ops runbook + release notes**) with approval/owner
       fields left for the IT team - the team drafts, it does not approve or deploy.
+- [ ] **Handover docs are clear & usable, not just present** - a developer who has never seen
+      the code could build, run and safely change it from the doc **alone** (no tribal knowledge,
+      no unexplained jargon, commands copy-pastable). `compliance-reviewer` checks usability at
+      this gate, not merely existence.
 - [ ] **Distributable** - evidence produced in `.md` **and** `.html`
       (`python -m scripts.render_html`). **By default one consolidated Delivery Report**
       (`docs/templates/delivery-report.md`) holds all sections; split into separate artifacts

@@ -25,6 +25,9 @@ When invoked:
 4. When the work is heading for handover, verify it against `docs/DEFINITION-OF-DONE.md` - you
    are the named verifier of that gate (CLAUDE.md §6a). Check each DoD item that applies to the
    deliverable type and record evidence (or the gap) for it, not just a pass/fail claim.
+   This includes **handover-doc usability, not just existence**: a developer who has never seen
+   the code should be able to build, run and safely change it from the doc alone. Flag tribal
+   knowledge, unexplained jargon, or non-runnable commands as a DoD gap, and send it back.
 
 Review checklist:
 - **Auditability:** every threshold/parameter has a recorded rationale and date; logic is
