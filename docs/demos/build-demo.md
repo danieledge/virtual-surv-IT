@@ -110,23 +110,48 @@ false-positive guard** (same pair but competitive 0.5% price → must NOT alert)
 > **early-continue, not a weighted score** (exactly as she demanded), gated on a fresh UBO link, and
 > made missing thresholds **fail loud** (`KeyError`) so nobody can ship undocumented numbers.
 >
-> **What happens next:** Mateo's code → **Ravi** (`code-reviewer`) for quality/security, **Layla**
-> (`compliance-reviewer`) to verify the obligation trace + gate the Definition of Done, and **Theo**
-> (`tuning-analyst`) to calibrate those placeholders with ATL/BTL. Nothing ships until that signs off.
+### → Step 4: the review + calibration chain (this actually ran - not narrated)
 
-> 🎩 **And the review stage immediately earned its keep.** When I actually *ran* Mateo's test, the
-> true-positive **failed** - the original sketch checked UBO staleness against the wall clock
-> (`datetime.utcnow()`) while the fixtures used a fixed date, so once "today" drifted past the window
-> the real alert was silently dropped. **A non-deterministic time bug** - exactly what review/QA exists
-> to catch. The fix (inject the reference date, make it deterministic) is in the committed artifact,
-> and the test now passes. The chain is **not a rubber stamp**: code doesn't ship until it's run *and*
-> reviewed. (Details in [`build-artifacts/`](build-artifacts/).)
+Mateo's code went through the full chain, and it **earned its keep** - independent review found
+**real defects the build missed**, all fixed and re-tested:
+
+- **Ravi (`code-reviewer`):** deviation checked the *sell leg only* (a buy-side wash slipped through);
+  buy-before-sell loop ordering; no `mid==0` guard → **fixed**.
+- **Linh (`qa-engineer`):** wrote a **33-test** independent suite that caught **DEF-001**, a UBO-staleness
+  off-by-one (`<` should be `<=`) → **fixed**.
+- **Layla (`compliance-reviewer`):** the alert **didn't carry its own obligation citation** - it violated
+  acceptance criterion AC3 → added `obligation` + `ubo_id` fields; spec/code divergence → spec **Rev B**.
+- **Theo (`tuning-analyst`):** turned the `PLACEHOLDER` thresholds into **📊 measured** values by
+  *synthesising a labelled dataset* and running real ATL/BTL → `price_tolerance_pct` **0.10-0.50%**
+  (100% precision *and* recall). Reproduce: `python3 build-artifacts/calibrate_wash_trade.py`.
+- **Thabo (`performance-reviewer`):** static review - **won't scale as-is** (O(n²)); fix = group by
+  instrument+window.
+
+> 🎩 **The bonus that proves the point:** when I first *ran* Mateo's test it **failed** - a
+> non-deterministic time bug (UBO staleness vs the wall clock). Exactly what review/QA exists to
+> catch. The chain is **not a rubber stamp.** Final result: dev tests **2/2**, QA suite **33/33** green;
+> every gate ran; only **human sign-off** is outstanding (a demo can't produce one).
+
+**📂 The complete, downloadable delivery:** [**`build-artifacts/`**](build-artifacts/) - the
+[delivery report](build-artifacts/delivery-report.md) (RTM, dispositions, DoD, **token usage**), the
+[spec](build-artifacts/wash-trade-scenario-spec.md), [SME validation](build-artifacts/wash-trade-sme-validation.md),
+[code](build-artifacts/wash_trade.py) + [tests](build-artifacts/test_wash_trade.py) +
+[QA suite](build-artifacts/test_wash_trade_qa.py) + [QA handover](build-artifacts/qa-handover.md),
+[tuning pack](build-artifacts/threshold-tuning-pack.md), and [performance review](build-artifacts/performance-review.md).
+
+### 💰 What it cost
+The full delivery - build + 3 independent reviews + tuning + performance - used **8 agents,
+~182k tokens** (table in the [delivery report](build-artifacts/delivery-report.md) §7). Right-sized
+to 8, not 16; a lighter touch (spec + build + one review) is ~a third of that.
 
 ---
 
 ## What this demo showed
-- **Orchestrator-workers** end-to-end: Amara → Camila → Mateo → reviewers, three agents not sixteen.
+- **Orchestrator-workers** end-to-end: Amara → Camila → Mateo → Ravi/Linh/Layla → Theo/Thabo → delivery.
 - **The blackboard** - each output is the next step's input; no agent-to-agent chatter.
 - **The SME caught a real flaw** (the UBO graph; off-market-as-necessary) *before* code existed.
-- **No invented thresholds** - flagged in the spec, `KeyError`-enforced in the code, left for tuning.
-- **Built to be reviewed** - the chain doesn't end at "code written"; it ends at signed-off.
+- **Review is not a rubber stamp** - it found 7 real defects (a false-negative, an off-by-one, a broken
+  audit field) and the fix→re-review loop closed them.
+- **Measured, not guessed** - thresholds calibrated by synthesising labelled data and running ATL/BTL.
+- **Honest gates** - the delivery is demo-complete but **says NOT deployable** until re-calibrated on
+  real data, the O(n²) is fixed, and a human signs off.

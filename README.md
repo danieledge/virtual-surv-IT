@@ -548,6 +548,7 @@ Multi-agent setups cost tokens, so the team is built to be cost-conscious. Measu
 |---|---|---|
 | One quick `code-reviewer` review (small file, opus) | **~18.7k tokens** | per review agent |
 | A lean engagement (intake + scorer + reviewer + synthesis) | ~35-50k | per engagement |
+| A **full build → 3 reviews → tuning → performance** delivery (8 agents, measured) | **~182k** | the heavy end - a complete reviewed+calibrated deliverable (see the [build demo](docs/demos/build-artifacts/delivery-report.md) §7) |
 | A full fan-out (right-sizing off) | ~150k+ | rarely - reserved for broad work |
 
 **Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
