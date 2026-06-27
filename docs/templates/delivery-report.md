@@ -24,6 +24,14 @@ human developer review), so the verdict can't be read as "blocked" when it was a
 Open; ✅/⚠️ once they're fixed or explicitly accepted. Then give **concrete next-step options with
 a recommendation** - never a dead end.
 
+> **This is the "as-delivered / after" view.** Where it supersedes earlier *as-found* evidence
+> (e.g. a [`qa-handover`](qa-handover.md), a review report), **reference that evidence as the
+> "before" and show the resolved state here - do not rewrite the source** (it's the audit trail of
+> what was caught). **Distinguish two kinds of "open":** 🔴 *unresolved defects* (a real problem -
+> the verdict can't be ✅) vs ⏭️ *deferred deploy-gates* (e.g. calibrate on real data, scale-test,
+> human sign-off) that are **correctly** open and out of scope for this stage. An honest report
+> showing the latter as open is *good*; a report that hides them to look "all green" is the failure.
+
 ## 2. Scope & what was delivered
 What was reviewed or built, the languages/components involved, and what's explicitly out of
 scope.
