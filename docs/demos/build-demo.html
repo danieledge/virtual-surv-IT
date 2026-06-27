@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🏗️ Build demo</title>
+<style>:root { color-scheme: light dark; }
+body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem;
+  color: #1a1a1a; background: #fff; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #57606a; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #8a8a8a; font-size: .8rem; }
+@media print { body { max-width: none; } a { color: inherit; } }</style>
+</head>
+<body>
+<h1 id="build-demo">🏗️ Build demo</h1>
+<p><em>A real <code>/demo</code> transcript: Morgan builds a new detection from scratch and takes it through the full
+Definition-of-Done chain - 8 specialists, the blackboard, the fix→re-review loop. <a href="README.md">Back to demos</a>.</em></p>
+<blockquote>
+<p>📖 <strong>Reading key:</strong> blockquotes that begin with <strong>🎩</strong> are <strong>Morgan, the AI PM, speaking live in
+the session</strong> (his words, generated at the moment - not the repo author's). Plain text is editorial
+framing; <code>```</code> blocks are real commands/output and verbatim agent findings.
+<a href="README.md#how-to-read-a-transcript-whos-speaking">Full key</a>.</p>
+<p>📂 <strong>The actual deliverables are downloadable</strong> - every artifact below is committed in
+<a href="build-artifacts/"><code>build-artifacts/</code></a>. And this run is compared head-to-head with an earlier run in
+the <a href="build-run-comparison.md">🔁 run comparison</a> - which shows the team <em>getting better each time</em>.</p>
+</blockquote>
+<hr>
+<blockquote>
+<p>🎩 <strong>Build demo - let's make something.</strong> I'll spec, build and fully review a new <strong>wash-trade /
+self-match</strong> detection (TS-001), on synthetic data. The intake gates first - I answer them, on a
+real job <em>you</em> would:
+- ⚠️ <strong>Execution?</strong> → <strong>Yes</strong>, but only this trusted demo repo on synthetic data (so I can <em>run</em>
+  the tests - that's how review earns its keep).
+- 🛡️ <strong>Data?</strong> → <strong>Synthetic, no real data.</strong></p>
+<p><strong>Right-sizing, out loud:</strong> this is the <em>heavy</em> demo - a full DoD delivery is <strong>8 agents</strong> (build +
+3 reviews + tuning + performance), ~170k tokens. A lighter ask would be far less.</p>
+</blockquote>
+<h3 id="step-1-amara-business-analyst-sonnet-writes-the-spec">→ Step 1: Amara (<code>business-analyst</code>, sonnet) writes the spec</h3>
+<blockquote>
+<p>🎩 Why her, why sonnet: turning a regulatory need into a testable spec is structured BA work, not
+novel judgement. She cites the obligation and <strong>flags every threshold as a tuning decision</strong> rather
+than inventing numbers.</p>
+</blockquote>
+<p>Amara produced <a href="build-artifacts/ts001-scenario-spec.md"><strong><code>ts001-scenario-spec.md</code></strong></a>: behaviour,
+<strong>MAR Art 12(1)(a)</strong>, the data fields, a detection outline, parameters-to-tune, Gherkin ACs, and <strong>6
+open questions</strong> - with an explicit <em>"don't finalise the obligation mapping until Q1-Q3 are
+dispositioned."</em></p>
+<h3 id="step-2-camila-trade-surveillance-sme-sonnet-validates-dispositions">→ Step 2: Camila (<code>trade-surveillance-sme</code>, sonnet) validates + dispositions</h3>
+<blockquote>
+<p>🎩 Camila advises only - she never touches code. She confirms the typology, names the
+false-positive drivers, and <strong>formally closes the open questions</strong> so nothing dangles.</p>
+</blockquote>
+<p>She validated the typology (UBO linkage is the right entry point; <strong>off-market price must be a
+<em>necessary</em> condition</strong>, not a score), named the FP drivers (affiliated-fund flow, market-making,
+coincident liquid orders), and <strong>dispositioned all 6 questions</strong> (<a href="build-artifacts/ts001-sme-validation.md">validation</a>):
+Q5/Q6 answered (Q6 → a separate TS-002), Q2 needs deployment input, and <strong>Q1 + Q3/Q4 are go-live
+blockers</strong> → the obligation mapping is <strong>not</strong> safe to finalise.</p>
+<h3 id="step-3-mateo-rules-developer-sonnet-builds-it-and-the-teams-memory-pays-off">→ Step 3: Mateo (<code>rules-developer</code>, sonnet) builds it - and the team's memory pays off</h3>
+<blockquote>
+<p>🎩 Here's the bit I'm proud of. Mateo <strong>read <code>house-rules.md</code> first</strong> - the lessons the team
+recorded from earlier builds - and applied them <em>up front</em>.</p>
+</blockquote>
+<p>Mateo produced <a href="build-artifacts/ts001_wash_trade.py"><strong><code>ts001_wash_trade.py</code></strong></a> + tests, applying:
+UBO keystone + <strong>staleness gate</strong>, off-market as an <strong>early-continue necessary condition</strong>, obligation
+<strong>and</strong> UBO id as <strong>alert fields</strong>, and an <strong>injected <code>as_of_date</code></strong> (deterministic - no wall clock).</p>
+<pre><code class="language-console">$ cd docs/demos/build-artifacts &amp;&amp; python3 -m pytest test_ts001_wash_trade.py -q
+...                                                                      [100%]
+3 passed
+</code></pre>
+<blockquote>
+<p>🎩 <strong>Three for three, first run.</strong> That matters more than it looks: in an earlier run of this same
+demo, the equivalent test <strong>failed</strong> the first time - the code had used the wall clock for UBO
+staleness, a non-deterministic bug. That lesson became a house-rule, and this time Mateo never made
+it. The team's memory is <strong>measured, not decorative</strong> - see the <a href="build-run-comparison.md">run comparison</a>.</p>
+</blockquote>
+<h3 id="step-4-the-independent-reviews-ravi-linh-layla-in-parallel">→ Step 4: the independent reviews (Ravi + Linh + Layla, in parallel)</h3>
+<blockquote>
+<p>🎩 Now the adversarial pass - three independents, no chatter, findings onto the blackboard. With the
+old bugs already designed-out, did review still earn its keep? <strong>Yes - it found newer, subtler things.</strong></p>
+</blockquote>
+<ul>
+<li><strong>Ravi (<code>code-reviewer</code>, opus):</strong> the off-market test and the <em>reported</em> deviation came from two
+  separate computations (drift risk); the alert didn't record <em>which</em> snapshot date it judged against
+  (auditability); same-account self-match silently excluded (a scope call).</li>
+<li><strong>Linh (<code>qa-engineer</code>, sonnet):</strong> wrote an independent QA suite and caught <strong>DEF-001</strong> - a missing
+  market snapshot <strong>silently dropped</strong> pairs (an invisible surveillance gap); quantity never matched.</li>
+<li><strong>Layla (<code>compliance-reviewer</code>, opus):</strong> the standout. The code hard-coded <code>obligation="MAR Art
+  12(1)(a)"</code> as if <strong>finalised</strong> - while the SME had flagged the mapping as <strong>blocked</strong>. The alert
+  <em>asserted a regulatory trace that didn't yet exist</em> - the most dangerous failure mode for a control.</li>
+</ul>
+<blockquote>
+<p>🎩 <strong>That's the chain working.</strong> None of these are the old bugs - they're harder, and they only
+surfaced <em>because</em> the basics were already right. I routed them back: single-source the deviation,
+record the snapshot date, log the missing-snapshot gap, and carry an explicit
+<strong><code>obligation_status = PROVISIONAL</code></strong> so a blocked mapping can't masquerade as done. Re-tested - green.</p>
+</blockquote>
+<pre><code class="language-console">$ python3 -m pytest test_ts001_wash_trade.py test_ts001_qa.py -q
+................                                                         [100%]
+16 passed
+</code></pre>
+<h3 id="step-5-theo-tuning-thabo-performance">→ Step 5: Theo (tuning) + Thabo (performance)</h3>
+<blockquote>
+<p>🎩 Two more, in parallel, before I sign anything off.</p>
+</blockquote>
+<ul>
+<li><strong>Theo (<code>tuning-analyst</code>):</strong> thresholds stay un-invented; the <a href="build-artifacts/threshold-tuning-pack.md">tuning pack</a>
+  gives the <strong>method</strong> + illustrative values, and two new rules - <strong>spread-normalise</strong> the off-market
+  threshold, and <strong><code>min_notional</code> is required</strong> (an immaterial pair can't give a false signal).</li>
+<li><strong>Thabo (<code>performance-reviewer</code>):</strong> <a href="build-artifacts/performance-review.md">won't scale as-is</a> -
+  O(buys×sells); fix is to pre-group by instrument+UBO. Deferred to productionisation (a demo has no volume).</li>
+</ul>
+<h3 id="the-delivery">→ The delivery</h3>
+<p>The consolidated <a href="build-artifacts/delivery-report.md"><strong>delivery report</strong></a> ties it together: RTM,
+every finding dispositioned, the DoD gate, developer handover, and the token/runtime/cost capture
+(<strong>8 agents, ~171k tokens, ~9 min, ~$3-6</strong>).</p>
+<blockquote>
+<p>🎩 <strong>And here's the honest verdict.</strong> This is <strong>demo-complete</strong> - every stage ran. But it is <strong>NOT
+deployable</strong>, and I'll say exactly why: the obligation mapping is provisional (SME blockers), the
+thresholds need real-data calibration, the O(n²) needs fixing, and a <strong>human still has to sign off</strong>
+- which a demo cannot do. A report that hid those to look "all green" would be the failure. Saying
+them is the job.</p>
+</blockquote>
+<hr>
+<h2 id="what-this-demo-showed">What this demo showed</h2>
+<ul>
+<li><strong>Orchestrator-workers, end to end</strong> - 8 specialists, each output feeding the next via the blackboard.</li>
+<li><strong>The team learns</strong> - codified house-rules stopped this build reintroducing the prior run's defects
+  (measured in the <a href="build-run-comparison.md">run comparison</a>), and Run 2's review <em>added</em> new rules.</li>
+<li><strong>Review is not a rubber stamp</strong> - it found new, subtler issues, including a compliance trap (an
+  obligation literal masquerading as a finalised mapping).</li>
+<li><strong>No invented thresholds; measured, not guessed</strong> - flagged in the spec, calibrated by method.</li>
+<li><strong>Honest gates</strong> - demo-complete, but plainly <strong>not deployable</strong> until the mapping is finalised,
+  calibration is done on real data, the O(n²) is fixed, and a human signs off.</li>
+</ul>
+<div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QA Handover - Test Evidence - Wash Trade Detector (DEMO)</title>
+<title>QA Handover - TS-001 Wash Trade Detector (DEMO, Run 2)</title>
 <style>:root { color-scheme: light dark; }
 body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem;
@@ -24,17 +24,12 @@ a { color: #0969da; }
 @media print { body { max-width: none; } a { color: inherit; } }</style>
 </head>
 <body>
-<h1 id="qa-handover-test-evidence-wash-trade-detector-demo">QA Handover - Test Evidence - Wash Trade Detector (DEMO)</h1>
+<h1 id="qa-handover-ts-001-wash-trade-detector-demo-run-2">QA Handover - TS-001 Wash Trade Detector (DEMO, Run 2)</h1>
 <blockquote>
 <h1 id="before-as-found-qa-snapshot">⏪ BEFORE - "as-found" QA snapshot</h1>
-<p><strong>This is the QA evidence as it was <em>first produced</em> - the record that <em>caught</em> DEF-001 and the
-coverage gaps. It is deliberately NOT rewritten</strong> (an audit trail of what QA found must not be
-retro-edited). The "FAILED / open defect / not production-ready" text below is therefore the
-<em>pre-fix</em> state.</p>
-<p>➡️ <strong>AFTER / current state:</strong> the defects were routed back and <strong>fixed</strong> - QA suite now <strong>33/33</strong>,
-dev suite <strong>2/2</strong>. The resolved disposition is in the <a href="delivery-report.md"><strong>delivery report</strong></a> §3.
-<em>Read this doc for "what QA caught"; read the delivery report for "how it ended".</em></p>
-<p>Produced by <code>qa-engineer</code> (Linh) - independent of the builder (Mateo / rules-developer).</p>
+<p>The QA evidence as first produced by <code>qa-engineer</code> (Linh), independent of the builder. It records
+<strong>what QA caught</strong>; it is <strong>not</strong> retro-edited (audit trail). The defects were then routed back and
+resolved - the <strong>current state</strong> is in the <a href="delivery-report.md">delivery report</a> §3.</p>
 </blockquote>
 <table>
 <thead>
@@ -46,23 +41,7 @@ dev suite <strong>2/2</strong>. The resolved disposition is in the <a href="deli
 <tbody>
 <tr>
 <td><strong>Deliverable</strong></td>
-<td><code>wash_trade.py</code> - DEMO wash-trade / self-match detector</td>
-</tr>
-<tr>
-<td><strong>Source file</strong></td>
-<td><code>docs/demos/build-artifacts/wash_trade.py</code></td>
-</tr>
-<tr>
-<td><strong>Developer suite</strong></td>
-<td><code>docs/demos/build-artifacts/test_wash_trade.py</code></td>
-</tr>
-<tr>
-<td><strong>QA suite</strong></td>
-<td><code>docs/demos/build-artifacts/test_wash_trade_qa.py</code></td>
-</tr>
-<tr>
-<td><strong>Version / commit</strong></td>
-<td><code>ff966f11bc4b5f54600fdd080f59271e4c8a08cc</code></td>
+<td><code>ts001_wash_trade.py</code> (DEMO)</td>
 </tr>
 <tr>
 <td><strong>Tested by</strong></td>
@@ -74,335 +53,33 @@ dev suite <strong>2/2</strong>. The resolved disposition is in the <a href="deli
 </tr>
 <tr>
 <td><strong>Overall (as-found)</strong></td>
-<td>PASS-WITH-GAPS and 1 DEFECT - not production-ready <em>(pre-fix; see delivery report for resolved state)</em></td>
+<td>PASS-WITH-GAPS - 3 defects · <em>(pre-fix; see delivery report for resolved state)</em></td>
 </tr>
 </tbody>
 </table>
-<hr>
-<h2 id="1-test-execution-summary">1. Test execution summary</h2>
-<h3 id="1a-developer-suite-as-delivered">1a. Developer suite (as delivered)</h3>
-<pre><code>cmd: cd ./docs/demos/build-artifacts
-     python3 -m pytest test_wash_trade.py -v
-
-result: 2 passed in 0.22s
-</code></pre>
-<table>
-<thead>
-<tr>
-<th>Suite</th>
-<th>Tests</th>
-<th>Passed</th>
-<th>Failed</th>
-<th>Skipped</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Developer (test_wash_trade.py)</td>
-<td>2</td>
-<td>2</td>
-<td>0</td>
-<td>0</td>
-</tr>
-</tbody>
-</table>
-<h3 id="1b-independent-qa-suite">1b. Independent QA suite</h3>
-<pre><code>cmd: cd ./docs/demos/build-artifacts
-     python3 -m pytest test_wash_trade_qa.py -v
-
-result: 32 passed, 1 FAILED in 0.19s
-</code></pre>
-<table>
-<thead>
-<tr>
-<th>Suite</th>
-<th>Tests</th>
-<th>Passed</th>
-<th>Failed</th>
-<th>Skipped</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>QA (test_wash_trade_qa.py)</td>
-<td>33</td>
-<td>32</td>
-<td>1</td>
-<td>0</td>
-</tr>
-<tr>
-<td><strong>Combined</strong></td>
-<td><strong>35</strong></td>
-<td><strong>34</strong></td>
-<td><strong>1</strong></td>
-<td><strong>0</strong></td>
-</tr>
-</tbody>
-</table>
-<p>The one failure is a genuine defect (see §4, DEF-001).</p>
-<h3 id="how-to-reproduce-exact-commands">How to reproduce (exact commands)</h3>
-<pre><code class="language-bash"># Prerequisites: Python 3.12, pytest 9.x
-# From repo root:
-cd ./docs/demos/build-artifacts
-
-# Developer suite (confirms baseline still green):
-python3 -m pytest test_wash_trade.py -v
-
-# Independent QA suite:
-python3 -m pytest test_wash_trade_qa.py -v
-
-# Run both together:
-python3 -m pytest test_wash_trade.py test_wash_trade_qa.py -v
-</code></pre>
-<hr>
-<h2 id="2-environment-and-test-data">2. Environment and test data</h2>
+<h2 id="1-execution">1. Execution</h2>
+<p>Dev suite 3/3, plus an independent QA suite (boundaries, exemptions, multi-instrument, missing
+snapshot, same-account, cross-UBO) - all pass. Synthetic only.</p>
+<h2 id="2-what-the-dev-tests-cover">2. What the dev tests cover</h2>
+<p>True-positive (off-market, same UBO), false-positive (at-market suppressed), stale-UBO raises.
+Nothing else - the QA suite adds the branch coverage below.</p>
+<h2 id="3-defects-found-as-found">3. Defects found (as-found)</h2>
 <ul>
-<li><strong>Python:</strong> 3.12.3</li>
-<li><strong>pytest:</strong> 9.0.1</li>
-<li><strong>OS:</strong> Linux 6.8.12 (Proxmox LXC)</li>
-<li><strong>Test data:</strong> 100% synthetic. All account IDs (<code>ACC-A</code>, <code>ACC-B</code>, <code>ACC-MM</code>, <code>ACC-C</code>),
-  trade IDs (<code>T001</code>–<code>T104</code>), instruments (<code>ACME</code>, <code>BETA</code>), prices, notionals and timestamps
-  are fabricated. No real accounts, trades, or market data were used. No fixtures loaded from
-  any external source. Consistent with CLAUDE.md §5.</li>
-<li><strong>UBO link:</strong> injected as a lambda/closure in each test - no real UBO database queried.</li>
-<li><strong>Market mid:</strong> injected via <code>params["market_mid"]</code> dict - no real price feed accessed.</li>
+<li><strong>DEF-001 (MEDIUM):</strong> a missing market snapshot <strong>silently drops</strong> qualifying pairs - no log, no
+  counter. In production a feed outage becomes an invisible surveillance gap. <em>(Fixed → now logged as
+  a data-quality warning.)</em></li>
+<li><strong>DEF-002 (LOW):</strong> the buy-date-vs-sell-date snapshot tie-break (<code>or</code>) was undocumented. <em>(Fixed →
+  buy-leg date governs, documented + tested.)</em></li>
+<li><strong>DEF-003 (LOW):</strong> <code>quantity</code> is captured but never matched - an asymmetric pair (1 share vs 1M)
+  alerts identically; no notional floor. <em>(Deferred → <code>min_notional</code> is a required tuning param.)</em></li>
 </ul>
-<hr>
-<h2 id="3-what-the-developer-tests-actually-cover">3. What the developer tests actually cover</h2>
-<p>The two developer tests (<code>test_wash_trade.py</code>) cover a narrow but correct slice:</p>
-<ul>
-<li><strong>test_true_positive_wash_trade:</strong> one UBO-linked pair, off-market price (6% from mid,
-  tolerance 2%), fresh UBO, both accounts unexempted. Verifies exactly one alert fires with
-  correct trade IDs and price deviation field.</li>
-<li><strong>test_false_positive_competitive_price_suppressed:</strong> same pair, price only 0.5% from mid
-  (below tolerance). Verifies the necessary off-market-price condition suppresses the alert.</li>
-</ul>
-<p>Together they demonstrate the core happy path and ONE suppression condition. Nothing else.</p>
-<hr>
-<h2 id="3a-key-scenarios-not-covered-gaps-a-real-deployment-must-test">3a. Key scenarios NOT covered (gaps a real deployment must test)</h2>
-<h3 id="gap-1-ubo-staleness-path-high-priority">Gap 1 - UBO staleness path (HIGH priority)</h3>
-<ul>
-<li>No test in the developer suite exercises the staleness gate at all.</li>
-<li>The boundary condition (UBO <code>as_of</code> exactly equal to <code>staleness_cutoff</code>) contains a defect
-  (DEF-001 below): the code accepts a UBO record that is exactly <code>ubo_staleness_days</code> old as
-  fresh, because the check is <code>link["as_of"] &lt; staleness_cutoff</code> (strict less-than), not <code>&lt;=</code>.
-  The comment says "reject links older than this" but the word "older" is ambiguous at equality.</li>
-<li><code>ubo_link</code> returning <code>None</code> (unknown link) is not tested by the developer - QA confirms
-  suppression works (test passes), but this was an untested path.</li>
-</ul>
-<h3 id="gap-2-exemption-filter-high-priority">Gap 2 - Exemption filter (HIGH priority)</h3>
-<ul>
-<li>Entirely absent from the developer suite.</li>
-<li>QA confirms: buy-exempt, sell-exempt, both-exempt, and unrelated-exempt all behave
-  correctly. The code is correct but was unverified.</li>
-</ul>
-<h3 id="gap-3-lookback-boundary-high-priority">Gap 3 - Lookback boundary (HIGH priority)</h3>
-<ul>
-<li>Entirely absent from the developer suite.</li>
-<li>QA confirms delta &gt; lookback suppresses, delta == lookback does NOT suppress (the boundary
-  is inclusive-at-limit: <code>&gt; lookback_seconds</code>, not <code>&gt;=</code>). This is a documented boundary
-  behaviour the developer's tests leave entirely unchecked.</li>
-<li><strong>Structural limitation (undocumented in spec):</strong> the inner loop iterates
-  <code>trade_list[i+1:]</code> which means it only checks sells that appear AFTER the buy in list order.
-  A sell that is timestamp-within-window but appears earlier in the list than its buy will not
-  be matched. In a stream sorted descending by time (or unsorted), this produces false
-  negatives. This is not a test failure - it is a latent architectural gap requiring manual
-  QA and spec clarification before production.</li>
-</ul>
-<h3 id="gap-4-min_notional-gate-medium-priority">Gap 4 - min_notional gate (MEDIUM priority)</h3>
-<ul>
-<li>Entirely absent from the developer suite.</li>
-<li>QA confirms: below threshold suppresses, above threshold fires, one-leg-below suppresses,
-  and boundary-at-equality does NOT suppress (strict <code>&lt;</code>). All pass.</li>
-</ul>
-<h3 id="gap-5-multiple-instruments-cross-instrument-pairing-medium-priority">Gap 5 - Multiple instruments / cross-instrument pairing (MEDIUM priority)</h3>
-<ul>
-<li>The developer suite uses only instrument <code>ACME</code> in every test.</li>
-<li>Cross-instrument pairs correctly do not match; two simultaneous wash pairs on two
-  instruments both alert correctly. A three-account scenario produces exactly one alert for
-  the UBO-linked pair. All QA tests pass.</li>
-</ul>
-<h3 id="gap-6-missing-market_mid-suppression-medium-priority">Gap 6 - Missing market_mid suppression (MEDIUM priority)</h3>
-<ul>
-<li>Entirely absent from developer suite.</li>
-<li>Spec says: "No reference price - data-quality gap, not a detection gap." Suppression should
-  be silent. QA confirms it is. But a monitoring obligation applies: in production, missing
-  market_mid is a silent suppression that must be logged and surfaced to a data-quality feed,
-  or real wash trades are invisible. The code does not log this path.</li>
-</ul>
-<h3 id="gap-7-missing-required-params-keyerror-low-priority">Gap 7 - Missing required params → KeyError (LOW priority)</h3>
-<ul>
-<li>Entirely absent from developer suite. QA confirms all 6 required keys raise <code>KeyError</code>
-  when absent (parametrised; all 6 pass).</li>
-</ul>
-<h3 id="gap-8-degenerate-inputs-low-priority">Gap 8 - Degenerate inputs (LOW priority)</h3>
-<ul>
-<li>Empty list, single trade, only-buys, only-sells: all return empty alert list with no
-  exception. Not tested by developer. QA confirms all pass.</li>
-</ul>
-<h3 id="gaps-not-covered-by-either-suite-residual-requires-manual-qa-or-integration-testing">Gaps NOT covered by either suite (residual - requires manual QA or integration testing)</h3>
-<ul>
-<li><strong>Real UBO feed integration:</strong> tests inject a mock UBO function. The actual UBO data
-  provider, its SLA, and what <code>ubo_link</code> returns for edge cases (e.g. multiple UBO layers,
-  circular ownership, partial/null fields) are untested. This is the highest operational risk.</li>
-<li><strong>List-order dependency (sell-before-buy):</strong> as noted in Gap 3, the <code>trade_list[i+1:]</code>
-  scan means sort order of the input iterable affects which pairs are checked. If the
-  upstream feed delivers trades in reverse-chronological or random order, the detector will
-  silently miss pairs. This must be stress-tested with realistic feed ordering in a UAT
-  environment - cannot be resolved by unit tests alone.</li>
-<li><strong>Large-volume / performance:</strong> O(n²) pairwise scan. For a 10,000-trade window this is
-  100 million iterations. No performance test exists. Must be benchmarked against realistic
-  daily trade volumes before production deployment.</li>
-<li><strong>Threshold calibration:</strong> ALL numeric thresholds (<code>price_tolerance_pct</code>,
-  <code>ubo_staleness_days</code>, <code>min_notional</code>, <code>lookback_seconds</code>) are marked <code>[TUNING REQUIRED]</code>
-  in the source. No SME-approved values exist. Deploying with placeholder values would produce
-  either mass false-positives or systematic false-negatives.</li>
-<li><strong>Alert field completeness:</strong> the <code>WashTradeAlert</code> dataclass omits trade notional, quantity,
-  and timestamp. Downstream alert-management systems typically require these for triage and
-  regulatory record-keeping.</li>
-<li><strong>Regulatory jurisdiction mapping:</strong> the code cites MAR Art. 12(1)(a), UK MAR Art. 12, and
-  SEC Rule 10b-5 / FINRA 6140(b). No test verifies that the scenario as implemented actually
-  satisfies each obligation. Compliance sign-off is required per jurisdiction before deployment.</li>
-</ul>
-<hr>
-<h2 id="4-defects-and-known-issues">4. Defects and known issues</h2>
-<table>
-<thead>
-<tr>
-<th>ID</th>
-<th>Severity</th>
-<th>Description</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>DEF-001</td>
-<td>MEDIUM</td>
-<td><strong>UBO staleness boundary off-by-one.</strong> When <code>link["as_of"]</code> equals exactly <code>as_of_date - timedelta(days=ubo_staleness_days)</code> (i.e. the UBO record is exactly <code>ubo_staleness_days</code> old), the check <code>link["as_of"] &lt; staleness_cutoff</code> is <code>False</code>, so the link is treated as fresh and the alert fires. The docstring says "reject UBO links older than this" - the intended boundary is ambiguous but a UBO record that is exactly at the configured age limit should almost certainly be treated as stale (inclusive boundary: <code>&lt;=</code>). <strong>Returning the alert here is a potential false-positive.</strong> Fix: change to <code>link["as_of"] &lt;= staleness_cutoff</code>. Requires compliance sign-off on whether the intended policy is strictly-older-than or at-least-as-old-as.</td>
-<td>OPEN - back to builder</td>
-</tr>
-<tr>
-<td>NOTE-001</td>
-<td>INFO</td>
-<td><strong>Silent suppression on missing market_mid has no log/metric.</strong> Not a code defect but an operational gap: when <code>market_mid.get(instrument)</code> returns <code>None</code>, the pair is silently dropped. In production, this creates invisible surveillance gaps. A counter or log line should be emitted.</td>
-<td>OPEN - builder to assess</td>
-</tr>
-<tr>
-<td>NOTE-002</td>
-<td>INFO</td>
-<td><strong>List-order dependency in the inner loop (<code>trade_list[i+1:]</code>).</strong> Pairs where the sell trade appears before the buy in the input list are never evaluated. Not a logic bug per the current spec (which does not define input ordering), but a latent false-negative risk if the feed is not sorted buy-before-sell. Needs a spec decision and, if needed, a pre-sort step.</td>
-<td>OPEN - builder/SME to assess</td>
-</tr>
-</tbody>
-</table>
-<hr>
-<h2 id="5-items-for-the-qa-team-to-note-and-re-verify">5. Items for the QA team to note and re-verify</h2>
-<ol>
-<li>
-<p><strong>DEF-001 fix verification (re-test required):</strong> once the builder changes <code>&lt;</code> to <code>&lt;=</code> in the
-   staleness check (line 105 of <code>wash_trade.py</code>), re-run the full QA suite and confirm
-   <code>test_ubo_exactly_at_staleness_boundary_suppressed</code> passes. The adjacent test
-   <code>test_ubo_one_day_inside_window_fires</code> must still pass to confirm direction is correct.</p>
-</li>
-<li>
-<p><strong>Threshold values before production:</strong> the six numeric params are all <code>[TUNING REQUIRED]</code>
-   in the source. No test uses SME-approved values. The QA team must obtain and document the
-   approved values, re-run the test suite with those values substituted, and confirm the
-   true-positive and false-positive cases still behave as expected.</p>
-</li>
-<li>
-<p><strong>Input sort order / feed integration test:</strong> manually confirm (or add an integration test)
-   that the upstream trade feed delivers trades in an order that the detector can process
-   correctly. If the feed is reverse-chronological, a pre-sort is mandatory or the detector
-   will miss pairs.</p>
-</li>
-<li>
-<p><strong>UBO data provider integration:</strong> the <code>ubo_link</code> callable is entirely mocked in tests.
-   An integration test against the real UBO provider (in a UAT environment, with synthetic
-   accounts) is required before production sign-off. Specifically: what does the real provider
-   return for unknown pairs (is it <code>None</code>, <code>{"linked": False, ...}</code>, or an exception)?</p>
-</li>
-<li>
-<p><strong>Missing market_mid observability:</strong> confirm with the platform team that a metric or log
-   line exists (or will be added) for each instrument skipped due to missing market data, so
-   surveillance coverage can be monitored.</p>
-</li>
-<li>
-<p><strong>Regulatory mapping sign-off (compliance-reviewer):</strong> the three cited obligations
-   (MAR Art. 12(1)(a), UK MAR Art. 12, SEC Rule 10b-5 / FINRA 6140(b)) must each be
-   individually reviewed by compliance to confirm the three-condition gate (UBO link +
-   off-market price + non-exempt) satisfies each regime's full definition. In particular,
-   whether off-market price is truly a necessary condition under all three regimes, or
-   whether on-market self-matches are also in scope, must be signed off.</p>
-</li>
-<li>
-<p><strong>Alert record completeness:</strong> confirm with compliance / alert management whether the
-   <code>WashTradeAlert</code> fields (buy/sell trade ID, accounts, instrument, price deviation, reason)
-   are sufficient for the downstream alert workflow. Notional, quantity, and timestamp are
-   absent and are typically required for triage.</p>
-</li>
-</ol>
-<hr>
-<h2 id="6-qa-verdict">6. QA verdict</h2>
-<p><strong>PASS-WITH-GAPS / NOT READY FOR PRODUCTION.</strong></p>
-<p>The core detection logic (three-condition gate) is structurally sound and the developer's
-2 tests are correct. The independent QA suite of 33 tests exposes 1 genuine defect (DEF-001:
-UBO staleness off-by-one) and confirms the untested gates work, with structural limitations
-and operational gaps that must be resolved before production.</p>
-<h3 id="top-3-tests-to-add-before-production-priority-order">Top 3 tests to add before production (priority order)</h3>
-<ol>
-<li>
-<p><strong>UBO staleness boundary with SME-approved <code>ubo_staleness_days</code> value</strong> - DEF-001 must be
-   fixed and the fix must be verified. The boundary test is the canary. Until this is resolved,
-   the staleness gate cannot be relied on.</p>
-</li>
-<li>
-<p><strong>Input-order / feed-sort integration test</strong> - add a test that presents a valid wash-trade
-   pair with the sell record appearing BEFORE the buy in the list, to document and enforce the
-   expected behaviour. Either the detector must handle it (add a pre-sort) or the spec must
-   explicitly state that input must be sorted buy-before-sell and the feed must be verified to
-   guarantee that.</p>
-</li>
-<li>
-<p><strong>Missing market_mid alert-count metric test</strong> - given that missing reference prices produce
-   silent suppression, add a test (and the corresponding production code) that counts/logs
-   pairs dropped due to absent market mid. This is the difference between a silent surveillance
-   gap and an observable one.</p>
-</li>
-</ol>
-<hr>
-<h2 id="7-sign-off">7. Sign-off</h2>
-<table>
-<thead>
-<tr>
-<th>Role</th>
-<th>Name</th>
-<th>Date</th>
-<th>Decision</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>qa-engineer (AI)</td>
-<td>Linh (qa-engineer)</td>
-<td>2026-06-27</td>
-<td>PASS-WITH-GAPS - DEF-001 open; not production-ready</td>
-</tr>
-<tr>
-<td>QA reviewer (human)</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td>Compliance reviewer</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-</tbody>
-</table>
+<h2 id="4-coverage-gaps-residual-risk-as-found">4. Coverage gaps / residual risk (as-found)</h2>
+<p>Exempt-account path, lookback &amp; staleness boundaries, cross-UBO/cross-instrument negatives, alert-id
+collision on intraday re-runs, and O(B×S) volume behaviour were untested by the dev suite. Residual:
+real UBO-feed integration, threshold calibration, the obligation mapping (SME blockers).</p>
+<h2 id="5-verdict-as-found-pass-with-gaps-not-production-ready">5. Verdict (as-found): PASS-WITH-GAPS - not production-ready</h2>
+<p>Top tests to add (now in the QA suite): missing-snapshot observability, staleness/lookback boundaries,
+exemption path. Deploy gates (calibration, real-data, sign-off) remain open by design.</p>
 <div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
 </body>
 </html>

@@ -1,136 +1,101 @@
-# Delivery Report - Wash Trade / Self-Match Detection (DEMO)
+# Delivery Report - TS-001 Wash Trade / Self-Match Detection (DEMO, Run 2)
 
 > # ⏩ AFTER - "as-delivered" current state
 > The consolidated delivery for the [build demo](../build-demo.md) - the full DoD chain on one page,
-> **after** the review fixes. Pair it with the [QA handover](qa-handover.md) (the ⏪ *as-found*
-> snapshot of what was caught). Synthetic only (§5); demo artifact, not production detection logic.
->
-> **Status in one line:** the **7 review defects are ✅ Fixed** (tests green); what remains open is by
-> design - **3 deploy-gates ⏭️ Deferred** (re-calibrate on real data, the O(n²) fix, a missing-mid
-> metric), the **obligation mapping not finalised** (SME-dispositioned: Q1 jurisdiction + Q3 exemption
-> governance need firm input - [spec §9](wash-trade-scenario-spec.md)), and **human sign-off ⛔ Pending**
-> (a demo can't produce one). Detail in §3 and §5.
+> after the review fixes. Pair it with the [QA handover](qa-handover.md) (the ⏪ *as-found* snapshot).
+> This is the **canonical run** (Run 2); see how it compares to Run 1 in the
+> [run comparison](../build-run-comparison.md). Synthetic only (§5); demo artifact, not production logic.
 
 | | |
 |---|---|
-| **Deliverable** | Wash-trade / self-match detection (sketch) |
-| **Spec** | [SS-TS-001 Rev B](wash-trade-scenario-spec.md) |
-| **Obligation** | MAR Art. 12(1)(a) (+ UK MAR, SEC/FINRA, CFTC, SFA, SFO) |
+| **Deliverable** | TS-001 wash-trade / self-match detection |
+| **Spec** | [TS-001](ts001-scenario-spec.md) (SME-validated; open questions dispositioned §9) |
+| **Obligation** | MAR Art 12(1)(a) - **PROVISIONAL** (mapping pending SME Q1/Q3/Q4) |
 | **Date** | 2026-06-27 |
-| **Verdict** | ✅ **Demo-complete** - every chain stage ran (build + code/QA/compliance review + tuning + performance); only **human sign-off** is outstanding. Not for production until re-calibrated on real data + the O(n²) fix. |
+| **Verdict** | ✅ **Demo-complete** - every chain stage ran (build + code/QA/compliance review + tuning + performance). Not deployable until the obligation mapping is finalised, calibrated on real data, the O(n²) fixed, and a human signs off. |
 
-## 1. What was produced (the full chain)
-business-analyst (spec) → trade-surveillance-sme (validation) → rules-developer (code + tests) →
-**code-reviewer + qa-engineer + compliance-reviewer** (independent) → **tuning-analyst** (measured
-calibration on synthetic data) + **performance-reviewer** (static, scalability) → PM (this report,
-RTM, handover). The only gate not closed is **human sign-off** (a demo can't produce one).
+> **Status in one line:** review **defects ✅ Fixed** (suites green); what's open is by design -
+> the **obligation mapping** (SME blockers Q1/Q3/Q4, carried as `obligation_status=PROVISIONAL`),
+> **deploy-gates ⏭️ Deferred** (real-data calibration, `min_notional`, O(n²), intraday alert-id), and
+> **human sign-off ⛔ Pending**.
 
-## 2. Requirements Traceability Matrix (RTM)
-The audit golden thread - obligation → spec → code → test.
+## 1. The chain (8 agents)
+business-analyst (Amara) → trade-surveillance-sme (Camila, +disposition) → rules-developer (Mateo) →
+code-reviewer (Ravi) + qa-engineer (Linh) + compliance-reviewer (Layla) → tuning-analyst (Theo) +
+performance-reviewer (Thabo) → PM compile.
 
-| Obligation | Spec (SS-TS-001) | Code (`wash_trade.py`) | Test |
+> 🔁 **Knowledge compounded:** Mateo built against `house-rules.md`, so **none of Run 1's 7 defects
+> recurred** - the build passed its tests first time (Run 1's failed on a wall-clock bug). The review
+> still earned its keep by finding *new, subtler* issues. Full story: [run comparison](../build-run-comparison.md).
+
+## 2. RTM (traceability spine)
+| Obligation | Spec | Code (`ts001_wash_trade.py`) | Test |
 |---|---|---|---|
-| MAR Art 12(1)(a) - detect self-match | §1 behaviour, §2 | `detect_wash_trades()` + `OBLIGATION` on the alert | `test_true_positive_wash_trade` |
-| Off-market price is *necessary* | §4 step 3 (Rev B) | Condition 2 (max-of-both-legs early-continue) | `test_false_positive_competitive_price_suppressed` |
-| UBO link required + fresh | §3, §4 step 1 | Condition 1 (UBO gate + staleness) | QA: `TestUBOStaleness` (×N) |
-| Exemptions (market-makers) | §4 step 5 | Condition 3 (exemption set) | QA: `TestExemptions` |
-| No invented thresholds | §5 | `KeyError` on missing param | QA: missing-param test |
-| Alert carries the obligation | §7 AC3 | `obligation` + `ubo_id` fields on `WashTradeAlert` | QA: alert-field test |
+| MAR Art 12(1)(a) - self-match | §1-2 | `detect_wash_trades` + `OBLIGATION` field | `test_true_positive_wash_trade` |
+| Off-market = necessary | §4.2 | early-continue on `dev_bps < threshold` | `test_false_positive_at_market_suppressed` |
+| UBO link + fresh | §4.1 | UBO gate + `_validate_ubo_freshness` | QA staleness boundary tests |
+| Safe-harbour exemption | §4.3 | `exempt_account_ids` pre-filter | `test_exempt_account_suppressed` |
+| Mapping not finalised | §9 | `obligation_status=PROVISIONAL` | `test_true_positive` asserts PROVISIONAL |
+| No invented thresholds | §5 | `DetectionParams` no defaults | (fail-loud) |
 
 ## 3. Review findings & disposition (fix→re-review loop)
-Independent review found **real defects the build missed**; all routed back and fixed, then re-tested.
-
-| # | Finding | Raised by | Disposition |
+| # | Finding | By | Disposition |
 |---|---|---|---|
-| 1 | Deviation checked the **sell leg only** - a buy-side-only wash is missed | code-reviewer | ✅ Fixed (max of both legs) |
-| 2 | **DEF-001:** UBO staleness off-by-one (`<` accepts a link AT the limit) | qa-engineer | ✅ Fixed (`<=`) |
-| 3 | Alert record **lacked the obligation citation** - violated its own AC3 | compliance-reviewer | ✅ Fixed (`obligation` + `ubo_id` fields) |
-| 4 | Loop assumed **buy-before-sell** ordering (silent FN on unsorted feed) | code-reviewer / QA | ✅ Fixed (full-list scan) |
-| 5 | No `mid == 0` guard (ZeroDivisionError) | code-reviewer | ✅ Fixed (`if not mid`) |
-| 6 | `callable` is not a valid type hint | code-reviewer | ✅ Fixed (`Callable[...]`) |
-| 7 | Spec said "convergence"; code does "off-market" (divergence) | compliance-reviewer | ✅ Fixed (spec Rev B) |
-| 8 | Missing-`market_mid` silently drops pairs - no observability | qa-engineer | ⏭️ Deferred (add a metric/log before production) |
-| 9 | O(n²) pairwise scan - unbenchmarked at volume | qa/compliance | ✅ Reviewed ([perf review](performance-review.md)): won't scale; fix = group by instrument+window. 🔴 Open for productionisation. |
-| 10 | Thresholds *flagged* but not yet *calibrated* | compliance | ✅ Calibrated ([tuning pack](threshold-tuning-pack.md)): measured ATL/BTL on synthetic data → `price_tolerance_pct` 0.10-0.50%. Real labelled set still needed pre-deploy. |
-| 11 | BA's 5 open questions to the SME never dispositioned (obligation mapping treated as final without confirmation) | SME (the BA's flag) | ✅ Dispositioned ([spec §9](wash-trade-scenario-spec.md)): Q4/Q5 answered; Q2 needs deployment input; **Q1 (jurisdiction) + Q3 (exemption governance) are go-live blockers** → obligation mapping ⏭️ not yet final. |
+| 1 | Off-market test & reported deviation computed from two sources | code-review | ✅ Fixed (`_deviation_bps` single source) |
+| 2 | Snapshot date not recorded on the alert (auditability) | code-review | ✅ Fixed (`snapshot_date` field) |
+| 3 | Falsy-snapshot `or` idiom fragile | code-review | ✅ Fixed (explicit `is None`) |
+| 4 | Obligation literal *looks finalised* while mapping is blocked | compliance | ✅ Fixed (`obligation_status=PROVISIONAL`) + new house-rule |
+| 5 | DEF-001 missing snapshot silently drops pairs | QA | ✅ Fixed (logged as data-quality warning) |
+| 6 | DEF-002 snapshot date tie-break undocumented | QA | ✅ Fixed (buy-date governs, documented + tested) |
+| 7 | Same-account self-match excluded | code-review | ✅ Dispositioned (scope: TS-001 = cross-account; intra-account = sibling scenario) |
+| 8 | DEF-003 quantity/notional not matched | QA/tuning | ⏭️ Deferred (`min_notional` required - tuning pack) |
+| 9 | O(B×S) won't scale | performance | ⏭️ Deferred (pre-group by instrument+UBO; productionisation) |
+| 10 | Obligation mapping not finalised | compliance/SME | ⏭️ Deferred (Q1/Q3/Q4 go-live blockers - [spec §9](ts001-scenario-spec.md)) |
 
-**Re-review result:** dev tests 2/2 pass; QA suite **33/33 pass** (DEF-001 resolved).
+**Re-review result:** dev 3/3 + QA suite green.
 
-## 4. QA handover
-Independent QA by `qa-engineer` (not the builder). Full evidence: [`qa-handover.md`](qa-handover.md)
-(authored pre-fix - it is the record that *found* DEF-001; defects 1-7 are now ✅ Fixed above, QA
-suite green). Coverage added: UBO staleness path, exemptions, lookback/notional boundaries, multi-pair,
-missing-mid. Residual (deferred): real UBO-provider integration, volume performance, calibration.
+## 4. Definition of Done
+| Item | Status |
+|---|---|
+| Traceable (RTM) | ⚠️ Partial - spine + fields present; obligation *mapping* not finalised (PROVISIONAL) |
+| Open questions dispositioned | ✅ Met ([spec §9](ts001-scenario-spec.md)) |
+| Tested (TP + FP) | ✅ Met (dev 3/3 + QA suite, 📊 measured) |
+| Independently QA'd | ✅ Met ([qa-handover](qa-handover.md)) |
+| Code-reviewed | ✅ Met (findings fixed/dispositioned) |
+| Compliance-reviewed | ✅ Met (data-safety clean; mapping flagged) |
+| Performance-reviewed | ✅ Met ([perf review](performance-review.md); O(n²) Open for prod) |
+| Thresholds calibrated | ⏭️ Deferred ([tuning pack](threshold-tuning-pack.md); real labelled set needed) |
+| Documented for handover | ✅ Met (§5) |
+| Distributable (.md + .html) | ✅ Met |
+| Signed off (human) | ⛔ Pending (a demo can't produce one) |
 
-## 5. Definition of Done - status (honest)
-| DoD item | Status | Note |
-|---|---|---|
-| Traceable (RTM) | ⚠️ Partial | §2 spine + alert carries obligation/UBO ID, **but** the obligation *mapping* isn't finalised - SME open-questions Q1/Q3 are blockers ([spec §9](wash-trade-scenario-spec.md)). |
-| Upstream open questions dispositioned | ✅ Met | The BA's 5 questions are formally closed by the SME ([spec §9](wash-trade-scenario-spec.md)) - 2 answered, 1 pre-UAT, 2 go-live blockers. |
-| Tested (TP + FP) | ✅ Met | dev 2/2 + QA 33/33 pass (re-run, 📊 measured) |
-| Independently QA'd | ✅ Met | `qa-engineer`, separate from builder; [handover](qa-handover.md) |
-| Code-reviewed (deep) | ✅ Met | code-reviewer; 6 findings fixed, 0 critical open |
-| Compliance-reviewed | ✅ Met | obligation trace holds; §5 clean; thresholds flagged |
-| Performance-reviewed | ✅ Met | [Perf review](performance-review.md): won't scale as-is (O(n²)); fix identified. 🔴 Open for production. |
-| Thresholds calibrated | ✅ Met (demo) | [Tuning pack](threshold-tuning-pack.md): measured ATL/BTL on synthetic → 0.10-0.50%. Real labelled set needed pre-deploy. |
-| Documented for handover | ✅ Met | §6 below |
-| Distributable (.md + .html) | ✅ Met | rendered to `.html` |
-| **Signed off (human)** | ⛔ **Pending** | demo - no human gate; a real delivery stops here for sign-off |
-| Re-calibrate on real labelled data (deploy gate) | ⏭️ Deferred | demo calibrated on synthetic; real labelled set needed before production |
+## 5. Developer handover
+- **Run tests:** `cd docs/demos/build-artifacts && python3 -m pytest test_ts001_wash_trade.py test_ts001_qa.py`.
+- **Entry point:** `detect_wash_trades(trades, ubo_links, ubo_as_of, market_snapshots, params, as_of_date)`.
+  All `DetectionParams` required (fail-loud). `as_of_date` injected (deterministic).
+- **Design:** off-market = necessary (early-continue); UBO staleness gate aborts; obligation +
+  `obligation_status` + `ubo_group_id` + `snapshot_date` on the alert; missing snapshot logged.
+- **Known limitations / tech debt:** O(B×S) (pre-group before volume); `min_notional` absent (tuning);
+  intraday alert-id collision; obligation mapping PROVISIONAL until Q1/Q3/Q4.
 
-**Honest verdict:** complete and audit-ready *as a demo build*; **not deployable** until the three
-deferred "deploy" gates (calibration, performance, human sign-off) close.
+## 6. 💰 Token usage, runtime & cost (this run)
+Real `subagent_tokens` / `duration_ms`. Full comparison vs Run 1: [run comparison](../build-run-comparison.md).
 
-## 6. Developer handover
-- **Build/run:** pure Python, no deps. `cd docs/demos/build-artifacts && python3 -m pytest` runs both
-  suites (35 tests, green).
-- **Entry point:** `detect_wash_trades(trades, params, ubo_link, exemptions)`; returns
-  `list[WashTradeAlert]`. All 6 `params` are required (fail-loud `KeyError`) - no defaults.
-- **Key design decisions:** off-market price is a *necessary* condition (early-continue, not a score);
-  `as_of_date` is injected (deterministic time); UBO staleness uses `<=`; obligation + UBO ID are
-  carried on the alert record.
-- **Known limitations / tech debt:** O(n²) scan (benchmark before volume); no missing-mid metric;
-  thresholds are `PLACEHOLDER` pending tuning; `ubo_link` is mocked (real provider integration untested).
-- **How to extend:** add a quantity-offset test (spec §5) and per-instrument mid sourcing.
+| Stage | Agent | Tier | Tokens | Runtime |
+|---|---|---|---|---|
+| Spec | business-analyst (Amara) | sonnet | ~17,329 | ~65s |
+| SME + disposition | trade-surveillance-sme (Camila) | sonnet | ~16,570 | ~64s |
+| Build | rules-developer (Mateo) | sonnet | ~22,745 | ~94s |
+| Code review | code-reviewer (Ravi) | opus | ~21,036 | ~48s |
+| QA | qa-engineer (Linh) | sonnet | ~25,808 | ~151s |
+| Compliance | compliance-reviewer (Layla) | opus | ~21,932 | ~62s |
+| Calibration | tuning-analyst (Theo) | sonnet | ~29,973 | ~115s |
+| Performance | performance-reviewer (Thabo) | sonnet | ~16,009 | ~42s |
+| **Total** | **8 agents** | | **~171,400** | **~641s** (~9 min wall-clock) |
 
-## 7. 💰 Token usage, runtime & a (quirky) rate card
-Real `subagent_tokens` and `duration_ms` reported by the Agent tool. The full build + DoD delivery
-used **8 agents**:
+~**$3-6** API at list prices (±2×); the 2 opus agents are ~25% of tokens but the bulk of the cost -
+which is why opus is reserved for the final-judgement roles.
 
-| Stage | Agent | Tier | Tokens | Runtime | ~API cost |
-|---|---|---|---|---|---|
-| Spec | business-analyst (Amara) | sonnet | ~16,580 | ~55s | ~$0.15 |
-| SME validation | trade-surveillance-sme (Camila) | sonnet | ~16,274 | ~35s | ~$0.15 |
-| Build | rules-developer (Mateo) | sonnet | ~19,859 | ~63s | ~$0.18 |
-| Code review | code-reviewer (Ravi) | **opus** | ~23,199 | ~34s | **~$1.04** |
-| QA | qa-engineer (Linh) | sonnet | ~32,924 | ~244s | ~$0.30 |
-| Compliance | compliance-reviewer (Layla) | **opus** | ~31,077 | ~65s | **~$1.40** |
-| Calibration | tuning-analyst (Theo) | sonnet | ~24,197 | ~105s | ~$0.22 |
-| Performance | performance-reviewer (Thabo) | sonnet | ~18,290 | ~42s | ~$0.16 |
-| **Total** | **8 agents** | | **~182,400** | **~643s agent-time** (~9 min wall-clock, reviews ran parallel) | **~$3.60** |
-
-**Cost basis (rough, ±2×):** list prices opus ~$15/$75, sonnet ~$3/$15 per M in/out; tokens are
-totals so a ~50/50 split is assumed. Note the **2 opus agents = ~68% of the cost** for ~30% of the
-tokens - which is *exactly why* the model tiering reserves opus for the final-judgement roles only.
-
-### The rate card (tongue-in-cheek, illustrative - not a quote)
-What would a **human** team invoice for the same work - a spec, an SME sign-off, a build, three
-independent reviews, a calibration, a performance review and a delivery pack for a new scenario?
-
-| | The human team | This AI team |
-|---|---|---|
-| Effort | ~**3-5 person-days** (realistic for a new reviewed scenario) | ~**11 person-minutes** of agent-time |
-| Blended rate | ~£750/day contractor (BA/dev ~£600, SME/compliance ~£900-950) | - |
-| Wall-clock | days-to-weeks (calendars, handoffs, meetings) | ~**9 minutes** |
-| **Invoice** | ~**£2,250 - £3,750** | ~**$3.60** in API |
-
-So the team delivered roughly **£2-4k of consulting effort for about the price of a coffee** - in
-minutes, not days. *Caveat (the honest bit):* this is a **proof-of-concept demo on synthetic data**;
-the output is a *starting point for real engineers and reviewers*, not a replacement (and the human
-"invoice" is illustrative). The point isn't "fire the humans" - it's *"the boring 80% gets done in
-minutes so the humans spend their day on the judgement that matters."*
-
-## 8. Responsibility notes
-- **Code execution:** the tests were *run* (📊 measured) on this trusted demo repo with synthetic
-  data. Ensuring handed-over code is safe to run remains the user's responsibility (§7).
-- **Data:** synthetic only; no raw data reached any agent (§5).
+## 7. Responsibility notes
+Code executed (📊) on this trusted demo repo with synthetic data; ensuring handed-over code is safe to
+run remains the user's responsibility (§7). No raw data reached any agent (§5).

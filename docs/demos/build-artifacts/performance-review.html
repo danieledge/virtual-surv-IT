@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Performance Review - Wash Trade Detector (DEMO)</title>
+<title>Performance Review - TS-001 Wash Trade Detector (DEMO, Run 2)</title>
 <style>:root { color-scheme: light dark; }
 body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem;
@@ -24,64 +24,32 @@ a { color: #0969da; }
 @media print { body { max-width: none; } a { color: inherit; } }</style>
 </head>
 <body>
-<h1 id="performance-review-wash-trade-detector-demo">Performance Review - Wash Trade Detector (DEMO)</h1>
+<h1 id="performance-review-ts-001-wash-trade-detector-demo-run-2">Performance Review - TS-001 Wash Trade Detector (DEMO, Run 2)</h1>
 <blockquote>
-<p>Produced by <code>performance-reviewer</code> (Thabo). <strong>Static-only</strong> (CLAUDE.md §7 - the code was not
-executed for profiling). Surveillance volumes are large (millions of trades/instrument/day).</p>
+<p>Produced by <code>performance-reviewer</code> (Thabo). <strong>Static-only</strong> (§7 - not executed). Surveillance
+volumes are large (millions of trades/day).</p>
 </blockquote>
 <h2 id="verdict-will-not-scale-as-is">Verdict: ❌ will NOT scale as-is</h2>
-<p>The O(n²) pairwise cross-scan against a fully-materialised input is a hard ceiling.</p>
+<p>The flat <code>buys × sells</code> cross-join with no pre-grouping is the binding constraint.</p>
 <h2 id="findings">Findings</h2>
 <ul>
-<li>🔴 <strong>O(n²) cross-scan</strong> (<code>detect_wash_trades</code>, the nested loop) - 🧠 inferred. The inner loop
-  iterates the <em>entire</em> trade list for every buy, regardless of instrument/window. At 10⁵ trades ≈
-  10¹⁰ pair-evals; 10⁶ ≈ 10¹²; 10⁷ ≈ 10¹⁴. The instrument/window guards fire <em>inside</em> the loop, so
-  they cut the constant factor, not the complexity. <strong>Fix:</strong> group by <code>(instrument, time-bucket)</code>
-  before scanning (a <code>defaultdict(list)</code> on instrument + a <code>bisect</code> window on a per-instrument
-  timestamp-sorted list) → expected <strong>O(n·k)</strong> where k = trades per instrument per window (k ≪ n).
-  Transformative at scale (minutes-to-hours → seconds).</li>
-<li>🟠 <strong>Full materialisation</strong> <code>trade_list = list(trades)</code> - 📊 measured (explicit at that line). The
-  whole input is loaded before processing; at 10⁶ trades ≈ hundreds of MB-low GB; 10⁷ may exhaust
-  heap. <strong>Fix:</strong> the grouping above can be a single streaming pass, capping peak memory to the
-  largest instrument's active window.</li>
+<li>🔴 <strong>O(B×S) nested loop</strong> (<code>detect_wash_trades</code>) - 🧠 inferred. Every buy is compared against every
+  sell across all instruments/UBO groups before the structural guards prune. ~2.5×10⁹ iterations at
+  10⁵ trades; untenable at 10⁶; infeasible at 10⁷. <strong>Fix:</strong> pre-group sells into a dict keyed by
+  <code>(instrument, ubo_group_id)</code>, then the inner loop visits only same-instrument/same-UBO sells →
+  collapses toward O(n). 🔴 Open for productionisation.</li>
+<li>🟠 <strong>Unbounded in-memory accumulation</strong> - 📊 the whole input is materialised and <code>alerts</code> grows
+  without a cap/stream. At 10⁷ trades, multi-GB. <strong>Fix:</strong> stream in instrument/date-partitioned
+  chunks and flush alerts. 🔴 Open for productionisation.</li>
 </ul>
 <h2 id="done-well">Done well</h2>
 <ul>
-<li>📊 Cheap structural filters (instrument/side/account/exemption) run <strong>before</strong> the expensive
-  <code>ubo_link()</code> call and mid lookup - limits UBO calls to already-qualified pairs.</li>
-<li>📊 <code>ubo_link</code> injected (mockable; a cache wrapper can be inserted without touching detection logic).</li>
-<li>📊 <code>as_of_date</code> injected, fail-loud params - correct for a regulated, deterministic rule.</li>
+<li>📊 UBO + market indices pre-built as dicts (O(1) lookups); freshness validated eagerly; exempt
+  accounts filtered once upfront; frozen dataclasses; obligation cited on the alert; deterministic
+  alert id.</li>
 </ul>
-<h2 id="potential-gains">Potential gains</h2>
-<table>
-<thead>
-<tr>
-<th>Issue</th>
-<th>Current</th>
-<th>After fix</th>
-<th>Gain</th>
-<th>Basis</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>O(n²) scan</td>
-<td>~10¹² evals @ 10⁶</td>
-<td>O(n·k), k≪n</td>
-<td>orders of magnitude</td>
-<td>🧠 inferred (loop shape)</td>
-</tr>
-<tr>
-<td>Full materialisation</td>
-<td>full set in heap</td>
-<td>window-bounded</td>
-<td>~10-100× peak memory</td>
-<td>📊 explicit + 🧠 projection</td>
-</tr>
-</tbody>
-</table>
-<p>Exact wall-clock savings need a benchmark (off by default, §7); the O(n²)→O(n·k) reduction is
-🧠 inferred and expected to be transformative, not incremental.</p>
+<p>Exact wall-clock needs a benchmark (off by default, §7); the O(n²)→O(n) reduction is 🧠 inferred and
+expected to be transformative. <strong>Deferred</strong> to productionisation (demo has no volume).</p>
 <div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
 </body>
 </html>

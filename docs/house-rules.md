@@ -34,6 +34,15 @@ standards.
   carry the **obligation citation** and the **keystone linkage ID** (here, the UBO ID) as *fields* -
   not only in a free-text `reason` - so the alert record *alone* satisfies the alert→obligation
   trace, which is the one place an investigator and a regulator actually look.
+- 2026-06-27 - **Mapping-not-finalised rule** (build demo Run 2, `compliance-reviewer`): never let an
+  unresolved obligation mapping *masquerade as finalised*. Don't embed a lone citation literal that
+  looks final while jurisdiction / connected-party scope is still an open SME decision - carry an
+  explicit `obligation_status` (e.g. PROVISIONAL pending Q1/Q3/Q4) or reference the obligation via an
+  RTM/decision-log id, so the alert can't assert a regulatory trace that doesn't yet exist.
+- 2026-06-27 - **Tuning rule** (build demo Run 2, `tuning-analyst`): the off-market threshold's natural
+  unit is **deviation ÷ prevailing spread** (spread-normalised), not a flat bps figure; and a
+  **`min_notional` floor is a required parameter** (an immaterial-notional pair can't give a "false or
+  misleading signal" under MAR Art 12(1)(a)) - it's a compliance risk-appetite decision, not pure stats.
 
 ## Venue / market quirks
 -
