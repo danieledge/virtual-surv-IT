@@ -26,9 +26,13 @@ a { color: #0969da; }
 <body>
 <h1 id="delivery-report-wash-trade-self-match-detection-demo">Delivery Report - Wash Trade / Self-Match Detection (DEMO)</h1>
 <blockquote>
-<p>The consolidated delivery artifact for the <a href="../build-demo.md">build demo</a> - the full DoD chain on
-one page. Synthetic only (§5). This is what a <em>complete</em> build stage produces, not just the build
-core. Demo artifact: not production detection logic.</p>
+<h1 id="after-as-delivered-current-state">⏩ AFTER - "as-delivered" current state</h1>
+<p>The consolidated delivery for the <a href="../build-demo.md">build demo</a> - the full DoD chain on one page,
+<strong>after</strong> the review fixes. Pair it with the <a href="qa-handover.md">QA handover</a> (the ⏪ <em>as-found</em>
+snapshot of what was caught). Synthetic only (§5); demo artifact, not production detection logic.</p>
+<p><strong>Status in one line:</strong> the <strong>7 review defects are ✅ Fixed</strong> (tests green); what remains open is by
+design - <strong>3 deploy-gates ⏭️ Deferred</strong> (re-calibrate on real data, the O(n²) fix, a missing-mid
+metric) and <strong>human sign-off ⛔ Pending</strong> (a demo can't produce one). Detail in §3 and §5.</p>
 </blockquote>
 <table>
 <thead>

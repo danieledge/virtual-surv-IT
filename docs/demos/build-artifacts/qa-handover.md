@@ -1,14 +1,16 @@
 # QA Handover - Test Evidence - Wash Trade Detector (DEMO)
 
-> **POST-REVIEW UPDATE (2026-06-27):** this handover is the record that *found* DEF-001 (UBO
-> staleness off-by-one) and the coverage gaps. They were routed back and **fixed** - the QA suite
-> now passes **33/33** and the dev suite 2/2. See the [delivery report](delivery-report.md) §3 for
-> the full disposition. The "FAILED" / "open defect" text below is preserved as the original QA
-> record (pre-fix).
+> # ⏪ BEFORE - "as-found" QA snapshot
+> **This is the QA evidence as it was *first produced* - the record that *caught* DEF-001 and the
+> coverage gaps. It is deliberately NOT rewritten** (an audit trail of what QA found must not be
+> retro-edited). The "FAILED / open defect / not production-ready" text below is therefore the
+> *pre-fix* state.
+>
+> ➡️ **AFTER / current state:** the defects were routed back and **fixed** - QA suite now **33/33**,
+> dev suite **2/2**. The resolved disposition is in the [**delivery report**](delivery-report.md) §3.
+> *Read this doc for "what QA caught"; read the delivery report for "how it ended".*
 >
 > Produced by `qa-engineer` (Linh) - independent of the builder (Mateo / rules-developer).
-> Evidences what was tested, the results, what is NOT covered, and what the QA team must
-> note or re-verify before any production deployment.
 
 | | |
 |---|---|
@@ -19,7 +21,7 @@
 | **Version / commit** | `ff966f11bc4b5f54600fdd080f59271e4c8a08cc` |
 | **Tested by** | qa-engineer (Linh) - independent |
 | **Date** | 2026-06-27 |
-| **Overall** | PASS-WITH-GAPS and 1 DEFECT - not production-ready as-is |
+| **Overall (as-found)** | PASS-WITH-GAPS and 1 DEFECT - not production-ready *(pre-fix; see delivery report for resolved state)* |
 
 ---
 

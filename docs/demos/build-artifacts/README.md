@@ -21,6 +21,18 @@ compile) - open / download them:
 > (a buy-side false-negative, an off-by-one, a broken audit-trail field, more) - all **fixed** and
 > re-tested (dev 2/2, QA 33/33 green). The disposition is in the [delivery report](delivery-report.md) §3.
 
+### ⏪ Before → After ⏩ (two snapshots, on purpose)
+The same deliverable appears at two points in time - this is deliberate, not a contradiction:
+
+| | Doc | Shows |
+|---|---|---|
+| ⏪ **Before** (as-found) | [`qa-handover.md`](qa-handover.md) | What QA *caught* - DEF-001 + gaps, "not production-ready". **Preserved, not rewritten** (audit trail). |
+| ⏩ **After** (as-delivered) | [`delivery-report.md`](delivery-report.md) | The resolved state - 7 defects ✅ Fixed; deploy-gates ⏭️ Deferred; sign-off ⛔ Pending. |
+
+You don't retro-edit QA evidence; you **disposition** it. The QA handover says "here's what was
+wrong"; the delivery report says "here's how it ended". Reading both *is* the demonstration of the
+fix→re-review loop.
+
 > ⚠️ **Demo artifacts - synthetic, not production.** They live under `docs/` and are **not** part of
 > the repo's detection logic or test suite (`testpaths = ["tests"]`). All data is fabricated (§5).
 
