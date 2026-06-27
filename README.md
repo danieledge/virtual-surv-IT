@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.5.0](https://img.shields.io/badge/version-0.5.0-blue)
+![Version 0.5.1](https://img.shields.io/badge/version-0.5.1-blue)
 ![Tests 34 passing](https://img.shields.io/badge/tests-34%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -20,13 +20,16 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.5.0
+> ## ✨ What's new in 0.5.1
 >
 > - **🧪 Team-quality eval harness** (`evals/`) - a regression net that scores the team's *own
 >   output* (reviews, coverage assessments, specs, tuning packs) against **17 golden cases** with
 >   seeded issues + false-positive traps. A deterministic scorer (`scripts/eval_score.py`,
 >   unit-tested) checks recall/must-find/traps; `/run-evals` adds an LLM-judge for the qualitative
->   dimensions. Catches a prompt change that silently degrades rigour.
+>   dimensions. See [Self-test](#-self-test-eval-harness).
+> - **💰 Token optimisation** - `CLAUDE.md` slimmed **~44%** (operating detail moved to a doc read
+>   on-engage), cutting the always-on context every session and subagent carries. See
+>   [Token usage](#-token-usage--optimisation).
 > - **⚡ Streamlined intake** *(0.4.x)* - upfront questions batched onto single screens, a
 >   duplicated question removed (~11 prompts → ~5), execution-safety only asked when code's involved.
 > - **📝 Handover-doc quality is now a Definition-of-Done gate** - docs must be *clear & usable by a
@@ -115,7 +118,7 @@ anonymised** (a startup disclaimer makes this explicit; the responsibility is yo
 
 ---
 
-**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🗺️ Roadmap](#-roadmap) · [🔧 Config](#-notes-on-the-config) · [🙏 Credits](#-credits)
+**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🔒 Real-data handling](#-handling-real-data) · [💰 Token usage](#-token-usage--optimisation) · [📁 Layout](#-layout) · [🗺️ Roadmap](#-roadmap) · [🔧 Config](#-notes-on-the-config) · [🙏 Credits](#-credits)
 
 ---
 
@@ -392,6 +395,7 @@ scripts/gen_synthetic.py     # synthetic order-flow generator (§5 - no real dat
 tests/test_spoofing.py       # true-positive + false-positive cases (§4)
 docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
 docs/WAYS-OF-WORKING.md      # frameworks, workflows, artifact menu, traceability spine
+docs/team-operating-guide.md # the PM's detailed operating rules (read on-engage; keeps CLAUDE.md lean)
 docs/agent-design.md         # how the team is built to agent best-practice + model-tiering rationale + conformance matrix
 docs/prepare-data-roadmap.md # path to make /prepare-data accept more data safely ("throw anything at it")
 docs/DEFINITION-OF-DONE.md   # the evidenced gate every delivery must meet
@@ -440,6 +444,24 @@ The rest install via the OS / build tooling:
 
 The agent runs whatever is present and reports which analysers were unavailable - nothing is
 silently skipped. None of these are required to *use* the team; they sharpen `code-reviewer`.
+
+## 🧪 Self-test (eval harness)
+
+The repo's **34 unit tests** check the *code*. The **eval harness** ([`evals/`](evals/)) checks the
+**quality of what the team produces** - so a prompt change that silently weakens a review gets
+caught, not shipped. (This is the regression net Anthropic's multi-agent guidance recommends.)
+
+- **5 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety) + **17 golden
+  cases** with deliberately seeded issues *and* false-positive traps (all synthetic).
+- **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)) - matches the team's
+  findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
+  (7 tests), runs free in CI** - no tokens.
+- **`/run-evals`** runs the live team per case, scores it, adds an **LLM-judge** for the qualitative
+  dimensions, and prints a scoreboard - flagging any regression. *(Spends tokens; run at milestones.)*
+
+> Proven against a real run: the actual `code-reviewer`, run blind on the seeded-bug case, scored
+> **recall 1.0** - it caught both planted criticals and correctly left the documented threshold
+> (the false-positive trap) alone.
 
 ## 🔒 Handling real data
 
@@ -499,6 +521,29 @@ python -m scripts.validate_masking                       # exit 0 = safe + faith
 - Models: **4 opus** (the final/unchecked judgement + novel-design roles) · **11 sonnet** ·
   **1 haiku** - the per-agent rationale and best-practice conformance live in
   [`docs/agent-design.md`](docs/agent-design.md). Change the `model:` field freely.
+
+## 💰 Token usage & optimisation
+
+Multi-agent setups cost tokens, so the team is built to be cost-conscious. Measured on a real run
+(the Agent tool reports actual usage; ~4 chars/token, so ±15%):
+
+| What | Cost | When it's paid |
+|---|---|---|
+| One quick `code-reviewer` review (small file, opus) | **~18.7k tokens** | per review agent |
+| A lean engagement (intake + scorer + reviewer + synthesis) | ~35-50k | per engagement |
+| A full fan-out (right-sizing off) | ~150k+ | rarely - reserved for broad work |
+
+**Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
+- **Model tiering** - **4 opus / 11 sonnet / 1 haiku**; opus (~5× sonnet) reserved for the four
+  final-judgement/novel-design roles, haiku for the mechanical review bookkeeping.
+- **Right-sizing** - a narrow change fires 2-3 agents, not 16; the PM states the agent count at the gate.
+- **Artifacts-as-blackboard** - agents return condensed results; big output goes to files, not back
+  through the orchestrator's context.
+- **Clean console** - detail to artifacts, not the chat.
+- **Lean always-on context (0.5.x)** - `CLAUDE.md` was slimmed **~44%** (~5.2k → ~2.9k tokens) by
+  moving on-engage operating detail to [`docs/team-operating-guide.md`](docs/team-operating-guide.md).
+  It loads into *every* session and is inherited by *every* subagent, so this saves ~2.3k tokens per
+  session - multiplied across a fan-out (a 5-agent run saves ~11k).
 
 ## 🗺️ Roadmap
 

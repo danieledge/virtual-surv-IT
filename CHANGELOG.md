@@ -3,6 +3,17 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.5.1] - 2026-06-27
+
+### Changed - token optimisation
+- **`CLAUDE.md` slimmed ~44%** (~5.2k → ~2.9k tokens) by moving the PM's detailed operating rules
+  (question-construction, voice/console, outcome discipline, orchestration detail) to
+  `docs/team-operating-guide.md`, read **on-engage**. CLAUDE.md keeps the always-on core (dormancy,
+  data-safety §5, the routing table + names, the execution gate §7). It loads into every session and
+  is inherited by every subagent, so this saves ~2.3k tokens per session - multiplied across a fan-out.
+- Measured real token usage and documented it: new README **Token usage & optimisation** and
+  **Self-test (eval harness)** sections.
+
 ## [0.5.0] - 2026-06-27
 
 ### Added - team-quality eval harness (`evals/`)
