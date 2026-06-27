@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.4.1](https://img.shields.io/badge/version-0.4.1-blue)
+![Version 0.4.2](https://img.shields.io/badge/version-0.4.2-blue)
 ![Tests 27 passing](https://img.shields.io/badge/tests-27%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -20,11 +20,15 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.4.1
+> ## ✨ What's new in 0.4.2
 >
 > - **⚡ Streamlined intake** - the upfront questions were batched onto single screens and a
 >   duplicated question removed (~11 prompts → ~5), with execution-safety only asked when code is
 >   involved. Same decisions, far less friction.
+> - **📝 Handover-doc quality is now a gate** - the Definition of Done checks handover docs are
+>   *clear & usable by a real developer*, not merely present (no new agent needed).
+> - **✨ Consistent prose** - em-dashes removed repo-wide; intake refinements applied across all
+>   review flows.
 > - **🛡️ Data-handling contract** *(0.4.0)* - the raw folder stays hard-blocked; *other* data is
 >   analysed on your **attestation** that it's masked/synthetic/anonymised (a startup disclaimer);
 >   an **automatic data-masking workflow** is on the roadmap to replace it.

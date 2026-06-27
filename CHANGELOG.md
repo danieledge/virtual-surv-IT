@@ -3,6 +3,17 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.4.2] - 2026-06-27
+
+### Changed
+- **Handover-doc quality is now a Definition-of-Done gate** - docs must be *clear & usable by a
+  developer who has never seen the code* (build/run/change from the doc alone), not merely present;
+  `compliance-reviewer` checks usability. Closes the documentation seam without adding an agent.
+- **audit-review intake** aligned with the other review flows: inherits the fix-cycle and
+  jurisdiction from `engage`, and no longer blurs the handover deliverable into the action question.
+- **Em-dashes removed repo-wide** (markdown *and* code comments/docstrings/config) for consistent prose.
+- README: Meet-the-team headcount corrected (15 specialists + PM + intern = 16 agents).
+
 ## [0.4.1] - 2026-06-27
 
 ### Changed
