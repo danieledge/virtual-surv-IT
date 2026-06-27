@@ -53,6 +53,9 @@ def test_true_positive_wash_trade():
     assert alerts[0].buy_trade_id == "T001"
     assert alerts[0].sell_trade_id == "T002"
     assert alerts[0].price_deviation_pct == pytest.approx(6.0, abs=0.01)
+    # The alert record carries the obligation + UBO id as fields (compliance-review fix, AC3).
+    assert alerts[0].obligation == "MAR Art. 12(1)(a)"
+    assert alerts[0].ubo_id
 
 
 def test_false_positive_competitive_price_suppressed():
