@@ -19,6 +19,7 @@ from scripts.validate_masking import (
     _TEST_KEY_CONSTANT,
     detection_fidelity,
     run_privacy_checks,
+    scan_masked_file,
 )
 
 KEY = b"test-key-not-a-secret"
@@ -64,8 +65,8 @@ def test_no_original_identifiers_survive():
     checks, _ = run_privacy_checks(_records(), SCHEMA, KEY)
     by_name = {name: (ok, detail) for name, ok, detail in checks}
     assert by_name["no residual identifiers"][0]
-    # Check name was updated in FIX 3 to reflect all-fields scanning scope.
-    assert by_name["no residual PII patterns (all output fields)"][0]
+    # Scans the free-text-capable output fields (redact/token + keep-direct-id).
+    assert by_name["no residual PII patterns (free-text-capable fields)"][0]
 
 
 def test_detection_fidelity_is_exact():
@@ -191,4 +192,28 @@ def test_direct_identifier_passthrough_is_flagged():
     by_name = {name: ok for name, ok, _ in checks}
     assert not by_name["no direct-identifier passthrough"], (
         "A trader field with role=keep must fail the direct-identifier passthrough check"
+    )
+
+
+def test_scan_masked_file_passes_clean(tmp_path):
+    """--in mode: a clean masked file (tokens + numbers) passes."""
+    f = tmp_path / "clean.jsonl"
+    f.write_text(
+        '{"trader":"party_a1","order_id":"order_9f","ts_ms":123,"price":100.0,"qty":50}\n'
+    )
+    checks = scan_masked_file(f, SCHEMA)
+    by_name = {name: ok for name, ok, _ in checks}
+    assert by_name["no residual PII in masked file (string fields)"] is True
+
+
+def test_scan_masked_file_catches_residual_pii(tmp_path):
+    """--in mode: residual free-text PII (email/IBAN) in a string field is caught."""
+    f = tmp_path / "leaky.jsonl"
+    f.write_text(
+        '{"trader":"party_a1","note":"reach john.smith@bank.com or GB29NWBK60161331926819"}\n'
+    )
+    checks = scan_masked_file(f, SCHEMA)
+    by_name = {name: ok for name, ok, _ in checks}
+    assert by_name["no residual PII in masked file (string fields)"] is False, (
+        "A leaked email/IBAN in a masked-file string field must fail the scan"
     )

@@ -6,7 +6,7 @@
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Version 0.5.1](https://img.shields.io/badge/version-0.5.1-blue)
-![Tests 34 passing](https://img.shields.io/badge/tests-34%20passing-brightgreen)
+![Tests 36 passing](https://img.shields.io/badge/tests-36%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
@@ -489,10 +489,16 @@ real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ �
 - **`scripts/ingest.py`** - schema-driven masking (`config/masking-schema.yaml`). Each field
   has a role: `token` (keyed HMAC, preserves linkage), `shift` (per-entity time shift,
   preserves deltas), `keep` (signal-bearing values), `generalise`, `redact` (free text).
-  Key from `MASKING_KEY` in `~/.secrets` - no insecure default.
-- **`scripts/validate_masking.py`** - gate that proves a config is safe *and* useful: no
-  residual identifiers/PII, k-anonymity over quasi-identifiers, **and** the spoofing rule
-  fires identically on masked vs. original data (fidelity).
+  Key from `MASKING_KEY` in `~/.secrets` - no insecure default. ⚠️ **`redact` is regex-only**
+  (email/IBAN/card/SSN/phone) - fine for structured fields, **not safe for real comms/chat**
+  (misses names + obfuscated IDs); swap in NER before masking real communications (roadmap).
+- **`scripts/validate_masking.py`** - two modes. **Default** = a *config self-test* on a synthetic
+  fixture: it proves the schema + masking logic are sound (no residual identifiers/PII in the
+  fixture, the spoofing rule fires identically masked-vs-original, k-anonymity over any *declared*
+  quasi-identifiers). It does **not** inspect your data. **`--in data/masked/x.jsonl`** = scans
+  **your actual masked file** for residual free-text PII (string fields) + k-anonymity. *(It can't
+  verify "no original identifier survived" or fidelity without the originals - by design they never
+  reach it.)* Note: k-anonymity is **off until you declare `quasi_identifiers`** in the schema.
 - **`scripts/synthesise.py`** - the safest tier: learns the *shape* of masked data
   (size/timing distributions + the spoofing motif at its observed rate) and emits fully
   **synthetic** sessions that share no real entity, timestamp or row. This is what's safe
@@ -503,7 +509,8 @@ real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ �
 ```bash
 export MASKING_KEY=...                                   # from ~/.secrets
 python -m scripts.ingest --in data/raw/x.jsonl --out data/masked/x.jsonl
-python -m scripts.validate_masking                       # exit 0 = safe + faithful
+python -m scripts.validate_masking                       # config self-test (synthetic fixture)
+python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked file for residual PII
 ```
 
 > Pseudonymised data is still personal data (GDPR). Masking enables local development;

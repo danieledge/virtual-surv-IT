@@ -5,19 +5,28 @@ Masking without measurement is faith, not control. This harness runs two sides:
 
 Privacy (re-identification risk):
   - residual identifiers: none of the original direct-identifier values survive
-  - residual PII patterns: ALL output fields are scanned (not only `redact`-role),
-    so a mis-configured `keep`/`generalise` field leaking free-text PII is caught
+  - residual PII patterns: scanned across the FREE-TEXT-CAPABLE output fields (`redact`/
+    `token` roles + any `keep`-role direct identifier). Numeric fields (`shift` timestamps,
+    `keep` prices/qty, `generalise` buckets) are excluded to avoid digit-run false positives;
+    the direct-identifier-passthrough check is the backstop for mis-roled identifier fields.
   - direct-identifier passthrough: any field declared as a direct identifier (role
     `token`/`drop`) that is instead given a pass-through role (`keep`/`generalise`)
     is a configuration error - flagged as FAIL
   - k-anonymity: each declared quasi-identifier combination is shared by >= k records
+    (only runs if the schema declares `quasi_identifiers`; skipped otherwise)
 
 Utility (detection fidelity):
   - the spoofing rule fires identically (same count + same non-identifying shape) on
     masked data as on the original - i.e. masking preserved the behavioural signal.
 
-Run as a gate (operates on SYNTHETIC data):
-  python -m scripts.validate_masking      # exit 0 = pass, non-zero = fail
+Two modes:
+  python -m scripts.validate_masking                       # CONFIG self-test on a synthetic
+      fixture: proves the schema + masking logic are sound (privacy checks + detection fidelity).
+      This does NOT inspect any user data - it is a regression/config gate.
+  python -m scripts.validate_masking --in data/masked/x.jsonl   # inspect YOUR actual masked
+      file: scans its string fields for residual free-text PII and runs k-anonymity over it.
+      (Cannot check 'no original identifier survived' or detection fidelity without the originals.)
+  exit 0 = pass, non-zero = fail.
 
 Key handling:
   - If MASKING_KEY is set in the environment it is used (production / CI path).
@@ -173,7 +182,7 @@ def run_privacy_checks(original_records, schema, key):
         else (str(pii_hits) if pii_hits else f"clean across {scanned_count} free-text-capable field(s)")
     )
     checks.append((
-        "no residual PII patterns (all output fields)",
+        "no residual PII patterns (free-text-capable fields)",
         not pii_hits,
         detail,
     ))
@@ -235,16 +244,71 @@ def detection_fidelity(original_events, schema, key):
     return ok, len(real), len(masked)
 
 
-def main() -> None:
-    schema = load_schema(Path("config/masking-schema.yaml"))
-    key = _resolve_key()
+def scan_masked_file(path: str | Path, schema: dict) -> list:
+    """Inspect a user's ACTUAL masked file (not a fixture). Data-independent checks only.
 
-    events = spoofing_session(seed=1)
-    checks, _ = run_privacy_checks([event_to_record(e) for e in events], schema, key)
-    ok_fid, n_real, n_masked = detection_fidelity(events, schema, key)
-    checks.append(
-        ("detection fidelity (spoofing)", ok_fid, f"alerts real={n_real} masked={n_masked}")
-    )
+    Scans every STRING field value for residual free-text PII (numbers are skipped so shifted
+    timestamps / prices don't trigger digit-run false positives), and runs k-anonymity over any
+    declared quasi-identifiers. It CANNOT verify 'no original identifier survived' or detection
+    fidelity - those need the original data, which by design never reaches this tool.
+    """
+    records = [
+        json.loads(line)
+        for line in Path(path).read_text().splitlines()
+        if line.strip()
+    ]
+    checks = []
+
+    # Residual free-text PII across all STRING fields of the real masked output.
+    text = " ".join(v for r in records for v in r.values() if isinstance(v, str))
+    hits = [label for label, pat in _PII_PATTERNS if pat.search(text)]
+    checks.append((
+        "no residual PII in masked file (string fields)",
+        not hits,
+        str(hits) if hits else f"clean across {len(records)} record(s)",
+    ))
+
+    # k-anonymity over declared quasi-identifiers (skipped if none declared).
+    qis = schema.get("quasi_identifiers", [])
+    if not qis:
+        checks.append(("k-anonymity", True, "no quasi-identifiers declared - skipped (declare to enforce)"))
+    else:
+        k = schema.get("k_anonymity", 1)
+        groups = Counter(tuple(r.get(q) for q in qis) for r in records)
+        worst = min(groups.values()) if groups else 0
+        checks.append(("k-anonymity", worst >= k, f"min group={worst}, required k={k}"))
+
+    return checks
+
+
+def main() -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Validate masking: config self-test, or scan a masked file.")
+    ap.add_argument("--in", dest="inp", type=Path, default=None,
+                    help="optional: scan YOUR masked .jsonl for residual PII + k-anonymity")
+    ap.add_argument("--schema", type=Path, default=Path("config/masking-schema.yaml"))
+    args = ap.parse_args()
+
+    schema = load_schema(args.schema)
+
+    if args.inp is not None:
+        # Inspect the user's actual masked output (data-independent checks).
+        print(f"[INFO] Scanning masked file {args.inp} (residual PII + k-anonymity). "
+              "Note: 'no original identifier survived' and detection fidelity need the originals "
+              "and are NOT checked in this mode.")
+        checks = scan_masked_file(args.inp, schema)
+    else:
+        # Config self-test on a synthetic fixture (regression/config gate; no user data).
+        key = _resolve_key()
+        events = spoofing_session(seed=1)
+        checks, _ = run_privacy_checks([event_to_record(e) for e in events], schema, key)
+        ok_fid, n_real, n_masked = detection_fidelity(events, schema, key)
+        checks.append(
+            ("detection fidelity (spoofing)", ok_fid, f"alerts real={n_real} masked={n_masked}")
+        )
+        print("[INFO] Config self-test on a synthetic fixture (no user data inspected). "
+              "Use --in <file> to scan your actual masked output.")
 
     for name, ok, detail in checks:
         print(f"[{'PASS' if ok else 'FAIL'}] {name}: {detail}")
