@@ -9,6 +9,16 @@ real agent findings, the guard hard-block, and the eval score.
 > from a real run, just on synthetic data. Nothing is faked for effect. (Analyser availability and
 > exact wording will vary run to run.)
 
+### How to read a transcript (who's speaking)
+| Style | Who | What it is |
+|---|---|---|
+| > 🎩 **Morgan** … (blockquote) | **Morgan, the AI PM** | Spoken **live in the session** - exactly what you'd see. *Morgan's words, not a human author's.* |
+| Plain text | This page | Editorial framing / stage directions for the reader. |
+| ` ```console ` / ` ```python ` blocks | The tools / agents | **Real** commands, their output, and verbatim specialist (agent) findings. |
+
+So when Morgan says something clever or sceptical below, that's **the model running the team** -
+generated at the moment, not scripted by the repo author.
+
 | Demo | What it shows |
 |---|---|
 | [🔍 Review](review-demo.md) | The review pipeline - one agent (right-sized), evidence-basis discipline, and the eval harness *proving* the result (recall 1.0). |
