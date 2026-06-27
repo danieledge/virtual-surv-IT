@@ -3,7 +3,14 @@
 > **The actual document produced by `business-analyst` (Amara) during the [build demo](../build-demo.md).**
 > Synthetic / illustrative - no real data (CLAUDE.md §5). Captured verbatim from the demo run.
 
-**Spec ID:** SS-TS-001 | **Status:** Draft - pending trade-surveillance-sme sign-off
+**Spec ID:** SS-TS-001 | **Status:** Rev B - SME-validated, code-reviewed
+
+> **Rev B (2026-06-27):** §4 step 3 corrected per `trade-surveillance-sme` and compliance review -
+> the qualifying test is **off-market price as a *necessary* condition** (either leg deviates from
+> mid beyond tolerance), **not** mere price/quantity convergence within a tolerance. Convergence
+> alone produced false positives at liquid price levels. The implementation
+> ([`wash_trade.py`](wash_trade.py)) follows this corrected logic; the alert record now carries the
+> `obligation` and `ubo_id` as fields (compliance-review fix).
 
 ---
 

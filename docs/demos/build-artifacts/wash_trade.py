@@ -20,8 +20,12 @@ Assumptions:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Iterable
+from datetime import timedelta
+from typing import Callable, Iterable
+
+# The obligation this scenario serves - carried ON the alert (compliance-review fix: the alert
+# record itself must satisfy the alert -> obligation trace, not just a free-text reason).
+OBLIGATION = "MAR Art. 12(1)(a)"
 
 
 @dataclass
@@ -32,13 +36,15 @@ class WashTradeAlert:
     account_sell: str
     instrument: str
     price_deviation_pct: float
+    ubo_id: str            # the keystone linkage ID (compliance-review fix)
+    obligation: str        # the regulatory citation, on the record (compliance-review fix)
     reason: str
 
 
 def detect_wash_trades(
     trades: Iterable[dict],
     params: dict,
-    ubo_link: callable,
+    ubo_link: Callable[[str, str], dict | None],
     exemptions: set[str],
 ) -> list[WashTradeAlert]:
     """
@@ -81,7 +87,11 @@ def detect_wash_trades(
         if buy["account_id"] in exemptions:
             continue  # Exemption gate (condition 3, buy side)
 
-        for sell in trade_list[i + 1:]:
+        # Scan ALL other trades, not just trade_list[i+1:] - the matching sell may appear before
+        # the buy in an unsorted feed (code-review fix: input-order independence).
+        for j, sell in enumerate(trade_list):
+            if j == i:
+                continue
             if sell["side"] != "S":
                 continue
             if sell["instrument"] != buy["instrument"]:
@@ -102,16 +112,19 @@ def detect_wash_trades(
             if not link or not link["linked"]:
                 continue  # No UBO connection - not in scope
             staleness_cutoff = params["as_of_date"] - timedelta(days=params["ubo_staleness_days"])
-            if link["as_of"] < staleness_cutoff:
+            # <= : a link AT exactly the staleness limit is treated as stale (QA DEF-001 fix).
+            if link["as_of"] <= staleness_cutoff:
                 continue  # Stale UBO data - skip; escalate to data-quality, do not false-positive
 
             # --- Condition 2: Off-market price (NECESSARY condition, per the SME) ---
             mid = params["market_mid"].get(buy["instrument"])
-            if mid is None:
-                continue  # No reference price - data-quality gap, not a detection gap
-            deviation_pct = abs(sell["price"] - mid) / mid * 100
+            if not mid:
+                continue  # No (or zero) reference price - data-quality gap, not a detection gap
+            # Off-market if EITHER leg deviates - a buy-side-only wash must not be missed
+            # (code-review fix: was sell-leg only).
+            deviation_pct = max(abs(buy["price"] - mid), abs(sell["price"] - mid)) / mid * 100
             if deviation_pct <= params["price_tolerance_pct"]:
-                continue  # Price is competitive - necessary condition NOT met
+                continue  # Both legs competitive - necessary condition NOT met
 
             alerts.append(
                 WashTradeAlert(
@@ -121,6 +134,8 @@ def detect_wash_trades(
                     account_sell=sell["account_id"],
                     instrument=buy["instrument"],
                     price_deviation_pct=round(deviation_pct, 4),
+                    ubo_id=link.get("ubo_id", f"{buy['account_id']}~{sell['account_id']}"),
+                    obligation=OBLIGATION,
                     reason=f"UBO-linked accounts, off-market price ({deviation_pct:.2f}% from mid)",
                 )
             )

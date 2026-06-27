@@ -30,6 +30,10 @@ standards.
   *necessary* (e.g. off-market price), implement it as an **early-continue that fully terminates the
   pair's evaluation**, not a weighted score - otherwise a strong UBO/volume signal can compensate
   for a missing price condition. That compensation is a common FP source and a frequent audit finding.
+- 2026-06-27 - **Alert-record rule** (build demo, `compliance-reviewer`): every alert dataclass must
+  carry the **obligation citation** and the **keystone linkage ID** (here, the UBO ID) as *fields* -
+  not only in a free-text `reason` - so the alert record *alone* satisfies the alert→obligation
+  trace, which is the one place an investigator and a regulator actually look.
 
 ## Venue / market quirks
 -

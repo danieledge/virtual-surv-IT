@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenario Spec - Wash Trade / Self-Match Detection (DEMO)</title>
+<style>:root { color-scheme: light dark; }
+body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem;
+  color: #1a1a1a; background: #fff; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #57606a; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #8a8a8a; font-size: .8rem; }
+@media print { body { max-width: none; } a { color: inherit; } }</style>
+</head>
+<body>
+<h1 id="scenario-spec-wash-trade-self-match-detection-demo">Scenario Spec - Wash Trade / Self-Match Detection (DEMO)</h1>
+<blockquote>
+<p><strong>The actual document produced by <code>business-analyst</code> (Amara) during the <a href="../build-demo.md">build demo</a>.</strong>
+Synthetic / illustrative - no real data (CLAUDE.md §5). Captured verbatim from the demo run.</p>
+</blockquote>
+<p><strong>Spec ID:</strong> SS-TS-001 | <strong>Status:</strong> Rev B - SME-validated, code-reviewed</p>
+<blockquote>
+<p><strong>Rev B (2026-06-27):</strong> §4 step 3 corrected per <code>trade-surveillance-sme</code> and compliance review -
+the qualifying test is <strong>off-market price as a <em>necessary</em> condition</strong> (either leg deviates from
+mid beyond tolerance), <strong>not</strong> mere price/quantity convergence within a tolerance. Convergence
+alone produced false positives at liquid price levels. The implementation
+(<a href="wash_trade.py"><code>wash_trade.py</code></a>) follows this corrected logic; the alert record now carries the
+<code>obligation</code> and <code>ubo_id</code> as fields (compliance-review fix).</p>
+</blockquote>
+<hr>
+<h3 id="1-behaviour-one-line">1. Behaviour (one line)</h3>
+<p>A party buys and sells the same instrument in offsetting trades where both sides are attributable to
+the same beneficial owner, account group, or coordinated entity, with no genuine change in economic
+exposure or risk transfer.</p>
+<h3 id="2-regulatory-obligation">2. Regulatory Obligation</h3>
+<p><strong>Primary:</strong> EU MAR Article 12(1)(a) - market manipulation by engaging in transactions that give
+false or misleading signals as to supply, demand or price. Wash trades are an archetypal example of
+artificial volume creation.</p>
+<p><strong>Also relevant (by jurisdiction):</strong>
+- UK MAR Art. 12(1)(a) (onshored equivalent)
+- US: Securities Exchange Act s.9(a)(1) (wash sales / matched orders); CFTC CEA s.4c(a)(2)
+- SFA (Singapore) s.197; SFO (Hong Kong) s.274/278</p>
+<p><strong>SME flag:</strong> The trade-surveillance-sme should confirm which jurisdictions are in scope for this
+deployment and whether any safe-harbour carve-outs apply (e.g. certain market-making or ETF
+creation/redemption flows). Do not finalise the obligation mapping without that confirmation.</p>
+<h3 id="3-data-required">3. Data Required</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Source</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Trade / order ID</td>
+<td>OMS / execution feed</td>
+<td>Unique identifier</td>
+</tr>
+<tr>
+<td>Instrument identifier</td>
+<td>OMS</td>
+<td>ISIN or equivalent</td>
+</tr>
+<tr>
+<td>Trade direction (B/S)</td>
+<td>OMS</td>
+<td>Buy or Sell</td>
+</tr>
+<tr>
+<td>Trade price</td>
+<td>OMS</td>
+<td>For price-offset check</td>
+</tr>
+<tr>
+<td>Trade quantity</td>
+<td>OMS</td>
+<td></td>
+</tr>
+<tr>
+<td>Trade timestamp</td>
+<td>OMS</td>
+<td>To nanosecond if available</td>
+</tr>
+<tr>
+<td>Account ID</td>
+<td>OMS / account master</td>
+<td>The booking account</td>
+</tr>
+<tr>
+<td>Beneficial owner / UBO ID</td>
+<td>Account master / CRM</td>
+<td>Links accounts under common control</td>
+</tr>
+<tr>
+<td>Trader / desk ID</td>
+<td>OMS</td>
+<td>For group-level aggregation</td>
+</tr>
+<tr>
+<td>Venue / execution channel</td>
+<td>OMS</td>
+<td>Distinguish on-exchange from OTC</td>
+</tr>
+<tr>
+<td>Counterparty ID</td>
+<td>OMS / post-trade</td>
+<td>For identifying the contra side</td>
+</tr>
+</tbody>
+</table>
+<p>Data classification: all fields above may constitute PII or MNPI. Synthetic data only in this repo
+(CLAUDE.md §5). The beneficial-owner linkage is the critical field - confirm the authoritative source
+with the data-engineering team.</p>
+<h3 id="4-detection-logic-outline-for-developer-no-code-no-thresholds">4. Detection-Logic Outline (for developer - no code, no thresholds)</h3>
+<ol>
+<li><strong>Normalise and link accounts.</strong> For each trade, resolve the booking account to its beneficial
+   owner or account-group identifier using the account-master / UBO table. Flag where this linkage is
+   missing or stale (data-quality gate).</li>
+<li><strong>Candidate-pair identification.</strong> Within a configurable lookback window, identify pairs of trades
+   in the same instrument where the two sides are attributable to the same beneficial owner (or
+   affiliated group) and the directions are opposite (one Buy, one Sell).</li>
+<li><strong>Offset test.</strong> For each candidate pair, test whether quantity and price are within configurable
+   tolerances of each other (near-full offset suggests no net economic change).</li>
+<li><strong>Venue and counterparty check.</strong> Flag pairs where the same entity appears on both sides of the
+   same exchange transaction (self-match), or where the OTC counterparty is another account in the
+   same beneficial-owner group.</li>
+<li><strong>Exemption filter.</strong> Apply configurable carve-outs (e.g. internal portfolio rebalancing with
+   documented justification, specific venue types) - the list must be SME/compliance approved.</li>
+<li><strong>Scoring / aggregation.</strong> Score each flagged pair by volume significance, repetition frequency,
+   and price-impact materiality. Aggregate repeated patterns within a rolling window into a single
+   alert with a count of contributing pairs.</li>
+<li><strong>Alert generation.</strong> Emit an alert linking: beneficial owner, instrument, trade pairs, scores,
+   and the specific MAR article satisfied.</li>
+</ol>
+<h3 id="5-parameters-requiring-tuning-sme-tuning-analyst-decisions-values-not-invented-here">5. Parameters Requiring Tuning (SME / Tuning-Analyst decisions - values NOT invented here)</h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+<th>Decision owner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lookback window</td>
+<td>How far back to search for the offsetting leg</td>
+<td>trade-surveillance-sme + tuning-analyst</td>
+</tr>
+<tr>
+<td>Price-offset tolerance</td>
+<td>How closely matched in price the two legs must be</td>
+<td>trade-surveillance-sme + tuning-analyst</td>
+</tr>
+<tr>
+<td>Quantity-offset tolerance</td>
+<td>Minimum proportion of volume that must offset</td>
+<td>trade-surveillance-sme + tuning-analyst</td>
+</tr>
+<tr>
+<td>Minimum notional / volume threshold</td>
+<td>Floor below which pairs are suppressed as noise</td>
+<td>tuning-analyst</td>
+</tr>
+<tr>
+<td>Repetition threshold</td>
+<td>Minimum count of pairs before alert fires</td>
+<td>tuning-analyst</td>
+</tr>
+<tr>
+<td>Exemption list</td>
+<td>Account types / flow types carved out from detection</td>
+<td>trade-surveillance-sme + compliance</td>
+</tr>
+</tbody>
+</table>
+<p>None of these values are set in this spec. All must be documented with rationale and tuning date in
+the codebase before deployment (CLAUDE.md §4).</p>
+<h3 id="6-synthetic-examples">6. Synthetic Examples</h3>
+<p><strong>True-positive - should alert.</strong> Account group "Alpha Strategies" holds two sub-accounts (A001,
+A002) both beneficially owned by the same entity. On 2026-06-10, A001 buys 50,000 units of synthetic
+instrument XYZ-SYN at 100.00; within 4 minutes, A002 sells 50,000 units of XYZ-SYN at 100.01 on the
+same venue. Net position change for the group: zero. No documented business justification. The pair
+fully offsets in quantity and price. Expected outcome: alert generated, referencing both trade IDs,
+the common UBO, and MAR Art. 12(1)(a).</p>
+<p><strong>False-positive - should not alert.</strong> An ETF market-maker (account MM-01) sells 30,000 units of
+synthetic ETF-SYN to a client at 10:02 and buys back 28,000 units at 10:47 from a different,
+unaffiliated counterparty during normal arbitrage activity. The accounts share a parent legal entity
+but the trades are with distinct unaffiliated counterparties, the firm has a documented market-making
+mandate, and the flow is within the SME-approved exemption list. Expected outcome: no alert.</p>
+<h3 id="7-acceptance-criteria-gherkin">7. Acceptance Criteria (Gherkin)</h3>
+<pre><code class="language-gherkin">Scenario: Self-match pair detected within lookback window
+  Given two trades in the same instrument on the same venue
+  And both trades are attributable to the same beneficial owner
+  And the trades are in opposite directions with quantity and price within configured tolerances
+  And no applicable exemption is in force for either account
+  When the detection scenario runs
+  Then an alert is generated referencing both trade IDs, the UBO, and MAR Art. 12(1)(a)
+
+Scenario: Exempted flow does not generate an alert
+  Given two offsetting trades attributable to the same beneficial owner
+  And the booking account is on the SME-approved exemption list
+  When the detection scenario runs
+  Then no alert is generated for that trade pair
+
+Scenario: Alert traces to obligation
+  Given a wash-trade alert has been generated
+  When the alert record is inspected
+  Then it contains: the matched trade pair IDs, the UBO identifier, the score, and a direct
+    reference to the regulatory obligation (MAR Art. 12(1)(a) or jurisdiction equivalent)
+</code></pre>
+<h3 id="8-open-questions-for-the-trade-surveillance-sme">8. Open Questions for the Trade-Surveillance SME</h3>
+<ol>
+<li><strong>Jurisdiction scope:</strong> Which of EU MAR, UK MAR, CFTC, SFA, SFO apply? Some carve-outs differ
+   materially (e.g. US wash-sale safe harbours).</li>
+<li><strong>UBO linkage source:</strong> Which system is authoritative for beneficial-owner account grouping, and
+   how current is it? Stale linkage is the most common source of false negatives.</li>
+<li><strong>Exemption list:</strong> What account types / flow types (market-making, prime brokerage, internal
+   treasury) should be carved out, and who approves additions?</li>
+<li><strong>Cross-venue scope:</strong> Should detection span multiple venues (buy on-exchange, sell OTC to an
+   affiliate)? This significantly expands the data-join complexity.</li>
+<li><strong>Price-tolerance rationale:</strong> Is near-zero price difference the primary indicator, or should the
+   scenario also catch deliberate off-market wash trades (two legs priced away from market)?</li>
+</ol>
+<p><strong>Hand-off:</strong> trade-surveillance-sme (review and sign off §2, §5, and the open questions), then
+rules-developer for implementation.</p>
+<div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
+</body>
+</html>

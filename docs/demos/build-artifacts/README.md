@@ -1,14 +1,22 @@
 # 🏗️ Build-demo artifacts - the actual documents produced
 
 These are the **real deliverables** the team produced during the [build demo](../build-demo.md) -
-not summaries. Open / download them:
+not summaries. A *complete* build stage (build core + 3 independent reviews + the delivery
+compile) - open / download them:
 
 | Document | Produced by | What it is |
 |---|---|---|
-| [`wash-trade-scenario-spec.md`](wash-trade-scenario-spec.md) | **Amara** (`business-analyst`) | The full scenario spec (SS-TS-001): behaviour, obligation, data, detection outline, parameters-to-tune, examples, Gherkin acceptance criteria, open questions. |
-| [`wash-trade-sme-validation.md`](wash-trade-sme-validation.md) | **Camila** (`trade-surveillance-sme`) | The typology validation: FP drivers, the biggest pitfall (the UBO graph), and the off-market-price-as-necessary correction. |
-| [`wash_trade.py`](wash_trade.py) | **Mateo** (`rules-developer`) | The detection function sketch - UBO gate, off-market-necessary, exemptions, fail-loud thresholds. |
-| [`test_wash_trade.py`](test_wash_trade.py) | **Mateo** (`rules-developer`) | A pytest with a true-positive and a false-positive guard. |
+| 📄 [`delivery-report.md`](delivery-report.md) | **Morgan** (PM) | **Start here.** The consolidated delivery: RTM, review findings + dispositions, DoD status, developer handover, and the **token-usage** capture. |
+| [`wash-trade-scenario-spec.md`](wash-trade-scenario-spec.md) | **Amara** (`business-analyst`) | The full scenario spec (SS-TS-001 Rev B): behaviour, obligation, data, detection outline, parameters-to-tune, Gherkin acceptance criteria. |
+| [`wash-trade-sme-validation.md`](wash-trade-sme-validation.md) | **Camila** (`trade-surveillance-sme`) | The typology validation: FP drivers, the UBO-graph pitfall, the off-market-price-as-necessary correction. |
+| [`wash_trade.py`](wash_trade.py) | **Mateo** (`rules-developer`) | The detection function - UBO gate, off-market-necessary, exemptions, fail-loud thresholds, obligation+UBO on the alert. |
+| [`test_wash_trade.py`](test_wash_trade.py) | **Mateo** (`rules-developer`) | Developer pytest (true-positive + false-positive guard). |
+| [`test_wash_trade_qa.py`](test_wash_trade_qa.py) | **Linh** (`qa-engineer`) | The **independent** 33-test QA suite that *found* DEF-001. |
+| [`qa-handover.md`](qa-handover.md) | **Linh** (`qa-engineer`) | QA evidence: coverage, gaps, residual risk, the defect found. |
+
+> **The fix→re-review loop is real:** independent review (code/QA/compliance) found 7 defects
+> (a buy-side false-negative, an off-by-one, a broken audit-trail field, more) - all **fixed** and
+> re-tested (dev 2/2, QA 33/33 green). The disposition is in the [delivery report](delivery-report.md) §3.
 
 > ⚠️ **Demo artifacts - synthetic, not production.** They live under `docs/` and are **not** part of
 > the repo's detection logic or test suite (`testpaths = ["tests"]`). All data is fabricated (§5).
