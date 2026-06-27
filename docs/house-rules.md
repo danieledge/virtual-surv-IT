@@ -13,12 +13,33 @@ standards.
 
 ## Detection typologies & thresholds
 - _(e.g. 2026-06-18 - spoofing: 5× median size + ≤2s lifetime calibrated on synthetic set.)_
+- 2026-06-27 - **Wash trade / self-match** (from the build demo, `trade-surveillance-sme`): the
+  beneficial-owner (UBO) link - *not* legal entity - is the correct entry point (accounts under
+  common control). Off-market price must be a **necessary condition**, not just price convergence
+  within a tolerance, and that tolerance must be validated against the **prevailing spread at time
+  of trade**, not a fixed basis-point figure. Obligation: MAR Art 12(1)(a) (jurisdiction-portable).
 
 ## Tuning outcomes & false-positive sources
--
+- 2026-06-27 - **Wash-trade FP drivers** (build demo, `trade-surveillance-sme`): (1) legitimate
+  two-way business between **affiliated funds** under one manager - the highest-volume FP source;
+  scope the UBO graph as a *surveillance perimeter*, not just "same UBO" (too wide floods alerts,
+  too narrow misses abuse). (2) **Market-making / riskless-principal** activity - exempt via
+  designated-MM status per venue/jurisdiction (RTS 3 / FINRA 5320). (3) Coincident independent
+  orders at a liquid price - mitigated by the off-market-price necessary condition above.
+- 2026-06-27 - **Implementation rule** (build demo, `rules-developer`): when a condition is
+  *necessary* (e.g. off-market price), implement it as an **early-continue that fully terminates the
+  pair's evaluation**, not a weighted score - otherwise a strong UBO/volume signal can compensate
+  for a missing price condition. That compensation is a common FP source and a frequent audit finding.
 
 ## Venue / market quirks
 -
+
+## Data quality
+- 2026-06-27 - **UBO-graph freshness is the wash-trade keystone** (build demo, `trade-surveillance-sme`):
+  stale/incomplete beneficial-owner linkage causes both false negatives (missed abuse) and false
+  positives (linking accounts no longer under common control), and is the most common reason a
+  wash-trade scenario fails audit. Require a defined refresh cadence + a data-quality gate before the
+  scenario runs, and include the BO source + its as-of date in the investigator evidence pack.
 
 ## Comms lexicon patterns
 -

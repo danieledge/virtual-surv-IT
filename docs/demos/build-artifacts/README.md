@@ -18,6 +18,13 @@ not summaries. Open / download them:
 cd docs/demos/build-artifacts && python3 -m pytest test_wash_trade.py
 ```
 
+### The advisory recommendations were actioned (loop closed)
+Camila and Mateo each recommended additions to `docs/house-rules.md` (the UBO-graph keystone, the
+affiliated-fund FP driver, off-market-price-as-necessary, the early-continue implementation rule).
+Advisory agents *recommend*; the PM *commits* - so those are now recorded in
+[`docs/house-rules.md`](../../house-rules.md) (2026-06-27 entries). That's the knowledge-compounds
+pattern working, not just narrated.
+
 ### The review stage caught a real bug (the chain isn't a rubber stamp)
 When Mateo's sketch was first run, the true-positive test **failed**: the original code checked UBO
 staleness against `datetime.utcnow()` (wall-clock) while the test fixtures used a fixed date - a
