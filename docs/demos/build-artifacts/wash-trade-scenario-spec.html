@@ -237,6 +237,47 @@ Scenario: Alert traces to obligation
 </ol>
 <p><strong>Hand-off:</strong> trade-surveillance-sme (review and sign off §2, §5, and the open questions), then
 rules-developer for implementation.</p>
+<h3 id="9-open-questions-disposition-decision-log-by-trade-surveillance-sme-camila-2026-06-27">9. Open-questions disposition (decision log) - by <code>trade-surveillance-sme</code> (Camila), 2026-06-27</h3>
+<p>The §8 open questions, formally dispositioned (closing the BA→SME loop):</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Question</th>
+<th>Disposition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q1</td>
+<td>Jurisdiction scope + safe-harbours</td>
+<td>⏭️ <strong>Needs deployment input</strong> - depends on where the firm trades / is domiciled. RTS 3 / FINRA 5320 designated-MM + ETF create/redeem carve-outs are real but which apply needs the in-scope desks. <strong>Blocks the obligation mapping.</strong></td>
+</tr>
+<tr>
+<td>Q2</td>
+<td>UBO linkage source</td>
+<td>⏭️ <strong>Needs deployment input</strong> - firm data-architecture. Firm-independent constraints recorded (UBO not legal-entity; as-of date in evidence pack; DQ gate). Resolve before UAT.</td>
+</tr>
+<tr>
+<td>Q3</td>
+<td>Exemption list + governance</td>
+<td>🔴 <strong>Open-decision-required</strong> - categories advisable (designated-MM, riskless-principal, treasury), but the specific list + a <strong>named approver</strong> + review cadence is a <strong>go-live gate</strong> (an unapproved list is itself a MAR Art 16(2) finding).</td>
+</tr>
+<tr>
+<td>Q4</td>
+<td>Cross-venue scope</td>
+<td>✅ <strong>Answered</strong> - detection <em>should</em> span venues (a buy on-exchange + sell OTC to an affiliate is a known evasion); match on instrument + UBO + window across venues. Constraint = OTC data availability (a coverage gap to document, not a reason to narrow).</td>
+</tr>
+<tr>
+<td>Q5</td>
+<td>Price-tolerance rationale</td>
+<td>✅ <strong>Answered</strong> - cover <strong>both</strong> variants: near-mid (within prevailing spread, not a fixed bps) <strong>and</strong> deliberate off-market (necessary condition, early-continue). Document the two trigger branches.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bottom line (SME):</strong> the <strong>obligation mapping is NOT yet safe to finalise.</strong> Minimum before sign-off:
+<strong>Q1</strong> (confirm jurisdiction/venue scope - blocks the mapping) and <strong>Q3</strong> (named approver + governance
+for the exemption list - a go-live gate). Q2 before UAT. Q4/Q5 closed.</p>
 <div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
 </body>
 </html>

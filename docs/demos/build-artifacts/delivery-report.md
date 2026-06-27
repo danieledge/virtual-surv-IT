@@ -7,7 +7,9 @@
 >
 > **Status in one line:** the **7 review defects are ✅ Fixed** (tests green); what remains open is by
 > design - **3 deploy-gates ⏭️ Deferred** (re-calibrate on real data, the O(n²) fix, a missing-mid
-> metric) and **human sign-off ⛔ Pending** (a demo can't produce one). Detail in §3 and §5.
+> metric), the **obligation mapping not finalised** (SME-dispositioned: Q1 jurisdiction + Q3 exemption
+> governance need firm input - [spec §9](wash-trade-scenario-spec.md)), and **human sign-off ⛔ Pending**
+> (a demo can't produce one). Detail in §3 and §5.
 
 | | |
 |---|---|
@@ -50,6 +52,7 @@ Independent review found **real defects the build missed**; all routed back and 
 | 8 | Missing-`market_mid` silently drops pairs - no observability | qa-engineer | ⏭️ Deferred (add a metric/log before production) |
 | 9 | O(n²) pairwise scan - unbenchmarked at volume | qa/compliance | ✅ Reviewed ([perf review](performance-review.md)): won't scale; fix = group by instrument+window. 🔴 Open for productionisation. |
 | 10 | Thresholds *flagged* but not yet *calibrated* | compliance | ✅ Calibrated ([tuning pack](threshold-tuning-pack.md)): measured ATL/BTL on synthetic data → `price_tolerance_pct` 0.10-0.50%. Real labelled set still needed pre-deploy. |
+| 11 | BA's 5 open questions to the SME never dispositioned (obligation mapping treated as final without confirmation) | SME (the BA's flag) | ✅ Dispositioned ([spec §9](wash-trade-scenario-spec.md)): Q4/Q5 answered; Q2 needs deployment input; **Q1 (jurisdiction) + Q3 (exemption governance) are go-live blockers** → obligation mapping ⏭️ not yet final. |
 
 **Re-review result:** dev tests 2/2 pass; QA suite **33/33 pass** (DEF-001 resolved).
 
@@ -62,7 +65,8 @@ missing-mid. Residual (deferred): real UBO-provider integration, volume performa
 ## 5. Definition of Done - status (honest)
 | DoD item | Status | Note |
 |---|---|---|
-| Traceable (RTM) | ✅ Met | §2 above; alert now carries obligation + UBO ID |
+| Traceable (RTM) | ⚠️ Partial | §2 spine + alert carries obligation/UBO ID, **but** the obligation *mapping* isn't finalised - SME open-questions Q1/Q3 are blockers ([spec §9](wash-trade-scenario-spec.md)). |
+| Upstream open questions dispositioned | ✅ Met | The BA's 5 questions are formally closed by the SME ([spec §9](wash-trade-scenario-spec.md)) - 2 answered, 1 pre-UAT, 2 go-live blockers. |
 | Tested (TP + FP) | ✅ Met | dev 2/2 + QA 33/33 pass (re-run, 📊 measured) |
 | Independently QA'd | ✅ Met | `qa-engineer`, separate from builder; [handover](qa-handover.md) |
 | Code-reviewed (deep) | ✅ Met | code-reviewer; 6 findings fixed, 0 critical open |

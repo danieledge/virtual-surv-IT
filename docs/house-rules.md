@@ -49,6 +49,13 @@ standards.
 -
 
 ## Reporting & audit conventions
+- 2026-06-27 - **Disposition every upstream open question before sign-off (don't let them dangle).**
+  When a spec/BRD/review raises **open questions** for a downstream owner (e.g. BA → SME), the owner
+  must **formally disposition each one** (✅ answered / ⏭️ needs deployment input / 🔴 open-decision-
+  required) in a tracked decision log, and the Definition of Done checks it. A question that's been
+  *partly touched in passing* is **not** dispositioned. *(Caught in the build demo: the BA flagged
+  "do not finalise the obligation mapping without confirming jurisdiction scope" and it was treated
+  as final anyway - the SME later dispositioned it; Q1/Q3 turned out to be go-live blockers.)*
 - 2026-06-27 - **Two-snapshot reporting (as-found vs as-delivered) - don't retro-edit evidence.**
   When a fix→re-review loop resolves findings, **preserve the as-found record** (the QA handover /
   review report - the audit trail of *what was caught*) and record the **resolved** state in the

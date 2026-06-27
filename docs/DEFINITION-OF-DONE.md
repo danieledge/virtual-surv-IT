@@ -8,6 +8,10 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 
 - [ ] **Traceable** - each requirement links requirement → design → code → test → obligation
       in the RTM (`docs/templates/rtm.md`).
+- [ ] **Open questions dispositioned** - every open question raised upstream (spec/BRD/review, e.g.
+      a BA's questions for an SME) is **formally closed** by its owner (✅ answered / ⏭️ needs
+      deployment input / 🔴 open-decision-required) in a tracked decision log - not left dangling or
+      "touched in passing". Any 🔴 / blocking item is reflected in the verdict.
 - [ ] **Tested** - tests appropriate to the deliverable exist and **pass**:
   - detection logic → true-positive **and** false-positive cases;
   - pipeline/transform → input/output, schema and edge-case tests;
