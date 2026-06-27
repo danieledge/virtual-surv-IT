@@ -10,9 +10,11 @@ and regulatory scrutiny**: **$ARGUMENTS**
 **If no target was given, first ask the user where the code is** (path/glob, repo/branch,
 commit range, or paste it) and wait - don't review an assumed target.
 
-**First, confirm the outcome wanted:** the review + verdict only, or also **fixes/refactor
-applied** as part of the loop, and/or a **handover pack** at the end? Default here is the
-fix→re-review loop, but confirm before changing the user's code.
+**Fix-cycle (report / fix / loop):** if invoked **via `engage`**, inherit its answer (Q3) -
+**don't re-ask**. If invoked **directly**, ask it once via the **question tool** (`multiSelect:
+false`): report only · apply fixes · fix→re-review loop (the default here). **Confirm before
+changing the user's code.** Don't blur in the handover pack - that's a **deliverable**, offered
+from the artifact menu / at close, not mixed into this action question.
 
 Run an **evaluator–optimizer loop**:
 
@@ -21,10 +23,11 @@ Run an **evaluator–optimizer loop**:
    Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep),
    citing OWASP ASVS / CWE / SEI CERT, with confidence scoring and filter transparency
    (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope.
-2. **compliance-reviewer** - first establish the **jurisdiction(s)** (from CLAUDE.md §2 /
-   `docs/scope-and-stack.md`, or ask) so it assesses against the **applicable** regime(s) and
-   states what's applicable vs not. Then: auditability, the alert→logic→obligation trace,
-   threshold rationale, secrets/PII, test coverage, and change control.
+2. **compliance-reviewer** - use the **jurisdiction(s)** already established in step 1's
+   `/deep-review` (or CLAUDE.md §2 / `docs/scope-and-stack.md`); **only ask if still unknown** -
+   don't re-ask what step 1 captured. It assesses against the **applicable** regime(s) and states
+   what's applicable vs not. Then: auditability, the alert→logic→obligation trace, threshold
+   rationale, secrets/PII, test coverage, and change control.
 3. If any **Critical/Warning** findings (and fixes are in scope), route fixes to the right
    builder, then **re-review** - and **fix everything you safely can in this pass, don't defer
    fixable work to a later sprint**. Loop until everything fixable is fixed; the only items left
