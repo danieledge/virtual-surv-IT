@@ -548,12 +548,21 @@ python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked
 Multi-agent setups cost tokens, so the team is built to be cost-conscious. Measured on a real run
 (the Agent tool reports actual usage; ~4 chars/token, so ±15%):
 
-| What | Cost | When it's paid |
-|---|---|---|
-| One quick `code-reviewer` review (small file, opus) | **~18.7k tokens** | per review agent |
-| A lean engagement (intake + scorer + reviewer + synthesis) | ~35-50k | per engagement |
-| A **full build → 3 reviews → tuning → performance** delivery (8 agents, measured) | **~182k** | the heavy end - a complete reviewed+calibrated deliverable (see the [build demo](docs/demos/build-artifacts/delivery-report.md) §7) |
-| A full fan-out (right-sizing off) | ~150k+ | rarely - reserved for broad work |
+| What | Tokens | ~API cost | When it's paid |
+|---|---|---|---|
+| One quick `code-reviewer` review (small file, opus) | **~18.7k** | **~$0.80** | per review agent |
+| A lean engagement (intake + scorer + reviewer + synthesis) | ~35-50k | ~$0.50-1.00 | per engagement |
+| A **full build → 3 reviews → tuning → performance** delivery (8 agents, measured) | **~182k** | **~$3-6** | the heavy end - a complete reviewed+calibrated deliverable (see the [build demo](docs/demos/build-artifacts/delivery-report.md) §7) |
+| A full fan-out (right-sizing off) | ~150k+ | ~$3-7 | rarely - reserved for broad work |
+
+> 💵 **Cost basis (rough, ±2×).** At list prices - **opus ~$15/$75, sonnet ~$3/$15, haiku ~$1/$5**
+> per million input/output tokens. The reported token counts are *totals* (no input/output split), so
+> these assume a ~50/50 mix; actual cost varies with the split, prices change, and prompt-caching can
+> cut it substantially. Treat as order-of-magnitude, not a quote.
+>
+> 🧾 **For fun:** the build demo's delivery report has a [tongue-in-cheek **rate card**](docs/demos/build-artifacts/delivery-report.md)
+> - that full 8-agent delivery (~$3.60 API, ~9 min) is ~£2-4k of human consulting effort. *The boring
+> 80% in minutes, so people spend their day on the judgement that matters.*
 
 **Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
 - **Model tiering** - **4 opus / 11 sonnet / 1 haiku**; opus (~5× sonnet) reserved for the four

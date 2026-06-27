@@ -277,8 +277,9 @@ deferred "deploy" gates (calibration, performance, human sign-off) close.</p>
   thresholds are <code>PLACEHOLDER</code> pending tuning; <code>ubo_link</code> is mocked (real provider integration untested).</li>
 <li><strong>How to extend:</strong> add a quantity-offset test (spec §5) and per-instrument mid sourcing.</li>
 </ul>
-<h2 id="7-token-usage-this-engagement">7. 💰 Token usage (this engagement)</h2>
-<p>Real <code>subagent_tokens</code> reported by the Agent tool. The full build + DoD delivery used <strong>6 agents</strong>:</p>
+<h2 id="7-token-usage-runtime-a-quirky-rate-card">7. 💰 Token usage, runtime &amp; a (quirky) rate card</h2>
+<p>Real <code>subagent_tokens</code> and <code>duration_ms</code> reported by the Agent tool. The full build + DoD delivery
+used <strong>8 agents</strong>:</p>
 <table>
 <thead>
 <tr>
@@ -286,6 +287,8 @@ deferred "deploy" gates (calibration, performance, human sign-off) close.</p>
 <th>Agent</th>
 <th>Tier</th>
 <th>Tokens</th>
+<th>Runtime</th>
+<th>~API cost</th>
 </tr>
 </thead>
 <tbody>
@@ -294,60 +297,117 @@ deferred "deploy" gates (calibration, performance, human sign-off) close.</p>
 <td>business-analyst (Amara)</td>
 <td>sonnet</td>
 <td>~16,580</td>
+<td>~55s</td>
+<td>~$0.15</td>
 </tr>
 <tr>
 <td>SME validation</td>
 <td>trade-surveillance-sme (Camila)</td>
 <td>sonnet</td>
 <td>~16,274</td>
+<td>~35s</td>
+<td>~$0.15</td>
 </tr>
 <tr>
 <td>Build</td>
 <td>rules-developer (Mateo)</td>
 <td>sonnet</td>
 <td>~19,859</td>
+<td>~63s</td>
+<td>~$0.18</td>
 </tr>
 <tr>
 <td>Code review</td>
 <td>code-reviewer (Ravi)</td>
-<td>opus</td>
+<td><strong>opus</strong></td>
 <td>~23,199</td>
+<td>~34s</td>
+<td><strong>~$1.04</strong></td>
 </tr>
 <tr>
 <td>QA</td>
 <td>qa-engineer (Linh)</td>
 <td>sonnet</td>
 <td>~32,924</td>
+<td>~244s</td>
+<td>~$0.30</td>
 </tr>
 <tr>
 <td>Compliance</td>
 <td>compliance-reviewer (Layla)</td>
-<td>opus</td>
+<td><strong>opus</strong></td>
 <td>~31,077</td>
+<td>~65s</td>
+<td><strong>~$1.40</strong></td>
 </tr>
 <tr>
 <td>Calibration</td>
 <td>tuning-analyst (Theo)</td>
 <td>sonnet</td>
 <td>~24,197</td>
+<td>~105s</td>
+<td>~$0.22</td>
 </tr>
 <tr>
 <td>Performance</td>
 <td>performance-reviewer (Thabo)</td>
 <td>sonnet</td>
 <td>~18,290</td>
+<td>~42s</td>
+<td>~$0.16</td>
 </tr>
 <tr>
 <td><strong>Total</strong></td>
 <td><strong>8 agents</strong></td>
 <td></td>
 <td><strong>~182,400</strong></td>
+<td><strong>~643s agent-time</strong> (~9 min wall-clock, reviews ran parallel)</td>
+<td><strong>~$3.60</strong></td>
 </tr>
 </tbody>
 </table>
-<p>The full build-to-everything-but-sign-off delivery cost <strong>~182k tokens</strong> across 8 agents (build +
-3 reviews + tuning + performance). Right-sizing kept it to 8, not 16; a lighter touch (spec + build
-+ one review) would be ~a third of this.</p>
+<p><strong>Cost basis (rough, ±2×):</strong> list prices opus ~$15/$75, sonnet ~$3/$15 per M in/out; tokens are
+totals so a ~50/50 split is assumed. Note the <strong>2 opus agents = ~68% of the cost</strong> for ~30% of the
+tokens - which is <em>exactly why</em> the model tiering reserves opus for the final-judgement roles only.</p>
+<h3 id="the-rate-card-tongue-in-cheek-illustrative-not-a-quote">The rate card (tongue-in-cheek, illustrative - not a quote)</h3>
+<p>What would a <strong>human</strong> team invoice for the same work - a spec, an SME sign-off, a build, three
+independent reviews, a calibration, a performance review and a delivery pack for a new scenario?</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>The human team</th>
+<th>This AI team</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Effort</td>
+<td>~<strong>3-5 person-days</strong> (realistic for a new reviewed scenario)</td>
+<td>~<strong>11 person-minutes</strong> of agent-time</td>
+</tr>
+<tr>
+<td>Blended rate</td>
+<td>~£750/day contractor (BA/dev ~£600, SME/compliance ~£900-950)</td>
+<td>-</td>
+</tr>
+<tr>
+<td>Wall-clock</td>
+<td>days-to-weeks (calendars, handoffs, meetings)</td>
+<td>~<strong>9 minutes</strong></td>
+</tr>
+<tr>
+<td><strong>Invoice</strong></td>
+<td>~<strong>£2,250 - £3,750</strong></td>
+<td>~<strong>$3.60</strong> in API</td>
+</tr>
+</tbody>
+</table>
+<p>So the team delivered roughly <strong>£2-4k of consulting effort for about the price of a coffee</strong> - in
+minutes, not days. <em>Caveat (the honest bit):</em> this is a <strong>proof-of-concept demo on synthetic data</strong>;
+the output is a <em>starting point for real engineers and reviewers</em>, not a replacement (and the human
+"invoice" is illustrative). The point isn't "fire the humans" - it's <em>"the boring 80% gets done in
+minutes so the humans spend their day on the judgement that matters."</em></p>
 <h2 id="8-responsibility-notes">8. Responsibility notes</h2>
 <ul>
 <li><strong>Code execution:</strong> the tests were <em>run</em> (📊 measured) on this trusted demo repo with synthetic
