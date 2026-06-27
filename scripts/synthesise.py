@@ -1,10 +1,10 @@
 """
-scripts/synthesise.py — learn the *shape* of (masked) order flow and emit fully synthetic
+scripts/synthesise.py - learn the *shape* of (masked) order flow and emit fully synthetic
 sessions that match it, while sharing no real rows, entities or timestamps.
 
 Why this exists: masked data is still personal data (pseudonymised != anonymous), and the
 preserved behaviour can itself be mildly re-identifying. For anything that leaves the
-governed environment — or goes in front of an LLM agent — synthetic data is the safer
+governed environment - or goes in front of an LLM agent - synthetic data is the safer
 choice: it reproduces the statistical and structural properties detection depends on
 without containing any real record.
 
@@ -85,7 +85,7 @@ def fit(sessions: list[list[OrderEvent]]) -> FlowProfile:
 def sample(profile: FlowProfile, n_sessions: int = 10, seed: int = 0) -> list[list[OrderEvent]]:
     """Generate `n_sessions` fully synthetic sessions matching the profile.
 
-    Every session uses fresh, made-up identifiers and a fresh timeline — nothing here
+    Every session uses fresh, made-up identifiers and a fresh timeline - nothing here
     maps back to any input record.
     """
     rng = random.Random(seed)

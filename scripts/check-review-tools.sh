@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-time review/perf tooling probe. Run ONCE per engagement (engage step 0) so Morgan
-# knows which analysers/profilers are installed — and can then SKIP the missing ones for the
+# knows which analysers/profilers are installed - and can then SKIP the missing ones for the
 # rest of the session instead of re-invoking tools that aren't there.
 #
 #   bash scripts/check-review-tools.sh
@@ -27,7 +27,7 @@ TOOLS=(
   "pwsh|PowerShell + PSScriptAnalyzer|install PowerShell, then Install-Module PSScriptAnalyzer"
 )
 # NOTE: profilers/benchmarks (py-spy, scalene, hyperfine, cProfile, Measure-Command, JMH) are
-# intentionally NOT listed — the team is STATIC-ONLY for now (it does not execute reviewed code,
+# intentionally NOT listed - the team is STATIC-ONLY for now (it does not execute reviewed code,
 # CLAUDE.md §7). Re-add them here if/when measured profiling is re-enabled via the consent flow.
 
 present=() ; missing=()
@@ -36,7 +36,7 @@ for entry in "${TOOLS[@]}"; do
   if command -v "$bin" >/dev/null 2>&1; then
     present+=("$bin ($role)")
   else
-    missing+=("$bin — $role  →  $hint")
+    missing+=("$bin - $role  →  $hint")
   fi
 done
 
@@ -45,8 +45,8 @@ echo
 echo "✅ Installed (${#present[@]}):"
 if [ "${#present[@]}" -eq 0 ]; then echo "   (none)"; else printf '   - %s\n' "${present[@]}"; fi
 echo
-echo "⚠️  Missing (${#missing[@]}) — reviews still run but degrade to inference-only (🧠) for these:"
-if [ "${#missing[@]}" -eq 0 ]; then echo "   (none — full tool-backed 📊 coverage)"; else printf '   - %s\n' "${missing[@]}"; fi
+echo "⚠️  Missing (${#missing[@]}) - reviews still run but degrade to inference-only (🧠) for these:"
+if [ "${#missing[@]}" -eq 0 ]; then echo "   (none - full tool-backed 📊 coverage)"; else printf '   - %s\n' "${missing[@]}"; fi
 echo
 echo "Note: Morgan should record this once and skip the missing tools for the rest of the"
 echo "session (do not re-invoke them). Install the ones you care about for measured (📊) findings."

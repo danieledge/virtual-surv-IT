@@ -1,10 +1,10 @@
-# Python analysers driven by the code-reviewer agent (optional — sharpen reviews; not
+# Python analysers driven by the code-reviewer agent (optional - sharpen reviews; not
 # required to use the team or run tests). Install with:
 #   pip install -r requirements-review.txt
 #
 # Non-Python analysers (ShellCheck/shfmt for Bash, PSScriptAnalyzer for PowerShell,
 # Checkstyle/PMD/SpotBugs for Java, scalafmt/scapegoat for Scala) install via the OS
-# package manager or the relevant build tool — see the README "Code-review tooling" table.
+# package manager or the relevant build tool - see the README "Code-review tooling" table.
 ruff>=0.5
 black>=24.0
 mypy>=1.10

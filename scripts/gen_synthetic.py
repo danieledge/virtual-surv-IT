@@ -48,7 +48,7 @@ def _cancel(ts, oid, side, price=BASE_PRICE):
 def benign_session(seed: int = 1) -> list[OrderEvent]:
     """Normal two-way trading: typical-sized orders that fill or rest and cancel slowly.
 
-    True-negative control — must not produce a spoofing alert.
+    True-negative control - must not produce a spoofing alert.
     """
     rng = random.Random(seed)
     events: list[OrderEvent] = []
@@ -72,7 +72,7 @@ def spoofing_session(seed: int = 1) -> list[OrderEvent]:
     """A clear spoof: an outsized BUY placed to inflate apparent demand, a genuine SELL
     executed into it, then the BUY cancelled within ~1.5s having barely filled.
 
-    True-positive control — must produce a spoofing alert.
+    True-positive control - must produce a spoofing alert.
     """
     rng = random.Random(seed)
     events: list[OrderEvent] = []
@@ -100,7 +100,7 @@ def large_genuine_session(seed: int = 1) -> list[OrderEvent]:
     """Outsized orders that are genuine: one fills in full, one rests then cancels with
     no opposite-side benefit.
 
-    False-positive control — must NOT produce a spoofing alert despite large size.
+    False-positive control - must NOT produce a spoofing alert despite large size.
     """
     rng = random.Random(seed)
     events: list[OrderEvent] = []

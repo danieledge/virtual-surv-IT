@@ -1,6 +1,6 @@
 """
 Tests for the masking pipeline (scripts/ingest.py) and its validation harness.
-All data is synthetic (§5). A throwaway test key is used — it is not a secret.
+All data is synthetic (§5). A throwaway test key is used - it is not a secret.
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def test_tokenisation_is_deterministic_and_referential():
 
 
 def test_signal_fields_are_preserved():
-    """price/qty/side/kind must pass through unchanged — they carry the detection signal."""
+    """price/qty/side/kind must pass through unchanged - they carry the detection signal."""
     orig, masked = _records(), mask_records(_records(), SCHEMA, KEY)
     for o, m in zip(orig, masked):
         assert (m["price"], m["qty"], m["side"], m["kind"]) == (
@@ -142,7 +142,7 @@ def test_mask_records_skips_bad_rows_not_abort(capsys):
     }
     records = [
         {"ts_ms": 1000000, "trader": "T1"},   # good
-        {"ts_ms": 2000000},                   # bad — missing 'trader' (shift entity)
+        {"ts_ms": 2000000},                   # bad - missing 'trader' (shift entity)
         {"ts_ms": 3000000, "trader": "T1"},   # good
     ]
     out = mask_records(records, schema, KEY)
@@ -166,7 +166,7 @@ def test_redaction_catches_iban_and_card():
 
 
 def test_validate_masking_test_key_is_deterministic(monkeypatch):
-    """validate_masking uses a fixed test key when MASKING_KEY is unset — not os.urandom."""
+    """validate_masking uses a fixed test key when MASKING_KEY is unset - not os.urandom."""
     monkeypatch.delenv("MASKING_KEY", raising=False)
     # Two runs with same inputs must produce identical results (os.urandom would differ).
     events = spoofing_session(seed=1)

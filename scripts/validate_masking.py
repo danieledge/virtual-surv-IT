@@ -1,5 +1,5 @@
 """
-scripts/validate_masking.py — prove a masking config is both SAFE and USEFUL.
+scripts/validate_masking.py - prove a masking config is both SAFE and USEFUL.
 
 Masking without measurement is faith, not control. This harness runs two sides:
 
@@ -9,12 +9,12 @@ Privacy (re-identification risk):
     so a mis-configured `keep`/`generalise` field leaking free-text PII is caught
   - direct-identifier passthrough: any field declared as a direct identifier (role
     `token`/`drop`) that is instead given a pass-through role (`keep`/`generalise`)
-    is a configuration error — flagged as FAIL
+    is a configuration error - flagged as FAIL
   - k-anonymity: each declared quasi-identifier combination is shared by >= k records
 
 Utility (detection fidelity):
   - the spoofing rule fires identically (same count + same non-identifying shape) on
-    masked data as on the original — i.e. masking preserved the behavioural signal.
+    masked data as on the original - i.e. masking preserved the behavioural signal.
 
 Run as a gate (operates on SYNTHETIC data):
   python -m scripts.validate_masking      # exit 0 = pass, non-zero = fail
@@ -23,7 +23,7 @@ Key handling:
   - If MASKING_KEY is set in the environment it is used (production / CI path).
   - If MASKING_KEY is unset a FIXED, clearly-non-secret constant key is used so
     the gate is deterministic and reproducible across runs without real credentials.
-    This constant MUST NOT be used with real data — it is a test fixture only.
+    This constant MUST NOT be used with real data - it is a test fixture only.
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ SENSITIVE_ROLES = {"token", "drop", "redact"}
 PASSTHROUGH_ROLES = {"keep", "generalise"}
 
 # Field names that are conventional direct identifiers. The schema may also
-# declare them explicitly under `direct_identifiers:` — both sources are used.
+# declare them explicitly under `direct_identifiers:` - both sources are used.
 # This heuristic list covers the most common naming patterns; it is deliberately
 # conservative (false positives here are a config-review prompt, not a data leak).
 _IDENTIFIER_NAME_HINTS = {
@@ -61,7 +61,7 @@ _IDENTIFIER_NAME_HINTS = {
 }
 
 # Fixed deterministic test key used when MASKING_KEY is absent.
-# This is a PUBLIC constant — it is intentionally non-secret and must NEVER be
+# This is a PUBLIC constant - it is intentionally non-secret and must NEVER be
 # used with real data. Its only purpose is reproducible CI runs on synthetic fixtures.
 _TEST_KEY_CONSTANT = b"validate-masking-test-key-not-a-secret-do-not-use-with-real-data"
 
@@ -73,14 +73,14 @@ def _resolve_key() -> bytes:
     Production / CI with a real key: reads MASKING_KEY from the environment.
     Gate reproducibility (synthetic only): falls back to _TEST_KEY_CONSTANT so
     that `python -m scripts.validate_masking` is deterministic without credentials.
-    os.urandom() is NOT used — a random key would make the gate non-reproducible.
+    os.urandom() is NOT used - a random key would make the gate non-reproducible.
     """
     env_key = os.environ.get("MASKING_KEY")
     if env_key:
         return env_key.encode()
-    # No env key — use the fixed test constant. Log clearly so it's never silent.
+    # No env key - use the fixed test constant. Log clearly so it's never silent.
     print(
-        "[INFO] MASKING_KEY not set; using fixed test key (synthetic data only — "
+        "[INFO] MASKING_KEY not set; using fixed test key (synthetic data only - "
         "NOT safe for real data). Set MASKING_KEY from ~/.secrets for production runs."
     )
     return _TEST_KEY_CONSTANT
@@ -125,7 +125,7 @@ def run_privacy_checks(original_records, schema, key):
     checks.append(("no residual identifiers", not leaked, str(leaked[:5]) if leaked else "none survive"))
 
     # ------------------------------------------------------------------
-    # 2. No residual free-text PII patterns — scan free-text-capable fields.
+    # 2. No residual free-text PII patterns - scan free-text-capable fields.
     #
     #    Previously only `redact`-role fields were scanned; a mis-configured
     #    `keep` field on a direct identifier would pass silently. We now scan
@@ -146,7 +146,7 @@ def run_privacy_checks(original_records, schema, key):
     #      - `keep`-role fields that are NOT direct identifiers (e.g. price,
     #        qty, side, kind): these are signal-bearing numeric/enum values.
     #
-    #    This is belt-and-braces — check 3 (direct-identifier passthrough) is
+    #    This is belt-and-braces - check 3 (direct-identifier passthrough) is
     #    the primary guardrail for mis-configured identifier fields.
     # ------------------------------------------------------------------
     direct_ids = _direct_identifier_fields(schema)
@@ -200,7 +200,7 @@ def run_privacy_checks(original_records, schema, key):
     # ------------------------------------------------------------------
     qis = schema.get("quasi_identifiers", [])
     if not qis:
-        checks.append(("k-anonymity", True, "no quasi-identifiers declared — skipped"))
+        checks.append(("k-anonymity", True, "no quasi-identifiers declared - skipped"))
     else:
         k = schema.get("k_anonymity", 1)
         groups = Counter(tuple(r.get(q) for q in qis) for r in masked)
@@ -211,7 +211,7 @@ def run_privacy_checks(original_records, schema, key):
 
 
 def _shape(a):
-    """Non-identifying alert shape — the part that must survive masking."""
+    """Non-identifying alert shape - the part that must survive masking."""
     return (
         a.spoof_side,
         a.spoof_qty,

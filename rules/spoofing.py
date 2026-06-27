@@ -1,8 +1,8 @@
 """
 MAR spoofing / layering detection.
 
-Regulatory basis: Market Abuse Regulation (EU) No 596/2014 — Article 12(1)(a) and
-Annex I — placing orders with no intention to execute ("non-bona-fide" orders) to
+Regulatory basis: Market Abuse Regulation (EU) No 596/2014 - Article 12(1)(a) and
+Annex I - placing orders with no intention to execute ("non-bona-fide" orders) to
 create a false or misleading impression of supply or demand, while benefiting from a
 genuine execution on the opposite side of the book. In the UK the equivalent
 prohibition on market manipulation is FCA MAR (MAR 1 / Art.15).
@@ -90,7 +90,7 @@ class SpoofingThresholds:
     """
 
     # An order >= this multiple of the trader's median order size in the instrument is
-    # "outsized" — spoof orders are large to move the perceived book. (tuned 2026-06-18)
+    # "outsized" - spoof orders are large to move the perceived book. (tuned 2026-06-18)
     large_qty_multiple: float = 5.0
     # Genuine resting liquidity persists; non-bona-fide orders are pulled quickly.
     # Placement->cancel within this window is a place-and-cancel indicator. (2026-06-18)
@@ -122,7 +122,7 @@ class SpoofingAlert:
     time_gap_ms: int
     reason: str
     obligation: str = (
-        "MAR (EU) 596/2014 Art.12(1)(a) / Annex I — non-bona-fide orders creating a "
+        "MAR (EU) 596/2014 Art.12(1)(a) / Annex I - non-bona-fide orders creating a "
         "false or misleading impression of supply/demand"
     )
 

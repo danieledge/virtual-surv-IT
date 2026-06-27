@@ -1,15 +1,15 @@
 """
-scripts/render_html.py — render a Markdown artifact to a styled, standalone HTML file.
+scripts/render_html.py - render a Markdown artifact to a styled, standalone HTML file.
 
 Every deliverable (engagement brief, BRD, FSD, review report, audit pack) is authored in
 Markdown and rendered to self-contained HTML (inline CSS, no external assets) so it can be
-emailed or shared as a single file — the team always produces artifacts in both .md and
+emailed or shared as a single file - the team always produces artifacts in both .md and
 .html for easy distribution.
 
 Security note: artifacts may include content from untrusted sources (captured comms excerpts,
 third-party tool output).  The raw HTML produced by markdown() is sanitised via bleach before
 insertion into the page, and the page title is html.escape()d.  If bleach is unavailable the
-build degrades gracefully — body content is still rendered but a warning is printed.
+build degrades gracefully - body content is still rendered but a warning is printed.
 
 Usage:
   python -m scripts.render_html artifacts/BRD-spoofing.md
@@ -55,7 +55,7 @@ _ALLOWED_TAGS = frozenset({
     "blockquote",
     # Tables (tables extension)
     "table", "thead", "tbody", "tfoot", "tr", "th", "td",
-    # Images — allowed with restricted attributes; src is constrained to data: or relative
+    # Images - allowed with restricted attributes; src is constrained to data: or relative
     "img",
     # TOC anchors
     "sup", "sub",
@@ -110,7 +110,7 @@ _TEMPLATE = """<!doctype html>
 </head>
 <body>
 %%BODY%%
-<div class="footer">Generated from Markdown — compliance surveillance engineering team.</div>
+<div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
 </body>
 </html>
 """
@@ -140,7 +140,7 @@ def _sanitise(raw_html: str) -> str:
         )
     # Degraded path: bleach unavailable.
     print(
-        "WARNING: bleach is not installed — HTML output is NOT sanitised. "
+        "WARNING: bleach is not installed - HTML output is NOT sanitised. "
         "Install bleach (pip install bleach) for safe output. "
         "See scripts/render_html.py for details.",
         file=sys.stderr,

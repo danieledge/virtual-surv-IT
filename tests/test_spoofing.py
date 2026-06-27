@@ -42,7 +42,7 @@ def test_large_but_genuine_orders_not_flagged():
 
 def test_thresholds_are_injectable_and_change_outcome():
     """Requiring a shorter place-and-cancel lifetime than the staged 1500ms suppresses the
-    alert — proves the documented thresholds actually drive the decision (auditability)."""
+    alert - proves the documented thresholds actually drive the decision (auditability)."""
     events = spoofing_session(seed=1)
     assert detect_spoofing(events)  # fires with defaults (max_spoof_lifetime_ms=2000)
     tight = SpoofingThresholds(max_spoof_lifetime_ms=1000)

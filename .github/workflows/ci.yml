@@ -43,4 +43,4 @@ jobs:
             git ls-files '*.csv' '*.parquet' '*.pcap'
             exit 1
           fi
-          echo "OK — no raw data files tracked."
+          echo "OK - no raw data files tracked."

@@ -4,9 +4,9 @@
 #   bash scripts/install-git-hooks.sh pre-commit     # just the commit gate
 #   bash scripts/install-git-hooks.sh pre-push       # just the push review
 #
-# The severity-blocking gate is adapted from turingmind-code-review (MIT) — see
+# The severity-blocking gate is adapted from turingmind-code-review (MIT) - see
 # THIRD-PARTY-LICENSES.md. Both hooks are OFF until installed, and an LLM in the git path is
-# slow — bypass any single run with `--no-verify`.
+# slow - bypass any single run with `--no-verify`.
 set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 src="$root/scripts/git-hooks"
@@ -30,4 +30,4 @@ fi
 
 echo
 echo "Tip: also run 'pre-commit install' for the deterministic gates"
-echo "     (tests, secret scan, no-raw-data) — separate from the AI review gate above."
+echo "     (tests, secret scan, no-raw-data) - separate from the AI review gate above."

@@ -4,7 +4,7 @@
 # Principle: destroy the IDENTITY layer, preserve the BEHAVIOUR layer.
 #   identifiers / links   -> token   (referential integrity preserved across records)
 #   timestamps            -> shift   (intra-trader deltas preserved exactly)
-#   signal-bearing values -> keep    (price/qty/side drive detection — must not change)
+#   signal-bearing values -> keep    (price/qty/side drive detection - must not change)
 
 on_unknown: drop            # any field not listed below is dropped (safe default)
 
@@ -28,7 +28,7 @@ fields:
   side:
     role: keep              # signal
   price:
-    role: keep              # signal — never perturb (marking/structuring logic needs it)
+    role: keep              # signal - never perturb (marking/structuring logic needs it)
   qty:
     role: keep              # signal
   kind:

@@ -18,7 +18,7 @@ repos:
   - repo: local
     hooks:
       - id: block-raw-data
-        name: block raw market/comms data files (use synthetic data — CLAUDE.md §5)
+        name: block raw market/comms data files (use synthetic data - CLAUDE.md §5)
         entry: "Raw data files must not be committed. Generate synthetic data with scripts/gen_synthetic.py."
         language: fail
         files: '\.(csv|parquet|pcap)$'

@@ -1,5 +1,5 @@
 """
-scripts/ingest.py — the single sanctioned path for real data to enter the pipeline.
+scripts/ingest.py - the single sanctioned path for real data to enter the pipeline.
 
 It applies a role-based masking policy (config/masking-schema.yaml) so that the
 IDENTITY layer is destroyed while the BEHAVIOUR layer (timing deltas, value
@@ -7,10 +7,10 @@ relationships, entity linkage) is preserved for detection development.
 
 CLAUDE.md §5: agents must never read raw records. Run this locally; agents only ever
 see the masked (or synthetic) output. Pseudonymised output is STILL sensitive (personal
-data under GDPR) — keep it governed; do not treat masking as anonymisation.
+data under GDPR) - keep it governed; do not treat masking as anonymisation.
 
 Key handling (host secrets standard): the HMAC key is read from the MASKING_KEY
-environment variable (sourced from ~/.secrets). There is NO insecure default — if it is
+environment variable (sourced from ~/.secrets). There is NO insecure default - if it is
 unset the tool refuses to run.
 
 Roles (per field):
@@ -49,57 +49,57 @@ TOKEN_LEN = 12
 #
 # NOTE: regex redaction is a dependency-light baseline suitable for structured
 # fields with predictable formats.  Production communications surveillance
-# (email body, chat, voice transcripts) MUST swap in a trained NER model —
+# (email body, chat, voice transcripts) MUST swap in a trained NER model -
 # regexes will miss obfuscated identifiers and novel formats.
 #
 # Pattern ordering rationale (most-specific-first):
-#   1. EMAIL   — must come before PHONE and ACCT to prevent the local-part or
+#   1. EMAIL   - must come before PHONE and ACCT to prevent the local-part or
 #                domain being consumed by the more-general digit/char rules.
-#   2. IBAN    — fixed format (2-letter country + 2 digits + up to 30 alphanum);
+#   2. IBAN    - fixed format (2-letter country + 2 digits + up to 30 alphanum);
 #                must precede ACCT (which matches any 8+ digit run) so the full
 #                IBAN is replaced rather than just its numeric suffix.
-#   3. CARD    — 13-19 digits, optionally space/dash separated; before ACCT.
-#   4. NATIONAL_ID — common patterns (SSN, NI); before PHONE/ACCT to avoid
+#   3. CARD    - 13-19 digits, optionally space/dash separated; before ACCT.
+#   4. NATIONAL_ID - common patterns (SSN, NI); before PHONE/ACCT to avoid
 #                partial matches.
-#   5. PHONE   — international/local; after EMAIL (email local-parts can look
+#   5. PHONE   - international/local; after EMAIL (email local-parts can look
 #                like phone numbers) and after NATIONAL_ID.
-#   6. DATE    — date-like strings that are NOT phone numbers (e.g. DOB); after
+#   6. DATE    - date-like strings that are NOT phone numbers (e.g. DOB); after
 #                PHONE to avoid mislabelling phone numbers as dates.
-#   7. ACCT    — any remaining long digit run (8+ digits); catch-all; must be
+#   7. ACCT    - any remaining long digit run (8+ digits); catch-all; must be
 #                last to avoid shadowing more-specific patterns above.
 # ---------------------------------------------------------------------------
 _PII_PATTERNS = [
-    # 1. Email address — most specific; consume before digit patterns.
+    # 1. Email address - most specific; consume before digit patterns.
     ("EMAIL", re.compile(
         r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
     )),
-    # 2. IBAN — ISO 13616: CC + 2 check digits + up to 30 BBAN chars.
+    # 2. IBAN - ISO 13616: CC + 2 check digits + up to 30 BBAN chars.
     #    Allow optional spaces/dashes (printed IBANs are often grouped).
     ("IBAN", re.compile(
         r"\b[A-Z]{2}\d{2}[\s\-]?(?:[A-Z0-9]{4}[\s\-]?){2,7}[A-Z0-9]{1,4}\b"
     )),
-    # 3. Payment card — 13–19 digits, optionally grouped by spaces or dashes.
+    # 3. Payment card - 13–19 digits, optionally grouped by spaces or dashes.
     #    Luhn validation is not done here (would require more logic); the regex
     #    catches the structural pattern only.
     ("CARD", re.compile(
         r"\b(?:\d[\s\-]?){13,18}\d\b"
     )),
-    # 4. National ID — UK NI (AA999999A), US SSN (NNN-NN-NNNN / NNNNNNNNN).
+    # 4. National ID - UK NI (AA999999A), US SSN (NNN-NN-NNNN / NNNNNNNNN).
     ("NATIONAL_ID", re.compile(
         r"\b(?:[A-Z]{2}\d{6}[A-D]|\d{3}[\-]\d{2}[\-]\d{4}|\d{9})\b"
     )),
-    # 5. Date of birth / date literals — placed BEFORE phone so YYYY-MM-DD is not
+    # 5. Date of birth / date literals - placed BEFORE phone so YYYY-MM-DD is not
     #    consumed as a phone-number digit run (ordering matters; see overlap test).
     #    Matches common date formats (YYYY-MM-DD, DD/MM/YYYY, DD-MMM-YYYY).
     ("DATE", re.compile(
         r"\b(?:\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}|\d{1,2}[\s\-][A-Za-z]{3}[\s\-]\d{4})\b"
     )),
-    # 6. Phone number — international (+CC) or long local (7–14 digits).
+    # 6. Phone number - international (+CC) or long local (7–14 digits).
     #    Lookbehind/ahead excludes '/' and '-' so a phone run cannot start mid-date.
     ("PHONE", re.compile(
         r"(?<![\d/\-])\+?\d[\d \-]{7,}\d(?![\d/\-])"
     )),
-    # 7. Account number — any unmatched run of 8+ digits (catch-all, must be last).
+    # 7. Account number - any unmatched run of 8+ digits (catch-all, must be last).
     ("ACCT", re.compile(
         r"(?<!\d)\d{8,}(?!\d)"
     )),
@@ -111,7 +111,7 @@ def get_key_from_env() -> bytes:
     key = os.environ.get("MASKING_KEY")
     if not key:
         raise RuntimeError(
-            "MASKING_KEY is not set. Source it from ~/.secrets — refusing to run with no "
+            "MASKING_KEY is not set. Source it from ~/.secrets - refusing to run with no "
             "key (no insecure default; see CLAUDE.md secrets standard)."
         )
     return key.encode()
@@ -229,12 +229,12 @@ def mask_records(records: list[dict], schema: dict, key: bytes) -> list[dict]:
     """
     Mask a list of records, skipping (not aborting on) individual bad rows.
 
-    Bad rows are collected by INDEX only — record content is never echoed into
+    Bad rows are collected by INDEX only - record content is never echoed into
     error messages or logs (CLAUDE.md §5: PII must not egress into logs).
     A summary count is printed at the end if any rows were skipped.
     """
     out = []
-    failures: list[int] = []  # row indices only — no record content
+    failures: list[int] = []  # row indices only - no record content
     for idx, record in enumerate(records):
         try:
             out.append(mask_record(record, schema, key))
@@ -266,7 +266,7 @@ def main() -> None:
     validate_schema(schema)
 
     # Parse input JSONL with per-line error handling.
-    # Failures are logged by line number only — never with line content (§5).
+    # Failures are logged by line number only - never with line content (§5).
     records = []
     parse_failures = []
     for lineno, line in enumerate(args.inp.read_text().splitlines(), start=1):
@@ -280,7 +280,7 @@ def main() -> None:
     if parse_failures:
         print(
             f"WARNING: {len(parse_failures)} line(s) could not be parsed as JSON "
-            f"(line numbers: {parse_failures}) — skipped.",
+            f"(line numbers: {parse_failures}) - skipped.",
             file=sys.stderr,
         )
 

@@ -1,8 +1,8 @@
 """Guard against hook-config drift between plugin mode and project mode.
 
 The PreToolUse guards (raw-data + code-execution) are declared in TWO places by design:
-- `hooks/hooks.json`     — loaded when installed as a Claude Code plugin.
-- `.claude/settings.json` — loaded when the repo is opened as a project.
+- `hooks/hooks.json`     - loaded when installed as a Claude Code plugin.
+- `.claude/settings.json` - loaded when the repo is opened as a project.
 
 Both must stay byte-for-byte identical so the two defence-critical guards can't silently
 diverge between the two run modes. This test fails loudly if they drift.

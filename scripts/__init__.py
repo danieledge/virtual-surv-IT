@@ -1,1 +1,1 @@
-"""Helper scripts. Synthetic data generation only — see CLAUDE.md §5."""
+"""Helper scripts. Synthetic data generation only - see CLAUDE.md §5."""
