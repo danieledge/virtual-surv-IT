@@ -3,6 +3,24 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.7.0] - 2026-06-27
+
+### Added - a complete, downloadable build delivery (`docs/demos/build-artifacts/`)
+- The `/demo` build flavour now produces the **actual deliverables**, not summaries: scenario spec,
+  SME validation, detection code + dev tests, an independent **33-test QA suite**, QA handover, a
+  **threshold-tuning pack with MEASURED ATL/BTL**, a static performance review, and a consolidated
+  **delivery report** (RTM, finding dispositions, DoD gate, token-usage table) - each in `.md` + `.html`.
+- **The full chain ran end-to-end** (build → code/QA/compliance review → tuning → performance →
+  delivery), demonstrating the fix→re-review loop: independent review found **7 real defects** in the
+  build, all fixed and re-tested (dev 2/2, QA 33/33 green).
+- **Measured calibration** ([`calibrate_wash_trade.py`](docs/demos/build-artifacts/calibrate_wash_trade.py)):
+  synthesises a *labelled* dataset and runs real ATL/BTL - `price_tolerance_pct` 0.10-0.50% (100%
+  precision + recall), honestly flagged as measured-on-synthetic.
+- **Token usage** documented: the full 8-agent delivery cost ~182k tokens (README table + delivery report §7).
+
+### Changed
+- README "What's new" + token-usage table updated; all demo artifacts linked and verified.
+
 ## [0.6.1] - 2026-06-27
 
 ### Added

@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.6.1](https://img.shields.io/badge/version-0.6.1-blue)
+![Version 0.7.0](https://img.shields.io/badge/version-0.7.0-blue)
 ![Tests 36 passing](https://img.shields.io/badge/tests-36%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -20,12 +20,16 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.6.1
+> ## ✨ What's new in 0.7.0
 >
-> - **🎬 Guided demo + readable transcripts** - `/demo` has Morgan run a full engagement
->   **end-to-end on safe synthetic data**, narrating every decision (which specialist, why, what model
->   tier, the patterns). Real transcripts are rendered on GitHub in [`docs/demos/`](docs/demos/) -
->   read the team work *without running anything*. New here? Start there.
+> - **🎬 Guided demo + downloadable artifacts** - `/demo` has Morgan run a full engagement
+>   **end-to-end on safe synthetic data**, narrating every decision. Real transcripts *and the actual
+>   deliverables* are on GitHub: [`docs/demos/`](docs/demos/) - including a **complete build delivery**
+>   ([spec → code → 3 reviews → tuning → performance → delivery report](docs/demos/build-artifacts/)),
+>   each artifact downloadable. New here? Start there.
+> - **🔁 The chain is not a rubber stamp** - in the build demo, independent review found **7 real
+>   defects** (a false-negative, an off-by-one, a broken audit field) - all fixed and re-tested. And
+>   thresholds were **calibrated with measured ATL/BTL on synthesised labelled data**, not guessed.
 > - **🔍 Honest data-masking validation** - `validate_masking` gains an **`--in <file>`** mode that
 >   scans **your actual masked output** for residual PII (not just a fixture), and the README claims
 >   were tightened to match what the code really does (a sceptical claims-vs-reality audit).
