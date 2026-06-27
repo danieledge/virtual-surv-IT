@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.4.0](https://img.shields.io/badge/version-0.4.0-blue)
+![Version 0.4.1](https://img.shields.io/badge/version-0.4.1-blue)
 ![Tests 27 passing](https://img.shields.io/badge/tests-27%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -20,17 +20,19 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.4.0
+> ## ✨ What's new in 0.4.1
 >
-> - **🛡️ Data-handling contract** - the raw folder stays hard-blocked; *other* data is analysed on
->   your **attestation** that it's masked/synthetic/anonymised (a startup disclaimer); an
->   **automatic data-masking workflow** is on the roadmap to replace it.
+> - **⚡ Streamlined intake** - the upfront questions were batched onto single screens and a
+>   duplicated question removed (~11 prompts → ~5), with execution-safety only asked when code is
+>   involved. Same decisions, far less friction.
+> - **🛡️ Data-handling contract** *(0.4.0)* - the raw folder stays hard-blocked; *other* data is
+>   analysed on your **attestation** that it's masked/synthetic/anonymised (a startup disclaimer);
+>   an **automatic data-masking workflow** is on the roadmap to replace it.
 > - **👥 A named, globally- & gender-diverse team** with playful staff profiles - and the PM
 >   (Morgan) addresses specialists by name.
 > - **📐 Built to agent best-practice** - per-agent **model tiering** (4 opus / 11 sonnet / 1 haiku)
 >   with rationale, and a **conformance matrix vs Anthropic's multi-agent guidance**
 >   ([`docs/agent-design.md`](docs/agent-design.md)).
-> - **🔒 Code-execution safety gate** - reviews static by default; execution behind a consent gate.
 >
 > <details><summary>What's new in 0.3.0 - data-analyst &amp; business-analyst expansion</summary>
 >

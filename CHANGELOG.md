@@ -3,6 +3,17 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.4.1] - 2026-06-27
+
+### Changed
+- **Streamlined engagement intake.** The review intake had grown to ~11 separate prompts; cut to
+  ~5 with no decisions lost: removed a genuine **duplicate** (the fix-cycle question was asked by
+  both `engage` and the review skills - `engage` now owns it, the review skills inherit it);
+  **batched** multi-axis menus onto single `AskUserQuestion` screens (review menu = depth+perf+
+  findings; scope = dimensions+breadth+mode); **gated** the execution-safety question to code
+  engagements; dropped the standalone "any other clarifications?" step.
+- **README:** Mei ↔ Viktor profile cross-links; "What's new" refreshed.
+
 ## [0.4.0] - 2026-06-26
 
 ### Changed - data-handling contract (the reason for the minor bump)
