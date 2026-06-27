@@ -84,24 +84,42 @@ deferred "deploy" gates (calibration, performance, human sign-off) close.
   thresholds are `PLACEHOLDER` pending tuning; `ubo_link` is mocked (real provider integration untested).
 - **How to extend:** add a quantity-offset test (spec §5) and per-instrument mid sourcing.
 
-## 7. 💰 Token usage (this engagement)
-Real `subagent_tokens` reported by the Agent tool. The full build + DoD delivery used **6 agents**:
+## 7. 💰 Token usage, runtime & a (quirky) rate card
+Real `subagent_tokens` and `duration_ms` reported by the Agent tool. The full build + DoD delivery
+used **8 agents**:
 
-| Stage | Agent | Tier | Tokens |
-|---|---|---|---|
-| Spec | business-analyst (Amara) | sonnet | ~16,580 |
-| SME validation | trade-surveillance-sme (Camila) | sonnet | ~16,274 |
-| Build | rules-developer (Mateo) | sonnet | ~19,859 |
-| Code review | code-reviewer (Ravi) | opus | ~23,199 |
-| QA | qa-engineer (Linh) | sonnet | ~32,924 |
-| Compliance | compliance-reviewer (Layla) | opus | ~31,077 |
-| Calibration | tuning-analyst (Theo) | sonnet | ~24,197 |
-| Performance | performance-reviewer (Thabo) | sonnet | ~18,290 |
-| **Total** | **8 agents** | | **~182,400** |
+| Stage | Agent | Tier | Tokens | Runtime | ~API cost |
+|---|---|---|---|---|---|
+| Spec | business-analyst (Amara) | sonnet | ~16,580 | ~55s | ~$0.15 |
+| SME validation | trade-surveillance-sme (Camila) | sonnet | ~16,274 | ~35s | ~$0.15 |
+| Build | rules-developer (Mateo) | sonnet | ~19,859 | ~63s | ~$0.18 |
+| Code review | code-reviewer (Ravi) | **opus** | ~23,199 | ~34s | **~$1.04** |
+| QA | qa-engineer (Linh) | sonnet | ~32,924 | ~244s | ~$0.30 |
+| Compliance | compliance-reviewer (Layla) | **opus** | ~31,077 | ~65s | **~$1.40** |
+| Calibration | tuning-analyst (Theo) | sonnet | ~24,197 | ~105s | ~$0.22 |
+| Performance | performance-reviewer (Thabo) | sonnet | ~18,290 | ~42s | ~$0.16 |
+| **Total** | **8 agents** | | **~182,400** | **~643s agent-time** (~9 min wall-clock, reviews ran parallel) | **~$3.60** |
 
-The full build-to-everything-but-sign-off delivery cost **~182k tokens** across 8 agents (build +
-3 reviews + tuning + performance). Right-sizing kept it to 8, not 16; a lighter touch (spec + build
-+ one review) would be ~a third of this.
+**Cost basis (rough, ±2×):** list prices opus ~$15/$75, sonnet ~$3/$15 per M in/out; tokens are
+totals so a ~50/50 split is assumed. Note the **2 opus agents = ~68% of the cost** for ~30% of the
+tokens - which is *exactly why* the model tiering reserves opus for the final-judgement roles only.
+
+### The rate card (tongue-in-cheek, illustrative - not a quote)
+What would a **human** team invoice for the same work - a spec, an SME sign-off, a build, three
+independent reviews, a calibration, a performance review and a delivery pack for a new scenario?
+
+| | The human team | This AI team |
+|---|---|---|
+| Effort | ~**3-5 person-days** (realistic for a new reviewed scenario) | ~**11 person-minutes** of agent-time |
+| Blended rate | ~£750/day contractor (BA/dev ~£600, SME/compliance ~£900-950) | - |
+| Wall-clock | days-to-weeks (calendars, handoffs, meetings) | ~**9 minutes** |
+| **Invoice** | ~**£2,250 - £3,750** | ~**$3.60** in API |
+
+So the team delivered roughly **£2-4k of consulting effort for about the price of a coffee** - in
+minutes, not days. *Caveat (the honest bit):* this is a **proof-of-concept demo on synthetic data**;
+the output is a *starting point for real engineers and reviewers*, not a replacement (and the human
+"invoice" is illustrative). The point isn't "fire the humans" - it's *"the boring 80% gets done in
+minutes so the humans spend their day on the judgement that matters."*
 
 ## 8. Responsibility notes
 - **Code execution:** the tests were *run* (📊 measured) on this trusted demo repo with synthetic
