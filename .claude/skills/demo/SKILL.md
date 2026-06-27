@@ -17,8 +17,9 @@ tokens; nothing touches real data or executes anything risky). Narrate in crisp 
 question tool (`multiSelect: false`) unless the arg already says which - default **Review**:
 - **Review** - review the repo's own synthetic spoofing detector (`rules/spoofing.py`); shows the
   review pipeline (scorer → code-reviewer → Morgan's challenge → scoreboard).
-- **Build** - spec + build a tiny new detection idea from scratch; shows orchestrator-workers
-  (business-analyst → SME → rules-developer → reviewers).
+- **Build** - build a new detection from scratch and take it **through the full Definition-of-Done
+  chain**; shows orchestrator-workers end to end (see step 3b). Cost-aware: ask the depth first
+  (it's the heavy demo).
 - **Data safety** - show `/prepare-data` and the raw-data guard *actually blocking* a read; shows
   the §5 keystone.
 
@@ -40,7 +41,37 @@ opus - subtle security judgement"*), then bring them in for real and **summarise
 - **The eval harness** (Review demo) - optionally score the result with `python -m scripts.eval_score`
   against the matching golden case to show the regression net in action.
 
-**3. For the Data-safety demo specifically:** show synthetic generation, then **attempt a read of
+**3b. For the Build demo - run the WHOLE chain (don't stop at "reviewers").** First, because this is
+the heavy demo, ask the depth via the question tool (`multiSelect: false`): **Core** (spec → SME →
+build + tests; ~50k tokens) or **Full DoD delivery** (the complete chain below; ~150-180k tokens, 8
+agents). State the token ballpark so the choice is informed. Pick a small, safe synthetic scenario
+(e.g. wash-trade / self-match). Then run it for real, narrating each handoff (the blackboard):
+
+1. **business-analyst** - a concise scenario spec (obligation cited; thresholds *flagged* as SME/
+   tuning decisions, never invented).
+2. **the relevant `*-sme`** (read-only) - validate the typology; the FP drivers; the biggest pitfall.
+3. **rules-developer** - implement the validated spec as a small detection sketch + a true-positive
+   and false-positive test.
+4. **Run the tests (fix→re-review loop).** Actually run them. When review/QA finds a real defect -
+   *it will* - route it back, fix it, re-run. **Narrate this as the chain earning its keep, not a
+   rubber stamp.** (Real session example: a non-deterministic time bug + an off-by-one + a missing
+   obligation field on the alert.)
+5. **code-reviewer + qa-engineer + compliance-reviewer** (independent, in parallel) - real findings,
+   each with an evidence basis and a disposition; compliance gates the **Definition of Done**.
+6. **tuning-analyst** - don't leave thresholds illustrative: **synthesise a *labelled* dataset** and
+   run **measured ATL/BTL** (precision/recall vs ground truth) to recommend a value. Honest caveat:
+   measured on a synthetic distribution, so it validates the *method*, not the real-world number.
+7. **performance-reviewer** (static) - will it scale at surveillance volume?
+8. **Compile the delivery** - the PM writes the consolidated **delivery report** (RTM, finding
+   dispositions, DoD status, developer handover, **token-usage table**) and renders every artifact to
+   `.md` + `.html` under `artifacts/` (or, for a keepable showcase, `docs/demos/build-artifacts/`).
+
+**Be honest about the gates:** the delivery is *demo-complete* but **say plainly it's NOT deployable**
+until the deploy gates close (re-calibrate on real labelled data, fix any scalability finding, and
+**human sign-off** - which a demo cannot produce). Action any advisory house-rules recommendations
+into `docs/house-rules.md` (recommend → PM commits) so the loop visibly closes.
+
+**3c. For the Data-safety demo specifically:** show synthetic generation, then **attempt a read of
 `data/raw/`** so the user *sees the guard hard-block it* (it will), and explain the layered defence
 (hook + attestation + masking on-ramp). Honest note: free-text masking is regex-only today (NER is
 on the roadmap).
@@ -48,7 +79,9 @@ on the roadmap).
 **4. Close - explain what was shown and how to do it for real.** Recap the patterns demonstrated in
 3-4 bullets, then hand back: *"That's the team end-to-end. To put it to work on your own code, type
 `/engage` and describe what you've got - I'll take it from there."* Offer to run a different demo
-flavour. Never dead-end.
+flavour. Never dead-end. *(For the Build demo, a committed reference run lives at
+`docs/demos/build-artifacts/` - point the user there to read a complete delivery without spending
+the tokens.)*
 
 > Honesty throughout: narrate what genuinely happened (real agent outputs, real guard blocks, real
 > eval scores) - never fake a step for effect. If an analyser is missing or a finding is inferred,
