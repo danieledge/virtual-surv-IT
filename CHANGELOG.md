@@ -3,6 +3,23 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.6.0] - 2026-06-27
+
+### Added
+- **`/demo` guided demo** - Morgan runs a full engagement end-to-end on safe synthetic data,
+  narrating every decision (which specialist + why, model tier + why, the patterns: right-sizing,
+  blackboard, challenge pass, safety gates). Three flavours: review / build / data-safety. The
+  fastest way to see the team work; surfaced as the new-user entry point.
+
+### Changed - data-masking honesty (claims-vs-reality audit)
+- **`validate_masking --in <file>`** - new mode that scans **your actual masked output** for
+  residual free-text PII (string fields) + k-anonymity, rather than only the built-in synthetic
+  fixture (which the default mode is now clearly labelled as). +2 tests (34 → 36).
+- Fixed the PII-scan label ("all output fields" → "free-text-capable fields") to match the code,
+  and tightened the README masking claims: validator-checks-a-fixture vs `--in` real-file scan,
+  k-anonymity is off until `quasi_identifiers` are declared, and `redact` is regex-only (not safe
+  for real comms without NER). Full audit in `artifacts/DATA-MASKING-CLAIMS-REVIEW`.
+
 ## [0.5.1] - 2026-06-27
 
 ### Changed - token optimisation

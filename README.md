@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.5.1](https://img.shields.io/badge/version-0.5.1-blue)
+![Version 0.6.0](https://img.shields.io/badge/version-0.6.0-blue)
 ![Tests 36 passing](https://img.shields.io/badge/tests-36%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -20,16 +20,18 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.5.1
+> ## ✨ What's new in 0.6.0
 >
-> - **🧪 Team-quality eval harness** (`evals/`) - a regression net that scores the team's *own
->   output* (reviews, coverage assessments, specs, tuning packs) against **17 golden cases** with
->   seeded issues + false-positive traps. A deterministic scorer (`scripts/eval_score.py`,
->   unit-tested) checks recall/must-find/traps; `/run-evals` adds an LLM-judge for the qualitative
->   dimensions. See [Self-test](#-self-test-eval-harness).
+> - **🎬 Guided demo** - `/demo` has Morgan run a full engagement **end-to-end on safe synthetic
+>   data**, narrating every decision: which specialist, why that one, what model tier and why, and
+>   the patterns at play. The fastest way to *see* the team work. New here? Start there.
+> - **🔍 Honest data-masking validation** - `validate_masking` gains an **`--in <file>`** mode that
+>   scans **your actual masked output** for residual PII (not just a fixture), and the README claims
+>   were tightened to match what the code really does (a sceptical claims-vs-reality audit).
+> - **🧪 Team-quality eval harness** (`evals/`) - scores the team's *own output* against **17 golden
+>   cases**; deterministic scorer + `/run-evals` LLM-judge. See [Self-test](#-self-test-eval-harness).
 > - **💰 Token optimisation** - `CLAUDE.md` slimmed **~44%** (operating detail moved to a doc read
->   on-engage), cutting the always-on context every session and subagent carries. See
->   [Token usage](#-token-usage--optimisation).
+>   on-engage). See [Token usage](#-token-usage--optimisation).
 > - **⚡ Streamlined intake** *(0.4.x)* - upfront questions batched onto single screens, a
 >   duplicated question removed (~11 prompts → ~5), execution-safety only asked when code's involved.
 > - **📝 Handover-doc quality is now a Definition-of-Done gate** - docs must be *clear & usable by a
@@ -216,7 +218,8 @@ claude
 ```
 
 Then run `/help` - you should see `/engage`, `/deep-review`, `/audit-review`, …. New here? Type
-**`/meet-the-team`** and Morgan will introduce the specialists; then `/engage` to start. (Also
+**`/demo`** to watch Morgan run a full engagement end-to-end on safe synthetic data (narrating every
+decision), or **`/meet-the-team`** for introductions; then `/engage` to start. (Also
 `pip install -r requirements-dev.txt` for the worked example, tests and the `.md→.html` render.)
 
 > ⚠️ **Two gotchas that waste people's time:**
@@ -335,7 +338,7 @@ agents - copy these:
 
 1. `CLAUDE.md` to your repo root (merge if you already have one) - the shared handbook.
 2. `.claude/agents/` - the 16 subagents.
-3. `.claude/skills/` - the 19 workflows (`/engage`, `/audit-review`, …); without these you
+3. `.claude/skills/` - the 20 workflows (`/engage`, `/audit-review`, …); without these you
    get agents but no front door.
 4. `.claude/hooks/` **and** `.claude/settings.json` - the always-on data-safety guard and its
    wiring. Don't skip these: they are the §5 control that keeps real data away from the model.
@@ -405,7 +408,7 @@ docs/templates/              # delivery-report (consolidated default) + BRD, FSD
 scripts/render_html.py       # render any .md artifact to standalone .html for distribution
 scripts/eval_score.py        # deterministic scorer for the team-quality eval harness
 evals/                       # team-quality eval harness: rubrics + 17 golden cases (regression net)
-.claude/skills/              # workflows: /engage, /meet-the-team, /prepare-data, /assess-coverage, /write-brd, /brd-to-fsd, /elicit-requirements, /reg-change-impact, /analyse-data, /tune-thresholds, /validate-tm-model, /run-evals, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
+.claude/skills/              # workflows: /engage, /meet-the-team, /demo, /prepare-data, /assess-coverage, /write-brd, /brd-to-fsd, /elicit-requirements, /reg-change-impact, /analyse-data, /tune-thresholds, /validate-tm-model, /run-evals, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
 .github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
 .pre-commit-config.yaml      # local secret / raw-data guardrails
 ```
