@@ -1,8 +1,13 @@
 # Delivery Report - Wash Trade / Self-Match Detection (DEMO)
 
-> The consolidated delivery artifact for the [build demo](../build-demo.md) - the full DoD chain on
-> one page. Synthetic only (§5). This is what a *complete* build stage produces, not just the build
-> core. Demo artifact: not production detection logic.
+> # ⏩ AFTER - "as-delivered" current state
+> The consolidated delivery for the [build demo](../build-demo.md) - the full DoD chain on one page,
+> **after** the review fixes. Pair it with the [QA handover](qa-handover.md) (the ⏪ *as-found*
+> snapshot of what was caught). Synthetic only (§5); demo artifact, not production detection logic.
+>
+> **Status in one line:** the **7 review defects are ✅ Fixed** (tests green); what remains open is by
+> design - **3 deploy-gates ⏭️ Deferred** (re-calibrate on real data, the O(n²) fix, a missing-mid
+> metric) and **human sign-off ⛔ Pending** (a demo can't produce one). Detail in §3 and §5.
 
 | | |
 |---|---|
