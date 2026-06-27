@@ -115,7 +115,7 @@ anonymised** (a startup disclaimer makes this explicit; the responsibility is yo
 
 ## 👥 Meet the team
 
-Sixteen specialists, one PM and a tireless intern - each with a day job, a name, strong opinions,
+Fifteen specialists, one PM and a tireless intern (16 agents in all) - each with a day job, a name, strong opinions,
 and a Slack status that tells you more than their job title does. (Inside a session, type
 `/meet-the-team` and Morgan does the introductions live.) **🧠 Advisors** are read-only - your
 *independent* check, so they can critique all day but can't touch the code (segregation of duties,
