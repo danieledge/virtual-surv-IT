@@ -5,8 +5,8 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.4.2](https://img.shields.io/badge/version-0.4.2-blue)
-![Tests 27 passing](https://img.shields.io/badge/tests-27%20passing-brightgreen)
+![Version 0.5.0](https://img.shields.io/badge/version-0.5.0-blue)
+![Tests 34 passing](https://img.shields.io/badge/tests-34%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
@@ -20,15 +20,17 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.4.2
+> ## ✨ What's new in 0.5.0
 >
-> - **⚡ Streamlined intake** - the upfront questions were batched onto single screens and a
->   duplicated question removed (~11 prompts → ~5), with execution-safety only asked when code is
->   involved. Same decisions, far less friction.
-> - **📝 Handover-doc quality is now a gate** - the Definition of Done checks handover docs are
->   *clear & usable by a real developer*, not merely present (no new agent needed).
-> - **✨ Consistent prose** - em-dashes removed repo-wide; intake refinements applied across all
->   review flows.
+> - **🧪 Team-quality eval harness** (`evals/`) - a regression net that scores the team's *own
+>   output* (reviews, coverage assessments, specs, tuning packs) against **17 golden cases** with
+>   seeded issues + false-positive traps. A deterministic scorer (`scripts/eval_score.py`,
+>   unit-tested) checks recall/must-find/traps; `/run-evals` adds an LLM-judge for the qualitative
+>   dimensions. Catches a prompt change that silently degrades rigour.
+> - **⚡ Streamlined intake** *(0.4.x)* - upfront questions batched onto single screens, a
+>   duplicated question removed (~11 prompts → ~5), execution-safety only asked when code's involved.
+> - **📝 Handover-doc quality is now a Definition-of-Done gate** - docs must be *clear & usable by a
+>   real developer*, not merely present (no new agent needed).
 > - **🛡️ Data-handling contract** *(0.4.0)* - the raw folder stays hard-blocked; *other* data is
 >   analysed on your **attestation** that it's masked/synthetic/anonymised (a startup disclaimer);
 >   an **automatic data-masking workflow** is on the roadmap to replace it.
@@ -330,7 +332,7 @@ agents - copy these:
 
 1. `CLAUDE.md` to your repo root (merge if you already have one) - the shared handbook.
 2. `.claude/agents/` - the 16 subagents.
-3. `.claude/skills/` - the 18 workflows (`/engage`, `/audit-review`, …); without these you
+3. `.claude/skills/` - the 19 workflows (`/engage`, `/audit-review`, …); without these you
    get agents but no front door.
 4. `.claude/hooks/` **and** `.claude/settings.json` - the always-on data-safety guard and its
    wiring. Don't skip these: they are the §5 control that keeps real data away from the model.
@@ -397,7 +399,9 @@ docs/scope-and-stack.md      # example regulatory scope + tech stack (customise;
 docs/code-review-method.md   # confidence scoring, filtering, deep review (adapted from turingmind)
 docs/templates/              # delivery-report (consolidated default) + BRD, FSD, ADR, RTM, review/performance, dev+QA handover, change/ops, scenario, model-validation
 scripts/render_html.py       # render any .md artifact to standalone .html for distribution
-.claude/skills/              # workflows: /engage, /meet-the-team, /prepare-data, /assess-coverage, /write-brd, /brd-to-fsd, /elicit-requirements, /reg-change-impact, /analyse-data, /tune-thresholds, /validate-tm-model, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
+scripts/eval_score.py        # deterministic scorer for the team-quality eval harness
+evals/                       # team-quality eval harness: rubrics + 17 golden cases (regression net)
+.claude/skills/              # workflows: /engage, /meet-the-team, /prepare-data, /assess-coverage, /write-brd, /brd-to-fsd, /elicit-requirements, /reg-change-impact, /analyse-data, /tune-thresholds, /validate-tm-model, /run-evals, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
 .github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
 .pre-commit-config.yaml      # local secret / raw-data guardrails
 ```
@@ -502,11 +506,11 @@ Tracked enhancements, with the rationale for each. *(Done this cycle: **subagent
 agents now self-verify against their brief and flag gaps before returning, CLAUDE.md §6.)*
 
 **Quality & evaluation**
-- **LLM-as-judge eval harness** - golden cases + a rubric (0–1 + pass/fail: correctness ·
-  completeness · traceability · evidence-basis) scoring the team's *generated artifacts* (reviews,
-  specs, tuning packs). *Why:* the 27 tests check the **code**, not the **quality of what the team
-  produces** - this is the regression net for a prompt-heavy system that keeps evolving (an
-  Anthropic multi-agent standard). **Highest-value open item.**
+- ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 5 rubrics + 17 golden cases
+  (seeded issues + false-positive traps) across review, coverage, spec/traceability, tuning and
+  data-safety. The deterministic scorer (`scripts/eval_score.py`) is unit-tested; `/run-evals`
+  runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and
+  calibrate the judge against human scores over time.
 
 **🚧 TODO - Automatic data-masking workflow** - detail in [`docs/prepare-data-roadmap.md`](docs/prepare-data-roadmap.md)
 

@@ -1,0 +1,27 @@
+case: validate-tm-coverage-and-mi
+workflow: /validate-tm-model
+rubric: threshold-tuning
+input: model.yaml
+description: >
+  A synthetic TM model-validation submission with two seeded defects - an in-scope
+  trade-based-money-laundering typology with no scenario (coverage gap), and missing
+  alert-to-SAR / false-positive-rate performance MI. Tests that the validation flags both
+  the coverage gap and the missing MI, and does NOT sign the model off as fully fit.
+
+planted:
+  - id: GAP-COVERAGE
+    keywords: [coverage gap, not covered, no scenario, uncovered typology, trade-based, tbml, no detection]
+    location: model.yaml:TYP-TBML
+    must_find: true
+  - id: GAP-MISSING-MI
+    keywords: [alert-to-sar, alert to sar, conversion, performance mi, false-positive rate, false positive rate, fp rate, not measured]
+    location: model.yaml:performance_mi
+    must_find: true
+
+forbidden:
+  - id: FP-FULLY-FIT
+    keywords: [fully fit, fit for purpose, passes validation, no findings, no gaps, model is sound, sign off, signed off]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

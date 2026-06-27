@@ -1,0 +1,52 @@
+# Synthetic eval input - a transaction-monitoring scenario set submitted for
+# periodic model validation. NOT a real environment. All names/IDs are synthetic.
+# See expected.yaml for the planted ground truth. The team (/validate-tm-model)
+# must assess coverage AND model-performance MI, among other dimensions.
+
+model_id: TM-MODEL-2026Q2
+validation_period: 2026-01-01 .. 2026-06-30
+
+# In-scope AML typologies the TM model is required to cover.
+in_scope_typologies:
+  - id: TYP-STRUCT
+    name: Structuring / smurfing
+    obligation: POCA 2002 / JMLSG
+  - id: TYP-RAPID
+    name: Rapid movement of funds (pass-through)
+    obligation: POCA 2002 / JMLSG
+  - id: TYP-HIGHRISK-GEO
+    name: High-risk jurisdiction exposure
+    obligation: POCA 2002 / JMLSG
+  - id: TYP-TBML
+    name: Trade-based money laundering
+    obligation: POCA 2002 / JMLSG
+
+# Deployed scenarios and the typology each covers.
+scenarios:
+  - id: TM-001
+    name: Cash structuring below reporting threshold
+    covers: TYP-STRUCT
+    threshold: aggregate_cash_deposits >= 9000 over 7d
+  - id: TM-002
+    name: Rapid in-out fund movement
+    covers: TYP-RAPID
+    threshold: in_out_within_48h and ratio >= 0.9
+  - id: TM-003
+    name: High-risk jurisdiction transfers
+    covers: TYP-HIGHRISK-GEO
+    threshold: counterparty_country in HIGH_RISK_LIST
+  # NOTE: there is NO scenario mapped to TYP-TBML (trade-based money
+  # laundering). That typology is in scope but has no detection deployed -
+  # a coverage gap.
+
+# Model-performance management information.
+performance_mi:
+  alert_volume:
+    total_alerts: 4120
+    avg_alerts_per_day: 22.6
+  # NOTE: there is NO alert-to-SAR / conversion MI and NO false-positive-rate
+  # tracking recorded. Alert volume is captured, but how many alerts converted
+  # to SARs (and the FP rate) is NOT measured - missing performance MI.
+  alert_to_sar: null
+  false_positive_rate: null
+  threshold_tuning_history: null

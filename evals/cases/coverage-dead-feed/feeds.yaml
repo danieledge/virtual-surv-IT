@@ -1,0 +1,65 @@
+# Synthetic eval input - in-scope surveillance scenarios and their data feeds.
+# NOT a real environment. All names/IDs are synthetic. See expected.yaml for the
+# planted ground truth. The team (/assess-coverage) must judge whether every
+# in-scope risk is detected AND whether the feeds those scenarios rely on are live.
+
+reporting_date: 2026-06-20
+
+# In-scope typologies the surveillance programme is required to cover.
+in_scope_typologies:
+  - id: TYP-INSIDER
+    name: Insider dealing
+    obligation: MAR Article 8 / 14
+  - id: TYP-SPOOF
+    name: Spoofing and layering
+    obligation: MAR Article 12
+  - id: TYP-WASH
+    name: Wash trades
+    obligation: MAR Article 12
+  - id: TYP-RAMP
+    name: Marking the close / ramping
+    obligation: MAR Article 12
+
+# Detection scenarios deployed, and the typology each one maps to.
+scenarios:
+  - id: SCN-001
+    name: News-correlated pre-announcement trading
+    covers: TYP-INSIDER
+    feeds_required: [orders, executions, news_reference]
+  - id: SCN-002
+    name: Order-to-trade spoofing pattern
+    covers: TYP-SPOOF
+    feeds_required: [orders, executions]
+  - id: SCN-003
+    name: End-of-day price ramping
+    covers: TYP-RAMP
+    feeds_required: [orders, executions, market_data]
+  # NOTE: there is NO scenario mapped to TYP-WASH (wash trades). That typology
+  # is in scope but has no detection logic deployed against it.
+
+# Data feeds the scenarios depend on, with their live/health status.
+feeds:
+  - id: orders
+    name: Order management system feed
+    status: active
+    last_updated: 2026-06-20T06:00:00Z
+    completeness: 99.8%
+  - id: executions
+    name: Execution / trade feed
+    status: active
+    last_updated: 2026-06-20T06:00:00Z
+    completeness: 99.9%
+  - id: market_data
+    name: Market data / price feed
+    status: active
+    last_updated: 2026-06-20T05:55:00Z
+    completeness: 100%
+  - id: news_reference
+    name: News and corporate-announcement reference feed
+    status: inactive
+    last_updated: 2025-11-03T14:00:00Z   # stale - not refreshed in ~7 months
+    completeness: 0%
+    note: >
+      Feed onboarding was paused and never resumed. SCN-001 (insider dealing)
+      depends on this feed; with it dead the scenario produces no alerts even
+      though it shows as deployed.

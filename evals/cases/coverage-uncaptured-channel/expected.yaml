@@ -1,0 +1,23 @@
+case: coverage-uncaptured-channel
+workflow: /assess-coverage
+rubric: coverage-assessment
+input: channels.yaml
+description: >
+  A synthetic comms-channel capture inventory where an in-scope trader population uses
+  WhatsApp, which is not captured or monitored - an off-channel blind spot. Plus a
+  false-positive trap (three captured-and-monitored channels). Tests that the assessment
+  catches the uncaptured channel and does NOT flag a monitored channel as a gap.
+
+planted:
+  - id: GAP-UNCAPTURED-CHANNEL
+    keywords: [whatsapp, not captured, off-channel, uncaptured, no surveillance, not monitored, off channel]
+    location: channels.yaml:CH-WHATSAPP
+    must_find: true
+
+forbidden:
+  - id: FP-MONITORED-CHANNEL
+    keywords: [email not captured, bloomberg gap, turret gap, monitored channel gap, captured channel not monitored]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

@@ -1,0 +1,25 @@
+case: spec-out-of-scope-clarity
+workflow: /elicit-requirements
+rubric: spec-traceability
+input: scenario.md
+description: >
+  A deliberately ambiguous request ("monitor everything suspicious in trading"). Tests that the
+  response surfaces open questions and asks for scope (instruments, venues, abuse types) rather
+  than guessing, and flags that "everything suspicious" is unbounded and not a testable
+  requirement - and does NOT silently invent a concrete scope as if it had been agreed.
+
+planted:
+  - id: SCOPE-1
+    keywords: [out of scope, out-of-scope, open question, clarify, clarifying, scope, which instruments, which venues, which abuse, in scope]
+    must_find: true
+  - id: TESTABLE-1
+    keywords: [not testable, untestable, ambiguous, unbounded, "everything is not", cannot be tested, too vague, not a testable requirement]
+    must_find: true
+
+forbidden:
+  - id: FP-1
+    keywords: ["scope is set to equities", "we will monitor spoofing and insider dealing and wash trades", "in scope: all equities and derivatives", "assuming the scope is", "the agreed scope is", "scope is therefore"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

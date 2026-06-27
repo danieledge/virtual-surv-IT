@@ -1,0 +1,21 @@
+case: review-clean-code
+workflow: /deep-review
+rubric: code-review
+input: notional_threshold.py
+description: >
+  A small, genuinely clean and well-documented helper. There are no planted issues - this case
+  tests that a clean file does NOT get inflated findings. The two false-positive traps are
+  correct-but-tempting-to-nitpick items: the documented constant and the intentional early
+  return / explicit raise. Neither must be flagged as a critical defect.
+
+planted: []
+
+forbidden:
+  - id: FP-1
+    keywords: [magic number, undocumented threshold, OUTSIZED_NOTIONAL_MULTIPLE, hardcoded threshold]
+  - id: FP-2
+    keywords: [early return, multiple returns, guard clause is a bug, unnecessary raise, should return false]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

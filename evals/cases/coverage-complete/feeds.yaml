@@ -1,0 +1,77 @@
+# Synthetic eval input - a FULLY COVERED surveillance inventory.
+# NOT a real environment. All names/IDs are synthetic. See expected.yaml for the
+# planted ground truth. Every in-scope typology has a scenario, every channel is
+# captured and monitored, and every feed is live and complete. There is NO gap.
+# This case tests that the assessment does NOT invent a gap to look thorough.
+
+reporting_date: 2026-06-20
+
+in_scope_typologies:
+  - id: TYP-INSIDER
+    name: Insider dealing
+    obligation: MAR Article 8 / 14
+  - id: TYP-SPOOF
+    name: Spoofing and layering
+    obligation: MAR Article 12
+  - id: TYP-WASH
+    name: Wash trades
+    obligation: MAR Article 12
+
+scenarios:
+  - id: SCN-001
+    name: News-correlated pre-announcement trading
+    covers: TYP-INSIDER
+    feeds_required: [orders, executions, news_reference]
+  - id: SCN-002
+    name: Order-to-trade spoofing pattern
+    covers: TYP-SPOOF
+    feeds_required: [orders, executions]
+  - id: SCN-003
+    name: Self-matching wash-trade detection
+    covers: TYP-WASH
+    feeds_required: [orders, executions, account_reference]
+
+feeds:
+  - id: orders
+    name: Order management system feed
+    status: active
+    last_updated: 2026-06-20T06:00:00Z
+    completeness: 99.9%
+  - id: executions
+    name: Execution / trade feed
+    status: active
+    last_updated: 2026-06-20T06:00:00Z
+    completeness: 99.9%
+  - id: news_reference
+    name: News and corporate-announcement reference feed
+    status: active
+    last_updated: 2026-06-20T05:50:00Z
+    completeness: 99.7%
+  - id: account_reference
+    name: Account / legal-entity reference feed
+    status: active
+    last_updated: 2026-06-20T04:00:00Z
+    completeness: 100%
+
+# Communications channels - all captured and monitored.
+in_scope_populations:
+  - id: POP-TRADERS
+    name: Front-office traders
+    obligation: SYSC 10A
+
+channels:
+  - id: CH-EMAIL
+    name: Corporate email
+    used_by: [POP-TRADERS]
+    captured: true
+    monitored: true
+  - id: CH-BLOOMBERG
+    name: Bloomberg chat
+    used_by: [POP-TRADERS]
+    captured: true
+    monitored: true
+  - id: CH-TURRET
+    name: Trader turret voice
+    used_by: [POP-TRADERS]
+    captured: true
+    monitored: true

@@ -1,0 +1,38 @@
+case: review-seeded-bugs-py
+workflow: /deep-review
+rubric: code-review
+input: input_alert_export.py
+description: >
+  A flawed alert-export utility with four planted issues (two critical) and one false-positive
+  trap (a correctly-documented threshold). Tests that the review catches the criticals, finds
+  the perf/leak issues, and does NOT flag the documented constant.
+
+planted:
+  - id: SEC-1
+    keywords: [hardcoded, secret, credential, password, api key]
+    location: input_alert_export.py:11
+    min_severity: critical
+    must_find: true
+  - id: SEC-2
+    keywords: [sql injection, injection, parameterize, interpolat]
+    location: input_alert_export.py:24
+    min_severity: critical
+    must_find: true
+  - id: PERF-1
+    keywords: ["o(n^2)", "o(n2)", quadratic, set, membership]
+    location: input_alert_export.py:31
+    min_severity: medium
+    must_find: false
+  - id: BUG-1
+    keywords: [resource leak, connection, not closed, unclosed, context manager]
+    location: input_alert_export.py:40
+    min_severity: warning
+    must_find: false
+
+forbidden:
+  - id: FP-1
+    keywords: [magic number, undocumented threshold, LARGE_ORDER_MULTIPLE]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

@@ -117,15 +117,15 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
 | Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |
 | **External memory** for long horizons | ✅ | `docs/house-rules.md` - committed, compounding team memory; subagent context isolation. |
-| **LLM-as-judge** rubric for output quality | 🟡 | We use a **reviewer + Definition-of-Done** model (code/compliance/QA + the PM re-challenging findings) rather than a 0–1 judge prompt - a valid equivalent for build/review work; the rubric form suits open-ended research. *Candidate enhancement: an explicit eval harness.* |
+| **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 5 rubrics + 17 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
 | Subagent **self-assessment** (plan → evaluate → refine) | ✅ | Team-wide convention (CLAUDE.md §6): every agent self-verifies against its brief and **flags gaps** before returning, rather than implying completeness it doesn't have. |
 | **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
 | **Dozens–hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable - right-sizing keeps us at 2–5 agents per engagement; we never reach that scale. |
 
 **Net:** strong conformance on the high-value lessons. The remaining 🟡s are deliberate fits to our
 *interactive, human-gated* delivery model (vs Anthropic's long-running autonomous research agent).
-The one open enhancement is an **LLM-judge eval harness** (see the README roadmap) - self-assessment
-is now a team convention (CLAUDE.md §6).
+Both former enhancement gaps are now closed: **self-assessment** is a team convention (CLAUDE.md §6)
+and the **LLM-judge eval harness** is shipped (`evals/`, `/run-evals`).
 
 ## 7. References (Anthropic agent guidance)
 

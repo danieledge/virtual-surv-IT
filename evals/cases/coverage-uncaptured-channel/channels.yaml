@@ -1,0 +1,48 @@
+# Synthetic eval input - communications-channel capture inventory.
+# NOT a real environment. All names/IDs are synthetic. See expected.yaml for the
+# planted ground truth. The team (/assess-coverage) must judge whether every
+# in-scope population's communications are actually captured and monitored.
+
+reporting_date: 2026-06-20
+
+# In-scope populations subject to communications surveillance.
+in_scope_populations:
+  - id: POP-TRADERS
+    name: Front-office traders (Rates desk)
+    obligation: SYSC 10A / MAR Article 16
+  - id: POP-SALES
+    name: Institutional sales
+    obligation: SYSC 10A / MAR Article 16
+
+# Communications channels available to those populations, with capture status.
+channels:
+  - id: CH-EMAIL
+    name: Corporate email
+    used_by: [POP-TRADERS, POP-SALES]
+    captured: true
+    monitored: true
+    lexicon_applied: true
+
+  - id: CH-TURRET
+    name: Trader turret voice
+    used_by: [POP-TRADERS]
+    captured: true
+    monitored: true
+    transcription: true
+
+  - id: CH-BLOOMBERG
+    name: Bloomberg chat (IB / persistent)
+    used_by: [POP-TRADERS, POP-SALES]
+    captured: true
+    monitored: true
+    lexicon_applied: true
+
+  - id: CH-WHATSAPP
+    name: WhatsApp (mobile messaging)
+    used_by: [POP-TRADERS]
+    captured: false          # off-channel - not captured, no surveillance
+    monitored: false
+    note: >
+      Rates traders are observed using WhatsApp for client and inter-dealer
+      contact, but the channel is not onboarded to capture. No archive, no
+      lexicon, no alerts - communications on it are entirely unsurveilled.

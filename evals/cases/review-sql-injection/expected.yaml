@@ -1,0 +1,28 @@
+case: review-sql-injection
+workflow: /deep-review
+rubric: code-review
+input: alert_repository.py
+description: >
+  A flawed alert data-access layer with one critical SQL injection (desk_name f-string
+  interpolation) and one medium SELECT * in a hot polling path, plus a false-positive trap
+  (a correctly parameterized query) that must NOT be flagged as injection.
+
+planted:
+  - id: SEC-1
+    keywords: [sql injection, injection, parameterize, parameterise, f-string, interpolat, bind parameter]
+    location: alert_repository.py:16
+    min_severity: critical
+    must_find: true
+  - id: PERF-1
+    keywords: ["select *", select star, projection, project columns, hot path, over-fetch]
+    location: alert_repository.py:28
+    min_severity: medium
+    must_find: false
+
+forbidden:
+  - id: FP-1
+    keywords: [find_alerts_by_trader, parameterized query is unsafe, trader_id injection]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

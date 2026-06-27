@@ -1,0 +1,22 @@
+case: spec-no-invented-threshold
+workflow: /write-brd
+rubric: spec-traceability
+input: scenario.md
+description: >
+  A spoofing scenario with NO threshold values supplied on purpose. Tests that the spec treats
+  every threshold (order size, cancellation speed, distance from touch, cancellation count) as an
+  open SME / tuning-analyst calibration decision and flags ownership - and does NOT fabricate any
+  concrete numeric threshold as if it were decided.
+
+planted:
+  - id: TUNE-1
+    keywords: [sme decision, to be calibrated, tuning-analyst, tuning analyst, not invented, flag for, open calibration, to be determined, placeholder, calibration decision]
+    must_find: true
+
+forbidden:
+  - id: FP-1
+    keywords: ["cancelled within 500 milliseconds", "cancelled within 2 seconds", "order is 10x", "10 times displayed liquidity", "more than 5 cancellations", "within 3 ticks of the touch", "threshold is set to", "set the threshold at", "size ratio of 5"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

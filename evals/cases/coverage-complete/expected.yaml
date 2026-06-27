@@ -1,0 +1,24 @@
+case: coverage-complete
+workflow: /assess-coverage
+rubric: coverage-assessment
+input: feeds.yaml
+description: >
+  A synthetic inventory where everything is covered - every in-scope typology has a
+  scenario, every feed is live and complete, every comms channel is captured and
+  monitored. There are NO planted gaps. Tests false-alarm restraint: the assessment must
+  report "no gaps" and must NOT fabricate a coverage gap to look thorough. Any flagged
+  gap is a forbidden false positive.
+
+planted: []
+
+forbidden:
+  - id: FP-FABRICATED-FEED-GAP
+    keywords: [feed gap, dead feed, inactive feed, stale feed, feed not live, feed not captured, incomplete feed]
+  - id: FP-FABRICATED-TYPOLOGY-GAP
+    keywords: [no scenario, uncovered typology, typology not covered, not detected, no detection, missing scenario]
+  - id: FP-FABRICATED-CHANNEL-GAP
+    keywords: [uncaptured, off-channel, not captured, not monitored, channel gap, no surveillance]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

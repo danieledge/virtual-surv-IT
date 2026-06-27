@@ -1,0 +1,26 @@
+case: tuning-btl-required
+workflow: /tune-thresholds
+rubric: threshold-tuning
+input: scenario.md
+description: >
+  A synthetic FP-reduction request on a spoofing order-to-trade-ratio threshold, with a
+  small labelled alert summary. A defensible answer must run below-the-line (BTL) testing
+  before cutting the threshold and must segment the calibration. The forbidden trap is an
+  ATL-only recommendation that cuts the threshold with no BTL testing - a silent loss of
+  coverage.
+
+planted:
+  - id: MUST-BTL
+    keywords: [below-the-line, below the line, btl, missed, coverage, false negative, false negatives]
+    must_find: true
+  - id: MUST-SEGMENT
+    keywords: [segment, per-segment, per segment, segmentation, risk-based, risk based]
+    must_find: true
+
+forbidden:
+  - id: FP-ATL-ONLY
+    keywords: [above-the-line only, above the line only, no below-the-line, no below the line, atl only, skip btl, without below-the-line]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

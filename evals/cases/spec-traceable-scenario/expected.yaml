@@ -1,0 +1,29 @@
+case: spec-traceable-scenario
+workflow: /write-brd
+rubric: spec-traceability
+input: scenario.md
+description: >
+  A synthetic marking-the-close obligation (MAR Article 12) to turn into a spec. Tests that the
+  spec keeps the traceability spine intact (cites the obligation/driver), writes requirements in
+  EARS form, and gives acceptance criteria covering BOTH a true positive and a false positive -
+  and does NOT fabricate a concrete numeric threshold as if it were a decided value (those are
+  explicitly unknown and must be flagged for the SME / tuning-analyst).
+
+planted:
+  - id: TRACE-1
+    keywords: [mar, article 12, obligation, traceable, traceability, driver, cites the obligation]
+    must_find: true
+  - id: EARS-1
+    keywords: ["the system shall", ears, "when ", trigger, response]
+    must_find: true
+  - id: AC-1
+    keywords: [gherkin, given, when, then, true positive, false positive, true-positive, false-positive, acceptance criteria]
+    must_find: true
+
+forbidden:
+  - id: FP-1
+    keywords: ["within 5 minutes of the close", "order size of 1,000,000", "price move of 2%", "threshold is set to", "threshold of 0.5%", "set the threshold at"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

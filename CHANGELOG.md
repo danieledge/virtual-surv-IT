@@ -3,6 +3,21 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.5.0] - 2026-06-27
+
+### Added - team-quality eval harness (`evals/`)
+- A regression net that scores the team's **own output** against golden cases - so a prompt change
+  that silently degrades rigour is caught. Closes the highest-value roadmap item and the last open
+  Anthropic-conformance gap (LLM-as-judge).
+- **5 rubrics** (code-review, coverage-assessment, spec-traceability, threshold-tuning, data-safety)
+  and **17 golden cases** with seeded issues + false-positive traps, all synthetic.
+- **`scripts/eval_score.py`** - deterministic scorer (recall / must-find criticals / FP-traps),
+  with **7 unit tests** (`tests/test_eval_score.py`) so the harness backbone runs free in CI.
+  Test suite: 27 → **34 passing**.
+- **`/run-evals`** skill - runs the live team per case, scores deterministically, adds an LLM-judge
+  for qualitative dimensions, prints a scoreboard, and flags regressions. (Spends tokens; run at
+  milestones.)
+
 ## [0.4.2] - 2026-06-27
 
 ### Changed

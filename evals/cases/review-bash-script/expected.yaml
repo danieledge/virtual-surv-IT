@@ -1,0 +1,33 @@
+case: review-bash-script
+workflow: /deep-review
+rubric: code-review
+input: deploy_surveillance_feed.sh
+description: >
+  A flawed Bash deploy helper with three planted issues (two critical) and one false-positive
+  trap (a correct `set -euo pipefail`). Tests that the review catches the remote curl-pipe-bash
+  and the unguarded rm -rf, flags the unquoted variable, and does NOT call strict mode a bug.
+
+planted:
+  - id: SEC-1
+    keywords: [curl, pipe to bash, remote code, "curl | bash", download and execute, untrusted]
+    location: deploy_surveillance_feed.sh:12
+    min_severity: critical
+    must_find: true
+  - id: SEC-2
+    keywords: [rm -rf, unset variable, empty variable, destructive, dangerous deletion]
+    location: deploy_surveillance_feed.sh:23
+    min_severity: critical
+    must_find: true
+  - id: BUG-1
+    keywords: [unquoted, word splitting, word-splitting, glob, quote the variable, shellcheck]
+    location: deploy_surveillance_feed.sh:17
+    min_severity: warning
+    must_find: false
+
+forbidden:
+  - id: FP-1
+    keywords: ["set -euo pipefail", strict mode, errexit, nounset, pipefail]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

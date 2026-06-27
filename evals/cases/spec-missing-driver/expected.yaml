@@ -1,0 +1,22 @@
+case: spec-missing-driver
+workflow: /elicit-requirements
+rubric: spec-traceability
+input: draft_spec.md
+description: >
+  A short draft spec with three requirements where REQ-3 (closing-window order-to-trade
+  reporting) cites NO regulatory/business driver while REQ-1 and REQ-2 both cite MAR Article 12.
+  Critique mode. Tests that the critique flags REQ-3 as untraceable / missing its obligation -
+  and does NOT wrongly flag REQ-1 or REQ-2 (which do cite their driver) as missing one.
+
+planted:
+  - id: TRACE-1
+    keywords: [req-3, req 3, no driver, missing obligation, untraceable, no citation, no obligation, missing driver, order-to-trade, order to trade]
+    must_find: true
+
+forbidden:
+  - id: FP-1
+    keywords: ["req-1 has no driver", "req-2 has no driver", "req-1 is untraceable", "req-2 is untraceable", "marking-the-close has no obligation", "wash-trade has no driver", "wash trade has no driver", "req-1 missing driver", "req-2 missing driver"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

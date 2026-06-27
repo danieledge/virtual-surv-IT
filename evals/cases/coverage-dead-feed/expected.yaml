@@ -1,0 +1,28 @@
+case: coverage-dead-feed
+workflow: /assess-coverage
+rubric: coverage-assessment
+input: feeds.yaml
+description: >
+  A synthetic feed/scenario inventory with two seeded coverage gaps - a dead news
+  reference feed that silently blinds the insider-dealing scenario, and an in-scope
+  wash-trade typology with no scenario mapped - plus a false-positive trap (three
+  healthy live feeds). Tests that the assessment catches both gaps, reasons about feed
+  health, and does NOT flag a live feed as a gap.
+
+planted:
+  - id: GAP-DEAD-FEED
+    keywords: [news feed, inactive, not live, stale, dead feed, insider dealing scenario no alerts, news reference]
+    location: feeds.yaml:news_reference
+    must_find: true
+  - id: GAP-UNMAPPED-TYPOLOGY
+    keywords: [wash trade, wash trades, no scenario, not covered, uncovered typology, no detection]
+    location: feeds.yaml:TYP-WASH
+    must_find: true
+
+forbidden:
+  - id: FP-HEALTHY-FEED
+    keywords: [orders feed gap, executions feed gap, market data feed gap, healthy feed missing, live feed not captured]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true
