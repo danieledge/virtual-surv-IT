@@ -48,6 +48,18 @@ standards.
 ## Comms lexicon patterns
 -
 
+## Reporting & audit conventions
+- 2026-06-27 - **Two-snapshot reporting (as-found vs as-delivered) - don't retro-edit evidence.**
+  When a fix→re-review loop resolves findings, **preserve the as-found record** (the QA handover /
+  review report - the audit trail of *what was caught*) and record the **resolved** state in the
+  Delivery Report's findings disposition. Never rewrite the source evidence to "look passed".
+  Codified in `docs/templates/qa-handover.md` + `docs/templates/delivery-report.md`.
+- 2026-06-27 - **Two kinds of "open" - keep them distinct.** 🔴 *unresolved defects* (a real
+  problem; the verdict cannot be ✅) vs ⏭️ *deferred deploy-gates* (calibrate on real data,
+  scale-test, human sign-off) that are **correctly** open and out of scope for the current stage.
+  A report that honestly shows deploy-gates as open is *good*; one that hides them to look
+  "all green" is the failure. The verdict must match the disposition.
+
 ## Surveillance evidence base (DA/BA expansion)
 - 2026-06-25 - **Evidence state by area (three deep-research passes).**
   - ✅ **AML/TM tuning - VERIFIED**: ATL/BTL, risk-based segmentation, SR 11-7 model validation,

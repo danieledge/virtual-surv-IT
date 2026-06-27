@@ -3,6 +3,12 @@
 > Produced by `qa-engineer` (independent of the builder). Evidences what was tested, the
 > results, what is **not** covered, and what the QA team should note or re-verify. Authored
 > in `.md`, rendered to `.html`.
+>
+> ⏪ **This is the "as-found" record - do NOT retro-edit it once defects are fixed.** QA evidence is
+> an audit trail of *what was caught*; rewriting it to "look passed" destroys that. If a re-review
+> loop fixes the findings, **preserve this doc as-found** and record the **resolved** state in the
+> Delivery Report's findings disposition (the "after"). Tag the status line "(as-found)" and link
+> the Delivery Report for the current state.
 
 | | |
 |---|---|
