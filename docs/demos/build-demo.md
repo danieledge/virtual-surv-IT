@@ -1,8 +1,13 @@
 # 🏗️ Build demo
 
 *A real `/demo` transcript: Morgan builds a new detection from scratch, chaining specialists
-(orchestrator-workers). Output is a demo sketch - not committed to the live `rules/`. [Back to
-demos](README.md).*
+(orchestrator-workers). [Back to demos](README.md).*
+
+> 📂 **The actual documents produced are downloadable** in
+> [**`build-artifacts/`**](build-artifacts/): the full [scenario spec](build-artifacts/wash-trade-scenario-spec.md),
+> the [SME validation](build-artifacts/wash-trade-sme-validation.md), and Mateo's
+> [`wash_trade.py`](build-artifacts/wash_trade.py) + [`test_wash_trade.py`](build-artifacts/test_wash_trade.py).
+> Not summaries - the real deliverables.
 
 ---
 
@@ -23,7 +28,8 @@ demos](README.md).*
 > Why her, why sonnet: turning an obligation into a precise, testable spec is structured BA work that
 > gets re-checked downstream - it doesn't need opus.
 
-Amara produced a concise scenario spec (`SS-TS-001`). Highlights:
+Amara produced a concise scenario spec (`SS-TS-001`) -
+[**read the full document**](build-artifacts/wash-trade-scenario-spec.md). Highlights:
 - **Behaviour:** a party buys and sells the same instrument in offsetting trades attributable to the
   same beneficial owner, with no genuine change in economic exposure.
 - **Obligation:** **EU MAR Article 12(1)(a)** (false/misleading signals as to supply/demand/price);
@@ -47,7 +53,7 @@ Amara produced a concise scenario spec (`SS-TS-001`). Highlights:
 > Why her: the market-abuse expert who validates the *typology*. Read-only by design - she advises,
 > can't edit.
 
-Camila's advisory (genuine output, condensed):
+Camila's advisory ([**full document**](build-artifacts/wash-trade-sme-validation.md); condensed here):
 - **Typology sound?** Yes - beneficial-owner linkage is the right entry point, opposite-direction
   pairs in a window is the standard signature, MAR Art 12(1)(a) is correct and jurisdiction-portable.
 - **Top false-positive drivers:** (1) **legitimate two-way business between affiliated funds** under
@@ -69,7 +75,9 @@ Camila's advisory (genuine output, condensed):
 > Why him, why sonnet: he implements the validated spec into deterministic, tested logic; it's then
 > independently reviewed, so it doesn't need opus. He inherits Amara's spec **and** Camila's caveats.
 
-Mateo produced a real `detect_wash_trades()` sketch honouring every caveat - the core (abridged):
+Mateo produced a real `detect_wash_trades()` sketch + tests
+([**`wash_trade.py`**](build-artifacts/wash_trade.py) ·
+[**`test_wash_trade.py`**](build-artifacts/test_wash_trade.py)) honouring every caveat - core (abridged):
 
 ```python
 def detect_wash_trades(trades, params, ubo_link, exemptions) -> list[WashTradeAlert]:
@@ -105,6 +113,14 @@ false-positive guard** (same pair but competitive 0.5% price → must NOT alert)
 > **What happens next:** Mateo's code → **Ravi** (`code-reviewer`) for quality/security, **Layla**
 > (`compliance-reviewer`) to verify the obligation trace + gate the Definition of Done, and **Theo**
 > (`tuning-analyst`) to calibrate those placeholders with ATL/BTL. Nothing ships until that signs off.
+
+> 🎩 **And the review stage immediately earned its keep.** When I actually *ran* Mateo's test, the
+> true-positive **failed** - the original sketch checked UBO staleness against the wall clock
+> (`datetime.utcnow()`) while the fixtures used a fixed date, so once "today" drifted past the window
+> the real alert was silently dropped. **A non-deterministic time bug** - exactly what review/QA exists
+> to catch. The fix (inject the reference date, make it deterministic) is in the committed artifact,
+> and the test now passes. The chain is **not a rubber stamp**: code doesn't ship until it's run *and*
+> reviewed. (Details in [`build-artifacts/`](build-artifacts/).)
 
 ---
 
