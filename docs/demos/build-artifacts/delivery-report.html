@@ -56,13 +56,15 @@ core. Demo artifact: not production detection logic.</p>
 </tr>
 <tr>
 <td><strong>Verdict</strong></td>
-<td>✅ <strong>Demo-complete</strong> (fix→re-review loop closed; not for production until the DoD "deploy" gates close)</td>
+<td>✅ <strong>Demo-complete</strong> - every chain stage ran (build + code/QA/compliance review + tuning + performance); only <strong>human sign-off</strong> is outstanding. Not for production until re-calibrated on real data + the O(n²) fix.</td>
 </tr>
 </tbody>
 </table>
 <h2 id="1-what-was-produced-the-full-chain">1. What was produced (the full chain)</h2>
 <p>business-analyst (spec) → trade-surveillance-sme (validation) → rules-developer (code + tests) →
-<strong>code-reviewer + qa-engineer + compliance-reviewer</strong> (independent) → PM (this report, RTM, handover).</p>
+<strong>code-reviewer + qa-engineer + compliance-reviewer</strong> (independent) → <strong>tuning-analyst</strong> (measured
+calibration on synthetic data) + <strong>performance-reviewer</strong> (static, scalability) → PM (this report,
+RTM, handover). The only gate not closed is <strong>human sign-off</strong> (a demo can't produce one).</p>
 <h2 id="2-requirements-traceability-matrix-rtm">2. Requirements Traceability Matrix (RTM)</h2>
 <p>The audit golden thread - obligation → spec → code → test.</p>
 <table>
@@ -177,13 +179,13 @@ core. Demo artifact: not production detection logic.</p>
 <td>9</td>
 <td>O(n²) pairwise scan - unbenchmarked at volume</td>
 <td>qa/compliance</td>
-<td>⏭️ Deferred (performance review at productionisation)</td>
+<td>✅ Reviewed (<a href="performance-review.md">perf review</a>): won't scale; fix = group by instrument+window. 🔴 Open for productionisation.</td>
 </tr>
 <tr>
 <td>10</td>
-<td>Thresholds <em>flagged</em> but not yet <em>calibrated with rationale + date</em></td>
+<td>Thresholds <em>flagged</em> but not yet <em>calibrated</em></td>
 <td>compliance</td>
-<td>⏭️ Deferred (tuning-analyst, pre-deploy gate)</td>
+<td>✅ Calibrated (<a href="threshold-tuning-pack.md">tuning pack</a>): measured ATL/BTL on synthetic data → <code>price_tolerance_pct</code> 0.10-0.50%. Real labelled set still needed pre-deploy.</td>
 </tr>
 </tbody>
 </table>
@@ -230,8 +232,13 @@ missing-mid. Residual (deferred): real UBO-provider integration, volume performa
 </tr>
 <tr>
 <td>Performance-reviewed</td>
-<td>⏭️ Deferred</td>
-<td>O(n²) - required at productionisation, not for a demo</td>
+<td>✅ Met</td>
+<td><a href="performance-review.md">Perf review</a>: won't scale as-is (O(n²)); fix identified. 🔴 Open for production.</td>
+</tr>
+<tr>
+<td>Thresholds calibrated</td>
+<td>✅ Met (demo)</td>
+<td><a href="threshold-tuning-pack.md">Tuning pack</a>: measured ATL/BTL on synthetic → 0.10-0.50%. Real labelled set needed pre-deploy.</td>
 </tr>
 <tr>
 <td>Documented for handover</td>
@@ -249,9 +256,9 @@ missing-mid. Residual (deferred): real UBO-provider integration, volume performa
 <td>demo - no human gate; a real delivery stops here for sign-off</td>
 </tr>
 <tr>
-<td>Thresholds calibrated (deploy gate)</td>
+<td>Re-calibrate on real labelled data (deploy gate)</td>
 <td>⏭️ Deferred</td>
-<td>tuning-analyst, before any real use</td>
+<td>demo calibrated on synthetic; real labelled set needed before production</td>
 </tr>
 </tbody>
 </table>
@@ -319,16 +326,28 @@ deferred "deploy" gates (calibration, performance, human sign-off) close.</p>
 <td>~31,077</td>
 </tr>
 <tr>
+<td>Calibration</td>
+<td>tuning-analyst (Theo)</td>
+<td>sonnet</td>
+<td>~24,197</td>
+</tr>
+<tr>
+<td>Performance</td>
+<td>performance-reviewer (Thabo)</td>
+<td>sonnet</td>
+<td>~18,290</td>
+</tr>
+<tr>
 <td><strong>Total</strong></td>
-<td><strong>6 agents</strong></td>
+<td><strong>8 agents</strong></td>
 <td></td>
-<td><strong>~139,900</strong></td>
+<td><strong>~182,400</strong></td>
 </tr>
 </tbody>
 </table>
-<p>A full build-to-signed-off delivery cost <strong>~140k tokens</strong> - the price of the <em>complete</em> chain
-(build + 3 independent reviews). Right-sizing kept it to 6 agents, not 16; a lighter touch (spec +
-build + one review) would be roughly half.</p>
+<p>The full build-to-everything-but-sign-off delivery cost <strong>~182k tokens</strong> across 8 agents (build +
+3 reviews + tuning + performance). Right-sizing kept it to 8, not 16; a lighter touch (spec + build
++ one review) would be ~a third of this.</p>
 <h2 id="8-responsibility-notes">8. Responsibility notes</h2>
 <ul>
 <li><strong>Code execution:</strong> the tests were <em>run</em> (📊 measured) on this trusted demo repo with synthetic

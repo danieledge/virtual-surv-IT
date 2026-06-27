@@ -10,11 +10,13 @@
 | **Spec** | [SS-TS-001 Rev B](wash-trade-scenario-spec.md) |
 | **Obligation** | MAR Art. 12(1)(a) (+ UK MAR, SEC/FINRA, CFTC, SFA, SFO) |
 | **Date** | 2026-06-27 |
-| **Verdict** | ✅ **Demo-complete** (fix→re-review loop closed; not for production until the DoD "deploy" gates close) |
+| **Verdict** | ✅ **Demo-complete** - every chain stage ran (build + code/QA/compliance review + tuning + performance); only **human sign-off** is outstanding. Not for production until re-calibrated on real data + the O(n²) fix. |
 
 ## 1. What was produced (the full chain)
 business-analyst (spec) → trade-surveillance-sme (validation) → rules-developer (code + tests) →
-**code-reviewer + qa-engineer + compliance-reviewer** (independent) → PM (this report, RTM, handover).
+**code-reviewer + qa-engineer + compliance-reviewer** (independent) → **tuning-analyst** (measured
+calibration on synthetic data) + **performance-reviewer** (static, scalability) → PM (this report,
+RTM, handover). The only gate not closed is **human sign-off** (a demo can't produce one).
 
 ## 2. Requirements Traceability Matrix (RTM)
 The audit golden thread - obligation → spec → code → test.
@@ -41,8 +43,8 @@ Independent review found **real defects the build missed**; all routed back and 
 | 6 | `callable` is not a valid type hint | code-reviewer | ✅ Fixed (`Callable[...]`) |
 | 7 | Spec said "convergence"; code does "off-market" (divergence) | compliance-reviewer | ✅ Fixed (spec Rev B) |
 | 8 | Missing-`market_mid` silently drops pairs - no observability | qa-engineer | ⏭️ Deferred (add a metric/log before production) |
-| 9 | O(n²) pairwise scan - unbenchmarked at volume | qa/compliance | ⏭️ Deferred (performance review at productionisation) |
-| 10 | Thresholds *flagged* but not yet *calibrated with rationale + date* | compliance | ⏭️ Deferred (tuning-analyst, pre-deploy gate) |
+| 9 | O(n²) pairwise scan - unbenchmarked at volume | qa/compliance | ✅ Reviewed ([perf review](performance-review.md)): won't scale; fix = group by instrument+window. 🔴 Open for productionisation. |
+| 10 | Thresholds *flagged* but not yet *calibrated* | compliance | ✅ Calibrated ([tuning pack](threshold-tuning-pack.md)): measured ATL/BTL on synthetic data → `price_tolerance_pct` 0.10-0.50%. Real labelled set still needed pre-deploy. |
 
 **Re-review result:** dev tests 2/2 pass; QA suite **33/33 pass** (DEF-001 resolved).
 
@@ -60,11 +62,12 @@ missing-mid. Residual (deferred): real UBO-provider integration, volume performa
 | Independently QA'd | ✅ Met | `qa-engineer`, separate from builder; [handover](qa-handover.md) |
 | Code-reviewed (deep) | ✅ Met | code-reviewer; 6 findings fixed, 0 critical open |
 | Compliance-reviewed | ✅ Met | obligation trace holds; §5 clean; thresholds flagged |
-| Performance-reviewed | ⏭️ Deferred | O(n²) - required at productionisation, not for a demo |
+| Performance-reviewed | ✅ Met | [Perf review](performance-review.md): won't scale as-is (O(n²)); fix identified. 🔴 Open for production. |
+| Thresholds calibrated | ✅ Met (demo) | [Tuning pack](threshold-tuning-pack.md): measured ATL/BTL on synthetic → 0.10-0.50%. Real labelled set needed pre-deploy. |
 | Documented for handover | ✅ Met | §6 below |
 | Distributable (.md + .html) | ✅ Met | rendered to `.html` |
 | **Signed off (human)** | ⛔ **Pending** | demo - no human gate; a real delivery stops here for sign-off |
-| Thresholds calibrated (deploy gate) | ⏭️ Deferred | tuning-analyst, before any real use |
+| Re-calibrate on real labelled data (deploy gate) | ⏭️ Deferred | demo calibrated on synthetic; real labelled set needed before production |
 
 **Honest verdict:** complete and audit-ready *as a demo build*; **not deployable** until the three
 deferred "deploy" gates (calibration, performance, human sign-off) close.
@@ -92,11 +95,13 @@ Real `subagent_tokens` reported by the Agent tool. The full build + DoD delivery
 | Code review | code-reviewer (Ravi) | opus | ~23,199 |
 | QA | qa-engineer (Linh) | sonnet | ~32,924 |
 | Compliance | compliance-reviewer (Layla) | opus | ~31,077 |
-| **Total** | **6 agents** | | **~139,900** |
+| Calibration | tuning-analyst (Theo) | sonnet | ~24,197 |
+| Performance | performance-reviewer (Thabo) | sonnet | ~18,290 |
+| **Total** | **8 agents** | | **~182,400** |
 
-A full build-to-signed-off delivery cost **~140k tokens** - the price of the *complete* chain
-(build + 3 independent reviews). Right-sizing kept it to 6 agents, not 16; a lighter touch (spec +
-build + one review) would be roughly half.
+The full build-to-everything-but-sign-off delivery cost **~182k tokens** across 8 agents (build +
+3 reviews + tuning + performance). Right-sizing kept it to 8, not 16; a lighter touch (spec + build
++ one review) would be ~a third of this.
 
 ## 8. Responsibility notes
 - **Code execution:** the tests were *run* (📊 measured) on this trusted demo repo with synthetic

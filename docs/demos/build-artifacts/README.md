@@ -13,6 +13,9 @@ compile) - open / download them:
 | [`test_wash_trade.py`](test_wash_trade.py) | **Mateo** (`rules-developer`) | Developer pytest (true-positive + false-positive guard). |
 | [`test_wash_trade_qa.py`](test_wash_trade_qa.py) | **Linh** (`qa-engineer`) | The **independent** 33-test QA suite that *found* DEF-001. |
 | [`qa-handover.md`](qa-handover.md) | **Linh** (`qa-engineer`) | QA evidence: coverage, gaps, residual risk, the defect found. |
+| [`threshold-tuning-pack.md`](threshold-tuning-pack.md) | **Theo** (`tuning-analyst`) | Calibration - **measured** ATL/BTL on synthetic data (`price_tolerance_pct` 0.10-0.50%) + methodology. |
+| [`calibrate_wash_trade.py`](calibrate_wash_trade.py) | **Theo** (`tuning-analyst`) | Synthesises a *labelled* set and runs the measured calibration (run it: `python3 calibrate_wash_trade.py`). |
+| [`performance-review.md`](performance-review.md) | **Thabo** (`performance-reviewer`) | Static scalability review - won't scale as-is (O(n²)); the fix. |
 
 > **The fix→re-review loop is real:** independent review (code/QA/compliance) found 7 defects
 > (a buy-side false-negative, an off-by-one, a broken audit-trail field, more) - all **fixed** and
