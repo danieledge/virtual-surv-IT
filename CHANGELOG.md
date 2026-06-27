@@ -3,6 +3,15 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.6.1] - 2026-06-27
+
+### Added
+- **Committed demo transcripts** (`docs/demos/`) - real `/demo` runs rendered on GitHub so the team
+  can be *seen* without running anything: a [review](docs/demos/review-demo.md) (with the eval
+  PASS), the [data-safety guard hard-blocking a raw read live](docs/demos/data-safety-demo.md), and
+  a [build from scratch](docs/demos/build-demo.md) (business-analyst → SME → rules-developer). The
+  transcripts reproduce the actual console - 🎩 narration, commands + output, real agent findings.
+
 ## [0.6.0] - 2026-06-27
 
 ### Added

@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.6.0](https://img.shields.io/badge/version-0.6.0-blue)
+![Version 0.6.1](https://img.shields.io/badge/version-0.6.1-blue)
 ![Tests 36 passing](https://img.shields.io/badge/tests-36%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -20,11 +20,12 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.6.0
+> ## ✨ What's new in 0.6.1
 >
-> - **🎬 Guided demo** - `/demo` has Morgan run a full engagement **end-to-end on safe synthetic
->   data**, narrating every decision: which specialist, why that one, what model tier and why, and
->   the patterns at play. The fastest way to *see* the team work. New here? Start there.
+> - **🎬 Guided demo + readable transcripts** - `/demo` has Morgan run a full engagement
+>   **end-to-end on safe synthetic data**, narrating every decision (which specialist, why, what model
+>   tier, the patterns). Real transcripts are rendered on GitHub in [`docs/demos/`](docs/demos/) -
+>   read the team work *without running anything*. New here? Start there.
 > - **🔍 Honest data-masking validation** - `validate_masking` gains an **`--in <file>`** mode that
 >   scans **your actual masked output** for residual PII (not just a fixture), and the README claims
 >   were tightened to match what the code really does (a sceptical claims-vs-reality audit).
@@ -222,6 +223,11 @@ Then run `/help` - you should see `/engage`, `/deep-review`, `/audit-review`, �
 decision), or **`/meet-the-team`** for introductions; then `/engage` to start. (Also
 `pip install -r requirements-dev.txt` for the worked example, tests and the `.md→.html` render.)
 
+> 🎬 **Prefer to read it first?** Real demo transcripts are rendered right here on GitHub -
+> [**`docs/demos/`**](docs/demos/): a [review](docs/demos/review-demo.md), the
+> [data-safety guard blocking a read live](docs/demos/data-safety-demo.md), and a
+> [build from scratch](docs/demos/build-demo.md). No setup needed.
+
 > ⚠️ **Two gotchas that waste people's time:**
 > - **Claude can't install the plugin for you.** `/plugin …` is a command **you** type - if you
 >   ask the assistant to "install the plugin" it may *say* it did without anything happening.
@@ -399,6 +405,7 @@ tests/test_spoofing.py       # true-positive + false-positive cases (§4)
 docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
 docs/WAYS-OF-WORKING.md      # frameworks, workflows, artifact menu, traceability spine
 docs/team-operating-guide.md # the PM's detailed operating rules (read on-engage; keeps CLAUDE.md lean)
+docs/demos/                  # real /demo transcripts (review, data-safety, build) - readable on GitHub
 docs/agent-design.md         # how the team is built to agent best-practice + model-tiering rationale + conformance matrix
 docs/prepare-data-roadmap.md # path to make /prepare-data accept more data safely ("throw anything at it")
 docs/DEFINITION-OF-DONE.md   # the evidenced gate every delivery must meet
