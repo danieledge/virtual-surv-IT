@@ -26,6 +26,7 @@ Usage:
   python -m scripts.ingest --schema config/masking-schema.yaml \\
       --in data/raw/orders.jsonl --out data/masked/orders.jsonl
 """
+
 from __future__ import annotations
 
 import argparse
@@ -70,39 +71,30 @@ TOKEN_LEN = 12
 # ---------------------------------------------------------------------------
 _PII_PATTERNS = [
     # 1. Email address - most specific; consume before digit patterns.
-    ("EMAIL", re.compile(
-        r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
-    )),
+    ("EMAIL", re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")),
     # 2. IBAN - ISO 13616: CC + 2 check digits + up to 30 BBAN chars.
     #    Allow optional spaces/dashes (printed IBANs are often grouped).
-    ("IBAN", re.compile(
-        r"\b[A-Z]{2}\d{2}[\s\-]?(?:[A-Z0-9]{4}[\s\-]?){2,7}[A-Z0-9]{1,4}\b"
-    )),
+    ("IBAN", re.compile(r"\b[A-Z]{2}\d{2}[\s\-]?(?:[A-Z0-9]{4}[\s\-]?){2,7}[A-Z0-9]{1,4}\b")),
     # 3. Payment card - 13–19 digits, optionally grouped by spaces or dashes.
     #    Luhn validation is not done here (would require more logic); the regex
     #    catches the structural pattern only.
-    ("CARD", re.compile(
-        r"\b(?:\d[\s\-]?){13,18}\d\b"
-    )),
+    ("CARD", re.compile(r"\b(?:\d[\s\-]?){13,18}\d\b")),
     # 4. National ID - UK NI (AA999999A), US SSN (NNN-NN-NNNN / NNNNNNNNN).
-    ("NATIONAL_ID", re.compile(
-        r"\b(?:[A-Z]{2}\d{6}[A-D]|\d{3}[\-]\d{2}[\-]\d{4}|\d{9})\b"
-    )),
+    ("NATIONAL_ID", re.compile(r"\b(?:[A-Z]{2}\d{6}[A-D]|\d{3}[\-]\d{2}[\-]\d{4}|\d{9})\b")),
     # 5. Date of birth / date literals - placed BEFORE phone so YYYY-MM-DD is not
     #    consumed as a phone-number digit run (ordering matters; see overlap test).
     #    Matches common date formats (YYYY-MM-DD, DD/MM/YYYY, DD-MMM-YYYY).
-    ("DATE", re.compile(
-        r"\b(?:\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}|\d{1,2}[\s\-][A-Za-z]{3}[\s\-]\d{4})\b"
-    )),
+    (
+        "DATE",
+        re.compile(
+            r"\b(?:\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}|\d{1,2}[\s\-][A-Za-z]{3}[\s\-]\d{4})\b"
+        ),
+    ),
     # 6. Phone number - international (+CC) or long local (7–14 digits).
     #    Lookbehind/ahead excludes '/' and '-' so a phone run cannot start mid-date.
-    ("PHONE", re.compile(
-        r"(?<![\d/\-])\+?\d[\d \-]{7,}\d(?![\d/\-])"
-    )),
+    ("PHONE", re.compile(r"(?<![\d/\-])\+?\d[\d \-]{7,}\d(?![\d/\-])")),
     # 7. Account number - any unmatched run of 8+ digits (catch-all, must be last).
-    ("ACCT", re.compile(
-        r"(?<!\d)\d{8,}(?!\d)"
-    )),
+    ("ACCT", re.compile(r"(?<!\d)\d{8,}(?!\d)")),
 ]
 
 
@@ -185,8 +177,10 @@ def _redact_text(text, key: bytes):
         return text
     out = text
     for label, pat in _PII_PATTERNS:
+
         def repl(m, label=label):
             return f"[{label}_{_hmac_hex(key, f'{label}:{m.group(0)}')[:6]}]"
+
         out = pat.sub(repl, out)
     return out
 

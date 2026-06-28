@@ -34,6 +34,7 @@ Key handling:
     the gate is deterministic and reproducible across runs without real credentials.
     This constant MUST NOT be used with real data - it is a test fixture only.
 """
+
 from __future__ import annotations
 
 import json
@@ -64,9 +65,21 @@ PASSTHROUGH_ROLES = {"keep", "generalise"}
 # This heuristic list covers the most common naming patterns; it is deliberately
 # conservative (false positives here are a config-review prompt, not a data leak).
 _IDENTIFIER_NAME_HINTS = {
-    "trader", "trader_id", "account", "account_id", "account_number",
-    "order_id", "client_id", "customer_id", "user_id", "party_id",
-    "email", "phone", "national_id", "ssn", "dob",
+    "trader",
+    "trader_id",
+    "account",
+    "account_id",
+    "account_number",
+    "order_id",
+    "client_id",
+    "customer_id",
+    "user_id",
+    "party_id",
+    "email",
+    "phone",
+    "national_id",
+    "ssn",
+    "dob",
 }
 
 # Fixed deterministic test key used when MASKING_KEY is absent.
@@ -105,9 +118,7 @@ def _direct_identifier_fields(schema: dict) -> set[str]:
     """
     explicit = set(schema.get("direct_identifiers", []))
     heuristic = {
-        name
-        for name in schema.get("fields", {})
-        if name.lower() in _IDENTIFIER_NAME_HINTS
+        name for name in schema.get("fields", {}) if name.lower() in _IDENTIFIER_NAME_HINTS
     }
     return explicit | heuristic
 
@@ -131,7 +142,9 @@ def run_privacy_checks(original_records, schema, key):
             if rec.get(f) is not None and str(rec[f]) and str(rec[f]) in masked_text
         }
     )
-    checks.append(("no residual identifiers", not leaked, str(leaked[:5]) if leaked else "none survive"))
+    checks.append(
+        ("no residual identifiers", not leaked, str(leaked[:5]) if leaked else "none survive")
+    )
 
     # ------------------------------------------------------------------
     # 2. No residual free-text PII patterns - scan free-text-capable fields.
@@ -165,27 +178,29 @@ def run_privacy_checks(original_records, schema, key):
     pii_scan_fields = {
         name
         for name, spec in schema["fields"].items()
-        if spec["role"] in _FREE_TEXT_ROLES
-        or (spec["role"] == "keep" and name in direct_ids)
+        if spec["role"] in _FREE_TEXT_ROLES or (spec["role"] == "keep" and name in direct_ids)
     }
     pii_scan_text = " ".join(
-        str(r.get(f, ""))
-        for r in masked
-        for f in pii_scan_fields
-        if r.get(f) is not None
+        str(r.get(f, "")) for r in masked for f in pii_scan_fields if r.get(f) is not None
     )
     pii_hits = [label for label, pat in _PII_PATTERNS if pat.search(pii_scan_text)]
     scanned_count = len(pii_scan_fields)
     detail = (
         "no free-text-capable fields to scan"
         if not pii_scan_fields
-        else (str(pii_hits) if pii_hits else f"clean across {scanned_count} free-text-capable field(s)")
+        else (
+            str(pii_hits)
+            if pii_hits
+            else f"clean across {scanned_count} free-text-capable field(s)"
+        )
     )
-    checks.append((
-        "no residual PII patterns (free-text-capable fields)",
-        not pii_hits,
-        detail,
-    ))
+    checks.append(
+        (
+            "no residual PII patterns (free-text-capable fields)",
+            not pii_hits,
+            detail,
+        )
+    )
 
     # ------------------------------------------------------------------
     # 3. Direct-identifier passthrough assertion.
@@ -197,12 +212,15 @@ def run_privacy_checks(original_records, schema, key):
         for name, spec in schema["fields"].items()
         if name in direct_ids and spec["role"] in PASSTHROUGH_ROLES
     ]
-    checks.append((
-        "no direct-identifier passthrough",
-        not bad_passthrough,
-        str(bad_passthrough) if bad_passthrough
-        else f"all {len(direct_ids)} direct identifier(s) use a masking role",
-    ))
+    checks.append(
+        (
+            "no direct-identifier passthrough",
+            not bad_passthrough,
+            str(bad_passthrough)
+            if bad_passthrough
+            else f"all {len(direct_ids)} direct identifier(s) use a masking role",
+        )
+    )
 
     # ------------------------------------------------------------------
     # 4. k-anonymity over declared quasi-identifiers.
@@ -252,26 +270,26 @@ def scan_masked_file(path: str | Path, schema: dict) -> list:
     declared quasi-identifiers. It CANNOT verify 'no original identifier survived' or detection
     fidelity - those need the original data, which by design never reaches this tool.
     """
-    records = [
-        json.loads(line)
-        for line in Path(path).read_text().splitlines()
-        if line.strip()
-    ]
+    records = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
     checks = []
 
     # Residual free-text PII across all STRING fields of the real masked output.
     text = " ".join(v for r in records for v in r.values() if isinstance(v, str))
     hits = [label for label, pat in _PII_PATTERNS if pat.search(text)]
-    checks.append((
-        "no residual PII in masked file (string fields)",
-        not hits,
-        str(hits) if hits else f"clean across {len(records)} record(s)",
-    ))
+    checks.append(
+        (
+            "no residual PII in masked file (string fields)",
+            not hits,
+            str(hits) if hits else f"clean across {len(records)} record(s)",
+        )
+    )
 
     # k-anonymity over declared quasi-identifiers (skipped if none declared).
     qis = schema.get("quasi_identifiers", [])
     if not qis:
-        checks.append(("k-anonymity", True, "no quasi-identifiers declared - skipped (declare to enforce)"))
+        checks.append(
+            ("k-anonymity", True, "no quasi-identifiers declared - skipped (declare to enforce)")
+        )
     else:
         k = schema.get("k_anonymity", 1)
         groups = Counter(tuple(r.get(q) for q in qis) for r in records)
@@ -284,9 +302,16 @@ def scan_masked_file(path: str | Path, schema: dict) -> list:
 def main() -> None:
     import argparse
 
-    ap = argparse.ArgumentParser(description="Validate masking: config self-test, or scan a masked file.")
-    ap.add_argument("--in", dest="inp", type=Path, default=None,
-                    help="optional: scan YOUR masked .jsonl for residual PII + k-anonymity")
+    ap = argparse.ArgumentParser(
+        description="Validate masking: config self-test, or scan a masked file."
+    )
+    ap.add_argument(
+        "--in",
+        dest="inp",
+        type=Path,
+        default=None,
+        help="optional: scan YOUR masked .jsonl for residual PII + k-anonymity",
+    )
     ap.add_argument("--schema", type=Path, default=Path("config/masking-schema.yaml"))
     args = ap.parse_args()
 
@@ -294,9 +319,11 @@ def main() -> None:
 
     if args.inp is not None:
         # Inspect the user's actual masked output (data-independent checks).
-        print(f"[INFO] Scanning masked file {args.inp} (residual PII + k-anonymity). "
-              "Note: 'no original identifier survived' and detection fidelity need the originals "
-              "and are NOT checked in this mode.")
+        print(
+            f"[INFO] Scanning masked file {args.inp} (residual PII + k-anonymity). "
+            "Note: 'no original identifier survived' and detection fidelity need the originals "
+            "and are NOT checked in this mode."
+        )
         checks = scan_masked_file(args.inp, schema)
     else:
         # Config self-test on a synthetic fixture (regression/config gate; no user data).
@@ -307,8 +334,10 @@ def main() -> None:
         checks.append(
             ("detection fidelity (spoofing)", ok_fid, f"alerts real={n_real} masked={n_masked}")
         )
-        print("[INFO] Config self-test on a synthetic fixture (no user data inspected). "
-              "Use --in <file> to scan your actual masked output.")
+        print(
+            "[INFO] Config self-test on a synthetic fixture (no user data inspected). "
+            "Use --in <file> to scan your actual masked output."
+        )
 
     for name, ok, detail in checks:
         print(f"[{'PASS' if ok else 'FAIL'}] {name}: {detail}")

@@ -16,6 +16,7 @@ Design principles (CLAUDE.md §4):
 - Synthetic/governed data only (CLAUDE.md §5): this module never logs raw record
   contents beyond the identifiers needed for the audit trail.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -33,22 +34,22 @@ class Side(str, Enum):
 
 
 class EventKind(str, Enum):
-    NEW = "NEW"        # order placed on the book
+    NEW = "NEW"  # order placed on the book
     CANCEL = "CANCEL"  # order cancelled (remaining qty removed)
-    FILL = "FILL"      # a (partial) execution against an order
+    FILL = "FILL"  # a (partial) execution against an order
 
 
 @dataclass(frozen=True)
 class OrderEvent:
     """A single order-lifecycle event. Synthetic/masked data only."""
 
-    ts_ms: int            # event time, ms since session start
+    ts_ms: int  # event time, ms since session start
     trader: str
     instrument: str
     order_id: str
     side: Side
     price: float
-    qty: float            # order qty for NEW; executed qty for FILL; ignored for CANCEL
+    qty: float  # order qty for NEW; executed qty for FILL; ignored for CANCEL
     kind: EventKind
 
 

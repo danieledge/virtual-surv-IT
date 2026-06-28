@@ -5,8 +5,8 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.1](https://img.shields.io/badge/version-0.7.1-blue)
-![Tests 36 passing](https://img.shields.io/badge/tests-36%20passing-brightgreen)
+![Version 0.7.2](https://img.shields.io/badge/version-0.7.2-blue)
+![Tests 58 passing](https://img.shields.io/badge/tests-58%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
@@ -20,16 +20,28 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.7.1
+> ## ✨ What's new in 0.7.2
+>
+> - **🔒 Hardening & governance** - shipped the `LICENSE` the badge already claimed (MIT), added
+>   `CONTRIBUTING.md` and `SECURITY.md`, and CI now enforces what the repo declared: `ruff`
+>   (lint + format), `bandit`, `shellcheck`, plus a plugin-manifest validator that fails if any
+>   declared agent/skill stops resolving.
+> - **🧪 The safety hooks are now tested** - behavioural tests drive both guards (block / allow /
+>   consent-marker / env-override); the HTML renderer gains XSS-sanitiser tests and now **fails
+>   closed** if `bleach` is missing instead of emitting unsanitised HTML. Test count 36 → 58.
+>
+> <details><summary>What's new in 0.7.1 - audit-grade document set + upgraded renderer</summary>
 >
 > - **📄 Audit-grade document set** - all **38 deliverable templates** now carry a standard
 >   document-control header (id/version/revision-history/owner/status/classification/as-of) + sign-off
 >   block + shared evidence/severity legends, with depth fixes (SR 11-7 model validation, ATL/BTL
->   lexicon tuning, RTS 25 timestamps, alert-to-SAR MI). Plus **5 new templates** - decision-log,
+>   lexicon tuning, RTS 25 timestamps, alert-to-SAR MI). Plus **6 new templates** - decision-log,
 >   alert-investigation, SAR/STR referral, tuning-decision register, control-mapping, data-lineage.
 > - **🎨 Upgraded HTML renderer** - every rendered artifact gets real dark-mode, print/PDF page setup,
 >   WCAG-AA contrast, a letterhead, working `.md`→`.html` links, and the stray empty table-header bar
 >   removed - one change that lifts the whole document pack.
+>
+> </details>
 >
 > <details><summary>What's new in 0.7.0 - the downloadable build delivery + run comparison</summary>
 >
@@ -473,7 +485,7 @@ silently skipped. None of these are required to *use* the team; they sharpen `co
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **34 unit tests** check the *code*. The **eval harness** ([`evals/`](evals/)) checks the
+The repo's **58 unit tests** check the *code*. The **eval harness** ([`evals/`](evals/)) checks the
 **quality of what the team produces** - so a prompt change that silently weakens a review gets
 caught, not shipped. (This is the regression net Anthropic's multi-agent guidance recommends.)
 

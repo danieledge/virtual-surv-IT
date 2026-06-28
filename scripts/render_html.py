@@ -8,20 +8,21 @@ emailed or shared as a single file - the team always produces artifacts in both 
 
 Security note: artifacts may include content from untrusted sources (captured comms excerpts,
 third-party tool output).  The raw HTML produced by markdown() is sanitised via bleach before
-insertion into the page, and the page title is html.escape()d.  If bleach is unavailable the
-build degrades gracefully - body content is still rendered but a warning is printed.
+insertion into the page, and the page title is html.escape()d.  bleach is a pinned dependency
+(requirements-dev.txt); if it is unavailable the render **fails closed** (raises) rather than
+emitting unsanitised HTML - we never silently produce a potentially-XSS artifact.
 
 Usage:
   python -m scripts.render_html artifacts/BRD-spoofing.md
   python -m scripts.render_html artifacts/BRD-spoofing.md --out artifacts/BRD-spoofing.html
 """
+
 from __future__ import annotations
 
 import argparse
 import datetime as _dt
 import html
 import re
-import sys
 from pathlib import Path
 
 try:
@@ -32,6 +33,7 @@ except ImportError:  # pragma: no cover - import guard
 try:
     import bleach
     import bleach.linkifier  # confirm full package is present, not just a stub
+
     _BLEACH_AVAILABLE = True
 except Exception:  # pragma: no cover - optional dependency
     _BLEACH_AVAILABLE = False
@@ -41,26 +43,54 @@ except Exception:  # pragma: no cover - optional dependency
 # Derived from common Markdown output + the extensions used here (tables, code,
 # toc).  Inline event handlers (onclick, onerror, …) are intentionally absent.
 # ---------------------------------------------------------------------------
-_ALLOWED_TAGS = frozenset({
-    # Structure
-    "p", "br", "hr", "div", "span",
-    # Headings
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    # Lists
-    "ul", "ol", "li",
-    # Inline
-    "a", "strong", "em", "b", "i", "s", "del", "ins",
-    # Code
-    "code", "pre",
-    # Quotes
-    "blockquote",
-    # Tables (tables extension)
-    "table", "thead", "tbody", "tfoot", "tr", "th", "td",
-    # Images - allowed with restricted attributes; src is constrained to data: or relative
-    "img",
-    # TOC anchors
-    "sup", "sub",
-})
+_ALLOWED_TAGS = frozenset(
+    {
+        # Structure
+        "p",
+        "br",
+        "hr",
+        "div",
+        "span",
+        # Headings
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        # Lists
+        "ul",
+        "ol",
+        "li",
+        # Inline
+        "a",
+        "strong",
+        "em",
+        "b",
+        "i",
+        "s",
+        "del",
+        "ins",
+        # Code
+        "code",
+        "pre",
+        # Quotes
+        "blockquote",
+        # Tables (tables extension)
+        "table",
+        "thead",
+        "tbody",
+        "tfoot",
+        "tr",
+        "th",
+        "td",
+        # Images - allowed with restricted attributes; src is constrained to data: or relative
+        "img",
+        # TOC anchors
+        "sup",
+        "sub",
+    }
+)
 
 _ALLOWED_ATTRS: dict = {
     # Links: href + title only; javascript: is blocked by bleach's protocol filter
@@ -153,27 +183,25 @@ def _sanitise(raw_html: str) -> str:
     """
     Sanitise raw HTML produced by markdown() using bleach.
 
-    If bleach is not installed we degrade gracefully: output the raw HTML
-    but print a warning.  This avoids a hard build dependency on bleach while
-    still making the safe path the default when the package is present.
+    Fails closed: bleach is a pinned dependency, so if it is unavailable we raise
+    rather than emit unsanitised HTML.  Artifacts may carry untrusted content
+    (captured comms, third-party output); silently shipping raw HTML would be an
+    XSS exposure for a single-file artifact that gets emailed or shared.
     """
-    if _BLEACH_AVAILABLE:
-        return bleach.clean(
-            raw_html,
-            tags=_ALLOWED_TAGS,
-            attributes=_ALLOWED_ATTRS,
-            protocols=_ALLOWED_PROTOCOLS,
-            strip=True,          # remove (not escape) disallowed tags
-            strip_comments=True, # strip HTML comments which can hide payloads
+    if not _BLEACH_AVAILABLE:
+        raise RuntimeError(
+            "bleach is required to render HTML safely but is not installed. "
+            "Install it (pip install -r requirements-dev.txt). Refusing to emit "
+            "unsanitised HTML - see scripts/render_html.py for details."
         )
-    # Degraded path: bleach unavailable.
-    print(
-        "WARNING: bleach is not installed - HTML output is NOT sanitised. "
-        "Install bleach (pip install bleach) for safe output. "
-        "See scripts/render_html.py for details.",
-        file=sys.stderr,
+    return bleach.clean(
+        raw_html,
+        tags=_ALLOWED_TAGS,
+        attributes=_ALLOWED_ATTRS,
+        protocols=_ALLOWED_PROTOCOLS,
+        strip=True,  # remove (not escape) disallowed tags
+        strip_comments=True,  # strip HTML comments which can hide payloads
     )
-    return raw_html
 
 
 # An all-empty table header row (from a "| | |" metadata block) renders as an ugly grey bar.
@@ -184,11 +212,11 @@ _MD_LINK = re.compile(r'(<a\s+[^>]*href=")(?!https?:|mailto:|#)([^":]+?)\.md((?:
 
 def render(md_text: str, title: str, source: str = "", generated: str = "") -> str:
     if markdown is None:
-        raise RuntimeError("The 'Markdown' package is required: pip install -r requirements-dev.txt")
+        raise RuntimeError(
+            "The 'Markdown' package is required: pip install -r requirements-dev.txt"
+        )
 
-    raw_body = markdown.markdown(
-        md_text, extensions=["tables", "fenced_code", "toc", "sane_lists"]
-    )
+    raw_body = markdown.markdown(md_text, extensions=["tables", "fenced_code", "toc", "sane_lists"])
     # Sanitise rendered HTML body to prevent XSS if artifact content is
     # untrusted (e.g. captured comms snippets, third-party output).
     safe_body = _sanitise(raw_body)
@@ -225,7 +253,9 @@ def main() -> None:
     out = args.out or args.src.with_suffix(".html")
     generated = _dt.date.today().isoformat()
     out.write_text(
-        render(md_text, _title_from(md_text, args.src.stem), source=args.src.name, generated=generated)
+        render(
+            md_text, _title_from(md_text, args.src.stem), source=args.src.name, generated=generated
+        )
     )
     print(f"Rendered {args.src} -> {out}")
 

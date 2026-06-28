@@ -3,6 +3,7 @@
 Verifies the deterministic matching/scoring logic so the regression backbone is itself
 trustworthy - independent of ever running the team.
 """
+
 from scripts.eval_score import score
 
 
@@ -10,8 +11,13 @@ def _expected(**over):
     base = {
         "case": "demo",
         "planted": [
-            {"id": "SEC-1", "keywords": ["hardcoded secret", "credential"],
-             "location": "config.py:12", "min_severity": "critical", "must_find": True},
+            {
+                "id": "SEC-1",
+                "keywords": ["hardcoded secret", "credential"],
+                "location": "config.py:12",
+                "min_severity": "critical",
+                "must_find": True,
+            },
             {"id": "PERF-1", "keywords": ["o(n^2)", "nested loop"], "must_find": False},
         ],
         "forbidden": [
@@ -25,7 +31,12 @@ def _expected(**over):
 
 def test_perfect_run_passes():
     findings = [
-        {"severity": "critical", "location": "config.py:12", "title": "Hardcoded secret in config", "kind": "security"},
+        {
+            "severity": "critical",
+            "location": "config.py:12",
+            "title": "Hardcoded secret in config",
+            "kind": "security",
+        },
         {"severity": "medium", "title": "O(n^2) nested loop over orders", "kind": "performance"},
     ]
     r = score(_expected(), findings)
@@ -45,7 +56,14 @@ def test_missing_must_find_critical_fails():
 
 def test_severity_floor_enforced():
     # The secret is flagged, but only as 'style' - below the required 'critical' floor.
-    findings = [{"severity": "style", "location": "config.py:12", "title": "hardcoded secret", "kind": "security"}]
+    findings = [
+        {
+            "severity": "style",
+            "location": "config.py:12",
+            "title": "hardcoded secret",
+            "kind": "security",
+        }
+    ]
     r = score(_expected(), findings)
     assert "SEC-1" in r["must_find_missed"]
     assert r["passed"] is False
@@ -53,7 +71,12 @@ def test_severity_floor_enforced():
 
 def test_false_positive_trap_fails_the_run():
     findings = [
-        {"severity": "critical", "location": "config.py:12", "title": "hardcoded credential", "kind": "security"},
+        {
+            "severity": "critical",
+            "location": "config.py:12",
+            "title": "hardcoded credential",
+            "kind": "security",
+        },
         {"severity": "warning", "title": "the documented threshold looks wrong", "kind": "logic"},
     ]
     r = score(_expected(), findings)
@@ -63,21 +86,37 @@ def test_false_positive_trap_fails_the_run():
 
 def test_location_match_within_line_tolerance():
     # planted at :12, finding reports :14 -> within +/-3 tolerance, still a match.
-    findings = [{"severity": "critical", "location": "config.py:14", "title": "secret leaked", "kind": "security"}]
+    findings = [
+        {
+            "severity": "critical",
+            "location": "config.py:14",
+            "title": "secret leaked",
+            "kind": "security",
+        }
+    ]
     r = score(_expected(), findings)
     # keyword 'hardcoded secret'/'credential' not present, but the location matches.
     assert "SEC-1" in r["planted_found"]
 
 
 def test_keyword_match_without_location():
-    findings = [{"severity": "critical", "title": "found a hardcoded secret value", "kind": "security"}]
+    findings = [
+        {"severity": "critical", "title": "found a hardcoded secret value", "kind": "security"}
+    ]
     r = score(_expected(), findings)
     assert "SEC-1" in r["planted_found"]
 
 
 def test_non_must_find_miss_still_passes():
     # Only the must-find critical is found; the optional PERF-1 is missed -> still passes.
-    findings = [{"severity": "critical", "location": "config.py:12", "title": "hardcoded credential", "kind": "security"}]
+    findings = [
+        {
+            "severity": "critical",
+            "location": "config.py:12",
+            "title": "hardcoded credential",
+            "kind": "security",
+        }
+    ]
     r = score(_expected(), findings)
     assert r["passed"] is True
     assert "PERF-1" in r["planted_missed"]

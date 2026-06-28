@@ -2,6 +2,7 @@
 Tests for the MAR spoofing detection rule (CLAUDE.md §4: known true-positive and
 false-positive cases are mandatory). All fixtures are synthetic (§5).
 """
+
 from __future__ import annotations
 
 from rules.spoofing import (
