@@ -4,10 +4,17 @@
 > **[IT team]** (contacts, alert thresholds, escalation, schedules) are for your team to set
 > against your tooling and standards. Authored in `.md`, rendered to `.html`.
 
+> **Document control** · ID `RUN-001` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+
 | | |
 |---|---|
-| **Service / component** | <…> |
-| **Version** | <…> |
+| **Service / component** | <...> |
+| **Version** | <...> |
 | **Owner (team)** | [IT team] |
 | **Date** | <YYYY-MM-DD> |
 
@@ -45,4 +52,24 @@ Inputs/outputs, classification, and where masking/synthetic data applies (CLAUDE
 | Compliance contact | | |
 
 ## 9. Backup / recovery & DR
-[IT team] - recovery objectives and procedures per your standards.
+[IT team] - complete against your standards and DR policy.
+
+| Field | Value |
+|---|---|
+| **RTO (Recovery Time Objective)** | [IT team - maximum tolerable downtime before service must be restored] |
+| **RPO (Recovery Point Objective)** | [IT team - maximum tolerable data loss; e.g. last good batch, last committed offset] |
+| **Backup frequency / method** | [IT team] |
+| **Recovery procedure** | [IT team - step-by-step restore; link runbook if separate] |
+| **DR test cadence** | [IT team] |
+| **Last DR test date / result** | [IT team] |
+
+> Note for surveillance: an RTO or RPO breach may itself constitute a compliance event (gap in
+> surveillance coverage). Ensure your DR targets are agreed with the compliance function and
+> recorded in your surveillance-coverage assurance framework.
+
+## Sign-off
+| Role | Name | Decision | Date |
+|------|------|----------|------|
+| Author / owner | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |

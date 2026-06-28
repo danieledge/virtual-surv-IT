@@ -3,6 +3,13 @@
 > Audit-trail document for a deployed (or candidate) detection. Mirrors
 > `docs/scenarios/spoofing.md`. Every detection must have one.
 
+> **Document control** · ID `SCN-DOC-001` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+
 | | |
 |---|---|
 | **Domain** | <transaction monitoring / trade surveillance / comms surveillance> |
@@ -27,15 +34,31 @@ Summary of the rule/model. Link to the implementation function.
 |---|---|---|---|
 | | | | |
 
-## 5. Test coverage
-| Case | Fixture | Expectation |
-|---|---|---|
-| | | |
+## 5. Data lineage
+Document the path from source feed through to the fields consumed by the detection logic.
+Any transformation (aggregation, join, normalisation) must be named. Gaps here are undetected
+abuse risk - flag any feed not yet reconciled.
 
-## 6. Limitations & open items
+| Feed / source | Field(s) consumed | Transformation | Produces | Owner |
+|---------------|-------------------|----------------|----------|-------|
+| <e.g. OMS feed> | <order_id, qty, price> | <deduplicate + aggregate> | <order_book snapshot> | <platform-engineer> |
+
+## 6. Test coverage
+| Case | Fixture | Expectation | Result (P/F) |
+|---|---|---|---|
+| | | | |
+
+## 7. Limitations & open items
 Known gaps and candidate enhancements.
 
-## 7. Review trail
+## 8. Review trail
 - [ ] SME reviewed detection logic
 - [ ] `compliance-reviewer` confirmed auditability, thresholds, no secrets/PII, tests
 - Tuning history: <date - change - rationale>
+
+## Sign-off
+| Role | Name | Decision | Date |
+|------|------|----------|------|
+| Author / owner | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |

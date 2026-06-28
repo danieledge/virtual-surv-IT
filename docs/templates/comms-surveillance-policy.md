@@ -6,6 +6,13 @@
 > rendered to `.html`. Policy/coverage document - channel-capture engineering is built by
 > `platform-engineer`.
 
+> **Document control** · ID `COMMS-001` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+
 | | |
 |---|---|
 | **Scope** | <desk / business line> |
@@ -45,7 +52,7 @@ The biggest comms blind spot: business conducted on **unapproved channels** (per
 SMS/iMessage/Signal, personal email) that are never captured. State the prohibition, attestation
 regime, detection/leakage controls, monitoring of approved-channel usage, and disciplinary path.
 
-> **Why this is the headline risk** *(verified - SEC & CFTC primary sources)*: the 2022–2024
+> **Why this is the headline risk** *(verified - SEC & CFTC primary sources)*: the 2022-2024
 > off-channel sweep penalised **failure to preserve and supervise** business comms on personal
 > devices, not trading misconduct - SEC actions in **Sep 2022 (16 firms, >$1.1bn)**, **Aug 2023
 > (11 firms, $289m)** and **Sep 2023 (10 firms, $79m)**, plus the **CFTC Aug 2023 (4 firms,
@@ -53,16 +60,58 @@ regime, detection/leakage controls, monitoring of approved-channel usage, and di
 > expectation: capture business comms **regardless of channel/device**, or credibly prohibit and
 > monitor for leakage - backed by attestations and discipline.
 
-## 5. Coverage assessment
+## 5. Voice capture
+Voice (telephone / recorded lines / soft-phone / turret) is frequently the highest-risk channel
+and the one most likely to have gaps. Complete this sub-section separately.
+
+| Item | Detail |
+|---|---|
+| Voice channels in scope | <direct lines / turrets / soft-phone / mobile recording / video calls> |
+| Capture system / platform | <e.g. NICE Engage / Verint / Theta Lake> |
+| Coverage confirmed? | <yes / partial / no - state which lines/devices> |
+| Transcription / STR applied? | <yes / no; if yes, confidence threshold and model ref> |
+| Retention period | <years; immutability mode (WORM / audit trail)> |
+| JML SLA for voice | <hours from joiner/mover/leaver event to capture active/deactivated> |
+| Known gaps | <...> |
+| Route to fix | <platform-engineer / data-quality-reviewer> |
+
+## 5a. Lexicon performance tracking
+For each lexicon/model applied across channels, track precision and recall so drift is visible.
+This feeds `tuning-analyst` for lexicon calibration.
+
+| Lexicon / model | Channel | Review period | Hits | True positives | False positives | Precision | Recall proxy | Trend | Action |
+|---|---|---|---|---|---|---|---|---|---|
+| <lexicon name> | email | <period> | <n> | <n> | <n> | <TP/(TP+FP)> | <if labelled set exists> | <stable/rising/falling> | <...> |
+| <lexicon name> | voice | <period> | <n> | <n> | <n> | <...> | <...> | <...> | <...> |
+
+## 6. Coverage assessment
 Confirm **every in-scope channel for every in-scope person is actually captured** - an
 un-onboarded channel or starter/leaver gap is undetected-comms exposure (the data-gap lesson,
 FCA Market Watch 79).
+
+**JML (joiner/mover/leaver) onboarding-to-capture SLA:** state the maximum permitted time between
+a JML event (HR system / provisioning) and surveillance capture being active or deactivated.
+Breaches are a coverage gap and must be logged and remediated. Typical expectation: <=1 business
+day for joiners and leavers on regulated desks.
+
+| JML event | SLA (hours) | Monitoring method | Owner | Breach escalation |
+|---|---|---|---|---|
+| Joiner - regulated role | <e.g. 4 hours> | <HR feed vs capture platform reconciliation> | <platform-engineer> | <...> |
+| Mover - change of role/desk | <e.g. 1 business day> | <...> | <...> | <...> |
+| Leaver - access removal | <e.g. same day> | <...> | <...> | <...> |
 
 | In-scope channel | Capture confirmed? | Population coverage (joiners/movers/leavers) | Gap / exposure | Route to |
 |---|---|---|---|---|
 
 Capture/onboarding gaps → `platform-engineer`; population/data gaps → `data-quality-reviewer`.
 
-## 6. Review cadence & next steps
+## 7. Review cadence & next steps
 Owner, review frequency, out-of-cycle triggers (new channel, new joiners, reg change), and the
 prioritised actions to close any gaps - with a recommendation. Never end at the gap list.
+
+## Sign-off
+| Role | Name | Decision | Date |
+|------|------|----------|------|
+| Author / owner | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |

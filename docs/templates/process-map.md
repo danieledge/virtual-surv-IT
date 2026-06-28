@@ -4,12 +4,16 @@
 > actors, decisions, controls and hand-offs for a surveillance process. Authored in `.md`,
 > rendered to `.html`. Synthetic illustrations only - no real data (§5).
 
+> **Document control** · ID `PROC-001` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+
 | | |
 |---|---|
-| **Document ID** | PRC-<slug> |
 | **Process owner** | <role> |
-| **Author / owner** | business-analyst / <user> |
-| **Version / date** | 0.1 / <YYYY-MM-DD> |
 | **Trigger** | <event that starts the process> |
 | **Outcome** | <what "done" looks like> |
 
@@ -26,16 +30,26 @@ e.g. alert triage feeding SAR/STR decisioning).
 | 4 | MLRO / Compliance | decision & regulatory filing |
 
 ## 3. Current-state (as-is) steps
-| # | Step | Lane | Input → Output | Pain point / risk |
+| # | Step | Lane | Input - Output | Pain point / risk |
 |---|------|------|----------------|-------------------|
 | 1 | <step> | <lane> | … | <manual / gap / delay> |
 
-## 4. Target-state (to-be) steps
-| # | Step | Lane | Input → Output | Change vs as-is |
+## 4. Current-state (as-is) diagram (Mermaid)
+Replace placeholder nodes with the real as-is flow. Annotate manual steps and pain points.
+```mermaid
+flowchart TD
+    A([Trigger: <event>]) --> B[<manual / legacy step>]
+    B --> C{<decision or pain point>}
+    C -- <path> --> D[<next step>]
+    C -- <path> --> E[/<exception or gap>/]
+```
+
+## 5. Target-state (to-be) steps
+| # | Step | Lane | Input - Output | Change vs as-is |
 |---|------|------|----------------|-----------------|
 | 1 | <step> | <lane> | … | <automated / new control> |
 
-## 5. Target-state diagram (Mermaid)
+## 6. Target-state diagram (Mermaid)
 Replace the placeholder nodes with the real flow; keep decisions as diamonds and controls
 annotated.
 ```mermaid
@@ -49,33 +63,52 @@ flowchart TD
     E -- Yes --> F[Analyst triage]
     F --> G{Escalate?}
     G -- No --> H[Close with rationale]
-    G -- Yes --> I[MLRO review → SAR/STR decision]
+    G -- Yes --> I[MLRO review - SAR/STR decision]
     I --> Z
 ```
 
-## 6. Decision points
+## 7. Decision points
 | ID | Decision | Criteria | Outcomes |
 |----|----------|----------|----------|
 | D1 | Data complete? | reconciliation pass | proceed / exception |
 | D2 | Escalate alert? | typology + materiality | close / escalate |
 
-## 7. Exceptions & error paths
+## 8. Exceptions & error paths
 | Exception | Detected at | Handling | Owner |
 |-----------|-------------|----------|-------|
 | Missing feed | ingestion | block + alert ops | IT team |
 | Late data | batch window | reprocess | platform-engineer |
 
-## 8. Controls in the flow
+## 9. Controls in the flow
 | Control | Step | Type (preventive/detective) | Obligation (§2) |
 |---------|------|-----------------------------|-----------------|
 | Reconciliation check | step 1 | detective | FCA SYSC record-keeping |
 | Alert audit trail | triage | detective | MAR / SR 11-7 |
 
-## 9. Hand-offs
-| From → To | What is handed over | SLA / trigger |
+## 10. KPIs & SLAs
+Measurable performance targets for the process. Agree baselines and review cadence with the
+process owner.
+
+| KPI / SLA | Target | Measurement method | Review cadence |
+|-----------|--------|--------------------|----------------|
+| Alert triage SLA | <e.g. analyst completes triage within 2 business days of alert raise> | case-management system timestamp | Monthly MI |
+| SAR / STR filing window | <e.g. filed within 3 business days of escalation decision> | filing system timestamp vs. escalation date | Monthly MI + regulatory requirement |
+| False-positive rate | <e.g. < 20 % of alerts escalated> | closed-no-action / total alerts | Monthly tuning review |
+| Feed completeness | <e.g. 100 % of expected records received within batch window> | reconciliation report | Daily |
+| Detection latency | <e.g. alert raised within 15 min of triggering event> | end-to-end timing | Weekly |
+
+## 11. Hand-offs
+| From - To | What is handed over | SLA / trigger |
 |-----------|---------------------|---------------|
-| Detection → Analyst | alert + evidence | on raise |
-| Analyst → MLRO | escalation pack | on escalate |
+| Detection - Analyst | alert + evidence | on raise |
+| Analyst - MLRO | escalation pack | on escalate |
 
 > Traceability: process steps and controls map to FSD functional requirements and RTM rows;
 > data-quality exceptions feed the data requirements in the elicitation doc.
+
+## Sign-off
+| Role | Name | Decision | Date |
+|------|------|----------|------|
+| Author / owner | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |
