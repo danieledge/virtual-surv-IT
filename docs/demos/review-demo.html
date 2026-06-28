@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🔍 Review demo</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
+<h1 id="review-demo">🔍 Review demo</h1>
+<p><em>A real <code>/demo</code> transcript: Morgan reviews a small synthetic Python file end-to-end, narrating every
+decision. <a href="README.html">Back to demos</a>.</em></p>
+<blockquote>
+<p>📖 <strong>Reading key:</strong> blockquotes that begin with <strong>🎩</strong> are <strong>Morgan, the AI PM, speaking live in
+the session</strong> (his words, generated at the moment - not the repo author's). Plain text is editorial
+framing; <code>```</code> blocks are real commands/output and verbatim agent findings.
+<a href="README.html#how-to-read-a-transcript-whos-speaking">Full key</a>.</p>
+</blockquote>
+<hr>
+<blockquote>
+<p>🎩 <strong>Review demo it is.</strong> I'll review a small synthetic Python file end-to-end. Let me walk you
+through the intake first, exactly as a real engagement runs - except <strong>I'll answer the questions
+myself and tell you why.</strong></p>
+<p><strong>The two safety gates (I answer these; on a real job, <em>you</em> would):</strong>
+- ⚠️ <strong>Execution?</strong> → <strong>No - static only.</strong> This is a quick read-plus-analysers review; I don't
+  need to <em>run</em> the code, and static-by-default is the safe choice.
+- 🛡️ <strong>Data?</strong> → <strong>Synthetic, no real data.</strong> The file is a synthetic eval fixture.</p>
+<p><strong>Now I right-size - out loud, because that's the whole point of cost discipline:</strong> this is <strong>one
+small file</strong> → I'll keep it to <strong>just Ravi (<code>code-reviewer</code>)</strong> - 1 agent, not 16. <strong>Ravi runs on
+opus</strong> <em>because</em> cross-language security judgement is exactly the subtle, high-blast-radius call
+that earns the top tier.</p>
+</blockquote>
+<h3 id="ravi-code-reviewer-opus-reviews-the-file">→ Ravi (<code>code-reviewer</code>, opus) reviews the file</h3>
+<pre><code>Findings
+🔴 Critical - Hardcoded credential - input_alert_export.py:9 - 🧠 inferred (gitleaks ran but did
+   not flag; reasoned by reading). CWE-798. DB_PASSWORD = &quot;s3cr3t-...&quot; is a plaintext secret.
+   Fix: read from os.environ[&quot;DB_PASSWORD&quot;]; never hardcode.
+🔴 Critical - SQL injection - input_alert_export.py:19 - 🧠 inferred. CWE-89. trader_name is
+   string-concatenated into the query.
+   Fix: cur.execute(&quot;SELECT * FROM alerts WHERE trader = ?&quot;, (trader_name,))  # parameterised
+🟠 Warning - Resource leak - input_alert_export.py:32-35 - 🧠 inferred. open_db returns a cursor
+   but the connection is never closed.
+🟡 Medium - O(n^2) dedupe - input_alert_export.py:23-29 - 🧠 inferred. `a not in unique` is a
+   linear scan in a loop. Fix: track membership with a set().
+🔵 Style - missing docstrings - input_alert_export.py:16,23,32,38 - 🧠 inferred. Non-blocking.
+
+Deliberately NOT flagged
+- LARGE_ORDER_MULTIPLE = 5.0 (line 13): correctly documented threshold with rationale + tuning
+  date per CLAUDE.md §4 - this is the planted FP-trap; flagging it would be a false positive.
+
+Tooling coverage: ruff/bandit/mypy/semgrep MISSING; gitleaks ran (no leaks reported - note the
+hardcoded password evaded its ruleset). All findings therefore 🧠 inferred from reading.
+</code></pre>
+<blockquote>
+<p>🎩 <strong>Ravi's back</strong> - and notice he did exactly what good looks like: found the issues <strong>and</strong>
+correctly <em>left the documented threshold alone</em> (no false alarm). That's the <strong>blackboard</strong> in
+action - his findings are structured data I can now work with, not chatter.</p>
+<p><strong>Now my challenge pass - I'm a sceptic, not a relay.</strong> I independently re-score: both Criticals
+verified by reading; the Warning and Medium are genuine. <strong>The honest bit:</strong> Ravi tagged everything
+<strong>🧠 inferred, not 📊 measured</strong>, <em>because the Python analysers aren't installed here</em> - only
+gitleaks ran, and it <strong>didn't flag the password</strong>. So I will <strong>not</strong> let these reach you dressed up
+as tool-verified facts.</p>
+</blockquote>
+<p><strong>Scoreboard:</strong></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Finding</th>
+<th>Basis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>🔴</td>
+<td>Hardcoded credential (<code>:9</code>)</td>
+<td>🧠 inferred</td>
+</tr>
+<tr>
+<td>🔴</td>
+<td>SQL injection (<code>:19</code>)</td>
+<td>🧠 inferred</td>
+</tr>
+<tr>
+<td>🟠</td>
+<td>Connection leak (<code>:32-35</code>)</td>
+<td>🧠 inferred</td>
+</tr>
+<tr>
+<td>🟡</td>
+<td>O(n²) dedupe (<code>:23-29</code>)</td>
+<td>🧠 inferred</td>
+</tr>
+<tr>
+<td>🔵</td>
+<td>Missing docstrings</td>
+<td>🧠 inferred</td>
+</tr>
+<tr>
+<td>✅</td>
+<td>Documented threshold - <em>correctly NOT flagged</em></td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>🎩 Now the flagship part - <strong>did the team actually do a good job? Let me prove it, not assert it.</strong>
+This file is one of our eval golden cases, so I can score Ravi's review against the known ground
+truth - the <strong>regression net</strong> live:</p>
+</blockquote>
+<pre><code class="language-console">$ python3 -m scripts.eval_score --expected evals/cases/review-seeded-bugs-py/expected.yaml --findings review.json
+VERDICT: PASS ✅
+recall = 1.0 (found all planted issues)
+must-find criticals missed: none
+false-positive traps triggered: none
+</code></pre>
+<blockquote>
+<p>🎩 <strong>And there's the proof - VERDICT: PASS, recall 1.0, zero false alarms.</strong> The eval harness
+independently confirmed Ravi caught <em>every</em> planted issue and didn't trip the documented-threshold
+trap. If a future prompt tweak quietly weakened that review, this score would drop and we'd catch it.</p>
+</blockquote>
+<hr>
+<h2 id="what-this-demo-showed">What this demo showed</h2>
+<ul>
+<li><strong>Right-sizing</strong> - one small file → <strong>1 agent, not 16.</strong> The count is stated out loud before spawning.</li>
+<li><strong>Model tiering</strong> - Ravi on <strong>opus</strong> for security judgement; on a bigger job Pip would do the
+  mechanical scoring on <strong>haiku</strong> for pennies.</li>
+<li><strong>The blackboard</strong> - structured findings flow forward; no agent-to-agent chatter.</li>
+<li><strong>Challenge pass</strong> - the PM re-scores as a sceptic and keeps the evidence basis honest (🧠 inferred,
+  not 📊 measured - no overselling).</li>
+<li><strong>The self-test</strong> - the result is <em>proven</em> with a real eval score, not just claimed.</li>
+</ul>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: review-demo.md &middot; 2026-06-28</div>
+</body>
+</html>

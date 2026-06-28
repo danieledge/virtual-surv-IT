@@ -4,31 +4,58 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🏗️ Build-demo artifacts - the actual documents produced (Run 2, canonical)</title>
-<style>:root { color-scheme: light dark; }
-body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  line-height: 1.55; max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem;
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
 h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
 h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
 h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
-code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em; }
-pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
 pre code { background: none; padding: 0; }
 table { border-collapse: collapse; width: 100%; margin: 1em 0; }
 th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
 th { background: #f6f8fa; }
-blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #57606a; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
 a { color: #0969da; }
 .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
-  color: #8a8a8a; font-size: .8rem; }
-@media print { body { max-width: none; } a { color: inherit; } }</style>
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
 </head>
 <body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
 <h1 id="build-demo-artifacts-the-actual-documents-produced-run-2-canonical">🏗️ Build-demo artifacts - the actual documents produced (Run 2, canonical)</h1>
-<p>The <strong>real deliverables</strong> the team produced in the <a href="../build-demo.md">build demo</a> - a <em>complete</em>
+<p>The <strong>real deliverables</strong> the team produced in the <a href="../build-demo.html">build demo</a> - a <em>complete</em>
 build stage (build core + 3 independent reviews + tuning + performance + the delivery compile). This
 is <strong>Run 2</strong>, the canonical run; for how it compares to Run 1 see the
-<a href="../build-run-comparison.md">run comparison</a>. Open / download:</p>
+<a href="../build-run-comparison.html">run comparison</a>. Open / download:</p>
 <table>
 <thead>
 <tr>
@@ -39,17 +66,17 @@ is <strong>Run 2</strong>, the canonical run; for how it compares to Run 1 see t
 </thead>
 <tbody>
 <tr>
-<td>📄 <a href="delivery-report.md"><code>delivery-report.md</code></a></td>
+<td>📄 <a href="delivery-report.html"><code>delivery-report.md</code></a></td>
 <td><strong>Morgan</strong> (PM)</td>
 <td><strong>Start here.</strong> Consolidated: RTM, review dispositions, DoD, handover, token+runtime+cost.</td>
 </tr>
 <tr>
-<td><a href="ts001-scenario-spec.md"><code>ts001-scenario-spec.md</code></a></td>
+<td><a href="ts001-scenario-spec.html"><code>ts001-scenario-spec.md</code></a></td>
 <td><strong>Amara</strong> (<code>business-analyst</code>)</td>
 <td>The scenario spec (TS-001) + the §9 open-questions decision log.</td>
 </tr>
 <tr>
-<td><a href="ts001-sme-validation.md"><code>ts001-sme-validation.md</code></a></td>
+<td><a href="ts001-sme-validation.html"><code>ts001-sme-validation.md</code></a></td>
 <td><strong>Camila</strong> (<code>trade-surveillance-sme</code>)</td>
 <td>Typology validation: FP drivers, the UBO-graph pitfall, the question dispositions.</td>
 </tr>
@@ -69,17 +96,17 @@ is <strong>Run 2</strong>, the canonical run; for how it compares to Run 1 see t
 <td>The independent QA suite (boundaries, exemptions, missing-snapshot observability…).</td>
 </tr>
 <tr>
-<td><a href="qa-handover.md"><code>qa-handover.md</code></a></td>
+<td><a href="qa-handover.html"><code>qa-handover.md</code></a></td>
 <td><strong>Linh</strong> (<code>qa-engineer</code>)</td>
 <td>QA evidence (⏪ as-found): coverage, gaps, the defects caught.</td>
 </tr>
 <tr>
-<td><a href="threshold-tuning-pack.md"><code>threshold-tuning-pack.md</code></a></td>
+<td><a href="threshold-tuning-pack.html"><code>threshold-tuning-pack.md</code></a></td>
 <td><strong>Theo</strong> (<code>tuning-analyst</code>)</td>
 <td>Calibration method + illustrative values (spread-normalised; <code>min_notional</code> required).</td>
 </tr>
 <tr>
-<td><a href="performance-review.md"><code>performance-review.md</code></a></td>
+<td><a href="performance-review.html"><code>performance-review.md</code></a></td>
 <td><strong>Thabo</strong> (<code>performance-reviewer</code>)</td>
 <td>Static scalability review - won't scale as-is (O(n²)); the fix.</td>
 </tr>
@@ -89,7 +116,7 @@ is <strong>Run 2</strong>, the canonical run; for how it compares to Run 1 see t
 <p><strong>The fix→re-review loop is real:</strong> independent review found genuine issues (a dual-source
 deviation, a missing-snapshot blind spot, and - the standout - an obligation literal that <em>looked</em>
 finalised while the SME flagged the mapping as blocked). All fixed or dispositioned; suites green.
-Dispositions: <a href="delivery-report.md">delivery report</a> §3.</p>
+Dispositions: <a href="delivery-report.html">delivery report</a> §3.</p>
 </blockquote>
 <h3 id="before-after-two-snapshots-on-purpose">⏪ Before → After ⏩ (two snapshots, on purpose)</h3>
 <table>
@@ -103,12 +130,12 @@ Dispositions: <a href="delivery-report.md">delivery report</a> §3.</p>
 <tbody>
 <tr>
 <td>⏪ <strong>Before</strong> (as-found)</td>
-<td><a href="qa-handover.md"><code>qa-handover.md</code></a></td>
+<td><a href="qa-handover.html"><code>qa-handover.md</code></a></td>
 <td>What QA <em>caught</em> - preserved, not rewritten (audit trail).</td>
 </tr>
 <tr>
 <td>⏩ <strong>After</strong> (as-delivered)</td>
-<td><a href="delivery-report.md"><code>delivery-report.md</code></a></td>
+<td><a href="delivery-report.html"><code>delivery-report.md</code></a></td>
 <td>Resolved state - defects fixed; deploy-gates + sign-off open by design.</td>
 </tr>
 </tbody>
@@ -124,7 +151,7 @@ detection logic or test suite (<code>testpaths = ["tests"]</code>). All data fab
 <p>Run 1's review found 7 defects; they became <code>docs/house-rules.md</code> entries. In Run 2, Mateo applied
 them and <strong>none recurred</strong>. Run 2's review then added <em>new</em> rules (obligation-status not a finalised
 literal; spread-normalised threshold; <code>min_notional</code> required) - now recorded for Run 3. Advisory
-agents recommend; the PM commits. That's the <a href="../../house-rules.md">house-rules</a> loop working.</p>
-<div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
+agents recommend; the PM commits. That's the <a href="../../house-rules.html">house-rules</a> loop working.</p>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: README.md &middot; 2026-06-28</div>
 </body>
 </html>
