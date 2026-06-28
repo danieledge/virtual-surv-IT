@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import html
 import re
 import sys
@@ -80,24 +81,50 @@ _ALLOWED_ATTRS: dict = {
 _ALLOWED_PROTOCOLS = frozenset({"http", "https", "mailto"})
 
 _CSS = """
-:root { color-scheme: light dark; }
 body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  line-height: 1.55; max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
 h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
 h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
 h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
-code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em; }
-pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
 pre code { background: none; padding: 0; }
 table { border-collapse: collapse; width: 100%; margin: 1em 0; }
 th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
 th { background: #f6f8fa; }
-blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #57606a; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
 a { color: #0969da; }
 .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
-  color: #8a8a8a; font-size: .8rem; }
-@media print { body { max-width: none; } a { color: inherit; } }
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}
 """.strip()
 
 _TEMPLATE = """<!doctype html>
@@ -109,8 +136,9 @@ _TEMPLATE = """<!doctype html>
 <style>%%CSS%%</style>
 </head>
 <body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>%%META%%</span></header>
 %%BODY%%
-<div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
+<div class="footer">%%FOOTER%%</div>
 </body>
 </html>
 """
@@ -148,7 +176,13 @@ def _sanitise(raw_html: str) -> str:
     return raw_html
 
 
-def render(md_text: str, title: str) -> str:
+# An all-empty table header row (from a "| | |" metadata block) renders as an ugly grey bar.
+_EMPTY_THEAD = re.compile(r"<thead>\s*<tr>\s*(?:<th[^>]*>\s*</th>\s*)+</tr>\s*</thead>", re.I)
+# Relative links between artifacts point at .md; in the rendered .html pack they must point at .html.
+_MD_LINK = re.compile(r'(<a\s+[^>]*href=")(?!https?:|mailto:|#)([^":]+?)\.md((?:#[^"]*)?)"', re.I)
+
+
+def render(md_text: str, title: str, source: str = "", generated: str = "") -> str:
     if markdown is None:
         raise RuntimeError("The 'Markdown' package is required: pip install -r requirements-dev.txt")
 
@@ -158,15 +192,26 @@ def render(md_text: str, title: str) -> str:
     # Sanitise rendered HTML body to prevent XSS if artifact content is
     # untrusted (e.g. captured comms snippets, third-party output).
     safe_body = _sanitise(raw_body)
+    # Drop empty metadata-table header rows, and repoint inter-artifact .md links to .html.
+    safe_body = _EMPTY_THEAD.sub("", safe_body)
+    safe_body = _MD_LINK.sub(r'\1\2.html\3"', safe_body)
 
     # html.escape() the title so injected HTML/JS in a Markdown H1 cannot
     # break out of the <title> element.
     safe_title = html.escape(title, quote=True)
+    meta = html.escape(generated, quote=True)
+    footer_bits = ["Generated from Markdown by the compliance surveillance engineering team."]
+    if source:
+        footer_bits.append(f"Source: {html.escape(source, quote=True)}")
+    if generated:
+        footer_bits.append(html.escape(generated, quote=True))
 
     return (
         _TEMPLATE.replace("%%TITLE%%", safe_title)
         .replace("%%CSS%%", _CSS)
+        .replace("%%META%%", meta)
         .replace("%%BODY%%", safe_body)
+        .replace("%%FOOTER%%", " &middot; ".join(footer_bits))
     )
 
 
@@ -178,7 +223,10 @@ def main() -> None:
 
     md_text = args.src.read_text()
     out = args.out or args.src.with_suffix(".html")
-    out.write_text(render(md_text, _title_from(md_text, args.src.stem)))
+    generated = _dt.date.today().isoformat()
+    out.write_text(
+        render(md_text, _title_from(md_text, args.src.stem), source=args.src.name, generated=generated)
+    )
     print(f"Rendered {args.src} -> {out}")
 
 

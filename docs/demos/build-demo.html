@@ -4,37 +4,64 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🏗️ Build demo</title>
-<style>:root { color-scheme: light dark; }
-body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  line-height: 1.55; max-width: 50rem; margin: 2rem auto; padding: 0 1.25rem;
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
 h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
 h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
 h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
-code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em; }
-pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
 pre code { background: none; padding: 0; }
 table { border-collapse: collapse; width: 100%; margin: 1em 0; }
 th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
 th { background: #f6f8fa; }
-blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #57606a; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
 a { color: #0969da; }
 .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
-  color: #8a8a8a; font-size: .8rem; }
-@media print { body { max-width: none; } a { color: inherit; } }</style>
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
 </head>
 <body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
 <h1 id="build-demo">🏗️ Build demo</h1>
 <p><em>A real <code>/demo</code> transcript: Morgan builds a new detection from scratch and takes it through the full
-Definition-of-Done chain - 8 specialists, the blackboard, the fix→re-review loop. <a href="README.md">Back to demos</a>.</em></p>
+Definition-of-Done chain - 8 specialists, the blackboard, the fix→re-review loop. <a href="README.html">Back to demos</a>.</em></p>
 <blockquote>
 <p>📖 <strong>Reading key:</strong> blockquotes that begin with <strong>🎩</strong> are <strong>Morgan, the AI PM, speaking live in
 the session</strong> (his words, generated at the moment - not the repo author's). Plain text is editorial
 framing; <code>```</code> blocks are real commands/output and verbatim agent findings.
-<a href="README.md#how-to-read-a-transcript-whos-speaking">Full key</a>.</p>
+<a href="README.html#how-to-read-a-transcript-whos-speaking">Full key</a>.</p>
 <p>📂 <strong>The actual deliverables are downloadable</strong> - every artifact below is committed in
 <a href="build-artifacts/"><code>build-artifacts/</code></a>. And this run is compared head-to-head with an earlier run in
-the <a href="build-run-comparison.md">🔁 run comparison</a> - which shows the team <em>getting better each time</em>.</p>
+the <a href="build-run-comparison.html">🔁 run comparison</a> - which shows the team <em>getting better each time</em>.</p>
 </blockquote>
 <hr>
 <blockquote>
@@ -53,7 +80,7 @@ real job <em>you</em> would:
 novel judgement. She cites the obligation and <strong>flags every threshold as a tuning decision</strong> rather
 than inventing numbers.</p>
 </blockquote>
-<p>Amara produced <a href="build-artifacts/ts001-scenario-spec.md"><strong><code>ts001-scenario-spec.md</code></strong></a>: behaviour,
+<p>Amara produced <a href="build-artifacts/ts001-scenario-spec.html"><strong><code>ts001-scenario-spec.md</code></strong></a>: behaviour,
 <strong>MAR Art 12(1)(a)</strong>, the data fields, a detection outline, parameters-to-tune, Gherkin ACs, and <strong>6
 open questions</strong> - with an explicit <em>"don't finalise the obligation mapping until Q1-Q3 are
 dispositioned."</em></p>
@@ -64,7 +91,7 @@ false-positive drivers, and <strong>formally closes the open questions</strong> 
 </blockquote>
 <p>She validated the typology (UBO linkage is the right entry point; <strong>off-market price must be a
 <em>necessary</em> condition</strong>, not a score), named the FP drivers (affiliated-fund flow, market-making,
-coincident liquid orders), and <strong>dispositioned all 6 questions</strong> (<a href="build-artifacts/ts001-sme-validation.md">validation</a>):
+coincident liquid orders), and <strong>dispositioned all 6 questions</strong> (<a href="build-artifacts/ts001-sme-validation.html">validation</a>):
 Q5/Q6 answered (Q6 → a separate TS-002), Q2 needs deployment input, and <strong>Q1 + Q3/Q4 are go-live
 blockers</strong> → the obligation mapping is <strong>not</strong> safe to finalise.</p>
 <h3 id="step-3-mateo-rules-developer-sonnet-builds-it-and-the-teams-memory-pays-off">→ Step 3: Mateo (<code>rules-developer</code>, sonnet) builds it - and the team's memory pays off</h3>
@@ -83,7 +110,7 @@ UBO keystone + <strong>staleness gate</strong>, off-market as an <strong>early-c
 <p>🎩 <strong>Three for three, first run.</strong> That matters more than it looks: in an earlier run of this same
 demo, the equivalent test <strong>failed</strong> the first time - the code had used the wall clock for UBO
 staleness, a non-deterministic bug. That lesson became a house-rule, and this time Mateo never made
-it. The team's memory is <strong>measured, not decorative</strong> - see the <a href="build-run-comparison.md">run comparison</a>.</p>
+it. The team's memory is <strong>measured, not decorative</strong> - see the <a href="build-run-comparison.html">run comparison</a>.</p>
 </blockquote>
 <h3 id="step-4-the-independent-reviews-ravi-linh-layla-in-parallel">→ Step 4: the independent reviews (Ravi + Linh + Layla, in parallel)</h3>
 <blockquote>
@@ -115,14 +142,14 @@ record the snapshot date, log the missing-snapshot gap, and carry an explicit
 <p>🎩 Two more, in parallel, before I sign anything off.</p>
 </blockquote>
 <ul>
-<li><strong>Theo (<code>tuning-analyst</code>):</strong> thresholds stay un-invented; the <a href="build-artifacts/threshold-tuning-pack.md">tuning pack</a>
+<li><strong>Theo (<code>tuning-analyst</code>):</strong> thresholds stay un-invented; the <a href="build-artifacts/threshold-tuning-pack.html">tuning pack</a>
   gives the <strong>method</strong> + illustrative values, and two new rules - <strong>spread-normalise</strong> the off-market
   threshold, and <strong><code>min_notional</code> is required</strong> (an immaterial pair can't give a false signal).</li>
-<li><strong>Thabo (<code>performance-reviewer</code>):</strong> <a href="build-artifacts/performance-review.md">won't scale as-is</a> -
+<li><strong>Thabo (<code>performance-reviewer</code>):</strong> <a href="build-artifacts/performance-review.html">won't scale as-is</a> -
   O(buys×sells); fix is to pre-group by instrument+UBO. Deferred to productionisation (a demo has no volume).</li>
 </ul>
 <h3 id="the-delivery">→ The delivery</h3>
-<p>The consolidated <a href="build-artifacts/delivery-report.md"><strong>delivery report</strong></a> ties it together: RTM,
+<p>The consolidated <a href="build-artifacts/delivery-report.html"><strong>delivery report</strong></a> ties it together: RTM,
 every finding dispositioned, the DoD gate, developer handover, and the token/runtime/cost capture
 (<strong>8 agents, ~171k tokens, ~9 min, ~$3-6</strong>).</p>
 <blockquote>
@@ -137,13 +164,13 @@ them is the job.</p>
 <ul>
 <li><strong>Orchestrator-workers, end to end</strong> - 8 specialists, each output feeding the next via the blackboard.</li>
 <li><strong>The team learns</strong> - codified house-rules stopped this build reintroducing the prior run's defects
-  (measured in the <a href="build-run-comparison.md">run comparison</a>), and Run 2's review <em>added</em> new rules.</li>
+  (measured in the <a href="build-run-comparison.html">run comparison</a>), and Run 2's review <em>added</em> new rules.</li>
 <li><strong>Review is not a rubber stamp</strong> - it found new, subtler issues, including a compliance trap (an
   obligation literal masquerading as a finalised mapping).</li>
 <li><strong>No invented thresholds; measured, not guessed</strong> - flagged in the spec, calibrated by method.</li>
 <li><strong>Honest gates</strong> - demo-complete, but plainly <strong>not deployable</strong> until the mapping is finalised,
   calibration is done on real data, the O(n²) is fixed, and a human signs off.</li>
 </ul>
-<div class="footer">Generated from Markdown - compliance surveillance engineering team.</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: build-demo.md &middot; 2026-06-28</div>
 </body>
 </html>
