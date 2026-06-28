@@ -396,9 +396,9 @@ delivery. Focused commands for each entry point:
 | `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
 | `/deep-review` | detailed code review (bugs, security, architecture, impact) | dimension fan-out + scoring |
 | `/performance-review` | performance & scalability vs target data volumes | profiling evidence |
-| `/audit-review` | existing code → robust & audit-ready? | evaluator–optimizer loop |
+| `/audit-review` | existing code → robust & audit-ready? | evaluator-optimizer loop |
 | `/remediate` | legacy / poorly-built code → assess, fix, hand over | assess → prioritise → fix loop |
-| `/build-solution` | full requirements → end-to-end build | orchestrator–workers |
+| `/build-solution` | full requirements → end-to-end build | orchestrator-workers |
 | `/handover` | developer + QA test-evidence handover pack | independent QA + dev docs |
 | `/new-scenario` | a single detection scenario | spec → SME → build → review |
 
