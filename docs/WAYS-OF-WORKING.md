@@ -99,11 +99,48 @@ and `.html`** (via `scripts/render_html.py`).
 | Change Request / RFC | `change-request.md` | feeds your change control / CAB |
 | Ops Runbook + Release Notes | `ops-runbook.md`, `release-notes.md` | feed ops/support + release |
 | Model Validation Report | `model-validation-report.md` | **SR 11-7**, **PRA SS1/23** |
+| Decision & open-questions log | `decision-log.md` | the **DoD "open questions dispositioned"** gate |
+
+> **Generic vs domain-specific templates.** Some artifacts have a **generic** and a **domain**
+> variant - use the domain one when it applies, the generic one otherwise (they are *not*
+> duplicates): scenario `scenario-spec.md` (generic / TM-AML) vs `trade-scenario-design.md`
+> (trade, with RTS 24/25 lifecycle + STOR detail); model validation `model-validation-report.md`
+> (generic) vs `tm-model-validation.md` (TM, with FFIEC BSA/AML depth). The catalogue is a **menu** -
+> most engagements emit one consolidated Delivery Report, not the whole set.
 
 > **Working alongside an IT team that has its own controls?** The team **drafts** these
 > artifacts to feed your existing change approval, deployment and sign-off - it does **not**
 > own or perform those controls. Approval/owner/contact fields are left blank and marked
 > `[IT team]`; the team never self-certifies a human control.
+
+### Document-control standard (every controlled template carries this)
+To make a broad template set cheap to keep audit-ready, **every** controlled artifact carries one
+standard header, a sign-off block, and - where it states findings - the shared legend. This is the
+single source; templates copy it verbatim.
+
+```markdown
+> **Document control** · ID `<DOC-ID>` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+```
+
+```markdown
+## Sign-off
+| Role | Name | Decision | Date |
+|------|------|----------|------|
+| Author / owner | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |
+```
+
+**Shared legends** (use consistently; don't rely on emoji alone - keep the word):
+- **Evidence basis:** 📊 *measured* (an analyser/benchmark ran) · 🧠 *inferred* (reasoned, not measured).
+- **Severity:** 🔴 Critical · 🟠 High/Warning · 🟡 Medium · 🔵 Low/Style · 🔇 Filtered.
+- **Disposition:** ✅ Fixed/Answered · 🔴 Open · ⏭️ Deferred/Needs-input · ⚖️ Accepted.
+- Every findings-bearing doc ends with a **disposition tally** (✅ _N_ · 🔴 _N_ · ⏭️ _N_ · ⚖️ _N_).
 
 Every delivery is checked against the **[Definition of Done](DEFINITION-OF-DONE.md)** - an
 evidenced gate (traceable, tested, independently QA'd, code/performance/compliance reviewed,
