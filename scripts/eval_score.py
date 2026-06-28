@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic scorer for the team-quality eval harness (evals/).
 
-The 27 unit tests check the *code*. This scores the *team's output* - did a review catch the
+The 58 unit tests check the *code*. This scores the *team's output* - did a review catch the
 planted criticals? did /assess-coverage find the seeded dead feed? - so prompt changes that
 silently degrade quality get caught. See evals/README.md.
 
