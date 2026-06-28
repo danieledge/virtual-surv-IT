@@ -24,7 +24,7 @@ run it blind, then score):**
    c. **Deterministic score:** write the findings JSON to a temp file and run
       `python -m scripts.eval_score --expected evals/cases/<case>/expected.yaml --findings <tmp>.json`.
       That returns recall, must-find-missed, and false-positive-traps-triggered.
-   d. **Qualitative judge** *(delegate to `compliance-reviewer` or a dedicated judge agent, acting as an
+   d. **Qualitative judge** *(delegate to `compliance-reviewer`, acting as an
       independent LLM-judge - NOT the agent that produced the output):* score the rubric's qualitative
       dimensions 0.0-1.0 (evidence-basis, actionability, clarity, etc.) and apply its auto-fail rules.
       Combine with the deterministic result for the case verdict (pass/fail + score).

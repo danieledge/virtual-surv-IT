@@ -12,6 +12,7 @@ Use as a library (preferred for tests):
 Or from the command line (writes JSONL under data/, which is git-ignored):
     python -m scripts.gen_synthetic --kind spoofing --out data/synthetic/spoofing.jsonl
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,7 +51,7 @@ def benign_session(seed: int = 1) -> list[OrderEvent]:
 
     True-negative control - must not produce a spoofing alert.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # nosec B311 - synthetic test data, not security-sensitive
     events: list[OrderEvent] = []
     ts = 0
     for i in range(12):
@@ -74,7 +75,7 @@ def spoofing_session(seed: int = 1) -> list[OrderEvent]:
 
     True-positive control - must produce a spoofing alert.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # nosec B311 - synthetic test data, not security-sensitive
     events: list[OrderEvent] = []
     # Baseline of typical genuine orders to establish the median.
     ts = 0
@@ -102,7 +103,7 @@ def large_genuine_session(seed: int = 1) -> list[OrderEvent]:
 
     False-positive control - must NOT produce a spoofing alert despite large size.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # nosec B311 - synthetic test data, not security-sensitive
     events: list[OrderEvent] = []
     ts = 0
     for i in range(4):

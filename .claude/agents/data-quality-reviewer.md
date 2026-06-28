@@ -5,7 +5,8 @@ description: >
   timeliness, reconciliation, and surveillance COVERAGE (is every in-scope instrument, venue,
   account and comms channel actually captured and monitored?). The biggest blind spot in
   surveillance: a missing or partial feed means abuse goes undetected and no alert ever fires.
-  Read-only; assesses and recommends - remediation is built by platform-engineer / data-analyst.
+  Independent and read-only - distinct from `data-analyst`'s exploratory/outcome analysis; it
+  assesses and recommends, and remediation is built by platform-engineer / data-analyst.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

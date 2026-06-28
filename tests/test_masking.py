@@ -2,12 +2,12 @@
 Tests for the masking pipeline (scripts/ingest.py) and its validation harness.
 All data is synthetic (§5). A throwaway test key is used - it is not a secret.
 """
+
 from __future__ import annotations
 
 import pytest
 
-from rules.spoofing import EventKind, Side, detect_spoofing
-from scripts.gen_synthetic import event_to_record, record_to_event, spoofing_session
+from scripts.gen_synthetic import event_to_record, spoofing_session
 from scripts.ingest import (
     get_key_from_env,
     load_schema,
@@ -47,7 +47,10 @@ def test_signal_fields_are_preserved():
     orig, masked = _records(), mask_records(_records(), SCHEMA, KEY)
     for o, m in zip(orig, masked):
         assert (m["price"], m["qty"], m["side"], m["kind"]) == (
-            o["price"], o["qty"], o["side"], o["kind"],
+            o["price"],
+            o["qty"],
+            o["side"],
+            o["kind"],
         )
 
 
@@ -101,6 +104,7 @@ def test_redaction_of_free_text():
 # Tests for new behaviour added by the data-safety remediation
 # ---------------------------------------------------------------------------
 
+
 def test_validate_schema_passes_on_good_schema():
     """validate_schema() is a no-op on a correctly configured schema."""
     # The canonical schema has a valid shift->entity reference.
@@ -111,7 +115,7 @@ def test_validate_schema_rejects_shift_without_entity():
     """validate_schema() raises ValueError if a shift field has no entity key."""
     bad = {
         "fields": {
-            "ts_ms": {"role": "shift"},   # missing 'entity'
+            "ts_ms": {"role": "shift"},  # missing 'entity'
             "trader": {"role": "token"},
         }
     }
@@ -142,9 +146,9 @@ def test_mask_records_skips_bad_rows_not_abort(capsys):
         },
     }
     records = [
-        {"ts_ms": 1000000, "trader": "T1"},   # good
-        {"ts_ms": 2000000},                   # bad - missing 'trader' (shift entity)
-        {"ts_ms": 3000000, "trader": "T1"},   # good
+        {"ts_ms": 1000000, "trader": "T1"},  # good
+        {"ts_ms": 2000000},  # bad - missing 'trader' (shift entity)
+        {"ts_ms": 3000000, "trader": "T1"},  # good
     ]
     out = mask_records(records, schema, KEY)
     # Two good records survive; the bad one is skipped without aborting.
@@ -183,7 +187,7 @@ def test_direct_identifier_passthrough_is_flagged():
     bad_schema = {
         "on_unknown": "drop",
         "fields": {
-            "trader": {"role": "keep"},      # direct identifier with pass-through role
+            "trader": {"role": "keep"},  # direct identifier with pass-through role
             "order_id": {"role": "token", "domain": "order"},
         },
     }
@@ -198,9 +202,7 @@ def test_direct_identifier_passthrough_is_flagged():
 def test_scan_masked_file_passes_clean(tmp_path):
     """--in mode: a clean masked file (tokens + numbers) passes."""
     f = tmp_path / "clean.jsonl"
-    f.write_text(
-        '{"trader":"party_a1","order_id":"order_9f","ts_ms":123,"price":100.0,"qty":50}\n'
-    )
+    f.write_text('{"trader":"party_a1","order_id":"order_9f","ts_ms":123,"price":100.0,"qty":50}\n')
     checks = scan_masked_file(f, SCHEMA)
     by_name = {name: ok for name, ok, _ in checks}
     assert by_name["no residual PII in masked file (string fields)"] is True

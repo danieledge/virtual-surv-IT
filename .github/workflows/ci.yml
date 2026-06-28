@@ -18,6 +18,27 @@ jobs:
       - run: pytest
       - name: Validate masking (safety + detection fidelity)
         run: python -m scripts.validate_masking
+      - name: Validate plugin manifest (declared agents/skills resolve)
+        run: python -m scripts.validate_manifest
+
+  lint:
+    name: Lint & static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install analysers
+        run: pip install ruff bandit
+      - name: ruff (lint)
+        run: ruff check scripts/ .claude/hooks/ rules/ tests/
+      - name: ruff (format check)
+        run: ruff format --check scripts/ .claude/hooks/ rules/ tests/
+      - name: bandit (security)
+        run: bandit -r scripts/ .claude/hooks/ -q
+      - name: shellcheck (Bash)
+        run: shellcheck scripts/*.sh scripts/git-hooks/pre-commit scripts/git-hooks/pre-push
 
   secret-scan:
     name: Secret scan

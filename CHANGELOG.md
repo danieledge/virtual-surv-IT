@@ -3,6 +3,43 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.7.2] - 2026-06-29
+
+### Added - project review fixes (packaging, hardening, governance)
+- **`LICENSE`** - the MIT text the badge, `plugin.json` and marketplace already referenced but
+  that shipped nowhere; adopters now have an actual grant.
+- **`CONTRIBUTING.md` and `SECURITY.md`** - how to add agents/skills/templates and run the checks;
+  private vulnerability-reporting policy and the data/code-safety stance.
+- **CI lint job** - `ruff check`, `ruff format --check`, `bandit` and `shellcheck` now run in CI
+  (previously declared but never executed), plus a **plugin-manifest validation** step
+  (`scripts/validate_manifest.py`) that fails if any declared agent/skill no longer resolves.
+- **`"hooks"` declared in `plugin.json`** so the always-on data-safety and code-execution guards
+  fire for plugin *installers* (previously relied on auto-discovery; the hook scripts/logic are
+  unchanged).
+- **Behavioural guard tests** (`tests/test_guards.py`) - drive both safety hooks with PreToolUse
+  payloads and assert block/allow, consent-marker and `CST_ALLOW_EXEC` behaviour (the hooks were
+  previously untested).
+- **HTML-renderer sanitiser tests** - XSS payloads (script/event-handler/`javascript:` URI/HTML
+  comment), `.md`→`.html` link rewriting, and the bleach-missing fail-closed path. Test count 36 → 58.
+
+### Changed
+- **Codebase formatted with `ruff format`** (line-length 100, configured in `pyproject.toml`) and
+  enforced in CI. Whitespace-only - no logic change to any file, including the safety hooks.
+- **`render_html` now fails closed** when `bleach` is unavailable (raises) instead of silently
+  emitting unsanitised HTML - matching the stated intent in `requirements-dev.txt`.
+- **`tuning-analyst` no longer holds `Edit`** (keeps `Write`), aligning it with `data-analyst` and
+  with `docs/agent-design.md` (analysts write their own scripts but never alter live detection source).
+- **`data-analyst` / `data-quality-reviewer` descriptions disambiguated** to reduce routing overlap
+  on "data-quality" / "reconciliation".
+- **`bandit` B311 false positives** (synthetic-data RNG) marked with scoped `# nosec`, keeping the
+  rule active everywhere else; cleaned 4 unused test imports.
+
+### Fixed
+- README/CHANGELOG counts: "5 new templates" → 6 (six were listed); test count corrected and kept
+  in sync with the badge.
+- `run-evals` skill referenced a non-existent "dedicated judge agent".
+- `pyproject.toml` version documented as intentionally decoupled from the plugin version.
+
 ## [0.7.1] - 2026-06-28
 
 ### Changed - audit-grade document templates + an upgraded renderer
@@ -18,7 +55,7 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   gains a business case + measurable ACs; NFRs get stable IDs + EARS phrasing.
 
 ### Added
-- **5 new templates** filling genuine coverage gaps: `decision-log` (satisfies the DoD "open questions
+- **6 new templates** filling genuine coverage gaps: `decision-log` (satisfies the DoD "open questions
   dispositioned" gate, previously templated nowhere), `alert-investigation`, `sar-str-referral`,
   `tuning-decision-register`, `control-mapping`, `data-lineage`.
 - **Upgraded HTML renderer** (`scripts/render_html.py`) - real dark-mode, print/PDF page setup

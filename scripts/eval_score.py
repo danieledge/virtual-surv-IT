@@ -36,6 +36,7 @@ Findings JSON (the runner normalizes the team's review artifact into this):
 Usage:
     python -m scripts.eval_score --expected evals/cases/<case>/expected.yaml --findings <f>.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -90,7 +91,9 @@ def _location_matches(spec_loc: str | None, finding_loc: str | None) -> bool:
 
 def _matches(spec: dict, finding: dict) -> bool:
     """A finding matches a planted/forbidden spec if location OR any keyword matches."""
-    hay = _norm(f"{finding.get('title', '')} {finding.get('kind', '')} {finding.get('location', '')}")
+    hay = _norm(
+        f"{finding.get('title', '')} {finding.get('kind', '')} {finding.get('location', '')}"
+    )
     if _location_matches(spec.get("location"), finding.get("location")):
         return _severity_ok(finding.get("severity"), spec.get("min_severity"))
     for kw in spec.get("keywords", []) or []:

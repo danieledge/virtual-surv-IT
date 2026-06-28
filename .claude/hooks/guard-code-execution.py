@@ -30,6 +30,7 @@ the review. See CLAUDE.md §7 and docs/house-rules.md.
 Protocol: read the PreToolUse JSON on stdin; exit 2 to block (stderr is fed to the model);
 exit 0 to allow. Only the Bash tool is in scope.
 """
+
 import json
 import os
 import re
@@ -51,25 +52,25 @@ def _exec_authorised() -> bool:
 # Commands/patterns that EXECUTE code. Blocked unless CST_ALLOW_EXEC is set.
 # Ordered, commented; each carries why it counts as "execution".
 _EXEC_PATTERNS = [
-    r"\bpytest\b",                       # Python test runner - runs the code
-    r"\bpython3?\s+-m\s+pytest\b",       # same, module form
-    r"\bunittest\b",                     # Python unit tests
-    r"Invoke-Pester\b",                  # PowerShell tests
-    r"Measure-Command\b",                # PowerShell timing - RUNS the script block
-    r"\bpwsh\b|\bpowershell\b",          # running PowerShell
+    r"\bpytest\b",  # Python test runner - runs the code
+    r"\bpython3?\s+-m\s+pytest\b",  # same, module form
+    r"\bunittest\b",  # Python unit tests
+    r"Invoke-Pester\b",  # PowerShell tests
+    r"Measure-Command\b",  # PowerShell timing - RUNS the script block
+    r"\bpwsh\b|\bpowershell\b",  # running PowerShell
     r"\bpy-spy\b|\bscalene\b|\bpyinstrument\b|\bmemory_profiler\b",  # Python profilers
-    r"\bpython3?\s+-m\s+cProfile\b",     # Python profiler
-    r"\bhyperfine\b",                    # CLI benchmark - runs the command repeatedly
-    r"\bnpm\s+(test|run|start)\b|\bnpx\b|\byarn\s+(test|start)\b",   # JS run/test
-    r"\bnode\s+\S+\.[mc]?js\b|\bdeno\s+run\b|\bbun\s+run\b",         # run JS file
-    r"\bgo\s+test\b|\bgo\s+run\b",       # Go
-    r"\bdotnet\s+(run|test)\b",          # .NET
+    r"\bpython3?\s+-m\s+cProfile\b",  # Python profiler
+    r"\bhyperfine\b",  # CLI benchmark - runs the command repeatedly
+    r"\bnpm\s+(test|run|start)\b|\bnpx\b|\byarn\s+(test|start)\b",  # JS run/test
+    r"\bnode\s+\S+\.[mc]?js\b|\bdeno\s+run\b|\bbun\s+run\b",  # run JS file
+    r"\bgo\s+test\b|\bgo\s+run\b",  # Go
+    r"\bdotnet\s+(run|test)\b",  # .NET
     r"\bmvn\b|\bgradle\b|\./gradlew\b",  # JVM build/test (executes)
     r"\bjava\s+(?!-version\b|--version\b|-help\b|--help\b|-h\b)(-jar\b|-cp\b|\S+\b)",  # run Java (allow -version/-help)
     r"\bruby\s+\S+\.rb\b|\bperl\s+\S+\.pl\b",  # run Ruby/Perl scripts
-    r"(^|\s|;|&&|\|)\./\S+",             # executing a file by path (./foo, ./x.sh)
-    r"\b(bash|sh|zsh)\s+\S+\.(sh|bash)\b",      # running a shell script file
-    r"\bpython3?\s+(?!-m\s+scripts\.|-c\b|-m\s+pytest)\S*\.py\b",    # run a .py FILE (not -m scripts., not -c)
+    r"(^|\s|;|&&|\|)\./\S+",  # executing a file by path (./foo, ./x.sh)
+    r"\b(bash|sh|zsh)\s+\S+\.(sh|bash)\b",  # running a shell script file
+    r"\bpython3?\s+(?!-m\s+scripts\.|-c\b|-m\s+pytest)\S*\.py\b",  # run a .py FILE (not -m scripts., not -c)
 ]
 _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 
