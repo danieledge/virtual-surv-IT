@@ -100,6 +100,11 @@ and `.html`** (via `scripts/render_html.py`).
 | Ops Runbook + Release Notes | `ops-runbook.md`, `release-notes.md` | feed ops/support + release |
 | Model Validation Report | `model-validation-report.md` | **SR 11-7**, **PRA SS1/23** |
 | Decision & open-questions log | `decision-log.md` | the **DoD "open questions dispositioned"** gate |
+| Alert investigation / case review | `alert-investigation.md` | analyst disposition record (close / escalate / SAR) |
+| SAR/STR referral pack | `sar-str-referral.md` | **CDR 2016/957** - reasons-to-suspect + 5yr retention |
+| Tuning decision register | `tuning-decision-register.md` | **SR 11-7**/FFIEC model-change-management (running log) |
+| Control mapping | `control-mapping.md` | scenario -> obligation -> internal control -> effectiveness |
+| Data lineage | `data-lineage.md` | feed -> field -> transform -> scenario (+ RTS 25, reconciliation) |
 
 > **Generic vs domain-specific templates.** Some artifacts have a **generic** and a **domain**
 > variant - use the domain one when it applies, the generic one otherwise (they are *not*

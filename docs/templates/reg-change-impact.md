@@ -5,12 +5,15 @@
 > data and specs. Authored in `.md`, rendered to `.html`. Synthetic illustrations only - no
 > real data (§5).
 
+> **Document control** · ID `RCI-001` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+
 | | |
 |---|---|
-| **Document ID** | RCI-<slug> |
-| **Author / owner** | business-analyst / <user> |
-| **Version / date** | 0.1 / <YYYY-MM-DD> |
-| **Status** | draft / assessed / planned |
 | **Effective date** | <YYYY-MM-DD> |
 | **Jurisdiction(s)** | <EU / UK / US / SG / HK / JP> |
 
@@ -46,7 +49,25 @@ Where the current solution does **not** yet meet the new obligation, and the ris
 |-----|---------------|----------------|---------------------|
 | <…> | … | … | High / Med / Low |
 
-## 5. Prioritised change plan
+## 5. Risk register
+Structured risk register for delivery of this change. Assess each risk before the change plan
+is agreed.
+
+| ID | Risk | Probability (H/M/L) | Impact (H/M/L) | Mitigation | Owner | Residual risk |
+|----|------|---------------------|----------------|------------|-------|---------------|
+| RISK-001 | <e.g. feed change delayed beyond effective date> | M | H | <e.g. interim manual review of affected population> | <platform-engineer / IT> | M |
+| RISK-002 | <e.g. SME interpretation ambiguous - wrong detection scope> | L | H | <e.g. legal/compliance sign-off on obligation read before build> | <business-analyst / SME> | L |
+
+## 6. Interim-control table
+Where a gap will not be closed before the effective date, document the interim control.
+Each row must have a named owner and a planned retire date (the date the permanent control
+goes live). This table is reviewed at every change-plan gate until all rows are retired.
+
+| Gap / RISK-ID | Interim control | Control owner | Retire date (target) | Review cadence |
+|---------------|-----------------|---------------|----------------------|----------------|
+| <e.g. RISK-001 - feed delay> | <e.g. manual daily review of OMS exceptions by senior analyst> | <Head of Surveillance> | <YYYY-MM-DD> | Weekly until retired |
+
+## 7. Prioritised change plan
 | ID | Change | Owner | Priority | Target date | Depends on |
 |----|--------|-------|----------|-------------|------------|
 | CHG-001 | <build/amend> | rules-developer | Must | <≤ effective date> | data feed |
@@ -54,16 +75,27 @@ Where the current solution does **not** yet meet the new obligation, and the ris
 | CHG-003 | feed / pipeline change | platform-engineer | Should | … | |
 | CHG-004 | update specs & RTM | business-analyst | Must | … | |
 
-## 6. Risk & timeline
+## 8. Risk & timeline
 Overall delivery risk vs. the effective date, key dependencies, and a recommendation
 (e.g. phased delivery, interim manual control). **Close with next-step options** - never a
 dead end.
 
-## 7. Sign-off
+## 9. Lessons - house-rules prompt
+After each regulatory-change engagement, capture recurring patterns and pitfalls for
+`docs/house-rules.md`. Prompt: did any requirement pattern, elicitation gap, or control
+mapping recur that should be standardised? Record it here before the engagement closes.
+
+| Lesson | Category (elicitation / req pattern / control mapping / other) | Proposed house-rule |
+|--------|----------------------------------------------------------------|---------------------|
+| <e.g. feed-change lead time always underestimated> | elicitation | <add feed-readiness check to intake checklist> |
+
+## 10. Sign-off
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | SME | | | |
 | Head of Surveillance / MLRO | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |
 
 > Traceability: every CHG-### lands as a BRD/FSD/RTM update and is verified by
 > `compliance-reviewer` against the cited obligation before handover.

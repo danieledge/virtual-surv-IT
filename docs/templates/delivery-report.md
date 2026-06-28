@@ -6,29 +6,37 @@
 > doesn't apply; split into separate artifacts only if the user/their controls require it.
 > Authored in `.md`, rendered to `.html`.
 
+> **Document control** · ID `DLVR-001` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+
 | | |
 |---|---|
 | **Deliverable** | <name> |
 | **Type** | review / build / remediation |
-| **Version / commit** | <…> |
+| **Version / commit** | <...> |
 | **Date** | <YYYY-MM-DD> |
-| **Overall verdict** | ✅ ready / ⚠️ ready with conditions / ❌ not yet |
-| **Findings disposition** | ✅ _N_ fixed · 🔴 _N_ open · ⚖️ _N_ accepted · ⏭️ _N_ deferred |
+| **Classification / distribution** | Internal - restricted to `<named recipients / role group>` |
+| **Overall verdict** | ready / ready with conditions / not yet |
+| **Findings disposition** | _N_ fixed · _N_ open · _N_ accepted · _N_ deferred |
 
 ## 1. Executive summary & next steps
 Plain-language outcome in a few lines. **Reconcile findings with what was then done** - this is
 mandatory: if the engagement found blocking issues **and** then fixed/reimplemented, state the
-**current** status of each (✅ addressed by the rework - say how / 🔴 still open / 🔴 open, needs
+**current** status of each (addressed by the rework - say how / still open / open, needs
 human developer review), so the verdict can't be read as "blocked" when it was actually resolved
-(or vice-versa). The **Overall verdict must match the disposition**: ❌ only if items are still
-Open; ✅/⚠️ once they're fixed or explicitly accepted. Then give **concrete next-step options with
-a recommendation** - never a dead end.
+(or vice-versa). The **Overall verdict must match the disposition**: not-yet only if items are still
+Open; ready/ready-with-conditions once they're fixed or explicitly accepted. Then give **concrete
+next-step options with a recommendation** - never a dead end.
 
 > **This is the "as-delivered / after" view.** Where it supersedes earlier *as-found* evidence
 > (e.g. a [`qa-handover`](qa-handover.md), a review report), **reference that evidence as the
 > "before" and show the resolved state here - do not rewrite the source** (it's the audit trail of
-> what was caught). **Distinguish two kinds of "open":** 🔴 *unresolved defects* (a real problem -
-> the verdict can't be ✅) vs ⏭️ *deferred deploy-gates* (e.g. calibrate on real data, scale-test,
+> what was caught). **Distinguish two kinds of "open":** *unresolved defects* (a real problem -
+> the verdict can't be ready) vs *deferred deploy-gates* (e.g. calibrate on real data, scale-test,
 > human sign-off) that are **correctly** open and out of scope for this stage. An honest report
 > showing the latter as open is *good*; a report that hides them to look "all green" is the failure.
 
@@ -42,16 +50,16 @@ scope.
 
 ## 4. Code review
 `Found N · Reported R · Filtered F` (depth, mode - see `docs/code-review-method.md`).
-Each finding gets a `diff`-style fix + "why it works" **and a Status**; if none: *✅ no
+Each finding gets a `diff`-style fix + "why it works" **and a Status**; if none: *no
 significant issues*.
 
-| Sev | File:line | Issue | Conf. | Standard | Status |
-|-----|-----------|-------|-------|----------|--------|
-| 🔴 | | | | CWE-… | ✅ Fixed / 🔴 Open / ⚖️ Accepted |
-| 🟠 | | | | | |
+| Sev | File:line | Issue | Conf. | Basis | Standard | Status |
+|-----|-----------|-------|-------|-------|----------|--------|
+| Critical | | | | 📊 measured / 🧠 inferred | CWE-... | Fixed / Open / Accepted |
+| Warning | | | | | | |
 
-**Disposition:** ✅ _N_ fixed · 🔴 _N_ open · ⚖️ _N_ accepted · ⏭️ _N_ deferred. A ❌ verdict lists
-the Open items. **No straightforward fix → mark 🔴 Open (needs human developer review)** with the
+**Disposition:** _N_ fixed · _N_ open · _N_ accepted · _N_ deferred. A not-yet verdict lists
+the Open items. **No straightforward fix - mark Open (needs human developer review)** with the
 reason and options - never a guessed fix.
 
 Per critical/warning, a suggested fix:
@@ -59,29 +67,34 @@ Per critical/warning, a suggested fix:
 - before
 + after
 ```
-*Why this works:* …
+*Why this works:* ...
 
 Architectural notes & impact (deep): patterns, coupling, blast radius, breaking changes.
 
-**Developer guidance - improving future code *(always include).*** 2–4 constructive, non-blocking
-points on the original coding style and how to improve next time (🔵 style/form; does not affect
+**Developer guidance - improving future code *(always include).*** 2-4 constructive, non-blocking
+points on the original coding style and how to improve next time (style/form; does not affect
 the verdict). If it's strong, say what's done well.
 
 ## 5. Performance & scalability  *(N/A if it doesn't process data at volume)*
 Workload & target volume; method (profiler used); evidence-backed findings; **scale verdict**.
 
-| Location | Issue | Evidence | Impact at target | Sev | Fix |
-|----------|-------|----------|------------------|-----|-----|
+All findings carry a basis qualifier: **📊 measured** (profiler/benchmark or explicit coded value)
+vs **🧠 inferred** (reasoned from structure - name the benchmark that would confirm it). The
+verdict for a static-only review must read "inferred - not profiled" rather than asserting
+scale as measured.
+
+| Location | Issue | Basis | Evidence | Impact at target | Sev | Fix |
+|----------|-------|-------|----------|------------------|-----|-----|
 
 ## 6. Compliance & audit
-Auditability (alert→logic→obligation), documented thresholds (§4), data safety (no
+Auditability (alert -> logic -> obligation), documented thresholds (§4), data safety (no
 secrets/PII/raw data, §5), change-control readiness.
 
 ## 7. QA / test evidence  *(independent - qa-engineer)*
 | Suite | Tests | Pass | Fail | Skip |
 |-------|-------|------|------|------|
 
-Reproduce: `<project's test command - pytest / Pester / mvn test / npm test …>`. Test data:
+Reproduce: `<project's test command - pytest / Pester / mvn test / npm test ...>`. Test data:
 synthetic/masked (§5). **Covered / NOT covered / residual
 risk.** Items for a human QA reviewer to re-verify.
 
@@ -98,11 +111,13 @@ debt, how to extend.
 > The team **drafts** §9; **your IT team approves, deploys and signs off** - it does not
 > self-certify these controls.
 
-## 10. Sign-off
+## Sign-off
 | Role | Name | Decision | Date |
 |------|------|----------|------|
-| qa-engineer (AI) | | | |
-| Human reviewer | | | |
+| Author / owner | | | |
+| PM (`Morgan`) | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |
 
 ---
 > **Code-execution note.** Review was **static by default**; any execution of the reviewed code

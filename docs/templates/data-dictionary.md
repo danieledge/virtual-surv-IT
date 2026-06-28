@@ -6,6 +6,13 @@
 > `config/masking-schema.yaml`. Authored in `.md`, rendered to `.html`. Aligns to DAMA-DMBOK
 > metadata-management practice.
 
+> **Document control** · ID `DD-001` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+
 | | |
 |---|---|
 | **Dataset / feed** | <logical name; what surveillance use it serves (§2)> |
@@ -14,6 +21,8 @@
 | **Refresh / latency** | <batch nightly / streaming; expected latency> |
 | **Lineage pointer** | <link to pipeline/ETL job + masking config: `config/masking-schema.yaml`> |
 | **Date / author** | <YYYY-MM-DD · data-analyst> |
+| **Timestamp granularity** | <microsecond / millisecond / second / date> |
+| **Clock-sync standard** | <MiFID II RTS 25 compliant? Gateway clock accuracy (e.g. <=1 ms from UTC); HFT venues require microsecond; note any known drift or gaps> |
 
 ## 1. Dataset overview
 One paragraph: grain (one row per …), key, expected volume, and the in-scope surveillance
@@ -42,9 +51,22 @@ referential integrity across feeds (e.g. `party`, `order`, `instrument`).
 The rules a feed-validation/DQ job should enforce - completeness, uniqueness, range, referential
 integrity, timeliness. Ties to any reconciliation job and surveillance coverage.
 
+Severity scale (use consistently; do not rely on emoji alone):
+- 🔴 Critical - breach silently disables a detection scenario or creates a regulatory exposure; escalate immediately.
+- 🟠 High - material coverage or accuracy gap; resolve within SLA or escalate.
+- 🟡 Medium - quality degraded but detection not fully blocked; log and track.
+- 🔵 Low - cosmetic or informational; record and review at next cycle.
+
 | Field / rule | Expectation | Severity if breached |
 |---|---|---|
 
 ## 5. Notes & open questions
 Ambiguous fields, deprecated columns, fields dropped by `on_unknown: drop`, and anything needing
 sign-off from the data owner before downstream use.
+
+## Sign-off
+| Role | Name | Decision | Date |
+|------|------|----------|------|
+| Author / owner | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |

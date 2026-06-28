@@ -6,6 +6,13 @@
 > `.html`. NLP/risk-model build is owned by `ml-engineer` (then `model-validator`); this is the
 > specification, not the production model.
 
+> **Document control** · ID `LEX-001` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+
 | | |
 |---|---|
 | **Lexicon / risk** | <name> |
@@ -24,10 +31,12 @@ verified, see the comms-surveillance policy §3*).
 > grounded in industry practice, not yet verified against a primary source - treat as guidance.*
 
 ## 2. Terms & phrases
-Each term with rationale, language and channel - no opaque keyword lists.
+Each term with rationale, language, channel, and per-term hit-rate and FP-rate from the most
+recent calibration run. No opaque keyword lists. A term with a hit-rate above threshold but
+FP-rate above target is a candidate for exclusion refinement or weight reduction.
 
-| Term / phrase | Rationale (why it signals risk) | Language | Channel(s) | Match type (exact / stem / regex / proximity) |
-|---|---|---|---|---|
+| Term / phrase | Rationale (why it signals risk) | Language | Channel(s) | Match type (exact / stem / regex / proximity) | Hit rate (per 1k msgs) | FP rate (% of hits reviewed) | Last calibrated |
+|---|---|---|---|---|---|---|---|
 
 ## 3. Scoring / weighting
 How term hits combine into an alert score - weights, proximity/co-occurrence boosts, thresholds.
@@ -49,6 +58,31 @@ allow-lists that suppress them without creating coverage gaps.
 Who owns the lexicon, how often it is reviewed, the change-control process, and the trigger
 events (new products, new slang, reg change) that force an out-of-cycle review.
 
+## 7a. ATL / BTL calibration
+Before finalising term weights and the alert threshold, run an ATL/BTL calibration on a
+synthetic/masked sample. This prevents the lexicon from being set by intuition rather than evidence.
+
+**ATL (Above-The-Line) - precision among flagged messages:**
+- Sample N messages flagged at the candidate threshold.
+- Label each: true positive (risk conduct genuinely present) or false positive (benign hit).
+- Record precision = TP / (TP + FP) per term and in aggregate.
+
+**BTL (Below-The-Line) - coverage just below the threshold:**
+- Sample N messages with a score just below the alert threshold (e.g. within 10% of threshold).
+- Label each: does any genuine risk conduct appear in the near-miss population?
+- Record the missed-conduct rate and whether it indicates a threshold that is too high.
+
+| Calibration window | Sample size (ATL) | Precision (ATL) | Sample size (BTL) | Missed-conduct rate (BTL) | Threshold verdict | Date |
+|---|---|---|---|---|---|---|
+| <period; synthetic/masked> | <n> | <%> | <n> | <%> | <hold / lower / raise> | <YYYY-MM-DD> |
+
 ## 8. Hand-off
 SME review: `comms-surveillance-sme`. Build: `ml-engineer` → independent `model-validator`.
 Tuning: `tuning-analyst`. Coverage feeds the Comms Surveillance Policy & Coverage Assessment.
+
+## Sign-off
+| Role | Name | Decision | Date |
+|------|------|----------|------|
+| Author / owner | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |

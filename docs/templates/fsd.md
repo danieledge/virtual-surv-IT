@@ -4,12 +4,14 @@
 > ISO/IEC/IEEE 29148; acceptance criteria in **Gherkin** (Given/When/Then). Authored in
 > `.md`, rendered to `.html`.
 
-| | |
-|---|---|
-| **Document ID** | FSD-<slug> |
-| **Traces to** | BRD-<slug> |
-| **Version / date** | 0.1 / <YYYY-MM-DD> |
-| **Status** | draft / approved |
+> **Document control** · ID `FSD-001` · Version `0.1` · Status `Draft | In review | Approved`
+> · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
+>
+> | Version | Date | Author | Change |
+> |---|---|---|---|
+> | 0.1 | <YYYY-MM-DD> | <author> | Initial draft |
+
+**Traces to:** BRD-`<slug>`
 
 ## 1. Overview
 What this spec covers and how it realises the BRD.
@@ -55,4 +57,24 @@ Feature: <name>
 |-----|-----|------|------------|
 | BRD-001 | FSD-001 | test_… | MAR Art.12 |
 
-## 9. Open questions & approvals
+## 9. Open questions
+Material unknowns the PM or BA is clarifying with the user or SME. Each question must be
+formally dispositioned before sign-off - don't close the FSD with a blocker open.
+
+| # | Question | Owner | Disposition |
+|---|----------|-------|-------------|
+| Q1 | <…> | <owner> | <open / answered: …> |
+
+## 10. Approvals
+| Role | Name | Decision | Date |
+|------|------|----------|------|
+| Business-analyst (author) | | | |
+| Domain SME | | | |
+| Head of Surveillance / sponsor | | | |
+
+## Sign-off
+| Role | Name | Decision | Date |
+|------|------|----------|------|
+| Author / owner | | | |
+| `compliance-reviewer` (DoD gate) | | | |
+| Human approver (or `[IT team]`) | | | |
