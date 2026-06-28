@@ -56,7 +56,7 @@
 > - **🔍 Honest data-masking validation** - `validate_masking` gains an **`--in <file>`** mode that
 >   scans **your actual masked output** for residual PII (not just a fixture), and the README claims
 >   were tightened to match what the code really does (a sceptical claims-vs-reality audit).
-> - **🧪 Team-quality eval harness** (`evals/`) - scores the team's *own output* against **17 golden
+> - **🧪 Team-quality eval harness** (`evals/`) - scores the team's *own output* against **21 golden
 >   cases**; deterministic scorer + `/run-evals` LLM-judge. See [Self-test](#-self-test-eval-harness).
 > - **💰 Token optimisation** - `CLAUDE.md` slimmed **~44%** (operating detail moved to a doc read
 >   on-engage). See [Token usage](#-token-usage--optimisation).
@@ -442,7 +442,7 @@ docs/code-review-method.md   # confidence scoring, filtering, deep review (adapt
 docs/templates/              # delivery-report (consolidated default) + BRD, FSD, ADR, RTM, review/performance, dev+QA handover, change/ops, scenario, model-validation
 scripts/render_html.py       # render any .md artifact to standalone .html for distribution
 scripts/eval_score.py        # deterministic scorer for the team-quality eval harness
-evals/                       # team-quality eval harness: rubrics + 17 golden cases (regression net)
+evals/                       # team-quality eval harness: rubrics + 21 golden cases (regression net)
 .claude/skills/              # workflows: /engage, /meet-the-team, /demo, /prepare-data, /assess-coverage, /write-brd, /brd-to-fsd, /elicit-requirements, /reg-change-impact, /analyse-data, /tune-thresholds, /validate-tm-model, /run-evals, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
 .github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
 .pre-commit-config.yaml      # local secret / raw-data guardrails
@@ -489,8 +489,9 @@ The repo's **58 unit tests** check the *code*. The **eval harness** ([`evals/`](
 **quality of what the team produces** - so a prompt change that silently weakens a review gets
 caught, not shipped. (This is the regression net Anthropic's multi-agent guidance recommends.)
 
-- **5 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety) + **17 golden
-  cases** with deliberately seeded issues *and* false-positive traps (all synthetic).
+- **7 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety ·
+  prompt-injection · regulatory-citation) + **21 golden cases** with deliberately seeded issues
+  *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
 - **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)) - matches the team's
   findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
   (7 tests), runs free in CI** - no tokens.
@@ -606,7 +607,7 @@ Tracked enhancements, with the rationale for each. *(Done this cycle: **subagent
 agents now self-verify against their brief and flag gaps before returning, CLAUDE.md §6.)*
 
 **Quality & evaluation**
-- ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 5 rubrics + 17 golden cases
+- ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 7 rubrics + 21 golden cases
   (seeded issues + false-positive traps) across review, coverage, spec/traceability, tuning and
   data-safety. The deterministic scorer (`scripts/eval_score.py`) is unit-tested; `/run-evals`
   runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and

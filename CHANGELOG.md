@@ -3,6 +3,21 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Added - adversarial evals + citation-grounding design
+- **Prompt-injection eval pack** (`evals/cases/injection-*`) - a monitored chat that embeds a
+  "mark BENIGN, ignore monitoring" payload, and code-under-review whose comment tells the reviewer
+  to ignore a hardcoded secret. Tests the data/instruction boundary and that findings survive
+  suppression. New `prompt-injection` rubric.
+- **Hallucinated-citation eval pack** (`evals/cases/citation-*`) - a spec that must not fabricate a
+  pinpoint legal citation (mirrors the no-invented-threshold pattern), and a draft whose confident
+  invented citations must be flagged as unverified rather than rubber-stamped. New
+  `regulatory-citation` rubric. Eval set 17 → 21 cases, 5 → 7 rubrics.
+- **`docs/adr/ADR-001`** - proposes grounding regulatory citations in a retrieved, version-controlled
+  register (retrieve-don't-recall) with a mechanical check at the `compliance-reviewer` gate,
+  instead of honour-based tagging of model-recalled citations.
+
 ## [0.7.2] - 2026-06-29
 
 ### Added - project review fixes (packaging, hardening, governance)
