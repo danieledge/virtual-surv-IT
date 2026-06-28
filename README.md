@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.0](https://img.shields.io/badge/version-0.7.0-blue)
+![Version 0.7.1](https://img.shields.io/badge/version-0.7.1-blue)
 ![Tests 36 passing](https://img.shields.io/badge/tests-36%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -20,7 +20,18 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.7.0
+> ## ✨ What's new in 0.7.1
+>
+> - **📄 Audit-grade document set** - all **38 deliverable templates** now carry a standard
+>   document-control header (id/version/revision-history/owner/status/classification/as-of) + sign-off
+>   block + shared evidence/severity legends, with depth fixes (SR 11-7 model validation, ATL/BTL
+>   lexicon tuning, RTS 25 timestamps, alert-to-SAR MI). Plus **5 new templates** - decision-log,
+>   alert-investigation, SAR/STR referral, tuning-decision register, control-mapping, data-lineage.
+> - **🎨 Upgraded HTML renderer** - every rendered artifact gets real dark-mode, print/PDF page setup,
+>   WCAG-AA contrast, a letterhead, working `.md`→`.html` links, and the stray empty table-header bar
+>   removed - one change that lifts the whole document pack.
+>
+> <details><summary>What's new in 0.7.0 - the downloadable build delivery + run comparison</summary>
 >
 > - **🎬 Guided demo + downloadable artifacts** - `/demo` has Morgan run a full engagement
 >   **end-to-end on safe synthetic data**, narrating every decision. Real transcripts *and the actual
@@ -49,6 +60,7 @@
 > - **📐 Built to agent best-practice** - per-agent **model tiering** (4 opus / 11 sonnet / 1 haiku)
 >   with rationale, and a **conformance matrix vs Anthropic's multi-agent guidance**
 >   ([`docs/agent-design.md`](docs/agent-design.md)).
+> </details>
 >
 > <details><summary>What's new in 0.3.0 - data-analyst &amp; business-analyst expansion</summary>
 >

@@ -3,6 +3,33 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.7.1] - 2026-06-28
+
+### Changed - audit-grade document templates + an upgraded renderer
+- **Document-control standard across all 38 templates** - a single standard header (id / version /
+  revision-history / owner / status / classification / as-of date), a standard sign-off block, and
+  shared evidence (📊/🧠) / severity / disposition legends, defined once in `docs/WAYS-OF-WORKING.md`
+  and applied everywhere. This was the #1 cross-cutting gap a 4-agent template review found.
+- **Per-template depth fixes** - e.g. `model-validation-report` brought to SR 11-7 (model id/tier,
+  assumptions, backtesting, ongoing-monitoring, severity taxonomy, limitations + compensating
+  controls); `performance-report` verdict now carries a measured/inferred basis qualifier; `rtm`
+  gains a status set + gap-disposition + bidirectional check; `lexicon-spec` gains ATL/BTL + per-term
+  hit-rate; `mi-spec` mandates alert-to-SAR; `data-dictionary` adds RTS 25 timestamp/clock-sync; BRD
+  gains a business case + measurable ACs; NFRs get stable IDs + EARS phrasing.
+
+### Added
+- **5 new templates** filling genuine coverage gaps: `decision-log` (satisfies the DoD "open questions
+  dispositioned" gate, previously templated nowhere), `alert-investigation`, `sar-str-referral`,
+  `tuning-decision-register`, `control-mapping`, `data-lineage`.
+- **Upgraded HTML renderer** (`scripts/render_html.py`) - real dark-mode, print/PDF page setup
+  (margins, break-avoidance, repeating table headers), WCAG-AA footer contrast, zebra tables, a
+  letterhead band + richer footer, `.md`→`.html` link rewriting, and removal of the empty
+  table-header bar that appeared above every metadata block. One change lifts every rendered artifact.
+
+### Note
+- Resolved "are 33 templates overkill?": the two flagged "duplicate" pairs are domain-specialised and
+  citation-rich (RTS 24/25 + STOR; SR 11-7 + FFIEC), not redundant - kept, with routing guidance.
+
 ## [0.7.0] - 2026-06-27
 
 ### Added - a complete, downloadable build delivery (`docs/demos/build-artifacts/`)
