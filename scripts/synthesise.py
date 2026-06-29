@@ -15,6 +15,7 @@ sequence model); the `fit -> sample` interface here is the same idea, just simpl
 
 Operates on synthetic/masked data only (CLAUDE.md §5).
 """
+
 from __future__ import annotations
 
 import random
@@ -34,12 +35,12 @@ from rules.spoofing import EventKind, OrderEvent, Side, detect_spoofing, reconst
 class FlowProfile:
     """The learned 'shape' of a corpus of order flow. Contains no real records."""
 
-    qty_values: list[float]    # observed genuine order sizes (sampled from)
-    gap_values: list[int]      # observed inter-event gaps in ms (sampled from)
-    spoof_rate: float          # fraction of sessions that exhibited a spoof
-    spoof_multiple: float      # spoof order size / median genuine size
-    spoof_lifetime_ms: int     # typical place -> cancel lifetime
-    opp_gap_ms: int            # typical gap to the benefiting opposite-side fill
+    qty_values: list[float]  # observed genuine order sizes (sampled from)
+    gap_values: list[int]  # observed inter-event gaps in ms (sampled from)
+    spoof_rate: float  # fraction of sessions that exhibited a spoof
+    spoof_multiple: float  # spoof order size / median genuine size
+    spoof_lifetime_ms: int  # typical place -> cancel lifetime
+    opp_gap_ms: int  # typical gap to the benefiting opposite-side fill
 
 
 def fit(sessions: list[list[OrderEvent]]) -> FlowProfile:
@@ -88,7 +89,7 @@ def sample(profile: FlowProfile, n_sessions: int = 10, seed: int = 0) -> list[li
     Every session uses fresh, made-up identifiers and a fresh timeline - nothing here
     maps back to any input record.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # nosec B311 - synthetic data generation, not security-sensitive
     median_genuine = statistics.median(profile.qty_values)
     sessions: list[list[OrderEvent]] = []
 
@@ -105,7 +106,16 @@ def sample(profile: FlowProfile, n_sessions: int = 10, seed: int = 0) -> list[li
             oid = f"{trader}_O{j:02d}"
             events.append(OrderEvent(ts, trader, instrument, oid, side, 100.0, qty, EventKind.NEW))
             events.append(
-                OrderEvent(ts + rng.randint(150, 500), trader, instrument, oid, side, 100.0, qty, EventKind.FILL)
+                OrderEvent(
+                    ts + rng.randint(150, 500),
+                    trader,
+                    instrument,
+                    oid,
+                    side,
+                    100.0,
+                    qty,
+                    EventKind.FILL,
+                )
             )
 
         if rng.random() < profile.spoof_rate:  # reproduce the spoof motif at the learned rate
@@ -113,14 +123,40 @@ def sample(profile: FlowProfile, n_sessions: int = 10, seed: int = 0) -> list[li
             spoof_qty = median_genuine * profile.spoof_multiple
             soid, boid = f"{trader}_SPOOF", f"{trader}_BEN"
             # benefiting genuine SELL on the opposite side
-            events.append(OrderEvent(ts, trader, instrument, boid, Side.SELL, 100.0, median_genuine, EventKind.NEW))
             events.append(
-                OrderEvent(ts + profile.opp_gap_ms, trader, instrument, boid, Side.SELL, 100.0, median_genuine, EventKind.FILL)
+                OrderEvent(
+                    ts, trader, instrument, boid, Side.SELL, 100.0, median_genuine, EventKind.NEW
+                )
+            )
+            events.append(
+                OrderEvent(
+                    ts + profile.opp_gap_ms,
+                    trader,
+                    instrument,
+                    boid,
+                    Side.SELL,
+                    100.0,
+                    median_genuine,
+                    EventKind.FILL,
+                )
             )
             # outsized non-bona-fide BUY, placed then cancelled unfilled
-            events.append(OrderEvent(ts - 50, trader, instrument, soid, Side.BUY, 100.0, spoof_qty, EventKind.NEW))
             events.append(
-                OrderEvent(ts - 50 + profile.spoof_lifetime_ms, trader, instrument, soid, Side.BUY, 100.0, spoof_qty, EventKind.CANCEL)
+                OrderEvent(
+                    ts - 50, trader, instrument, soid, Side.BUY, 100.0, spoof_qty, EventKind.NEW
+                )
+            )
+            events.append(
+                OrderEvent(
+                    ts - 50 + profile.spoof_lifetime_ms,
+                    trader,
+                    instrument,
+                    soid,
+                    Side.BUY,
+                    100.0,
+                    spoof_qty,
+                    EventKind.CANCEL,
+                )
             )
 
         sessions.append(events)
@@ -139,9 +175,7 @@ def main() -> None:
     # confirm the synthetic data carries the same detectable behaviour.
     from scripts.gen_synthetic import benign_session, spoofing_session
 
-    corpus = [
-        spoofing_session(seed=s) if s % 2 == 0 else benign_session(seed=s) for s in range(6)
-    ]
+    corpus = [spoofing_session(seed=s) if s % 2 == 0 else benign_session(seed=s) for s in range(6)]
     profile = fit(corpus)
     synthetic = sample(profile, n_sessions=50, seed=1)
 

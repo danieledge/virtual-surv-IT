@@ -23,6 +23,7 @@ FAIL-OPEN RESIDUAL RISK (Bash):
 
 See CLAUDE.md §5 and scripts/ingest.py for the full data-safety contract.
 """
+
 import json
 import os
 import sys

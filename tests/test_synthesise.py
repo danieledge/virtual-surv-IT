@@ -1,6 +1,7 @@
 """
 Tests for the statistical synthesiser (scripts/synthesise.py). All data is synthetic (§5).
 """
+
 from __future__ import annotations
 
 from scripts.gen_synthetic import benign_session, spoofing_session
@@ -15,8 +16,8 @@ def _corpus():
 def test_fit_learns_a_plausible_spoof_rate():
     profile = fit(_corpus())
     assert profile.spoof_rate == 0.5
-    assert profile.spoof_multiple >= 5.0       # outsized, as the rule requires
-    assert profile.qty_values                   # learned a size distribution
+    assert profile.spoof_multiple >= 5.0  # outsized, as the rule requires
+    assert profile.qty_values  # learned a size distribution
 
 
 def test_sampled_data_carries_the_signal():
@@ -24,7 +25,7 @@ def test_sampled_data_carries_the_signal():
     profile = fit(_corpus())
     synthetic = sample(profile, n_sessions=40, seed=1)
     rate = detection_rate(synthetic)
-    assert 0.3 <= rate <= 0.7                    # near the learned 0.5, within sampling noise
+    assert 0.3 <= rate <= 0.7  # near the learned 0.5, within sampling noise
 
 
 def test_synthetic_shares_no_real_entities():

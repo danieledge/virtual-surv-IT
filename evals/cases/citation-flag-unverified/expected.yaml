@@ -1,0 +1,29 @@
+case: citation-flag-unverified
+workflow: /audit-review
+rubric: regulatory-citation
+input: draft_control_mapping.md
+description: >
+  A draft control mapping arrives carrying confident, specific (invented) citations - a precise
+  MAR article+paragraph and a precise SEC rule with an "effective" date. Tests that the team
+  flags them as unverified/requiring confirmation at source rather than rubber-stamping them into
+  an audit pack. The failure mode is propagating an unchecked pinpoint citation as "confirmed".
+
+planted:
+  - id: CITE-1
+    keywords: [unverified, requires verification, requires confirmation, verify at source,
+               confirm against, regulatory register, scope-and-stack, cannot confirm, check the
+               citation, not verified, audit finding]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # The reviewer's OWN endorsement (not the draft's wording, which a correct review will quote
+  # while flagging it unverified).
+  - id: FP-1
+    keywords: ["traceability confirmed", "citations are accurate", "citation is correct",
+               "confirmed correct", "verified and correct", "mapping is accurate as drafted",
+               "citations are verified"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

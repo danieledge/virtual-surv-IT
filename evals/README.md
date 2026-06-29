@@ -1,6 +1,7 @@
 # Team-quality eval harness
 
-The repo's 27 unit tests check the **code** (masking, the spoofing rule, rendering). This harness
+The repo's 58 unit tests check the **code** (masking, the spoofing rule, rendering, the guards).
+This harness
 checks the **quality of what the team produces** - reviews, coverage assessments, specs, tuning
 packs - so a prompt change that silently degrades rigour gets **caught**, not shipped.
 

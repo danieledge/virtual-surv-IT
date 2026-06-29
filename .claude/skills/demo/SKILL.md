@@ -24,10 +24,14 @@ question tool (`multiSelect: false`) unless the arg already says which - default
   the §5 keystone.
 
 **1. Narrate the intake - answer your own questions, out loud.** Show the safety disclaimers
-(execution + data) as a real engagement would, then **answer them yourself with the reasoning**:
-*"This demo is static-only on synthetic data, so I'll choose 'No execution' - here's why that's the
-safe default…"* and *"All synthetic, so the data attestation is 'no real data involved'."* Explain
-that on a real engagement the **user** answers these.
+(execution + data) as a real engagement would, then **answer them yourself with the reasoning**.
+The execution answer depends on the flavour: the **Review** and **Data** demos are static-only -
+*"I'll choose 'No execution' - the safe default for a review"*; the **Build** demo legitimately
+runs its own synthetic tests and measured ATL/BTL, so choose *"Yes - trusted synthetic code in a
+sandbox/dev env"* and record consent (the team writes `.claude/.exec-consent`), explaining why a
+build that must run its tests needs execution while a code review never does. Data is always
+synthetic, so the data attestation is *"no real data involved."* Explain that on a real engagement
+the **user** answers these.
 
 **2. Run the flow live, narrating each agent.** For each specialist you bring in, say in one or two
 lines: **who** (name + role), **why this one and not another** (route-by-deliverable), **what model
@@ -52,7 +56,9 @@ agents). State the token ballpark so the choice is informed. Pick a small, safe 
 2. **the relevant `*-sme`** (read-only) - validate the typology; the FP drivers; the biggest pitfall.
 3. **rules-developer** - implement the validated spec as a small detection sketch + a true-positive
    and false-positive test.
-4. **Run the tests (fix→re-review loop).** Actually run them. When review/QA finds a real defect -
+4. **Run the tests (fix→re-review loop).** Actually run them (this is why the Build demo chose
+   "Yes - execution" with the consent marker at step 1; without it the `guard-code-execution.py`
+   hook blocks the test run). When review/QA finds a real defect -
    *it will* - route it back, fix it, re-run. **Narrate this as the chain earning its keep, not a
    rubber stamp.** (Real session example: a non-deterministic time bug + an off-by-one + a missing
    obligation field on the alert.)

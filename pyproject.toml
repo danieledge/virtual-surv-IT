@@ -1,5 +1,8 @@
 [project]
 name = "compliance-surveillance"
+# Version of the Python helper package (rules/ + scripts/) only. Intentionally decoupled
+# from the Claude Code plugin version in .claude-plugin/plugin.json (the plugin is the
+# distributed artifact; this package is the in-repo tooling it ships with).
 version = "0.1.0"
 description = "Reference detection scenarios for the compliance surveillance virtual team"
 requires-python = ">=3.10"
@@ -8,3 +11,7 @@ requires-python = ">=3.10"
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+# Matches the existing house style; long regex/comment lines are left as-is by the formatter.
+line-length = 100

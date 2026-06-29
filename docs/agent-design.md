@@ -117,7 +117,7 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
 | Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |
 | **External memory** for long horizons | ✅ | `docs/house-rules.md` - committed, compounding team memory; subagent context isolation. |
-| **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 5 rubrics + 17 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
+| **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 7 rubrics + 21 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
 | Subagent **self-assessment** (plan → evaluate → refine) | ✅ | Team-wide convention (CLAUDE.md §6): every agent self-verifies against its brief and **flags gaps** before returning, rather than implying completeness it doesn't have. |
 | **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
 | **Dozens–hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable - right-sizing keeps us at 2–5 agents per engagement; we never reach that scale. |
