@@ -78,7 +78,7 @@ performance-reviewer (Thabo) → PM compile.
 - **Known limitations / tech debt:** O(B×S) (pre-group before volume); `min_notional` absent (tuning);
   intraday alert-id collision; obligation mapping PROVISIONAL until Q1/Q3/Q4.
 
-## 6. 💰 Token usage, runtime & cost (this run)
+## 6. 💰 Token usage, runtime & a (quirky) rate card
 Real `subagent_tokens` / `duration_ms`. Full comparison vs Run 1: [run comparison](../build-run-comparison.md).
 
 | Stage | Agent | Tier | Tokens | Runtime |
@@ -95,6 +95,23 @@ Real `subagent_tokens` / `duration_ms`. Full comparison vs Run 1: [run compariso
 
 ~**$3-6** API at list prices (±2×); the 2 opus agents are ~25% of tokens but the bulk of the cost -
 which is why opus is reserved for the final-judgement roles.
+
+### The rate card (tongue-in-cheek, illustrative - not a quote)
+What would a **human** team invoice for the same work - a spec, an SME sign-off, a build, three
+independent reviews, a calibration, a performance review and a delivery pack for a new scenario?
+
+| | The human team | This AI team |
+|---|---|---|
+| Effort | ~**3-5 person-days** (realistic for a new reviewed scenario) | ~**11 person-minutes** of agent-time |
+| Blended rate | ~£750/day contractor (BA/dev ~£600, SME/compliance ~£900-950) | - |
+| Wall-clock | days-to-weeks (calendars, handoffs, meetings) | ~**9 minutes** |
+| **Invoice** | ~**£2,250 - £3,750** | ~**$3-6** in API |
+
+So the team delivered roughly **£2-4k of consulting effort for about the price of a coffee** - in
+minutes, not days. *Caveat (the honest bit):* this is a **proof-of-concept demo on synthetic data**;
+the output is a *starting point for real engineers and reviewers*, not a replacement (and the human
+"invoice" is illustrative). The point isn't "fire the humans" - it's *"the boring 80% gets done in
+minutes, so the humans spend their day on the judgement that matters."*
 
 ## 7. Responsibility notes
 Code executed (📊) on this trusted demo repo with synthetic data; ensuring handed-over code is safe to

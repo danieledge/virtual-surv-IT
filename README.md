@@ -529,7 +529,7 @@ Multi-agent setups cost tokens, so the team is built to be cost-conscious. Measu
 > cut it substantially. Treat as order-of-magnitude, not a quote.
 >
 > 🧾 **For fun:** the build demo's delivery report has a [tongue-in-cheek **rate card**](docs/demos/build-artifacts/delivery-report.md)
-> - that full 8-agent delivery (~$3.60 API, ~9 min) is ~£2-4k of human consulting effort. *The boring
+> - that full 8-agent delivery (~$3-6 API, ~9 min) is ~£2-4k of human consulting effort. *The boring
 > 80% in minutes, so people spend their day on the judgement that matters.*
 
 **Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
