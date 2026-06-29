@@ -18,6 +18,10 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   pointers each way (README → OVERVIEW for "understand it"; OVERVIEW → README for "do it").
 - **OVERVIEW glossary de-duplicated** - the Mini-glossary no longer re-defines LLM/agent/subagent
   (§2 owns those); it points to §2 and keeps only the terms §2 doesn't cover.
+- **Quick start now leads with the plugin install** (the recommended default) - "open the repo as a
+  project" is demoted to a collapsed alternative (still the best path for `/demo`, the worked example
+  and the scripts). The script-step caveat + guard-portability notes stay visible under the plugin
+  path. Also de-duplicated the Meet-the-team caption vs intro (the headcount breakdown was repeated).
 
 ## [0.7.10] - 2026-06-29
 
