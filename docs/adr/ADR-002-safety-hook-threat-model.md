@@ -119,10 +119,10 @@ the accepted-residual-risk notes already in the hooks and `docs/house-rules.md`.
 
 | Item | Detail |
 |------|--------|
-| Implementation status | not started (proposed) — assessment only; no hook code changed |
+| Implementation status | **partially implemented (2026-06-29).** Done: Tier-1 recs 1-4 in `guard-code-execution.py` (segment-split, anchored `_TEAM_ALLOW`, block `python -c`/`-`/`node -e`/`ruby -e`/`perl -e`/`php -r`/`bash -c`, versioned-interpreter fix, broader runners), backed by 7 new `tests/test_guards.py` cases; Tier-2 rec 6 (absolute-path `Grep`/`Glob` deny variants in `.claude/settings.json`). **Deferred:** Tier-1 rec 5 (gate `Write`/`Edit` on the consent marker / settings - needs a new hook + dual wiring), Tier-2 recs 7-8, Tier-3 (the OS/ACL boundary). |
 | Implementing agent / team | `platform-engineer` (hooks + settings), human approver for the OS/ACL boundary |
-| Target completion | backlog; Tier 1 first |
-| Follow-up actions | implement Tier 1 lexical hardening behind tests (extend `tests/test_guards.py`); add Tier 2 deny entries; document the Tier 3 boundary in deployment guidance; keep `tests/test_guards.py` as the regression net |
+| Target completion | Tier-1 rec 5 next; Tier-3 is a deployment-guidance item |
+| Follow-up actions | implement the `Write`/`Edit` consent-marker gate (rec 5); add Tier-2 recs 7-8; document the Tier-3 filesystem boundary in deployment guidance; `tests/test_guards.py` is the regression net |
 | Linked tickets / PRs | - |
 
 ## Sign-off

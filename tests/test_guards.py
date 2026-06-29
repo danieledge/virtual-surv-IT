@@ -167,3 +167,44 @@ def test_exec_guard_allows_with_consent_marker(tmp_path):
     (tmp_path / ".claude").mkdir()
     (tmp_path / ".claude" / ".exec-consent").write_text("ok")
     assert _run(_EXEC_GUARD, _bash("pytest tests/"), {"CLAUDE_PROJECT_DIR": str(tmp_path)}) == ALLOW
+
+
+# --- ADR-002 Tier-1 hardening: harder bypasses now blocked --------------------
+
+
+def test_exec_guard_blocks_python_dash_c(no_consent):
+    # Inline code execution was previously whitelisted by an explicit -c carve-out.
+    assert _run(_EXEC_GUARD, _bash("python -c \"import os;os.system('x')\""), no_consent) == BLOCK
+
+
+def test_exec_guard_blocks_shell_dash_c(no_consent):
+    assert _run(_EXEC_GUARD, _bash('bash -c "echo hi"'), no_consent) == BLOCK
+    assert _run(_EXEC_GUARD, _bash('sh -c "rm x"'), no_consent) == BLOCK
+
+
+def test_exec_guard_blocks_node_eval(no_consent):
+    assert _run(_EXEC_GUARD, _bash('node -e "process.exit(0)"'), no_consent) == BLOCK
+
+
+def test_exec_guard_blocks_versioned_python_file(no_consent):
+    # python3.11 broke the old `python3?\s` anchor and slipped past.
+    assert _run(_EXEC_GUARD, _bash("python3.11 evil.py"), no_consent) == BLOCK
+
+
+def test_exec_guard_blocks_task_runners(no_consent):
+    assert _run(_EXEC_GUARD, _bash("uv run python app.py"), no_consent) == BLOCK
+    assert _run(_EXEC_GUARD, _bash("make test"), no_consent) == BLOCK
+
+
+def test_exec_guard_blocks_chained_after_allowed_segment(no_consent):
+    # The headline fix: an allow-listed segment must not wave through a blocked one chained after.
+    assert (
+        _run(_EXEC_GUARD, _bash("python -m scripts.render_html x.md && pytest"), no_consent)
+        == BLOCK
+    )
+    assert _run(_EXEC_GUARD, _bash('echo "scripts."; python evil.py'), no_consent) == BLOCK
+
+
+def test_exec_guard_allows_benign_chain(no_consent):
+    # Chaining only non-executing/allowed segments stays allowed.
+    assert _run(_EXEC_GUARD, _bash("git diff --stat && ruff check scripts/"), no_consent) == ALLOW
