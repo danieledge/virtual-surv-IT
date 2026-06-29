@@ -92,7 +92,43 @@ volume/coverage trade-off without touching detection logic.
 | No genuine baseline (limitation) | all spoof-shaped, none genuine market-wide | no alert (cannot size "outsized") |
 | Same-ms lifecycle | FILL listed before its NEW at the same ms | fill applied, not dropped |
 
-## 6. Limitations & open items
+## 6. Running this scenario
+
+Prerequisite: `pip install -r requirements-dev.txt` (standard library + pytest; no extra deps for
+the rule itself).
+
+```bash
+# 1. Generate synthetic order flow (no real data - §5).
+python -m scripts.gen_synthetic --kind spoofing --out data/synthetic/spoofing.jsonl
+#    other fixtures: --kind benign | large_genuine
+
+# 2. Run the rule's tests (true-positive, false-positive, and regression cases).
+pytest tests/test_spoofing.py -v
+
+# 3. Prove masking preserves the signal (the rule fires identically masked vs original).
+python -m scripts.validate_masking
+```
+
+Use the rule directly in code:
+
+```python
+from rules.spoofing import detect_spoofing, SpoofingThresholds
+from scripts.gen_synthetic import spoofing_session
+
+alerts = detect_spoofing(spoofing_session(seed=1))
+for a in alerts:
+    print(a.spoof_order_id, "-", a.reason)
+    print("  obligation:", a.obligation)
+
+# Thresholds are injectable - recalibrate without touching detection logic:
+detect_spoofing(spoofing_session(seed=1), SpoofingThresholds(large_qty_multiple=6.0))
+```
+
+> `pytest` executes code, so inside the team it needs execution consent (the `/engage` intake, or
+> `CST_ALLOW_EXEC=1`) - see [the safety hooks](../../README.md#-the-two-safety-hooks-plain-english).
+> The `scripts.*` helpers (`gen_synthetic`, `validate_masking`) are always allowed.
+
+## 7. Limitations & open items
 
 - Single-account heuristic; does not yet detect **layering** (multiple orders at
   successive price levels) or **cross-account** coordination.
@@ -108,7 +144,7 @@ volume/coverage trade-off without touching detection logic.
   measured calibration evidence (see the calibration note in §4) and `trade-surveillance-sme`
   confirmation.
 
-## 7. Review trail
+## 8. Review trail
 
 - [ ] `trade-surveillance-sme` reviewed detection logic
 - [x] `code-reviewer` reviewed the 2026-06-29 genuine-baseline change (findings W1/W2/M1 applied:
