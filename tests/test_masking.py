@@ -2,12 +2,12 @@
 Tests for the masking pipeline (scripts/ingest.py) and its validation harness.
 All data is synthetic (§5). A throwaway test key is used - it is not a secret.
 """
+
 from __future__ import annotations
 
 import pytest
 
-from rules.spoofing import EventKind, Side, detect_spoofing
-from scripts.gen_synthetic import event_to_record, record_to_event, spoofing_session
+from scripts.gen_synthetic import event_to_record, spoofing_session
 from scripts.ingest import (
     get_key_from_env,
     load_schema,
@@ -47,7 +47,10 @@ def test_signal_fields_are_preserved():
     orig, masked = _records(), mask_records(_records(), SCHEMA, KEY)
     for o, m in zip(orig, masked):
         assert (m["price"], m["qty"], m["side"], m["kind"]) == (
-            o["price"], o["qty"], o["side"], o["kind"],
+            o["price"],
+            o["qty"],
+            o["side"],
+            o["kind"],
         )
 
 
@@ -97,9 +100,19 @@ def test_redaction_of_free_text():
     assert "[EMAIL_" in out and "[PHONE_" in out and "[ACCT_" in out
 
 
+def test_redaction_handles_parenthesised_phone():
+    """Regression: a US-style parenthesised number (+1 (555) 123-4567) must be redacted,
+    not leaked because the digit run breaks at the parenthesis."""
+    schema = {"on_unknown": "drop", "fields": {"body": {"role": "redact"}}}
+    out = mask_record({"body": "reach me on +1 (555) 123-4567 today"}, schema, KEY)["body"]
+    assert "555" not in out and "4567" not in out
+    assert "[PHONE_" in out
+
+
 # ---------------------------------------------------------------------------
 # Tests for new behaviour added by the data-safety remediation
 # ---------------------------------------------------------------------------
+
 
 def test_validate_schema_passes_on_good_schema():
     """validate_schema() is a no-op on a correctly configured schema."""
@@ -111,7 +124,7 @@ def test_validate_schema_rejects_shift_without_entity():
     """validate_schema() raises ValueError if a shift field has no entity key."""
     bad = {
         "fields": {
-            "ts_ms": {"role": "shift"},   # missing 'entity'
+            "ts_ms": {"role": "shift"},  # missing 'entity'
             "trader": {"role": "token"},
         }
     }
@@ -142,9 +155,9 @@ def test_mask_records_skips_bad_rows_not_abort(capsys):
         },
     }
     records = [
-        {"ts_ms": 1000000, "trader": "T1"},   # good
-        {"ts_ms": 2000000},                   # bad - missing 'trader' (shift entity)
-        {"ts_ms": 3000000, "trader": "T1"},   # good
+        {"ts_ms": 1000000, "trader": "T1"},  # good
+        {"ts_ms": 2000000},  # bad - missing 'trader' (shift entity)
+        {"ts_ms": 3000000, "trader": "T1"},  # good
     ]
     out = mask_records(records, schema, KEY)
     # Two good records survive; the bad one is skipped without aborting.
@@ -183,7 +196,7 @@ def test_direct_identifier_passthrough_is_flagged():
     bad_schema = {
         "on_unknown": "drop",
         "fields": {
-            "trader": {"role": "keep"},      # direct identifier with pass-through role
+            "trader": {"role": "keep"},  # direct identifier with pass-through role
             "order_id": {"role": "token", "domain": "order"},
         },
     }
@@ -195,12 +208,39 @@ def test_direct_identifier_passthrough_is_flagged():
     )
 
 
+def test_keep_free_text_field_is_scanned_for_pii():
+    """Regression: a kept free-text field that is NOT a declared identifier (e.g. notes) must be
+    scanned for residual PII by run_privacy_checks - previously only redact/token/keep-identifier
+    fields were scanned, so such fields were a blind spot that the --in file scan would catch."""
+    schema = {
+        "on_unknown": "drop",
+        "fields": {
+            "order_id": {"role": "token", "domain": "order"},
+            "notes": {"role": "keep"},  # free-text, NOT a declared direct identifier
+        },
+    }
+    records = [{"order_id": "O1", "notes": "call john.smith@bank.com about the trade"}]
+    checks, _ = run_privacy_checks(records, schema, KEY)
+    by_name = {name: ok for name, ok, _ in checks}
+    assert by_name["no residual PII patterns (free-text-capable fields)"] is False, (
+        "residual PII in a kept free-text field must be caught"
+    )
+
+
+def test_scan_masked_file_scans_nested_strings(tmp_path):
+    """Regression: residual PII nested inside a list/dict value must be caught, not only
+    top-level string fields."""
+    f = tmp_path / "nested.jsonl"
+    f.write_text('{"order_id":"order_9f","meta":{"note":"email john.smith@bank.com"}}\n')
+    checks = scan_masked_file(f, SCHEMA)
+    by_name = {name: ok for name, ok, _ in checks}
+    assert by_name["no residual PII in masked file (string fields)"] is False
+
+
 def test_scan_masked_file_passes_clean(tmp_path):
     """--in mode: a clean masked file (tokens + numbers) passes."""
     f = tmp_path / "clean.jsonl"
-    f.write_text(
-        '{"trader":"party_a1","order_id":"order_9f","ts_ms":123,"price":100.0,"qty":50}\n'
-    )
+    f.write_text('{"trader":"party_a1","order_id":"order_9f","ts_ms":123,"price":100.0,"qty":50}\n')
     checks = scan_masked_file(f, SCHEMA)
     by_name = {name: ok for name, ok, _ in checks}
     assert by_name["no residual PII in masked file (string fields)"] is True

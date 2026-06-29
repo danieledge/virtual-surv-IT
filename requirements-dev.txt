@@ -4,8 +4,9 @@ pytest>=8.0
 pre-commit>=3.7
 PyYAML>=6.0
 Markdown>=3.5    # scripts/render_html.py - artifacts are produced in .md and .html
-bleach>=6.0      # scripts/render_html.py - sanitises rendered HTML (XSS guard); pinned so the
-                 #   render path never silently falls back to emitting raw, unsanitised HTML
+bleach[css]>=6.0 # scripts/render_html.py - sanitises rendered HTML (XSS guard); pinned so the
+                 #   render path never silently falls back to emitting raw, unsanitised HTML.
+                 #   The [css] extra (tinycss2) lets the sanitiser keep table text-align.
 
 # The Python analysers used by the code-reviewer agent live in requirements-review.txt
 # (kept separate so the core dev/test install stays lean).

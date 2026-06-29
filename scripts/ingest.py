@@ -26,6 +26,7 @@ Usage:
   python -m scripts.ingest --schema config/masking-schema.yaml \\
       --in data/raw/orders.jsonl --out data/masked/orders.jsonl
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,7 +43,10 @@ try:
 except ImportError:  # pragma: no cover - import guard
     yaml = None
 
-TOKEN_LEN = 12
+# Hex chars of the HMAC kept per token. 24 hex = 96 bits: the birthday bound is ~2^48, so
+# identifier-domain (e.g. order_id) tokens stay collision-free at realistic venue volumes -
+# 12 hex (48 bits) collided around ~17M distinct ids, silently merging order lifecycles.
+TOKEN_LEN = 24
 
 # ---------------------------------------------------------------------------
 # Free-text PII patterns for the `redact` role.
@@ -70,39 +74,30 @@ TOKEN_LEN = 12
 # ---------------------------------------------------------------------------
 _PII_PATTERNS = [
     # 1. Email address - most specific; consume before digit patterns.
-    ("EMAIL", re.compile(
-        r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
-    )),
+    ("EMAIL", re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")),
     # 2. IBAN - ISO 13616: CC + 2 check digits + up to 30 BBAN chars.
     #    Allow optional spaces/dashes (printed IBANs are often grouped).
-    ("IBAN", re.compile(
-        r"\b[A-Z]{2}\d{2}[\s\-]?(?:[A-Z0-9]{4}[\s\-]?){2,7}[A-Z0-9]{1,4}\b"
-    )),
+    ("IBAN", re.compile(r"\b[A-Z]{2}\d{2}[\s\-]?(?:[A-Z0-9]{4}[\s\-]?){2,7}[A-Z0-9]{1,4}\b")),
     # 3. Payment card - 13–19 digits, optionally grouped by spaces or dashes.
     #    Luhn validation is not done here (would require more logic); the regex
     #    catches the structural pattern only.
-    ("CARD", re.compile(
-        r"\b(?:\d[\s\-]?){13,18}\d\b"
-    )),
+    ("CARD", re.compile(r"\b(?:\d[\s\-]?){13,18}\d\b")),
     # 4. National ID - UK NI (AA999999A), US SSN (NNN-NN-NNNN / NNNNNNNNN).
-    ("NATIONAL_ID", re.compile(
-        r"\b(?:[A-Z]{2}\d{6}[A-D]|\d{3}[\-]\d{2}[\-]\d{4}|\d{9})\b"
-    )),
+    ("NATIONAL_ID", re.compile(r"\b(?:[A-Z]{2}\d{6}[A-D]|\d{3}[\-]\d{2}[\-]\d{4}|\d{9})\b")),
     # 5. Date of birth / date literals - placed BEFORE phone so YYYY-MM-DD is not
     #    consumed as a phone-number digit run (ordering matters; see overlap test).
     #    Matches common date formats (YYYY-MM-DD, DD/MM/YYYY, DD-MMM-YYYY).
-    ("DATE", re.compile(
-        r"\b(?:\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}|\d{1,2}[\s\-][A-Za-z]{3}[\s\-]\d{4})\b"
-    )),
+    (
+        "DATE",
+        re.compile(
+            r"\b(?:\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4}|\d{1,2}[\s\-][A-Za-z]{3}[\s\-]\d{4})\b"
+        ),
+    ),
     # 6. Phone number - international (+CC) or long local (7–14 digits).
     #    Lookbehind/ahead excludes '/' and '-' so a phone run cannot start mid-date.
-    ("PHONE", re.compile(
-        r"(?<![\d/\-])\+?\d[\d \-]{7,}\d(?![\d/\-])"
-    )),
+    ("PHONE", re.compile(r"(?<![\d/\-])\+?\d[\d \-().]{7,}\d(?![\d/\-])")),
     # 7. Account number - any unmatched run of 8+ digits (catch-all, must be last).
-    ("ACCT", re.compile(
-        r"(?<!\d)\d{8,}(?!\d)"
-    )),
+    ("ACCT", re.compile(r"(?<!\d)\d{8,}(?!\d)")),
 ]
 
 
@@ -185,8 +180,10 @@ def _redact_text(text, key: bytes):
         return text
     out = text
     for label, pat in _PII_PATTERNS:
+
         def repl(m, label=label):
             return f"[{label}_{_hmac_hex(key, f'{label}:{m.group(0)}')[:6]}]"
+
         out = pat.sub(repl, out)
     return out
 
@@ -208,10 +205,10 @@ def mask_record(record: dict, schema: dict, key: bytes) -> dict:
         elif role == "token":
             out[name] = _token(value, spec.get("domain", name), key)
         elif role == "shift":
-            # validate_schema() guarantees spec["entity"] exists in the SCHEMA. Per record,
-            # if the entity field is absent the field is simply skipped (this loop is over
-            # record.items()); if present-but-non-numeric the per-record wrapper in
-            # mask_records() skips the whole row by index.
+            # validate_schema() guarantees spec["entity"] exists in the SCHEMA. Per record, if
+            # the entity field is absent, record[spec["entity"]] raises KeyError and the
+            # per-record wrapper in mask_records() skips the WHOLE row by index (not just this
+            # field); a present-but-non-numeric value is caught the same way.
             offset = _shift_offset(
                 record[spec["entity"]], key, int(spec.get("max_shift_ms", 2592000000))
             )
@@ -238,9 +235,11 @@ def mask_records(records: list[dict], schema: dict, key: bytes) -> list[dict]:
     for idx, record in enumerate(records):
         try:
             out.append(mask_record(record, schema, key))
-        except Exception:
-            # Swallow the per-row error; do NOT include record content.
-            # Failures are reported as a count + index list only.
+        except (ValueError, KeyError, TypeError, IndexError, ArithmeticError):
+            # Skip DATA-shaped row errors (bad/missing/non-numeric fields), by INDEX only -
+            # never echo record content. A schema/programming error (e.g. NameError, a bad
+            # role) is NOT caught here: it propagates and aborts, so config bugs fail loudly
+            # instead of silently dropping every row.
             failures.append(idx)
     if failures:
         print(

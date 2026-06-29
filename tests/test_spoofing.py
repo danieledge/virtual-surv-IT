@@ -2,9 +2,12 @@
 Tests for the MAR spoofing detection rule (CLAUDE.md §4: known true-positive and
 false-positive cases are mandatory). All fixtures are synthetic (§5).
 """
+
 from __future__ import annotations
 
 from rules.spoofing import (
+    EventKind,
+    OrderEvent,
     Side,
     SpoofingThresholds,
     detect_spoofing,
@@ -56,3 +59,52 @@ def test_reconstruct_orders_tracks_lifecycle():
     assert spoof.cancelled_ms is not None
     assert spoof.fill_ratio == 0.0
     assert spoof.lifetime_ms == 1500
+
+
+def _new(ts, oid, side, qty):
+    return OrderEvent(ts, "T1", "INSTR", oid, side, 100.0, qty, EventKind.NEW)
+
+
+def _fill(ts, oid, side, qty):
+    return OrderEvent(ts, "T1", "INSTR", oid, side, 100.0, qty, EventKind.FILL)
+
+
+def _cancel(ts, oid, side):
+    return OrderEvent(ts, "T1", "INSTR", oid, side, 100.0, 0.0, EventKind.CANCEL)
+
+
+def test_repeat_spoofer_not_masked_by_own_orders():
+    """Regression: a trader who spoofs repeatedly must not escape because their own large
+    spoofs inflate the median size baseline. Here large spoofs OUTNUMBER genuine orders, so an
+    all-orders median (the old logic) is 600 -> threshold 3000 -> zero alerts. The genuine-only
+    baseline is 100 -> threshold 500 -> every spoof fires."""
+    events = [
+        # Three genuine filled orders (qty 100) - the only legitimate size signal.
+        _new(1000, "GEN_BUY_C", Side.BUY, 100),
+        _fill(1100, "GEN_BUY_C", Side.BUY, 100),
+        _new(4900, "GEN_SELL_A", Side.SELL, 100),
+        _fill(5000, "GEN_SELL_A", Side.SELL, 100),
+        _new(9900, "GEN_SELL_B", Side.SELL, 100),
+        _fill(10000, "GEN_SELL_B", Side.SELL, 100),
+    ]
+    # Four outsized BUY spoofs (qty 600 = 6x), each placed-and-cancelled fast, ~unfilled,
+    # each benefiting from a genuine opposite-side SELL fill in-window.
+    for oid, place in [("SP0", 5000), ("SP1", 5200), ("SP2", 9800), ("SP3", 10100)]:
+        events.append(_new(place, oid, Side.BUY, 600))
+        events.append(_cancel(place + 500, oid, Side.BUY))
+
+    alerts = detect_spoofing(events)
+    assert len(alerts) == 4, f"expected all 4 repeat spoofs flagged, got {len(alerts)}"
+    assert {a.spoof_order_id for a in alerts} == {"SP0", "SP1", "SP2", "SP3"}
+
+
+def test_same_timestamp_fill_before_new_not_lost():
+    """Regression: a FILL listed before its NEW at the same ms must still be applied (NEW is
+    processed first within a timestamp), so the fill is not silently dropped."""
+    events = [
+        _fill(5000, "O1", Side.BUY, 100),  # listed BEFORE its NEW, same ms
+        _new(5000, "O1", Side.BUY, 100),
+    ]
+    orders = reconstruct_orders(events)
+    assert orders["O1"].filled_qty == 100.0
+    assert orders["O1"].fill_ratio == 1.0

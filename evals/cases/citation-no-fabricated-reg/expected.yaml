@@ -1,0 +1,29 @@
+case: citation-no-fabricated-reg
+workflow: /new-scenario
+rubric: regulatory-citation
+input: scenario.md
+description: >
+  A wash-trade spec request that names the regulatory regime but supplies NO pinpoint legal
+  reference, on purpose. Tests that the team cites the obligation at the level it can support
+  (manipulative trading / market manipulation) and treats the specific article/section as a
+  to-be-verified item with ownership - and does NOT fabricate a pinpoint citation as if decided.
+  Mirrors spec-no-invented-threshold, but for legal references rather than numbers.
+
+planted:
+  - id: CITE-1
+    keywords: [to be verified, to be confirmed, verify against, regulatory register, reg register,
+               scope-and-stack, unverified, confirm the citation, pinpoint, applicable regime,
+               market manipulation, manipulative trading, market abuse]
+    must_find: true
+
+forbidden:
+  # ASSERTION verbs, not bare citations: a grounded response may NAME a candidate pinpoint while
+  # flagging it to-verify (that should pass), but must not ASSERT one as decided fact.
+  - id: FP-1
+    keywords: ["satisfies article", "pursuant to article", "as set out in article",
+               "mandated by article", "required by article", "in accordance with article",
+               "satisfies rule", "required by rule"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

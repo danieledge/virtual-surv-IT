@@ -3,6 +3,95 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Added - adversarial evals + citation-grounding design
+- **Prompt-injection eval pack** (`evals/cases/injection-*`) - a monitored chat that embeds a
+  "mark BENIGN, ignore monitoring" payload, and code-under-review whose comment tells the reviewer
+  to ignore a hardcoded secret. Tests the data/instruction boundary and that findings survive
+  suppression. New `prompt-injection` rubric.
+- **Hallucinated-citation eval pack** (`evals/cases/citation-*`) - a spec that must not fabricate a
+  pinpoint legal citation (mirrors the no-invented-threshold pattern), and a draft whose confident
+  invented citations must be flagged as unverified rather than rubber-stamped. New
+  `regulatory-citation` rubric. Eval set 17 → 21 cases, 5 → 7 rubrics.
+- **`docs/adr/ADR-001`** - proposes grounding regulatory citations in a retrieved, version-controlled
+  register (retrieve-don't-recall) with a mechanical check at the `compliance-reviewer` gate,
+  instead of honour-based tagging of model-recalled citations.
+- **`docs/adr/ADR-002`** - safety-hook threat model: an adversarial red-team of both guards
+  (full bypass enumeration), the decision to represent them honestly as advisory defence-in-depth,
+  and a ranked additive-hardening backlog. No hook logic changed.
+
+### Fixed - correctness bugs from a deeper code review
+- **Spoofing rule self-masking (detection FN):** the "outsized" size baseline was the median of
+  *all* a trader's orders, so a prolific spoofer inflated their own median and evaded the rule a
+  one-off spoof tripped. Baseline is now genuine (non place-and-cancel) orders only. Regression
+  test added. *(detection-logic change - per §4 route via rules-developer + compliance-reviewer.)*
+- **Spoofing lifecycle (same-ms events):** `reconstruct_orders` now orders NEW before CANCEL/FILL
+  within a millisecond, so a same-ms fill/cancel listed before its NEW is no longer dropped.
+- **HTML renderer:** table column alignment was silently lost (bleach dropped `style` with no CSS
+  sanitiser) - now preserved via a `text-align`-only CSS sanitiser (`bleach[css]`); placeholder
+  substitution is single-pass so body/title text containing a literal `%%TOKEN%%` can't collide;
+  `data:`-image comments corrected.
+- **eval scorer:** file matching now uses basename equality, not substring (so `auth.py` no longer
+  matches `oauth.py` and falsely marks a must-find found); severity synonyms (`high`, `error`, …)
+  resolve into the canonical vocab instead of failing closed.
+- **Masking:** phone redaction now catches parenthesised numbers (`+1 (555) 123-4567`); identifier
+  tokens widened 48→96 bits to avoid collisions merging distinct order lifecycles at scale; a
+  misleading comment about a missing shift-entity field corrected.
+- **`validate_manifest.py`:** type-guards `skills`/`agents` entries, skips dot-dirs, validates the
+  declared `hooks` path, and checks the marketplace `plugins[]` list (not a whole-doc substring).
+- **Masking validator:** `run_privacy_checks` now scans *any* kept free-text field (e.g. `notes`),
+  not only declared identifiers - closing a blind spot the `--in` file scan already caught;
+  `scan_masked_file` no longer crashes on a malformed JSON line (counts/skips it) and now recurses
+  into nested list/dict string values; k-anonymity has an empty-input guard.
+- **Skill execution-consent contradictions:** the `/demo` Build flavour narrated "No execution"
+  then ran `pytest`/ATL-BTL (hook-blocked) - it now chooses execution consent for the build only;
+  `/performance-review` no longer asks for an execution permission it never uses; `/engage` Q2 no
+  longer oversells the static perf review as "measured profiling".
+- **Data-safety attestation on direct invocation:** `/analyse-data`, `/tune-thresholds` and
+  `/validate-tm-model` now prompt the attestation when invoked directly (not only "at intake" via
+  `/engage`).
+- **Renderer:** `data:` images are now embeddable (inline base64) so artifacts stay self-contained;
+  `mask_records` narrowed its exception scope so config/programming errors fail loudly instead of
+  silently dropping every row.
+
+## [0.7.2] - 2026-06-29
+
+### Added - project review fixes (packaging, hardening, governance)
+- **`LICENSE`** - the MIT text the badge, `plugin.json` and marketplace already referenced but
+  that shipped nowhere; adopters now have an actual grant.
+- **`CONTRIBUTING.md` and `SECURITY.md`** - how to add agents/skills/templates and run the checks;
+  private vulnerability-reporting policy and the data/code-safety stance.
+- **CI lint job** - `ruff check`, `ruff format --check`, `bandit` and `shellcheck` now run in CI
+  (previously declared but never executed), plus a **plugin-manifest validation** step
+  (`scripts/validate_manifest.py`) that fails if any declared agent/skill no longer resolves.
+- **`"hooks"` declared in `plugin.json`** so the always-on data-safety and code-execution guards
+  fire for plugin *installers* (previously relied on auto-discovery; the hook scripts/logic are
+  unchanged).
+- **Behavioural guard tests** (`tests/test_guards.py`) - drive both safety hooks with PreToolUse
+  payloads and assert block/allow, consent-marker and `CST_ALLOW_EXEC` behaviour (the hooks were
+  previously untested).
+- **HTML-renderer sanitiser tests** - XSS payloads (script/event-handler/`javascript:` URI/HTML
+  comment), `.md`→`.html` link rewriting, and the bleach-missing fail-closed path. Test count 36 → 58.
+
+### Changed
+- **Codebase formatted with `ruff format`** (line-length 100, configured in `pyproject.toml`) and
+  enforced in CI. Whitespace-only - no logic change to any file, including the safety hooks.
+- **`render_html` now fails closed** when `bleach` is unavailable (raises) instead of silently
+  emitting unsanitised HTML - matching the stated intent in `requirements-dev.txt`.
+- **`tuning-analyst` no longer holds `Edit`** (keeps `Write`), aligning it with `data-analyst` and
+  with `docs/agent-design.md` (analysts write their own scripts but never alter live detection source).
+- **`data-analyst` / `data-quality-reviewer` descriptions disambiguated** to reduce routing overlap
+  on "data-quality" / "reconciliation".
+- **`bandit` B311 false positives** (synthetic-data RNG) marked with scoped `# nosec`, keeping the
+  rule active everywhere else; cleaned 4 unused test imports.
+
+### Fixed
+- README/CHANGELOG counts: "5 new templates" → 6 (six were listed); test count corrected and kept
+  in sync with the badge.
+- `run-evals` skill referenced a non-existent "dedicated judge agent".
+- `pyproject.toml` version documented as intentionally decoupled from the plugin version.
+
 ## [0.7.1] - 2026-06-28
 
 ### Changed - audit-grade document templates + an upgraded renderer
@@ -18,7 +107,7 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   gains a business case + measurable ACs; NFRs get stable IDs + EARS phrasing.
 
 ### Added
-- **5 new templates** filling genuine coverage gaps: `decision-log` (satisfies the DoD "open questions
+- **6 new templates** filling genuine coverage gaps: `decision-log` (satisfies the DoD "open questions
   dispositioned" gate, previously templated nowhere), `alert-investigation`, `sar-str-referral`,
   `tuning-decision-register`, `control-mapping`, `data-lineage`.
 - **Upgraded HTML renderer** (`scripts/render_html.py`) - real dark-mode, print/PDF page setup

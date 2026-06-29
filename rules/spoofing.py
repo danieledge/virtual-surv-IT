@@ -16,6 +16,7 @@ Design principles (CLAUDE.md §4):
 - Synthetic/governed data only (CLAUDE.md §5): this module never logs raw record
   contents beyond the identifiers needed for the audit trail.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -33,22 +34,22 @@ class Side(str, Enum):
 
 
 class EventKind(str, Enum):
-    NEW = "NEW"        # order placed on the book
+    NEW = "NEW"  # order placed on the book
     CANCEL = "CANCEL"  # order cancelled (remaining qty removed)
-    FILL = "FILL"      # a (partial) execution against an order
+    FILL = "FILL"  # a (partial) execution against an order
 
 
 @dataclass(frozen=True)
 class OrderEvent:
     """A single order-lifecycle event. Synthetic/masked data only."""
 
-    ts_ms: int            # event time, ms since session start
+    ts_ms: int  # event time, ms since session start
     trader: str
     instrument: str
     order_id: str
     side: Side
     price: float
-    qty: float            # order qty for NEW; executed qty for FILL; ignored for CANCEL
+    qty: float  # order qty for NEW; executed qty for FILL; ignored for CANCEL
     kind: EventKind
 
 
@@ -130,7 +131,11 @@ class SpoofingAlert:
 def reconstruct_orders(events: list[OrderEvent]) -> dict[str, Order]:
     """Fold a stream of events into per-order lifecycles, time-ordered."""
     orders: dict[str, Order] = {}
-    for e in sorted(events, key=lambda x: x.ts_ms):
+    # Tiebreaker: within the same millisecond, process NEW before CANCEL/FILL so a same-ms
+    # fill/cancel cannot be dropped for an order whose NEW is listed later (venue feeds emit
+    # NEW and its first FILL in the same ms). Without this, a stable sort keeps input order
+    # and a mis-ordered FILL/CANCEL is silently lost, corrupting the lifecycle.
+    for e in sorted(events, key=lambda x: (x.ts_ms, 0 if x.kind is EventKind.NEW else 1)):
         if e.kind is EventKind.NEW:
             orders[e.order_id] = Order(
                 order_id=e.order_id,
@@ -162,6 +167,18 @@ def _median(values: list[float]) -> float:
     return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2.0
 
 
+def _is_place_and_cancel(o: Order, th: SpoofingThresholds) -> bool:
+    """True if the order has the non-bona-fide place-and-cancel shape: cancelled quickly and
+    near-unfilled. Such orders are excluded from the size baseline (see detect_spoofing) so a
+    trader's own spoofs cannot inflate their median and mask the 'outsized' test."""
+    return (
+        o.cancelled_ms is not None
+        and o.lifetime_ms is not None
+        and o.lifetime_ms <= th.max_spoof_lifetime_ms
+        and o.fill_ratio <= th.max_fill_ratio
+    )
+
+
 def detect_spoofing(
     events: list[OrderEvent],
     thresholds: SpoofingThresholds | None = None,
@@ -183,7 +200,12 @@ def detect_spoofing(
     for (trader, instrument), olist in by_key.items():
         if len(olist) < th.min_orders_for_baseline:
             continue
-        median_qty = _median([o.qty for o in olist])
+        # Size baseline from GENUINE orders only - exclude the place-and-cancel, near-unfilled
+        # shape so a prolific spoofer cannot inflate their own median and evade the "outsized"
+        # test (a one-off spoof was caught, a campaign self-masked). If no genuine baseline
+        # exists (every order has the spoof shape) we cannot size "outsized", so skip.
+        # (rationale added 2026-06-29; route via rules-developer + compliance-reviewer per §4)
+        median_qty = _median([o.qty for o in olist if not _is_place_and_cancel(o, th)])
         if median_qty <= 0:
             continue
 

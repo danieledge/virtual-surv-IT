@@ -6,7 +6,7 @@ description: >
   Above-The-Line / Below-The-Line testing, risk-based segmentation, dry-run/test-alert analysis,
   false-positive reduction, and model-performance MI (alert volumes, FP rate, alert-to-SAR).
   Quantifies the volume↔coverage trade-off so a tuning decision is defensible to a regulator.
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Bash, Grep, Glob
 model: sonnet
 ---
 

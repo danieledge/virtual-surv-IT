@@ -7,6 +7,7 @@ The PreToolUse guards (raw-data + code-execution) are declared in TWO places by 
 Both must stay byte-for-byte identical so the two defence-critical guards can't silently
 diverge between the two run modes. This test fails loudly if they drift.
 """
+
 import json
 from pathlib import Path
 

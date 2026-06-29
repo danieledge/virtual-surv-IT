@@ -1,5 +1,5 @@
 ---
-description: Performance & scalability review with profiling evidence, against target data volumes
+description: Static performance & scalability review against target data volumes (findings inferred; profiling is a future opt-in)
 argument-hint: <path/glob or component to review> [at <volume/SLA> if known]
 allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*)
 ---
@@ -21,8 +21,9 @@ distinct question with the stated `multiSelect`:
 > inherit that answer. Only ask it (batched in the same call) if this skill was invoked **directly**,
 > not via `engage`. Deliverables like a handover pack are chosen separately. Legacy end-to-end
 > overhaul is `/remediate`.
-- **Execution permission** - see the execution gate below; profiling **runs the code**, so this
-  is required. Wait for answers.
+- **No execution-permission question here** - this review is static-only (see the STATIC-ONLY note
+  below), so it never runs the code and nothing is asked about it. Measured profiling is a future
+  opt-in that would need execution re-enabled via the consent flow.
 
 > ⚙️ **STATIC-ONLY mode (CLAUDE.md §7).** This review does **not execute** the code - profilers
 > and benchmarks *run* it, and the team is configured not to. So assess performance
