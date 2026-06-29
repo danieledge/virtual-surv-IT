@@ -17,7 +17,10 @@ each step to the right agent and chain them in this session:
 
 1. **business-analyst** - turn "$ARGUMENTS" into a spec using
    `docs/templates/scenario-spec.md` (obligation, data, detection requirements,
-   true-positive / false-positive acceptance criteria).
+   true-positive / false-positive acceptance criteria). **Cite the obligation by RETRIEVING it
+   from the regulatory register** (`python -m scripts.check_citations --typology <x>` /
+   `config/regulatory-register.yaml`) - never invent a pinpoint article/section/rule; flag any
+   citation not in the register as to-verify (ADR-001; `compliance-reviewer` runs the check).
 2. **Domain SME** - pick by domain: `trade-surveillance-sme`, `tm-sme`, or
    `comms-surveillance-sme`. Have them review the proposed detection logic and thresholds.
    (Advisory/read-only - they recommend, they do not edit.)

@@ -33,6 +33,13 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   truth, seeded as `example`) + `scripts/check_citations.py` - `lookup(typology)` to retrieve a
   grounded citation, and `check_text()` / CLI to flag any pinpoint citation NOT in the register as
   UNVERIFIED. `compliance-reviewer` now runs this gate. 5 unit tests.
+- **Citation register wired into authoring:** `/new-scenario` and `/reg-change-impact` now instruct
+  retrieving the obligation from the register (never inventing a pinpoint), so it's used at
+  authoring time, not only at review.
+- **`guard-raw-data` Grep glob fix + secret denies:** the raw guard now checks the Grep `glob`
+  param (the tool's real name; `include` was a dead check), and `.claude/settings.json` secret
+  denies gained absolute / non-`./` variants for `.env`, `secrets/`, `*.pem`, `*.key`. (A path-less
+  Grep into cwd remains an OS/filesystem-boundary residual; see ADR-002 Tier-3.)
 
 ### Fixed - correctness bugs from a deeper code review
 - **Spoofing rule self-masking (detection FN):** the "outsized" size baseline was the median of
