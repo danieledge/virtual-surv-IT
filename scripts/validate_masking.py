@@ -174,14 +174,23 @@ def run_privacy_checks(original_records, schema, key):
     direct_ids = _direct_identifier_fields(schema)
     # Roles whose output can contain free-text or structured PII.
     _FREE_TEXT_ROLES = {"redact", "token"}
-    # Keep-role direct identifiers are also in scope (raw value passes through).
+    # Any `keep`-role field whose masked value is a STRING is also free-text-capable and must be
+    # scanned - not only declared identifiers. This closes the blind spot where a kept free-text
+    # field (e.g. `notes`, `comment`) bypassed the scan while `scan_masked_file` (the --in mode)
+    # caught it. Numeric `keep` fields (price/qty) are str-typed-excluded here, so digit-run
+    # false positives are still avoided. Check 3 remains the primary guardrail for mis-roled IDs.
+    keep_str_fields = {
+        name
+        for name, spec in schema["fields"].items()
+        if spec["role"] == "keep" and any(isinstance(r.get(name), str) for r in masked)
+    }
     pii_scan_fields = {
         name
         for name, spec in schema["fields"].items()
         if spec["role"] in _FREE_TEXT_ROLES or (spec["role"] == "keep" and name in direct_ids)
-    }
+    } | keep_str_fields
     pii_scan_text = " ".join(
-        str(r.get(f, "")) for r in masked for f in pii_scan_fields if r.get(f) is not None
+        str(r.get(f, "")) for r in masked for f in pii_scan_fields if isinstance(r.get(f), str)
     )
     pii_hits = [label for label, pat in _PII_PATTERNS if pat.search(pii_scan_text)]
     scanned_count = len(pii_scan_fields)
@@ -231,7 +240,7 @@ def run_privacy_checks(original_records, schema, key):
     else:
         k = schema.get("k_anonymity", 1)
         groups = Counter(tuple(r.get(q) for q in qis) for r in masked)
-        worst = min(groups.values())
+        worst = min(groups.values()) if groups else 0
         checks.append(("k-anonymity", worst >= k, f"min group={worst}, required k={k}"))
 
     return checks, masked
@@ -270,8 +279,20 @@ def scan_masked_file(path: str | Path, schema: dict) -> list:
     declared quasi-identifiers. It CANNOT verify 'no original identifier survived' or detection
     fidelity - those need the original data, which by design never reaches this tool.
     """
-    records = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
+    records = []
+    bad_lines = 0
+    for line in Path(path).read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            # Count malformed lines (by position only - never echo content) rather than
+            # crashing the whole scan on one bad row.
+            bad_lines += 1
     checks = []
+    if bad_lines:
+        checks.append(("file parse", False, f"{bad_lines} malformed JSON line(s) skipped"))
 
     # Residual free-text PII across all STRING fields of the real masked output.
     text = " ".join(v for r in records for v in r.values() if isinstance(v, str))
