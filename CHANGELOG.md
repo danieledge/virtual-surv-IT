@@ -3,6 +3,17 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Changed - docs
+- **`agent-design.md` self-assessment made honest (audit follow-up).** An independent audit against
+  Anthropic's guidance found the conformance matrix overstated a few rows. Fixed, no code changes:
+  downgraded **subagent self-assessment** (a one-line convention, not an enforced loop) and
+  **condensed sub-agent returns** (aspirational, not enforced) to 🟡 with reasons; reworded
+  "advisors are read-only" → **"no Write/Edit (Bash execution-gated)"** (6 advisors hold Bash);
+  reframed the agent-count rationale as **"library, not a pipeline - the PM engages the minimal
+  sufficient subset"**; flagged the per-role marginal-value question as acknowledged-unbenchmarked.
+
 ## [0.7.9] - 2026-06-29
 
 ### Changed
