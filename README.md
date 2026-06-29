@@ -1,7 +1,7 @@
 # Compliance Surveillance Engineering - Virtual Team
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.8](https://img.shields.io/badge/version-0.7.8-blue)
+![Version 0.7.9](https://img.shields.io/badge/version-0.7.9-blue)
 ![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -19,14 +19,15 @@
 > **only** when you run `/engage` (or another team command, or simply ask for the team). The sole
 > always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.7.8
+> ## ✨ What's new in 0.7.9
 >
-> - **🧑‍💻 Reviews coach "vibe-coded" code** - `/deep-review`, `/audit-review` and `/remediate` ask
->   whether the code was AI-assisted; if so the report adds a **Prompting guidance** section: why
->   the top findings happened (what the prompt under-specified) + reusable example prompts to get a
->   better first draft next time.
+> - **🧠 Memory is project-scoped, not plugin-scoped** - installed across many projects, the plugin
+>   accrues **no** project memory: project-specific learnings (typologies, thresholds, FP drivers)
+>   go to the **working project's own `CLAUDE.md`**; `docs/house-rules.md` keeps only **general,
+>   cross-project** conventions. All 13 recommending agents re-pointed accordingly.
 >
-> Recent **0.7.x**: docs slimmed + honest masking framing; Morgan states the loaded version on
+> Recent **0.7.x**: reviews coach "vibe-coded" code (prompting guidance); docs slimmed + honest
+> masking framing; Morgan states the loaded version on
 > startup; safety-hook hardening (ADR-002);
 > citations *retrieved, not recalled* against a source-verified
 > [regulatory register](config/regulatory-register.yaml) (ADR-001); CI lint/manifest gates; and a
