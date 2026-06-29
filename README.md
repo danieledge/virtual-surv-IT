@@ -1,7 +1,7 @@
 # Compliance Surveillance Engineering - Virtual Team
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.9](https://img.shields.io/badge/version-0.7.9-blue)
+![Version 0.7.10](https://img.shields.io/badge/version-0.7.10-blue)
 ![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -19,14 +19,17 @@
 > **only** when you run `/engage` (or another team command, or simply ask for the team). The sole
 > always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.7.9
+> ## ✨ What's new in 0.7.10
 >
-> - **🧠 Memory is project-scoped, not plugin-scoped** - installed across many projects, the plugin
->   accrues **no** project memory: project-specific learnings (typologies, thresholds, FP drivers)
->   go to the **working project's own `CLAUDE.md`**; `docs/house-rules.md` keeps only **general,
->   cross-project** conventions. All 13 recommending agents re-pointed accordingly.
+> - **🔍 Audited against Anthropic's guidance; self-assessment made honest** - an independent audit
+>   (vs *Building Effective Agents*, the multi-agent system + context-engineering posts) found the
+>   design broadly conformant but the conformance matrix overstated a few rows. Aligned to reality
+>   (no code changes): "advisors are read-only" → "no Write/Edit (Bash execution-gated)"; subagent
+>   self-assessment + condensed returns marked 🟡 (honest partials); the roster reframed as a
+>   **library, not a pipeline** (the PM engages the minimal sufficient subset).
 >
-> Recent **0.7.x**: reviews coach "vibe-coded" code (prompting guidance); docs slimmed + honest
+> Recent **0.7.x**: memory is project-scoped (no project memory in the plugin); reviews coach
+> "vibe-coded" code (prompting guidance); docs slimmed + honest
 > masking framing; Morgan states the loaded version on
 > startup; safety-hook hardening (ADR-002);
 > citations *retrieved, not recalled* against a source-verified
