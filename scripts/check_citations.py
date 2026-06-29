@@ -8,11 +8,14 @@ tool implements the ADR-001 controls:
   * RETRIEVE, don't recall - `lookup(typology)` returns grounded obligations from the register
     (config/regulatory-register.yaml) so the team cites what it can support.
   * MECHANICAL CHECK at the gate - `check_text()` scans an artifact for pinpoint citations and
-    flags any that are NOT in the register as UNVERIFIED, instead of trusting the prose.
+    flags any that are NOT in the register as TO-VERIFY, so they get confirmed before sign-off.
 
-This is a lexical aid, not proof a citation is correct: a register entry is only as good as the
-human verification behind it (see the `status`/`verified_on` fields). It catches *fabricated /
-unsupported* pinpoints, which is the high-frequency failure mode.
+The register is a **verification ledger, NOT an allowlist that limits what may be cited.** The team
+should use its full regulatory knowledge to surface the obligation that applies; a citation not in
+the register is "not yet human-verified", **not** "wrong" or "forbidden". This tool flags those so
+they can be confirmed against the primary source (and added to the register) - it does not decide a
+citation is incorrect. The real failure mode it guards is a pinpoint *asserted as decided fact*
+when it was only recalled from memory; an honestly-flagged to-verify citation is fine.
 
 Usage:
     python -m scripts.check_citations artifacts/control-mapping.md      # scan an artifact
@@ -127,15 +130,17 @@ def _main(argv: list[str] | None = None) -> int:
 
     result = check_text(args.artifact.read_text(), register)
     for c in result["verified"]:
-        print(f"[OK]         {c}")
+        print(f"[VERIFIED]  {c}")
     for c in result["unverified"]:
         print(
-            f"[UNVERIFIED] {c} - not in the regulatory register; verify against the primary source"
+            f"[TO-VERIFY] {c} - not yet in the register; confirm against the primary source and add it"
         )
     print(
-        f"\n{len(result['verified'])} verified, {len(result['unverified'])} unverified "
-        f"citation(s) in {args.artifact}."
+        f"\n{len(result['verified'])} verified, {len(result['unverified'])} to-verify "
+        f"citation(s) in {args.artifact}. (To-verify = needs confirmation, NOT 'wrong'.)"
     )
+    # Exit 1 is a REVIEW SIGNAL ("there are citations to confirm before sign-off"), not a verdict
+    # that any citation is incorrect.
     return 1 if result["unverified"] else 0
 
 

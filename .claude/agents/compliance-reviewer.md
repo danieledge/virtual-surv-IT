@@ -34,9 +34,14 @@ Review checklist:
   traceable from alert → code → regulatory obligation.
 - **Citations grounded, not recalled (ADR-001):** for any deliverable that cites a pinpoint legal
   reference, run `python -m scripts.check_citations <artifact>` against the regulatory register
-  (`config/regulatory-register.yaml`). Treat any **UNVERIFIED** pinpoint as a 🔴 finding - a model
-  can confabulate a citation; it must resolve to a register entry (verified against the primary
-  source), not be asserted from memory. New obligations belong in the register first.
+  (`config/regulatory-register.yaml`). The register is a **growing ledger of human-verified
+  citations, NOT a limit on what may be cited** - use your full regulatory knowledge to surface the
+  obligation that applies; do **not** suppress a relevant citation just because it isn't listed. A
+  pinpoint not in the register is **to-verify**: flag it 🧠 (confirm against the primary source
+  before sign-off, then add it to the register), not 🔴. Reserve a 🔴 finding for a citation that
+  **contradicts** the register, or a pinpoint **asserted as decided fact with no verification
+  flag** - that is the confabulation risk the gate exists for. The check is a review prompt, not a
+  verdict that the citation is wrong.
 - **Explainability:** outputs can be justified to a regulator; no opaque magic numbers.
 - **Data safety:** no PII/MNPI, raw records, secrets or credentials in code, tests, logs or
   fixtures; tests use synthetic/masked data.

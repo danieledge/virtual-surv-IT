@@ -3,6 +3,19 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Changed
+- **Citation register reframed as a ledger, not an allowlist.** The 7-entry register plus
+  "treat any unverified pinpoint as a 🔴 finding" risked suppressing the agents' legitimate
+  regulatory knowledge (almost any real citation not in the small list got flagged as a failure).
+  Reframed across `compliance-reviewer`, `check_citations.py` (output now `[TO-VERIFY]`, "not
+  'wrong'"), the `regulatory-citation` rubric, the register header and ADR-001: agents use their
+  **full knowledge** to surface the applicable obligation; a citation not in the register is
+  flagged **to-verify** (confirm + add it), and only a citation that **contradicts** the register
+  or is **asserted as decided fact without a flag** is a 🔴 finding. The register grows; its size
+  is not a cap on coverage.
+
 ## [0.7.4] - 2026-06-29
 
 ### Fixed
