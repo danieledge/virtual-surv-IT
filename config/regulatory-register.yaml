@@ -1,0 +1,102 @@
+# Regulatory register - the single source of truth for pinpoint legal citations (ADR-001).
+#
+# WHY: an LLM emits citations ("MAR Article 12", "Rule 10b-5") from parametric memory, where it
+# confabulates confidently. In a regulated domain a wrong pinpoint citation is a control failure.
+# So the team RETRIEVES citations from this controlled list rather than RECALLING them, and
+# `scripts/check_citations.py` flags any pinpoint citation in an artifact that is not listed here.
+#
+# SEED DATA: the entries below are the example obligations this reference repo already cites
+# (spoofing rule + comms surveillance). They are marked `status: verified` only as a STARTING
+# POINT for this POC - replace/extend with YOUR firm's obligations, each checked against the
+# primary source, and record the source URL + the date you verified it. Treat `status: example`
+# entries as un-confirmed until a human verifies them.
+#
+# Each entry:
+#   id            stable key
+#   regime        the instrument/framework (e.g. "EU MAR")
+#   jurisdiction  EU | UK | US | ...
+#   typology      the surveillance scenario(s) it supports (free text / keywords)
+#   pinpoint      the exact citation string detection compares against (article/section/rule)
+#   aliases       other spellings the same obligation may appear as (optional)
+#   effective_date  when it took/takes effect (ISO date or "-")
+#   source        primary-source URL or document id
+#   verified_on   date a human last checked it against the source ("-" = not yet)
+#   status        verified | example
+
+obligations:
+  - id: MAR-ART12-1A
+    regime: EU MAR (Regulation (EU) No 596/2014)
+    jurisdiction: EU
+    typology: spoofing, layering, market manipulation
+    pinpoint: MAR Art.12(1)(a)
+    aliases: ["Article 12(1)(a)", "Art.12(1)(a)", "Regulation (EU) No 596/2014 Article 12"]
+    effective_date: "2016-07-03"
+    source: https://eur-lex.europa.eu/eli/reg/2014/596/oj
+    verified_on: "-"
+    status: example
+
+  - id: MAR-ART15
+    regime: EU MAR / UK FCA MAR
+    jurisdiction: EU, UK
+    typology: market manipulation (general prohibition)
+    pinpoint: MAR Art.15
+    aliases: ["Article 15", "Art.15", "FCA MAR Art.15"]
+    effective_date: "2016-07-03"
+    source: https://eur-lex.europa.eu/eli/reg/2014/596/oj
+    verified_on: "-"
+    status: example
+
+  - id: MAR-ART16
+    regime: EU MAR
+    jurisdiction: EU
+    typology: prevention and detection of market abuse; STORs; surveillance coverage
+    pinpoint: MAR Art.16
+    aliases: ["Article 16", "Art.16"]
+    effective_date: "2016-07-03"
+    source: https://eur-lex.europa.eu/eli/reg/2014/596/oj
+    verified_on: "-"
+    status: example
+
+  - id: MIFID2-ART16-7
+    regime: MiFID II (Directive 2014/65/EU)
+    jurisdiction: EU
+    typology: communications recording; e-comms/voice surveillance
+    pinpoint: MiFID II Art.16(7)
+    aliases: ["Article 16(7)", "Art.16(7)"]
+    effective_date: "2018-01-03"
+    source: https://eur-lex.europa.eu/eli/dir/2014/65/oj
+    verified_on: "-"
+    status: example
+
+  - id: CDR-2017-565-ART76
+    regime: Commission Delegated Regulation (EU) 2017/565
+    jurisdiction: EU
+    typology: recording of telephone conversations and electronic communications
+    pinpoint: CDR (EU) 2017/565 Art.76
+    aliases: ["Article 76", "Art.76", "2017/565 Art.76"]
+    effective_date: "2018-01-03"
+    source: https://eur-lex.europa.eu/eli/reg_del/2017/565/oj
+    verified_on: "-"
+    status: example
+
+  - id: SEC-17A4-B4
+    regime: SEC Rule 17a-4 (Securities Exchange Act)
+    jurisdiction: US
+    typology: books and records; communications retention
+    pinpoint: SEC 17a-4(b)(4)
+    aliases: ["17a-4(b)(4)", "Rule 17a-4"]
+    effective_date: "-"
+    source: https://www.ecfr.gov/current/title-17/chapter-II/part-240/section-240.17a-4
+    verified_on: "-"
+    status: example
+
+  - id: FINRA-4511
+    regime: FINRA Rule 4511
+    jurisdiction: US
+    typology: general books and records requirements
+    pinpoint: FINRA 4511
+    aliases: ["Rule 4511"]
+    effective_date: "2011-12-05"
+    source: https://www.finra.org/rules-guidance/rulebooks/finra-rules/4511
+    verified_on: "-"
+    status: example

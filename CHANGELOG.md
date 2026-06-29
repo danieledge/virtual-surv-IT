@@ -21,6 +21,19 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   (full bypass enumeration), the decision to represent them honestly as advisory defence-in-depth,
   and a ranked additive-hardening backlog. No hook logic changed.
 
+### Added - safety-hook hardening + citation grounding (ADR-001/002 implemented)
+- **Hook hardening (ADR-002 Tier-1):** `guard-code-execution.py` now segment-splits the command
+  (an allow-listed segment can't wave through a blocked one chained after it), anchors the team
+  allow-list, blocks inline-code execution (`python -c`, `node -e`, `bash -c`, …), fixes the
+  versioned-interpreter gap (`python3.11`), and covers more runners (`uv/poetry/pipenv run`, `tox`,
+  `nox`, `make`, `docker run`). Absolute-path `Grep`/`Glob` deny variants added (Tier-2). +7 guard
+  tests. Deferred: the `Write`/`Edit` consent-marker gate (Tier-1 rec 5) and the OS/filesystem
+  boundary (Tier-3) - the irreducible residual is unchanged and documented.
+- **Citation grounding (ADR-001):** `config/regulatory-register.yaml` (the controlled source of
+  truth, seeded as `example`) + `scripts/check_citations.py` - `lookup(typology)` to retrieve a
+  grounded citation, and `check_text()` / CLI to flag any pinpoint citation NOT in the register as
+  UNVERIFIED. `compliance-reviewer` now runs this gate. 5 unit tests.
+
 ### Fixed - correctness bugs from a deeper code review
 - **Spoofing rule self-masking (detection FN):** the "outsized" size baseline was the median of
   *all* a trader's orders, so a prolific spoofer inflated their own median and evaded the rule a

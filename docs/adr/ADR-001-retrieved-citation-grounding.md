@@ -84,10 +84,10 @@ Treat a regulatory citation like a threshold: **it must be grounded or flagged, 
 
 | Item | Detail |
 |------|--------|
-| Implementation status | not started (proposed) |
+| Implementation status | **core implemented (2026-06-29).** `config/regulatory-register.yaml` (seeded, example status), `scripts/check_citations.py` (retrieve via `lookup()`, mechanical gate via `check_text()` / CLI), 5 unit tests, and `compliance-reviewer` now runs the gate (a register-lookup step). **Deferred:** wiring `lookup()` into the authoring skills (`/write-brd`, `/brd-to-fsd`, `/new-scenario`, `/reg-change-impact`); a CI gate (held off so it doesn't flag existing docs); human verification of the seed entries (`status: example` -> `verified`). |
 | Implementing agent / team | `platform-engineer` (register + retrieval), `compliance-reviewer` (gate check) |
-| Target completion | next milestone after acceptance |
-| Follow-up actions | seed register from `docs/scope-and-stack.md`; wire retrieval into citation-bearing skills (`/write-brd`, `/brd-to-fsd`, `/new-scenario`, `/reg-change-impact`); add register-lookup step to `compliance-reviewer`; keep `citation-*` eval cases as the regression net; update RTM/`docs/agent-design.md` |
+| Target completion | seed verification + skill wiring next |
+| Follow-up actions | verify the seed obligations against primary sources (flip `status`); wire `lookup()` into citation-bearing skills; consider a CI gate once the register covers the repo's docs; `citation-*` eval cases remain the regression net |
 | Linked tickets / PRs | - |
 
 ## Sign-off
