@@ -196,28 +196,44 @@ def detect_spoofing(
     for o in orders.values():
         by_key[(o.trader, o.instrument)].append(o)
 
+    # Genuine (non place-and-cancel) order sizes per instrument, across ALL traders. Used as a
+    # fallback baseline when a trader's own book has too few genuine orders to size against - so a
+    # trader who places ONLY spoof-shaped orders is still measured, not silently skipped (W1).
+    genuine_by_instrument: dict[str, list[float]] = defaultdict(list)
+    for o in orders.values():
+        if not _is_place_and_cancel(o, th):
+            genuine_by_instrument[o.instrument].append(o.qty)
+
     alerts: list[SpoofingAlert] = []
     for (trader, instrument), olist in by_key.items():
         if len(olist) < th.min_orders_for_baseline:
             continue
-        # Size baseline from GENUINE orders only - exclude the place-and-cancel, near-unfilled
-        # shape so a prolific spoofer cannot inflate their own median and evade the "outsized"
-        # test (a one-off spoof was caught, a campaign self-masked). If no genuine baseline
-        # exists (every order has the spoof shape) we cannot size "outsized", so skip.
-        # (rationale added 2026-06-29; route via rules-developer + compliance-reviewer per §4)
-        median_qty = _median([o.qty for o in olist if not _is_place_and_cancel(o, th)])
+        # Size baseline from GENUINE orders only (exclude the place-and-cancel, near-unfilled
+        # shape) so a prolific spoofer cannot inflate their own median and evade the "outsized"
+        # test. Prefer the trader's own genuine orders when there are enough for a robust median
+        # (>= min_orders_for_baseline genuine, NOT just total - reconciles the gate with the
+        # baseline population); otherwise fall back to the instrument's genuine flow across
+        # traders. If no genuine baseline exists anywhere for the instrument we cannot define
+        # "outsized", so we skip - a documented limitation, rare (needs zero genuine orders
+        # market-wide in the window). See docs/scenarios/spoofing.md.
+        # (rationale 2026-06-29; routed via code-reviewer + compliance-reviewer per §4.)
+        trader_genuine = [o.qty for o in olist if not _is_place_and_cancel(o, th)]
+        if len(trader_genuine) >= th.min_orders_for_baseline:
+            median_qty = _median(trader_genuine)
+            baseline_src = "trader median"
+        else:
+            median_qty = _median(genuine_by_instrument.get(instrument, []))
+            baseline_src = "instrument median"
         if median_qty <= 0:
             continue
 
         for spoof in olist:
-            # Non-bona-fide signature: outsized, cancelled, short-lived, near-unfilled.
-            if spoof.cancelled_ms is None or spoof.lifetime_ms is None:
+            # Non-bona-fide signature: the place-and-cancel / near-unfilled shape (same predicate
+            # used for the baseline exclusion, so the two definitions cannot drift - M1) AND
+            # outsized vs the genuine baseline. Size is judged independently of the shape.
+            if not _is_place_and_cancel(spoof, th):
                 continue
             if spoof.qty < th.large_qty_multiple * median_qty:
-                continue
-            if spoof.lifetime_ms > th.max_spoof_lifetime_ms:
-                continue
-            if spoof.fill_ratio > th.max_fill_ratio:
                 continue
 
             # Benefiting genuine execution on the opposite side, close in time to the
@@ -253,9 +269,9 @@ def detect_spoofing(
                     time_gap_ms=gap,
                     reason=(
                         f"Outsized {spoof.side.value} order {spoof.order_id} "
-                        f"({spoof.qty:g} ≈ {spoof.qty / median_qty:.1f}× median) placed and "
-                        f"cancelled within {spoof.lifetime_ms}ms, {spoof.fill_ratio:.0%} filled, "
-                        f"while {benef.side.value} order {benef.order_id} executed "
+                        f"({spoof.qty:g} ~ {spoof.qty / median_qty:.1f}x {baseline_src}) placed "
+                        f"and cancelled within {spoof.lifetime_ms}ms, {spoof.fill_ratio:.0%} "
+                        f"filled, while {benef.side.value} order {benef.order_id} executed "
                         f"{benef.filled_qty:g} on the opposite side {gap}ms away."
                     ),
                 )
