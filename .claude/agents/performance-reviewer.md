@@ -69,5 +69,6 @@ fix, the **gain**, and **how it was derived** (📊 measured before/after or exp
 vs 🧠 inferred projection with the model named). A developer wants the headline "what do I get,
 and how do you know" - never present an inferred projection as a measured result. **End with the
 total execution time saved at target volume** (the aggregate headline, e.g. "~Xs → ~Ys per run
-at 5M rows: ~Z saved"), split **measured vs projected** so the total stays honest. Recommend
-recurring hotspots for `docs/house-rules.md`.
+at 5M rows: ~Z saved"), split **measured vs projected** so the total stays honest. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
+drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
+**general, cross-project** patterns → `docs/house-rules.md`.

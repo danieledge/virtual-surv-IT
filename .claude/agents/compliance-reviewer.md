@@ -61,4 +61,6 @@ item it serves - assertions without evidence are not sign-off. **Give every find
 (🔴 Open · ✅ Fixed · ⚖️ Accepted · ⏭️ Deferred - rationale in the description) and a disposition tally, so a
 **Fail makes clear exactly what is still Open** and what was already addressed - never leave it
 ambiguous. Where there's no straightforward fix, mark it **🔴 Open (needs human review)** with
-the reason. Recommend recurring issues for `docs/house-rules.md` so reviews tighten over time.
+the reason. Recommend durable lessons (CLAUDE.md §6): a **general, cross-project** review/audit pattern →
+`docs/house-rules.md` (so reviews tighten over time); anything **specific to this engagement** →
+the working **project's own memory** (its `CLAUDE.md`).

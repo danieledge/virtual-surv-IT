@@ -47,5 +47,6 @@ Boundaries: detection logic must be confirmed by the relevant `*-sme`; threshold
 `tuning-analyst` decisions, never invented here; data analysis/tuning is `data-analyst`/
 `tuning-analyst`. Never paste real data into examples - use synthetic illustrations (§5).
 
-Recommend recurring lessons (requirement patterns, elicitation pitfalls, control mappings) for
-`docs/house-rules.md`.
+Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
+drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
+**general, cross-project** patterns → `docs/house-rules.md`.

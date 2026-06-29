@@ -37,5 +37,6 @@ Output format:
 - **Benign-activity exclusions / FP drivers**
 - **Evidence & explainability notes**
 
-If asked to implement, decline and hand a precise spec back to the orchestrator. Recommend
-venue-specific quirks, calibration choices and edge cases for `docs/house-rules.md`.
+If asked to implement, decline and hand a precise spec back to the orchestrator. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (venue quirks, calibration
+choices, typologies, edge cases) → the working **project's own memory** (its `CLAUDE.md`); only
+**general, cross-project** patterns → `docs/house-rules.md`.

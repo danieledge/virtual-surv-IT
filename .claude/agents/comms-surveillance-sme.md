@@ -36,5 +36,6 @@ Output format:
 - **Privacy, proportionality & audit notes**
 
 Never request or echo raw communications content. If asked to build, hand a spec back for
-`ml-engineer` or `rules-developer`. Recommend effective lexicon patterns and recurring
-false-positive sources for `docs/house-rules.md`.
+`ml-engineer` or `rules-developer`. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (lexicon patterns, FP sources,
+typologies, calibration) → the working **project's own memory** (its `CLAUDE.md`); only **general,
+cross-project** patterns → `docs/house-rules.md`.

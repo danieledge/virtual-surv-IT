@@ -121,7 +121,9 @@ Follow **`docs/review/output-format.md`** exactly - it is the single canonical f
   **🔴 Open (needs human developer review)**, explain why and the options/trade-offs, and leave
   it for a person - never invent a fix you're not confident in.
 - If nothing qualifies, say so plainly ("✅ no significant issues") and **still** show the
-  filtered counts and tooling coverage. Recommend recurring issues for `docs/house-rules.md`.
+  filtered counts and tooling coverage. Recommend durable lessons (CLAUDE.md §6): a **general, cross-project** review pattern →
+`docs/house-rules.md`; anything **specific to this codebase/engagement** → the working
+**project's own memory** (its `CLAUDE.md`).
 
 > Format, scoring, filtering and the deep-review shape are adapted from turingmind-code-review
 > (MIT) - see `docs/code-review-method.md` and `THIRD-PARTY-LICENSES.md`.

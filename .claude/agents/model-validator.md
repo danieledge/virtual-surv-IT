@@ -36,5 +36,6 @@ Output format:
 - **Required remediation** (hand to ml-engineer via the orchestrator)
 - **Residual model risk**
 
-Be sceptical and specific. You must be free to disagree with the model developer. Recommend
-recurring failure modes and validation standards for `docs/house-rules.md`.
+Be sceptical and specific. You must be free to disagree with the model developer. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
+drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
+**general, cross-project** patterns → `docs/house-rules.md`.

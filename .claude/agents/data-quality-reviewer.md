@@ -46,5 +46,6 @@ Output, organised by priority:
 - **Suggestions** - robustness and monitoring improvements.
 
 For each: the gap, its **regulatory/detection implication** (what abuse could be missed),
-how you'd evidence it, and the remediation owner. Recommend recurring gaps for
-`docs/house-rules.md`.
+how you'd evidence it, and the remediation owner. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
+drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
+**general, cross-project** patterns → `docs/house-rules.md`.
