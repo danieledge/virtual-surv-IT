@@ -2,8 +2,13 @@
 #
 # WHY: an LLM emits citations ("MAR Article 12", "Rule 10b-5") from parametric memory, where it
 # confabulates confidently. In a regulated domain a wrong pinpoint citation is a control failure.
-# So the team RETRIEVES citations from this controlled list rather than RECALLING them, and
-# `scripts/check_citations.py` flags any pinpoint citation in an artifact that is not listed here.
+# So `scripts/check_citations.py` flags any pinpoint citation in an artifact that is not listed here.
+#
+# THIS IS A VERIFICATION LEDGER, NOT AN ALLOWLIST. It does NOT limit what the team may cite - the
+# agents should use their full regulatory knowledge to surface the obligation that applies. A
+# citation not in this list is "not yet human-verified" (flag it to-verify, confirm against the
+# source, then ADD it), NOT "wrong" or "forbidden". The list starts small on purpose and grows as
+# obligations are verified - so DON'T treat its size as a cap on the team's regulatory coverage.
 #
 # SEED DATA: the entries below are the obligations this reference repo cites (spoofing rule +
 # comms surveillance). Each pinpoint + typology was checked against the primary source on

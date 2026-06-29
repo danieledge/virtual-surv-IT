@@ -44,10 +44,13 @@ Treat a regulatory citation like a threshold: **it must be grounded or flagged, 
 1. **Source of truth.** Maintain a project-local, version-controlled **regulatory register** (the
    firm's in-scope obligations - regime, instrument/typology, pinpoint reference, effective date,
    source URL/document id). `docs/scope-and-stack.md` becomes the example seed for it.
-2. **Retrieve, don't recall.** When any deliverable needs a pinpoint citation, the producing agent
-   must **retrieve** it from the register (lookup over a controlled corpus), not generate it from
-   memory. If the register has no matching entry, the agent cites at the **level it can support**
-   (named regime / typology) and marks the pinpoint as `to-be-verified` with an owner.
+2. **Use knowledge, but flag the unverified (ledger, not allowlist).** The agent uses its **full
+   regulatory knowledge** to identify the applicable obligation - the register does **not** limit
+   what may be cited. A pinpoint that resolves to a register entry is cited as **verified**; one
+   that does not is still **surfaced** but marked **to-verify** (confirm against the primary source,
+   then add it to the register) - it is "not yet verified", not "wrong" or "forbidden". The register
+   is a growing **verification ledger**, so its size never caps the team's regulatory coverage. The
+   one hard rule: never assert an unverified pinpoint as **decided fact** without the to-verify flag.
 3. **Mechanical check at the gate.** `compliance-reviewer` verifies every emitted pinpoint citation
    **against the register** rather than reading it for plausibility. An unmatched pinpoint is an
    audit finding, not prose to be trusted.
