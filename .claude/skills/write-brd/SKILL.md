@@ -11,7 +11,9 @@ Under the PM (CLAUDE.md §6), turn this idea into a BRD: **$ARGUMENTS**
 2. Route to **business-analyst** to draft using `docs/templates/brd.md`.
 3. Write each requirement in **EARS** form ("When `<trigger>`, the system shall
    `<response>`") with a stable ID (BRD-001, …) and the regulatory/business driver cited
-   per requirement (CLAUDE.md §2).
+   per requirement (CLAUDE.md §2). **Retrieve any pinpoint regulatory citation from the register**
+   (`config/regulatory-register.yaml`; `python -m scripts.check_citations --typology <x>`) - never
+   invent an article/section/rule; mark unsupported pinpoints as to-verify (ADR-001).
 4. List open questions for the PM to raise with the user.
 5. Save `artifacts/BRD-<slug>.md` and render: `python -m scripts.render_html artifacts/BRD-<slug>.md`.
 

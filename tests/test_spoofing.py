@@ -137,6 +137,18 @@ def test_no_genuine_baseline_anywhere_skips():
     assert detect_spoofing(events) == []
 
 
+def test_calibration_perfect_on_synthetic_set():
+    """The measured-calibration evidence: the rule must score recall=1.0 and FP=0 across the
+    labelled synthetic corpus (spoof TP + benign/large-genuine controls). A regression here means
+    the genuine-baseline change degraded detection. See scripts/calibrate_spoofing.py."""
+    from scripts.calibrate_spoofing import _evaluate
+
+    _, total = _evaluate()
+    assert total.fn == 0, f"false negatives: {total.fn}"
+    assert total.fp == 0, f"false positives: {total.fp}"
+    assert total.tp == 50
+
+
 def test_same_timestamp_fill_before_new_not_lost():
     """Regression: a FILL listed before its NEW at the same ms must still be applied (NEW is
     processed first within a timestamp), so the fill is not silently dropped."""
