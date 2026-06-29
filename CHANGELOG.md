@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.7.4] - 2026-06-29
 
 ### Fixed
 - **Duplicate hook file** - removed `"hooks": "./hooks/hooks.json"` from `plugin.json` (added in

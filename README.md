@@ -5,8 +5,8 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.3](https://img.shields.io/badge/version-0.7.3-blue)
-![Tests 83 passing](https://img.shields.io/badge/tests-83%20passing-brightgreen)
+![Version 0.7.4](https://img.shields.io/badge/version-0.7.4-blue)
+![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
@@ -20,7 +20,13 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.7.3
+> ## ✨ What's new in 0.7.4
+>
+> - **🔧 Fixed a duplicate-hook-file warning** - `plugin.json` no longer declares the standard
+>   `hooks/hooks.json` (Claude Code auto-loads it, so declaring it loaded the guards twice). The
+>   manifest validator now flags this so it can't recur.
+>
+> <details><summary>What's new in 0.7.3 - hook hardening, citation grounding, spoofing FN fix</summary>
 >
 > - **🛡️ Safety hooks hardened (ADR-002)** - the code-execution guard now segment-splits chained
 >   commands (an allow-listed segment can't wave a blocked one through), blocks inline-code
@@ -36,6 +42,8 @@
 >   hides by inflating their own size baseline; closed with a genuine-only baseline + instrument
 >   fallback, and **measured** precision/recall 1.00 on a labelled synthetic set
 >   ([calibration evidence](docs/scenarios/spoofing-calibration.md)).
+>
+> </details>
 >
 > <details><summary>What's new in 0.7.2 - LICENSE, CI lint/manifest, safety-hook tests</summary>
 >
@@ -504,7 +512,7 @@ silently skipped. None of these are required to *use* the team; they sharpen `co
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **83 unit tests** check the *code*. The **eval harness** ([`evals/`](evals/)) checks the
+The repo's **84 unit tests** check the *code*. The **eval harness** ([`evals/`](evals/)) checks the
 **quality of what the team produces** - so a prompt change that silently weakens a review gets
 caught, not shipped. (This is the regression net Anthropic's multi-agent guidance recommends.)
 
