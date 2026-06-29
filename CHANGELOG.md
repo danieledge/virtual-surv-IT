@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.7.5] - 2026-06-29
 
 ### Changed
 - **Citation register reframed as a ledger, not an allowlist.** The 7-entry register plus
