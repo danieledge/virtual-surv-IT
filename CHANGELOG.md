@@ -3,6 +3,20 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Changed - docs
+- **README restructured for navigation (research-backed).** Surveyed well-formatted OSS READMEs +
+  GitHub's own guidance, then: moved **Quick start above the roster**; collapsed the heavy/reference
+  sections into `<details>` using **Pattern A** (the `##` heading stays visible, only the body
+  collapses - so the jump-nav and GitHub Outline keep working, and anchors still land); collapsed
+  the "What's new" changelog; added back-to-top links and a `readme-top` anchor; delinked the
+  `#mei`/`#viktor` cross-links (they pointed inside a now-collapsed block). **Nothing removed** -
+  all detail is one click away.
+- **README now defers the newcomer narrative to `docs/OVERVIEW.md`** (the safety story, the
+  job-flow and the worked example), instead of re-explaining them at length - with explicit
+  pointers each way (README → OVERVIEW for "understand it"; OVERVIEW → README for "do it").
+
 ## [0.7.10] - 2026-06-29
 
 ### Changed - docs

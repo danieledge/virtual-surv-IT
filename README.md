@@ -1,3 +1,5 @@
+<a id="readme-top"></a>
+
 # Compliance Surveillance Engineering - Virtual Team
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
@@ -19,30 +21,6 @@
 > **only** when you run `/engage` (or another team command, or simply ask for the team). The sole
 > always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.7.10
->
-> - **🔍 Audited against Anthropic's guidance; self-assessment made honest** - an independent audit
->   (vs *Building Effective Agents*, the multi-agent system + context-engineering posts) found the
->   design broadly conformant but the conformance matrix overstated a few rows. Aligned to reality
->   (no code changes): "advisors are read-only" → "no Write/Edit (Bash execution-gated)"; subagent
->   self-assessment + condensed returns marked 🟡 (honest partials); the roster reframed as a
->   **library, not a pipeline** (the PM engages the minimal sufficient subset).
->
-> Recent **0.7.x**: memory is project-scoped (no project memory in the plugin); reviews coach
-> "vibe-coded" code (prompting guidance); docs slimmed + honest
-> masking framing; Morgan states the loaded version on
-> startup; safety-hook hardening (ADR-002);
-> citations *retrieved, not recalled* against a source-verified
-> [regulatory register](config/regulatory-register.yaml) (ADR-001); CI lint/manifest gates; and a
-> self-masking fix + measured calibration on the **bundled example** spoofing scenario (the worked
-> reference example, not the agents themselves). 📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
->
-> 🎬 **See it work** - a full build, end-to-end on synthetic data, captured as a readable
-> **[build demo transcript](docs/demos/build-demo.md)**, with every produced artifact in
-> [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/) (spec → code → 3 reviews → tuning →
-> delivery report). Other transcripts: [review](docs/demos/review-demo.md) ·
-> [data-safety](docs/demos/data-safety-demo.md) · [run comparison](docs/demos/build-run-comparison.md).
-
 A **virtual compliance-surveillance *engineering* team made of AI assistants** - the
 **engineering** behind surveillance. It builds and reviews the **technology that detects** money
 laundering, market manipulation and trader misconduct - rather than performing the compliance,
@@ -54,8 +32,8 @@ subject-matter experts who advise, and builders who engineer, test and review - 
 flowing between them like a real engineering team.
 
 > 🟢 **New to AI agents and LLMs?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md) - a
-> plain-English tour of what this is, who the team are, and how it keeps confidential data away
-> from the AI. No prior knowledge needed.
+> plain-English tour of what this is, who the team are, how a job flows through them, and how it
+> keeps confidential data away from the AI. No prior knowledge needed.
 
 ```mermaid
 flowchart LR
@@ -73,97 +51,37 @@ synthetic, or anonymised** (a startup disclaimer makes this explicit - the respo
 yours). Prefer **masked** (identities scrambled, behaviour preserved) or **synthetic** (entirely
 made up). See [how real data is handled](#-handling-real-data).
 
+🎬 **See it work** - a full build, end-to-end on synthetic data, captured as a readable
+**[build demo transcript](docs/demos/build-demo.md)** (every artifact in
+[`docs/demos/build-artifacts/`](docs/demos/build-artifacts/)). Other transcripts:
+[review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) ·
+[run comparison](docs/demos/build-run-comparison.md).
+
+<details>
+<summary>✨ <b>What's new in 0.7.10</b> - audit-honest conformance (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+- **🔍 Audited against Anthropic's guidance; self-assessment made honest** - an independent audit
+  (vs *Building Effective Agents*, the multi-agent system + context-engineering posts) found the
+  design broadly conformant but the conformance matrix overstated a few rows. Aligned to reality
+  (no code changes): "advisors are read-only" → "no Write/Edit (Bash execution-gated)"; subagent
+  self-assessment + condensed returns marked 🟡 (honest partials); the roster reframed as a
+  **library, not a pipeline** (the PM engages the minimal sufficient subset).
+
+Recent **0.7.x**: memory is project-scoped (no project memory in the plugin); reviews coach
+"vibe-coded" code (prompting guidance); docs slimmed + honest masking framing; Morgan states the
+loaded version on startup; safety-hook hardening (ADR-002); citations *retrieved, not recalled*
+against a source-verified [regulatory register](config/regulatory-register.yaml) (ADR-001); CI
+lint/manifest gates; and a self-masking fix + measured calibration on the **bundled example**
+spoofing scenario (the worked reference example, not the agents themselves).
+📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
+
+</details>
+
 ---
 
-**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [📚 Built on](#-built-on---anthropic-agent-guidance) · [🙏 Credits](#-credits) · [📄 License](#-license)
+**📑 Jump to** - [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [📚 Built on](#-built-on---anthropic-agent-guidance) · [🙏 Credits](#-credits) · [📄 License](#-license)
 
 ---
-
-## 👥 Meet the team
-
-![The compliance-surveillance engineering team - a group portrait of the 17 named characters (Morgan + 16 specialists), each labelled with name and role](docs/assets/team-portrait.png)
-
-*The team - **Morgan** (PM/orchestrator) plus **16 agents**: fifteen specialists and a tireless junior (Pip). Full bios below.*
-
-**Morgan** (PM & orchestrator) leads **16 agents** - fifteen specialists and a tireless junior
-(Pip) - the seventeen in the photo above. Each has a day job, a name, strong opinions, and a Slack
-status that tells you more than their job title does. (Type `/meet-the-team` and Morgan does the
-introductions live.) **🧠 Advisors** are read-only - your
-*independent* check, so they can critique all day but can't touch the code (segregation of duties,
-basically). **🔧 Builders** write the stuff.
-
-**🎩 Morgan** - *Project Manager & orchestrator.* Translates regulator-speak into plain English,
-leads with "yes, here's how", and physically cannot let a piece of work end at "analysis". Will
-get it past the reviewers **and** the change board. · *Slack:* "happy to take that as an action."
-
-### 🔧 Builders - they engineer the surveillance technology
-
-- **Amara** - *Business Analyst.* Asks "but what does the regulation *actually require*?" until the
-  spec can't be misread. BABOK to her bones; allergic to ambiguity and to thresholds that turned up
-  without a rationale. · *Slack:* "requirement unclear → workshop booked (recurring)."
-- **Mateo** - *Detection Rules Developer.* Turns "catch the spoofers" into deterministic, tested
-  logic - second line of defence, in code form. A rule without a false-positive test is, to him,
-  just a rumour. · *Slack:* "no test, no merge. it's in the SDLC."
-- **Ana** - *Data Analyst.* Lives in the data and the false positives; trusts nothing until she's
-  seen the distribution. Will name your FP driver before you've finished writing the ticket. ·
-  *Slack:* "the data says otherwise."
-- **Theo** - *Tuning Analyst.* Can defend a threshold to a regulator with a straight face - ATL/BTL,
-  segmentation, the lot. Treats "let's just round it to 10k" as a personal insult. · *Slack:*
-  "show me the below-the-line sample."
-- <a id="mei"></a>**Mei** - *ML Engineer.* Reaches for ML only when plain rules genuinely aren't enough - and says
-  so out loud, because she knows [Viktor](#viktor)'s coming. Won't ship a model she can't explain to a
-  regulator. · *Slack:* "…do we actually need a model for this?"
-- **Kenji** - *Platform / Data Engineer.* Builds the plumbing nobody thanks him for until a feed
-  drops at quarter-end. Pipelines, ETL, retention, lineage - and a deep, personal grudge against
-  silent failures. · *Slack:* "have you tried the runbook?"
-- **Linh** - *QA Engineer.* Refuses to mark her own homework - independent by design. Finds the
-  edge case you were hoping nobody would raise in UAT. Residual risk: stated, not buried. ·
-  *Slack:* "reopening - it's a finding, not a nit."
-
-> Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
-> a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
-> **threshold tuning → `tuning-analyst`**; **requirements/elicitation/reg-change → `business-analyst`**;
-> an ML model → `ml-engineer`. The PM picks; see CLAUDE.md §6.
-
-### 🧠 Advisors - they guide and sign off (read-only)
-
-- **Hassan** - *Transaction-Monitoring / AML SME.* The money-laundering brain. Structuring,
-  smurfing, layering - usually spotted before lunch. Will gently warn you when a "clever" scenario
-  would file a thousand defensive SARs and catch nothing. · *Slack:* "that's structuring. and
-  that. and that."
-- **Camila** - *Trade-Surveillance SME.* Thinks like a spoofer so you don't have to. Spoofing,
-  layering, marking the close, insider dealing - reads an order book like a crime novel. ·
-  *Slack:* "…and there's the cancel. classic."
-- **Cleo** - *Comms-Surveillance SME.* Reads trader chat for a living: lexicons, NLP risk flags,
-  e-comms and voice. Fluent in euphemism; deeply unimpressed by "let's take this to my personal
-  phone". · *Slack:* "'per my last message' is doing a lot of work here."
-- <a id="viktor"></a>**Viktor** - *Model Validator.* Independent of [Mei](#mei) *by design*, and entirely comfortable telling
-  her the model's wrong. Lives in **SR 11-7**; the friendly adversary every model needs. ·
-  *Slack:* "prove it. then prove it again. then document it."
-- **Ravi** - *Code Reviewer.* Reads seven languages (**Python, TypeScript/JS, Scala, Java,
-  PowerShell, Bash, SQL**) and the security flaws in all of them. Drives the real analysers
-  (ruff/bandit/SpotBugs/ShellCheck/Semgrep…), adds judgement on top - and, sorry, there's a
-  hard-coded secret on line 42. · *Slack:* "nit: naming (×40). also: CRITICAL, line 42."
-- **Thabo** - *Performance Reviewer.* Asks one question - *"will it survive month-end?"* - and
-  answers with evidence, not vibes. **Static by default** (won't run your code uninvited, §7). ·
-  *Slack:* "fine in dev. now do it at 10× and T+1."
-- **Layla** - *Compliance Reviewer.* The last gate before anything ships: auditability, the
-  alert→logic→obligation trail, secrets/PII, the Definition of Done. "Probably fine" does not pass
-  review. · *Slack:* "if it isn't documented, it didn't happen."
-- **Yuki** - *Data-Quality Reviewer.* Quietly obsessed with the one missing feed that means abuse
-  goes undetected - completeness, timeliness, **total coverage**. Knows a silent feed gap *is* the
-  control failure. · *Slack:* "no feed, no alert, no idea."
-
-### ⚙️ …and behind the scenes
-
-- **Pip** - *Review Coordinator.* Haiku-tier and proud of it. Preps every review - detects the
-  context, picks the lenses, scores findings and keeps the Found/Reported/Filtered tallies - so the
-  senior reviewers never burn opus on arithmetic. Will absolutely raise a ticket for it. ·
-  *Slack:* "review prepped & triaged ▓▓▓░░ (JIRA raised)"
-
-> Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
-> real independent check. The restriction is enforced by the tools each agent is granted -
-> advisors get `Read, Grep, Glob` only - not by convention.
 
 ## 🚀 Quick start
 
@@ -182,10 +100,19 @@ Then run `/help` - you should see `/engage`, `/deep-review`, `/audit-review`, �
 decision), or **`/meet-the-team`** for introductions; then `/engage` to start. (Also
 `pip install -r requirements-dev.txt` for the worked example, tests and the `.md→.html` render.)
 
-> 🎬 **Prefer to read it first?** Real demo transcripts are rendered right here on GitHub -
-> [**`docs/demos/`**](docs/demos/): a [review](docs/demos/review-demo.md), the
-> [data-safety guard blocking a read live](docs/demos/data-safety-demo.md), and a
-> [build from scratch](docs/demos/build-demo.md). No setup needed.
+Then just **talk to the PM** - describe whatever you've got:
+
+```
+/engage I need to detect wash trades in our equities flow
+/engage here's a PowerShell script, review it and tell me if it'd survive an audit
+/engage build this from the attached FSD
+```
+
+> **You only type `/engage` once** - to kick off a piece of work. After that, just reply in
+> plain English ("yes, go ahead", "add a false-positive test", "now do the handover");
+> Morgan stays in role for the whole session. Use `/engage` again only to start a new,
+> separate piece of work, or a focused command (`/audit-review`, `/handover`, …) to jump
+> straight to a specific workflow.
 
 > ⚠️ **Two gotchas that waste people's time:**
 > - **Claude can't install the plugin for you.** `/plugin …` is a command **you** type - if you
@@ -194,7 +121,11 @@ decision), or **`/meet-the-team`** for introductions; then `/engage` to start. (
 >   `.claude/skills/<name>/SKILL.md`, so copying the whole folder mis-nests them and they won't
 >   load. Use project mode (above) or a real plugin install (below).
 
-### Install once - launch the team on demand from *any* project
+> Don't have Claude Code yet? Install it from <https://claude.com/claude-code>, then run
+> `claude` inside this folder.
+
+<details>
+<summary>🔌 <b>Install as a plugin</b> - summon the team on demand from <i>any</i> project</summary>
 
 Install it as a plugin and the team is available in every project, summoned with one command.
 
@@ -242,37 +173,10 @@ You get the 16 agents, the workflow commands and the raw-data guard hook in ever
 > backed by the OS-level `permissions.deny` in settings. (Note: the hook runs `python3`; the
 > guard is inert without Python - the deny-list still applies.)
 
-Then just **talk to the PM** - describe whatever you've got:
+</details>
 
-```
-/engage I need to detect wash trades in our equities flow
-/engage here's a PowerShell script, review it and tell me if it'd survive an audit
-/engage build this from the attached FSD
-```
-
-> **You only type `/engage` once** - to kick off a piece of work. After that, just reply in
-> plain English ("yes, go ahead", "add a false-positive test", "now do the handover");
-> Morgan stays in role for the whole session. Use `/engage` again only to start a new,
-> separate piece of work, or a focused command (`/audit-review`, `/handover`, …) to jump
-> straight to a specific workflow.
-
-The PM (the main session) then:
-1. **Asks you clarifying questions** and waits for your answers - it won't guess scope,
-   jurisdiction, data or success criteria.
-2. **Offers a menu of deliverables** to pick from (BRD, FSD, ADRs, RTM, review report,
-   audit pack…).
-3. **Agrees a plan** with you (the Engagement Brief), then **runs the right specialists**.
-4. **Hands back deliverables in both `.md` and `.html`** under `artifacts/`.
-
-Prefer to drive a specific step yourself? Use the focused commands:
-`/write-brd` · `/brd-to-fsd` · `/deep-review` · `/audit-review` · `/build-solution` ·
-`/new-scenario` (see [Using them](#-using-them)).
-
-> Don't have Claude Code yet? Install it from <https://claude.com/claude-code>, then run
-> `claude` inside this folder. New to agents/LLMs? Read
-> [`docs/OVERVIEW.md`](docs/OVERVIEW.md) first.
-
-### Add it to an existing repo (manual / partial install)
+<details>
+<summary>🧩 <b>Manual / partial install</b> - hand-pick the team into an existing repo</summary>
 
 Prefer to hand-pick the team into a repo you already have, without the marketplace? Copy these:
 
@@ -291,6 +195,102 @@ Prefer to hand-pick the team into a repo you already have, without the marketpla
 (If you install this repo as a Claude Code **plugin** via `.claude-plugin/`, all of the above
 ships together - see the manifest.)
 
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
+## 👥 Meet the team
+
+![The compliance-surveillance engineering team - a group portrait of the 17 named characters (Morgan + 16 specialists), each labelled with name and role](docs/assets/team-portrait.png)
+
+*The team - **Morgan** (PM/orchestrator) plus **16 agents**: fifteen specialists and a tireless junior (Pip). Full bios below.*
+
+**Morgan** (PM & orchestrator) leads **16 agents** - fifteen specialists and a tireless junior
+(Pip) - the seventeen in the photo above. Each has a day job, a name, strong opinions, and a Slack
+status that tells you more than their job title does. (Type `/meet-the-team` and Morgan does the
+introductions live.) **🧠 Advisors** are read-only - your *independent* check, so they can critique
+all day but can't touch the code (segregation of duties, basically). **🔧 Builders** write the stuff.
+
+> Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
+> a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
+> **threshold tuning → `tuning-analyst`**; **requirements/elicitation/reg-change → `business-analyst`**;
+> an ML model → `ml-engineer`. The PM picks; see CLAUDE.md §6.
+
+<details>
+<summary>👥 <b>The full roster</b> - day jobs, strong opinions and Slack statuses (or run <code>/meet-the-team</code>)</summary>
+
+**🎩 Morgan** - *Project Manager & orchestrator.* Translates regulator-speak into plain English,
+leads with "yes, here's how", and physically cannot let a piece of work end at "analysis". Will
+get it past the reviewers **and** the change board. · *Slack:* "happy to take that as an action."
+
+### 🔧 Builders - they engineer the surveillance technology
+
+- **Amara** - *Business Analyst.* Asks "but what does the regulation *actually require*?" until the
+  spec can't be misread. BABOK to her bones; allergic to ambiguity and to thresholds that turned up
+  without a rationale. · *Slack:* "requirement unclear → workshop booked (recurring)."
+- **Mateo** - *Detection Rules Developer.* Turns "catch the spoofers" into deterministic, tested
+  logic - second line of defence, in code form. A rule without a false-positive test is, to him,
+  just a rumour. · *Slack:* "no test, no merge. it's in the SDLC."
+- **Ana** - *Data Analyst.* Lives in the data and the false positives; trusts nothing until she's
+  seen the distribution. Will name your FP driver before you've finished writing the ticket. ·
+  *Slack:* "the data says otherwise."
+- **Theo** - *Tuning Analyst.* Can defend a threshold to a regulator with a straight face - ATL/BTL,
+  segmentation, the lot. Treats "let's just round it to 10k" as a personal insult. · *Slack:*
+  "show me the below-the-line sample."
+- **Mei** - *ML Engineer.* Reaches for ML only when plain rules genuinely aren't enough - and says
+  so out loud, because she knows Viktor's coming. Won't ship a model she can't explain to a
+  regulator. · *Slack:* "…do we actually need a model for this?"
+- **Kenji** - *Platform / Data Engineer.* Builds the plumbing nobody thanks him for until a feed
+  drops at quarter-end. Pipelines, ETL, retention, lineage - and a deep, personal grudge against
+  silent failures. · *Slack:* "have you tried the runbook?"
+- **Linh** - *QA Engineer.* Refuses to mark her own homework - independent by design. Finds the
+  edge case you were hoping nobody would raise in UAT. Residual risk: stated, not buried. ·
+  *Slack:* "reopening - it's a finding, not a nit."
+
+### 🧠 Advisors - they guide and sign off (read-only)
+
+- **Hassan** - *Transaction-Monitoring / AML SME.* The money-laundering brain. Structuring,
+  smurfing, layering - usually spotted before lunch. Will gently warn you when a "clever" scenario
+  would file a thousand defensive SARs and catch nothing. · *Slack:* "that's structuring. and
+  that. and that."
+- **Camila** - *Trade-Surveillance SME.* Thinks like a spoofer so you don't have to. Spoofing,
+  layering, marking the close, insider dealing - reads an order book like a crime novel. ·
+  *Slack:* "…and there's the cancel. classic."
+- **Cleo** - *Comms-Surveillance SME.* Reads trader chat for a living: lexicons, NLP risk flags,
+  e-comms and voice. Fluent in euphemism; deeply unimpressed by "let's take this to my personal
+  phone". · *Slack:* "'per my last message' is doing a lot of work here."
+- **Viktor** - *Model Validator.* Independent of Mei *by design*, and entirely comfortable telling
+  her the model's wrong. Lives in **SR 11-7**; the friendly adversary every model needs. ·
+  *Slack:* "prove it. then prove it again. then document it."
+- **Ravi** - *Code Reviewer.* Reads seven languages (**Python, TypeScript/JS, Scala, Java,
+  PowerShell, Bash, SQL**) and the security flaws in all of them. Drives the real analysers
+  (ruff/bandit/SpotBugs/ShellCheck/Semgrep…), adds judgement on top - and, sorry, there's a
+  hard-coded secret on line 42. · *Slack:* "nit: naming (×40). also: CRITICAL, line 42."
+- **Thabo** - *Performance Reviewer.* Asks one question - *"will it survive month-end?"* - and
+  answers with evidence, not vibes. **Static by default** (won't run your code uninvited, §7). ·
+  *Slack:* "fine in dev. now do it at 10× and T+1."
+- **Layla** - *Compliance Reviewer.* The last gate before anything ships: auditability, the
+  alert→logic→obligation trail, secrets/PII, the Definition of Done. "Probably fine" does not pass
+  review. · *Slack:* "if it isn't documented, it didn't happen."
+- **Yuki** - *Data-Quality Reviewer.* Quietly obsessed with the one missing feed that means abuse
+  goes undetected - completeness, timeliness, **total coverage**. Knows a silent feed gap *is* the
+  control failure. · *Slack:* "no feed, no alert, no idea."
+
+### ⚙️ …and behind the scenes
+
+- **Pip** - *Review Coordinator.* Haiku-tier and proud of it. Preps every review - detects the
+  context, picks the lenses, scores findings and keeps the Found/Reported/Filtered tallies - so the
+  senior reviewers never burn opus on arithmetic. Will absolutely raise a ticket for it. ·
+  *Slack:* "review prepped & triaged ▓▓▓░░ (JIRA raised)"
+
+> Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
+> real independent check. The restriction is enforced by the tools each agent is granted -
+> advisors get `Read, Grep, Glob` only - not by convention.
+
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 🤖 Using them
 
 It's one **dynamic, agile delivery team** with a single front door: the **PM, "Morgan"** -
@@ -302,9 +302,11 @@ the specialists.
 /engage <a problem, code to review, or a set of requirements>
 ```
 
-The PM asks clarifying questions (and waits for your answers), offers a **menu of documentary
-artifacts** to choose from, summarises everything in an Engagement Brief, then oversees
-delivery. Focused commands for each entry point:
+The PM **asks clarifying questions** (and waits for your answers - it won't guess scope,
+jurisdiction, data or success criteria), offers a **menu of documentary artifacts** to choose from
+(BRD, FSD, ADRs, RTM, review report, audit pack…), summarises everything in an Engagement Brief,
+then oversees delivery and **hands back each deliverable in both `.md` and `.html`** under
+`artifacts/`. Focused commands for each entry point:
 
 | Command | Use it for | Pattern |
 |---|---|---|
@@ -328,6 +330,8 @@ You can also just describe a task in plain English (Claude matches on each agent
 `description`), or enable experimental agent teams via `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`
 for genuinely parallel workstreams.
 
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 📓 Worked example
 
 A complete reference scenario ships with the repo so the conventions are concrete - the
@@ -340,7 +344,8 @@ tests/test_spoofing.py       # true-positive + false-positive cases (§4)
 docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
 ```
 
-(The full repo structure is in [Layout](#-layout).)
+(The full repo structure is in [Layout](#-layout). New to the spoofing example?
+[`docs/OVERVIEW.md` §6](docs/OVERVIEW.md) explains it in plain English.)
 
 Quickstart:
 
@@ -355,15 +360,20 @@ Add a new detection with `/new-scenario <requirement>`, which chains
 business-analyst → SME → rules-developer → code-reviewer → compliance-reviewer per the
 handbook.
 
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 🔍 Code-review tooling
 
-The `code-reviewer` agent drives standard analysers - it doesn't reinvent rules. The Python
-ones are in `requirements-review.txt` (kept separate so the core test install stays lean).
-The rest install via the OS / build tooling:
+The `code-reviewer` agent drives standard analysers - it doesn't reinvent rules. None are required
+to *use* the team; they sharpen reviews. **Without them, reviews still run - but degrade to
+inference-only (🧠) instead of tool-backed measured (📊) findings** (the 🔬 tooling-coverage line
+says what couldn't run).
 
-> **Without these installed, reviews still run - but degrade to inference-only (🧠) instead of
-> tool-backed measured (📊) findings.** The review's 🔬 tooling-coverage line will say what
-> couldn't run. Install them before testing if you want analyser-evidenced results.
+<details>
+<summary>🔍 <b>Analyser install per language</b> (optional; sharpens <code>code-reviewer</code>)</summary>
+
+The Python ones are in `requirements-review.txt` (kept separate so the core test install stays
+lean). The rest install via the OS / build tooling:
 
 | Language | Install |
 |---|---|
@@ -375,13 +385,21 @@ The rest install via the OS / build tooling:
 | Any | Semgrep (`pip`) for multi-language; gitleaks for secrets |
 
 The agent runs whatever is present and reports which analysers were unavailable - nothing is
-silently skipped. None of these are required to *use* the team; they sharpen `code-reviewer`.
+silently skipped.
+
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **84 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The **eval harness** ([`evals/`](evals/)) checks the
-**quality of what the team produces** - so a prompt change that silently weakens a review gets
-caught, not shipped. (This is the regression net Anthropic's multi-agent guidance recommends.)
+The repo's **84 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The
+**eval harness** ([`evals/`](evals/)) checks the **quality of what the team produces** - so a prompt
+change that silently weakens a review gets caught, not shipped. (This is the regression net
+Anthropic's multi-agent guidance recommends.)
+
+<details>
+<summary>🧪 <b>What's in the harness</b> - 7 rubrics · 21 golden cases · deterministic scorer</summary>
 
 - **7 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety ·
   prompt-injection · regulatory-citation) + **21 golden cases** with deliberately seeded issues
@@ -396,11 +414,19 @@ caught, not shipped. (This is the regression net Anthropic's multi-agent guidanc
 > **recall 1.0** - it caught both planted criticals and correctly left the documented threshold
 > (the false-positive trap) alone.
 
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 🪝 The two safety hooks (plain English)
 
 A *hook* is a small script Claude Code runs automatically **right before** it uses a tool, and it
 can **allow** or **block** that action. This plugin ships two, **always on** (they run even when the
-team is dormant):
+team is dormant). The newcomer-friendly version of the whole safety story is in
+[`docs/OVERVIEW.md` §5](docs/OVERVIEW.md); the operational detail is below.
+
+<details>
+<summary>🪝 <b>The raw-data guard + the code-execution gate</b> - what they do and how strong they are</summary>
 
 **1. The raw-data guard** (`guard-raw-data.py`) - *agents must never read real, unmasked data.*
 Anything an agent reads is sent to the AI model, so real records (PII/MNPI) can't go that way. The
@@ -425,21 +451,31 @@ boundary for shell is OS file permissions / keeping raw data off the box. The fu
 and the hardening backlog are in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md);
 operating notes are in [`docs/house-rules.md`](docs/house-rules.md).
 
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 🔒 Handling real data
 
 **Raw data under `data/raw/` is hard-blocked** - the guard stops any agent reading it, and
 anything an agent reads goes to the model provider as context. Two safe ways to get data to the
 team:
 
-1. **Mask it** through the pipeline below (recommended for real data) → point agents at
-   `data/masked/`; or **synthesise** it (safest, shareable).
+1. **Mask it** through the pipeline (recommended for real data) → point agents at `data/masked/`;
+   or **synthesise** it (safest, shareable).
 2. **Provide already-safe data** (synthetic / masked / anonymised). A **startup disclaimer** has
    you confirm it carries no prohibited PII/MNPI - that's your responsibility, not the team's.
 
 Either way, **committed examples, tests, artifacts and logs stay synthetic/masked only** (§5) -
 the attestation covers the analysis *inputs* you point at, not what gets written into the repo.
 An **automatic masking workflow** (so you don't have to self-attest) is on the [roadmap](#-roadmap).
-The pipeline:
+
+> Pseudonymised data is still personal data (GDPR). Masking enables local development; prefer fully
+> synthetic data for anything that leaves the environment. (Plain-English version:
+> [`docs/OVERVIEW.md` §5](docs/OVERVIEW.md).)
+
+<details>
+<summary>🔒 <b>The masking pipeline</b> - ingest · validate · synthesise (scripts + commands)</summary>
 
 ```
 real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ ─▶ agents / dev
@@ -477,12 +513,14 @@ python -m scripts.validate_masking                       # config self-test (syn
 python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked file for residual PII
 ```
 
-> Pseudonymised data is still personal data (GDPR). Masking enables local development;
-> prefer fully synthetic data for anything that leaves the environment.
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
 
 ## 📁 Layout
 
-One consolidated map of the repo:
+<details>
+<summary>📁 <b>One consolidated map of the repo</b></summary>
 
 ```
 .claude-plugin/                 # plugin + marketplace manifests (installable via /plugin)
@@ -508,7 +546,14 @@ evals/                          # team-quality eval harness: 7 rubrics + 21 gold
 .pre-commit-config.yaml         # local secret / raw-data guardrails
 ```
 
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 🔧 Notes on the config
+
+<details>
+<summary>🔧 <b>Tool permissions · memory scope · model tiering</b></summary>
 
 - Advisory agents are restricted to read-only tools (`Read, Grep, Glob`, sometimes `Bash`)
   so they physically cannot alter detection logic.
@@ -523,10 +568,18 @@ evals/                          # team-quality eval harness: 7 rubrics + 21 gold
   **1 haiku** - the per-agent rationale and best-practice conformance live in
   [`docs/agent-design.md`](docs/agent-design.md). Change the `model:` field freely.
 
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 💰 Token usage & optimisation
 
-Multi-agent setups cost tokens, so the team is built to be cost-conscious. Measured on a real run
-(the Agent tool reports actual usage; ~4 chars/token, so ±15%):
+Multi-agent setups cost tokens, so the team is built to be cost-conscious.
+
+<details>
+<summary>💰 <b>Measured per-run numbers + the optimisations in place</b></summary>
+
+Measured on a real run (the Agent tool reports actual usage; ~4 chars/token, so ±15%):
 
 | What | Tokens | ~API cost | When it's paid |
 |---|---|---|---|
@@ -556,10 +609,17 @@ Multi-agent setups cost tokens, so the team is built to be cost-conscious. Measu
   It loads into *every* session and is inherited by *every* subagent, so this saves ~2.3k tokens per
   session - multiplied across a fan-out (a 5-agent run saves ~11k).
 
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 🗺️ Roadmap
 
 Tracked enhancements, with the rationale for each. *(Done this cycle: **subagent self-assessment** -
 agents now self-verify against their brief and flag gaps before returning, CLAUDE.md §6.)*
+
+<details>
+<summary>🗺️ <b>What's shipped and what's next</b></summary>
 
 **Quality & evaluation**
 - ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 7 rubrics + 21 golden cases
@@ -595,6 +655,10 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
   12 events). *Why:* enables a *measured* `/tune-thresholds` demo (ATL/BTL, real FP reduction)
   rather than an illustrative one. Plus the price-context (distance-from-touch) check noted in
   [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md).
+
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
 
 ## 📚 Built on - Anthropic agent guidance
 
