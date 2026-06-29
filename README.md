@@ -444,7 +444,7 @@ scripts/render_html.py       # render any .md artifact to standalone .html for d
 scripts/eval_score.py        # deterministic scorer for the team-quality eval harness
 evals/                       # team-quality eval harness: rubrics + 21 golden cases (regression net)
 .claude/skills/              # workflows: /engage, /meet-the-team, /demo, /prepare-data, /assess-coverage, /write-brd, /brd-to-fsd, /elicit-requirements, /reg-change-impact, /analyse-data, /tune-thresholds, /validate-tm-model, /run-evals, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
-.github/workflows/ci.yml     # runs tests + gitleaks + a no-raw-data check
+.github/workflows/ci.yml     # tests + lint (ruff/bandit/shellcheck) + manifest validation + gitleaks + no-raw-data check
 .pre-commit-config.yaml      # local secret / raw-data guardrails
 ```
 
