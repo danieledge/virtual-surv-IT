@@ -49,6 +49,10 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   masked data still owned by `tuning-analyst`). Pinned by a regression test.
 - **Register wiring completed:** `/write-brd` now also retrieves pinpoint citations from the
   regulatory register (joining `/new-scenario` + `/reg-change-impact`).
+- **Register seeds verified:** the 7 seed obligations (MAR Art.12(1)(a)/15/16, MiFID II Art.16(7),
+  CDR 2017/565 Art.76, SEC 17a-4(b)(4), FINRA 4511) were checked pinpoint + typology against
+  primary sources (EUR-Lex, Cornell LII, FINRA) and flipped `example -> verified` (`verified_on:
+  2026-06-29`); SEC source repointed to the resolvable Cornell LII mirror.
 
 ### Fixed - correctness bugs from a deeper code review
 - **Spoofing rule self-masking (detection FN):** the "outsized" size baseline was the median of

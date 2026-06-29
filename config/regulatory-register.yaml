@@ -5,11 +5,11 @@
 # So the team RETRIEVES citations from this controlled list rather than RECALLING them, and
 # `scripts/check_citations.py` flags any pinpoint citation in an artifact that is not listed here.
 #
-# SEED DATA: the entries below are the example obligations this reference repo already cites
-# (spoofing rule + comms surveillance). They are marked `status: verified` only as a STARTING
-# POINT for this POC - replace/extend with YOUR firm's obligations, each checked against the
-# primary source, and record the source URL + the date you verified it. Treat `status: example`
-# entries as un-confirmed until a human verifies them.
+# SEED DATA: the entries below are the obligations this reference repo cites (spoofing rule +
+# comms surveillance). Each pinpoint + typology was checked against the primary source on
+# 2026-06-29 (see `verified_on` / `source`) and marked `status: verified`. For PRODUCTION use,
+# replace/extend with YOUR firm's in-scope obligations and re-verify against the primary source
+# for your jurisdiction; treat any `status: example` entry as un-confirmed until a human checks it.
 #
 # Each entry:
 #   id            stable key
@@ -31,9 +31,9 @@ obligations:
     pinpoint: MAR Art.12(1)(a)
     aliases: ["Article 12(1)(a)", "Art.12(1)(a)", "Regulation (EU) No 596/2014 Article 12"]
     effective_date: "2016-07-03"
-    source: https://eur-lex.europa.eu/eli/reg/2014/596/oj
-    verified_on: "-"
-    status: example
+    source: https://eur-lex.europa.eu/eli/reg/2014/596/oj/eng
+    verified_on: "2026-06-29"
+    status: verified
 
   - id: MAR-ART15
     regime: EU MAR / UK FCA MAR
@@ -42,9 +42,9 @@ obligations:
     pinpoint: MAR Art.15
     aliases: ["Article 15", "Art.15", "FCA MAR Art.15"]
     effective_date: "2016-07-03"
-    source: https://eur-lex.europa.eu/eli/reg/2014/596/oj
-    verified_on: "-"
-    status: example
+    source: https://eur-lex.europa.eu/eli/reg/2014/596/oj/eng
+    verified_on: "2026-06-29"
+    status: verified
 
   - id: MAR-ART16
     regime: EU MAR
@@ -53,9 +53,9 @@ obligations:
     pinpoint: MAR Art.16
     aliases: ["Article 16", "Art.16"]
     effective_date: "2016-07-03"
-    source: https://eur-lex.europa.eu/eli/reg/2014/596/oj
-    verified_on: "-"
-    status: example
+    source: https://eur-lex.europa.eu/eli/reg/2014/596/oj/eng
+    verified_on: "2026-06-29"
+    status: verified
 
   - id: MIFID2-ART16-7
     regime: MiFID II (Directive 2014/65/EU)
@@ -64,9 +64,9 @@ obligations:
     pinpoint: MiFID II Art.16(7)
     aliases: ["Article 16(7)", "Art.16(7)"]
     effective_date: "2018-01-03"
-    source: https://eur-lex.europa.eu/eli/dir/2014/65/oj
-    verified_on: "-"
-    status: example
+    source: https://eur-lex.europa.eu/eli/dir/2014/65/oj/eng
+    verified_on: "2026-06-29"
+    status: verified
 
   - id: CDR-2017-565-ART76
     regime: Commission Delegated Regulation (EU) 2017/565
@@ -75,9 +75,9 @@ obligations:
     pinpoint: CDR (EU) 2017/565 Art.76
     aliases: ["Article 76", "Art.76", "2017/565 Art.76"]
     effective_date: "2018-01-03"
-    source: https://eur-lex.europa.eu/eli/reg_del/2017/565/oj
-    verified_on: "-"
-    status: example
+    source: https://eur-lex.europa.eu/eli/reg_del/2017/565/oj/eng
+    verified_on: "2026-06-29"
+    status: verified
 
   - id: SEC-17A4-B4
     regime: SEC Rule 17a-4 (Securities Exchange Act)
@@ -86,9 +86,9 @@ obligations:
     pinpoint: SEC 17a-4(b)(4)
     aliases: ["17a-4(b)(4)", "Rule 17a-4"]
     effective_date: "-"
-    source: https://www.ecfr.gov/current/title-17/chapter-II/part-240/section-240.17a-4
-    verified_on: "-"
-    status: example
+    source: https://www.law.cornell.edu/cfr/text/17/240.17a-4
+    verified_on: "2026-06-29"
+    status: verified
 
   - id: FINRA-4511
     regime: FINRA Rule 4511
@@ -98,5 +98,5 @@ obligations:
     aliases: ["Rule 4511"]
     effective_date: "2011-12-05"
     source: https://www.finra.org/rules-guidance/rulebooks/finra-rules/4511
-    verified_on: "-"
-    status: example
+    verified_on: "2026-06-29"
+    status: verified
