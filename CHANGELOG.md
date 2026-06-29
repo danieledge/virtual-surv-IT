@@ -12,6 +12,13 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   ([`docs/demos/build-demo.md`](docs/demos/build-demo.md)) and the other transcripts. The entrance
   paragraphs (tagline, POC/dormant callouts, intro, safety one-liner) were reworded for clarity -
   e.g. the intro leads with "the engineering behind surveillance" instead of "it doesn't do compliance".
+  Badges moved under the title; jump-nav fixed to match section order (+ Built on / License); a
+  License section added; "Layout" relocated to the end; the standalone Install section folded into
+  Quick start; the two overlapping file-trees merged into one.
+- **OVERVIEW masking honesty** - the "new to LLMs" page no longer reads as if masking is
+  comprehensive: it's described as a **basic** engine (tokenise identifiers + regex-redact common
+  PII), explicitly **not a full anonymiser** (regex-only free-text redaction misses names/disguised
+  IDs; real comms need NER; prefer synthetic).
 - **Scoping clarified** - the spoofing fixes/calibration are explicitly tagged as the **bundled
   reference/example scenario** (`rules/spoofing.py`), not the agents' own logic, in the README and
   this changelog, so they aren't read as a defect in the team itself.
