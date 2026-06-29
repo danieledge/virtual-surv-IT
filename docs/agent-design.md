@@ -11,10 +11,12 @@
    scope boundaries (what *another* agent owns). Overlaps are removed, not tolerated (e.g.
    `data-analyst` does exploratory/FP/MI work and **cedes threshold calibration to
    `tuning-analyst`**).
-2. **Least privilege, enforced by `tools:`.** Every agent declares its tools explicitly. **All
-   advisory/reviewer agents are read-only** (no `Write`/`Edit`) - that independence is a *tool
-   grant*, not a polite request. Build agents get exactly what they need (analysts hold `Write`
-   for their own scripts but **not** `Edit`, so they never alter live detection source).
+2. **Least privilege, enforced by `tools:`.** Every agent declares its tools explicitly.
+   **Advisory/reviewer agents hold no `Write`/`Edit`** - that independence is a *tool grant*, not a
+   polite request. (Six also hold `Bash` for static analysers / `git diff`; execution of the *code
+   under review* is gated by `guard-code-execution.py` (§7) - so the precise claim is "no
+   Write/Edit", not strictly "read-only".) Build agents get exactly what they need (analysts hold
+   `Write` for their own scripts but **not** `Edit`, so they never alter live detection source).
 3. **Match the model to the work (see §2).** Cheap tier for mechanical, top tier only where it
    changes outcomes.
 4. **Right-size every engagement.** Multi-agent costs ~15× the tokens; the PM uses the *leanest*
@@ -69,8 +71,10 @@ to sonnet if cost must be pushed harder, accepting a small risk on deep security
 
 ## 4. Why 16 agents (and not fewer / more)
 
-16 is at the upper end of "manageable", justified by the **breadth of deliverables** (detection
-rules, pipelines, ETL, ML, reviews across 7 languages, three surveillance domains, independent
+16 is the **library** size, not a per-task spawn count. The PM engages the **minimal sufficient
+subset** (typically 2–5) for the deliverable at hand, and the team is dormant by default - so the
+breadth costs nothing unless a task needs it. The roster spans the deliverables (detection rules,
+pipelines, ETL, ML, reviews across 7 languages, three surveillance domains, independent
 validation/QA/DQ). The over-fragmentation risk is controlled by: removing real overlaps (the
 `data-analyst`/`tuning-analyst` boundary), distinct non-colliding descriptions, and the right-sizing
 rule so a given task fires 2–3 agents, never all 16. We did **not** add agents for thin slices (no
@@ -81,7 +85,7 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | Best-practice item | Status | How |
 |---|---|---|
 | Frontmatter complete (name·description·tools·model) | ✅ | All 16. |
-| `tools:` least-privilege; advisors read-only | ✅ | Verified - zero advisors hold Write/Edit. |
+| `tools:` least-privilege; advisors hold no Write/Edit | ✅ | Verified - zero advisors hold Write/Edit. (6 hold `Bash` for analysers/diffs; code-under-review execution is hook-gated, §7 - "no Write/Edit", not strictly "read-only".) |
 | Description = clear when-to-use trigger | ✅ | Standardised "When the team is engaged, use for…"; overlaps removed. |
 | Model tiering (not all-one-tier; documented) | ✅ | §2 above; 4/11/1 split. |
 | Reasonable agent count / no routing collisions | ✅ | §4; one historical overlap fixed. |
@@ -103,7 +107,7 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 
 | Anthropic multi-agent standard | Status | How we meet it (or why it differs) |
 |---|---|---|
-| Simplest thing that works; multi-agent only when it improves outcomes | ✅ | Right-sizing doctrine (CLAUDE.md §6); a narrow change uses 1 builder + 1 reviewer, not the team. |
+| Simplest thing that works; multi-agent only when it improves outcomes | ✅ | The roster is a **library, not a pipeline**: the PM engages the minimal sufficient subset per task (a narrow change uses 1 builder + 1 reviewer) and the team is dormant by default - complexity is opt-in *by selection*, not asserted by size. *(Honest caveat: whether each engaged role is optimal is a human-gated judgement, not benchmarked - see `docs/research-virtual-team.md`.)* |
 | **Orchestrator-worker** (lead plans, workers act as filters) | ✅ | `/engage` - the PM decomposes, delegates, and synthesises. |
 | Delegate with **objective · output format · tools/sources · boundaries** | ✅ | CLAUDE.md §6 + `engage` §5 require exactly those four. |
 | Subagents **inherit no parent history** - put every input in the brief | ✅ | Stated in CLAUDE.md §6 delegation. |
@@ -111,21 +115,24 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | **Scale effort to complexity**; state the number of agents | ✅ | PM states intended agent count + why at the gate (`engage` §5). |
 | Budget **~15× tokens**; reserve multi-agent for high value | ✅ | "~15× the tokens" cited verbatim (CLAUDE.md §6). |
 | **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 11 sonnet / 1 haiku. |
-| Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | ✅ | Blackboard: agents write the Delivery Report / RTM; the PM synthesises. |
-| **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; all advisors read-only. |
+| Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) reduces *re-reading* big outputs - but a subagent's final message still lands in the orchestrator's context; we don't *enforce* a condensed return. Aspirational. |
+| **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no Write/Edit (Bash, where granted, is execution-gated, §7). |
 | Guard the failure modes (over-spawn · duplicate · runaway · premature stop) | ✅ | Right-size + state-count (over-spawn); non-overlapping briefs (duplicate); fix-loop stop conditions (runaway); never-dead-end (premature stop). |
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
 | Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |
 | **External memory** for long horizons | ✅ | **Project-scoped:** project-specific memory lives in the working project's own `CLAUDE.md` (the plugin ships no project memory - it's installed across many projects); `docs/house-rules.md` holds only **general, cross-project** conventions. Subagent context isolation (CLAUDE.md §6). |
 | **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 7 rubrics + 21 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
-| Subagent **self-assessment** (plan → evaluate → refine) | ✅ | Team-wide convention (CLAUDE.md §6): every agent self-verifies against its brief and **flags gaps** before returning, rather than implying completeness it doesn't have. |
+| Subagent **self-assessment** (plan → evaluate → refine) | 🟡 | A team-wide *convention* (CLAUDE.md §6: agents self-verify and flag gaps), but a single line - not a structured plan→evaluate→refine loop in each prompt. We lean on **independent** verification (reviewer chains, `model-validator`) instead - arguably stronger, but a different lesson. |
 | **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
 | **Dozens–hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable - right-sizing keeps us at 2–5 agents per engagement; we never reach that scale. |
 
-**Net:** strong conformance on the high-value lessons. The remaining 🟡s are deliberate fits to our
-*interactive, human-gated* delivery model (vs Anthropic's long-running autonomous research agent).
-Both former enhancement gaps are now closed: **self-assessment** is a team convention (CLAUDE.md §6)
-and the **LLM-judge eval harness** is shipped (`evals/`, `/run-evals`).
+**Net:** strong conformance on the high-value lessons. The 🟡s are honest partials - some are
+deliberate fits to our *interactive, human-gated* model (vs Anthropic's long-running autonomous
+research agent), and some are genuine gaps stated plainly: structured **self-assessment** is a
+one-line convention, not an enforced loop (we lean on independent review instead); **condensed
+sub-agent returns** are aspirational, not enforced. The **LLM-judge eval harness** is shipped
+(`evals/`, `/run-evals`); the **team-size / per-role marginal-value** question is
+acknowledged-unbenchmarked (see `docs/research-virtual-team.md`), not claimed as proven.
 
 ## 7. References (Anthropic agent guidance)
 
