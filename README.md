@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.4](https://img.shields.io/badge/version-0.7.4-blue)
+![Version 0.7.5](https://img.shields.io/badge/version-0.7.5-blue)
 ![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -20,11 +20,21 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.7.4
+> ## ✨ What's new in 0.7.5
+>
+> - **📚 Citation register reframed as a ledger, not an allowlist** - the regulatory register no
+>   longer limits what the team may cite. Agents use their **full regulatory knowledge** to surface
+>   the applicable obligation; a citation not in the register is flagged **to-verify** (confirm +
+>   add it), not treated as wrong or suppressed. A finding is reserved for a citation that
+>   *contradicts* the register or is *asserted as decided fact without a flag*.
+>
+> <details><summary>What's new in 0.7.4 - duplicate-hook-file fix</summary>
 >
 > - **🔧 Fixed a duplicate-hook-file warning** - `plugin.json` no longer declares the standard
 >   `hooks/hooks.json` (Claude Code auto-loads it, so declaring it loaded the guards twice). The
 >   manifest validator now flags this so it can't recur.
+>
+> </details>
 >
 > <details><summary>What's new in 0.7.3 - hook hardening, citation grounding, spoofing FN fix</summary>
 >
