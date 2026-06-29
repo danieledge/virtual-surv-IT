@@ -70,7 +70,7 @@ made up). See [how real data is handled](#-handling-real-data).
 
 ---
 
-**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [📁 Layout](#-layout) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [📚 Built on](#-built-on---anthropic-agent-guidance) · [🙏 Credits](#-credits) · [📄 License](#-license)
+**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [📚 Built on](#-built-on---anthropic-agent-guidance) · [🙏 Credits](#-credits) · [📄 License](#-license)
 
 ---
 
@@ -262,34 +262,9 @@ Prefer to drive a specific step yourself? Use the focused commands:
 > `claude` inside this folder. New to agents/LLMs? Read
 > [`docs/OVERVIEW.md`](docs/OVERVIEW.md) first.
 
-## 📁 Layout
+### Add it to an existing repo (manual / partial install)
 
-```
-.claude-plugin/               # plugin + marketplace manifests (installable via /plugin)
-CLAUDE.md                     # shared team handbook (example defaults - customise as needed)
-.claude/agents/               # 16 subagents (15 specialists + review-scorer helper)
-  business-analyst.md     # BA            (build)
-  tm-sme.md                   # AML SME       (advisory, read-only)
-  trade-surveillance-sme.md   # SME           (advisory, read-only)
-  comms-surveillance-sme.md   # SME           (advisory, read-only)
-  rules-developer.md          # detection rules (build)
-  platform-engineer.md        # pipelines/ETL/scripts/infra (build)
-  data-analyst.md             # analysis, FP analysis, data-quality, reporting/MI (build)
-  tuning-analyst.md           # threshold calibration / alert tuning (ATL-BTL) (build)
-  ml-engineer.md              # AI/ML         (build)
-  qa-engineer.md              # independent testing & QA evidence (build)
-  model-validator.md          # independent model validation (advisory, read-only)
-  code-reviewer.md            # multi-language code review (advisory, read-only)
-  performance-reviewer.md     # performance & scalability review (advisory, read-only)
-  compliance-reviewer.md      # audit/compliance review (advisory, read-only)
-  data-quality-reviewer.md    # data completeness & coverage assurance (advisory, read-only)
-  review-scorer.md            # cheap-tier (haiku) helper: context/scoring/filtering (read-only)
-```
-
-## 📦 Install
-
-The team is a set of files you commit into your repo. To get the whole team - not just the
-agents - copy these:
+Prefer to hand-pick the team into a repo you already have, without the marketplace? Copy these:
 
 1. `CLAUDE.md` to your repo root (merge if you already have one) - the shared handbook.
 2. `.claude/agents/` - the 16 subagents.
@@ -345,29 +320,17 @@ for genuinely parallel workstreams.
 
 ## 📓 Worked example
 
-A complete reference scenario ships with the repo so the conventions are concrete:
+A complete reference scenario ships with the repo so the conventions are concrete - the
+**bundled example** (the worked example, not the agents themselves):
 
 ```
 rules/spoofing.py            # MAR spoofing detection (deterministic, explainable)
 scripts/gen_synthetic.py     # synthetic order-flow generator (§5 - no real data)
 tests/test_spoofing.py       # true-positive + false-positive cases (§4)
 docs/scenarios/spoofing.md   # audit trail: alert → logic → obligation
-docs/WAYS-OF-WORKING.md      # frameworks, workflows, artifact menu, traceability spine
-docs/team-operating-guide.md # the PM's detailed operating rules (read on-engage; keeps CLAUDE.md lean)
-docs/demos/                  # real /demo transcripts (review, data-safety, build) - readable on GitHub
-docs/agent-design.md         # how the team is built to agent best-practice + model-tiering rationale + conformance matrix
-docs/prepare-data-roadmap.md # path to make /prepare-data accept more data safely ("throw anything at it")
-docs/DEFINITION-OF-DONE.md   # the evidenced gate every delivery must meet
-docs/scope-and-stack.md      # example regulatory scope + tech stack (customise; kept out of the always-loaded handbook)
-docs/code-review-method.md   # confidence scoring, filtering, deep review (adapted from turingmind)
-docs/templates/              # delivery-report (consolidated default) + BRD, FSD, ADR, RTM, review/performance, dev+QA handover, change/ops, scenario, model-validation
-scripts/render_html.py       # render any .md artifact to standalone .html for distribution
-scripts/eval_score.py        # deterministic scorer for the team-quality eval harness
-evals/                       # team-quality eval harness: rubrics + 21 golden cases (regression net)
-.claude/skills/              # workflows: /engage, /meet-the-team, /demo, /prepare-data, /assess-coverage, /write-brd, /brd-to-fsd, /elicit-requirements, /reg-change-impact, /analyse-data, /tune-thresholds, /validate-tm-model, /run-evals, /deep-review, /performance-review, /audit-review, /remediate, /build-solution, /handover, /new-scenario
-.github/workflows/ci.yml     # tests + lint (ruff/bandit/shellcheck) + manifest validation + gitleaks + no-raw-data check
-.pre-commit-config.yaml      # local secret / raw-data guardrails
 ```
+
+(The full repo structure is in [Layout](#-layout).)
 
 Quickstart:
 
@@ -506,6 +469,34 @@ python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked
 
 > Pseudonymised data is still personal data (GDPR). Masking enables local development;
 > prefer fully synthetic data for anything that leaves the environment.
+
+## 📁 Layout
+
+One consolidated map of the repo:
+
+```
+.claude-plugin/                 # plugin + marketplace manifests (installable via /plugin)
+CLAUDE.md                       # shared team handbook (example defaults - customise as needed)
+.claude/agents/                 # 16 subagents:
+   builders                       business-analyst · rules-developer · platform-engineer ·
+                                  data-analyst · tuning-analyst · ml-engineer · qa-engineer
+   advisors (read-only)           tm-sme · trade-surveillance-sme · comms-surveillance-sme ·
+                                  model-validator · code-reviewer · performance-reviewer ·
+                                  compliance-reviewer · data-quality-reviewer
+   helper                         review-scorer (haiku - review prep, scoring, filter tallies)
+.claude/skills/                 # 20 workflows: /engage, /deep-review, /audit-review, /handover,
+                                #   /new-scenario, /tune-thresholds, … (see "Using them")
+.claude/hooks/ + settings.json  # always-on data-safety + code-execution guards
+rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
+scripts/                        # masking (ingest), synthesise, render_html, eval_score,
+                                #   calibrate_spoofing, check_citations, validate_* helpers
+config/                         # masking schema + regulatory register
+docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
+                                #   scenarios/ · demos/ · templates/ · adr/
+evals/                          # team-quality eval harness: 7 rubrics + 21 golden cases
+.github/workflows/ci.yml        # tests + lint + manifest validation + gitleaks + no-raw-data check
+.pre-commit-config.yaml         # local secret / raw-data guardrails
+```
 
 ## 🔧 Notes on the config
 
