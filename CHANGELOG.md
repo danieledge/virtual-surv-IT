@@ -22,6 +22,10 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   project" is demoted to a collapsed alternative (still the best path for `/demo`, the worked example
   and the scripts). The script-step caveat + guard-portability notes stay visible under the plugin
   path. Also de-duplicated the Meet-the-team caption vs intro (the headcount breakdown was repeated).
+- **Legibility/grammar copy-edit pass** (README + OVERVIEW) - completed a cut-off sentence in the
+  OVERVIEW Pip row, split an NER run-on, fixed an awkward "the builder depends on the deliverable",
+  reworded "loads it ephemerally", and removed a doubled stop after an ellipsis. House style (ASCII
+  hyphens, British spelling) confirmed clean; no meaning or structure changed.
 
 ## [0.7.10] - 2026-06-29
 

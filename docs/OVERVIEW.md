@@ -80,7 +80,7 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 | **Thabo** `performance-reviewer` | 🧠 Advisor | Checks it's fast enough and will scale to real data volumes |
 | **Layla** `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |
 | **Yuki** `data-quality-reviewer` | 🧠 Advisor | Independently checks the data is complete & accurate, and that nothing in scope goes unmonitored |
-| **Pip** `review-scorer` | ⚙️ Helper | Cheap-tier (haiku) assistant that does the rote review steps - context detection, scoring, filtering - so the expensive reviewers don't |
+| **Pip** `review-scorer` | ⚙️ Helper | Cheap-tier (haiku) assistant that does the rote review steps - context detection, scoring, filtering - so the expensive reviewers don't have to |
 
 > Why "read-only" matters: a reviewer who could quietly fix the thing they're reviewing
 > isn't really an independent check. Making advisors read-only is enforced by the tools
@@ -92,7 +92,7 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 
 You describe what you want - a problem, some code to review, or a build. The **PM** (the
 main AI session, acting as project manager) clarifies, agrees a plan, then routes it through
-the right specialists. The builder depends on the deliverable - a detection rule, a data
+the right specialists. Which builder is used depends on the deliverable - a detection rule, a data
 pipeline, a transformation script, an ML model - not always the same person:
 
 ```mermaid
@@ -152,7 +152,7 @@ Three layers, from most to least sensitive:
    timing, patterns) so detection still works. A checker (`scripts/validate_masking.py`) verifies
    the configured fields were cleaned and that detection still fires. **Its limits matter:** the
    free-text redaction is regex-only, so it will **miss names and disguised identifiers** buried in
-   narrative or chat - real communications need proper NER (named-entity recognition), and for
+   narrative or chat. Real communications need proper NER (named-entity recognition), and for
    anything leaving the environment you should prefer synthetic data (below).
 3. **🟢 Synthetic data** (`scripts/synthesise.py`) is the safest: it studies the *shape* of
    the cleaned data, then generates **completely made-up** records that behave the same way
