@@ -37,6 +37,10 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   misleading comment about a missing shift-entity field corrected.
 - **`validate_manifest.py`:** type-guards `skills`/`agents` entries, skips dot-dirs, validates the
   declared `hooks` path, and checks the marketplace `plugins[]` list (not a whole-doc substring).
+- **Masking validator:** `run_privacy_checks` now scans *any* kept free-text field (e.g. `notes`),
+  not only declared identifiers - closing a blind spot the `--in` file scan already caught;
+  `scan_masked_file` no longer crashes on a malformed JSON line (counts/skips it); k-anonymity has
+  an empty-input guard.
 
 ## [0.7.2] - 2026-06-29
 

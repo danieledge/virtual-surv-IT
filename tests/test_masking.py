@@ -208,6 +208,25 @@ def test_direct_identifier_passthrough_is_flagged():
     )
 
 
+def test_keep_free_text_field_is_scanned_for_pii():
+    """Regression: a kept free-text field that is NOT a declared identifier (e.g. notes) must be
+    scanned for residual PII by run_privacy_checks - previously only redact/token/keep-identifier
+    fields were scanned, so such fields were a blind spot that the --in file scan would catch."""
+    schema = {
+        "on_unknown": "drop",
+        "fields": {
+            "order_id": {"role": "token", "domain": "order"},
+            "notes": {"role": "keep"},  # free-text, NOT a declared direct identifier
+        },
+    }
+    records = [{"order_id": "O1", "notes": "call john.smith@bank.com about the trade"}]
+    checks, _ = run_privacy_checks(records, schema, KEY)
+    by_name = {name: ok for name, ok, _ in checks}
+    assert by_name["no residual PII patterns (free-text-capable fields)"] is False, (
+        "residual PII in a kept free-text field must be caught"
+    )
+
+
 def test_scan_masked_file_passes_clean(tmp_path):
     """--in mode: a clean masked file (tokens + numbers) passes."""
     f = tmp_path / "clean.jsonl"
