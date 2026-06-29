@@ -43,7 +43,10 @@ try:
 except ImportError:  # pragma: no cover - import guard
     yaml = None
 
-TOKEN_LEN = 12
+# Hex chars of the HMAC kept per token. 24 hex = 96 bits: the birthday bound is ~2^48, so
+# identifier-domain (e.g. order_id) tokens stay collision-free at realistic venue volumes -
+# 12 hex (48 bits) collided around ~17M distinct ids, silently merging order lifecycles.
+TOKEN_LEN = 24
 
 # ---------------------------------------------------------------------------
 # Free-text PII patterns for the `redact` role.
@@ -92,7 +95,7 @@ _PII_PATTERNS = [
     ),
     # 6. Phone number - international (+CC) or long local (7–14 digits).
     #    Lookbehind/ahead excludes '/' and '-' so a phone run cannot start mid-date.
-    ("PHONE", re.compile(r"(?<![\d/\-])\+?\d[\d \-]{7,}\d(?![\d/\-])")),
+    ("PHONE", re.compile(r"(?<![\d/\-])\+?\d[\d \-().]{7,}\d(?![\d/\-])")),
     # 7. Account number - any unmatched run of 8+ digits (catch-all, must be last).
     ("ACCT", re.compile(r"(?<!\d)\d{8,}(?!\d)")),
 ]
@@ -202,10 +205,10 @@ def mask_record(record: dict, schema: dict, key: bytes) -> dict:
         elif role == "token":
             out[name] = _token(value, spec.get("domain", name), key)
         elif role == "shift":
-            # validate_schema() guarantees spec["entity"] exists in the SCHEMA. Per record,
-            # if the entity field is absent the field is simply skipped (this loop is over
-            # record.items()); if present-but-non-numeric the per-record wrapper in
-            # mask_records() skips the whole row by index.
+            # validate_schema() guarantees spec["entity"] exists in the SCHEMA. Per record, if
+            # the entity field is absent, record[spec["entity"]] raises KeyError and the
+            # per-record wrapper in mask_records() skips the WHOLE row by index (not just this
+            # field); a present-but-non-numeric value is caught the same way.
             offset = _shift_offset(
                 record[spec["entity"]], key, int(spec.get("max_shift_ms", 2592000000))
             )

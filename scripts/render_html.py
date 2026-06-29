@@ -38,6 +38,19 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     _BLEACH_AVAILABLE = False
 
+# Optional CSS sanitiser so Markdown table column alignment (style="text-align: …") survives.
+# Needs the bleach[css] extra (tinycss2). It is purely cosmetic: sanitisation itself must NOT
+# depend on it, so we load it separately and fall back to None (alignment lost, output still
+# safe) if the extra is absent. Without ANY css_sanitizer, bleach empties allowed style attrs.
+_CSS_SANITIZER = None
+if _BLEACH_AVAILABLE:
+    try:
+        from bleach.css_sanitizer import CSSSanitizer
+
+        _CSS_SANITIZER = CSSSanitizer(allowed_css_properties=["text-align"])
+    except Exception:  # pragma: no cover - bleach[css]/tinycss2 not installed
+        _CSS_SANITIZER = None
+
 # ---------------------------------------------------------------------------
 # bleach allow-list: tags and attributes that are safe in rendered Markdown.
 # Derived from common Markdown output + the extensions used here (tables, code,
@@ -84,7 +97,8 @@ _ALLOWED_TAGS = frozenset(
         "tr",
         "th",
         "td",
-        # Images - allowed with restricted attributes; src is constrained to data: or relative
+        # Images - allowed with restricted attributes; src restricted to http(s)/relative
+        # (data: URIs are intentionally NOT allowed - see _ALLOWED_PROTOCOLS).
         "img",
         # TOC anchors
         "sup",
@@ -199,6 +213,7 @@ def _sanitise(raw_html: str) -> str:
         tags=_ALLOWED_TAGS,
         attributes=_ALLOWED_ATTRS,
         protocols=_ALLOWED_PROTOCOLS,
+        css_sanitizer=_CSS_SANITIZER,  # keep table text-align; drop everything else
         strip=True,  # remove (not escape) disallowed tags
         strip_comments=True,  # strip HTML comments which can hide payloads
     )
@@ -234,13 +249,17 @@ def render(md_text: str, title: str, source: str = "", generated: str = "") -> s
     if generated:
         footer_bits.append(html.escape(generated, quote=True))
 
-    return (
-        _TEMPLATE.replace("%%TITLE%%", safe_title)
-        .replace("%%CSS%%", _CSS)
-        .replace("%%META%%", meta)
-        .replace("%%BODY%%", safe_body)
-        .replace("%%FOOTER%%", " &middot; ".join(footer_bits))
-    )
+    fields = {
+        "TITLE": safe_title,
+        "CSS": _CSS,
+        "META": meta,
+        "BODY": safe_body,
+        "FOOTER": " &middot; ".join(footer_bits),
+    }
+    # Single-pass substitution: inserted content (e.g. a title or body that itself contains a
+    # literal %%BODY%%/%%FOOTER%% token) is never re-scanned, so it cannot collide with a later
+    # placeholder. The callback's return value is inserted verbatim (no backref processing).
+    return re.sub(r"%%(TITLE|CSS|META|BODY|FOOTER)%%", lambda m: fields[m.group(1)], _TEMPLATE)
 
 
 def main() -> None:

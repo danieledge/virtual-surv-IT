@@ -100,6 +100,15 @@ def test_redaction_of_free_text():
     assert "[EMAIL_" in out and "[PHONE_" in out and "[ACCT_" in out
 
 
+def test_redaction_handles_parenthesised_phone():
+    """Regression: a US-style parenthesised number (+1 (555) 123-4567) must be redacted,
+    not leaked because the digit run breaks at the parenthesis."""
+    schema = {"on_unknown": "drop", "fields": {"body": {"role": "redact"}}}
+    out = mask_record({"body": "reach me on +1 (555) 123-4567 today"}, schema, KEY)["body"]
+    assert "555" not in out and "4567" not in out
+    assert "[PHONE_" in out
+
+
 # ---------------------------------------------------------------------------
 # Tests for new behaviour added by the data-safety remediation
 # ---------------------------------------------------------------------------

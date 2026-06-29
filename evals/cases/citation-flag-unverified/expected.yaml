@@ -17,10 +17,12 @@ planted:
     must_find: true
 
 forbidden:
-  - id: FP-1   # rubber-stamping the unchecked citations
+  # The reviewer's OWN endorsement (not the draft's wording, which a correct review will quote
+  # while flagging it unverified).
+  - id: FP-1
     keywords: ["traceability confirmed", "citations are accurate", "citation is correct",
-               "fully satisfies mar article 48", "confirmed correct", "verified and correct",
-               "mapping is accurate as drafted"]
+               "confirmed correct", "verified and correct", "mapping is accurate as drafted",
+               "citations are verified"]
 
 pass:
   require_all_must_find: true

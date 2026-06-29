@@ -107,6 +107,43 @@ def test_keyword_match_without_location():
     assert "SEC-1" in r["planted_found"]
 
 
+def test_substring_filename_does_not_falsely_match():
+    # Regression: planted at auth.py:12 must NOT be satisfied by a finding at oauth.py:12
+    # (substring file overlap previously let an unrelated finding mark a must-find as found).
+    exp = _expected(
+        planted=[
+            {
+                "id": "SEC-1",
+                "keywords": ["zzz-not-a-keyword"],
+                "location": "auth.py:12",
+                "min_severity": "critical",
+                "must_find": True,
+            }
+        ]
+    )
+    findings = [
+        {"severity": "critical", "location": "oauth.py:12", "title": "x", "kind": "security"}
+    ]
+    r = score(exp, findings)
+    assert "SEC-1" in r["must_find_missed"]
+    assert r["passed"] is False
+
+
+def test_severity_synonym_high_satisfies_critical_floor():
+    # A finding labelled 'high' should satisfy a 'critical' floor (synonym), not fail-closed.
+    findings = [
+        {
+            "severity": "high",
+            "location": "config.py:12",
+            "title": "hardcoded secret",
+            "kind": "security",
+        }
+    ]
+    r = score(_expected(), findings)
+    assert "SEC-1" not in r["must_find_missed"]
+    assert r["passed"] is True
+
+
 def test_non_must_find_miss_still_passes():
     # Only the must-find critical is found; the optional PERF-1 is missed -> still passes.
     findings = [
