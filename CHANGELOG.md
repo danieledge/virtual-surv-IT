@@ -3,6 +3,17 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Changed - docs
+- **README slimmed and restructured** - the "What's new" section was ~140 lines of nested
+  per-version collapsibles duplicating this file; replaced with the latest highlights + a one-line
+  recent-arc summary + a pointer here. Added a prominent **build demo transcript** link
+  ([`docs/demos/build-demo.md`](docs/demos/build-demo.md)) and the other transcripts.
+- **Scoping clarified** - the spoofing fixes/calibration are explicitly tagged as the **bundled
+  reference/example scenario** (`rules/spoofing.py`), not the agents' own logic, in the README and
+  this changelog, so they aren't read as a defect in the team itself.
+
 ## [0.7.6] - 2026-06-29
 
 ### Added
@@ -72,7 +83,9 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   denies gained absolute / non-`./` variants for `.env`, `secrets/`, `*.pem`, `*.key`. (A path-less
   Grep into cwd remains an OS/filesystem-boundary residual; see ADR-002 Tier-3.)
 
-### Added - spoofing calibration evidence + register wiring completed
+### Added - example-scenario calibration evidence + register wiring completed
+> Scope: the spoofing calibration below is for `rules/spoofing.py`, the **bundled reference/example
+> scenario** shipped with the repo - **not** the agents' own logic.
 - **Measured calibration evidence** (`scripts/calibrate_spoofing.py` + `docs/scenarios/spoofing-calibration.md`):
   runs the rule over a labelled synthetic corpus (50 spoof + 50 benign + 50 outsized-but-genuine)
   and reports precision 1.00 / recall 1.00 / FP-rate 0.00 - the measured FP/FN evidence the
@@ -86,6 +99,8 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   2026-06-29`); SEC source repointed to the resolvable Cornell LII mirror.
 
 ### Fixed - correctness bugs from a deeper code review
+> Scope: `rules/spoofing.py` is the **bundled reference/example scenario** (the worked example), not
+> part of the agents' own logic - the spoofing items below fix the example, not the team's behaviour.
 - **Spoofing rule self-masking (detection FN):** the "outsized" size baseline was the median of
   *all* a trader's orders, so a prolific spoofer inflated their own median and evaded the rule a
   one-off spoof tripped. Baseline is now genuine (non place-and-cancel) orders only. Regression

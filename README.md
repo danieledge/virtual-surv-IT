@@ -27,141 +27,17 @@
 >   glance which version is running - handy because an installed plugin is a cached copy and a
 >   plain restart won't upgrade it (use `/plugin update`).
 >
-> <details><summary>What's new in 0.7.5 - citation register reframed as a ledger</summary>
->
-> - **📚 Citation register reframed as a ledger, not an allowlist** - the regulatory register no
->   longer limits what the team may cite. Agents use their **full regulatory knowledge** to surface
->   the applicable obligation; a citation not in the register is flagged **to-verify** (confirm +
->   add it), not treated as wrong or suppressed. A finding is reserved for a citation that
->   *contradicts* the register or is *asserted as decided fact without a flag*.
->
-> </details>
->
-> <details><summary>What's new in 0.7.4 - duplicate-hook-file fix</summary>
->
-> - **🔧 Fixed a duplicate-hook-file warning** - `plugin.json` no longer declares the standard
->   `hooks/hooks.json` (Claude Code auto-loads it, so declaring it loaded the guards twice). The
->   manifest validator now flags this so it can't recur.
->
-> </details>
->
-> <details><summary>What's new in 0.7.3 - hook hardening, citation grounding, spoofing FN fix</summary>
->
-> - **🛡️ Safety hooks hardened (ADR-002)** - the code-execution guard now segment-splits chained
->   commands (an allow-listed segment can't wave a blocked one through), blocks inline-code
->   execution (`python -c`, `node -e`, `bash -c`, …), fixes the versioned-interpreter gap and
->   covers more runners; secret/`data/raw` deny-lists extended. Full threat model + residual risk
->   in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
-> - **📚 Citations are retrieved, not recalled (ADR-001)** - a version-controlled
->   [`regulatory-register.yaml`](config/regulatory-register.yaml) (7 obligations **verified against
->   primary sources**) + `scripts/check_citations.py` flag any pinpoint citation not in the
->   register; `compliance-reviewer` and the authoring skills now use it - so the team can't assert
->   a fabricated article/rule.
-> - **🎯 Spoofing rule: self-masking false-negative fixed + measured** - a repeat spoofer no longer
->   hides by inflating their own size baseline; closed with a genuine-only baseline + instrument
->   fallback, and **measured** precision/recall 1.00 on a labelled synthetic set
->   ([calibration evidence](docs/scenarios/spoofing-calibration.md)).
->
-> </details>
->
-> <details><summary>What's new in 0.7.2 - LICENSE, CI lint/manifest, safety-hook tests</summary>
->
-> - **🔒 Hardening & governance** - shipped the `LICENSE` the badge already claimed (MIT), added
->   `CONTRIBUTING.md` and `SECURITY.md`, and CI now enforces what the repo declared: `ruff`
->   (lint + format), `bandit`, `shellcheck`, plus a plugin-manifest validator that fails if any
->   declared agent/skill stops resolving.
-> - **🧪 The safety hooks are now tested** - behavioural tests drive both guards (block / allow /
->   consent-marker / env-override); the HTML renderer gains XSS-sanitiser tests and now **fails
->   closed** if `bleach` is missing instead of emitting unsanitised HTML. Test count 36 → 58.
->
-> </details>
->
-> <details><summary>What's new in 0.7.1 - audit-grade document set + upgraded renderer</summary>
->
-> - **📄 Audit-grade document set** - all **38 deliverable templates** now carry a standard
->   document-control header (id/version/revision-history/owner/status/classification/as-of) + sign-off
->   block + shared evidence/severity legends, with depth fixes (SR 11-7 model validation, ATL/BTL
->   lexicon tuning, RTS 25 timestamps, alert-to-SAR MI). Plus **6 new templates** - decision-log,
->   alert-investigation, SAR/STR referral, tuning-decision register, control-mapping, data-lineage.
-> - **🎨 Upgraded HTML renderer** - every rendered artifact gets real dark-mode, print/PDF page setup,
->   WCAG-AA contrast, a letterhead, working `.md`→`.html` links, and the stray empty table-header bar
->   removed - one change that lifts the whole document pack.
->
-> </details>
->
-> <details><summary>What's new in 0.7.0 - the downloadable build delivery + run comparison</summary>
->
-> - **🎬 Guided demo + downloadable artifacts** - `/demo` has Morgan run a full engagement
->   **end-to-end on safe synthetic data**, narrating every decision. Real transcripts *and the actual
->   deliverables* are on GitHub: [`docs/demos/`](docs/demos/) - including a **complete build delivery**
->   ([spec → code → 3 reviews → tuning → performance → delivery report](docs/demos/build-artifacts/)),
->   each artifact downloadable. New here? Start there.
-> - **🔁 The chain is not a rubber stamp** - in the build demo, independent review found **7 real
->   defects** (a false-negative, an off-by-one, a broken audit field) - all fixed and re-tested. And
->   thresholds were **calibrated with measured ATL/BTL on synthesised labelled data**, not guessed.
-> - **🔍 Honest data-masking validation** - `validate_masking` gains an **`--in <file>`** mode that
->   scans **your actual masked output** for residual PII (not just a fixture), and the README claims
->   were tightened to match what the code really does (a sceptical claims-vs-reality audit).
-> - **🧪 Team-quality eval harness** (`evals/`) - scores the team's *own output* against **21 golden
->   cases**; deterministic scorer + `/run-evals` LLM-judge. See [Self-test](#-self-test-eval-harness).
-> - **💰 Token optimisation** - `CLAUDE.md` slimmed **~44%** (operating detail moved to a doc read
->   on-engage). See [Token usage](#-token-usage--optimisation).
-> - **⚡ Streamlined intake** *(0.4.x)* - upfront questions batched onto single screens, a
->   duplicated question removed (~11 prompts → ~5), execution-safety only asked when code's involved.
-> - **📝 Handover-doc quality is now a Definition-of-Done gate** - docs must be *clear & usable by a
->   real developer*, not merely present (no new agent needed).
-> - **🛡️ Data-handling contract** *(0.4.0)* - the raw folder stays hard-blocked; *other* data is
->   analysed on your **attestation** that it's masked/synthetic/anonymised (a startup disclaimer);
->   an **automatic data-masking workflow** is on the roadmap to replace it.
-> - **👥 A named, globally- & gender-diverse team** with playful staff profiles - and the PM
->   (Morgan) addresses specialists by name.
-> - **📐 Built to agent best-practice** - per-agent **model tiering** (4 opus / 11 sonnet / 1 haiku)
->   with rationale, and a **conformance matrix vs Anthropic's multi-agent guidance**
->   ([`docs/agent-design.md`](docs/agent-design.md)).
-> </details>
->
-> <details><summary>What's new in 0.3.0 - data-analyst &amp; business-analyst expansion</summary>
->
-> **A data-analyst & business-analyst expansion (research-grounded), plus a code-execution safety gate.**
-> - **`tuning-analyst`** (new) - surveillance threshold calibration / alert tuning: risk-based
->   segmentation, **Above-The-Line / Below-The-Line** testing, dry-run alerts, FP & alert-to-SAR MI;
->   extended to trade (peer-group, RTS 25 timestamps) and comms (lexicon/NLP) tuning.
-> - **`business-analyst`** (rebranded from `requirements-analyst`) - the full **BABOK** lifecycle:
->   elicitation, stakeholder & process analysis (BPMN), UAT, traceability, reg-change impact.
-> - **6 new workflows** - `/tune-thresholds`, `/validate-tm-model`, `/assess-coverage`,
->   `/elicit-requirements`, `/reg-change-impact`, `/analyse-data` - plus **`/meet-the-team`**.
-> - **16 new deliverable templates** (BA + DA + trade/comms), grounded in two deep-research passes
->   (IIBA BABOK, DAMA-DMBOK; FFIEC/FATF/SR 11-7; MAR Art 16 / RTS 24 / RTS 22 / RTS 25 **verified
->   against primary sources**, as are the **comms** citations - MiFID II Art 16(7) / CDR 2017/565
->   Art 76, SEC 17a-4(b)(4) / FINRA 4511, the off-channel sweep). *Lexicon/NLP **practice** detail
->   remains foundational - flagged in `docs/house-rules.md`.*
-> - **Code-execution safety gate** - reviews are **static by default**; running tests/profilers is
->   blocked by a hook unless authorised (consent marker or `CST_ALLOW_EXEC=1`), behind a prominent
->   disclaimer. Performance review is static/inferred-only for now.
-> </details>
->
-> <details><summary>What's new in 0.2.0 - modular code-review subsystem</summary>
->
-> **Leaning heavily on [turingmind-code-review](https://github.com/turingmindai/turingmind-code-review) (MIT, © 2026 TuringMind), attribution in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md).**
-> - **Review lenses** (`docs/review/lenses/`) - modular per-dimension checks (bugs · security ·
->   architecture) and per-language lenses for **Python, TypeScript/JS, Scala, Java, PowerShell,
->   Bash, SQL**, loaded progressively by a router so only the relevant ones run.
-> - **Scope menu** - `/deep-review`, `/audit-review` and `/performance-review` now ask what's in
->   scope (dimensions · breadth · change-vs-audit mode · outcome) before reviewing.
-> - **Clean traffic-light output** - a glanceable 🔴🟠🟡🔵🔇 **scoreboard** to the console, with
->   full findings written to a **clean artifact** (not a wall of console tables).
-> - **Evidence basis on every claim** - findings are tagged **📊 measured** vs **🧠 inferred**, so
->   a performance assertion (e.g. an explicit `sleep` vs a derived O(n²)) is never passed off as
->   fact it isn't.
-> - **🔵 Style & form lane** - meaningful, non-blocking "consider in future" suggestions, kept
->   separate from blockers and from filtered noise.
-> - **Morgan challenges the agents** - the PM independently re-scores and **downgrades** weak
->   findings before you see them, and runs on **opus**.
-> - **Opt-in AI-review git-hook gate** - a severity-blocking `pre-commit` (blocks on 🔴 Critical
->   or any §5 data-safety finding; advisory on 🟠), off by default.
-> </details>
->
+> Recent **0.7.x**: safety-hook hardening (ADR-002), citations *retrieved, not recalled* against a
+> source-verified [regulatory register](config/regulatory-register.yaml) (ADR-001), CI lint/manifest
+> gates, audit-grade templates, and a self-masking fix + measured calibration on the **bundled
+> example** spoofing scenario (the worked reference example, not the agents themselves).
 > 📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
+>
+> 🎬 **See it work** - a full build, end-to-end on synthetic data, captured as a readable
+> **[build demo transcript](docs/demos/build-demo.md)**, with every produced artifact in
+> [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/) (spec → code → 3 reviews → tuning →
+> delivery report). Other transcripts: [review](docs/demos/review-demo.md) ·
+> [data-safety](docs/demos/data-safety-demo.md) · [run comparison](docs/demos/build-run-comparison.md).
 
 A **virtual compliance surveillance *engineering* team made of AI assistants** - it doesn't
 *do* compliance, it **builds the surveillance solutions and technology** behind detecting
