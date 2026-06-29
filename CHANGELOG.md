@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.7.3] - 2026-06-29
 
 ### Added - adversarial evals + citation-grounding design
 - **Prompt-injection eval pack** (`evals/cases/injection-*`) - a monitored chat that embeds a
