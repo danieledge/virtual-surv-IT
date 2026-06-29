@@ -16,6 +16,8 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 - **README now defers the newcomer narrative to `docs/OVERVIEW.md`** (the safety story, the
   job-flow and the worked example), instead of re-explaining them at length - with explicit
   pointers each way (README → OVERVIEW for "understand it"; OVERVIEW → README for "do it").
+- **OVERVIEW glossary de-duplicated** - the Mini-glossary no longer re-defines LLM/agent/subagent
+  (§2 owns those); it points to §2 and keeps only the terms §2 doesn't cover.
 
 ## [0.7.10] - 2026-06-29
 
