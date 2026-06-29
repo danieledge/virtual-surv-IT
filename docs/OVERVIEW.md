@@ -234,9 +234,8 @@ it organises and does the work - you stay in the loop at the decision points.
 
 ## Mini-glossary
 
-- **LLM** - the AI text engine (e.g. Claude). Reads instructions, writes text and code.
-- **Agent** - an LLM given a job and tools so it can actually do work.
-- **Subagent** - one agent set up for a single focused role (this repo has 16).
+*(**LLM**, **agent** and **subagent** are explained in [§2](#2-two-words-you-need-llm-and-agent) above.)*
+
 - **Orchestrator** - whoever hands tasks to the right agent and chains them together.
 - **Masking** - scrambling identities in real data while keeping its behaviour.
 - **Synthetic data** - completely made-up data that behaves realistically.
