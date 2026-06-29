@@ -9,7 +9,9 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 - **README slimmed and restructured** - the "What's new" section was ~140 lines of nested
   per-version collapsibles duplicating this file; replaced with the latest highlights + a one-line
   recent-arc summary + a pointer here. Added a prominent **build demo transcript** link
-  ([`docs/demos/build-demo.md`](docs/demos/build-demo.md)) and the other transcripts.
+  ([`docs/demos/build-demo.md`](docs/demos/build-demo.md)) and the other transcripts. The entrance
+  paragraphs (tagline, POC/dormant callouts, intro, safety one-liner) were reworded for clarity -
+  e.g. the intro leads with "the engineering behind surveillance" instead of "it doesn't do compliance".
 - **Scoping clarified** - the spoofing fixes/calibration are explicitly tagged as the **bundled
   reference/example scenario** (`rules/spoofing.py`), not the agents' own logic, in the README and
   this changelog, so they aren't read as a defect in the team itself.
