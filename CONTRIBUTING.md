@@ -33,6 +33,29 @@ bandit -r scripts/ .claude/hooks/ -q
 shellcheck scripts/*.sh scripts/git-hooks/pre-commit scripts/git-hooks/pre-push
 ```
 
+## The tooling, in plain English
+
+What each tool is and does (all of these run automatically in CI on every push/PR):
+
+| Tool | What it is | Covers |
+|------|------------|--------|
+| **pytest** | Runs the unit tests - the safety net that proves the code (detection rule, masking, renderer, the guard hooks) still behaves. | the Python in `rules/`, `scripts/`, `.claude/hooks/` |
+| **ruff check** | A **linter**: flags likely mistakes - unused imports, dead variables, bug-prone patterns. | Python only (`.py`) |
+| **ruff format** | A **formatter**: restyles layout (spacing, line breaks, quotes) for one consistent look. It never changes what the code *does*. | Python only (`.py`) |
+| **bandit** | A **security** scanner for Python - e.g. hardcoded secrets, unsafe calls. | Python only |
+| **shellcheck** | A linter for **Bash** scripts (catches shell bugs/quoting issues). Lint only - it does not reformat. | the `*.sh` + git-hook scripts |
+| **validate_masking** | Proves the masking config is both **safe** (no original PII survives) and **useful** (detection still fires on masked data). `--in <file>` scans your actual masked output. | `scripts/`, `config/masking-schema.yaml` |
+| **validate_manifest** | Checks the plugin manifest (`plugin.json`) matches the repo - every declared agent/skill/hook actually exists. | `.claude-plugin/` |
+
+Two things worth knowing:
+
+- **Ruff is Python-only.** It does not touch Bash, JSON, YAML or Markdown. Bash is linted by
+  shellcheck; JSON is content-checked by `validate_manifest`; **Markdown / YAML / JSON layout is
+  by hand** (e.g. the "ASCII hyphens, not en-dashes" rule is a convention, not enforced).
+- **The two safety hooks are a separate thing** from this tooling - they run *inside Claude Code*
+  to block raw-data reads and un-consented code execution. They're explained in
+  `docs/house-rules.md` and threat-modelled in `docs/adr/ADR-002`.
+
 ## Adding or changing components
 
 - **Agent** — add `.claude/agents/<slug>.md` with frontmatter (`name`, `description`, `model`,
