@@ -227,6 +227,16 @@ def test_keep_free_text_field_is_scanned_for_pii():
     )
 
 
+def test_scan_masked_file_scans_nested_strings(tmp_path):
+    """Regression: residual PII nested inside a list/dict value must be caught, not only
+    top-level string fields."""
+    f = tmp_path / "nested.jsonl"
+    f.write_text('{"order_id":"order_9f","meta":{"note":"email john.smith@bank.com"}}\n')
+    checks = scan_masked_file(f, SCHEMA)
+    by_name = {name: ok for name, ok, _ in checks}
+    assert by_name["no residual PII in masked file (string fields)"] is False
+
+
 def test_scan_masked_file_passes_clean(tmp_path):
     """--in mode: a clean masked file (tokens + numbers) passes."""
     f = tmp_path / "clean.jsonl"

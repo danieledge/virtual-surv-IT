@@ -97,8 +97,8 @@ _ALLOWED_TAGS = frozenset(
         "tr",
         "th",
         "td",
-        # Images - allowed with restricted attributes; src restricted to http(s)/relative
-        # (data: URIs are intentionally NOT allowed - see _ALLOWED_PROTOCOLS).
+        # Images - allowed with restricted attributes; src may be http(s), relative, or an
+        # inline data: URI (see _ALLOWED_PROTOCOLS) so artifacts can embed charts self-contained.
         "img",
         # TOC anchors
         "sup",
@@ -121,8 +121,11 @@ _ALLOWED_ATTRS: dict = {
     "*": ["id"],
 }
 
-# Allowed URI schemes in href/src attributes.
-_ALLOWED_PROTOCOLS = frozenset({"http", "https", "mailto"})
+# Allowed URI schemes in href/src attributes. `data:` is included so images can be embedded
+# inline (base64) and the artifact stays truly self-contained; bleach cannot scope a protocol
+# to a tag/mediatype, so a `data:` URI in an <a href> is also permitted (low risk for a
+# locally-opened artifact, and javascript:/vbscript: remain blocked).
+_ALLOWED_PROTOCOLS = frozenset({"http", "https", "mailto", "data"})
 
 _CSS = """
 body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;

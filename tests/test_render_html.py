@@ -89,6 +89,12 @@ def test_render_preserves_table_alignment():
     assert "text-align" in html
 
 
+def test_render_allows_inline_data_image():
+    # Inline base64 images keep the artifact self-contained; data: URIs are allowed.
+    html = render("# T\n\n![chart](data:image/png;base64,iVBORw0KGgo=)", "T")
+    assert "data:image/png" in html
+
+
 def test_render_body_with_literal_placeholder_not_clobbered():
     # A body that contains a literal %%FOOTER%% token must survive intact, and the real footer
     # must still render exactly once (regression: sequential str.replace re-scanned inserts).

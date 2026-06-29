@@ -143,7 +143,7 @@ last time this was left loose the model offered "Quick **and** Deep" as a multi-
 
 | Label | Description |
 |---|---|
-| **Yes** | Add a scalability review vs target data volumes - profiling evidence, each claim tagged 📊 measured / 🧠 inferred, with a total-time-saved summary. Runs alongside the chosen depth. |
+| **Yes** | Add a **static** scalability review vs target data volumes - findings 🧠 inferred (📊 only for an explicit coded cost), with a total-impact summary. Measured profiling is a future opt-in. Runs alongside the chosen depth. |
 | **No** | No performance review. |
 
 **Q3 - "After the review, what should happen to the findings?"  (single-select / `multiSelect: false`) - applies to ANY depth, *including Quick*:**

@@ -17,6 +17,9 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 - **`docs/adr/ADR-001`** - proposes grounding regulatory citations in a retrieved, version-controlled
   register (retrieve-don't-recall) with a mechanical check at the `compliance-reviewer` gate,
   instead of honour-based tagging of model-recalled citations.
+- **`docs/adr/ADR-002`** - safety-hook threat model: an adversarial red-team of both guards
+  (full bypass enumeration), the decision to represent them honestly as advisory defence-in-depth,
+  and a ranked additive-hardening backlog. No hook logic changed.
 
 ### Fixed - correctness bugs from a deeper code review
 - **Spoofing rule self-masking (detection FN):** the "outsized" size baseline was the median of
@@ -39,8 +42,18 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   declared `hooks` path, and checks the marketplace `plugins[]` list (not a whole-doc substring).
 - **Masking validator:** `run_privacy_checks` now scans *any* kept free-text field (e.g. `notes`),
   not only declared identifiers - closing a blind spot the `--in` file scan already caught;
-  `scan_masked_file` no longer crashes on a malformed JSON line (counts/skips it); k-anonymity has
-  an empty-input guard.
+  `scan_masked_file` no longer crashes on a malformed JSON line (counts/skips it) and now recurses
+  into nested list/dict string values; k-anonymity has an empty-input guard.
+- **Skill execution-consent contradictions:** the `/demo` Build flavour narrated "No execution"
+  then ran `pytest`/ATL-BTL (hook-blocked) - it now chooses execution consent for the build only;
+  `/performance-review` no longer asks for an execution permission it never uses; `/engage` Q2 no
+  longer oversells the static perf review as "measured profiling".
+- **Data-safety attestation on direct invocation:** `/analyse-data`, `/tune-thresholds` and
+  `/validate-tm-model` now prompt the attestation when invoked directly (not only "at intake" via
+  `/engage`).
+- **Renderer:** `data:` images are now embeddable (inline base64) so artifacts stay self-contained;
+  `mask_records` narrowed its exception scope so config/programming errors fail loudly instead of
+  silently dropping every row.
 
 ## [0.7.2] - 2026-06-29
 
