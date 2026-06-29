@@ -1,0 +1,143 @@
+"""
+scripts/check_citations.py - ground regulatory citations against the register (ADR-001).
+
+An LLM emits pinpoint legal citations ("MAR Article 12", "Rule 10b-5") from parametric memory,
+where it confabulates confidently - a wrong citation in an audit pack is a control failure. This
+tool implements the ADR-001 controls:
+
+  * RETRIEVE, don't recall - `lookup(typology)` returns grounded obligations from the register
+    (config/regulatory-register.yaml) so the team cites what it can support.
+  * MECHANICAL CHECK at the gate - `check_text()` scans an artifact for pinpoint citations and
+    flags any that are NOT in the register as UNVERIFIED, instead of trusting the prose.
+
+This is a lexical aid, not proof a citation is correct: a register entry is only as good as the
+human verification behind it (see the `status`/`verified_on` fields). It catches *fabricated /
+unsupported* pinpoints, which is the high-frequency failure mode.
+
+Usage:
+    python -m scripts.check_citations artifacts/control-mapping.md      # scan an artifact
+    python -m scripts.check_citations --typology spoofing               # retrieve obligations
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+from pathlib import Path
+
+_REGISTER = Path(__file__).resolve().parent.parent / "config" / "regulatory-register.yaml"
+
+# Pinpoint-citation shapes we detect in free text: Article/Art N(...), Rule N, Section N, § N,
+# and bare SEC-style refs like 17a-4(b)(4).
+_CITE_RE = re.compile(
+    r"\bart(?:icle)?\.?\s*\d+[\dA-Za-z()\.\-]*"
+    r"|\brule\s*\d+[\dA-Za-z\-]*"
+    r"|\bsection\s*\d+[\dA-Za-z()\-]*"
+    r"|§\s*\d+[\dA-Za-z()\-]*"
+    r"|\b\d{1,3}[A-Za-z]-\d+(?:\([\dA-Za-z]+\))*",
+    re.IGNORECASE,
+)
+
+
+def _load_register(path: str | Path = _REGISTER) -> dict:
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - exercised only without pyyaml
+        raise RuntimeError("pyyaml is required: pip install -r requirements-dev.txt")
+    return yaml.safe_load(Path(path).read_text()) or {}
+
+
+def _core(citation: str) -> str:
+    """Normalise a citation to a comparable core: lower-case, 'article'->'art', strip spaces/dots.
+
+    'Article 12(1)(a)' -> 'art12(1)(a)';  'Rule 10b-5' -> 'rule10b-5';  '§ 48' -> '§48'.
+    """
+    s = citation.lower().replace("article", "art")
+    return re.sub(r"[\s.]", "", s)
+
+
+def _register_cores(register: dict) -> set[str]:
+    """All citation cores the register supports (from each obligation's pinpoint + aliases)."""
+    cores: set[str] = set()
+    for ob in register.get("obligations", []) or []:
+        candidates = [ob.get("pinpoint", "")] + list(ob.get("aliases", []) or [])
+        for c in candidates:
+            for m in _CITE_RE.findall(c or ""):
+                cores.add(_core(m))
+    return cores
+
+
+def find_citations(text: str) -> list[str]:
+    """Return the distinct pinpoint citations detected in *text* (original spelling)."""
+    seen, out = set(), []
+    for m in _CITE_RE.findall(text or ""):
+        key = _core(m)
+        if key not in seen:
+            seen.add(key)
+            out.append(m.strip())
+    return out
+
+
+def check_text(text: str, register: dict | None = None) -> dict:
+    """Scan *text* for pinpoint citations; classify each as verified (in register) or unverified.
+
+    Returns {"verified": [...], "unverified": [...]} (original spellings). Pure - no I/O.
+    """
+    register = register if register is not None else _load_register()
+    known = _register_cores(register)
+    verified, unverified = [], []
+    for cite in find_citations(text):
+        (verified if _core(cite) in known else unverified).append(cite)
+    return {"verified": verified, "unverified": unverified}
+
+
+def lookup(typology: str, register: dict | None = None) -> list[dict]:
+    """Retrieve register obligations whose typology mentions *typology* (case-insensitive)."""
+    register = register if register is not None else _load_register()
+    t = typology.lower().strip()
+    return [
+        ob
+        for ob in register.get("obligations", []) or []
+        if t in str(ob.get("typology", "")).lower()
+    ]
+
+
+def _main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Ground regulatory citations against the register.")
+    ap.add_argument("artifact", nargs="?", type=Path, help="path to a .md/.txt artifact to scan")
+    ap.add_argument("--typology", help="retrieve obligations for a typology (e.g. spoofing)")
+    ap.add_argument("--register", type=Path, default=_REGISTER)
+    args = ap.parse_args(argv)
+
+    register = _load_register(args.register)
+
+    if args.typology:
+        hits = lookup(args.typology, register)
+        if not hits:
+            print(f"No register obligation found for typology '{args.typology}'.")
+            return 0
+        for ob in hits:
+            print(
+                f"- {ob['pinpoint']}  [{ob['id']}, {ob.get('status', '?')}]  {ob.get('source', '')}"
+            )
+        return 0
+
+    if not args.artifact:
+        ap.error("provide an artifact to scan, or --typology to retrieve")
+
+    result = check_text(args.artifact.read_text(), register)
+    for c in result["verified"]:
+        print(f"[OK]         {c}")
+    for c in result["unverified"]:
+        print(
+            f"[UNVERIFIED] {c} - not in the regulatory register; verify against the primary source"
+        )
+    print(
+        f"\n{len(result['verified'])} verified, {len(result['unverified'])} unverified "
+        f"citation(s) in {args.artifact}."
+    )
+    return 1 if result["unverified"] else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())
