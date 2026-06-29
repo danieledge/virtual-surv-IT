@@ -1,7 +1,7 @@
 # Compliance Surveillance Engineering - Virtual Team
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.7](https://img.shields.io/badge/version-0.7.7-blue)
+![Version 0.7.8](https://img.shields.io/badge/version-0.7.8-blue)
 ![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -19,14 +19,15 @@
 > **only** when you run `/engage` (or another team command, or simply ask for the team). The sole
 > always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.7.7
+> ## ✨ What's new in 0.7.8
 >
-> - **🧹 Docs cleanup** - the README is slimmer and better structured (badges under the title, an
->   accurate jump-nav, one consolidated repo map, a single install path, a License section), and
->   the "new to LLMs" [overview](docs/OVERVIEW.md) now describes masking honestly as a **basic**
->   engine - explicitly *not* a comprehensive anonymiser.
+> - **🧑‍💻 Reviews coach "vibe-coded" code** - `/deep-review`, `/audit-review` and `/remediate` ask
+>   whether the code was AI-assisted; if so the report adds a **Prompting guidance** section: why
+>   the top findings happened (what the prompt under-specified) + reusable example prompts to get a
+>   better first draft next time.
 >
-> Recent **0.7.x**: Morgan states the loaded version on startup; safety-hook hardening (ADR-002);
+> Recent **0.7.x**: docs slimmed + honest masking framing; Morgan states the loaded version on
+> startup; safety-hook hardening (ADR-002);
 > citations *retrieved, not recalled* against a source-verified
 > [regulatory register](config/regulatory-register.yaml) (ADR-001); CI lint/manifest gates; and a
 > self-masking fix + measured calibration on the **bundled example** spoofing scenario (the worked

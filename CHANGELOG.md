@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.7.8] - 2026-06-29
 
 ### Added
 - **Reviews coach "vibe-coded" authors.** `/deep-review`, `/audit-review` and `/remediate` now ask
@@ -11,12 +11,8 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   it), the report adds a **🧑‍💻 Prompting guidance** section - tying the top findings to what the
   prompt under-specified, plus 2-4 concrete example prompts to get a better first draft next time.
   Defined once in `docs/review/output-format.md`; wired into the `code-reviewer` agent.
-- **Team portrait** in the README "Meet the team" section (`docs/assets/team-portrait.png`) -
-  all 17 characters (Morgan + 16) labelled with name + role, consistent with the roster.
 
-### Fixed
-- Restored the tongue-in-cheek **rate card** in the build-demo delivery report (dropped in the
-  TS-001 swap while the README still linked to it); updated to this run's figures and re-rendered.
+_(Plus minor documentation updates.)_
 
 ## [0.7.7] - 2026-06-29
 
