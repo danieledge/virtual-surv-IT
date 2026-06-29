@@ -1,14 +1,14 @@
 # Compliance Surveillance Engineering - Virtual Team
 
-> *An AI **engineering** team - PM, builders, reviewers and subject-matter experts - that builds
-> and reviews the technology behind compliance surveillance, right inside Claude Code. Raw data is
-> hard-blocked from the model; anything else you share carries a data-safety attestation.*
-
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Version 0.7.6](https://img.shields.io/badge/version-0.7.6-blue)
 ![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
+
+> *An AI **engineering** team - PM, builders, reviewers and subject-matter experts - that builds
+> and reviews the technology behind compliance surveillance, right inside Claude Code. Raw data is
+> hard-blocked from the model; anything else you share carries a data-safety attestation.*
 
 > ⚗️ **Proof of concept.** An exploratory experiment in what an AI "engineering team" can do
 > inside Claude Code - **not** a production system, and **not** regulatory tooling. Treat its
@@ -70,7 +70,7 @@ made up). See [how real data is handled](#-handling-real-data).
 
 ---
 
-**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [💰 Token usage](#-token-usage--optimisation) · [📁 Layout](#-layout) · [🗺️ Roadmap](#-roadmap) · [🔧 Config](#-notes-on-the-config) · [🙏 Credits](#-credits)
+**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [📁 Layout](#-layout) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [📚 Built on](#-built-on---anthropic-agent-guidance) · [🙏 Credits](#-credits) · [📄 License](#-license)
 
 ---
 
@@ -406,7 +406,7 @@ silently skipped. None of these are required to *use* the team; they sharpen `co
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **84 unit tests** check the *code*. The **eval harness** ([`evals/`](evals/)) checks the
+The repo's **84 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The **eval harness** ([`evals/`](evals/)) checks the
 **quality of what the team produces** - so a prompt change that silently weakens a review gets
 caught, not shipped. (This is the regression net Anthropic's multi-agent guidance recommends.)
 
@@ -415,7 +415,7 @@ caught, not shipped. (This is the regression net Anthropic's multi-agent guidanc
   *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
 - **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)) - matches the team's
   findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
-  (7 tests), runs free in CI** - no tokens.
+  (9 tests), runs free in CI** - no tokens.
 - **`/run-evals`** runs the live team per case, scores it, adds an **LLM-judge** for the qualitative
   dimensions, and prints a scoreboard - flagging any regression. *(Spends tokens; run at milestones.)*
 
@@ -610,3 +610,8 @@ systems. The conformance audit is in [`docs/agent-design.md`](docs/agent-design.
   [**turingmind-code-review**](https://github.com/turingmindai/turingmind-code-review)
   (MIT, © 2026 TuringMind). See [`docs/code-review-method.md`](docs/code-review-method.md).
   Our additions: regulated-domain audit mode and data-safety/traceability weighting.
+
+## 📄 License
+
+MIT - see [`LICENSE`](LICENSE). Third-party attributions are in
+[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md).
