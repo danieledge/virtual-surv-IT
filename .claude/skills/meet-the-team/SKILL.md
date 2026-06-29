@@ -12,6 +12,11 @@ how to start. Use roughly this shape (keep it current with `.claude/agents/`; on
 > plan, then bring in the right specialists and keep you in charge at every gate. Here's the team
 > behind me:
 
+(Before the roster, **state the team version** - read `version` from the plugin manifest
+(`$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json`, or `.claude-plugin/plugin.json` at the repo
+root) and show it, e.g. *"Compliance Surveillance team **v0.7.5**"*, so the loaded build is
+visible. If unresolvable, say so rather than guess.)
+
 **🔧 The builders** (they write code, specs and analysis):
 - **Amara** (`business-analyst`) - turns a regulatory or business need into clear, testable requirements
   (elicitation, stakeholders, process maps, UAT, reg-change impact). The "what & why" before code.

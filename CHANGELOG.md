@@ -3,6 +3,15 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Added
+- **Morgan states the team version on startup** - `/engage` and `/meet-the-team` now have Morgan
+  read the `version` from the plugin manifest (`$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json`, or
+  the repo root) and state it in the opening, so the user can see which build is **actually
+  loaded** - useful because an installed plugin is a cached copy, so the version confirms whether a
+  `/plugin update` took effect.
+
 ## [0.7.5] - 2026-06-29
 
 ### Changed
