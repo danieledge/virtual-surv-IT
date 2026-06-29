@@ -1,8 +1,8 @@
 # Compliance Surveillance Engineering - Virtual Team
 
-> *An AI engineering team - PM, builders, reviewers and SMEs - that builds and reviews
-> compliance-surveillance technology inside Claude Code, with raw data hard-blocked from the model
-> and a data-safety disclaimer on anything you share.*
+> *An AI **engineering** team - PM, builders, reviewers and subject-matter experts - that builds
+> and reviews the technology behind compliance surveillance, right inside Claude Code. Raw data is
+> hard-blocked from the model; anything else you share carries a data-safety attestation.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Version 0.7.6](https://img.shields.io/badge/version-0.7.6-blue)
@@ -10,15 +10,14 @@
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
-> ⚗️ **Proof of concept / experiment.** This is an exploratory POC for what an AI
-> "engineering team" could do inside Claude Code - not a production system or regulatory
-> tooling. Treat its outputs as a starting point for real engineers and reviewers, not as
-> assured or accredited work.
+> ⚗️ **Proof of concept.** An exploratory experiment in what an AI "engineering team" can do
+> inside Claude Code - **not** a production system, and **not** regulatory tooling. Treat its
+> output as a starting point for real engineers and reviewers, not as assured or accredited work.
 >
-> 🛑 **Dormant by default.** The team is **opt-in** - it does not take over your sessions.
-> A normal `claude` session behaves like standard Claude Code; the team, the agents and the
-> "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
-> for the team). The one always-on piece is the data-safety guard.
+> 🛑 **Dormant by default.** The team is **opt-in** and never takes over your sessions. A normal
+> `claude` session is just standard Claude Code; the agents and the "Morgan" persona wake up
+> **only** when you run `/engage` (or another team command, or simply ask for the team). The sole
+> always-on piece is the data-safety guard.
 
 > ## ✨ What's new in 0.7.6
 >
@@ -39,19 +38,19 @@
 > delivery report). Other transcripts: [review](docs/demos/review-demo.md) ·
 > [data-safety](docs/demos/data-safety-demo.md) · [run comparison](docs/demos/build-run-comparison.md).
 
-A **virtual compliance surveillance *engineering* team made of AI assistants** - it doesn't
-*do* compliance, it **builds the surveillance solutions and technology** behind detecting
-money laundering, market manipulation and trader misconduct. Detection rules are just one
-deliverable: it equally builds **data pipelines / ETL, transformation and utility scripts
-(Python, Scala, Java, PowerShell, Bash), reconciliation and reporting jobs, tooling**, or
-simply **reviews** existing code. It runs in
-[Claude Code](https://claude.com/claude-code) as a set of 16 focused "subagents": some are
-subject-matter experts who only advise, others engineer, test and review the solutions, and
-the work flows between them like a real engineering team.
+A **virtual compliance-surveillance *engineering* team made of AI assistants** - the
+**engineering** behind surveillance. It builds and reviews the **technology that detects** money
+laundering, market manipulation and trader misconduct - rather than performing the compliance,
+monitoring or investigation work itself. Detection rules are just one deliverable: it equally
+builds **data pipelines / ETL, transformation and utility scripts** (Python, Scala, Java,
+PowerShell, Bash), reconciliation and reporting jobs, and tooling - or simply **reviews** existing
+code. It runs in [Claude Code](https://claude.com/claude-code) as **16 focused subagents**:
+subject-matter experts who advise, and builders who engineer, test and review - with the work
+flowing between them like a real engineering team.
 
-> 🟢 **New to AI agents and LLMs? Read [`docs/OVERVIEW.md`](docs/OVERVIEW.md) first** - a
-> plain-English tour of what this is, who the team are, and how it keeps confidential data
-> away from the AI. No prior knowledge needed.
+> 🟢 **New to AI agents and LLMs?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md) - a
+> plain-English tour of what this is, who the team are, and how it keeps confidential data away
+> from the AI. No prior knowledge needed.
 
 ```mermaid
 flowchart LR
@@ -63,11 +62,11 @@ flowchart LR
     Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
 ```
 
-**The safety rule in one line:** raw data under `data/raw/` is **hard-blocked** - an automatic
-guard stops any agent reading it. Anything else you share, **you confirm is masked, synthetic, or
-anonymised** (a startup disclaimer makes this explicit; the responsibility is yours). Prefer
-*masked* (identities scrambled, behaviour kept) or *synthetic* (made up). See
-[How real data is handled](#-handling-real-data).
+**The safety rule, in one line:** raw data under `data/raw/` is **hard-blocked** - an always-on
+guard stops any agent from reading it. For anything else you share, **you attest it's masked,
+synthetic, or anonymised** (a startup disclaimer makes this explicit - the responsibility is
+yours). Prefer **masked** (identities scrambled, behaviour preserved) or **synthetic** (entirely
+made up). See [how real data is handled](#-handling-real-data).
 
 ---
 
