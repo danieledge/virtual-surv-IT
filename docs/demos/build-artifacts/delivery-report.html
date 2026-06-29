@@ -50,7 +50,7 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-29</span></header>
 <h1 id="delivery-report-ts-001-wash-trade-self-match-detection-demo-run-2">Delivery Report - TS-001 Wash Trade / Self-Match Detection (DEMO, Run 2)</h1>
 <blockquote>
 <h1 id="after-as-delivered-current-state">⏩ AFTER - "as-delivered" current state</h1>
@@ -287,7 +287,7 @@ still earned its keep by finding <em>new, subtler</em> issues. Full story: <a hr
 <li><strong>Known limitations / tech debt:</strong> O(B×S) (pre-group before volume); <code>min_notional</code> absent (tuning);
   intraday alert-id collision; obligation mapping PROVISIONAL until Q1/Q3/Q4.</li>
 </ul>
-<h2 id="6-token-usage-runtime-cost-this-run">6. 💰 Token usage, runtime &amp; cost (this run)</h2>
+<h2 id="6-token-usage-runtime-a-quirky-rate-card">6. 💰 Token usage, runtime &amp; a (quirky) rate card</h2>
 <p>Real <code>subagent_tokens</code> / <code>duration_ms</code>. Full comparison vs Run 1: <a href="../build-run-comparison.html">run comparison</a>.</p>
 <table>
 <thead>
@@ -367,9 +367,48 @@ still earned its keep by finding <em>new, subtler</em> issues. Full story: <a hr
 </table>
 <p>~<strong>$3-6</strong> API at list prices (±2×); the 2 opus agents are ~25% of tokens but the bulk of the cost -
 which is why opus is reserved for the final-judgement roles.</p>
+<h3 id="the-rate-card-tongue-in-cheek-illustrative-not-a-quote">The rate card (tongue-in-cheek, illustrative - not a quote)</h3>
+<p>What would a <strong>human</strong> team invoice for the same work - a spec, an SME sign-off, a build, three
+independent reviews, a calibration, a performance review and a delivery pack for a new scenario?</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>The human team</th>
+<th>This AI team</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Effort</td>
+<td>~<strong>3-5 person-days</strong> (realistic for a new reviewed scenario)</td>
+<td>~<strong>11 person-minutes</strong> of agent-time</td>
+</tr>
+<tr>
+<td>Blended rate</td>
+<td>~£750/day contractor (BA/dev ~£600, SME/compliance ~£900-950)</td>
+<td>-</td>
+</tr>
+<tr>
+<td>Wall-clock</td>
+<td>days-to-weeks (calendars, handoffs, meetings)</td>
+<td>~<strong>9 minutes</strong></td>
+</tr>
+<tr>
+<td><strong>Invoice</strong></td>
+<td>~<strong>£2,250 - £3,750</strong></td>
+<td>~<strong>$3-6</strong> in API</td>
+</tr>
+</tbody>
+</table>
+<p>So the team delivered roughly <strong>£2-4k of consulting effort for about the price of a coffee</strong> - in
+minutes, not days. <em>Caveat (the honest bit):</em> this is a <strong>proof-of-concept demo on synthetic data</strong>;
+the output is a <em>starting point for real engineers and reviewers</em>, not a replacement (and the human
+"invoice" is illustrative). The point isn't "fire the humans" - it's <em>"the boring 80% gets done in
+minutes, so the humans spend their day on the judgement that matters."</em></p>
 <h2 id="7-responsibility-notes">7. Responsibility notes</h2>
 <p>Code executed (📊) on this trusted demo repo with synthetic data; ensuring handed-over code is safe to
 run remains the user's responsibility (§7). No raw data reached any agent (§5).</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report.md &middot; 2026-06-28</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report.md &middot; 2026-06-29</div>
 </body>
 </html>
