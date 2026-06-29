@@ -15,9 +15,16 @@
       "Glob(/**/data/raw/**)",
       "Read(./.env)",
       "Read(./.env.*)",
+      "Read(.env)",
+      "Read(/**/.env)",
+      "Read(/**/.env.*)",
       "Read(./secrets/**)",
+      "Read(secrets/**)",
+      "Read(/**/secrets/**)",
       "Read(./**/*.pem)",
-      "Read(./**/*.key)"
+      "Read(/**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(/**/*.key)"
     ],
     "allow": [
       "Bash(pytest:*)",

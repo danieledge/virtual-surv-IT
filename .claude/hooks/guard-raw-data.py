@@ -88,10 +88,13 @@ def _extract_path_candidates(tool: str, tool_input: dict) -> list[str]:
         return [tool_input.get("file_path") or ""]
 
     if tool == "Grep":
-        # Grep exposes 'path' (directory to search) and optionally 'include' (glob).
-        # Both are checked; either resolving under raw/ is enough to block.
+        # Grep exposes 'path' (directory to search) and a glob filter. The current tool names the
+        # glob 'glob'; older configs used 'include' - check both so neither is a dead check. Any
+        # resolving under raw/ is enough to block. (A path-LESS Grep searches cwd and is not caught
+        # here - that residual needs the OS/filesystem boundary; see ADR-002 Tier-3.)
         return [
             tool_input.get("path") or "",
+            tool_input.get("glob") or "",
             tool_input.get("include") or "",
         ]
 

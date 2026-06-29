@@ -12,7 +12,10 @@ question per axis; make any mutually-exclusive axis (e.g. a single jurisdiction)
 (CLAUDE.md §2).
 
 1. **Understand the change** - what obligation changed, effective date, the new/amended
-   requirement (get the `*-sme` to read it; don't interpret regulation unaided).
+   requirement (get the `*-sme` to read it; don't interpret regulation unaided). **Ground every
+   pinpoint citation against the regulatory register** (`config/regulatory-register.yaml`); a new
+   or amended obligation belongs in the register first, not asserted from memory (ADR-001). Run
+   `python -m scripts.check_citations <artifact>` over the output and resolve any UNVERIFIED hits.
 2. **Trace the blast radius** - which **detection scenarios**, **controls**, **data feeds/
    lineage**, **specs (BRD/FSD/RTM)** and **thresholds** are affected. Use the RTM to find what's
    linked to the old obligation.

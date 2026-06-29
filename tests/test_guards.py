@@ -68,6 +68,16 @@ def test_raw_guard_blocks_grep_under_raw():
     assert code == BLOCK
 
 
+def test_raw_guard_blocks_grep_glob_under_raw():
+    # The Grep tool's glob filter is named 'glob' (the hook also still checks 'include').
+    code = _run(
+        _RAW_GUARD,
+        {"tool_name": "Grep", "tool_input": {"pattern": "x", "glob": "data/raw/*.csv"}},
+        _raw_env(),
+    )
+    assert code == BLOCK
+
+
 def test_raw_guard_blocks_bash_touching_raw():
     code = _run(
         _RAW_GUARD,
