@@ -226,6 +226,10 @@ It's the template every other detection in this team would follow.
 Think of it as a small, flexible delivery team: hand it a problem, a review, or a build, and
 it organises and does the work - you stay in the loop at the decision points.
 
+> ▶️ **Ready to try it?** This page is the *understand-it* tour; the
+> [**README**](../README.md) is the *do-it* reference - the one-command quick start, the full list
+> of commands, and the install options.
+
 ---
 
 ## Mini-glossary
