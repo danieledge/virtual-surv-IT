@@ -149,7 +149,7 @@ anonymised** (a startup disclaimer makes this explicit; the responsibility is yo
 
 ---
 
-**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🔒 Real-data handling](#-handling-real-data) · [💰 Token usage](#-token-usage--optimisation) · [📁 Layout](#-layout) · [🗺️ Roadmap](#-roadmap) · [🔧 Config](#-notes-on-the-config) · [🙏 Credits](#-credits)
+**📑 Jump to** - [👥 Meet the team](#-meet-the-team) · [🚀 Quick start](#-quick-start) · [📦 Install](#-install) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [💰 Token usage](#-token-usage--optimisation) · [📁 Layout](#-layout) · [🗺️ Roadmap](#-roadmap) · [🔧 Config](#-notes-on-the-config) · [🙏 Credits](#-credits)
 
 ---
 
@@ -502,6 +502,35 @@ caught, not shipped. (This is the regression net Anthropic's multi-agent guidanc
 > **recall 1.0** - it caught both planted criticals and correctly left the documented threshold
 > (the false-positive trap) alone.
 
+## 🪝 The two safety hooks (plain English)
+
+A *hook* is a small script Claude Code runs automatically **right before** it uses a tool, and it
+can **allow** or **block** that action. This plugin ships two, **always on** (they run even when the
+team is dormant):
+
+**1. The raw-data guard** (`guard-raw-data.py`) - *agents must never read real, unmasked data.*
+Anything an agent reads is sent to the AI model, so real records (PII/MNPI) can't go that way. The
+hook blocks any read/search/command whose path lands inside `data/raw/`. Point the team at masked or
+synthetic data instead.
+
+**2. The code-execution gate** (`guard-code-execution.py`) - *reviewing code means reading it, not
+running it.* Running untrusted code is a real risk, so commands that **execute** code (test runners,
+scripts, profilers) are blocked **unless you've given consent** - a `.claude/.exec-consent` marker
+(written when you answer "yes" at intake) or `CST_ALLOW_EXEC=1`. The team's own `scripts/` helpers
+are always allowed.
+
+Both are wired in **two** places so they fire in either mode - `hooks/hooks.json` (installed as a
+plugin) and `.claude/settings.json` (this repo opened as a project) - and a test keeps the two copies
+identical.
+
+**How strong are they? (the honest answer.)** For the file tools (`Read`/`Grep`/`Glob`) the block is
+backed by the OS-level `permissions.deny` list, so it genuinely holds. For **shell commands** the
+guards work by *reading the text of the command* - a strong default and a consent record, but **not
+a sandbox**: a determined user can dodge string-matching (e.g. hide a path in a variable). The real
+boundary for shell is OS file permissions / keeping raw data off the box. The full bypass analysis
+and the hardening backlog are in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md);
+operating notes are in [`docs/house-rules.md`](docs/house-rules.md).
+
 ## 🔒 Handling real data
 
 **Raw data under `data/raw/` is hard-blocked** - the guard stops any agent reading it, and
@@ -542,8 +571,10 @@ real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ �
   (size/timing distributions + the spoofing motif at its observed rate) and emits fully
   **synthetic** sessions that share no real entity, timestamp or row. This is what's safe
   to put in front of an agent or to share outside the environment.
-- **`.claude/hooks/guard-raw-data.py`** - PreToolUse hook (wired in `.claude/settings.json`)
-  that blocks any agent `Read`/`Bash` touching `data/raw/`.
+- **`.claude/hooks/guard-raw-data.py`** - PreToolUse hook (wired in both `.claude/settings.json`
+  and `hooks/hooks.json`) that blocks any agent `Read`/`Grep`/`Glob`/`Bash` touching `data/raw/`.
+  See [the safety-hooks section](#-the-two-safety-hooks-plain-english) for what "blocks" means for
+  shell commands vs the file tools.
 
 ```bash
 export MASKING_KEY=...                                   # from ~/.secrets
