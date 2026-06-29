@@ -271,6 +271,18 @@ def detection_fidelity(original_events, schema, key):
     return ok, len(real), len(masked)
 
 
+def _iter_strings(obj):
+    """Yield every string value in obj, recursing into nested dicts and lists."""
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            yield from _iter_strings(v)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            yield from _iter_strings(v)
+
+
 def scan_masked_file(path: str | Path, schema: dict) -> list:
     """Inspect a user's ACTUAL masked file (not a fixture). Data-independent checks only.
 
@@ -294,8 +306,9 @@ def scan_masked_file(path: str | Path, schema: dict) -> list:
     if bad_lines:
         checks.append(("file parse", False, f"{bad_lines} malformed JSON line(s) skipped"))
 
-    # Residual free-text PII across all STRING fields of the real masked output.
-    text = " ".join(v for r in records for v in r.values() if isinstance(v, str))
+    # Residual free-text PII across all STRING values, including those nested inside list/dict
+    # fields (a flat record is the norm, but nested values must not be a blind spot).
+    text = " ".join(s for r in records for s in _iter_strings(r))
     hits = [label for label, pat in _PII_PATTERNS if pat.search(text)]
     checks.append(
         (

@@ -17,7 +17,8 @@ Ask as discrete, structured questions:
 - **Target** - **single-select, mutually exclusive**: reduce FP without losing coverage / hit
   an alert-volume budget / close a coverage gap. The user picks exactly one.
 - **Data location** - where the **alert + behavioural data** is (synthetic, masked, or data the
-  user **attested is safe** at intake, §5 - if it's raw/unprepared, route through `/prepare-data`;
+  user **attested is safe** - at intake, or **confirm now if this skill was invoked directly**
+  rather than via `/engage`, §5 - if it's raw/unprepared, route through `/prepare-data`;
   `data/raw/` is hard-blocked). Separate question.
 - **Segmentation** that applies (product/instrument/customer/channel). Separate question.
 

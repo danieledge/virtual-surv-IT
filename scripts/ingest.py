@@ -235,9 +235,11 @@ def mask_records(records: list[dict], schema: dict, key: bytes) -> list[dict]:
     for idx, record in enumerate(records):
         try:
             out.append(mask_record(record, schema, key))
-        except Exception:
-            # Swallow the per-row error; do NOT include record content.
-            # Failures are reported as a count + index list only.
+        except (ValueError, KeyError, TypeError, IndexError, ArithmeticError):
+            # Skip DATA-shaped row errors (bad/missing/non-numeric fields), by INDEX only -
+            # never echo record content. A schema/programming error (e.g. NameError, a bad
+            # role) is NOT caught here: it propagates and aborts, so config bugs fail loudly
+            # instead of silently dropping every row.
             failures.append(idx)
     if failures:
         print(
