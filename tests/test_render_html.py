@@ -79,3 +79,19 @@ def test_render_fails_closed_when_bleach_unavailable(monkeypatch):
     monkeypatch.setattr(rh, "_BLEACH_AVAILABLE", False)
     with pytest.raises(RuntimeError, match="bleach"):
         render("# T\n\n<script>alert(1)</script>", "T")
+
+
+@pytest.mark.skipif(rh._CSS_SANITIZER is None, reason="bleach[css] (tinycss2) not installed")
+def test_render_preserves_table_alignment():
+    # A right-aligned Markdown column must keep its text-align after sanitisation
+    # (regression: without a CSS sanitiser bleach silently drops the style attribute).
+    html = render("# T\n\n| Amount |\n|------:|\n| 100 |\n", "T")
+    assert "text-align" in html
+
+
+def test_render_body_with_literal_placeholder_not_clobbered():
+    # A body that contains a literal %%FOOTER%% token must survive intact, and the real footer
+    # must still render exactly once (regression: sequential str.replace re-scanned inserts).
+    html = render("# T\n\nThis doc mentions the %%FOOTER%% token literally.", "T")
+    assert "%%FOOTER%%" in html  # the literal in the body was not substituted
+    assert "Generated from Markdown" in html  # the real footer still rendered

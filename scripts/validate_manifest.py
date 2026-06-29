@@ -44,6 +44,9 @@ def _check() -> list[str]:
         problems.append("plugin.json 'agents' must be a list")
         agents = []
     for rel in agents:
+        if not isinstance(rel, str):
+            problems.append(f"plugin.json 'agents' entry is not a string: {rel!r}")
+            continue
         if not (_ROOT / rel).is_file():
             problems.append(f"declared agent does not exist: {rel}")
 
@@ -58,13 +61,18 @@ def _check() -> list[str]:
             problems.append(f"agent declared in plugin.json but file missing: {extra}")
 
     # Skills: each declared skills root must contain skill dirs, each with a SKILL.md.
-    for rel in manifest.get("skills", []):
+    skills = manifest.get("skills", [])
+    if not isinstance(skills, list):
+        problems.append("plugin.json 'skills' must be a list")
+        skills = []
+    for rel in skills:
         skills_root = _ROOT / rel
         if not skills_root.is_dir():
             problems.append(f"declared skills directory does not exist: {rel}")
             continue
+        # Skip helper dirs: __pycache__ etc. and hidden/dot dirs (e.g. .ipynb_checkpoints).
         skill_dirs = [
-            d for d in skills_root.iterdir() if d.is_dir() and not d.name.startswith("__")
+            d for d in skills_root.iterdir() if d.is_dir() and not d.name.startswith(("__", "."))
         ]
         if not skill_dirs:
             problems.append(f"skills directory has no skills: {rel}")
@@ -72,14 +80,19 @@ def _check() -> list[str]:
             if not (d / "SKILL.md").is_file():
                 problems.append(f"skill missing SKILL.md: {d.relative_to(_ROOT)}")
 
+    # Hooks: if declared, the referenced file must exist (same failure class as agents/skills).
+    hooks = manifest.get("hooks")
+    if isinstance(hooks, str) and not (_ROOT / hooks).is_file():
+        problems.append(f"declared hooks file does not exist: {hooks}")
+
     # Marketplace cross-reference (best-effort): the plugin name should appear there.
     if _MARKETPLACE_JSON.is_file():
         try:
             market = json.loads(_MARKETPLACE_JSON.read_text())
-            names = json.dumps(market)
-            if manifest.get("name") and manifest["name"] not in names:
+            plugin_names = {p.get("name") for p in market.get("plugins", []) if isinstance(p, dict)}
+            if manifest.get("name") and manifest["name"] not in plugin_names:
                 problems.append(
-                    f"plugin name {manifest['name']!r} not referenced in marketplace.json"
+                    f"plugin name {manifest['name']!r} not listed in marketplace.json plugins[]"
                 )
         except json.JSONDecodeError as exc:
             problems.append(f"marketplace.json is not valid JSON: {exc}")

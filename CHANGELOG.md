@@ -18,6 +18,26 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   register (retrieve-don't-recall) with a mechanical check at the `compliance-reviewer` gate,
   instead of honour-based tagging of model-recalled citations.
 
+### Fixed - correctness bugs from a deeper code review
+- **Spoofing rule self-masking (detection FN):** the "outsized" size baseline was the median of
+  *all* a trader's orders, so a prolific spoofer inflated their own median and evaded the rule a
+  one-off spoof tripped. Baseline is now genuine (non place-and-cancel) orders only. Regression
+  test added. *(detection-logic change - per §4 route via rules-developer + compliance-reviewer.)*
+- **Spoofing lifecycle (same-ms events):** `reconstruct_orders` now orders NEW before CANCEL/FILL
+  within a millisecond, so a same-ms fill/cancel listed before its NEW is no longer dropped.
+- **HTML renderer:** table column alignment was silently lost (bleach dropped `style` with no CSS
+  sanitiser) - now preserved via a `text-align`-only CSS sanitiser (`bleach[css]`); placeholder
+  substitution is single-pass so body/title text containing a literal `%%TOKEN%%` can't collide;
+  `data:`-image comments corrected.
+- **eval scorer:** file matching now uses basename equality, not substring (so `auth.py` no longer
+  matches `oauth.py` and falsely marks a must-find found); severity synonyms (`high`, `error`, …)
+  resolve into the canonical vocab instead of failing closed.
+- **Masking:** phone redaction now catches parenthesised numbers (`+1 (555) 123-4567`); identifier
+  tokens widened 48→96 bits to avoid collisions merging distinct order lifecycles at scale; a
+  misleading comment about a missing shift-entity field corrected.
+- **`validate_manifest.py`:** type-guards `skills`/`agents` entries, skips dot-dirs, validates the
+  declared `hooks` path, and checks the marketplace `plugins[]` list (not a whole-doc substring).
+
 ## [0.7.2] - 2026-06-29
 
 ### Added - project review fixes (packaging, hardening, governance)

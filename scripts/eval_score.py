@@ -45,6 +45,27 @@ import sys
 from pathlib import Path
 
 _SEVERITY_RANK = {"style": 0, "medium": 1, "warning": 2, "critical": 3}
+# Common synonyms a team/normaliser might emit, mapped into the canonical vocab so an
+# out-of-vocab label (e.g. "high", "error", "info") doesn't silently fail-closed and flip
+# a genuine pass/fail.
+_SEVERITY_SYNONYMS = {
+    "blocker": "critical",
+    "crit": "critical",
+    "high": "critical",
+    "severe": "critical",
+    "error": "warning",
+    "major": "warning",
+    "warn": "warning",
+    "moderate": "medium",
+    "med": "medium",
+    "normal": "medium",
+    "minor": "style",
+    "low": "style",
+    "info": "style",
+    "informational": "style",
+    "nit": "style",
+    "trivial": "style",
+}
 _LINE_TOLERANCE = 3  # a planted issue at file:12 matches a finding at file:10-14
 
 
@@ -70,11 +91,18 @@ def _parse_location(loc: str | None) -> tuple[str, int | None]:
     return str(loc).strip().lower(), None
 
 
+def _sev_rank(sev: str | None, default: int) -> int:
+    """Rank a severity label, resolving synonyms first; *default* for unknown labels."""
+    s = _norm(sev)
+    return _SEVERITY_RANK.get(_SEVERITY_SYNONYMS.get(s, s), default)
+
+
 def _severity_ok(finding_sev: str | None, floor: str | None) -> bool:
     """True if the finding's severity is at or above the required floor (or no floor set)."""
     if not floor:
         return True
-    return _SEVERITY_RANK.get(_norm(finding_sev), -1) >= _SEVERITY_RANK.get(_norm(floor), 99)
+    # Unknown finding severity -> -1 (below any floor); unknown floor -> 99 (unsatisfiable).
+    return _sev_rank(finding_sev, -1) >= _sev_rank(floor, 99)
 
 
 def _location_matches(spec_loc: str | None, finding_loc: str | None) -> bool:
@@ -82,7 +110,10 @@ def _location_matches(spec_loc: str | None, finding_loc: str | None) -> bool:
         return False
     sf, sl = _parse_location(spec_loc)
     ff, fl = _parse_location(finding_loc)
-    if not sf or sf not in ff and ff not in sf:  # file must overlap
+    # Match on basename equality, not substring overlap: 'auth.py' must NOT match 'oauth.py'
+    # (which would let an unrelated finding satisfy a planted must-find -> false pass). A
+    # planted basename still matches a finding that carries a directory path.
+    if not sf or Path(sf).name != Path(ff).name:
         return False
     if sl is None or fl is None:
         return True  # file-level match when no line given on either side
