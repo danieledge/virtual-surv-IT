@@ -12,7 +12,10 @@ PM oversees an agile remediation loop (CLAUDE.md §6; gate: `docs/DEFINITION-OF-
 This is **audit mode** - pre-existing issues are in scope, not filtered out.
 
 1. **Assess.** Run `/deep-review` and `/performance-review` over the code. Capture findings
-   with confidence scores and evidence. (No real data - work on synthetic/masked, §5.)
+   with confidence scores and evidence. (No real data - work on synthetic/masked, §5.) Legacy
+   code here is often **AI-assisted / vibe-coded** - `/deep-review` asks, and if so the
+   remediation pack should include the **🧑‍💻 Prompting guidance** (how to prompt for a better
+   first draft next time; see `docs/review/output-format.md`).
 2. **Characterise & prioritise.** Produce a **remediation plan**: findings ranked by
    risk × impact × effort, with a recommended order. Surface anything regulatory (secrets,
    PII, broken traceability, undocumented thresholds) as top priority - never deferred.

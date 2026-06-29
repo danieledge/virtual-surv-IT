@@ -3,6 +3,19 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Added
+- **Reviews coach "vibe-coded" authors.** `/deep-review`, `/audit-review` and `/remediate` now ask
+  at intake whether the code was AI-assisted / vibe-coded; if yes (or if the findings plainly show
+  it), the report adds a **🧑‍💻 Prompting guidance** section - tying the top findings to what the
+  prompt under-specified, plus 2-4 concrete example prompts to get a better first draft next time.
+  Defined once in `docs/review/output-format.md`; wired into the `code-reviewer` agent.
+
+### Fixed
+- Restored the tongue-in-cheek **rate card** in the build-demo delivery report (dropped in the
+  TS-001 swap while the README still linked to it); updated to this run's figures and re-rendered.
+
 ## [0.7.7] - 2026-06-29
 
 ### Changed - docs

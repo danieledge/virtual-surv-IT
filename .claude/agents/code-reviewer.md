@@ -109,6 +109,11 @@ Follow **`docs/review/output-format.md`** exactly - it is the single canonical f
 - **Always include the "Developer guidance - improving future code" section** (2–4 constructive
   points on the original coding style and how to improve next time), even on a clean pass - this
   is mandatory, not optional.
+- **If the code was AI-assisted / "vibe-coded"** (the user said so at intake, or the findings make
+  it plain - no tests, hallucinated APIs, inconsistent patterns, missing error handling), add the
+  **🧑‍💻 Prompting guidance** section (`docs/review/output-format.md`): tie the top findings to what
+  the prompt under-specified, and give 2–4 concrete, reusable example prompts to get a better first
+  draft next time.
 - **Give every finding a Status (disposition)** - 🔴 Open · ✅ Fixed (say what changed) · ⚖️
   Accepted (rationale + who) · ⏭️ Deferred - plus a disposition tally, so it's never ambiguous
   what was actioned. A ❌ verdict lists the Open items explicitly.

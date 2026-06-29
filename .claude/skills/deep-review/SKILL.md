@@ -10,8 +10,8 @@ Run a **deep (detailed) code review** of: **$ARGUMENTS**.
 `git diff`), ask where the code is - a path/glob, repo/branch, commit range, or to paste it -
 and wait. Don't review an assumed target.
 
-**2. Put scope on a menu - ask, don't assume.** Ask the three axes below **in ONE `AskUserQuestion`
-call** (one screen, not three round-trips); they stay distinct questions with the stated
+**2. Put scope on a menu - ask, don't assume.** Ask the axes below **in ONE `AskUserQuestion`
+call** (one screen, not separate round-trips); they stay distinct questions with the stated
 `multiSelect` (don't merge them into one list):
 - **Dimensions** - **`multiSelect: true`**, default = all: 🐛 bugs & logic · 🔐 security ·
   📐 architecture · 🧰 language-specific · 📝 docs/comments · 🔵 style & form · 📋 compliance/audit.
@@ -21,6 +21,10 @@ call** (one screen, not three round-trips); they stay distinct questions with th
   whole module · whole repo.
 - **Mode** - **`multiSelect: false`**: change review (filter pre-existing) **or** audit (keep
   pre-existing in scope).
+- **Origin** - **`multiSelect: false`**: was this **AI-assisted / "vibe-coded"**? (yes · mixed ·
+  no, hand-written). If **yes/mixed**, the report adds a **🧑‍💻 Prompting guidance** section (see
+  `docs/review/output-format.md`): how a better prompt would have prevented the top findings, plus
+  example prompts to reuse. (The reviewer also adds it if the findings clearly show vibe-coding.)
 
 > **Do NOT re-ask the fix-cycle (report / fix / loop) here** - `engage` already captured it
 > (its Q3) and it is the single source of truth; inherit that answer. If this skill was invoked

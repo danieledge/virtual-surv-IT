@@ -122,6 +122,21 @@ but a single honest sentence is fine on a trivial diff - don't manufacture fille
 genuinely strong, say so and name what's done well. The point is the developer always leaves with
 something to learn, not just a pass/fail.
 
+### 🧑‍💻 Prompting guidance - *only when the work was AI-assisted / "vibe-coded"*
+Include this section **only if** the author said at intake the code was AI-generated/vibe-coded,
+**or** the findings plainly show it (no tests, hallucinated/non-existent APIs, inconsistent
+patterns, missing error handling, plausible-but-wrong logic). Keep it constructive, not preachy -
+the aim is a better *first draft* from the model next time, not just a fixed diff:
+- **Why it happened** - tie the top 2-3 findings to what the prompt under-specified (e.g.
+  "no false-positive test" ← the prompt never asked for one; "hard-coded threshold" ← no rationale
+  requested; "hallucinated API" ← the model wasn't told to verify it exists).
+- **Better prompts next time** - 2-4 concrete, reusable prompts tailored to the findings and this
+  domain, e.g.:
+  - *"Implement <rule>; include a true-positive AND a false-positive test, and a comment giving each threshold's rationale + tuning date."*
+  - *"Before coding, list the edge cases (empty input, malformed row, ties, same-timestamp events) and handle each explicitly."*
+  - *"Cite the specific regulatory obligation this serves and carry it as a field on the alert record, not just in free-text."*
+  - *"Don't invent APIs - if you're unsure a function/library exists, say so and show how you'd verify it before using it."*
+
 ### 🔇 Filtered (transparency - counts, not findings)
 | Reason | Count |
 |--------|-------|

@@ -22,7 +22,9 @@ Run an **evaluator–optimizer loop**:
    across the languages present, driving the standard analysers (ruff/mypy/bandit,
    Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep),
    citing OWASP ASVS / CWE / SEI CERT, with confidence scoring and filter transparency
-   (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope.
+   (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope. The embedded
+   `/deep-review` asks whether the code was **AI-assisted / vibe-coded**; if so, carry its
+   **🧑‍💻 Prompting guidance** through into the audit report (see `docs/review/output-format.md`).
 2. **compliance-reviewer** - use the **jurisdiction(s)** already established in step 1's
    `/deep-review` (or CLAUDE.md §2 / `docs/scope-and-stack.md`); **only ask if still unknown** -
    don't re-ask what step 1 captured. It assesses against the **applicable** regime(s) and states
