@@ -85,53 +85,13 @@ spoofing scenario (the worked reference example, not the agents themselves).
 
 ## 🚀 Quick start
 
-### ✅ Simplest - open the repo as a project (no install, no marketplace)
+### 🔌 Install as a plugin (recommended) - summon the team from *any* project
 
-The most reliable way. Project-scoped skills and agents **auto-load** - nothing to install:
+Install once and the team is available in **every** project, summoned on demand.
 
-```bash
-git clone https://github.com/danieledge/virtual-surv-IT.git
-cd virtual-surv-IT     # launch Claude FROM the repo root (discovery doesn't walk up dirs)
-claude
-```
-
-Then run `/help` - you should see `/engage`, `/deep-review`, `/audit-review`, …. New here? Type
-**`/demo`** to watch Morgan run a full engagement end-to-end on safe synthetic data (narrating every
-decision), or **`/meet-the-team`** for introductions; then `/engage` to start. (Also
-`pip install -r requirements-dev.txt` for the worked example, tests and the `.md→.html` render.)
-
-Then just **talk to the PM** - describe whatever you've got:
-
-```
-/engage I need to detect wash trades in our equities flow
-/engage here's a PowerShell script, review it and tell me if it'd survive an audit
-/engage build this from the attached FSD
-```
-
-> **You only type `/engage` once** - to kick off a piece of work. After that, just reply in
-> plain English ("yes, go ahead", "add a false-positive test", "now do the handover");
-> Morgan stays in role for the whole session. Use `/engage` again only to start a new,
-> separate piece of work, or a focused command (`/audit-review`, `/handover`, …) to jump
-> straight to a specific workflow.
-
-> ⚠️ **Two gotchas that waste people's time:**
-> - **Claude can't install the plugin for you.** `/plugin …` is a command **you** type - if you
->   ask the assistant to "install the plugin" it may *say* it did without anything happening.
-> - **Don't copy the repo into `~/.claude/skills/`.** The repo's skills live at
->   `.claude/skills/<name>/SKILL.md`, so copying the whole folder mis-nests them and they won't
->   load. Use project mode (above) or a real plugin install (below).
-
-> Don't have Claude Code yet? Install it from <https://claude.com/claude-code>, then run
-> `claude` inside this folder.
-
-<details>
-<summary>🔌 <b>Install as a plugin</b> - summon the team on demand from <i>any</i> project</summary>
-
-Install it as a plugin and the team is available in every project, summoned with one command.
-
-> 🛑 **You must type the `/plugin` commands yourself.** `/plugin …` is an interactive command -
-> if you *ask the assistant* to "install the plugin" it may claim success without anything
-> happening. And first remove any earlier hand-copy (e.g. `~/.claude/skills/…`) - it conflicts.
+> 🛑 **You must type the `/plugin` commands yourself.** `/plugin …` is an interactive command - if
+> you *ask the assistant* to "install the plugin" it may claim success without anything happening.
+> (First remove any earlier hand-copy like `~/.claude/skills/…` - it conflicts.)
 
 **1. Add the marketplace and install** (type these in Claude Code yourself):
 ```
@@ -146,32 +106,65 @@ Install it as a plugin and the team is available in every project, summoned with
 
 **2. Restart Claude Code.**
 
-**3. From any project, summon the team on demand** (commands are namespaced):
+**3. From any project, summon the team** (commands are namespaced):
 ```
 /compliance-surveillance-team:engage
 ```
 …and likewise `…:deep-review`, `…:audit-review`, `…:handover`, etc.
 
-**Verify it installed:** run `/plugin` - it should list **compliance-surveillance-team** as
-enabled (recorded in your config under `enabledPlugins`). **If it's not listed, the install
-didn't run** - re-type the commands above yourself.
+**Verify:** run `/plugin` - it should list **compliance-surveillance-team** as enabled (under
+`enabledPlugins`). **If it's not listed, the install didn't run** - re-type the commands yourself.
+*(One session only? `claude --plugin-dir /path/to/virtual-surv-IT` loads it ephemerally, not saved.)*
 
-*(Just need it for one session? `claude --plugin-dir /path/to/virtual-surv-IT` loads it
-ephemerally, not saved.)*
+You get the 16 agents, the workflow commands and the raw-data guard hook in every project. Then just
+**talk to the PM** - describe whatever you've got:
 
-You get the 16 agents, the workflow commands and the raw-data guard hook in every project.
+```
+/compliance-surveillance-team:engage I need to detect wash trades in our equities flow
+/compliance-surveillance-team:engage here's a PowerShell script - would it survive an audit?
+/compliance-surveillance-team:engage build this from the attached FSD
+```
 
-> **What works from another project vs repo-as-project.** The full **review/advisory** team -
-> `/engage`, all the reviews, the SMEs, Morgan - works everywhere. The helper-**script** steps
-> (the `.md`→`.html` render and the masking pipeline) need the plugin's `scripts/` reachable
-> from the working directory, which Claude Code doesn't expose to the model's shell from a
-> foreign project - so those run cleanest in **repo-as-project** mode. For "summon the team to
-> review/advise on my current project", the plugin install is exactly right.
+> **You only invoke `engage` once** - to kick off a piece of work. After that, just reply in plain
+> English ("yes, go ahead", "add a false-positive test", "now do the handover"); Morgan stays in
+> role for the whole session. Invoke it again only to start a new, separate piece of work, or use a
+> focused command (`…:audit-review`, `…:handover`, …) to jump straight to a specific workflow.
+
+> **What works everywhere vs repo-as-project.** The full **review/advisory** team - `engage`, all
+> the reviews, the SMEs, Morgan - works in any project. The helper-**script** steps (the
+> `.md`→`.html` render and the masking pipeline) need the plugin's `scripts/` reachable from the
+> working directory, which Claude Code doesn't expose from a foreign project - so those run cleanest
+> in **repo-as-project** mode (below). For "summon the team to review/advise on my code", the plugin
+> is exactly right.
 
 > **Data-safety guard is fully portable.** It's a hook, so it receives `CLAUDE_PROJECT_DIR` and
 > protects **your project's** `data/raw/` (not the plugin's) wherever the plugin is installed -
-> backed by the OS-level `permissions.deny` in settings. (Note: the hook runs `python3`; the
-> guard is inert without Python - the deny-list still applies.)
+> backed by the OS-level `permissions.deny`. (The hook runs `python3`; without Python the guard is
+> inert - the deny-list still applies.)
+
+> Don't have Claude Code yet? Install it from <https://claude.com/claude-code>.
+
+<details>
+<summary>📂 <b>Or: open the repo as a project</b> (no install) - best for <code>/demo</code>, the worked example and the scripts</summary>
+
+Project-scoped skills and agents **auto-load** - nothing to install, and the bundled scripts
+(`/demo`, the worked example, the masking pipeline, the `.md→.html` render) all work out of the box:
+
+```bash
+git clone https://github.com/danieledge/virtual-surv-IT.git
+cd virtual-surv-IT     # launch Claude FROM the repo root (discovery doesn't walk up dirs)
+claude
+```
+
+Then run `/help` - you should see `/engage`, `/deep-review`, `/audit-review`, …. New here? Type
+**`/demo`** to watch Morgan run a full engagement end-to-end on safe synthetic data, or
+**`/meet-the-team`** for introductions; then `/engage` to start. (Also
+`pip install -r requirements-dev.txt` for the worked example, tests and the `.md→.html` render.)
+Here the commands are **not** namespaced - just `/engage`, `/demo`, etc.
+
+> ⚠️ **Don't copy the repo into `~/.claude/skills/`.** The repo's skills live at
+> `.claude/skills/<name>/SKILL.md`, so copying the whole folder mis-nests them and they won't
+> load. Use a real plugin install (above) or project mode (here).
 
 </details>
 
@@ -203,7 +196,7 @@ ships together - see the manifest.)
 
 ![The compliance-surveillance engineering team - a group portrait of the 17 named characters (Morgan + 16 specialists), each labelled with name and role](docs/assets/team-portrait.png)
 
-*The team - **Morgan** (PM/orchestrator) plus **16 agents**: fifteen specialists and a tireless junior (Pip). Full bios below.*
+*The team - all seventeen, each labelled with name and role.*
 
 **Morgan** (PM & orchestrator) leads **16 agents** - fifteen specialists and a tireless junior
 (Pip) - the seventeen in the photo above. Each has a day job, a name, strong opinions, and a Slack
