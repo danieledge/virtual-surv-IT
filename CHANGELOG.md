@@ -11,6 +11,8 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   it), the report adds a **🧑‍💻 Prompting guidance** section - tying the top findings to what the
   prompt under-specified, plus 2-4 concrete example prompts to get a better first draft next time.
   Defined once in `docs/review/output-format.md`; wired into the `code-reviewer` agent.
+- **Team portrait** in the README "Meet the team" section (`docs/assets/team-portrait.png`) -
+  all 17 characters (Morgan + 16) labelled with name + role, consistent with the roster.
 
 ### Fixed
 - Restored the tongue-in-cheek **rate card** in the build-demo delivery report (dropped in the

@@ -76,6 +76,10 @@ made up). See [how real data is handled](#-handling-real-data).
 
 ## 👥 Meet the team
 
+![The compliance-surveillance engineering team - a group portrait of the 17 named characters (Morgan + 16 specialists), each labelled with name and role](docs/assets/team-portrait.png)
+
+*The team: Morgan (PM) and the 16 specialists. Full bios below.*
+
 Fifteen specialists, one PM and a tireless junior (16 agents in all) - each with a day job, a name, strong opinions,
 and a Slack status that tells you more than their job title does. (Inside a session, type
 `/meet-the-team` and Morgan does the introductions live.) **🧠 Advisors** are read-only - your
