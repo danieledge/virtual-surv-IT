@@ -145,17 +145,23 @@ Three layers, from most to least sensitive:
 1. **🔴 Real data** lives in `data/raw/` and is **off-limits to the AI**. An automatic
    guard (a small script that runs before every file read) blocks any agent that tries to
    open it.
-2. **🟠 Masking** (`scripts/ingest.py`) cleans real data: it scrambles the *identities*
-   (names, account numbers, traders become meaningless codes; dates are shifted) but keeps
-   the *behaviour* (the amounts, the timing, the patterns) so the detection still works.
-   We even have a checker (`scripts/validate_masking.py`) that proves the cleaning both
-   removed the identities **and** kept the detection working.
+2. **🟠 Masking** (`scripts/ingest.py`) is a **basic** cleaning step - useful, but deliberately
+   simple, **not a comprehensive anonymiser.** It tokenises the *identifiers* (names, account
+   numbers, traders → meaningless codes; dates shifted) and runs **regex redaction** of common PII
+   (emails, phones, card/IBAN/account numbers) in free text, while keeping the *behaviour* (amounts,
+   timing, patterns) so detection still works. A checker (`scripts/validate_masking.py`) verifies
+   the configured fields were cleaned and that detection still fires. **Its limits matter:** the
+   free-text redaction is regex-only, so it will **miss names and disguised identifiers** buried in
+   narrative or chat - real communications need proper NER (named-entity recognition), and for
+   anything leaving the environment you should prefer synthetic data (below).
 3. **🟢 Synthetic data** (`scripts/synthesise.py`) is the safest: it studies the *shape* of
    the cleaned data, then generates **completely made-up** records that behave the same way
    but correspond to nobody real. This is what's safe to put in front of the AI.
 
-> Important honesty: "masked" is safer but **not** anonymous - scrambled bank data is still
-> sensitive and stays locked down. "Synthetic" (made-up) data is the safe one to share.
+> Important honesty: the masking engine is **basic** (good for structured identifier fields plus
+> regex PII; **not** a full anonymiser), and even well-masked data is **not** anonymous - scrambled
+> bank data is still sensitive and stays locked down. "Synthetic" (made-up) data is the safe one to
+> share.
 
 ---
 
