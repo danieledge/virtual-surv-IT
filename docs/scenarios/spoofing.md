@@ -74,10 +74,12 @@ volume/coverage trade-off without touching detection logic.
 
 > **Calibration note (2026-06-29).** The genuine-baseline change re-bases the effective
 > outsized threshold for every trader (excluding spoof-shaped orders lowers the median for a
-> spoofer, but can raise it for a legitimate fast-cancel/market-making profile). A full FP/FN
-> delta against the synthetic calibration set is **outstanding** and owned by `data-analyst` /
-> `tuning-analyst` before the change is treated as production-calibrated; the thresholds
-> themselves are unchanged.
+> spoofer, but can raise it for a legitimate fast-cancel/market-making profile). A **measured
+> method-validation** FP/FN run on the labelled synthetic set is recorded in
+> [`spoofing-calibration.md`](spoofing-calibration.md) (precision/recall 1.00, FP-rate 0.00;
+> reproduce with `python -m scripts.calibrate_spoofing`). **Real-world calibration** on masked
+> production data, and `trade-surveillance-sme` confirmation, remain owned by `tuning-analyst`
+> before the change is treated as production-calibrated; the thresholds themselves are unchanged.
 
 ## 5. Test coverage
 

@@ -41,6 +41,15 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   denies gained absolute / non-`./` variants for `.env`, `secrets/`, `*.pem`, `*.key`. (A path-less
   Grep into cwd remains an OS/filesystem-boundary residual; see ADR-002 Tier-3.)
 
+### Added - spoofing calibration evidence + register wiring completed
+- **Measured calibration evidence** (`scripts/calibrate_spoofing.py` + `docs/scenarios/spoofing-calibration.md`):
+  runs the rule over a labelled synthetic corpus (50 spoof + 50 benign + 50 outsized-but-genuine)
+  and reports precision 1.00 / recall 1.00 / FP-rate 0.00 - the measured FP/FN evidence the
+  compliance review asked for (method validation on synthetic data; real-world calibration on
+  masked data still owned by `tuning-analyst`). Pinned by a regression test.
+- **Register wiring completed:** `/write-brd` now also retrieves pinpoint citations from the
+  regulatory register (joining `/new-scenario` + `/reg-change-impact`).
+
 ### Fixed - correctness bugs from a deeper code review
 - **Spoofing rule self-masking (detection FN):** the "outsized" size baseline was the median of
   *all* a trader's orders, so a prolific spoofer inflated their own median and evaded the rule a
