@@ -3,6 +3,19 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Changed
+- **Memory is project-scoped, not plugin-scoped.** The plugin is installed user-wide across many
+  independent projects, so it must hold **no project memory**. `docs/house-rules.md` is now strictly
+  **general, cross-project conventions**; **project-specific** learnings (typologies, thresholds, FP
+  drivers, venue quirks) now go to the **working project's own memory** (its `CLAUDE.md`). Added the
+  rule to CLAUDE.md §6; re-pointed all 13 agents that recommend lessons; moved the wash-trade demo
+  specifics out of house-rules into `docs/demos/build-artifacts/scenario-learnings.md`; updated the
+  README, `agent-design.md` and `/demo` framing.
+- **README "Meet the team" count corrected** (16 agents = 15 specialists + the junior; Morgan, the
+  PM, is the 17th) and the labelled team portrait added.
+
 ## [0.7.8] - 2026-06-29
 
 ### Added

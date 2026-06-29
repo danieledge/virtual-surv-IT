@@ -38,5 +38,6 @@ Principles:
 
 Output is the QA handover in `.md` (rendered to `.html`), suitable to hand to a human QA team.
 
-Recommend recurring lessons (test gaps, flaky-case patterns, residual-risk themes) for
-`docs/house-rules.md`.
+Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
+drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
+**general, cross-project** patterns → `docs/house-rules.md`.

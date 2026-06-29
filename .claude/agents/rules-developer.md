@@ -28,5 +28,6 @@ When invoked:
 Output: the implementation, the tests, and a short note mapping the code to the acceptance
 criteria and the regulatory obligation. Never hard-code secrets or embed real data.
 
-Recommend recurring lessons (implementation patterns, threshold rationales, FP pitfalls) for
-`docs/house-rules.md`.
+Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
+drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
+**general, cross-project** patterns → `docs/house-rules.md`.

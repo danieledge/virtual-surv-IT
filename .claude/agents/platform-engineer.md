@@ -41,4 +41,6 @@ When invoked:
    systems for explicit human approval.
 
 Output: design proposal, key trade-offs, security & retention posture, and open decisions.
-Recommend recurring lessons (patterns, pitfalls, infra conventions) for `docs/house-rules.md`.
+Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
+drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
+**general, cross-project** patterns → `docs/house-rules.md`.

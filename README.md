@@ -79,11 +79,12 @@ made up). See [how real data is handled](#-handling-real-data).
 
 ![The compliance-surveillance engineering team - a group portrait of the 17 named characters (Morgan + 16 specialists), each labelled with name and role](docs/assets/team-portrait.png)
 
-*The team: Morgan (PM) and the 16 specialists. Full bios below.*
+*The team - **Morgan** (PM/orchestrator) plus **16 agents**: fifteen specialists and a tireless junior (Pip). Full bios below.*
 
-Fifteen specialists, one PM and a tireless junior (16 agents in all) - each with a day job, a name, strong opinions,
-and a Slack status that tells you more than their job title does. (Inside a session, type
-`/meet-the-team` and Morgan does the introductions live.) **🧠 Advisors** are read-only - your
+**Morgan** (PM & orchestrator) leads **16 agents** - fifteen specialists and a tireless junior
+(Pip) - the seventeen in the photo above. Each has a day job, a name, strong opinions, and a Slack
+status that tells you more than their job title does. (Type `/meet-the-team` and Morgan does the
+introductions live.) **🧠 Advisors** are read-only - your
 *independent* check, so they can critique all day but can't touch the code (segregation of duties,
 basically). **🔧 Builders** write the stuff.
 
@@ -508,10 +509,12 @@ evals/                          # team-quality eval harness: 7 rubrics + 21 gold
 - Advisory agents are restricted to read-only tools (`Read, Grep, Glob`, sometimes `Bash`)
   so they physically cannot alter detection logic.
 - Build agents have write access (`Read, Write, Edit, Bash, Grep, Glob`).
-- Accumulated knowledge (house typologies, tuning decisions, recurring findings) lives in a
-  committed file, [`docs/house-rules.md`](docs/house-rules.md) - advisory agents recommend
-  additions and the PM commits them. (Claude Code subagents have no per-agent memory; a
-  committed file is the real, auditable mechanism.)
+- Memory is **project-scoped, not plugin-scoped** (the plugin is installed across many projects, so
+  it accrues no project memory): **project-specific** learnings (typologies, tuning decisions, FP
+  drivers) go to the **working project's own memory** (its `CLAUDE.md`); only **general,
+  cross-project** conventions live in the committed, plugin-shipped
+  [`docs/house-rules.md`](docs/house-rules.md). Advisory agents recommend; the PM commits.
+  (Claude Code subagents have no per-agent memory; a committed file is the real, auditable mechanism.)
 - Models: **4 opus** (the final/unchecked judgement + novel-design roles) · **11 sonnet** ·
   **1 haiku** - the per-agent rationale and best-practice conformance live in
   [`docs/agent-design.md`](docs/agent-design.md). Change the `model:` field freely.

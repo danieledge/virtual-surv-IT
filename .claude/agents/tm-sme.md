@@ -39,5 +39,6 @@ Output format:
 Flag anything that would be hard to explain to a regulator. If asked to implement, decline
 and hand a clear specification back to the orchestrator for `rules-developer`.
 
-Recommend additions to `docs/house-rules.md` - recurring typologies, threshold rationales
-and tuning outcomes - for the PM to commit, so the team's knowledge compounds over time.
+Recommend durable lessons (CLAUDE.md §6) for the PM to commit: **project-specific** ones
+(typologies, threshold rationales, tuning outcomes, FP drivers) → the working **project's own
+memory** (its `CLAUDE.md`); only **general, cross-project** patterns → `docs/house-rules.md`.

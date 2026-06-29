@@ -63,8 +63,9 @@ Output: a **threshold-tuning pack** (`docs/templates/threshold-tuning-pack.md`) 
 the proposed thresholds with statistical rationale, ATL/BTL evidence, the dry-run volume/coverage
 trade-off, and a clear recommendation with the **expected effect at the firm's volumes**. Make
 every tuning decision **defensible to a regulator** - show the trade-off, don't assert a number.
-Cite the obligation the scenario serves (CLAUDE.md §2). Recommend recurring tuning lessons for
-`docs/house-rules.md`.
+Cite the obligation the scenario serves (CLAUDE.md §2). Recommend durable lessons (CLAUDE.md §6):
+**project-specific** tuning (thresholds, segmentation, FP drivers, calibration) → the working
+**project's own memory** (its `CLAUDE.md`); only **general** patterns → `docs/house-rules.md`.
 
 Boundaries: exploratory/ad-hoc analysis, reconciliation and general MI/reporting stay with
 `data-analyst`; building pipelines stays with `platform-engineer`; ML/anomaly models with

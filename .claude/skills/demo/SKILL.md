@@ -74,8 +74,9 @@ agents). State the token ballpark so the choice is informed. Pick a small, safe 
 
 **Be honest about the gates:** the delivery is *demo-complete* but **say plainly it's NOT deployable**
 until the deploy gates close (re-calibrate on real labelled data, fix any scalability finding, and
-**human sign-off** - which a demo cannot produce). Action any advisory house-rules recommendations
-into `docs/house-rules.md` (recommend → PM commits) so the loop visibly closes.
+**human sign-off** - which a demo cannot produce). Action any advisory recommendations per
+CLAUDE.md §6 (recommend → PM commits): **general** patterns → `docs/house-rules.md`;
+**project-specific** learnings → the project's own memory - so the loop visibly closes.
 
 **3c. For the Data-safety demo specifically:** show synthetic generation, then **attempt a read of
 `data/raw/`** so the user *sees the guard hard-block it* (it will), and explain the layered defence
