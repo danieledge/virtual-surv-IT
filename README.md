@@ -5,7 +5,7 @@
 > and a data-safety disclaimer on anything you share.*
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.5](https://img.shields.io/badge/version-0.7.5-blue)
+![Version 0.7.6](https://img.shields.io/badge/version-0.7.6-blue)
 ![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -20,13 +20,22 @@
 > "Morgan" persona activate **only** when you run `/engage` (or another team command, or ask
 > for the team). The one always-on piece is the data-safety guard.
 
-> ## ✨ What's new in 0.7.5
+> ## ✨ What's new in 0.7.6
+>
+> - **🏷️ Morgan states the team version on startup** - `/engage` and `/meet-the-team` now show the
+>   loaded build version in Morgan's opening (read from the plugin manifest), so you can tell at a
+>   glance which version is running - handy because an installed plugin is a cached copy and a
+>   plain restart won't upgrade it (use `/plugin update`).
+>
+> <details><summary>What's new in 0.7.5 - citation register reframed as a ledger</summary>
 >
 > - **📚 Citation register reframed as a ledger, not an allowlist** - the regulatory register no
 >   longer limits what the team may cite. Agents use their **full regulatory knowledge** to surface
 >   the applicable obligation; a citation not in the register is flagged **to-verify** (confirm +
 >   add it), not treated as wrong or suppressed. A finding is reserved for a citation that
 >   *contradicts* the register or is *asserted as decided fact without a flag*.
+>
+> </details>
 >
 > <details><summary>What's new in 0.7.4 - duplicate-hook-file fix</summary>
 >
