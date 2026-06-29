@@ -114,7 +114,7 @@ Install once and the team is available in **every** project, summoned on demand.
 
 **Verify:** run `/plugin` - it should list **compliance-surveillance-team** as enabled (under
 `enabledPlugins`). **If it's not listed, the install didn't run** - re-type the commands yourself.
-*(One session only? `claude --plugin-dir /path/to/virtual-surv-IT` loads it ephemerally, not saved.)*
+*(One session only? `claude --plugin-dir /path/to/virtual-surv-IT` loads it temporarily, not saved.)*
 
 You get the 16 agents, the workflow commands and the raw-data guard hook in every project. Then just
 **talk to the PM** - describe whatever you've got:
@@ -156,7 +156,7 @@ cd virtual-surv-IT     # launch Claude FROM the repo root (discovery doesn't wal
 claude
 ```
 
-Then run `/help` - you should see `/engage`, `/deep-review`, `/audit-review`, …. New here? Type
+Then run `/help` - you should see `/engage`, `/deep-review`, `/audit-review`, … New here? Type
 **`/demo`** to watch Morgan run a full engagement end-to-end on safe synthetic data, or
 **`/meet-the-team`** for introductions; then `/engage` to start. (Also
 `pip install -r requirements-dev.txt` for the worked example, tests and the `.md→.html` render.)
