@@ -33,6 +33,5 @@
     "./.claude/agents/trade-surveillance-sme.md",
     "./.claude/agents/tuning-analyst.md"
   ],
-  "skills": ["./.claude/skills/"],
-  "hooks": "./hooks/hooks.json"
+  "skills": ["./.claude/skills/"]
 }

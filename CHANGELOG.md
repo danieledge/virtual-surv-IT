@@ -3,6 +3,15 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Fixed
+- **Duplicate hook file** - removed `"hooks": "./hooks/hooks.json"` from `plugin.json` (added in
+  0.7.2). Claude Code **auto-loads** the standard `hooks/hooks.json` at the plugin root, so
+  declaring it double-loaded it ("duplicate hook file detected"). `agents`/`skills` still need
+  explicit declaration (they live in non-standard `.claude/` paths); `hooks/` is standard and must
+  not be declared. `scripts/validate_manifest.py` now flags this regression, with a smoke test.
+
 ## [0.7.3] - 2026-06-29
 
 ### Added - adversarial evals + citation-grounding design

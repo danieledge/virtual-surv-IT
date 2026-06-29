@@ -80,10 +80,19 @@ def _check() -> list[str]:
             if not (d / "SKILL.md").is_file():
                 problems.append(f"skill missing SKILL.md: {d.relative_to(_ROOT)}")
 
-    # Hooks: if declared, the referenced file must exist (same failure class as agents/skills).
+    # Hooks: the standard hooks/hooks.json at the plugin root is AUTO-LOADED by Claude Code, so it
+    # must NOT be declared in plugin.json - doing so double-loads it ("duplicate hook file"). The
+    # `hooks` key should only reference ADDITIONAL hook files outside the standard location.
     hooks = manifest.get("hooks")
-    if isinstance(hooks, str) and not (_ROOT / hooks).is_file():
-        problems.append(f"declared hooks file does not exist: {hooks}")
+    hook_refs = [hooks] if isinstance(hooks, str) else (hooks if isinstance(hooks, list) else [])
+    for ref in hook_refs:
+        if str(ref).lstrip("./") == "hooks/hooks.json":
+            problems.append(
+                "plugin.json 'hooks' references the auto-loaded hooks/hooks.json - that "
+                "double-loads it. Remove it (declare only ADDITIONAL hook files)."
+            )
+        elif not (_ROOT / ref).is_file():
+            problems.append(f"declared hooks file does not exist: {ref}")
 
     # Marketplace cross-reference (best-effort): the plugin name should appear there.
     if _MARKETPLACE_JSON.is_file():
