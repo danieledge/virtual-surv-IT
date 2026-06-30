@@ -6,14 +6,12 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ## [Unreleased]
 
 ### Changed - docs
-- **README replaced with a leaner, restructured edition** (provided by the maintainer). Single H1 +
-  a linked table of contents; the personality roster kept on the home page; a stronger
-  "experimental / will be replaced" framing on the masking pipeline. The **previous detailed README
-  is preserved as `README-old.md`**. The new front page is intentionally lighter and no longer
-  surfaces some detail that lives in `README-old.md` / the docs - notably the token-usage & cost
-  table (and rate card), the code-execution safety-hook + "how strong are the guards" analysis, the
-  demo-transcript links, the manual/partial-install steps, and the eval/model-tiering specifics.
-- _(superseded below)_ **README reworked on a cleaner foundation** (presented as "Virtual Surv-IT"). Added Why /
+- **Leaner "Virtual Surv-IT" rewrite in progress (not yet promoted).** A maintainer-provided,
+  restructured edition is being developed as `readme2.md` (single H1, a jump-links bar, detailed
+  plugin-install steps, dense team bios, and a stronger "experimental / will be replaced" framing on
+  the masking pipeline). `README.md` remains the current detailed version until the rewrite is ready
+  to swap in.
+- **README reworked on a cleaner foundation** (presented as "Virtual Surv-IT"). Added Why /
   Features / Core principles / Documentation / Contributing / Disclaimer / Acknowledgements
   sections while **preserving all existing content** - the Meet-the-team roster + portrait stay on
   the home page, and the data-safety / eval / tooling / hooks / real-data / token / roadmap detail
