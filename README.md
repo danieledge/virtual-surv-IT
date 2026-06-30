@@ -37,7 +37,7 @@ reconciliation and reporting jobs, and tooling - or simply **reviews** existing 
 [Claude Code](https://claude.com/claude-code) as **a PM (Morgan) plus 16 focused subagents**:
 subject-matter experts who advise, and builders who engineer, test and review.
 
-> 🟢 **New to AI agents and LLMs?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md) - a
+> **New to AI agents and LLMs?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md) - a
 > plain-English tour of what this is, who the team are, how a job flows through them, and how it
 > keeps confidential data away from the AI. No prior knowledge needed.
 
@@ -51,7 +51,7 @@ flowchart LR
     Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
 ```
 
-> ⚖️ **Not all 16 every time.** The roster is a **library of specialists, not a fixed pipeline.**
+> **Not all 16 every time.** The roster is a **library of specialists, not a fixed pipeline.**
 > The PM (Morgan) engages **only the agents a task needs** - typically **2-5** (often just a builder
 > + a reviewer), and **never all 16**. The diagram above is the *shape* of a full delivery; most
 > tasks use a leaner subset. That selection is **how the team controls cost** *and* how it stays
@@ -64,7 +64,7 @@ synthetic, or anonymised** (a startup disclaimer makes this explicit - the respo
 yours). Prefer **masked** (identities scrambled, behaviour preserved) or **synthetic** (entirely
 made up). See [how real data is handled](#-handling-real-data).
 
-🎬 **See it work** - a full build, end-to-end on synthetic data, captured as a readable
+**See it work** - a full build, end-to-end on synthetic data, captured as a readable
 **[build demo transcript](docs/demos/build-demo.md)** (every artifact in
 [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/)). Other transcripts:
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) ·
@@ -73,7 +73,7 @@ made up). See [how real data is handled](#-handling-real-data).
 <details>
 <summary>✨ <b>What's new in 0.7.11</b> - engagement-summary email artifact (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
 
-- **📧 Every engagement now closes with a summary email** - a short, plain-language cover note from
+- **Every engagement now closes with a summary email** - a short, plain-language cover note from
   the PM (Morgan), saved as a `.txt` in `artifacts/` alongside the other deliverables (the one
   artifact kept as `.txt`, not rendered to HTML). It's a required Definition-of-Done item, with a
   template and the recipient's name never invented ("Hi," when unknown).
@@ -119,18 +119,18 @@ and **right-sized** to each task (see below).
 
 ## ✨ Features
 
-- ✅ **A real engineering team** - a PM (Morgan) + 16 specialist subagents, not one generalist.
-- ✅ **Right-sized per task** - the PM engages only the agents a job needs (typically 2-5, **never
-  all 16**); cost-controlled and faithful to Anthropic's "simplest thing that works".
-- ✅ **Built-in independent peer review** - reviewers are **read-only by tool grant** (segregation
-  of duties): they recommend, builders fix.
-- ✅ **More than detection rules** - pipelines/ETL, transformation scripts, ML, reviews, docs.
-- ✅ **Data-safety by design** - raw data hard-blocked from the model; masking + synthetic on-ramp.
-- ✅ **Evidence-based & auditable** - alert → logic → obligation traceability; a Definition of Done.
-- ✅ **Self-tested** - an eval harness (rubrics + golden cases) catches quality regressions.
-- ✅ **Claude Code native** - install as a plugin; dormant by default until you invoke it.
-- ✅ **Extensible & modular** - add or re-tier specialists independently.
-- ✅ **Documentation generation** - every deliverable in `.md` + `.html`, plus a summary email.
+| Capability | What it gives you |
+|---|---|
+| A real engineering team | A PM (Morgan) + 16 specialist subagents, not one generalist. |
+| Right-sized per task | The PM engages only the agents a job needs (typically 2-5, never all 16) - cost-controlled and faithful to Anthropic's "simplest thing that works". |
+| Built-in independent review | Reviewers are read-only by tool grant (segregation of duties): they recommend, builders fix. |
+| More than detection rules | Pipelines/ETL, transformation scripts, ML, reviews and docs - not just rules. |
+| Data-safety by design | Raw data hard-blocked from the model; masking + synthetic on-ramp. |
+| Evidence-based & auditable | Alert → logic → obligation traceability, behind a Definition of Done. |
+| Self-tested | An eval harness (rubrics + golden cases) catches quality regressions. |
+| Claude Code native | Install as a plugin; dormant by default until you invoke it. |
+| Extensible & modular | Add or re-tier specialists independently. |
+| Documentation generation | Every deliverable in `.md` + `.html`, plus a summary email. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
@@ -421,20 +421,15 @@ handbook.
 
 ## 🧭 Core principles
 
-- **Engineering first.** The team assists software engineering; it does **not** give compliance,
-  legal or regulatory advice.
-- **Right-sized, not all-hands.** The PM engages only the agents a task needs (typically 2-5,
-  **never all 16**) - the mechanism that controls cost and keeps the team true to Anthropic's "use
-  the simplest thing that works".
-- **Independent peer review.** Reviewers and SMEs are **read-only by tool grant** (segregation of
-  duties): they recommend; builders fix. An advisor can't quietly edit what it's reviewing.
-- **Human oversight.** People review and approve all outputs; nothing touching live systems
-  proceeds without sign-off.
-- **Safe development.** Synthetic, masked or appropriately protected data only; raw data is
-  hard-blocked from the model.
-- **Auditable & traceable.** Every delivery carries the thread requirement → code → test →
-  obligation, with explainable thresholds - so it survives an audit.
-- **Modular.** Each specialist can evolve (or be re-tiered) independently without disturbing the rest.
+| Principle | What it means |
+|---|---|
+| Engineering first | Assists software engineering; not compliance, legal or regulatory advice. |
+| Right-sized, not all-hands | The PM engages only the agents a task needs (typically 2-5, never all 16) - the mechanism that controls cost and keeps the team true to Anthropic's "use the simplest thing that works". |
+| Independent peer review | Reviewers and SMEs are read-only by tool grant (segregation of duties): they recommend; builders fix - an advisor can't quietly edit what it's reviewing. |
+| Human oversight | People review and approve all outputs; nothing touching live systems proceeds without sign-off. |
+| Safe development | Synthetic, masked or appropriately protected data only; raw data is hard-blocked from the model. |
+| Auditable & traceable | Every delivery carries the thread requirement → code → test → obligation, with explainable thresholds - so it survives an audit. |
+| Modular | Each specialist can evolve (or be re-tiered) independently without disturbing the rest. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
