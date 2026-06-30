@@ -122,20 +122,30 @@ but a single honest sentence is fine on a trivial diff - don't manufacture fille
 genuinely strong, say so and name what's done well. The point is the developer always leaves with
 something to learn, not just a pass/fail.
 
-### 🧑‍💻 Prompting guidance - *only when the work was AI-assisted / "vibe-coded"*
-Include this section **only if** the author said at intake the code was AI-generated/vibe-coded,
-**or** the findings plainly show it (no tests, hallucinated/non-existent APIs, inconsistent
-patterns, missing error handling, plausible-but-wrong logic). Keep it constructive, not preachy -
-the aim is a better *first draft* from the model next time, not just a fixed diff:
-- **Why it happened** - tie the top 2-3 findings to what the prompt under-specified (e.g.
-  "no false-positive test" ← the prompt never asked for one; "hard-coded threshold" ← no rationale
-  requested; "hallucinated API" ← the model wasn't told to verify it exists).
-- **Better prompts next time** - 2-4 concrete, reusable prompts tailored to the findings and this
-  domain, e.g.:
-  - *"Implement <rule>; include a true-positive AND a false-positive test, and a comment giving each threshold's rationale + tuning date."*
-  - *"Before coding, list the edge cases (empty input, malformed row, ties, same-timestamp events) and handle each explicitly."*
-  - *"Cite the specific regulatory obligation this serves and carry it as a field on the alert record, not just in free-text."*
-  - *"Don't invent APIs - if you're unsure a function/library exists, say so and show how you'd verify it before using it."*
+### 🧑‍💻 Prompting guidance - *only when AI-assisted / "vibe-coded" AND findings were raised*
+Include this section **only if** (a) the author said at intake the code was AI-generated/vibe-coded,
+**or** the findings plainly show it (no tests, hallucinated/non-existent APIs, inconsistent patterns,
+missing error handling, plausible-but-wrong logic) - **and** (b) the review actually raised at least
+one finding. On a clean pass, **skip it** (there's nothing to coach). Keep it constructive, not
+preachy - the aim is a better *first draft* from the model next time, not just a fixed diff.
+
+**Map the findings to the prompt (findings-driven, not generic).** Take the significant findings this
+review raised, group near-duplicates into one row, and for each show the prompt change that would
+have **closed** it:
+
+| Finding (or cluster) | Why the prompt let it through | Prompt clause that would have closed it |
+|---|---|---|
+| *(example)* no false-positive test | the prompt never asked for one | "…include a true-positive AND a false-positive test." |
+| *(example)* hard-coded threshold | no rationale/tuning date requested | "…comment each threshold with its rationale + tuning date." |
+| *(example)* hallucinated API | model wasn't told to verify APIs exist | "…don't invent APIs; if unsure a function exists, say so and show how you'd verify it." |
+
+Only include rows for findings the review **actually raised** - omit examples that don't apply.
+
+**Reusable prompts.** Distil the rows into 2-3 prompts the author can keep and reuse on this kind of
+work next time, e.g.:
+- *"Implement <rule>; include a true-positive AND a false-positive test, and a comment giving each threshold's rationale + tuning date."*
+- *"Before coding, list the edge cases (empty input, malformed row, ties, same-timestamp events) and handle each explicitly."*
+- *"Cite the specific regulatory obligation this serves and carry it as a field on the alert record, not just in free-text."*
 
 ### 🔇 Filtered (transparency - counts, not findings)
 | Reason | Count |

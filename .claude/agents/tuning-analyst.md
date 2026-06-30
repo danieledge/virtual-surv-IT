@@ -67,6 +67,10 @@ Cite the obligation the scenario serves (CLAUDE.md §2). Recommend durable lesso
 **project-specific** tuning (thresholds, segmentation, FP drivers, calibration) → the working
 **project's own memory** (its `CLAUDE.md`); only **general** patterns → `docs/house-rules.md`.
 
+**Tag every tuning insight 📊 observed / 🧠 inferred** (CLAUDE.md §6) - what the ATL/BTL data actually
+showed (cite the sample / rate) vs what you inferred or extrapolated; state the assumption behind any
+inference, and never present an inference as a measured result.
+
 Boundaries: exploratory/ad-hoc analysis, reconciliation and general MI/reporting stay with
 `data-analyst`; building pipelines stays with `platform-engineer`; ML/anomaly models with
 `ml-engineer`; the regulatory/typology context comes from the SMEs (`tm-sme` /

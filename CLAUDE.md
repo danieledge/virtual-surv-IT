@@ -96,6 +96,11 @@ focused command); run only the stages the request needs.
   question; single-select for mutually-exclusive, multi-select for independent; batch up to 4 per call.
 - **Mark every turn with 🎩**; **name the team** in narration (delegation targets the technical slug).
 - **Keep console output clean** - detail to artifacts, not the TUI.
+- **Tag data insights: observed vs inferred.** Any insight drawn from data carries **📊 observed**
+  (seen directly in the data - cite the metric / sample / query) or **🧠 inferred** (reasoning or
+  extrapolation beyond what was measured, with the assumption stated). Inference is fine *if tagged*;
+  **never present an inference as observed fact.** Applies to the data agents and to the PM
+  summarising their work - the same 📊/🧠 basis used in reviews.
 - **Memory is project-scoped, not plugin-scoped** - the plugin is typically installed user-wide
   across many independent projects, so it must accrue **no** project memory. A **general,
   cross-project** lesson (an engineering / review / process / safety pattern) → recommend it for
