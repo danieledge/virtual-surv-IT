@@ -38,5 +38,9 @@ named below are the building blocks.
    a pack that mentions blocking findings must make clear whether the rework addressed them or
    they're still open (🔴 Open / needs human developer review), never ambiguous.
 6. Save under `artifacts/` and render to `.html` (`python -m scripts.render_html`).
+7. **Engagement-summary email** (required closing artifact - Definition of Done): a short
+   email-format cover note (`docs/templates/engagement-summary-email.md`) saved as a **`.txt` in
+   `artifacts/`**, **signed off as Morgan** ("Hi," if you don't know the recipient's name). It's an
+   email, so it stays `.txt` - not rendered to HTML.
 
 Stop for human sign-off - real reviewers will read these, and approval/execution is theirs.

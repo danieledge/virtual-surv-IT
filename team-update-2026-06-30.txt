@@ -1,0 +1,87 @@
+To:        Daniel Edge
+From:      Morgan - PM & Orchestrator, Compliance Surveillance Engineering (Virtual Team)
+Date:      30 June 2026
+Subject:   Engineering update - releases 0.7.8-0.7.10, a best-practice audit, and a full docs overhaul
+
+Hi Daniel,
+
+Wrapping up this cycle. Headline: three releases shipped (we're on v0.7.10, all CI-green,
+84 tests passing), an independent best-practice audit done and acted on, and the README +
+onboarding given a proper overhaul. The detail's below - skim the headers.
+
+
+RELEASES SHIPPED
+----------------
+- 0.7.8  Reviews now coach "vibe-coded" code. /deep-review, /audit-review and /remediate ask
+         at intake whether the code was AI-assisted; if so, the report adds a "Prompting
+         guidance" section - why the top findings happened, plus reusable example prompts for
+         a better first draft next time.
+
+- 0.7.9  Memory is project-scoped, not plugin-scoped. This was the important one. Because the
+         plugin is installed across many independent projects, it must hold NO project memory -
+         otherwise one project's learnings leak into all the others. So project-specific
+         learnings (typologies, thresholds, FP drivers) now live in the working project's OWN
+         CLAUDE.md; only general, cross-project conventions stay in the plugin's house-rules.
+         Re-pointed all 13 agents that recommend lessons, and moved the wash-trade demo
+         specifics out to the demo's own scenario-learnings file.
+
+- 0.7.10 Honest self-assessment after an Anthropic-guidance audit (see below).
+
+
+BEST-PRACTICE AUDIT (vs Anthropic's published guidance + the Claude Code platform docs)
+----------------------------------------------------------------------------------------
+- Verdict: broadly conformant - genuinely so on the high-value lessons (orchestrator-worker
+  delegation, model tiering, token-cost awareness, safety-via-hooks, a real eval harness).
+
+- We corrected our own overstatements rather than gloss them: "advisors are read-only" is now
+  "advisors hold no Write/Edit (Bash is execution-gated)"; subagent self-assessment and
+  condensed sub-agent returns are marked honest partials; and the roster is reframed as a
+  LIBRARY, not a pipeline - the PM engages the minimal sufficient subset per task.
+
+- We checked the platform auditor's two "broken packaging" alarms and found them NOT
+  substantiated (the hooks auto-load, the manifest paths resolve, the plugin demonstrably
+  installs) - so no disruptive restructure on a false alarm.
+
+- On "should we benchmark the team size?" - we concluded it's the wrong question. You never
+  engage all 16; the PM selects what a task needs. "Simplest thing that works" is satisfied by
+  that selection, not by a benchmark, so we documented it honestly instead of building one.
+
+
+DOCUMENTATION OVERHAUL
+----------------------
+- README restructured for navigation, grounded in how the best open-source READMEs are built:
+  Quick start now leads; heavy reference sections collapse into expandable blocks while their
+  headings stay visible (so the jump-nav and the GitHub outline keep working); added
+  back-to-top links. Nothing was removed - it's all one click away.
+
+- Promoted the plugin install to the recommended default in Quick start; "open the repo as a
+  project" is now the clearly-labelled alternative for the demo, the worked example and the
+  scripts.
+
+- The README now defers the plain-English newcomer story to docs/OVERVIEW.md (each points at
+  the other: README = do it, OVERVIEW = understand it), and we de-duplicated the glossary.
+
+- Added the team portrait to "Meet the team" (with the role labels corrected), fixed the
+  head-count wording, and ran a light legibility + grammar copy-edit over both docs.
+
+
+WHERE THINGS STAND
+------------------
+- Version 0.7.10; tags v0.7.0 through v0.7.10 are contiguous; main is in sync with origin;
+  working tree clean; CI green; 84 tests passing.
+- The CHANGELOG's [Unreleased] section holds the documentation pass, ready to fold into the
+  next tagged release.
+
+
+OPEN / OPTIONAL NEXT STEPS
+--------------------------
+- A one-time clean-room GitHub plugin install smoke test would fully retire the structural
+  doubt the platform audit raised - that one needs you to type the /plugin commands, as I
+  can't run them myself.
+- Tag a release whenever you'd like to stamp the [Unreleased] docs work with a version number.
+
+As ever - happy to take any of those as an action.
+
+Morgan
+PM & Orchestrator
+Compliance Surveillance Engineering - Virtual Team

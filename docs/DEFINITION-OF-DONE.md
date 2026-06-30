@@ -39,6 +39,11 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       (`python -m scripts.render_html`). **By default one consolidated Delivery Report**
       (`docs/templates/delivery-report.md`) holds all sections; split into separate artifacts
       only if a control requires it.
+- [ ] **Engagement-summary email** - the PM (**Morgan**) has written a short email-format cover
+      note summarising what was done and where it stands, saved as a **`.txt` in `artifacts/`**
+      (`docs/templates/engagement-summary-email.md`). Address it to the requester **only if the name
+      is known** - otherwise open with "Hi,"; sign off as Morgan. (It's an email, so it stays `.txt`
+      and is the one artifact not rendered to HTML.)
 - [ ] **Signed off** - human approval recorded at the gate; nothing touching live systems
       proceeds without it.
 

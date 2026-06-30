@@ -65,7 +65,8 @@ that holds review, performance, compliance, QA evidence, handover and change/ops
 of a single file - easier to read and distribute than many separate documents. Ask for
 **separate artifacts** only when a control needs a standalone (e.g. a change request to attach
 to a ticket); the templates below are the building blocks. Everything is produced in **`.md`
-and `.html`** (via `scripts/render_html.py`).
+and `.html`** (via `scripts/render_html.py`) - the **one exception** is the engagement-summary
+email, which is an email and stays a `.txt` (see the last row).
 
 | Artifact | Template | Standard it follows |
 |---|---|---|
@@ -105,6 +106,7 @@ and `.html`** (via `scripts/render_html.py`).
 | Tuning decision register | `tuning-decision-register.md` | **SR 11-7**/FFIEC model-change-management (running log) |
 | Control mapping | `control-mapping.md` | scenario -> obligation -> internal control -> effectiveness |
 | Data lineage | `data-lineage.md` | feed -> field -> transform -> scenario (+ RTS 25, reconciliation) |
+| **Engagement summary email** (always, at close) | `engagement-summary-email.md` | PM cover note - **`.txt` in `artifacts/`**, signed as Morgan ("Hi," if recipient unknown) |
 
 > **Generic vs domain-specific templates.** Some artifacts have a **generic** and a **domain**
 > variant - use the domain one when it applies, the generic one otherwise (they are *not*
