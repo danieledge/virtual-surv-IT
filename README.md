@@ -738,6 +738,13 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
   rather than an illustrative one. Plus the price-context (distance-from-touch) check noted in
   [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md).
 
+**Performance / startup** *(nice-to-have)*
+- **Trim routing metadata** - the agent + skill descriptions (~2.3k tokens) load every session for
+  routing; tighten the few verbose ones to crisp "use when…" lines. *Why:* lower per-session cost.
+- **Merge the two PreToolUse guards into one `python3` call** per tool use. *Why:* the raw-data and
+  code-execution guards currently spawn `python3` twice on every `Read`/`Grep`/`Glob`/`Bash` -
+  halving the spawns cuts per-call latency without weakening either guard.
+
 </details>
 
 <sub>[↑ Back to top](#readme-top)</sub>

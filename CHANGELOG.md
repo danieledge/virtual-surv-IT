@@ -18,6 +18,12 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   probe to `.claude/.tool-availability` and serves it while fresh (7-day TTL, override
   `CST_TOOLCHECK_TTL_DAYS`), with `--refresh` to force a re-probe - so a static environment isn't
   re-probed on every engagement. The cache is git-ignored; `/engage` step 0 reworded accordingly.
+- **Always-on context slimmed.** Moved the *detail* of the newer standing rules (memory scope, the
+  closing-summary email, observed-vs-inferred tagging) out of `CLAUDE.md` into the on-engage
+  `docs/team-operating-guide.md`, leaving terse one-line pointers. `CLAUDE.md` loads into every
+  session and is inherited by every subagent, so this trims per-session and per-fan-out cost. The
+  remaining startup levers (trim routing metadata; merge the two PreToolUse guards into one
+  `python3` call) are logged in the roadmap.
 
 ## [0.7.12] - 2026-06-30
 
