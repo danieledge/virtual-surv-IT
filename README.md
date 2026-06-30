@@ -545,6 +545,14 @@ An **automatic masking workflow** (so you don't have to self-attest) is on the [
 > synthetic data for anything that leaves the environment. (Plain-English version:
 > [`docs/OVERVIEW.md` §5](docs/OVERVIEW.md).)
 
+> ⚠️ **The masking pipeline is an early proof of concept** - a demonstration of the *workflow*,
+> **not** a production-grade anonymiser, and not to be relied on as the sole control. It is
+> **expected to be replaced** by a stronger data-preparation pipeline (local schema profiling,
+> NER-based free-text redaction, validated synthetic data, and an auto-validation gate that blocks
+> on residual PII), not incrementally evolved. Until then, keep real data in `data/raw/`
+> (agent-blocked), prefer synthetic, and only ever feed it data your own controls have already
+> masked or anonymised.
+
 <details>
 <summary>🔒 <b>The masking pipeline</b> - ingest · validate · synthesise (scripts + commands)</summary>
 
@@ -764,27 +772,23 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the detail.
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
-## 📚 Built on - Anthropic agent guidance
+## 📚 Built on & acknowledgements
 
-This team is designed to follow Anthropic's published best practice for agents and multi-agent
-systems. The conformance audit is in [`docs/agent-design.md`](docs/agent-design.md); the sources:
+Virtual Surv-IT explores collaborative AI engineering by combining specialised Claude Code agents
+into a coordinated team, with independent review, to produce higher-quality engineering outcomes.
+It is designed to follow Anthropic's published best practice for agents and multi-agent systems
+(conformance audit in [`docs/agent-design.md`](docs/agent-design.md)):
 
 - [**Building Effective Agents**](https://www.anthropic.com/engineering/building-effective-agents) - patterns + "use the simplest thing that works".
 - [**How we built our multi-agent research system**](https://www.anthropic.com/engineering/multi-agent-research-system) - orchestrator-worker, delegation briefs, ~15× token cost, failure modes.
 - [**Effective context engineering for AI agents**](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) - context isolation, compaction, agentic memory.
 - [**Subagents (Claude Agent SDK)**](https://code.claude.com/docs/en/agent-sdk/subagents) · [**Claude Code subagents**](https://code.claude.com/docs/en/subagents) - frontmatter, tools, model tiering, isolation.
 
-## 🙏 Credits & acknowledgements
-
-Virtual Surv-IT explores collaborative AI engineering by combining specialised Claude Code agents
-into a coordinated team - a demonstration of how domain-specific AI specialists can work together,
-with independent review, to produce higher-quality engineering outcomes.
-
-- The `code-reviewer`'s **confidence-scoring, false-positive filtering, filter-transparency
-  and deep-review** approach is adapted from
-  [**turingmind-code-review**](https://github.com/turingmindai/turingmind-code-review)
-  (MIT, © 2026 TuringMind). See [`docs/code-review-method.md`](docs/code-review-method.md).
-  Our additions: regulated-domain audit mode and data-safety/traceability weighting.
+The `code-reviewer`'s **confidence-scoring, false-positive filtering, filter-transparency and
+deep-review** approach is adapted from
+[**turingmind-code-review**](https://github.com/turingmindai/turingmind-code-review) (MIT, © 2026
+TuringMind; see [`docs/code-review-method.md`](docs/code-review-method.md)) - with our additions of
+a regulated-domain audit mode and data-safety/traceability weighting.
 
 ## ⚖️ Disclaimer
 

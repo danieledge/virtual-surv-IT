@@ -6,11 +6,11 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ## [Unreleased]
 
 ### Changed - docs
-- **Leaner "Virtual Surv-IT" rewrite in progress (not yet promoted).** A maintainer-provided,
-  restructured edition is being developed as `readme2.md` (single H1, a jump-links bar, detailed
-  plugin-install steps, dense team bios, and a stronger "experimental / will be replaced" framing on
-  the masking pipeline). `README.md` remains the current detailed version until the rewrite is ready
-  to swap in.
+- **README restructured and refined (now live).** Presented as "Virtual Surv-IT", with a jump-links
+  bar, the detailed plugin-install steps, real clickable doc links, the dense team bios, an
+  active-development warning, and a stronger "early PoC, expected to be replaced" framing on the
+  masking pipeline; "Built on" and "Credits & acknowledgements" merged into one section. The interim
+  rewrite drafts were removed once the final version was promoted.
 - **README reworked on a cleaner foundation** (presented as "Virtual Surv-IT"). Added Why /
   Features / Core principles / Documentation / Contributing / Disclaimer / Acknowledgements
   sections while **preserving all existing content** - the Meet-the-team roster + portrait stay on
