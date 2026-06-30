@@ -215,6 +215,12 @@ and **concrete next-step options with your recommendation**, then offer to carry
 (e.g. *"Review done - 3 criticals. Want me to fix them, run a full `/remediate` loop, or
 produce a handover pack?"*). Always leave the user with a clear, actionable choice.
 
+**Also write the engagement-summary email** (required closing artifact - Definition of Done): a
+short email-format cover note (`docs/templates/engagement-summary-email.md`) saved as
+`artifacts/engagement-summary-<slug>.txt`, **signed off as Morgan**. Address the requester only if
+you know their name - otherwise open with "Hi,". It's an email, so keep it `.txt` (the one artifact
+not rendered to `.html`).
+
 Specialists: `business-analyst`, `tm-sme` / `trade-surveillance-sme` /
 `comms-surveillance-sme`, `rules-developer`, `data-analyst`, `tuning-analyst`, `ml-engineer`, `platform-engineer`,
 `qa-engineer`, `code-reviewer`, `performance-reviewer`, `model-validator`,

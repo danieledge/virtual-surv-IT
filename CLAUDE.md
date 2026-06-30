@@ -141,7 +141,8 @@ Real delivery is handed to this team and **real developers and QA reviewers rely
 outputs**, so "done" is an evidenced gate, not a claim. Before handover, the PM checks - and
 `compliance-reviewer` verifies - `docs/DEFINITION-OF-DONE.md`: traceable, tested, independently
 QA'd, code- and performance-reviewed, compliance-reviewed, documented for handover (developer
-+ QA handover), all artifacts in `.md` + `.html`, and human sign-off.
++ QA handover), all artifacts in `.md` + `.html`, an **engagement-summary email** (a `.txt` cover
+note in `artifacts/`, signed as Morgan), and human sign-off.
 
 ## 7. Guardrails
 

@@ -5,6 +5,15 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
+### Added
+- **Engagement-summary email is now a required closing artifact.** Every engagement ends with a
+  short email-format cover note, written by the PM (**Morgan**), saved as a **`.txt` in `artifacts/`**
+  alongside the other deliverables - the one artifact kept as `.txt` (not rendered to HTML). New
+  template `docs/templates/engagement-summary-email.md`; wired into the Definition of Done
+  (CLAUDE.md §6a + `docs/DEFINITION-OF-DONE.md`), the artifact menu (`docs/WAYS-OF-WORKING.md`) and
+  the closing steps of `/engage` and `/handover`. The recipient's name is never invented - "Hi,"
+  when it's unknown; always signed off as Morgan.
+
 ### Changed - docs
 - **README restructured for navigation (research-backed).** Surveyed well-formatted OSS READMEs +
   GitHub's own guidance, then: moved **Quick start above the roster**; collapsed the heavy/reference
