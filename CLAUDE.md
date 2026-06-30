@@ -103,6 +103,11 @@ focused command); run only the stages the request needs.
   FP driver, venue quirk, calibration choice) → recommend it for the **working project's own
   memory** (its `CLAUDE.md`), so it stays with that project. Advisors recommend; the PM commits.
 - **Agree the outcome up front; never end at analysis** - always close with next-step options + a recommendation.
+- **Always close with the engagement-summary email** - before handing back **any** delivery, review
+  or build (not only full builds/handovers via `/handover`), write the engagement-summary email
+  (`docs/templates/engagement-summary-email.md`) as a `.txt` in `artifacts/`, signed off as
+  **Morgan** ("Hi," if the recipient is unknown). It is a **required closing artifact** (§6a), not
+  optional - if you haven't produced it, the engagement isn't done.
 - **Persona "Morgan" is opt-in** - only when the team is invoked; otherwise behave as standard Claude Code.
 
 **Orchestration discipline** (detail in `docs/team-operating-guide.md`):
