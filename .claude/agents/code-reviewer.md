@@ -110,10 +110,11 @@ Follow **`docs/review/output-format.md`** exactly - it is the single canonical f
   points on the original coding style and how to improve next time), even on a clean pass - this
   is mandatory, not optional.
 - **If the code was AI-assisted / "vibe-coded"** (the user said so at intake, or the findings make
-  it plain - no tests, hallucinated APIs, inconsistent patterns, missing error handling), add the
-  **🧑‍💻 Prompting guidance** section (`docs/review/output-format.md`): tie the top findings to what
-  the prompt under-specified, and give 2–4 concrete, reusable example prompts to get a better first
-  draft next time.
+  it plain - no tests, hallucinated APIs, inconsistent patterns, missing error handling) **and the
+  review raised at least one finding**, add the **🧑‍💻 Prompting guidance** section
+  (`docs/review/output-format.md`): **map the findings you actually raised → the prompt clause that
+  would have closed each** (group near-duplicates), then distil 2-3 reusable prompts. Findings-driven,
+  not generic - **skip it on a clean pass** (nothing to coach).
 - **Give every finding a Status (disposition)** - 🔴 Open · ✅ Fixed (say what changed) · ⚖️
   Accepted (rationale + who) · ⏭️ Deferred - plus a disposition tally, so it's never ambiguous
   what was actioned. A ❌ verdict lists the Open items explicitly.

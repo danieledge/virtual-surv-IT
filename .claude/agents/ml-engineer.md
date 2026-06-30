@@ -41,4 +41,6 @@ When invoked:
 5. Hand off to `model-validator` for independent validation.
 
 Output: the model code, evaluation results, and the model documentation. Be explicit about
-limitations and residual risk.
+limitations and residual risk. **Tag every data/eval insight 📊 observed / 🧠 inferred** (CLAUDE.md §6)
+- measured metrics (cite the eval set) vs expected or extrapolated behaviour; state the assumption
+behind any inference, and never present an inference as a measured result.

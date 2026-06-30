@@ -3,6 +3,18 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Changed
+- **Reviews coach vibe-coded code with findings-driven prompts.** When code is AI-assisted *and* the
+  review raised findings, the 🧑‍💻 Prompting-guidance section now **maps the actual findings → the
+  prompt clause that would have closed each** (not generic advice), then distils 2-3 reusable
+  prompts; it is **skipped on a clean pass**. (`docs/review/output-format.md` + `code-reviewer`.)
+- **Data insights must be tagged observed vs inferred.** New standing rule (CLAUDE.md §6): every data
+  insight carries **📊 observed** (seen in the data, with its basis - metric/sample/query) or
+  **🧠 inferred** (with the assumption stated); an inference is never presented as fact. Wired into
+  `data-analyst`, `tuning-analyst`, `data-quality-reviewer` and `ml-engineer`.
+
 ## [0.7.12] - 2026-06-30
 
 ### Changed - docs
