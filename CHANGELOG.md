@@ -3,25 +3,27 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.7.12] - 2026-06-30
 
 ### Changed - docs
-- **README restructured and refined (now live).** Presented as "Virtual Surv-IT", with a jump-links
-  bar, the detailed plugin-install steps, real clickable doc links, the dense team bios, an
-  active-development warning, and a stronger "early PoC, expected to be replaced" framing on the
-  masking pipeline; "Built on" and "Credits & acknowledgements" merged into one section. The interim
-  rewrite drafts were removed once the final version was promoted.
-- **README reworked on a cleaner foundation** (presented as "Virtual Surv-IT"). Added Why /
-  Features / Core principles / Documentation / Contributing / Disclaimer / Acknowledgements
-  sections while **preserving all existing content** - the Meet-the-team roster + portrait stay on
-  the home page, and the data-safety / eval / tooling / hooks / real-data / token / roadmap detail
-  stays in the in-page collapsibles (nothing moved out). Made the **right-sizing** point prominent
-  (the PM engages only the agents a task needs, **never all 16** - the cost-control + Anthropic
-  best-practice mechanism), and added an **"active development - may contain bugs / behave
-  unexpectedly"** warning to the proof-of-concept callout and the disclaimer.
-- **Light "corporate" polish** - Features and Core-principles turned into tables; decorative inline
-  emojis trimmed from the prose/callouts (section-header markers and the ⚗️/🛑 warning icons kept).
-  The **Meet-the-team** section is deliberately left **identical** (character bios + portrait).
+- **README overhauled into a cohesive front page** (presented as "Virtual Surv-IT"): a jump-links
+  bar, the detailed plugin-install steps, **real clickable doc links**, the dense character-bio
+  roster on the home page, Why / Features / Core principles (as tables), an **active-development**
+  warning, and a stronger "the masking pipeline is an early PoC, **expected to be replaced**"
+  honesty. "Built on" and "Credits & acknowledgements" merged. All prior reference detail (token
+  usage + rate card, the two safety hooks, eval harness, real-data handling) preserved in in-page
+  collapsibles.
+
+### Fixed
+- **The engagement-summary email now fires on every close.** It was only wired into `/engage`,
+  `/handover` and the Definition of Done, so review paths (`/deep-review`, `/audit-review`,
+  `/remediate`, …) could finish without it. Added an always-on standing rule (CLAUDE.md §6): every
+  delivery, review or build closes with the summary email (`.txt` in `artifacts/`, signed as Morgan).
+
+### Removed
+- **`docs/team-pipeline-review.md`** - an out-of-date (2026-06-19) historical review snapshot,
+  unreferenced and fully superseded by the live docs (`agent-design.md`, `WAYS-OF-WORKING.md`,
+  `DEFINITION-OF-DONE.md`).
 
 ## [0.7.11] - 2026-06-30
 
