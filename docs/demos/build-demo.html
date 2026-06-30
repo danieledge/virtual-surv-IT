@@ -50,7 +50,7 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-30</span></header>
 <h1 id="build-demo">🏗️ Build demo</h1>
 <p><em>A real <code>/demo</code> transcript: Morgan builds a new detection from scratch and takes it through the full
 Definition-of-Done chain - 8 specialists, the blackboard, the fix→re-review loop. <a href="README.html">Back to demos</a>.</em></p>
@@ -60,19 +60,19 @@ the session</strong> (his words, generated at the moment - not the repo author's
 framing; <code>```</code> blocks are real commands/output and verbatim agent findings.
 <a href="README.html#how-to-read-a-transcript-whos-speaking">Full key</a>.</p>
 <p>📂 <strong>The actual deliverables are downloadable</strong> - every artifact below is committed in
-<a href="build-artifacts/"><code>build-artifacts/</code></a>. And this run is compared head-to-head with an earlier run in
-the <a href="build-run-comparison.html">🔁 run comparison</a> - which shows the team <em>getting better each time</em>.</p>
+<a href="build-artifacts/"><code>build-artifacts/</code></a>. Synthetic only (§5); a demo artifact, not production logic.</p>
 </blockquote>
 <hr>
 <blockquote>
 <p>🎩 <strong>Build demo - let's make something.</strong> I'll spec, build and fully review a new <strong>wash-trade /
-self-match</strong> detection (TS-001), on synthetic data. The intake gates first - I answer them, on a
+self-match</strong> detection (TS-001), on synthetic data. The intake gates first - I answer them; on a
 real job <em>you</em> would:
 - ⚠️ <strong>Execution?</strong> → <strong>Yes</strong>, but only this trusted demo repo on synthetic data (so I can <em>run</em>
   the tests - that's how review earns its keep).
 - 🛡️ <strong>Data?</strong> → <strong>Synthetic, no real data.</strong></p>
-<p><strong>Right-sizing, out loud:</strong> this is the <em>heavy</em> demo - a full DoD delivery is <strong>8 agents</strong> (build +
-3 reviews + tuning + performance), ~170k tokens. A lighter ask would be far less.</p>
+<p><strong>Right-sizing, out loud:</strong> this is the <em>heavy</em> demo - a full DoD delivery is <strong>8 specialists</strong>
+(build + 3 independent reviews + tuning + performance). It is <strong>not</strong> cheap (see the honest token
+note at the end); a lighter ask would use far fewer.</p>
 </blockquote>
 <h3 id="step-1-amara-business-analyst-sonnet-writes-the-spec">→ Step 1: Amara (<code>business-analyst</code>, sonnet) writes the spec</h3>
 <blockquote>
@@ -80,97 +80,103 @@ real job <em>you</em> would:
 novel judgement. She cites the obligation and <strong>flags every threshold as a tuning decision</strong> rather
 than inventing numbers.</p>
 </blockquote>
-<p>Amara produced <a href="build-artifacts/ts001-scenario-spec.html"><strong><code>ts001-scenario-spec.md</code></strong></a>: behaviour,
-<strong>MAR Art 12(1)(a)</strong>, the data fields, a detection outline, parameters-to-tune, Gherkin ACs, and <strong>6
-open questions</strong> - with an explicit <em>"don't finalise the obligation mapping until Q1-Q3 are
-dispositioned."</em></p>
+<p>Amara produced <a href="build-artifacts/ts001-scenario-spec.html"><strong><code>ts001-scenario-spec.md</code></strong></a>: the behaviour,
+<strong>MAR Art 12(1)(a)</strong> (the only pinpoint <em>verified</em> in the register - the rest flagged <code>[TO-VERIFY]</code> 🧠
+per ADR-001), 6 EARS requirements, Gherkin acceptance criteria, the data schema, and <strong>5 open
+questions</strong> - carrying <code>obligation_status = PROVISIONAL</code> until the SME confirms the mapping.</p>
 <h3 id="step-2-camila-trade-surveillance-sme-sonnet-validates-dispositions">→ Step 2: Camila (<code>trade-surveillance-sme</code>, sonnet) validates + dispositions</h3>
 <blockquote>
 <p>🎩 Camila advises only - she never touches code. She confirms the typology, names the
 false-positive drivers, and <strong>formally closes the open questions</strong> so nothing dangles.</p>
 </blockquote>
 <p>She validated the typology (UBO linkage is the right entry point; <strong>off-market price must be a
-<em>necessary</em> condition</strong>, not a score), named the FP drivers (affiliated-fund flow, market-making,
-coincident liquid orders), and <strong>dispositioned all 6 questions</strong> (<a href="build-artifacts/ts001-sme-validation.html">validation</a>):
-Q5/Q6 answered (Q6 → a separate TS-002), Q2 needs deployment input, and <strong>Q1 + Q3/Q4 are go-live
-blockers</strong> → the obligation mapping is <strong>not</strong> safe to finalise.</p>
-<h3 id="step-3-mateo-rules-developer-sonnet-builds-it-and-the-teams-memory-pays-off">→ Step 3: Mateo (<code>rules-developer</code>, sonnet) builds it - and the team's memory pays off</h3>
+<em>necessary</em> condition</strong>, not a score - spread-normalised, mid-referenced), named the FP drivers
+(<strong>affiliated funds under one manager = the single biggest pitfall</strong>, structural not tunable;
+market-making; coincident liquid orders), and <strong>dispositioned all 5 questions</strong>
+(<a href="build-artifacts/ts001-sme-validation.html">validation</a>): <strong>1 ✅, 3 🔴 go-live blockers, 1 ⏭️</strong> → the
+obligation mapping is <strong>not</strong> safe to finalise. She also flagged a known scope gap: <em>at-market</em> wash
+(volume-only) won't alert under the necessary condition - a candidate future scenario.</p>
+<h3 id="step-3-mateo-rules-developer-sonnet-builds-it">→ Step 3: Mateo (<code>rules-developer</code>, sonnet) builds it</h3>
 <blockquote>
-<p>🎩 Here's the bit I'm proud of. Mateo <strong>read <code>house-rules.md</code> first</strong> - the lessons the team
-recorded from earlier builds - and applied them <em>up front</em>.</p>
+<p>🎩 Mateo builds from the <em>validated</em> spec - UBO keystone, off-market as an early-continue, obligation
+<strong>and</strong> UBO id as alert fields, an injected <code>as_of_date</code> (deterministic, no wall clock).</p>
 </blockquote>
-<p>Mateo produced <a href="build-artifacts/ts001_wash_trade.py"><strong><code>ts001_wash_trade.py</code></strong></a> + tests, applying:
-UBO keystone + <strong>staleness gate</strong>, off-market as an <strong>early-continue necessary condition</strong>, obligation
-<strong>and</strong> UBO id as <strong>alert fields</strong>, and an <strong>injected <code>as_of_date</code></strong> (deterministic - no wall clock).</p>
+<p>Mateo produced <a href="build-artifacts/ts001_wash_trade.py"><strong><code>ts001_wash_trade.py</code></strong></a> + tests: Phase-1
+UBO-only pairing, the spread-normalised off-market <strong>necessary condition</strong>, safe-harbour + materiality
+suppression, <strong>per-account</strong> stale-graph exclusion with a data-quality warning, the implied-match tier
+off at launch, and thresholds as <strong>named constants each with a rationale + <code>tuning_date</code></strong>.</p>
 <pre><code class="language-console">$ cd docs/demos/build-artifacts &amp;&amp; python3 -m pytest test_ts001_wash_trade.py -q
-...                                                                      [100%]
-3 passed
+..........                                                               [100%]
+10 passed
 </code></pre>
-<blockquote>
-<p>🎩 <strong>Three for three, first run.</strong> That matters more than it looks: in an earlier run of this same
-demo, the equivalent test <strong>failed</strong> the first time - the code had used the wall clock for UBO
-staleness, a non-deterministic bug. That lesson became a house-rule, and this time Mateo never made
-it. The team's memory is <strong>measured, not decorative</strong> - see the <a href="build-run-comparison.html">run comparison</a>.</p>
-</blockquote>
 <h3 id="step-4-the-independent-reviews-ravi-linh-layla-in-parallel">→ Step 4: the independent reviews (Ravi + Linh + Layla, in parallel)</h3>
 <blockquote>
-<p>🎩 Now the adversarial pass - three independents, no chatter, findings onto the blackboard. With the
-old bugs already designed-out, did review still earn its keep? <strong>Yes - it found newer, subtler things.</strong></p>
+<p>🎩 The adversarial pass - three independents, no chatter, findings onto the blackboard. Did review
+earn its keep? <strong>Yes - and the standout is that two of them found the <em>same</em> real defect independently.</strong></p>
 </blockquote>
 <ul>
-<li><strong>Ravi (<code>code-reviewer</code>, opus):</strong> the off-market test and the <em>reported</em> deviation came from two
-  separate computations (drift risk); the alert didn't record <em>which</em> snapshot date it judged against
-  (auditability); same-account self-match silently excluded (a scope call).</li>
-<li><strong>Linh (<code>qa-engineer</code>, sonnet):</strong> wrote an independent QA suite and caught <strong>DEF-001</strong> - a missing
-  market snapshot <strong>silently dropped</strong> pairs (an invisible surveillance gap); quantity never matched.</li>
-<li><strong>Layla (<code>compliance-reviewer</code>, opus):</strong> the standout. The code hard-coded <code>obligation="MAR Art
-  12(1)(a)"</code> as if <strong>finalised</strong> - while the SME had flagged the mapping as <strong>blocked</strong>. The alert
-  <em>asserted a regulatory trace that didn't yet exist</em> - the most dangerous failure mode for a control.</li>
+<li><strong>Ravi (<code>code-reviewer</code>, opus):</strong> ⚠️ conditional pass. <strong>W1 - a non-positive market price was
+  <em>silently dropped</em> with no audit record</strong> (a silent false-negative). Plus items for the SME/tuning
+  (MM-as-tag vs designated register; the mid-vs-touch threshold frame) and order-dependent UBO edges.
+  Honest caveat: the Python analysers aren't installed here, so his logic findings are <strong>🧠 inferred</strong>.</li>
+<li><strong>Linh (<code>qa-engineer</code>, sonnet):</strong> wrote a <strong>31-test</strong> independent suite (boundaries, the exemption
+  register, observability) - and independently hit the <strong>same bad-mid silent drop</strong> (NOTE-001). She
+  also found the <em>previous</em> run's QA file was stale (tested an API that no longer exists) and
+  <strong>regenerated it</strong> against the delivered detector.</li>
+<li><strong>Layla (<code>compliance-reviewer</code>, opus):</strong> <strong>FAIL - return to build</strong>, and rightly: the rework had
+  left the old delivery report + RTM describing a <strong>non-existent API</strong> and stale claims. The code
+  itself she found <strong>sound</strong> - typed obligation/UBO fields, <code>PROVISIONAL</code> correctly held, citations
+  <strong>grounded</strong> (<code>check_citations</code>: Art 12(1)(a) <code>[VERIFIED]</code>, the rest <code>[TO-VERIFY]</code> - no
+  confabulation), data-safe. Her durable lesson: <em>a post-review rewrite silently invalidates the prior
+  QA/RTM/handover - re-sync and re-run before the gate.</em></li>
 </ul>
 <blockquote>
-<p>🎩 <strong>That's the chain working.</strong> None of these are the old bugs - they're harder, and they only
-surfaced <em>because</em> the basics were already right. I routed them back: single-source the deviation,
-record the snapshot date, log the missing-snapshot gap, and carry an explicit
-<strong><code>obligation_status = PROVISIONAL</code></strong> so a blocked mapping can't masquerade as done. Re-tested - green.</p>
+<p>🎩 <strong>That's the chain working.</strong> Two independents caught the same silent false-negative - that's the
+signal it's real. I routed it back to Mateo (mirror the data-quality guard so a bad price leaves a
+trail, never a silent drop), plus the order-dependent UBO edges. Re-ran <strong>both</strong> suites:</p>
 </blockquote>
 <pre><code class="language-console">$ python3 -m pytest test_ts001_wash_trade.py test_ts001_qa.py -q
-................                                                         [100%]
-16 passed
+...........................................                              [100%]
+43 passed
 </code></pre>
 <h3 id="step-5-theo-tuning-thabo-performance">→ Step 5: Theo (tuning) + Thabo (performance)</h3>
 <blockquote>
 <p>🎩 Two more, in parallel, before I sign anything off.</p>
 </blockquote>
 <ul>
-<li><strong>Theo (<code>tuning-analyst</code>):</strong> thresholds stay un-invented; the <a href="build-artifacts/threshold-tuning-pack.html">tuning pack</a>
-  gives the <strong>method</strong> + illustrative values, and two new rules - <strong>spread-normalise</strong> the off-market
-  threshold, and <strong><code>min_notional</code> is required</strong> (an immaterial pair can't give a false signal).</li>
+<li><strong>Theo (<code>tuning-analyst</code>):</strong> thresholds stay un-invented, but now <strong>measured</strong>. He built a seeded
+  synthetic labelled set and swept the off-market threshold (<a href="build-artifacts/threshold-tuning-pack.html">tuning pack</a>):
+  recommend <strong>0.75× the spread from mid</strong> - precision <strong>0.84</strong> / recall <strong>0.84</strong> (F1 0.84). 0.5× (the
+  touch) over-alerts; 1.0× misses 28%. <strong>Honest caveat:</strong> synthetic distribution - it validates the
+  <em>method</em>, not a production number; re-confirm on real data before go-live.</li>
 <li><strong>Thabo (<code>performance-reviewer</code>):</strong> <a href="build-artifacts/performance-review.html">won't scale as-is</a> -
-  O(buys×sells); fix is to pre-group by instrument+UBO. Deferred to productionisation (a demo has no volume).</li>
+  the O(buys×sells) pairing; fix is to pre-bucket by <code>(instrument, ubo_group_id)</code>. A <strong>deploy-gate</strong>,
+  deferred to productionisation (a demo has no volume).</li>
 </ul>
 <h3 id="the-delivery">→ The delivery</h3>
-<p>The consolidated <a href="build-artifacts/delivery-report.html"><strong>delivery report</strong></a> ties it together: RTM,
-every finding dispositioned, the DoD gate, developer handover, and the token/runtime/cost capture
-(<strong>8 agents, ~171k tokens, ~9 min, ~$3-6</strong>).</p>
+<p>The consolidated <a href="build-artifacts/delivery-report.html"><strong>delivery report</strong></a> ties it together: the RTM
+(against the <em>delivered</em> API), every finding dispositioned, the DoD gate, the developer handover, the
+measured token table - and it closes with the <strong><a href="build-artifacts/engagement-summary-email.txt">engagement-summary email</a></strong>.</p>
 <blockquote>
-<p>🎩 <strong>And here's the honest verdict.</strong> This is <strong>demo-complete</strong> - every stage ran. But it is <strong>NOT
-deployable</strong>, and I'll say exactly why: the obligation mapping is provisional (SME blockers), the
-thresholds need real-data calibration, the O(n²) needs fixing, and a <strong>human still has to sign off</strong>
-- which a demo cannot do. A report that hid those to look "all green" would be the failure. Saying
-them is the job.</p>
+<p>🎩 <strong>The honest verdict.</strong> This is <strong>demo-complete</strong> - every stage ran on synthetic data. But it is
+<strong>NOT deployable</strong>, and I'll say exactly why: the obligation mapping is PROVISIONAL (SME blockers),
+the 0.75× threshold is a synthetic number that needs real-data confirmation, the O(B×S) pairing
+needs bucketing before volume, and a <strong>human still has to sign off</strong> - which a demo cannot do. A
+report that hid those to look "all green" would be the failure. Saying them is the job.</p>
 </blockquote>
 <hr>
 <h2 id="what-this-demo-showed">What this demo showed</h2>
 <ul>
 <li><strong>Orchestrator-workers, end to end</strong> - 8 specialists, each output feeding the next via the blackboard.</li>
-<li><strong>The team learns</strong> - codified house-rules stopped this build reintroducing the prior run's defects
-  (measured in the <a href="build-run-comparison.html">run comparison</a>), and Run 2's review <em>added</em> new rules.</li>
-<li><strong>Review is not a rubber stamp</strong> - it found new, subtler issues, including a compliance trap (an
-  obligation literal masquerading as a finalised mapping).</li>
-<li><strong>No invented thresholds; measured, not guessed</strong> - flagged in the spec, calibrated by method.</li>
+<li><strong>Independent review is not a rubber stamp</strong> - two reviewers independently caught the same silent
+  false-negative, and compliance caught that a post-rework rewrite had desynced the evidence docs.</li>
+<li><strong>Citations retrieved, not recalled</strong> - only the register-verified pinpoint is asserted; the rest
+  are flagged <code>[TO-VERIFY]</code>, and the obligation mapping is held <code>PROVISIONAL</code>.</li>
+<li><strong>No invented thresholds; measured, not guessed</strong> - flagged in the spec, then calibrated with a real
+  labelled harness (with the synthetic-data caveat stated).</li>
 <li><strong>Honest gates</strong> - demo-complete, but plainly <strong>not deployable</strong> until the mapping is finalised,
-  calibration is done on real data, the O(n²) is fixed, and a human signs off.</li>
+  the threshold is re-confirmed on real data, the O(B×S) pairing is bucketed, and a human signs off.</li>
 </ul>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: build-demo.md &middot; 2026-06-28</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: build-demo.md &middot; 2026-06-30</div>
 </body>
 </html>

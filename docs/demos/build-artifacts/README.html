@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>🏗️ Build-demo artifacts - the actual documents produced (Run 2, canonical)</title>
+<title>🏗️ Build-demo artifacts - the documents the team actually produced (DEMO)</title>
 <style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
@@ -50,12 +50,11 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
-<h1 id="build-demo-artifacts-the-actual-documents-produced-run-2-canonical">🏗️ Build-demo artifacts - the actual documents produced (Run 2, canonical)</h1>
-<p>The <strong>real deliverables</strong> the team produced in the <a href="../build-demo.html">build demo</a> - a <em>complete</em>
-build stage (build core + 3 independent reviews + tuning + performance + the delivery compile). This
-is <strong>Run 2</strong>, the canonical run; for how it compares to Run 1 see the
-<a href="../build-run-comparison.html">run comparison</a>. Open / download:</p>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-30</span></header>
+<h1 id="build-demo-artifacts-the-documents-the-team-actually-produced-demo">🏗️ Build-demo artifacts - the documents the team actually produced (DEMO)</h1>
+<p>The <strong>real deliverables</strong> from the <a href="../build-demo.html">build demo</a> - a <em>complete</em> build stage (spec →
+SME → build → independent QA → code/compliance/performance review → measured tuning → the delivery
+compile), on synthetic data. Open / download:</p>
 <table>
 <thead>
 <tr>
@@ -68,55 +67,71 @@ is <strong>Run 2</strong>, the canonical run; for how it compares to Run 1 see t
 <tr>
 <td>📄 <a href="delivery-report.html"><code>delivery-report.md</code></a></td>
 <td><strong>Morgan</strong> (PM)</td>
-<td><strong>Start here.</strong> Consolidated: RTM, review dispositions, DoD, handover, token+runtime+cost.</td>
+<td><strong>Start here.</strong> Consolidated: RTM, finding dispositions, DoD status, handover, measured token table.</td>
+</tr>
+<tr>
+<td>📧 <a href="engagement-summary-email.txt"><code>engagement-summary-email.txt</code></a></td>
+<td><strong>Morgan</strong> (PM)</td>
+<td>The one-page summary email that closes every engagement (kept as <code>.txt</code>).</td>
 </tr>
 <tr>
 <td><a href="ts001-scenario-spec.html"><code>ts001-scenario-spec.md</code></a></td>
 <td><strong>Amara</strong> (<code>business-analyst</code>)</td>
-<td>The scenario spec (TS-001) + the §9 open-questions decision log.</td>
+<td>The scenario spec (SCN-001) + EARS requirements, Gherkin criteria, open-questions log.</td>
 </tr>
 <tr>
 <td><a href="ts001-sme-validation.html"><code>ts001-sme-validation.md</code></a></td>
 <td><strong>Camila</strong> (<code>trade-surveillance-sme</code>)</td>
-<td>Typology validation: FP drivers, the UBO-graph pitfall, the question dispositions.</td>
+<td>Typology validation: FP drivers, the affiliated-fund pitfall, the Q1-Q5 dispositions.</td>
 </tr>
 <tr>
 <td><a href="ts001_wash_trade.py"><code>ts001_wash_trade.py</code></a></td>
 <td><strong>Mateo</strong> (<code>rules-developer</code>)</td>
-<td>The detector - UBO gate, off-market-necessary, exemptions, obligation+status+UBO fields, fail-loud.</td>
+<td>The detector - UBO gate, off-market-necessary (spread-normalised, mid-referenced), exemptions, obligation+status+UBO as typed fields.</td>
 </tr>
 <tr>
 <td><a href="test_ts001_wash_trade.py"><code>test_ts001_wash_trade.py</code></a></td>
 <td><strong>Mateo</strong> (<code>rules-developer</code>)</td>
-<td>Developer tests (TP + FP + stale-UBO).</td>
+<td>Developer tests (TP + FP + bad-data DQ + freshest-edge).</td>
 </tr>
 <tr>
 <td><a href="test_ts001_qa.py"><code>test_ts001_qa.py</code></a></td>
 <td><strong>Linh</strong> (<code>qa-engineer</code>)</td>
-<td>The independent QA suite (boundaries, exemptions, missing-snapshot observability…).</td>
+<td>The independent QA suite (boundaries, exemption register, observability…).</td>
 </tr>
 <tr>
 <td><a href="qa-handover.html"><code>qa-handover.md</code></a></td>
 <td><strong>Linh</strong> (<code>qa-engineer</code>)</td>
-<td>QA evidence (⏪ as-found): coverage, gaps, the defects caught.</td>
+<td>QA evidence (⏪ as-found): coverage, gaps, residual risk, the defect caught.</td>
 </tr>
 <tr>
 <td><a href="threshold-tuning-pack.html"><code>threshold-tuning-pack.md</code></a></td>
 <td><strong>Theo</strong> (<code>tuning-analyst</code>)</td>
-<td>Calibration method + illustrative values (spread-normalised; <code>min_notional</code> required).</td>
+<td><strong>Measured</strong> ATL/BTL calibration (recommend 0.75× spread; precision/recall) + the synthetic caveat.</td>
+</tr>
+<tr>
+<td><a href="ts001_threshold_tuning_harness.py"><code>ts001_threshold_tuning_harness.py</code></a></td>
+<td><strong>Theo</strong> (<code>tuning-analyst</code>)</td>
+<td>The seeded, reproducible labelled-data harness behind the tuning numbers.</td>
 </tr>
 <tr>
 <td><a href="performance-review.html"><code>performance-review.md</code></a></td>
 <td><strong>Thabo</strong> (<code>performance-reviewer</code>)</td>
-<td>Static scalability review - won't scale as-is (O(n²)); the fix.</td>
+<td>Static scalability review - won't scale as-is (O(B×S)); the bucketing fix.</td>
+</tr>
+<tr>
+<td><a href="scenario-learnings.html"><code>scenario-learnings.md</code></a></td>
+<td><strong>Morgan</strong> (PM)</td>
+<td>Project/scenario memory - what this build taught (lives with the demo, not the plugin).</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p><strong>The fix→re-review loop is real:</strong> independent review found genuine issues (a dual-source
-deviation, a missing-snapshot blind spot, and - the standout - an obligation literal that <em>looked</em>
-finalised while the SME flagged the mapping as blocked). All fixed or dispositioned; suites green.
-Dispositions: <a href="delivery-report.html">delivery report</a> §3.</p>
+<p><strong>The fix→re-review loop is real.</strong> Two reviewers independently caught a genuine silent
+false-negative (a non-positive market price dropped with no audit trail); it was fixed and <strong>both
+test suites re-run green (43/43)</strong>. Compliance also flagged that the rework had desynced the old
+QA/RTM/handover - exactly the re-sync discipline that produced this set. Dispositions:
+<a href="delivery-report.html">delivery report</a> §3.</p>
 </blockquote>
 <h3 id="before-after-two-snapshots-on-purpose">⏪ Before → After ⏩ (two snapshots, on purpose)</h3>
 <table>
@@ -130,8 +145,8 @@ Dispositions: <a href="delivery-report.html">delivery report</a> §3.</p>
 <tbody>
 <tr>
 <td>⏪ <strong>Before</strong> (as-found)</td>
-<td><a href="qa-handover.html"><code>qa-handover.md</code></a></td>
-<td>What QA <em>caught</em> - preserved, not rewritten (audit trail).</td>
+<td><a href="qa-handover.html"><code>qa-handover.md</code></a> + review findings</td>
+<td>What QA / review <em>caught</em> - preserved, not rewritten (audit trail).</td>
 </tr>
 <tr>
 <td>⏩ <strong>After</strong> (as-delivered)</td>
@@ -142,16 +157,19 @@ Dispositions: <a href="delivery-report.html">delivery report</a> §3.</p>
 </table>
 <blockquote>
 <p>⚠️ <strong>Demo artifacts - synthetic, not production.</strong> Under <code>docs/</code>, <strong>not</strong> part of the repo's
-detection logic or test suite (<code>testpaths = ["tests"]</code>). All data fabricated (§5).</p>
+detection logic or test suite (<code>testpaths = ["tests"]</code>). All data fabricated (§5). The deliverable
+is <strong>demo-complete, not deployable</strong> - obligation mapping PROVISIONAL, threshold synthetic-only,
+O(B×S) pairing to bucket, human sign-off pending.</p>
 </blockquote>
 <p><strong>Run the tests in isolation</strong> (they pass):</p>
 <pre><code class="language-bash">cd docs/demos/build-artifacts &amp;&amp; python3 -m pytest test_ts001_wash_trade.py test_ts001_qa.py
 </code></pre>
-<h3 id="knowledge-compounded-the-lessons-that-prevented-run-1s-defects-then-grew">Knowledge compounded - the lessons that prevented Run 1's defects, then grew</h3>
-<p>Run 1's review found 7 defects; they became <code>docs/house-rules.md</code> entries. In Run 2, Mateo applied
-them and <strong>none recurred</strong>. Run 2's review then added <em>new</em> rules (obligation-status not a finalised
-literal; spread-normalised threshold; <code>min_notional</code> required) - now recorded for Run 3. Advisory
-agents recommend; the PM commits. That's the <a href="../../house-rules.html">house-rules</a> loop working.</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: README.md &middot; 2026-06-28</div>
+<h3 id="knowledge-compounds-scenario-memory">Knowledge compounds - scenario memory</h3>
+<p>The build's scenario-specific lessons (the affiliated-fund pitfall, spread-normalised/mid-referenced
+tuning, treat-every-data-fault-symmetrically, bucket-the-pairing) are recorded in
+<a href="scenario-learnings.html"><code>scenario-learnings.md</code></a> - project memory that travels with the demo. The
+<em>general</em> engineering/audit patterns go to <a href="../../house-rules.html"><code>docs/house-rules.md</code></a>. Advisory
+agents recommend; the PM commits.</p>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: README.md &middot; 2026-06-30</div>
 </body>
 </html>

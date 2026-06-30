@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Threshold-Tuning Pack - TS-001 Wash Trade (DEMO, Run 2)</title>
+<title>Threshold Tuning Pack - TS-001 Wash Trade / Self-Match (off-market spread-multiple)</title>
 <style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
@@ -50,89 +50,502 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
-<h1 id="threshold-tuning-pack-ts-001-wash-trade-demo-run-2">Threshold-Tuning Pack - TS-001 Wash Trade (DEMO, Run 2)</h1>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-30</span></header>
+<h1 id="threshold-tuning-pack-ts-001-wash-trade-self-match-off-market-spread-multiple">Threshold Tuning Pack - TS-001 Wash Trade / Self-Match (off-market spread-multiple)</h1>
 <blockquote>
-<p>Produced by <code>tuning-analyst</code> (Theo). Obligation: MAR Art 12(1)(a). Synthetic only.
-No labelled production data here - values are <strong>🧠 inferred</strong> (illustrative), to be re-calibrated
-via ATL/BTL on a real labelled set. Run 1 proved the measured-sweep-on-synthetic-labelled-data
-method works (it found a 0-FP plateau); apply the same per segment.</p>
-</blockquote>
-<h2 id="method-per-parameter">Method (per parameter)</h2>
-<ul>
-<li><strong><code>off_market_threshold_bps</code></strong> - the natural unit is <strong>deviation ÷ prevailing spread</strong>
-  (spread-normalised), not flat bps. Set per liquidity segment where the true-positive ratio
-  distribution separates from the FP distribution (sweep, P5-TP subject to P95-FP below it).</li>
-<li><strong><code>lookback_days</code></strong> - P90-P95 of the legitimate same-UBO round-trip lag.</li>
-<li><strong><code>ubo_graph_max_age_days</code></strong> - a <strong>data-quality gate</strong>, not a stat threshold: the UBO feed refresh
-  SLA + a grace day (confirm with the data owner).</li>
-<li><strong><code>min_notional</code></strong> <em>(required, currently absent - QA DEF-003)</em> - a de-minimis floor; an
-  immaterial-notional pair can't give a "false or misleading signal" under MAR Art 12(1)(a). A
-  <strong>compliance risk-appetite</strong> decision, not pure stats.</li>
-</ul>
-<h2 id="illustrative-starting-values-inferred-not-measured">Illustrative starting values (🧠 inferred - NOT measured)</h2>
+<p>Produced by <code>tuning-analyst</code> (Theo). Evidence for a threshold/parameter change, defensible to a
+regulator. Statistical analysis on <strong>synthetic data only</strong> (§5). Authored in <code>.md</code>, rendered to
+<code>.html</code>. Threshold changes to live logic are implemented by <code>rules-developer</code> and signed off by
+<code>model-validator</code> - this pack is the recommendation, not the production change.</p>
+<p><strong>Document control</strong> · ID <code>TUNE-001</code> · Version <code>0.1</code> · Status <code>Draft</code>
+· Classification <code>Internal</code> · Owner <code>tuning-analyst (Theo)</code> · As-of <code>2026-06-30</code></p>
 <table>
 <thead>
 <tr>
-<th>Parameter</th>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-06-30</td>
+<td>Theo (tuning-analyst)</td>
+<td>Initial calibration of <code>off_market_spread_multiple</code> (M2) on a seeded synthetic labelled set</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Scenario / rule</strong></td>
+<td>TS-001 Wash trade / self-match (<code>ts001_wash_trade.py</code>); obligation EU MAR Art.12(1)(a) (<code>obligation_status = PROVISIONAL</code>, SMV-001)</td>
+</tr>
+<tr>
+<td><strong>Jurisdiction(s)</strong></td>
+<td>EU MAR (primary, verified in register); UK/US/SG/HK/JP equivalents <code>TO-VERIFY</code> per SCN-001 §2</td>
+</tr>
+<tr>
+<td><strong>Data window</strong></td>
+<td>Synthetic labelled population, 2,400 candidate pairs, generated deterministically (seed <code>20260630</code>); no real data</td>
+</tr>
+<tr>
+<td><strong>Date / tuner</strong></td>
+<td>2026-06-30 / Theo (tuning-analyst)</td>
+</tr>
+<tr>
+<td><strong>Recommendation</strong></td>
+<td>Set <code>off_market_spread_multiple = 0.75</code> (keep the <strong>mid</strong> reference frame); resolves M2 against the placeholder <code>1.0</code></td>
+</tr>
+<tr>
+<td><strong>Next review date</strong></td>
+<td>2026-12-30 (6 months) or on first calibration against real/masked production data</td>
+</tr>
+<tr>
+<td><strong>Re-tune triggers</strong></td>
+<td>Alert volume spike &gt;25%; precision &lt;0.70 in production sampling; alert-to-STOR conversion &lt;10%; book/venue composition change; spread-regime shift; regulatory change to the typology</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="1-objective-current-state">1. Objective &amp; current state</h2>
+<p>We are calibrating the one tuning parameter that governs the <strong>DR-002 off-market necessary
+condition</strong>: <code>off_market_spread_multiple</code>. The detector flags a UBO-linked opposing-leg pair only
+when the average leg price deviates from the prevailing <strong>mid</strong> by <strong>more than</strong> this multiple of
+the prevailing (time-weighted) spread:</p>
+<pre><code>spread_normalised_deviation = |avg_leg_price - mid| / mid * 10_000 / time_weighted_spread_bps
+alert if spread_normalised_deviation &gt; off_market_spread_multiple   (and DR-003/004/005 pass)
+</code></pre>
+<p><strong>Current state.</strong> The constant ships at a <strong>placeholder <code>1.0</code></strong> (<code>tuning_date: TBD</code>) - "a full
+spread from mid", which is <strong>~2x the touch</strong> (the half-spread to best bid/offer). That value is a
+reasoned starting point, <strong>not</strong> a calibrated number, and the code explicitly defers the choice to
+this analysis (M2). There is no production alert volume / FP / alert-to-STOR baseline yet (the
+scenario is pre-deployment), so this pack establishes the calibration <strong>method</strong> and the
+<strong>relative trade-off</strong> on a labelled synthetic distribution, not a production number (see §7 caveat).</p>
+<p><strong>Why it matters.</strong> DR-002 is the sole precision lever in TS-001 that tuning can move: UBO linkage,
+safe-harbour and materiality are structural/policy gates, not calibration knobs (SMV-001 §3). The
+spread-multiple alone decides how much at/near-market noise is admitted vs how much genuine
+off-market wash is caught.</p>
+<hr>
+<h2 id="2-segmentation-risk-based">2. Segmentation (risk-based)</h2>
+<p>Spread-normalisation is itself the segmentation mechanism for this parameter: dividing by each
+instrument's time-weighted spread is designed to make <strong>one</strong> threshold behave consistently from
+tight- to wide-spread instruments (SMV-001 §1.2). To <strong>test</strong> that claim - rather than assume it -
+the synthetic population spans three liquidity segments and we calibrate per segment.</p>
+<table>
+<thead>
+<tr>
 <th>Segment</th>
-<th>Value</th>
+<th>Definition</th>
+<th>Population (pairs)</th>
+<th>Behaviour profile (normalised dev: median / spread)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LIQUID</td>
+<td>tight spread ~3 bps (e.g. large-cap equity)</td>
+<td>800 (100 wash / 700 legit)</td>
+<td>wash ~1.3x / σ0.55; legit ~0x / σ0.32 (📊 by construction)</td>
+</tr>
+<tr>
+<td>MID</td>
+<td>spread ~20 bps</td>
+<td>800 (100 wash / 700 legit)</td>
+<td>same normalised distributions as LIQUID</td>
+</tr>
+<tr>
+<td>ILLIQUID</td>
+<td>wide spread ~200 bps (e.g. off-the-run / small-cap)</td>
+<td>800 (100 wash / 700 legit)</td>
+<td>same normalised distributions as LIQUID</td>
+</tr>
+</tbody>
+</table>
+<p>The wash- and legit-deviation distributions are <strong>identical in normalised space across the three
+segments by construction</strong>, so any divergence in measured precision/recall across segments would
+reveal a normalisation defect. 📊 (synthetic, n=2,400)</p>
+<hr>
+<h2 id="3-candidate-thresholds-statistical-rationale">3. Candidate thresholds &amp; statistical rationale</h2>
+<p>The genuine-population (legit) normalised deviation is centred at mid (σ≈0.32 of a spread): at/near
+-market coincident fills, ETF creation/redemption and index rebalancing (SMV-001 §3). On a half-
+normal that puts <strong>P95 ≈ 0.63</strong> and <strong>P99 ≈ 0.74</strong> spreads. So a threshold at the <strong>0.75x</strong> knee
+sits just above the legit P99 - i.e. it is the smallest multiple that clears essentially the whole
+genuine distribution, the classic "μ+ of the benign population" basis. Candidates swept:</p>
+<table>
+<thead>
+<tr>
+<th>Segment</th>
+<th>Current</th>
+<th>Candidate</th>
+<th>Basis</th>
 <th>Rationale</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>off-market (spread ratio)</td>
-<td>liquid large-cap</td>
-<td>1.5× spread</td>
-<td>abuse hides at tight prices</td>
+<td>All (normalised)</td>
+<td>1.0 (placeholder)</td>
+<td><strong>0.75</strong></td>
+<td>≈ legit P99 (half-normal σ0.32 → P99≈0.74)</td>
+<td>Smallest multiple clearing the benign tail; F1-optimal on the swept grid (§4)</td>
 </tr>
 <tr>
-<td>off-market (spread ratio)</td>
-<td>mid/small-cap</td>
-<td>2.0× spread</td>
-<td>wider natural spread</td>
+<td>All (normalised)</td>
+<td>1.0</td>
+<td>0.5 (touch)</td>
+<td>best bid/offer boundary</td>
+<td>M2 lower anchor - any print beyond the visible quote</td>
 </tr>
 <tr>
-<td>off-market (spread ratio)</td>
-<td>illiquid/OTC</td>
-<td>3.0× spread</td>
-<td>high spread variance</td>
+<td>All (normalised)</td>
+<td>1.0</td>
+<td>1.0 (full spread)</td>
+<td>a full spread from mid</td>
+<td>M2 upper anchor / current placeholder</td>
 </tr>
 <tr>
-<td>off-market (abs fallback)</td>
-<td>no spread data</td>
-<td>50 bps</td>
-<td>only with a coverage-gap flag</td>
-</tr>
-<tr>
-<td><code>lookback_days</code></td>
-<td>exchange equities</td>
-<td>3</td>
-<td>same-day/T+1 typical</td>
-</tr>
-<tr>
-<td><code>ubo_graph_max_age_days</code></td>
-<td>all</td>
-<td>feed SLA + 1</td>
-<td>data-quality, confirm with owner</td>
-</tr>
-<tr>
-<td><code>min_notional</code></td>
-<td>all</td>
-<td><em>firm STOR materiality</em></td>
-<td>compliance decision, placeholder only</td>
+<td>All (normalised)</td>
+<td>1.0</td>
+<td>1.5, 2.0</td>
+<td>deep tail</td>
+<td>precision-maximising / coverage-sacrificing extremes</td>
 </tr>
 </tbody>
 </table>
-<h2 id="volumecoverage-trade-off">Volume↔coverage trade-off</h2>
-<p>Tightening off-market catches at-market evasion but floods on affiliated-fund flow; loosening cuts
-load but blinds the scenario to near-market washes. <strong>Two highest-value moves:</strong> add <code>min_notional</code>
-(precision gain, negligible coverage cost) and switch to <strong>spread-normalised</strong> thresholds per segment
-(improves precision in illiquid names and recall in liquid ones simultaneously).</p>
-<h2 id="to-actually-calibrate">To actually calibrate</h2>
-<p>Need: labelled/SME-assessed pairs (50-100/segment); populated <code>spread_bps</code>; UBO feed SLA; the notional
-distribution; alert-to-STOR history; a verified exempt-account list. (Masked/synthetic only, §5.)</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: threshold-tuning-pack.md &middot; 2026-06-28</div>
+<p>No round number is asserted without the ATL/BTL evidence below.</p>
+<hr>
+<h2 id="4-above-the-line-atl-test-precision-among-flagged">4. Above-The-Line (ATL) test - precision among flagged</h2>
+<p>Detector run at each candidate over the full labelled set (n=2,400 pairs; 300 wash / 2,100 legit;
+synthetic base rate 12.5%). <strong>📊 observed</strong> at every row.</p>
+<p><strong>Overall:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threshold (x spread from mid)</th>
+<th>Alerts</th>
+<th>TP</th>
+<th>FP</th>
+<th>FN</th>
+<th>Precision</th>
+<th>Recall</th>
+<th>F1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.50 (touch)</td>
+<td>514</td>
+<td>275</td>
+<td>239</td>
+<td>25</td>
+<td>0.535</td>
+<td>0.917</td>
+<td>0.676</td>
+</tr>
+<tr>
+<td><strong>0.75 (recommended)</strong></td>
+<td><strong>298</strong></td>
+<td><strong>251</strong></td>
+<td><strong>47</strong></td>
+<td><strong>49</strong></td>
+<td><strong>0.842</strong></td>
+<td><strong>0.837</strong></td>
+<td><strong>0.839</strong></td>
+</tr>
+<tr>
+<td>1.00 (full spread / current)</td>
+<td>219</td>
+<td>215</td>
+<td>4</td>
+<td>85</td>
+<td>0.982</td>
+<td>0.717</td>
+<td>0.829</td>
+</tr>
+<tr>
+<td>1.50</td>
+<td>102</td>
+<td>102</td>
+<td>0</td>
+<td>198</td>
+<td>1.000</td>
+<td>0.340</td>
+<td>0.507</td>
+</tr>
+<tr>
+<td>2.00</td>
+<td>28</td>
+<td>28</td>
+<td>0</td>
+<td>272</td>
+<td>1.000</td>
+<td>0.093</td>
+<td>0.171</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Per segment (validates spread-normalisation):</strong> precision at a given threshold is consistent
+across the three liquidity segments - e.g. at 0.75x: LIQUID 0.890 / MID 0.865 / ILLIQUID 0.780; at
+1.0x: 0.988 / 0.969 / 0.987. 📊 The single normalised threshold therefore behaves equivalently from
+3 bps to 200 bps spreads, <strong>confirming no per-segment override of this parameter is needed</strong> -
+residual cross-segment variation is sampling noise (±~50 wash/segment), not a structural break.</p>
+<hr>
+<h2 id="5-below-the-line-btl-test-whats-missed-just-under-the-line">5. Below-The-Line (BTL) test - what's missed just under the line</h2>
+<p>Distribution of the labelled population by deviation band (📊 observed, n=2,400) - this is what each
+threshold leaves behind:</p>
+<table>
+<thead>
+<tr>
+<th>Band (x spread from mid)</th>
+<th>Wash (true)</th>
+<th>Legit (false)</th>
+<th>Wash:Legit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.00 - 0.50</td>
+<td>25</td>
+<td>1,861</td>
+<td>1 : 74</td>
+</tr>
+<tr>
+<td>0.50 - 0.75</td>
+<td>24</td>
+<td>192</td>
+<td>1 : 8</td>
+</tr>
+<tr>
+<td>0.75 - 1.00</td>
+<td>36</td>
+<td>43</td>
+<td>~1 : 1</td>
+</tr>
+<tr>
+<td>1.00 - 1.50</td>
+<td>113</td>
+<td>4</td>
+<td>28 : 1</td>
+</tr>
+<tr>
+<td>1.50 +</td>
+<td>102</td>
+<td>0</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reading the BTL:</strong>
+- Just <strong>under 0.75</strong> (the 0.50-0.75 band): 24 genuine wash pairs are missed - but the band is
+  <strong>8:1 legit-dominated</strong>. Recovering those 24 (by dropping to 0.5) admits 192 false positives. 📊
+- Just <strong>under 1.0</strong> (the 0.75-1.00 band): 36 genuine wash pairs sit here against 43 legit - the
+  genuinely <strong>ambiguous zone</strong>, ~1:1. Choosing 1.0 forgoes these 36 true wash; choosing 0.75
+  captures them at a proportionate 43-FP cost. 📊
+- The missed wash below 0.75 are by definition the <strong>least off-market</strong> prints (barely through the
+  spread) - the evidentially weakest cases, hardest to sustain as abuse without comms (🧠 inferred,
+  consistent with SMV-001 §1.2 on volume-only / near-market conduct).</p>
+<hr>
+<h2 id="6-dry-run-projected-volume-population-change">6. Dry-run - projected volume &amp; population change</h2>
+<p>Candidate vs the placeholder <code>1.0</code> baseline, over the synthetic window. 📊 observed.</p>
+<table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Alerts now (1.0)</th>
+<th>Alerts (candidate)</th>
+<th>Δ volume</th>
+<th>Population effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>→ <strong>0.75 (recommended)</strong></td>
+<td>219</td>
+<td>298</td>
+<td><strong>+79 (+36%)</strong></td>
+<td>+36 true wash caught (recall 0.717→0.837), +43 FP (precision 0.982→0.842)</td>
+</tr>
+<tr>
+<td>→ 0.50 (touch)</td>
+<td>219</td>
+<td>514</td>
+<td>+295 (+135%)</td>
+<td>+60 true wash vs 1.0, but +235 FP; precision collapses to 0.535</td>
+</tr>
+<tr>
+<td>→ 1.50</td>
+<td>219</td>
+<td>102</td>
+<td>−117 (−53%)</td>
+<td>−113 true wash (recall 0.717→0.340); precision 1.000</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="7-volume-coverage-trade-off-recommendation">7. Volume ↔ coverage trade-off &amp; recommendation</h2>
+<p><strong>The headline.</strong> Resolving M2 is a choice along the touch↔full-spread axis:</p>
+<ul>
+<li><strong>0.50x (the touch / best bid-offer)</strong> - "alert on any print beyond the visible quote." Maximal
+  coverage (<strong>recall 0.917</strong>) but <strong>precision 0.535</strong>: on this set <strong>over half of all alerts are
+  false positives</strong> (239 of 514). At production base rates - far below 12.5% - precision would be
+  worse still. This is the alert-fatigue / credibility failure mode the SME warns of (SMV-001 §3);
+  operationally untenable. 📊</li>
+<li><strong>1.00x (a full spread from mid / the placeholder)</strong> - "alert only when demonstrably through the
+  book." Near-perfect <strong>precision 0.982</strong> (4 FP) but <strong>recall 0.717</strong>: it <strong>misses 85 of 300 genuine
+  wash pairs (28%)</strong> - a coverage blind spot a regulator would challenge, concentrated in the
+  ambiguous 0.75-1.0 band. 📊</li>
+<li><strong>0.75x (recommended)</strong> - the knee just above the benign P99. <strong>Precision 0.842, recall 0.837,
+  F1 0.839</strong> (the swept maximum). Versus the <code>1.0</code> placeholder it <strong>recovers 12 points of recall
+  (+36 true wash caught) for a precision cost from 98% to 84% (+43 FP across 2,400 pairs)</strong> -
+  and <strong>42% fewer alerts</strong> than the 0.5 touch for only an 8-point recall give-up (the 24 missed
+  cases sit in an 8:1 legit-dominated band). 📊</li>
+</ul>
+<p><strong>Recommendation (per segment): a single <code>off_market_spread_multiple = 0.75</code>, mid-referenced, for
+all liquidity segments.</strong> §4 shows the normalised threshold behaves equivalently across LIQUID / MID
+/ ILLIQUID, so no per-segment override is warranted for this parameter. Recall the SME confirmed the
+<strong>mid</strong> reference frame and the <strong>time-weighted</strong> spread denominator (SMV-001 §1.2) - this
+recommendation keeps both and tunes only the multiple.</p>
+<p><strong>M2 resolution (explicit).</strong> The reference frame <strong>stays MID</strong> (do not re-anchor to the touch).
+The multiple moves from the placeholder <code>1.0</code> to <strong><code>0.75</code></strong> - i.e. <strong>1.5x the touch / three-
+quarters of a full spread from mid</strong>. Rationale: 1.0 leaves a 28% coverage gap in the ambiguous
+zone; 0.5 (the touch) is precision-untenable; 0.75 is the evidenced balance and corresponds to a
+defensible statistical anchor (just above the legit-population P99).</p>
+<p><strong>Other parameters (noted, not re-tuned here):</strong>
+- <code>lookback_days = 1</code> - non-binding on this single-day population; <strong>🧠 inferred</strong> that a real
+  deployment must replace date granularity with sub-second/intraday windows per asset class
+  (per the detector docstring and SMV-001 §Q5). Out of scope for this pack; flag for a follow-up.
+- <code>min_pair_notional = 10_000</code> - set well below all synthetic notionals so it did not gate the
+  ATL/BTL; a materiality/risk-appetite call to be set against the firm's real notional distribution.
+  <strong>Not calibrated here.</strong>
+- <code>ubo_graph_max_age_days = 90</code> - a coverage (false-negative) control, not a precision lever
+  (SMV-001 §1.1); unchanged.</p>
+<p><strong>Residual risk.</strong> At 0.75x, 49 of 300 genuine wash pairs are still missed (the least off-market
+prints) and 47 false positives survive into the queue - acceptable given the §5 BTL shows the
+missed band is benign-dominated and the survivors are individually reviewable. 🧠</p>
+<p><strong>Honest caveat (load-bearing).</strong> Every number here is <strong>📊 observed on a <em>synthetic</em> distribution</strong>
+with a deliberately high 12.5% wash base rate (chosen for statistical power, n=300 wash). It
+validates the <strong>calibration method and the <em>relative</em> trade-off between thresholds</strong> - it is <strong>not</strong>
+a real-world production number. Two consequences: (a) at realistic (far lower) wash base rates,
+<strong>absolute precision will be lower</strong> than shown - the threshold ordering transfers, the precision
+levels do not; (b) the legit/wash deviation distributions are modelled assumptions, so the exact
+knee (0.75) must be <strong>re-confirmed against masked/real data</strong> before go-live. This pack should be
+re-run on production-representative data once available. 🧠</p>
+<hr>
+<h2 id="8-performance-mi-ongoing-monitoring">8. Performance MI - ongoing monitoring</h2>
+<p>Track after deployment to detect decay and confirm the tuning held.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Definition</th>
+<th>Calculation</th>
+<th>Current</th>
+<th>Target</th>
+<th>Basis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Alert volume</td>
+<td>Alerts raised per period</td>
+<td><code>count(alert_id) by segment, period</code></td>
+<td>n/a (pre-prod)</td>
+<td>stable ±25%</td>
+<td>📊</td>
+</tr>
+<tr>
+<td>False-positive rate</td>
+<td>FP alerts / total alerts</td>
+<td><code>count(FP) / count(alert)</code></td>
+<td>0.158 (synthetic, 0.75x)</td>
+<td>&lt;0.30 in prod sampling</td>
+<td>📊</td>
+</tr>
+<tr>
+<td>Precision</td>
+<td>TP / (TP + FP) at threshold</td>
+<td><code>count(TP) / count(TP + FP)</code></td>
+<td>0.842 (synthetic, 0.75x)</td>
+<td>monitor; expect lower in prod</td>
+<td>📊</td>
+</tr>
+<tr>
+<td>Recall (sampled)</td>
+<td>TP / (TP + FN) on labelled QA sample</td>
+<td><code>count(TP) / count(TP + FN)</code></td>
+<td>0.837 (synthetic, 0.75x)</td>
+<td>≥0.80 on QA sample</td>
+<td>📊</td>
+</tr>
+<tr>
+<td>Alert-to-SAR/STR conversion</td>
+<td>STORs filed / alerts raised</td>
+<td><code>count(STOR) / count(alert)</code></td>
+<td>n/a</td>
+<td>≥0.10 (re-tune trigger)</td>
+<td>📊</td>
+</tr>
+<tr>
+<td>Stability</td>
+<td>Month-on-month alert volume variance</td>
+<td>std-dev of monthly alert counts</td>
+<td>n/a</td>
+<td>low variance</td>
+<td>📊</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="9-next-steps">9. Next steps</h2>
+<ul>
+<li><strong>Implementation → <code>rules-developer</code> (Mateo):</strong> set <code>DEFAULT_OFF_MARKET_SPREAD_MULTIPLE = 0.75</code>
+  with <code>tuning_date: 2026-06-30</code> and a comment citing this pack (TUNE-001); keep the mid reference
+  frame and the time-weighted spread denominator unchanged.</li>
+<li><strong>Independent sign-off → <code>model-validator</code> (Viktor):</strong> challenge the synthetic distributions and
+  the base-rate caveat before the value is treated as production-ready.</li>
+<li><strong>Follow-ups (out of scope here):</strong> calibrate <code>lookback_days</code> per asset class on intraday data;
+  set <code>min_pair_notional</code> against the firm's real notional distribution; <strong>re-run this harness on
+  masked/production-representative data</strong> to confirm the 0.75 knee.</li>
+<li>Reproduce the evidence: <code>python3 docs/demos/build-artifacts/ts001_threshold_tuning_harness.py</code>
+  (seed <code>20260630</code>, deterministic).</li>
+</ul>
+<hr>
+<h2 id="sign-off">Sign-off</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td>Theo (tuning-analyst)</td>
+<td>Recommend <code>off_market_spread_multiple = 0.75</code>, mid-referenced, single threshold across segments. Synthetic evidence; validates method + relative trade-off, not a production number.</td>
+<td>2026-06-30</td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Human approver (or <code>[IT team]</code>)</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: threshold-tuning-pack.md &middot; 2026-06-30</div>
 </body>
 </html>

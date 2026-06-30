@@ -1,0 +1,42 @@
+From:      Morgan - PM & Orchestrator, Compliance Surveillance Engineering (Virtual Team)
+Date:      30 June 2026
+Subject:   TS-001 wash-trade detection - demo build delivered (synthetic; not deployable)
+
+Hi,
+
+Quick cover note on the TS-001 wash-trade / self-match build. Headline: the full
+engineering chain ran end-to-end on synthetic data and the deliverable is demo-complete -
+43/43 tests green, independently reviewed and calibrated - but it is NOT deployable yet, by
+design. Detail is in the delivery report; this is the one-page version.
+
+WHAT WE DID
+- Spec (Amara) -> SME validation (Camila) -> detector + tests (Mateo) -> independent QA
+  (Linh) + code/compliance/performance review (Ravi/Layla/Thabo) -> measured tuning (Theo)
+  -> this delivery compile.
+- The review chain earned its keep: two reviewers independently caught a silent
+  false-negative (a bad market-data price was dropped without an audit trail); it was fixed
+  and both test suites re-run green.
+- Tuning is measured, not guessed: on a seeded synthetic labelled set the off-market
+  threshold recommendation is 0.75x the spread from mid (precision 0.84 / recall 0.84).
+
+WHERE THINGS STAND
+- Verdict: demo-complete, NOT deployable. Open by design: the obligation mapping is
+  PROVISIONAL (only EU MAR Art 12(1)(a) is source-verified; Legal must resolve SME
+  questions Q1/Q3/Q4); the threshold must be re-confirmed on real data (the 0.84/0.84 is a
+  synthetic number - it validates the method, not a production figure); and the detector's
+  O(B x S) pairing must be bucketed before production volume (it will not scale as written).
+- No unresolved defects - the build is green. What's open is deploy-gates and decisions
+  that correctly sit with the SME / real data / a human approver, not the demo.
+- Everything is synthetic (no real data touched), and every artifact is in .md + .html.
+
+NEXT STEPS (your call)
+- Treat this as the reference build cycle, or
+- Resolve the PROVISIONAL obligation mapping with Legal and re-confirm the threshold on
+  masked/real data, then re-gate, or
+- Take on the performance deploy-gate (bucket the pairing) and benchmark at volume.
+
+As ever - happy to take any of those as an action.
+
+Morgan
+PM & Orchestrator
+Compliance Surveillance Engineering - Virtual Team

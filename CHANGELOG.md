@@ -6,6 +6,13 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ## [Unreleased]
 
 ### Changed
+- **Build-demo re-run with fresh artifacts.** Re-ran the full DoD chain (8 specialists, real test
+  runs, measured ATL/BTL, the fix→re-review loop) on TS-001 wash-trade and **regenerated every
+  `docs/demos/build-artifacts/` artifact** to current conventions (doc-control headers, disposition
+  tallies, ADR-001 citation grounding, 📊/🧠 tagging) - now incl. the **engagement-summary email**
+  and the reproducible tuning harness. The chain caught a real silent false-negative (two reviewers
+  independently) and the post-rework evidence desync; both resolved (43/43 tests green). Dropped the
+  run-numbering and retired `build-run-comparison.md`; refreshed the `build-demo.md` transcript.
 - **Reviews coach vibe-coded code with findings-driven prompts.** When code is AI-assisted *and* the
   review raised findings, the 🧑‍💻 Prompting-guidance section now **maps the actual findings → the
   prompt clause that would have closed each** (not generic advice), then distils 2-3 reusable

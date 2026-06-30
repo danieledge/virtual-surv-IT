@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Delivery Report - TS-001 Wash Trade / Self-Match Detection (DEMO, Run 2)</title>
+<title>Delivery Report - TS-001 Wash Trade / Self-Match Detection (DEMO)</title>
 <style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
@@ -50,365 +50,403 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-29</span></header>
-<h1 id="delivery-report-ts-001-wash-trade-self-match-detection-demo-run-2">Delivery Report - TS-001 Wash Trade / Self-Match Detection (DEMO, Run 2)</h1>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-30</span></header>
+<h1 id="delivery-report-ts-001-wash-trade-self-match-detection-demo">Delivery Report - TS-001 Wash Trade / Self-Match Detection (DEMO)</h1>
 <blockquote>
-<h1 id="after-as-delivered-current-state">⏩ AFTER - "as-delivered" current state</h1>
-<p>The consolidated delivery for the <a href="../build-demo.html">build demo</a> - the full DoD chain on one page,
-after the review fixes. Pair it with the <a href="qa-handover.html">QA handover</a> (the ⏪ <em>as-found</em> snapshot).
-This is the <strong>canonical run</strong> (Run 2); see how it compares to Run 1 in the
-<a href="../build-run-comparison.html">run comparison</a>. Synthetic only (§5); demo artifact, not production logic.</p>
+<p><strong>Document control</strong> · ID <code>DLVR-001</code> · Version <code>0.1</code> · Status <code>In review</code> · Classification <code>Internal</code> · Owner <code>PM (Morgan)</code> · As-of <code>2026-06-30</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-06-30</td>
+<td>Morgan (PM)</td>
+<td>Consolidated delivery for the build-demo re-run</td>
+</tr>
+</tbody>
+</table>
+<p><strong>⏩ AFTER — "as-delivered" snapshot.</strong> The full DoD chain on one page, <em>after</em> the review fix-loop.
+Pair it with the <a href="qa-handover.html">QA handover</a> and the review findings below (the ⏪ <em>as-found</em>
+record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo artifact, not production logic.</strong></p>
 </blockquote>
 <table>
 
 <tbody>
 <tr>
 <td><strong>Deliverable</strong></td>
-<td>TS-001 wash-trade / self-match detection</td>
+<td>TS-001 wash-trade / self-match detection (<code>ts001_wash_trade.py</code>)</td>
 </tr>
 <tr>
 <td><strong>Spec</strong></td>
-<td><a href="ts001-scenario-spec.html">TS-001</a> (SME-validated; open questions dispositioned §9)</td>
+<td><a href="ts001-scenario-spec.html">SCN-001</a> (SME-validated; open questions dispositioned) · <a href="ts001-sme-validation.html">SME validation</a></td>
 </tr>
 <tr>
 <td><strong>Obligation</strong></td>
-<td>MAR Art 12(1)(a) - <strong>PROVISIONAL</strong> (mapping pending SME Q1/Q3/Q4)</td>
+<td><strong>EU MAR Art 12(1)(a)</strong> — register-<code>[VERIFIED]</code>. All other pinpoints (Art 12(2)(c) + non-EU equivalents) <strong><code>[TO-VERIFY]</code> 🧠</strong>. <code>obligation_status = PROVISIONAL</code>.</td>
 </tr>
 <tr>
 <td><strong>Date</strong></td>
-<td>2026-06-27</td>
+<td>2026-06-30</td>
 </tr>
 <tr>
 <td><strong>Verdict</strong></td>
-<td>✅ <strong>Demo-complete</strong> - every chain stage ran (build + code/QA/compliance review + tuning + performance). Not deployable until the obligation mapping is finalised, calibrated on real data, the O(n²) fixed, and a human signs off.</td>
+<td>✅ <strong>Demo-complete</strong> — every chain stage ran (spec → SME → build → independent QA → code/compliance/performance review → measured tuning → delivery). <strong>Not deployable</strong> until: obligation mapping finalised (SME Q1/Q3/Q4), threshold re-confirmed on real data, the O(B×S) pairing bucketed, and a human signs off.</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p><strong>Status in one line:</strong> review <strong>defects ✅ Fixed</strong> (suites green); what's open is by design -
-the <strong>obligation mapping</strong> (SME blockers Q1/Q3/Q4, carried as <code>obligation_status=PROVISIONAL</code>),
-<strong>deploy-gates ⏭️ Deferred</strong> (real-data calibration, <code>min_notional</code>, O(n²), intraday alert-id), and
-<strong>human sign-off ⛔ Pending</strong>.</p>
+<p><strong>Status in one line:</strong> code-review <strong>defects ✅ Fixed</strong> (43/43 tests green); what's open is <strong>by design</strong> — the obligation mapping (PROVISIONAL, SME blockers Q1/Q3/Q4), the performance <strong>deploy-gates</strong> (⏭️ bucket the pairing before production volume), the synthetic-only tuning number (⏭️ re-confirm on real data), and <strong>human sign-off ⛔ Pending</strong>.</p>
 </blockquote>
-<h2 id="1-the-chain-8-agents">1. The chain (8 agents)</h2>
-<p>business-analyst (Amara) → trade-surveillance-sme (Camila, +disposition) → rules-developer (Mateo) →
-code-reviewer (Ravi) + qa-engineer (Linh) + compliance-reviewer (Layla) → tuning-analyst (Theo) +
-performance-reviewer (Thabo) → PM compile.</p>
-<blockquote>
-<p>🔁 <strong>Knowledge compounded:</strong> Mateo built against <code>house-rules.md</code>, so <strong>none of Run 1's 7 defects
-recurred</strong> - the build passed its tests first time (Run 1's failed on a wall-clock bug). The review
-still earned its keep by finding <em>new, subtler</em> issues. Full story: <a href="../build-run-comparison.html">run comparison</a>.</p>
-</blockquote>
-<h2 id="2-rtm-traceability-spine">2. RTM (traceability spine)</h2>
+<hr>
+<h2 id="1-what-was-built">1. What was built</h2>
+<p>A deterministic, explainable detector (<code>ts001_wash_trade.py</code>, self-contained — does not import the repo <code>rules/</code>). It groups trades by <code>ubo_group_id</code> (Phase-1 UBO-only, per SME Q4), pairs opposing buy/sell legs in the same instrument within a lookback, and applies <strong>off-market price as a NECESSARY early-continue condition</strong> (DR-002), spread-normalised against the <strong>time-weighted</strong> spread. Safe-harbour (DR-003) and immaterial-notional (DR-004) pairs are suppressed; accounts on a stale UBO graph are excluded per-account with a data-quality warning (DR-005); the implied-match tier (DR-006) is <strong>off</strong> at launch (SME Q5). <code>detect_wash_trades(trades, ubo_links, market_snapshots, as_of_date, params=None)</code> returns a <code>DetectionResult</code> (<code>alerts</code>, <code>data_quality_warnings</code>, <code>suppressions</code>).</p>
+<h2 id="2-requirements-traceability-matrix-rtm">2. Requirements Traceability Matrix (RTM)</h2>
 <table>
 <thead>
 <tr>
+<th>Req</th>
+<th>Logic (code)</th>
+<th>Test(s)</th>
 <th>Obligation</th>
-<th>Spec</th>
-<th>Code (<code>ts001_wash_trade.py</code>)</th>
-<th>Test</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>MAR Art 12(1)(a) - self-match</td>
-<td>§1-2</td>
-<td><code>detect_wash_trades</code> + <code>OBLIGATION</code> field</td>
-<td><code>test_true_positive_wash_trade</code></td>
+<td>DR-001 pair opposing legs in same instrument, same UBO group, within lookback</td>
+<td>pairing loop + <code>lookback_days</code></td>
+<td><code>test_tp_cross_account_off_market_same_ubo</code>, <code>test_tp_single_account_both_sides</code>, QA lookback-boundary tests</td>
+<td>MAR 12(1)(a)</td>
 </tr>
 <tr>
-<td>Off-market = necessary</td>
-<td>§4.2</td>
-<td>early-continue on <code>dev_bps &lt; threshold</code></td>
-<td><code>test_false_positive_at_market_suppressed</code></td>
+<td>DR-002 off-market price = NECESSARY condition (spread-normalised, mid-referenced, early-continue)</td>
+<td><code>_price_deviation_bps</code> ÷ <code>time_weighted_spread_bps</code> vs <code>off_market_spread_multiple</code></td>
+<td>QA spread-multiple boundary tests (at / just-over); <code>test_fp_at_market_not_alerted</code></td>
+<td>MAR 12(1)(a)</td>
 </tr>
 <tr>
-<td>UBO link + fresh</td>
-<td>§4.1</td>
-<td>UBO gate + <code>_validate_ubo_freshness</code></td>
-<td>QA staleness boundary tests</td>
+<td>DR-003 suppress safe-harboured pairs</td>
+<td><code>_safe_harbour_reason</code> (<code>exempt_account_ids</code> register + <code>exempt_strategy_tags</code>)</td>
+<td>QA register + <code>RISKLESS_PRINCIPAL</code> + non-exempt tests</td>
+<td>MAR 12 (MM/riskless-principal)</td>
 </tr>
 <tr>
-<td>Safe-harbour exemption</td>
-<td>§4.3</td>
-<td><code>exempt_account_ids</code> pre-filter</td>
-<td><code>test_exempt_account_suppressed</code></td>
+<td>DR-004 immaterial-notional floor</td>
+<td><code>min_pair_notional</code> (smaller-leg governs)</td>
+<td>QA at/just-below floor</td>
+<td>risk-appetite (no false signal)</td>
 </tr>
 <tr>
-<td>Mapping not finalised</td>
-<td>§9</td>
-<td><code>obligation_status=PROVISIONAL</code></td>
-<td><code>test_true_positive</code> asserts PROVISIONAL</td>
+<td>DR-005 stale-UBO-graph → per-account exclude + DQ warning (not abort)</td>
+<td>freshest-edge-per-account index</td>
+<td><code>test_multiple_ubo_edges_freshest_wins...</code>, QA partial-stale/one-over</td>
+<td>coverage control</td>
 </tr>
 <tr>
-<td>No invented thresholds</td>
-<td>§5</td>
-<td><code>DetectionParams</code> no defaults</td>
-<td>(fail-loud)</td>
+<td>DR-006 implied-match tier OFF at launch</td>
+<td><code>enable_implied_match_tier=False</code> guard</td>
+<td><code>test_implied_match_tier_disabled</code></td>
+<td>SME Q5</td>
+</tr>
+<tr>
+<td>Alert carries obligation + keystone as <strong>fields</strong></td>
+<td><code>WashTradeAlert.obligation_reference</code>, <code>.obligation_status</code>, <code>.ubo_group_id</code>, <code>.spread_normalised_deviation</code></td>
+<td><code>test_tp_..._obligation_fields</code></td>
+<td>MAR 12(1)(a) traceability</td>
+</tr>
+<tr>
+<td>Bad market data not silently dropped</td>
+<td><code>mid_price&lt;=0</code> / <code>spread&lt;=0</code> → DQ warning + continue</td>
+<td><code>test_non_positive_mid_is_dq_warning_not_silent_drop</code></td>
+<td>§4 audit/coverage</td>
 </tr>
 </tbody>
 </table>
-<h2 id="3-review-findings-disposition-fixre-review-loop">3. Review findings &amp; disposition (fix→re-review loop)</h2>
+<h2 id="3-findings-disposition-consolidated-across-the-review-chain">3. Findings &amp; disposition (consolidated across the review chain)</h2>
 <table>
 <thead>
 <tr>
-<th>#</th>
+<th>ID</th>
+<th>Source</th>
 <th>Finding</th>
-<th>By</th>
 <th>Disposition</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1</td>
-<td>Off-market test &amp; reported deviation computed from two sources</td>
-<td>code-review</td>
-<td>✅ Fixed (<code>_deviation_bps</code> single source)</td>
+<td>W1 / NOTE-001</td>
+<td>code-review + QA</td>
+<td>Non-positive <code>mid</code> silently dropped (silent false-negative)</td>
+<td><strong>✅ Fixed</strong> — DQ guard added (mirrors the spread guard); test added; 43/43 green</td>
 </tr>
 <tr>
-<td>2</td>
-<td>Snapshot date not recorded on the alert (auditability)</td>
+<td>M4</td>
 <td>code-review</td>
-<td>✅ Fixed (<code>snapshot_date</code> field)</td>
+<td>Multiple UBO edges handled order-dependently</td>
+<td><strong>✅ Fixed</strong> — freshest-edge-per-account; test added</td>
 </tr>
 <tr>
-<td>3</td>
-<td>Falsy-snapshot <code>or</code> idiom fragile</td>
+<td>M3</td>
 <td>code-review</td>
-<td>✅ Fixed (explicit <code>is None</code>)</td>
+<td>Safe-harbour <strong>register</strong> branch + boundaries untested</td>
+<td><strong>✅ Covered</strong> — QA suite added register / boundary tests</td>
 </tr>
 <tr>
-<td>4</td>
-<td>Obligation literal <em>looks finalised</em> while mapping is blocked</td>
+<td>C1</td>
 <td>compliance</td>
-<td>✅ Fixed (<code>obligation_status=PROVISIONAL</code>) + new house-rule</td>
+<td>Old QA file tested a prior API + the rejected "abort" behaviour</td>
+<td><strong>✅ Resolved</strong> — QA suite regenerated against the delivered detector (31 tests)</td>
 </tr>
 <tr>
-<td>5</td>
-<td>DEF-001 missing snapshot silently drops pairs</td>
-<td>QA</td>
-<td>✅ Fixed (logged as data-quality warning)</td>
+<td>C2 / W2</td>
+<td>compliance</td>
+<td>Old delivery report + RTM described a non-existent API; stale dates</td>
+<td><strong>✅ Resolved</strong> — this report (delivered API, 2026-06-30)</td>
 </tr>
 <tr>
-<td>6</td>
-<td>DEF-002 snapshot date tie-break undocumented</td>
-<td>QA</td>
-<td>✅ Fixed (buy-date governs, documented + tested)</td>
+<td>W1 (compliance)</td>
+<td>compliance</td>
+<td><code>.html</code> stale vs sources</td>
+<td><strong>✅ Resolved</strong> — all artifacts re-rendered at compile</td>
 </tr>
 <tr>
-<td>7</td>
-<td>Same-account self-match excluded</td>
+<td>M1</td>
 <td>code-review</td>
-<td>✅ Dispositioned (scope: TS-001 = cross-account; intra-account = sibling scenario)</td>
+<td><code>MARKET_MAKER</code> as a per-order tag vs designated-status register</td>
+<td><strong>⏭️ Deferred</strong> — SME Q2 decision (designated-status register vs per-order capacity); obligation PROVISIONAL</td>
 </tr>
 <tr>
-<td>8</td>
-<td>DEF-003 quantity/notional not matched</td>
-<td>QA/tuning</td>
-<td>⏭️ Deferred (<code>min_notional</code> required - tuning pack)</td>
+<td>M2</td>
+<td>code-review</td>
+<td>Off-market threshold reference frame (mid vs touch)</td>
+<td><strong>⏭️ Deferred → tuning</strong> — Theo's measured recommendation below; comment added; constant left pending real-data confirmation</td>
 </tr>
 <tr>
-<td>9</td>
-<td>O(B×S) won't scale</td>
+<td>PERF-F1</td>
 <td>performance</td>
-<td>⏭️ Deferred (pre-group by instrument+UBO; productionisation)</td>
+<td>Unbucketed <strong>O(B×S)</strong> pairing — will not scale</td>
+<td><strong>🔴 Open (deploy-gate)</strong> — bucket by <code>(instrument, ubo_group_id)</code> before production volume</td>
 </tr>
 <tr>
-<td>10</td>
-<td>Obligation mapping not finalised</td>
-<td>compliance/SME</td>
-<td>⏭️ Deferred (Q1/Q3/Q4 go-live blockers - <a href="ts001-scenario-spec.html">spec §9</a>)</td>
+<td>PERF-F2</td>
+<td>performance</td>
+<td>Per-pair DQ-warning string blow-up</td>
+<td><strong>🔴 Open (deploy-gate)</strong> — dedupe by <code>(instrument, date)</code></td>
 </tr>
 </tbody>
 </table>
-<p><strong>Re-review result:</strong> dev 3/3 + QA suite green.</p>
-<h2 id="4-definition-of-done">4. Definition of Done</h2>
+<p><strong>Disposition tally:</strong> ✅ 6 Fixed/Resolved · 🔴 2 Open (performance deploy-gates) · ⏭️ 2 Deferred (SME Q2; real-data tuning) · ⚖️ 0 Accepted.</p>
+<p><em>Two kinds of "open":</em> there are <strong>no unresolved defects</strong> — the build is green. The Open items are <strong>deploy-gates</strong> (production-scale performance) and the Deferred items are decisions that correctly sit with the SME / real-data calibration, not the demo.</p>
+<h2 id="4-tuning-measured-atlbtl-theo">4. Tuning (measured ATL/BTL — Theo)</h2>
+<p>On a <strong>seeded synthetic</strong> labelled set (n=2,400; 300 wash / 2,100 legit; three liquidity segments), sweeping the off-market spread-multiple:</p>
 <table>
 <thead>
 <tr>
-<th>Item</th>
-<th>Status</th>
+<th>Threshold (×spread from mid)</th>
+<th>Precision 📊</th>
+<th>Recall 📊</th>
+<th>Note</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Traceable (RTM)</td>
-<td>⚠️ Partial - spine + fields present; obligation <em>mapping</em> not finalised (PROVISIONAL)</td>
+<td>0.5 (the touch)</td>
+<td>0.535</td>
+<td>0.917</td>
+<td>over-alerts — untenable</td>
 </tr>
 <tr>
-<td>Open questions dispositioned</td>
-<td>✅ Met (<a href="ts001-scenario-spec.html">spec §9</a>)</td>
+<td><strong>0.75 (recommended)</strong></td>
+<td><strong>0.842</strong></td>
+<td><strong>0.837</strong></td>
+<td>F1 0.839 (swept max)</td>
 </tr>
 <tr>
-<td>Tested (TP + FP)</td>
-<td>✅ Met (dev 3/3 + QA suite, 📊 measured)</td>
-</tr>
-<tr>
-<td>Independently QA'd</td>
-<td>✅ Met (<a href="qa-handover.html">qa-handover</a>)</td>
-</tr>
-<tr>
-<td>Code-reviewed</td>
-<td>✅ Met (findings fixed/dispositioned)</td>
-</tr>
-<tr>
-<td>Compliance-reviewed</td>
-<td>✅ Met (data-safety clean; mapping flagged)</td>
-</tr>
-<tr>
-<td>Performance-reviewed</td>
-<td>✅ Met (<a href="performance-review.html">perf review</a>; O(n²) Open for prod)</td>
-</tr>
-<tr>
-<td>Thresholds calibrated</td>
-<td>⏭️ Deferred (<a href="threshold-tuning-pack.html">tuning pack</a>; real labelled set needed)</td>
-</tr>
-<tr>
-<td>Documented for handover</td>
-<td>✅ Met (§5)</td>
-</tr>
-<tr>
-<td>Distributable (.md + .html)</td>
-<td>✅ Met</td>
-</tr>
-<tr>
-<td>Signed off (human)</td>
-<td>⛔ Pending (a demo can't produce one)</td>
+<td>1.0 (placeholder)</td>
+<td>0.982</td>
+<td>0.717</td>
+<td>misses 28% of genuine wash</td>
 </tr>
 </tbody>
 </table>
+<p><strong>Recommendation:</strong> <code>off_market_spread_multiple = 0.75</code>, <strong>mid-referenced</strong>, single threshold across segments (spread-normalisation holds per-segment). <strong>Honest caveat (📊→context):</strong> measured on a <em>synthetic</em> distribution with an inflated 12.5% base rate — this validates the <strong>method and the relative trade-off</strong>, <strong>not</strong> a production number; the 0.75 knee must be re-confirmed on masked/real data before go-live. The constant is therefore <strong>recorded as a recommendation, not hard-coded</strong> (kept conservative; <code>tuning_date</code> to be stamped on real-data confirmation).</p>
 <h2 id="5-developer-handover">5. Developer handover</h2>
 <ul>
-<li><strong>Run tests:</strong> <code>cd docs/demos/build-artifacts &amp;&amp; python3 -m pytest test_ts001_wash_trade.py test_ts001_qa.py</code>.</li>
-<li><strong>Entry point:</strong> <code>detect_wash_trades(trades, ubo_links, ubo_as_of, market_snapshots, params, as_of_date)</code>.
-  All <code>DetectionParams</code> required (fail-loud). <code>as_of_date</code> injected (deterministic).</li>
-<li><strong>Design:</strong> off-market = necessary (early-continue); UBO staleness gate aborts; obligation +
-  <code>obligation_status</code> + <code>ubo_group_id</code> + <code>snapshot_date</code> on the alert; missing snapshot logged.</li>
-<li><strong>Known limitations / tech debt:</strong> O(B×S) (pre-group before volume); <code>min_notional</code> absent (tuning);
-  intraday alert-id collision; obligation mapping PROVISIONAL until Q1/Q3/Q4.</li>
+<li><strong>Build/run:</strong> <code>pip install -r requirements-dev.txt</code>; <code>python -m pytest docs/demos/build-artifacts/test_ts001_wash_trade.py docs/demos/build-artifacts/test_ts001_qa.py -q</code> → <strong>43 passed</strong>.</li>
+<li><strong>Entry point:</strong> <code>detect_wash_trades(trades, ubo_links, market_snapshots, as_of_date, params=None) -&gt; DetectionResult</code>. Inputs: <code>Trade</code>, <code>UBOLink(account_id, ubo_group_id, graph_as_of_date)</code>, <code>MarketSnapshot(instrument, snapshot_date, mid_price, time_weighted_spread_bps)</code>. All <code>DetectionParams</code> have documented defaults with a rationale + <code>tuning_date</code> placeholder.</li>
+<li><strong>Known limitations / tech debt (must close before production):</strong> (1) <strong>PERF-F1/F2</strong> — bucket the pairing + dedupe DQ warnings, then benchmark at 100K/1M (<code>pytest-benchmark</code>). (2) <strong>Obligation mapping PROVISIONAL</strong> — resolve SME Q1/Q3/Q4 (Legal), verify the <code>[TO-VERIFY]</code> citations against primary sources and add to the register. (3) <strong>Threshold</strong> — re-confirm 0.75 on real data. (4) <strong>M1</strong> — finalise the MM exemption taxonomy (SME Q2). (5) <strong>At-market wash</strong> is a known, accepted detection gap (DR-002) — candidate future scenario TS-003.</li>
+<li><strong>Change/ops artifacts</strong> (change request, ops runbook, release notes) are not produced for a demo; templates exist for a real engagement.</li>
 </ul>
-<h2 id="6-token-usage-runtime-a-quirky-rate-card">6. 💰 Token usage, runtime &amp; a (quirky) rate card</h2>
-<p>Real <code>subagent_tokens</code> / <code>duration_ms</code>. Full comparison vs Run 1: <a href="../build-run-comparison.html">run comparison</a>.</p>
+<h2 id="6-token-usage-measured-this-run">6. Token usage (measured this run)</h2>
+<p>The Agent tool reports actual per-specialist usage (~4 chars/token, ±15%):</p>
 <table>
 <thead>
 <tr>
 <th>Stage</th>
-<th>Agent</th>
-<th>Tier</th>
+<th>Specialist</th>
 <th>Tokens</th>
-<th>Runtime</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Spec</td>
-<td>business-analyst (Amara)</td>
-<td>sonnet</td>
-<td>~17,329</td>
-<td>~65s</td>
+<td>business-analyst</td>
+<td>~25k</td>
 </tr>
 <tr>
-<td>SME + disposition</td>
-<td>trade-surveillance-sme (Camila)</td>
-<td>sonnet</td>
-<td>~16,570</td>
-<td>~64s</td>
+<td>SME validation</td>
+<td>trade-surveillance-sme</td>
+<td>~19k</td>
 </tr>
 <tr>
-<td>Build</td>
-<td>rules-developer (Mateo)</td>
-<td>sonnet</td>
-<td>~22,745</td>
-<td>~94s</td>
+<td>Build + tests</td>
+<td>rules-developer</td>
+<td>~78k</td>
 </tr>
 <tr>
 <td>Code review</td>
-<td>code-reviewer (Ravi)</td>
-<td>opus</td>
-<td>~21,036</td>
-<td>~48s</td>
+<td>code-reviewer</td>
+<td>~51k</td>
 </tr>
 <tr>
-<td>QA</td>
-<td>qa-engineer (Linh)</td>
-<td>sonnet</td>
-<td>~25,808</td>
-<td>~151s</td>
+<td>Independent QA</td>
+<td>qa-engineer</td>
+<td>~95k</td>
 </tr>
 <tr>
-<td>Compliance</td>
-<td>compliance-reviewer (Layla)</td>
-<td>opus</td>
-<td>~21,932</td>
-<td>~62s</td>
+<td>Compliance / DoD</td>
+<td>compliance-reviewer</td>
+<td>~60k</td>
 </tr>
 <tr>
-<td>Calibration</td>
-<td>tuning-analyst (Theo)</td>
-<td>sonnet</td>
-<td>~29,973</td>
-<td>~115s</td>
+<td>Fix-loop</td>
+<td>rules-developer</td>
+<td>~61k</td>
 </tr>
 <tr>
 <td>Performance</td>
-<td>performance-reviewer (Thabo)</td>
-<td>sonnet</td>
-<td>~16,009</td>
-<td>~42s</td>
+<td>performance-reviewer</td>
+<td>~30k</td>
 </tr>
 <tr>
-<td><strong>Total</strong></td>
-<td><strong>8 agents</strong></td>
-<td></td>
-<td><strong>~171,400</strong></td>
-<td><strong>~641s</strong> (~9 min wall-clock)</td>
+<td>Tuning (measured)</td>
+<td>tuning-analyst</td>
+<td>~83k</td>
+</tr>
+<tr>
+<td><strong>Total (specialists)</strong></td>
+<td><strong>9 agent-runs</strong></td>
+<td><strong>~500k</strong></td>
 </tr>
 </tbody>
 </table>
-<p>~<strong>$3-6</strong> API at list prices (±2×); the 2 opus agents are ~25% of tokens but the bulk of the cost -
-which is why opus is reserved for the final-judgement roles.</p>
-<h3 id="the-rate-card-tongue-in-cheek-illustrative-not-a-quote">The rate card (tongue-in-cheek, illustrative - not a quote)</h3>
-<p>What would a <strong>human</strong> team invoice for the same work - a spec, an SME sign-off, a build, three
-independent reviews, a calibration, a performance review and a delivery pack for a new scenario?</p>
+<blockquote>
+<p>💵 <strong>Honest cost note.</strong> At ~500k tokens this run cost roughly <strong>$4-8</strong> at list prices — <strong>above</strong> the ~150-180k / ~$3-6 <em>estimate</em> given at intake. The specialists ran deeper than the estimate assumed (QA wrote 31 independent tests; tuning built and ran a real labelled harness; the fix-loop re-ran both suites). The right read: the estimate was optimistic for a genuinely thorough, real (not faked) run. 🧾 <em>Rate-card framing:</em> this full reviewed-and-calibrated deliverable is the routine ~80% of a real engagement done in minutes — the human effort it stands in for is measured in days, not dollars.</p>
+</blockquote>
+<h2 id="7-definition-of-done-status">7. Definition-of-Done status</h2>
 <table>
 <thead>
 <tr>
-<th></th>
-<th>The human team</th>
-<th>This AI team</th>
+<th>DoD item</th>
+<th>Status</th>
+<th>Evidence / gap</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Effort</td>
-<td>~<strong>3-5 person-days</strong> (realistic for a new reviewed scenario)</td>
-<td>~<strong>11 person-minutes</strong> of agent-time</td>
+<td>Traceable (RTM)</td>
+<td>✅ Met</td>
+<td>§2 RTM maps DR → delivered code → test → obligation; obligation PROVISIONAL by design</td>
 </tr>
 <tr>
-<td>Blended rate</td>
-<td>~£750/day contractor (BA/dev ~£600, SME/compliance ~£900-950)</td>
-<td>-</td>
+<td>Open questions dispositioned</td>
+<td>✅ Met</td>
+<td>Spec + SME §5 disposition Q1-Q5 (3 🔴 go-live blockers reflected in the verdict)</td>
 </tr>
 <tr>
-<td>Wall-clock</td>
-<td>days-to-weeks (calendars, handoffs, meetings)</td>
-<td>~<strong>9 minutes</strong></td>
+<td>Tested (TP + FP, pass)</td>
+<td>✅ Met</td>
+<td>43/43 green (dev 12 + independent QA 31), TP + FP controls</td>
 </tr>
 <tr>
-<td><strong>Invoice</strong></td>
-<td>~<strong>£2,250 - £3,750</strong></td>
-<td>~<strong>$3-6</strong> in API</td>
+<td>Independently QA'd</td>
+<td>✅ Met</td>
+<td><code>qa-handover.md</code> — <code>qa-engineer</code> (not the builder); fresh suite vs delivered API</td>
+</tr>
+<tr>
+<td>Code-reviewed</td>
+<td>✅ Met</td>
+<td>findings dispositioned (§3); W1/M4 fixed and re-run; analysers absent → logic findings 🧠 (re-run ruff/mypy/bandit before real sign-off)</td>
+</tr>
+<tr>
+<td>Performance-reviewed</td>
+<td>✅ Met (gate open)</td>
+<td><code>performance-review.md</code>; O(B×S) = ⏭️ deploy-gate</td>
+</tr>
+<tr>
+<td>Compliance-reviewed</td>
+<td>✅ Met</td>
+<td>data-safety clean; citations grounded; obligation PROVISIONAL correct</td>
+</tr>
+<tr>
+<td>Documented for handover</td>
+<td>✅ Met</td>
+<td>§5 (matches the delivered API)</td>
+</tr>
+<tr>
+<td>Engagement-summary email</td>
+<td>✅ Met</td>
+<td><code>engagement-summary-email.txt</code> (this run)</td>
+</tr>
+<tr>
+<td>Distributable (.md + .html)</td>
+<td>✅ Met</td>
+<td>all artifacts re-rendered at compile</td>
+</tr>
+<tr>
+<td>Signed off (human)</td>
+<td>⛔ Pending</td>
+<td>a demo cannot produce one — by design</td>
 </tr>
 </tbody>
 </table>
-<p>So the team delivered roughly <strong>£2-4k of consulting effort for about the price of a coffee</strong> - in
-minutes, not days. <em>Caveat (the honest bit):</em> this is a <strong>proof-of-concept demo on synthetic data</strong>;
-the output is a <em>starting point for real engineers and reviewers</em>, not a replacement (and the human
-"invoice" is illustrative). The point isn't "fire the humans" - it's <em>"the boring 80% gets done in
-minutes, so the humans spend their day on the judgement that matters."</em></p>
-<h2 id="7-responsibility-notes">7. Responsibility notes</h2>
-<p>Code executed (📊) on this trusted demo repo with synthetic data; ensuring handed-over code is safe to
-run remains the user's responsibility (§7). No raw data reached any agent (§5).</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report.md &middot; 2026-06-29</div>
+<h2 id="sign-off">Sign-off</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td>Morgan (PM)</td>
+<td>Demo-complete; not deployable (see verdict).</td>
+<td>2026-06-30</td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td>Layla</td>
+<td>Data-safety / citations / auditability met; C1/C2 resolved at compile. Re-gate on the open deploy-gates before production.</td>
+<td>2026-06-30</td>
+</tr>
+<tr>
+<td>Human approver (or <code>[IT team]</code>)</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report.md &middot; 2026-06-30</div>
 </body>
 </html>

@@ -67,8 +67,7 @@ made up). See [how real data is handled](#-handling-real-data).
 **See it work** - a full build, end-to-end on synthetic data, captured as a readable
 **[build demo transcript](docs/demos/build-demo.md)** (every artifact in
 [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/)). Other transcripts:
-[review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) ·
-[run comparison](docs/demos/build-run-comparison.md).
+[review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md).
 
 <details>
 <summary>✨ <b>What's new in 0.7.12</b> - README overhaul + summary-email on every close (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
