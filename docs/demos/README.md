@@ -23,8 +23,7 @@ generated at the moment, not scripted by the repo author.
 |---|---|
 | [🔍 Review](review-demo.md) | The review pipeline - one agent (right-sized), evidence-basis discipline, and the eval harness *proving* the result (recall 1.0). |
 | [🛡️ Data safety](data-safety-demo.md) | The §5 keystone - the raw-data guard **hard-blocking a read in real time**, and the masking validator *failing* a file that leaked PII. |
-| [🏗️ Build](build-demo.md) | Orchestrator-workers - business-analyst → SME → rules-developer → reviewers, each output feeding the next via the blackboard. |
-| [🔁 Run 1 vs Run 2](build-run-comparison.md) | We re-ran the **whole** build chain and compared: the codified house-rules **stopped Run 2 reintroducing Run 1's defects**, while review still found new issues. **The team learns** - measured, not claimed. |
+| [🏗️ Build](build-demo.md) | Orchestrator-workers - business-analyst → SME → rules-developer → independent reviews → tuning → performance → delivery, each output feeding the next via the blackboard; the fix→re-review loop catching a real defect. |
 
 **To run a demo live:** open the repo in Claude Code and type **`/demo`**. To put the team to work
 on your own code, type **`/engage`**.

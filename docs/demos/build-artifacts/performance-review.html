@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Performance Review - TS-001 Wash Trade Detector (DEMO, Run 2)</title>
+<title>Performance Review - TS-001 Wash Trade / Self-Match Detector (DEMO)</title>
 <style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
@@ -50,33 +50,98 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
-<h1 id="performance-review-ts-001-wash-trade-detector-demo-run-2">Performance Review - TS-001 Wash Trade Detector (DEMO, Run 2)</h1>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-30</span></header>
+<h1 id="performance-review-ts-001-wash-trade-self-match-detector-demo">Performance Review - TS-001 Wash Trade / Self-Match Detector (DEMO)</h1>
 <blockquote>
-<p>Produced by <code>performance-reviewer</code> (Thabo). <strong>Static-only</strong> (§7 - not executed). Surveillance
-volumes are large (millions of trades/day).</p>
+<p><strong>Document control</strong> · ID <code>PERF-001</code> · Version <code>0.1</code> · Status <code>In review</code> · Classification <code>Internal</code> · Owner <code>performance-reviewer (Thabo)</code> · As-of <code>2026-06-30</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-06-30</td>
+<td>Thabo (performance-reviewer)</td>
+<td>Static scalability review of the as-delivered detector</td>
+</tr>
+</tbody>
+</table>
 </blockquote>
-<h2 id="verdict-will-not-scale-as-is">Verdict: ❌ will NOT scale as-is</h2>
-<p>The flat <code>buys × sells</code> cross-join with no pre-grouping is the binding constraint.</p>
-<h2 id="findings">Findings</h2>
+<p><strong>Review basis:</strong> <strong>Static only</strong> (CLAUDE.md §7 - the detector was <strong>not executed</strong>, no profiler run). Every complexity/scaling finding is <strong>🧠 inferred</strong> from code structure; an explicitly coded value is <strong>📊 measured</strong>. Legend: severity 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low/Info; evidence 📊 measured · 🧠 inferred.</p>
+<hr>
+<h2 id="1-workload-targets">1. Workload &amp; targets</h2>
 <ul>
-<li>🔴 <strong>O(B×S) nested loop</strong> (<code>detect_wash_trades</code>) - 🧠 inferred. Every buy is compared against every
-  sell across all instruments/UBO groups before the structural guards prune. ~2.5×10⁹ iterations at
-  10⁵ trades; untenable at 10⁶; infeasible at 10⁷. <strong>Fix:</strong> pre-group sells into a dict keyed by
-  <code>(instrument, ubo_group_id)</code>, then the inner loop visits only same-instrument/same-UBO sells →
-  collapses toward O(n). 🔴 Open for productionisation.</li>
-<li>🟠 <strong>Unbounded in-memory accumulation</strong> - 📊 the whole input is materialised and <code>alerts</code> grows
-  without a cap/stream. At 10⁷ trades, multi-GB. <strong>Fix:</strong> stream in instrument/date-partitioned
-  chunks and flush alerts. 🔴 Open for productionisation.</li>
+<li><strong>Volume:</strong> 1M+ confirmed fills/day (target); thousands of instruments; UBO groups of 10-100+ accounts.</li>
+<li><strong>Mode:</strong> daily batch (<code>as_of_date</code> injected; date-granular).</li>
+<li><strong>SLA:</strong> not stated; typical T+1 surveillance batch is sub-hour for alert generation.</li>
+<li><strong>Key driver:</strong> all of the day's fills are loaded into flat <code>buys</code> / <code>sells</code> lists before the cross-product loop.</li>
 </ul>
-<h2 id="done-well">Done well</h2>
-<ul>
-<li>📊 UBO + market indices pre-built as dicts (O(1) lookups); freshness validated eagerly; exempt
-  accounts filtered once upfront; frozen dataclasses; obligation cited on the alert; deterministic
-  alert id.</li>
-</ul>
-<p>Exact wall-clock needs a benchmark (off by default, §7); the O(n²)→O(n) reduction is 🧠 inferred and
-expected to be transformative. <strong>Deferred</strong> to productionisation (demo has no volume).</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: performance-review.md &middot; 2026-06-28</div>
+<h2 id="2-tooling-coverage">2. Tooling coverage</h2>
+<p>No profiler was run (static mode, §7), so there are <strong>no 📊 measured time costs</strong> - all timings below are <strong>🧠 projected</strong>. The benchmark that would confirm them: <code>pytest-benchmark</code> measuring <code>detect_wash_trades()</code> wall-clock + peak memory (<code>tracemalloc</code>) on synthetic sets of 10K / 100K / 1M trades, sweeping instrument count and UBO-group size.</p>
+<h2 id="3-findings">3. Findings</h2>
+<h3 id="finding-1-unbucketed-obs-cross-product-pairing-critical-inferred">🔴 Finding 1 - Unbucketed O(B×S) cross-product pairing (CRITICAL · 🧠 inferred)</h3>
+<p><code>ts001_wash_trade.py</code> (pairing loop): the <code>for buy in buys: for sell in sells:</code> evaluates the full <code>B_total × S_total</code> cross-product. The instrument / UBO / lookback guards are <code>continue</code>s - they cut per-iteration work, <strong>not</strong> the iteration count. At 1M trades (≈500k buys × 500k sells) that is ~2.5×10¹¹ iterations; even with a 1,000-instrument universe pruning 99.9% of pairs, ~250M still reach the UBO check, and a single high-volume instrument gets no instrument-guard pruning at all. Large UBO groups compound it.
+<strong>Fix:</strong> pre-bucket trades by <code>(instrument, ubo_group_id, side)</code> after the UBO-freshness phase, then pair <em>within</em> buckets → complexity drops to <code>Σ over buckets (B_k × S_k)</code>; structurally eliminates cross-instrument / cross-group pairs without visiting them. <strong>Route:</strong> <code>rules-developer</code>.</p>
+<h3 id="finding-2-per-pair-dq-warning-generation-high-inferred">🟠 Finding 2 - Per-pair DQ-warning generation (HIGH · 🧠 inferred)</h3>
+<p>The three snapshot-quality checks <code>append</code> a formatted string <strong>per pair</strong>, not per <code>(instrument, date)</code>. One instrument with a missing snapshot and 500×500 pairs → ~250k warning strings (~30 MB) from a single gap; unbounded across instruments. Also a control-flow miss: on a missing snapshot the loop <code>continue</code>s to the next sell rather than breaking (no sell can resolve a snapshot keyed on the <em>buy</em>).
+<strong>Fix:</strong> dedupe warnings by <code>(instrument, date)</code> via a <code>set</code>; break the inner loop on snapshot-miss; ideally hoist snapshot validation above the pairing loop. <strong>Route:</strong> <code>rules-developer</code>.</p>
+<h3 id="finding-3-dual-on-partition-scan-low-inferred">🟡 Finding 3 - Dual O(N) partition scan (LOW · 🧠 inferred)</h3>
+<p>Two separate comprehensions over <code>ordered</code> build <code>buys</code>/<code>sells</code> with 2N <code>account_id in ubo_index</code> lookups. A single conditional pass halves it. Sub-dominant while Finding 1 stands; <strong>fold into the bucketing refactor</strong>.</p>
+<h3 id="finding-4-six-variable-alert-reason-f-string-per-alert-info-inferred">🔵 Finding 4 - Six-variable alert <code>reason</code> f-string per alert (INFO · 🧠 inferred)</h3>
+<p>Negligible at expected alert volumes (hundreds-low thousands/day). Note only if alert counts grow unexpectedly. No action.</p>
+<h2 id="4-potential-gains-projected-no-profiler-run">4. Potential gains (🧠 projected - no profiler run)</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Issue</th>
+<th>Current (🧠)</th>
+<th>After fix (🧠)</th>
+<th>Gain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Unbucketed O(B×S)</td>
+<td>~2.5×10¹¹ worst-case; ~250M in a 1,000-instrument case</td>
+<td><code>Σ (B_k×S_k)</code> per bucket (~25M in the worked example)</td>
+<td>~10× conservative; 1,000×+ in skewed distributions</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Per-pair DQ warnings</td>
+<td>up to ~250k string allocs per affected instrument</td>
+<td>O(1) per <code>(instrument, date)</code> defect</td>
+<td>up to ~250,000×; removes unbounded memory growth</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Dual O(N) scan</td>
+<td>2N lookups</td>
+<td>N lookups</td>
+<td>constant factor (sub-dominant)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Headline (🧠 projected, static-only):</strong> Finding 1 dominates by orders of magnitude; as written the unbucketed form will exhaust a realistic batch window before alerts complete. After Fixes 1-2 the rule is benchmarkable - run <code>pytest-benchmark</code> at 100K and 1M to convert these to 📊 measured numbers.</p>
+<h2 id="5-before-after">5. Before / after</h2>
+<p>Not available - static-only review, no profiler run (§7). Populate after the benchmark harness runs against the fixed code.</p>
+<h2 id="6-recommendation">6. Recommendation</h2>
+<ol>
+<li><strong>[CRITICAL]</strong> Bucket trades by <code>(instrument, ubo_group_id, side)</code> before pairing → <code>rules-developer</code>.</li>
+<li><strong>[HIGH]</strong> Dedupe DQ warnings by <code>(instrument, date)</code> + break on snapshot-miss (or hoist the check) → <code>rules-developer</code>.</li>
+<li><strong>[LOW]</strong> Fold the buy/sell partition into the bucketing refactor.
+Then run <code>pytest-benchmark</code> at 100K / 1M to confirm the projected gains and establish the production baseline.</li>
+</ol>
+<p><strong>Disposition tally:</strong> ✅ 0 Fixed/Answered · 🔴 2 Open (F1 Critical, F2 High - production-scale deploy-gates) · ⏭️ 2 Deferred (F3 fold-in, F4 info) · ⚖️ 0 Accepted.</p>
+<p><strong>Verdict: will not scale at target volume (🧠 inferred)</strong> - a <strong>deferred deploy-gate</strong>, not a demo blocker. The detector is correct at demo scale; bucketing by <code>(instrument, ubo_group_id)</code> is the concrete, necessary fix before production volume.</p>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: performance-review.md &middot; 2026-06-30</div>
 </body>
 </html>

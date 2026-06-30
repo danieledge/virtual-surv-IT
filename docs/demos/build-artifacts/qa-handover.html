@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QA Handover - TS-001 Wash Trade Detector (DEMO, Run 2)</title>
+<title>QA Handover - TS-001 Wash Trade / Self-Match Detection (DEMO)</title>
 <style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
@@ -50,58 +50,496 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
-<h1 id="qa-handover-ts-001-wash-trade-detector-demo-run-2">QA Handover - TS-001 Wash Trade Detector (DEMO, Run 2)</h1>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-30</span></header>
+<h1 id="qa-handover-ts-001-wash-trade-self-match-detection-demo">QA Handover - TS-001 Wash Trade / Self-Match Detection (DEMO)</h1>
 <blockquote>
-<h1 id="before-as-found-qa-snapshot">⏪ BEFORE - "as-found" QA snapshot</h1>
-<p>The QA evidence as first produced by <code>qa-engineer</code> (Linh), independent of the builder. It records
-<strong>what QA caught</strong>; it is <strong>not</strong> retro-edited (audit trail). The defects were then routed back and
-resolved - the <strong>current state</strong> is in the <a href="delivery-report.html">delivery report</a> §3.</p>
+<p>Produced by <code>qa-engineer</code> (Linh) - independent of the builder (Mateo / rules-developer).
+Evidences what was tested, exact results, what is NOT covered, and items for the human QA team.</p>
+<p><strong>This is the "as-found" record. Do NOT retro-edit once defects are fixed.</strong></p>
+<p><strong>Document control</strong> · ID <code>QAH-TS001-001</code> · Version <code>0.1</code> · Status <code>In review</code>
+· Classification <code>Internal</code> · Owner <code>qa-engineer (Linh)</code> · As-of <code>2026-06-30</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-06-30</td>
+<td>Linh (qa-engineer)</td>
+<td>Independent QA pass against commit 8dc8044</td>
+</tr>
+</tbody>
+</table>
 </blockquote>
 <table>
 
 <tbody>
 <tr>
 <td><strong>Deliverable</strong></td>
-<td><code>ts001_wash_trade.py</code> (DEMO)</td>
+<td>TS-001 Wash Trade / Self-Match detector (<code>ts001_wash_trade.py</code>)</td>
+</tr>
+<tr>
+<td><strong>Version / commit</strong></td>
+<td><code>8dc8044</code> (main, 2026-06-30)</td>
+</tr>
+<tr>
+<td><strong>Traces to</strong></td>
+<td>SCN-001 v0.1 (DR-001 through DR-006), SMV-001 v0.1</td>
 </tr>
 <tr>
 <td><strong>Tested by</strong></td>
-<td>qa-engineer (Linh) - independent</td>
+<td>Linh (qa-engineer) - did NOT write the detector</td>
 </tr>
 <tr>
 <td><strong>Date</strong></td>
-<td>2026-06-27</td>
+<td>2026-06-30</td>
 </tr>
 <tr>
-<td><strong>Overall (as-found)</strong></td>
-<td>PASS-WITH-GAPS - 3 defects · <em>(pre-fix; see delivery report for resolved state)</em></td>
+<td><strong>Overall</strong></td>
+<td>Ready with notes - detector logic passes all 41 tests; one pre-existing QA file defect resolved (DEF-QA-001); obligation mapping remains PROVISIONAL pending SME open questions (not a code defect)</td>
 </tr>
 </tbody>
 </table>
-<h2 id="1-execution">1. Execution</h2>
-<p>Dev suite 3/3, plus an independent QA suite (boundaries, exemptions, multi-instrument, missing
-snapshot, same-account, cross-UBO) - all pass. Synthetic only.</p>
-<h2 id="2-what-the-dev-tests-cover">2. What the dev tests cover</h2>
-<p>True-positive (off-market, same UBO), false-positive (at-market suppressed), stale-UBO raises.
-Nothing else - the QA suite adds the branch coverage below.</p>
-<h2 id="3-defects-found-as-found">3. Defects found (as-found)</h2>
-<ul>
-<li><strong>DEF-001 (MEDIUM):</strong> a missing market snapshot <strong>silently drops</strong> qualifying pairs - no log, no
-  counter. In production a feed outage becomes an invisible surveillance gap. <em>(Fixed → now logged as
-  a data-quality warning.)</em></li>
-<li><strong>DEF-002 (LOW):</strong> the buy-date-vs-sell-date snapshot tie-break (<code>or</code>) was undocumented. <em>(Fixed →
-  buy-leg date governs, documented + tested.)</em></li>
-<li><strong>DEF-003 (LOW):</strong> <code>quantity</code> is captured but never matched - an asymmetric pair (1 share vs 1M)
-  alerts identically; no notional floor. <em>(Deferred → <code>min_notional</code> is a required tuning param.)</em></li>
-</ul>
-<h2 id="4-coverage-gaps-residual-risk-as-found">4. Coverage gaps / residual risk (as-found)</h2>
-<p>Exempt-account path, lookback &amp; staleness boundaries, cross-UBO/cross-instrument negatives, alert-id
-collision on intraday re-runs, and O(B×S) volume behaviour were untested by the dev suite. Residual:
-real UBO-feed integration, threshold calibration, the obligation mapping (SME blockers).</p>
-<h2 id="5-verdict-as-found-pass-with-gaps-not-production-ready">5. Verdict (as-found): PASS-WITH-GAPS - not production-ready</h2>
-<p>Top tests to add (now in the QA suite): missing-snapshot observability, staleness/lookback boundaries,
-exemption path. Deploy gates (calibration, real-data, sign-off) remain open by design.</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: qa-handover.md &middot; 2026-06-28</div>
+<hr>
+<h2 id="1-test-execution-summary">1. Test execution summary</h2>
+<table>
+<thead>
+<tr>
+<th>Suite</th>
+<th>File</th>
+<th>Tests</th>
+<th>Passed</th>
+<th>Failed</th>
+<th>Skipped</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Developer (Mateo)</td>
+<td><code>test_ts001_wash_trade.py</code></td>
+<td>10</td>
+<td>10</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Independent QA (Linh)</td>
+<td><code>test_ts001_qa.py</code></td>
+<td>31</td>
+<td>31</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>Combined</strong></td>
+<td>both</td>
+<td><strong>41</strong></td>
+<td><strong>41</strong></td>
+<td><strong>0</strong></td>
+<td><strong>0</strong></td>
+</tr>
+</tbody>
+</table>
+<p>All results are 📊 measured (executed on the actual code, not inferred).</p>
+<p><strong>Acceptance threshold:</strong> zero failed tests; all true-positive and false-positive acceptance
+criteria cases covered. Threshold: <strong>met</strong>.</p>
+<h3 id="how-to-reproduce-exact-commands">How to reproduce (exact commands)</h3>
+<pre><code class="language-bash"># Environment: Python 3.12.3, pytest 9.0.1, platform linux
+# From repo root - detector and tests both live in docs/demos/build-artifacts/
+
+cd /home/daniel/www/virt-survtecb/docs/demos/build-artifacts
+
+# Developer suite only
+python3 -m pytest test_ts001_wash_trade.py -v
+
+# Independent QA suite only
+python3 -m pytest test_ts001_qa.py -v
+
+# Both suites together (recommended for CI)
+python3 -m pytest test_ts001_wash_trade.py test_ts001_qa.py -v
+</code></pre>
+<p>No additional dependencies beyond the repo standard environment.
+All fixtures are fully synthetic (CLAUDE.md §5); no real data is required.</p>
+<hr>
+<h2 id="2-environment-and-test-data">2. Environment and test data</h2>
+<p><strong>Environment:</strong>
+- Python 3.12.3
+- pytest 9.0.1, pluggy 1.6.0
+- Platform: linux (open-codeserver)
+- Commit: <code>8dc8044</code></p>
+<p><strong>Test data provenance:</strong>
+All trade IDs, account IDs, UBO group IDs, instrument identifiers and notionals are wholly
+synthetic (naming convention: <code>SYNTH-EQ-QA-*</code>, <code>ACCT-A/B/C/D</code>, <code>UBO-QA-X/Y</code>,
+<code>MM-ACCT-QA-001</code>). Market snapshot parameters (mid=100.0, spread=5.0 bps) are illustrative
+round numbers chosen for clear boundary arithmetic, not derived from real market data. Exact
+float values for boundary tests (e.g., <code>price=100.05</code> yields <code>normalised=0.9999...</code> in IEEE 754)
+were verified by a pre-write Python 3.12 arithmetic check before the tests were authored.</p>
+<hr>
+<h2 id="3-coverage">3. Coverage</h2>
+<h3 id="3a-what-is-covered-measured-combined-41-tests">3a. What is covered (📊 measured - combined 41 tests)</h3>
+<table>
+<thead>
+<tr>
+<th>Detection requirement</th>
+<th>Mateo's tests</th>
+<th>Linh's tests</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DR-001: cross-account off-market same-UBO pair -&gt; alert</td>
+<td>test_tp_cross_account_off_market_same_ubo</td>
+<td>TestAlertFields::test_alert_carries_all_mandatory_obligation_fields</td>
+<td>Obligation fields asserted independently</td>
+</tr>
+<tr>
+<td>DR-001: single-account both-sides wash</td>
+<td>test_tp_single_account_both_sides</td>
+<td>-</td>
+<td>SCN-001 §3 in-scope variant; Mateo's coverage sufficient</td>
+</tr>
+<tr>
+<td>DR-001: multi-day pair within lookback</td>
+<td>test_tp_off_market_within_lookback_not_same_day</td>
+<td>TestLookbackWindowBoundary (2 tests)</td>
+<td>Mateo tests interior; Linh adds at-boundary and over-boundary</td>
+</tr>
+<tr>
+<td>DR-001: cross-instrument isolation</td>
+<td>-</td>
+<td>TestMultiplePairs::test_cross_instrument_pairs_are_not_formed</td>
+<td>NEW</td>
+</tr>
+<tr>
+<td>DR-001: cross-UBO-group isolation</td>
+<td>test_fp_coincident_independent_orders_liquid_price</td>
+<td>TestMultiplePairs::test_cross_ubo_group_does_not_pair</td>
+<td>NEW independent assertion</td>
+</tr>
+<tr>
+<td>DR-001: full cross-product 2x2 pairing</td>
+<td>-</td>
+<td>TestMultiplePairs::test_two_buys_two_sells_same_ubo_full_cross_product</td>
+<td>NEW</td>
+</tr>
+<tr>
+<td>DR-002: at-market fails necessary condition</td>
+<td>test_fp_affiliated_funds_at_market</td>
+<td>TestSpreadMultipleBoundary (5 tests)</td>
+<td>NEW: at-threshold, above, below, dynamic boundary, asymmetric avg</td>
+</tr>
+<tr>
+<td>DR-003: MM strategy tag suppressed + logged</td>
+<td>test_fp_designated_mm_strategy_tagged_cross</td>
+<td>TestSafeHarbour (3 tests)</td>
+<td>NEW: account register, RISKLESS_PRINCIPAL tag, non-exempt tag does not suppress</td>
+</tr>
+<tr>
+<td>DR-004: immaterial notional no alert</td>
+<td>test_fp_immaterial_notional</td>
+<td>TestNotionalBoundary (3 tests)</td>
+<td>NEW: exact-at-floor, just-below, smaller-leg governs</td>
+</tr>
+<tr>
+<td>DR-005: stale UBO -&gt; DQ warning no alert</td>
+<td>test_fp_stale_ubo_graph_warns_no_alert</td>
+<td>TestUboFreshnessBoundary (3 tests)</td>
+<td>NEW: at-limit (not stale), over-limit, partial-stale (one excluded, rest intact)</td>
+</tr>
+<tr>
+<td>DR-006: implied-match disabled raises</td>
+<td>test_implied_match_tier_disabled_raises</td>
+<td>-</td>
+<td>Mateo's coverage sufficient</td>
+</tr>
+<tr>
+<td>Missing snapshot -&gt; DQ warning</td>
+<td>test_no_snapshot_is_dq_warning_not_alert</td>
+<td>TestSnapshotFallback (2 tests)</td>
+<td>NEW: also tests buy-date-absent fallback path</td>
+</tr>
+<tr>
+<td>Zero / negative spread -&gt; DQ warning</td>
+<td>-</td>
+<td>TestZeroAndNegativeSpread (2 tests)</td>
+<td>NEW</td>
+</tr>
+<tr>
+<td>Empty/edge inputs no crash</td>
+<td>-</td>
+<td>TestEdgeInputs (5 tests)</td>
+<td>NEW: empty trades, empty UBO, fully empty, unknown side, orphan account</td>
+</tr>
+<tr>
+<td>Alert ID sequential + date-embedded</td>
+<td>-</td>
+<td>TestAlertFields::test_alert_ids_are_sequential_and_embed_as_of_date</td>
+<td>NEW</td>
+</tr>
+<tr>
+<td>Alert field arithmetic consistency</td>
+<td>-</td>
+<td>TestAlertFields::test_alert_spread_deviation_arithmetic_consistency</td>
+<td>NEW</td>
+</tr>
+</tbody>
+</table>
+<h3 id="3b-what-is-not-covered-and-why-honest-gap-register">3b. What is NOT covered (and why) - 📊 honest gap register</h3>
+<table>
+<thead>
+<tr>
+<th>Gap</th>
+<th>Risk level</th>
+<th>Why not covered</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>At-market wash trading (volume inflation without price signal)</strong></td>
+<td>High (accepted design gap)</td>
+<td>DR-002 discards at-market pairs by design (SMV-001 §1.2). Not a code defect. Candidate future scenario TS-003.</td>
+</tr>
+<tr>
+<td><strong><code>mid_price &lt;= 0</code> silent discard</strong></td>
+<td>Medium</td>
+<td>No DQ warning in this code path (see NOTE-001). The case produces 0-deviation -&gt; pair silently dropped. Untested because there is nothing to assert on from the outside.</td>
+</tr>
+<tr>
+<td><strong>Performance / volume stress</strong></td>
+<td>Medium for production</td>
+<td>No test with &gt;100 trades. O(B*S) complexity within a large UBO group is untested. 🧠 Inferred acceptable for demo scale.</td>
+</tr>
+<tr>
+<td><strong>Sub-second / intraday timing</strong></td>
+<td>Medium for production</td>
+<td>Detector uses date granularity (demo assumption). Production asset-class-specific intraday windows are not implemented or tested.</td>
+</tr>
+<tr>
+<td><strong>Obligation string correct against EUR-Lex primary source</strong></td>
+<td>Regulatory risk</td>
+<td>Automated tests assert the string IS present as <code>"EU MAR Art.12(1)(a)"</code>. Whether this matches the current EUR-Lex text is a human-only verification.</td>
+</tr>
+<tr>
+<td><strong>PROVISIONAL status process control</strong></td>
+<td>Regulatory risk</td>
+<td>Tests assert status IS "PROVISIONAL". Cannot automate the control that it must NOT be upgraded without sign-off. This is a process/governance control.</td>
+</tr>
+<tr>
+<td><strong>Safe-harbour register lapse (false-negative risk)</strong></td>
+<td>Operational</td>
+<td>Register is a static frozenset in tests. Lapsed MM designation in a live feed is a data/process risk, not code.</td>
+</tr>
+<tr>
+<td><strong>Affiliated-fund FP volume (Q4 open)</strong></td>
+<td>High structural risk</td>
+<td>Cannot be tested until Q4 (connected-party width) is resolved. Structural, not testable with current schema.</td>
+</tr>
+<tr>
+<td><strong>DR-006 implied-match tier logic</strong></td>
+<td>Deferred (off at launch)</td>
+<td>Tier disabled per SME Q5. Guard tested (Mateo). Logic unimplemented; cannot be tested.</td>
+</tr>
+<tr>
+<td><strong>Integration with live upstream feeds</strong></td>
+<td>Out of scope (demo)</td>
+<td>All tests are unit-level with synthetic data.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="3c-residual-risk">3c. Residual risk</h3>
+<ol>
+<li>
+<p><strong>Silent suppression when <code>mid_price &lt;= 0</code></strong> - A data-quality fault producing mid=0 will cause
+   all pairs on that instrument to be silently discarded with no DQ warning. The <code>spread &lt;= 0</code>
+   case is guarded; <code>mid &lt;= 0</code> is not. Recommend hardening before connecting to a live market data
+   feed (see NOTE-001).</p>
+</li>
+<li>
+<p><strong>O(n^2) pairing complexity</strong> - In a large deployment with many UBO-linked accounts, the
+   cross-product of buys and sells could produce very large alert volumes. 🧠 Inferred as acceptable
+   for demo; must be benchmarked before production deployment.</p>
+</li>
+<li>
+<p><strong>Obligation mapping is PROVISIONAL</strong> - A standing regulatory risk (not a code risk). All alerts
+   carry <code>obligation_status = "PROVISIONAL"</code>. Correct per spec. Must not be changed without
+   SME Q1/Q3/Q4 resolution and register verification.</p>
+</li>
+</ol>
+<hr>
+<h2 id="4-defects-and-known-issues-as-found">4. Defects and known issues (as-found)</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Severity</th>
+<th>Description</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DEF-QA-001</td>
+<td>Medium</td>
+<td><strong>Pre-existing <code>test_ts001_qa.py</code> entirely non-functional.</strong> The file imported <code>UBOGraphStaleError</code> (does not exist in the detector), used wrong argument order, and used wrong <code>DetectionParams</code> field name (<code>off_market_threshold_bps</code> vs <code>off_market_spread_multiple</code>). Failure mode: <code>ImportError</code> at pytest collection - surfaces as a collection error, not a test failure, making it easy to overlook in CI. Zero coverage was provided.</td>
+<td>✅ Resolved - overwritten with this 31-test independent suite.</td>
+</tr>
+<tr>
+<td>NOTE-001</td>
+<td>Informational</td>
+<td><strong><code>mid_price &lt;= 0</code> produces no DQ warning.</strong> When a market snapshot has <code>mid_price=0</code> or negative, <code>_price_deviation_bps</code> returns <code>0.0</code>, <code>normalised=0</code>, and the pair is silently discarded via the DR-002 early-continue. No DQ warning is raised, unlike the analogous <code>spread &lt;= 0</code> guard. This is not a defect against the current spec (which does not require a mid-price guard) but is a hardening gap for production.</td>
+<td>Open - recommend raising with builder as a pre-production hardening item. Not a demo blocker.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="5-items-for-the-qa-team-to-note-and-re-verify">5. Items for the QA team to note and re-verify</h2>
+<p>The following require human review and cannot be fully verified by automated test.</p>
+<h3 id="5a-regulatory-and-obligation-mapping">5a. Regulatory and obligation mapping</h3>
+<ol>
+<li>
+<p><strong>Verify obligation reference string against EUR-Lex primary source.</strong> The alert carries
+   <code>obligation_reference = "EU MAR Art.12(1)(a)"</code>. Tests assert the string is present.
+   A human reviewer must verify this against the current EUR-Lex text of Regulation (EU) No 596/2014
+   before any alert enters a regulatory report or STOR. The citation is in
+   <code>config/regulatory-register.yaml</code> with <code>status: verified</code>; confirm the register entry is current.</p>
+</li>
+<li>
+<p><strong>PROVISIONAL status must remain until SME blockers resolved.</strong> Tests assert alerts carry
+   <code>obligation_status = "PROVISIONAL"</code>. Per SMV-001 §5, this must not be upgraded without signed
+   Legal/Compliance decisions on Q1 (regime/venue scope), Q3 (intragroup treatment) and Q4
+   (connected-party width), plus human verification and register addition of all TO-VERIFY citations.
+   This is a process control for the QA team, not an automated gate.</p>
+</li>
+<li>
+<p><strong>MAR Art.12(2)(c) indicator not in register.</strong> Cited conceptually in the spec (TO-VERIFY, 🧠).
+   Must not appear in alert fields, STORs or regulatory reports until verified and added to the
+   register. The detector does not reference it in alert fields; confirm no downstream processing
+   promotes it.</p>
+</li>
+<li>
+<p><strong>All non-EU-MAR jurisdiction equivalents are TO-VERIFY (🧠).</strong> UK MAR, FINRA 6140, CFTC CEA,
+   SG SFA, HK SFO, JP FIEA - all absent from the register. The detector does not reference them.
+   Confirm this remains the case in any downstream alert management system.</p>
+</li>
+</ol>
+<h3 id="5b-threshold-calibration">5b. Threshold calibration</h3>
+<ol>
+<li>
+<p><strong>All thresholds carry <code>tuning_date: TBD</code>.</strong> <code>DEFAULT_LOOKBACK_DAYS=1</code>,
+   <code>DEFAULT_OFF_MARKET_SPREAD_MULTIPLE=1.0</code>, <code>DEFAULT_MIN_PAIR_NOTIONAL=10000.0</code>,
+   <code>DEFAULT_UBO_GRAPH_MAX_AGE_DAYS=90</code> are all uncalibrated starting points. Tests verify the
+   detector respects these values; they do not validate the values are appropriate. Tuning-analyst
+   (Theo) must calibrate against evidence before go-live.</p>
+</li>
+<li>
+<p><strong>Boundary semantics of the off-market threshold.</strong> At exactly <code>normalised == threshold</code>, the
+   condition <code>normalised &lt;= threshold</code> fires (no alert - a false negative at the boundary). The spec
+   says "more than the configured threshold" (implying strict <code>&gt;</code>), which is consistent with the
+   current <code>&lt;=</code> early-continue. Confirm with Camila this boundary interpretation is intended.</p>
+</li>
+</ol>
+<h3 id="5c-operational-hardening">5c. Operational hardening</h3>
+<ol>
+<li>
+<p><strong>mid_price &lt;= 0 silent discard (NOTE-001).</strong> A data-feed fault producing mid=0 suppresses pairs
+   without a DQ warning. Before live market data connection, add a mid-price guard with DQ warning
+   analogous to the existing spread guard.</p>
+</li>
+<li>
+<p><strong>DQ warnings must feed an operational dashboard.</strong> DR-005 stale-graph warnings and missing-
+   snapshot warnings are returned in <code>result.data_quality_warnings</code>. In production, these must flow
+   to a data-quality monitoring tool so persistent gaps surface to a data owner, not just into
+   application logs.</p>
+</li>
+<li>
+<p><strong>Safe-harbour register update process.</strong> The static <code>exempt_account_ids</code> register must in
+   production be sourced from a maintained feed with a defined review cycle (SMV-001 Q2). A lapsed
+   MM designation creates a false-negative. Confirm the operational process is defined before go-live.</p>
+</li>
+<li>
+<p><strong>Q4 affiliated-fund structural risk.</strong> If Q4 resolves the UBO boundary at management-company
+    level rather than fund level, affiliated-fund FP volume could be operationally disabling. This
+    structural risk must be resolved in Q4 before any production deployment sign-off; it cannot be
+    mitigated by threshold tuning.</p>
+</li>
+</ol>
+<hr>
+<h2 id="disposition-tally">Disposition tally</h2>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Count</th>
+<th>Items</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>✅ Resolved</td>
+<td>1</td>
+<td>DEF-QA-001 (broken prior QA file, overwritten)</td>
+</tr>
+<tr>
+<td>🔴 Open defect / blocker</td>
+<td>0</td>
+<td>None</td>
+</tr>
+<tr>
+<td>⏭️ Deferred / needs-input</td>
+<td>1</td>
+<td>NOTE-001 (mid&lt;=0 silent discard - pre-production hardening)</td>
+</tr>
+<tr>
+<td>⚖️ Accepted / by-design</td>
+<td>3</td>
+<td>At-market wash trading gap (DR-002 design), O(n^2) complexity, PROVISIONAL obligation status</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Disposition tally:</strong> ✅ 1 Resolved · 🔴 0 Open · ⏭️ 1 Deferred · ⚖️ 3 Accepted.</p>
+<p><strong>QA verdict: Ready with notes.</strong> All 41 automated tests pass. No open defects in the detector
+implementation. DEF-QA-001 resolved. All residual items are accepted-by-design, deferred
+pre-production hardening, or regulatory-mapping items requiring human review - none block the demo
+deliverable.</p>
+<hr>
+<h2 id="sign-off">Sign-off</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td>Linh (qa-engineer)</td>
+<td>QA pass complete. Evidence above is as-found.</td>
+<td>2026-06-30</td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Human approver</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: qa-handover.md &middot; 2026-06-30</div>
 </body>
 </html>

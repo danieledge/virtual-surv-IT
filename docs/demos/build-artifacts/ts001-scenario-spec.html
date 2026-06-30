@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Scenario Spec - TS-001 Wash Trade / Self-Match (DEMO, Run 2)</title>
+<title>Scenario Spec - TS-001 Wash Trade / Self-Match (DEMO)</title>
 <style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
@@ -50,100 +50,432 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-28</span></header>
-<h1 id="scenario-spec-ts-001-wash-trade-self-match-demo-run-2">Scenario Spec - TS-001 Wash Trade / Self-Match (DEMO, Run 2)</h1>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-30</span></header>
+<h1 id="scenario-spec-ts-001-wash-trade-self-match-demo">Scenario Spec - TS-001 Wash Trade / Self-Match (DEMO)</h1>
 <blockquote>
-<p>Produced by <code>business-analyst</code> (Amara). Obligation: <strong>MAR Art 12(1)(a)</strong>. Synthetic only (§5).
-Status: <strong>SME-validated; open questions dispositioned (§9); obligation mapping PROVISIONAL.</strong></p>
+<p>Produced by <code>business-analyst</code> (Amara). Synthetic data only (§5). DEMO artefact.</p>
+<p><strong>Document control</strong> · ID <code>SCN-001</code> · Version <code>0.1</code> · Status <code>Draft</code>
+· Classification <code>Internal</code> · Owner <code>business-analyst (Amara)</code> · As-of <code>2026-06-30</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-06-30</td>
+<td>Amara</td>
+<td>Initial draft</td>
+</tr>
+</tbody>
+</table>
 </blockquote>
-<h2 id="1-behaviour">1. Behaviour</h2>
-<p>A trader or connected group submits offsetting buy/sell orders in the same instrument that match
-against each other, creating artificial volume or a false price signal with no genuine change in
-economic exposure.</p>
+<hr>
+<h2 id="1-need-trigger">1. Need / trigger</h2>
+<p>Regulators and internal compliance require that the firm detect wash trading and self-matching
+conduct: the submission of offsetting buy and sell orders by a trader or economically connected
+group that match against each other, generating artificial volume or a false price signal while
+producing no genuine change in beneficial ownership or economic risk. Left undetected, this
+conduct exposes the firm to regulatory censure, reputational damage and potential civil or
+criminal liability. A detective control is required to identify matched pairs and generate an
+explainable, obligation-traceable alert for review.</p>
+<hr>
 <h2 id="2-regulatory-obligation">2. Regulatory obligation</h2>
-<p>Primary: <strong>EU MAR Art 12(1)(a)</strong> (false/misleading signals as to supply, demand or price), with
-Art 12(2)(c) "no change in beneficial ownership" indicator. Equivalents: UK MAR Art 12; US SEC 10b-5 /
-FINRA 6140; CFTC CEA s.4c(a); SG SFA s.197; HK SFO s.274; JP FIEA Art 159.</p>
+<p><strong>Primary obligation:</strong> EU MAR Art.12(1)(a) - transactions, orders to trade or other behaviour
+that give, or are likely to give, false or misleading signals as to the supply of, demand for,
+or price of a financial instrument. (<code>obligation_status = PROVISIONAL</code> - see flag below.)</p>
+<p><strong>Indicator:</strong> EU MAR Art.12(2)(c) - transactions or orders where there is no change in
+beneficial ownership. <code>TO-VERIFY (🧠)</code> - Art.12(2)(c) is not yet in <code>config/regulatory-register.yaml</code>;
+add and verify against the primary source before obligation mapping is finalised.</p>
+<p><strong>Jurisdiction equivalents (all <code>TO-VERIFY (🧠)</code> - not in the register; confirm pinpoints
+against primary sources before going live in those regimes):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Regime</th>
+<th>Pinpoint</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UK MAR</td>
+<td>UK MAR Art.12(1)(a)</td>
+<td>TO-VERIFY (🧠)</td>
+</tr>
+<tr>
+<td>US (SEC)</td>
+<td>SEC Rule 10b-5 (Exchange Act s.10(b))</td>
+<td>TO-VERIFY (🧠)</td>
+</tr>
+<tr>
+<td>US (FINRA)</td>
+<td>FINRA Rule 6140</td>
+<td>TO-VERIFY (🧠)</td>
+</tr>
+<tr>
+<td>US (CFTC)</td>
+<td>CEA s.4c(a)</td>
+<td>TO-VERIFY (🧠)</td>
+</tr>
+<tr>
+<td>SG</td>
+<td>SFA s.197</td>
+<td>TO-VERIFY (🧠)</td>
+</tr>
+<tr>
+<td>HK</td>
+<td>SFO s.274</td>
+<td>TO-VERIFY (🧠)</td>
+</tr>
+<tr>
+<td>JP</td>
+<td>FIEA Art.159</td>
+<td>TO-VERIFY (🧠)</td>
+</tr>
+</tbody>
+</table>
 <blockquote>
-<p><strong>FLAG (resolved in §9):</strong> the obligation mapping above is illustrative - the SME must confirm
-which desks/venues fall under which regime and which safe-harbours apply <strong>before</strong> the mapping is
-finalised. Until then the detector carries <code>obligation_status = PROVISIONAL</code>.</p>
+<p><strong>PROVISIONAL flag (ADR-001):</strong> the obligation mapping above is illustrative. The
+<code>trade-surveillance-sme</code> (Camila) must confirm which desks, venues and domiciles fall under
+which regime and which safe-harbours apply before this mapping is finalised. Until then the
+detector carries <code>obligation_status = PROVISIONAL</code> in every alert. The citation <code>MAR Art.12(1)(a)</code>
+is <code>status: verified</code> in the register; all others must be added and verified.</p>
 </blockquote>
-<h2 id="3-data-required">3. Data required</h2>
-<p>Trade/order id, instrument id, side, price, quantity/notional, timestamps, trader/desk id, account &amp;
-legal-entity id, counterparty id, venue, strategy/algo tag. Plus: UBO/connected-party graph (with
-as-of date) and a market snapshot (mid + prevailing spread) per instrument/date. <em>Contains PII/MNPI -
-fixtures are synthetic only (§5).</em></p>
-<h2 id="4-detection-logic-outline-no-thresholds">4. Detection-logic outline (no thresholds)</h2>
-<ol>
-<li>Pair opposing buy/sell legs in the same instrument where accounts share a <strong>UBO / connected-party
-   group</strong>, within a lookback window.</li>
-<li><strong>Off-market price is a NECESSARY condition</strong> (SME-confirmed) - the average leg price must deviate
-   from the prevailing mid beyond a (spread-normalised) threshold; implement as an early-continue.</li>
-<li>Apply a <strong>safe-harbour exemption</strong> set (designated market-makers) <em>before</em> pairing.</li>
-<li>Raise an explainable alert carrying the matched pair, UBO id, deviation, and the obligation (+status).</li>
-</ol>
-<h2 id="5-parameters-sme-tuning-decisions-no-invented-values">5. Parameters (SME / tuning decisions - no invented values)</h2>
-<p><code>lookback_days</code> · <code>off_market_threshold_bps</code> (spread-normalised) · <code>min_notional</code> (required - see tuning
-pack) · <code>ubo_graph_max_age_days</code> (data-quality gate) · connected-party definition · safe-harbour list.</p>
-<h2 id="6-examples-synthetic">6. Examples (synthetic)</h2>
-<ul>
-<li><strong>True-positive:</strong> ACCT-A buys, ACCT-B sells SYNTH-EQ-001 (same UBO-X) at 100.60 vs mid 100.00 (60bps
-  off-market), same day → alert.</li>
-<li><strong>False-positive:</strong> designated MM (MM-ACCT-001) two-sided quote fills at mid → suppressed (off-market
-  necessary condition + exemption).</li>
-</ul>
-<h2 id="7-acceptance-criteria-gherkin">7. Acceptance criteria (Gherkin)</h2>
-<pre><code class="language-gherkin">Scenario: Cross-account self-match, off-market, same UBO -&gt; alert
-  Given opposing legs in one instrument from two accounts sharing a UBO group
-  And the price is off-market beyond the threshold within the lookback window
-  And neither account is exempt
-  Then an alert is raised carrying both trade ids, the UBO id, the deviation and the obligation
+<p><strong>Control mapping:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Obligation</th>
+<th>Control ID</th>
+<th>Control name</th>
+<th>Control type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EU MAR Art.12(1)(a)</td>
+<td>CTRL-TS-001</td>
+<td>Wash trade / self-match detection</td>
+<td>Detective</td>
+</tr>
+<tr>
+<td>EU MAR Art.12(2)(c) (TO-VERIFY)</td>
+<td>CTRL-TS-001</td>
+<td>Same as above (indicator)</td>
+<td>Detective</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="3-typology-behaviour">3. Typology / behaviour</h2>
+<p>A trader or economically connected group (sharing a UBO or connected-party relationship)
+submits opposing buy and sell orders in the same instrument. The orders match against each
+other - either on the same venue (direct self-match) or arranged across accounts - creating the
+appearance of genuine market activity: inflated volume and/or a price signal. Because the same
+beneficial owner is on both sides, no real transfer of economic risk occurs.</p>
+<p>Key behavioural indicators:
+- Opposing legs in the same instrument within a short lookback window.
+- Counterparty accounts linked by a common UBO or connected-party relationship.
+- Execution price that deviates from the prevailing market mid beyond the spread (off-market
+  price is a <strong>necessary condition</strong>, not a scored factor - see DR-002).
+- No legitimate economic rationale (e.g., not a designated market-maker, not a riskless-principal).</p>
+<p>Variant in scope: single-account wash (one account takes both sides if the venue permits).
+Variant out of scope (separate scenario): pre-arranged trade via an unconnected counterparty
+(requires comms/network analysis - defer to TS-002; see §7).</p>
+<hr>
+<h2 id="4-data-requirements">4. Data requirements</h2>
+<p>All fields containing personal or firm identifiers, account numbers or trade details are
+classified <strong>PII / potentially MNPI</strong>. No real records may appear in this repository; all
+fixtures must be fully synthetic (§5).</p>
+<table>
+<thead>
+<tr>
+<th>Field group</th>
+<th>Fields required</th>
+<th>Source system (indicative)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Trade / order identity</td>
+<td>trade_id, order_id</td>
+<td>OMS / execution system</td>
+</tr>
+<tr>
+<td>Instrument</td>
+<td>instrument_id, asset_class, venue</td>
+<td>Reference data</td>
+</tr>
+<tr>
+<td>Economics</td>
+<td>side (buy/sell), price, quantity, notional, currency</td>
+<td>OMS / trade blotter</td>
+</tr>
+<tr>
+<td>Timing</td>
+<td>order_timestamp, execution_timestamp</td>
+<td>OMS</td>
+</tr>
+<tr>
+<td>Parties</td>
+<td>trader_id, desk_id, account_id, legal_entity_id, counterparty_id</td>
+<td>CRM / entity master</td>
+</tr>
+<tr>
+<td>Classification</td>
+<td>strategy_tag, algo_tag</td>
+<td>OMS / algo system</td>
+</tr>
+<tr>
+<td>Ownership graph</td>
+<td>UBO_group_id, connected_party_flag, graph_as_of_date</td>
+<td>Ownership / BO registry</td>
+</tr>
+<tr>
+<td>Market snapshot</td>
+<td>mid_price, prevailing_spread_bps, snapshot_timestamp</td>
+<td>Market data feed</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="5-detection-requirements-ears">5. Detection requirements (EARS)</h2>
+<p>Thresholds (<code>lookback_days</code>, <code>off_market_threshold_bps</code>, <code>min_notional</code>,
+<code>ubo_graph_max_age_days</code>) are SME / tuning-analyst decisions and must not be invented here;
+each is flagged as a tuning decision below.</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Detection requirement (EARS)</th>
+<th>Rationale / source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DR-001</td>
+<td>When two or more trade or order records in the same instrument are identified within the configured lookback window, the system shall group them by UBO/connected-party group (using the ownership graph, filtered to records where <code>graph_as_of_date</code> is within the freshness limit) and pair opposing buy/sell legs within each group.</td>
+<td>Typology §3; UBO graph requirement - Q3/Q4 open (§7). <code>lookback_days</code> = tuning decision.</td>
+</tr>
+<tr>
+<td>DR-002</td>
+<td>When a candidate pair is identified under DR-001, the system shall apply the off-market price test as an <strong>early-continue</strong>: if the average execution price of the pair does not deviate from the prevailing mid by more than the configured spread-normalised threshold, the system shall immediately discard the pair and generate no alert.</td>
+<td>Off-market price is a necessary condition (not a score); prevents at-market fills from alerting. <code>off_market_threshold_bps</code> = tuning decision (spread-normalised).</td>
+</tr>
+<tr>
+<td>DR-003</td>
+<td>When a candidate pair passes DR-002, the system shall check each account against the current safe-harbour exemption register; if either account is exempt (e.g., designated market-maker, riskless-principal), the system shall suppress the alert for that pair and log the suppression reason.</td>
+<td>Safe-harbour pre-filter; Q1/Q2 open (§7). Exemption list = deployment/SME decision.</td>
+</tr>
+<tr>
+<td>DR-004</td>
+<td>When a candidate pair passes DR-002 and DR-003, and the notional value of the pair meets or exceeds the configured minimum notional floor, the system shall raise an alert containing: both trade/order identifiers, instrument identifier, UBO/connected-party group identifier, spread-normalised price deviation, <code>obligation_status</code>, and the applicable obligation reference(s).</td>
+<td>Alert content must be explainable and obligation-traceable (CLAUDE.md §4). <code>min_notional</code> = risk-appetite / tuning decision.</td>
+</tr>
+<tr>
+<td>DR-005</td>
+<td>When the <code>graph_as_of_date</code> of the ownership graph for an account exceeds the configured freshness limit, the system shall exclude that account's pairs from alert generation and raise a data-quality warning.</td>
+<td>Stale UBO data creates false negatives; data-quality gate. <code>ubo_graph_max_age_days</code> = tuning decision.</td>
+</tr>
+<tr>
+<td>DR-006</td>
+<td>When an opposing-leg pair is identified by UBO/connected-party grouping but no confirmed fill record exists for one leg (implied match), the system shall, if the implied-match tier is enabled, raise a lower-confidence alert with a distinct <code>confidence_tier</code> label and apply a tighter lookback window for that tier.</td>
+<td>Implied match is a valid lower-confidence variant; see Q5 (§7). Tier enablement and tighter window = SME/tuning decision.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="6-acceptance-criteria-gherkin">6. Acceptance criteria (Gherkin)</h2>
+<p>All identifiers and prices below are <strong>synthetic</strong> (§5).</p>
+<pre><code class="language-gherkin">Feature: TS-001 Wash trade / self-match detection
 
-Scenario: At-market price -&gt; no alert (necessary condition)
-  Given the same UBO-linked opposing legs priced at mid
-  Then no alert is raised
+  # --- True-positive scenarios (MUST alert) ---
+
+  Scenario: Off-market cross-account self-match, same UBO group -&gt; alert
+    Given account ACCT-SYNTH-A and ACCT-SYNTH-B share UBO group UBO-SYNTH-X (graph current)
+    And ACCT-SYNTH-A places a buy order on SYNTH-EQ-001 at price 100.60
+    And ACCT-SYNTH-B places a sell order on SYNTH-EQ-001 at price 100.60
+    And the prevailing mid is 100.00 and the spread is 5 bps
+    And the orders execute within the configured lookback window
+    And neither account appears on the safe-harbour exemption register
+    And the paired notional meets the minimum notional floor
+    Then the system raises an alert for the pair
+    And the alert carries both trade identifiers, UBO-SYNTH-X, the spread-normalised deviation,
+        the applicable obligation reference, and obligation_status = PROVISIONAL
+
+  Scenario: Same-account wash trade (single account, both sides) -&gt; alert
+    Given account ACCT-SYNTH-C is on both sides of a matched trade in SYNTH-EQ-002
+    And the execution price is off-market beyond the configured threshold
+    And the account is not exempt
+    Then the system raises an alert
+
+  # --- False-positive controls (MUST NOT alert) ---
+
+  Scenario: At-market price - necessary condition fails -&gt; no alert
+    Given account ACCT-SYNTH-A and ACCT-SYNTH-B share UBO group UBO-SYNTH-X
+    And the opposing legs execute at the prevailing mid (within spread)
+    Then the system discards the pair via the early-continue (DR-002) and raises no alert
+
+  Scenario: Designated market-maker exemption -&gt; no alert
+    Given account MM-ACCT-SYNTH-001 is listed on the safe-harbour exemption register
+    And MM-ACCT-SYNTH-001 provides a two-sided quote that fills at an off-market price
+    Then the system suppresses the alert and logs the suppression reason (DR-003)
+
+  Scenario: Stale UBO graph -&gt; data-quality warning, no alert
+    Given the ownership graph for ACCT-SYNTH-D has a graph_as_of_date beyond the freshness limit
+    Then the system raises a data-quality warning and excludes ACCT-SYNTH-D's pairs from alerts (DR-005)
+
+  Scenario: Implied match, lower-confidence tier enabled -&gt; lower-confidence alert
+    Given ACCT-SYNTH-A and ACCT-SYNTH-B are UBO-linked
+    And no confirmed fill exists for ACCT-SYNTH-B's leg (implied match)
+    And the implied-match tier is enabled
+    Then the system raises an alert with confidence_tier = LOWER_CONFIDENCE and a distinct label
 </code></pre>
-<h2 id="8-open-questions-for-the-sme">8. Open questions for the SME</h2>
-<p>Q1 jurisdiction scope + safe-harbours · Q2 safe-harbour operationalisation · Q3 intra-group/treasury
-treatment · Q4 connected-party definition · Q5 implied-match where no fill confirmation · Q6 cover the
-pre-arranged-via-connected-counterparty variant?</p>
-<h2 id="9-open-questions-disposition-decision-log-trade-surveillance-sme-camila-2026-06-27">9. Open-questions disposition (decision log) - <code>trade-surveillance-sme</code> (Camila), 2026-06-27</h2>
+<hr>
+<h2 id="7-out-of-scope-assumptions-open-questions">7. Out of scope / assumptions / open questions</h2>
+<p><strong>Out of scope:</strong>
+- Pre-arranged wash via an unconnected counterparty (requires comms/network analysis) - scope
+  as TS-002.
+- Cross-asset wash (different instrument classes) - not in scope for this iteration.
+- Historical back-fill of alerts prior to go-live.</p>
+<p><strong>Assumptions:</strong>
+- The UBO/connected-party ownership graph is maintained by an upstream system and delivered to
+  the detection layer with a reliable <code>graph_as_of_date</code> field.
+- A safe-harbour exemption register (market-maker designations, riskless-principal flags) is
+  maintained and accessible as a reference feed.
+- A market data feed providing mid price and prevailing spread per instrument per date is
+  available.</p>
+<p><strong>Open questions for <code>trade-surveillance-sme</code> (Camila) to disposition before sign-off:</strong></p>
 <table>
 <thead>
 <tr>
 <th>#</th>
+<th>Question</th>
+<th>Owner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q1</td>
+<td>Which desks, venues and client domiciles are in scope under each regime listed in §2? Which safe-harbours apply per venue/regime (e.g., MiFID II market-maker exemption)? <strong>Blocks obligation mapping.</strong></td>
+<td>trade-surveillance-sme</td>
+</tr>
+<tr>
+<td>Q2</td>
+<td>How is the safe-harbour exemption operationalised? Is there a maintained MM-designation feed or buyback register that can serve as the pre-filter in DR-003?</td>
+<td>trade-surveillance-sme</td>
+</tr>
+<tr>
+<td>Q3</td>
+<td>How should intra-group and treasury transactions be treated? Exclude from detection entirely, or route to a separate review queue with lower priority? This is a firm-policy call requiring Legal/Compliance sign-off.</td>
+<td>trade-surveillance-sme / Legal</td>
+</tr>
+<tr>
+<td>Q4</td>
+<td>What is the required width of the connected-party definition (entity-level UBO only, or full acting-in-concert group)? This drives the ownership-graph schema and alert volume.</td>
+<td>trade-surveillance-sme</td>
+</tr>
+<tr>
+<td>Q5</td>
+<td>Should the implied-match lower-confidence tier (DR-006) be enabled at launch? If so, what tighter lookback window applies?</td>
+<td>trade-surveillance-sme / tuning-analyst</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="8-hand-off">8. Hand-off</h2>
+<p>SME for review and open-question disposition: <code>trade-surveillance-sme</code> (Camila).
+Implementer: <code>rules-developer</code> (Mateo).
+Threshold calibration (once SME questions are dispositioned): <code>tuning-analyst</code> (Theo).
+Independent QA: <code>qa-engineer</code> (Linh).</p>
+<hr>
+<h2 id="9-open-questions-disposition-decision-log">9. Open-questions disposition (decision log)</h2>
+<p>To be completed by <code>trade-surveillance-sme</code> (Camila) before the obligation mapping is
+finalised and sign-off is given.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Question</th>
+<th>Owner</th>
 <th>Disposition</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Q1</td>
-<td>⏭️ <strong>Needs deployment input</strong> - depends on venues/domicile; safe-harbours are venue-specific. <strong>Blocks the mapping.</strong></td>
+<td>Regime / venue / safe-harbour scope</td>
+<td>trade-surveillance-sme</td>
+<td><strong>Open</strong></td>
 </tr>
 <tr>
 <td>Q2</td>
-<td>⏭️ Needs deployment input - MM-designation feed + buyback register, applied as a pre-filter.</td>
+<td>Safe-harbour exemption operationalisation</td>
+<td>trade-surveillance-sme</td>
+<td><strong>Open</strong></td>
 </tr>
 <tr>
 <td>Q3</td>
-<td>🔴 <strong>Open-decision-required</strong> - intra-group/treasury is a firm-policy call (exclude vs separate queue); Legal/Compliance sign-off.</td>
+<td>Intra-group / treasury treatment</td>
+<td>trade-surveillance-sme / Legal</td>
+<td><strong>Open</strong></td>
 </tr>
 <tr>
 <td>Q4</td>
-<td>🔴 <strong>Open-decision-required</strong> - UBO is the right anchor, but the <em>width</em> (entity / group / acting-in-concert) must be chosen; drives BO-graph + alert volume.</td>
+<td>Connected-party definition width</td>
+<td>trade-surveillance-sme</td>
+<td><strong>Open</strong></td>
 </tr>
 <tr>
 <td>Q5</td>
-<td>✅ Answered - implied match is a valid <em>lower-confidence tier</em>: tighter window, distinct confidence label, higher review threshold.</td>
-</tr>
-<tr>
-<td>Q6</td>
-<td>✅ Answered - real typology but materially harder (needs comms/network analysis); scope as a <strong>separate TS-002</strong>, do not fold in.</td>
+<td>Implied-match tier enablement</td>
+<td>trade-surveillance-sme / tuning-analyst</td>
+<td><strong>Open</strong></td>
 </tr>
 </tbody>
 </table>
-<p><strong>Bottom line:</strong> obligation mapping <strong>not safe to finalise</strong> - Q1 + Q3/Q4 are go-live blockers.</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ts001-scenario-spec.md &middot; 2026-06-28</div>
+<p><strong>Bottom line:</strong> obligation mapping is <strong>not safe to finalise</strong>. Q1 (regime/venue/safe-harbour
+scope) is a go-live blocker. Q3 (intra-group treatment) and Q4 (connected-party width) are
+go-live blockers. Q2 and Q5 are required before implementation but do not block the obligation
+mapping itself.</p>
+<hr>
+<h2 id="sign-off">Sign-off</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td>Amara (business-analyst)</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Human approver</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ts001-scenario-spec.md &middot; 2026-06-30</div>
 </body>
 </html>
