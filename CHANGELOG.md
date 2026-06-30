@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.7.11] - 2026-06-30
 
 ### Added
 - **Engagement-summary email is now a required closing artifact.** Every engagement ends with a
