@@ -1,6 +1,6 @@
 <a id="readme-top"></a>
 
-# Compliance Surveillance Engineering - Virtual Team
+# Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Version 0.7.11](https://img.shields.io/badge/version-0.7.11-blue)
@@ -8,28 +8,34 @@
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
-> *An AI **engineering** team - PM, builders, reviewers and subject-matter experts - that builds
-> and reviews the technology behind compliance surveillance, right inside Claude Code. Raw data is
-> hard-blocked from the model; anything else you share carries a data-safety attestation.*
+> *AI-powered Compliance Surveillance **Engineering** Team for Claude Code - a PM, builders,
+> reviewers and subject-matter experts that build and review the technology behind surveillance,
+> right inside Claude Code. Raw data is hard-blocked from the model; anything else you share
+> carries a data-safety attestation.*
 
-> ⚗️ **Proof of concept.** An exploratory experiment in what an AI "engineering team" can do
-> inside Claude Code - **not** a production system, and **not** regulatory tooling. Treat its
-> output as a starting point for real engineers and reviewers, not as assured or accredited work.
+> ⚗️ **Proof of concept, in active development.** An exploratory experiment in what an AI
+> "engineering team" can do inside Claude Code - **not** a production system, and **not** regulatory
+> tooling. It is **evolving quickly, will contain bugs, and may behave in unexpected ways** - expect
+> rough edges and breaking changes, and **review everything it produces.** Treat its output as a
+> starting point for real engineers and reviewers, not as assured or accredited work.
 >
 > 🛑 **Dormant by default.** The team is **opt-in** and never takes over your sessions. A normal
 > `claude` session is just standard Claude Code; the agents and the "Morgan" persona wake up
 > **only** when you run `/engage` (or another team command, or simply ask for the team). The sole
 > always-on piece is the data-safety guard.
 
-A **virtual compliance-surveillance *engineering* team made of AI assistants** - the
-**engineering** behind surveillance. It builds and reviews the **technology that detects** money
-laundering, market manipulation and trader misconduct - rather than performing the compliance,
-monitoring or investigation work itself. Detection rules are just one deliverable: it equally
-builds **data pipelines / ETL, transformation and utility scripts** (Python, Scala, Java,
-PowerShell, Bash), reconciliation and reporting jobs, and tooling - or simply **reviews** existing
-code. It runs in [Claude Code](https://claude.com/claude-code) as **16 focused subagents**:
-subject-matter experts who advise, and builders who engineer, test and review - with the work
-flowing between them like a real engineering team.
+Virtual Surv-IT is a **collaborative AI engineering framework**: instead of relying on a single
+AI assistant, it assembles a **team of specialist AI agents** inside Claude Code to design, build,
+review, test and document **compliance-surveillance software** - so work is reviewed, refined and
+delivered through structured collaboration, like a real engineering team.
+
+It's the **engineering** behind surveillance - it builds and reviews the **technology that detects**
+money laundering, market manipulation and trader misconduct, rather than performing the compliance,
+monitoring or investigation work itself. Detection rules are just one deliverable: it equally builds
+**data pipelines / ETL, transformation and utility scripts** (Python, Scala, Java, PowerShell, Bash),
+reconciliation and reporting jobs, and tooling - or simply **reviews** existing code. It runs in
+[Claude Code](https://claude.com/claude-code) as **a PM (Morgan) plus 16 focused subagents**:
+subject-matter experts who advise, and builders who engineer, test and review.
 
 > 🟢 **New to AI agents and LLMs?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md) - a
 > plain-English tour of what this is, who the team are, how a job flows through them, and how it
@@ -44,6 +50,13 @@ flowchart LR
     QA --> Rev[review<br/>code · performance · compliance]
     Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
 ```
+
+> ⚖️ **Not all 16 every time.** The roster is a **library of specialists, not a fixed pipeline.**
+> The PM (Morgan) engages **only the agents a task needs** - typically **2-5** (often just a builder
+> + a reviewer), and **never all 16**. The diagram above is the *shape* of a full delivery; most
+> tasks use a leaner subset. That selection is **how the team controls cost** *and* how it stays
+> true to Anthropic's *"use the simplest thing that works"* guidance - complexity is opt-in, not the
+> default.
 
 **The safety rule, in one line:** raw data under `data/raw/` is **hard-blocked** - an always-on
 guard stops any agent from reading it. For anything else you share, **you attest it's masked,
@@ -78,9 +91,48 @@ spoofing scenario (the worked reference example, not the agents themselves).
 
 ---
 
-**📑 Jump to** - [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🔍 Code-review tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [📚 Built on](#-built-on---anthropic-agent-guidance) · [🙏 Credits](#-credits) · [📄 License](#-license)
+**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on---anthropic-agent-guidance) · [📄 License](#-license)
 
 ---
+
+## 🤔 Why Virtual Surv-IT?
+
+Building surveillance systems needs expertise across many disciplines at once - and a single
+general-purpose assistant tends to do all of them shallowly, with nobody checking its work.
+Virtual Surv-IT splits the work across specialists and builds in **independent review**:
+
+- **Business analysis** - turning a regulatory obligation into a buildable, unambiguous spec.
+- **Surveillance rule development** - deterministic, tested detection logic.
+- **Data engineering** - pipelines, ETL, transformation/utility scripts.
+- **Data analysis & threshold tuning** - false-positive analysis, ATL/BTL calibration, MI.
+- **ML / AI detection** - and *independent* model validation.
+- **QA** - independent test design and evidence (it doesn't mark its own homework).
+- **Code, performance & compliance review** - quality, scalability and audit-readiness.
+- **Data-quality & coverage assurance** - the missing feed that means abuse goes undetected.
+- **Technical documentation** - handover a real developer can build, run and maintain from.
+
+The result is an engineering workflow that produces more **consistent, auditable and maintainable**
+output than one generalist assistant - because the work is specialised, **independently reviewed**,
+and **right-sized** to each task (see below).
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
+## ✨ Features
+
+- ✅ **A real engineering team** - a PM (Morgan) + 16 specialist subagents, not one generalist.
+- ✅ **Right-sized per task** - the PM engages only the agents a job needs (typically 2-5, **never
+  all 16**); cost-controlled and faithful to Anthropic's "simplest thing that works".
+- ✅ **Built-in independent peer review** - reviewers are **read-only by tool grant** (segregation
+  of duties): they recommend, builders fix.
+- ✅ **More than detection rules** - pipelines/ETL, transformation scripts, ML, reviews, docs.
+- ✅ **Data-safety by design** - raw data hard-blocked from the model; masking + synthetic on-ramp.
+- ✅ **Evidence-based & auditable** - alert → logic → obligation traceability; a Definition of Done.
+- ✅ **Self-tested** - an eval harness (rubrics + golden cases) catches quality regressions.
+- ✅ **Claude Code native** - install as a plugin; dormant by default until you invoke it.
+- ✅ **Extensible & modular** - add or re-tier specialists independently.
+- ✅ **Documentation generation** - every deliverable in `.md` + `.html`, plus a summary email.
+
+<sub>[↑ Back to top](#readme-top)</sub>
 
 ## 🚀 Quick start
 
@@ -202,6 +254,7 @@ ships together - see the manifest.)
 status that tells you more than their job title does. (Type `/meet-the-team` and Morgan does the
 introductions live.) **🧠 Advisors** are read-only - your *independent* check, so they can critique
 all day but can't touch the code (segregation of duties, basically). **🔧 Builders** write the stuff.
+Morgan engages only the ones a task needs - **not all of them every time**.
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
 > a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
@@ -297,8 +350,8 @@ the specialists.
 The PM **asks clarifying questions** (and waits for your answers - it won't guess scope,
 jurisdiction, data or success criteria), offers a **menu of documentary artifacts** to choose from
 (BRD, FSD, ADRs, RTM, review report, audit pack…), summarises everything in an Engagement Brief,
-then oversees delivery and **hands back each deliverable in both `.md` and `.html`** under
-`artifacts/`. Focused commands for each entry point:
+**states how many agents it intends to use and why**, then oversees delivery and **hands back each
+deliverable in both `.md` and `.html`** under `artifacts/`. Focused commands for each entry point:
 
 | Command | Use it for | Pattern |
 |---|---|---|
@@ -314,9 +367,21 @@ then oversees delivery and **hands back each deliverable in both `.md` and `.htm
 | `/handover` | developer + QA test-evidence handover pack | independent QA + dev docs |
 | `/new-scenario` | a single detection scenario | spec → SME → build → review |
 
+**Example requests** (the PM routes each to the right specialists - and only those):
+
+```
+Design a spoofing detection algorithm
+Review this surveillance rule and tell me if it'd survive an audit
+Explain / optimise this SQL query
+Create unit tests for this detector
+Document this workflow for handover
+Build this from the attached FSD
+```
+
 Every deliverable is produced in **`.md` and `.html`** (via `scripts/render_html.py`) for
-easy distribution. See **[`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md)** for the
-frameworks, the artifact menu and the traceability spine.
+easy distribution, and every engagement closes with a short **summary email** (`.txt`) signed by
+Morgan. See **[`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md)** for the frameworks, the artifact
+menu and the traceability spine.
 
 You can also just describe a task in plain English (Claude matches on each agent's
 `description`), or enable experimental agent teams via `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`
@@ -351,6 +416,25 @@ pre-commit install                       # optional: enable local guardrails
 Add a new detection with `/new-scenario <requirement>`, which chains
 business-analyst → SME → rules-developer → code-reviewer → compliance-reviewer per the
 handbook.
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
+## 🧭 Core principles
+
+- **Engineering first.** The team assists software engineering; it does **not** give compliance,
+  legal or regulatory advice.
+- **Right-sized, not all-hands.** The PM engages only the agents a task needs (typically 2-5,
+  **never all 16**) - the mechanism that controls cost and keeps the team true to Anthropic's "use
+  the simplest thing that works".
+- **Independent peer review.** Reviewers and SMEs are **read-only by tool grant** (segregation of
+  duties): they recommend; builders fix. An advisor can't quietly edit what it's reviewing.
+- **Human oversight.** People review and approve all outputs; nothing touching live systems
+  proceeds without sign-off.
+- **Safe development.** Synthetic, masked or appropriately protected data only; raw data is
+  hard-blocked from the model.
+- **Auditable & traceable.** Every delivery carries the thread requirement → code → test →
+  obligation, with explainable thresholds - so it survives an audit.
+- **Modular.** Each specialist can evolve (or be re-tiered) independently without disturbing the rest.
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
@@ -566,7 +650,8 @@ evals/                          # team-quality eval harness: 7 rubrics + 21 gold
 
 ## 💰 Token usage & optimisation
 
-Multi-agent setups cost tokens, so the team is built to be cost-conscious.
+Multi-agent setups cost tokens, so the team is built to be cost-conscious - the biggest lever being
+**right-sizing** (engaging only the agents a task needs, never all 16).
 
 <details>
 <summary>💰 <b>Measured per-run numbers + the optimisations in place</b></summary>
@@ -590,9 +675,10 @@ Measured on a real run (the Agent tool reports actual usage; ~4 chars/token, so 
 > 80% in minutes, so people spend their day on the judgement that matters.*
 
 **Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
+- **Right-sizing** - the headline lever: a narrow change fires 2-3 agents, not 16; the PM states the
+  agent count at the gate, so over-spawning is visible.
 - **Model tiering** - **4 opus / 11 sonnet / 1 haiku**; opus (~5× sonnet) reserved for the four
   final-judgement/novel-design roles, haiku for the mechanical review bookkeeping.
-- **Right-sizing** - a narrow change fires 2-3 agents, not 16; the PM states the agent count at the gate.
 - **Artifacts-as-blackboard** - agents return condensed results; big output goes to files, not back
   through the orchestrator's context.
 - **Clean console** - detail to artifacts, not the chat.
@@ -652,6 +738,37 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
+## 📖 Documentation
+
+| Guide | What it covers |
+|---|---|
+| [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Plain-English tour - start here if you're new to agents/LLMs |
+| [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) | Frameworks, the artifact menu, the traceability spine |
+| [`docs/agent-design.md`](docs/agent-design.md) | Per-agent rationale + the Anthropic best-practice conformance matrix |
+| [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) | The evidenced gate every delivery must pass before handover |
+| [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack - customise to yours |
+| [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
+| [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
+| [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
+## 🤝 Contributing
+
+Contributions, issues, suggestions and discussions are welcome.
+
+1. Fork the repository and create a feature branch.
+2. Keep the guardrails green - CI runs **tests + lint (ruff) + manifest validation + gitleaks +
+   a no-raw-data check**; `pre-commit install` runs the secret / raw-data guards locally.
+3. **Never commit secrets or real data** - tests and fixtures use synthetic/masked data only (§5).
+4. Detection-logic changes need a review (`code-reviewer` + `compliance-reviewer`) and tests
+   (true- *and* false-positive cases) before merge.
+5. Open a pull request.
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the detail.
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 📚 Built on - Anthropic agent guidance
 
 This team is designed to follow Anthropic's published best practice for agents and multi-agent
@@ -662,13 +779,25 @@ systems. The conformance audit is in [`docs/agent-design.md`](docs/agent-design.
 - [**Effective context engineering for AI agents**](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) - context isolation, compaction, agentic memory.
 - [**Subagents (Claude Agent SDK)**](https://code.claude.com/docs/en/agent-sdk/subagents) · [**Claude Code subagents**](https://code.claude.com/docs/en/subagents) - frontmatter, tools, model tiering, isolation.
 
-## 🙏 Credits
+## 🙏 Credits & acknowledgements
+
+Virtual Surv-IT explores collaborative AI engineering by combining specialised Claude Code agents
+into a coordinated team - a demonstration of how domain-specific AI specialists can work together,
+with independent review, to produce higher-quality engineering outcomes.
 
 - The `code-reviewer`'s **confidence-scoring, false-positive filtering, filter-transparency
   and deep-review** approach is adapted from
   [**turingmind-code-review**](https://github.com/turingmindai/turingmind-code-review)
   (MIT, © 2026 TuringMind). See [`docs/code-review-method.md`](docs/code-review-method.md).
   Our additions: regulated-domain audit mode and data-safety/traceability weighting.
+
+## ⚖️ Disclaimer
+
+Virtual Surv-IT is an **engineering productivity framework**, and it is **in active development** -
+expect bugs, breaking changes and occasional unexpected behaviour. It is **not** a compliance
+advisory service and is **not** a substitute for legal, regulatory or professional judgement. Its
+outputs are a starting point for real engineers and reviewers - **users remain responsible for
+validating all outputs before any production use.**
 
 ## 📄 License
 
