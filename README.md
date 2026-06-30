@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.11](https://img.shields.io/badge/version-0.7.11-blue)
+![Version 0.7.12](https://img.shields.io/badge/version-0.7.12-blue)
 ![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -71,20 +71,21 @@ made up). See [how real data is handled](#-handling-real-data).
 [run comparison](docs/demos/build-run-comparison.md).
 
 <details>
-<summary>✨ <b>What's new in 0.7.11</b> - engagement-summary email artifact (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.7.12</b> - README overhaul + summary-email on every close (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
 
-- **Every engagement now closes with a summary email** - a short, plain-language cover note from
-  the PM (Morgan), saved as a `.txt` in `artifacts/` alongside the other deliverables (the one
-  artifact kept as `.txt`, not rendered to HTML). It's a required Definition-of-Done item, with a
-  template and the recipient's name never invented ("Hi," when unknown).
+- **README overhauled** into a cohesive front page - jump-links bar, detailed plugin install, real
+  clickable doc links, the character-bio roster, Why / Features / Core principles, and a stronger
+  "the masking pipeline is an early PoC, expected to be replaced" honesty.
+- **The summary email now fires on every close** - it was only wired into `/engage` and
+  `/handover`, so review paths (`/deep-review`, `/audit-review`, `/remediate`, …) could finish
+  without it; now an always-on rule covers every delivery, review and build.
 
-Recent **0.7.x**: audited against Anthropic's guidance + self-assessment made honest; memory is
-project-scoped (no project memory in the plugin); reviews coach
-"vibe-coded" code (prompting guidance); docs slimmed + honest masking framing; Morgan states the
-loaded version on startup; safety-hook hardening (ADR-002); citations *retrieved, not recalled*
-against a source-verified [regulatory register](config/regulatory-register.yaml) (ADR-001); CI
-lint/manifest gates; and a self-masking fix + measured calibration on the **bundled example**
-spoofing scenario (the worked reference example, not the agents themselves).
+Recent **0.7.x**: every engagement closes with a Morgan-signed summary email; audited against
+Anthropic's guidance + self-assessment made honest; memory is project-scoped (no project memory in
+the plugin); reviews coach "vibe-coded" code (prompting guidance); docs slimmed + honest masking
+framing; Morgan states the loaded version on startup; safety-hook hardening (ADR-002); citations
+*retrieved, not recalled* against a source-verified
+[regulatory register](config/regulatory-register.yaml) (ADR-001).
 📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
 
 </details>
