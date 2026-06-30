@@ -3,6 +3,18 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Changed - docs
+- **README reworked on a cleaner foundation** (presented as "Virtual Surv-IT"). Added Why /
+  Features / Core principles / Documentation / Contributing / Disclaimer / Acknowledgements
+  sections while **preserving all existing content** - the Meet-the-team roster + portrait stay on
+  the home page, and the data-safety / eval / tooling / hooks / real-data / token / roadmap detail
+  stays in the in-page collapsibles (nothing moved out). Made the **right-sizing** point prominent
+  (the PM engages only the agents a task needs, **never all 16** - the cost-control + Anthropic
+  best-practice mechanism), and added an **"active development - may contain bugs / behave
+  unexpectedly"** warning to the proof-of-concept callout and the disclaimer.
+
 ## [0.7.11] - 2026-06-30
 
 ### Added
