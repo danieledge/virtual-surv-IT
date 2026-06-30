@@ -14,6 +14,9 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   (the PM engages only the agents a task needs, **never all 16** - the cost-control + Anthropic
   best-practice mechanism), and added an **"active development - may contain bugs / behave
   unexpectedly"** warning to the proof-of-concept callout and the disclaimer.
+- **Light "corporate" polish** - Features and Core-principles turned into tables; decorative inline
+  emojis trimmed from the prose/callouts (section-header markers and the ⚗️/🛑 warning icons kept).
+  The **Meet-the-team** section is deliberately left **identical** (character bios + portrait).
 
 ## [0.7.11] - 2026-06-30
 
