@@ -82,6 +82,8 @@ OR a feed has silently failed (the MW79 trap). Distinguish these using at least 
 Prioritised remediation with owners. Close with concrete options and a recommendation - never
 end at the gap list. Re-assessment cadence and triggers are recorded in the header above.
 
+**Disposition tally:** ✅ _N_ Fixed/Answered · 🔴 _N_ Open · ⏭️ _N_ Deferred/Needs-input · ⚖️ _N_ Accepted - across the coverage gaps in §5; reconcile with the recommendation above.
+
 ## Sign-off
 | Role | Name | Decision | Date |
 |------|------|----------|------|

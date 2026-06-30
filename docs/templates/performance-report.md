@@ -80,6 +80,8 @@ What to change, in priority order, with the expected effect at target volume (fr
 route to `rules-developer` / `platform-engineer` / `ml-engineer`, then **re-profile to confirm the
 projected gain became a measured one**.
 
+**Disposition tally:** ✅ _N_ Fixed/Answered · 🔴 _N_ Open · ⏭️ _N_ Deferred/Needs-input · ⚖️ _N_ Accepted - reconcile with the recommendation above (a non-pass makes the Open items explicit).
+
 ## Sign-off
 | Role | Name | Decision | Date |
 |------|------|----------|------|

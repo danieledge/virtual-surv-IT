@@ -89,6 +89,8 @@ mapping recur that should be standardised? Record it here before the engagement 
 |--------|----------------------------------------------------------------|---------------------|
 | <e.g. feed-change lead time always underestimated> | elicitation | <add feed-readiness check to intake checklist> |
 
+**Disposition tally:** ✅ _N_ Fixed/Answered · 🔴 _N_ Open · ⏭️ _N_ Deferred/Needs-input · ⚖️ _N_ Accepted - across the impacted scenarios/controls in §7. *(Severity / disposition / evidence-basis legends: see `docs/WAYS-OF-WORKING.md`.)*
+
 ## 10. Sign-off
 | Role | Name | Decision | Date |
 |------|------|----------|------|

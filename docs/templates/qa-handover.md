@@ -63,6 +63,8 @@ How to reproduce (exact commands - use the project's test framework, not an assu
 Things a human reviewer should manually confirm (e.g. regulatory mapping, alert wording,
 threshold rationale, anything not fully automatable).
 
+**Disposition tally:** ✅ _N_ Fixed/Answered · 🔴 _N_ Open · ⏭️ _N_ Deferred/Needs-input · ⚖️ _N_ Accepted - reconcile with the QA verdict; a Fail must make the Open defects explicit.
+
 ## Sign-off
 | Role | Name | Decision | Date |
 |------|------|----------|------|
