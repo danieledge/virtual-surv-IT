@@ -14,6 +14,10 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   insight carries **📊 observed** (seen in the data, with its basis - metric/sample/query) or
   **🧠 inferred** (with the assumption stated); an inference is never presented as fact. Wired into
   `data-analyst`, `tuning-analyst`, `data-quality-reviewer` and `ml-engineer`.
+- **`/engage`'s tool check is now cached.** `scripts/check-review-tools.sh` caches the analyser
+  probe to `.claude/.tool-availability` and serves it while fresh (7-day TTL, override
+  `CST_TOOLCHECK_TTL_DAYS`), with `--refresh` to force a re-probe - so a static environment isn't
+  re-probed on every engagement. The cache is git-ignored; `/engage` step 0 reworded accordingly.
 
 ## [0.7.12] - 2026-06-30
 
