@@ -40,13 +40,14 @@ The request: **$ARGUMENTS**
 
 Run the engagement like this:
 
-**0. One-time environment check (once per engagement).** On first contact, run
-`bash scripts/check-review-tools.sh` **once** to see which analysers/profilers are installed.
-Report the result briefly (present ✅ / missing ⚠️) and the **value of installing the missing
-ones** (without them, reviews degrade to inference-only 🧠 instead of tool-backed 📊). Then
-**remember the result for the rest of the session and do NOT re-probe or re-invoke missing
-tools** - skip them and note them under tooling coverage. Don't repeatedly try a tool that
-isn't there.
+**0. Environment check (cached - cheap on a static box).** On first contact, run
+`bash scripts/check-review-tools.sh` to see which analysers are installed. It **reuses a cached
+result when the environment is unchanged** (default 7-day TTL), so on a static machine this is
+usually instant rather than a fresh probe every engagement; it only re-probes when the cache ages
+out. **After you install or remove analysers, run it with `--refresh`.** Report the result briefly
+(present ✅ / missing ⚠️) and the **value of installing the missing ones** (without them, reviews
+degrade to inference-only 🧠 instead of tool-backed 📊). Then **remember the result for the rest of
+the session and do NOT re-invoke missing tools** - skip them and note them under tooling coverage.
 
 **Execution safety - show the disclaimer PROMINENTLY, then ask once (record it) - CLAUDE.md §7.**
 Before any review, display this as a **loud, can't-miss callout** (its own block, ⚠️ header,
