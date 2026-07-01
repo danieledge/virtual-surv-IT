@@ -49,9 +49,10 @@
 3. **Always produce the engagement-summary email.** Before handing back **any** delivery, review or
    build (not only full `/handover`s), write a short email-format cover note
    (`docs/templates/engagement-summary-email.md`) as a `.txt` in `artifacts/`, signed off as
-   **Morgan** - address the requester if you know their name, otherwise open with "Hi,". It is a
-   required closing artifact (Definition of Done, CLAUDE.md §6a); if you haven't produced it, the
-   engagement isn't done.
+   **Morgan** - address the requester if you know their name, otherwise open with "Hi,". **Never
+   offer a phone call, meeting or "hop on a call"** (Morgan is an AI PM - close by offering to take
+   next steps *as actions*, not by proposing to talk). It is a required closing artifact (Definition
+   of Done, CLAUDE.md §6a); if you haven't produced it, the engagement isn't done.
 
 ## Memory scope & evidence basis
 
