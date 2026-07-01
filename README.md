@@ -91,7 +91,7 @@ framing; Morgan states the loaded version on startup; safety-hook hardening (ADR
 
 ---
 
-**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on---anthropic-agent-guidance) · [📄 License](#-license)
+**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [⚠️ Known issues](#-known-issues-cosmetic) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on---anthropic-agent-guidance) · [📄 License](#-license)
 
 ---
 
@@ -743,6 +743,48 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
 - **Merge the two PreToolUse guards into one `python3` call** per tool use. *Why:* the raw-data and
   code-execution guards currently spawn `python3` twice on every `Read`/`Grep`/`Glob`/`Bash` -
   halving the spawns cuts per-call latency without weakening either guard.
+
+</details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
+## ⚠️ Known issues (cosmetic)
+
+Both are **display-only** - they don't affect what the team does (routing, tool grants, the actual
+deliverables). Flagged honestly, in the spirit of the proof-of-concept notice at the top.
+
+- **Morgan sometimes narrates the wrong agent *name*** - e.g. "Isla" for the AML SME or "Jordan"
+  for the tuning analyst, instead of **Hassan** / **Theo**. The *work* is unaffected: the team
+  routes by role slug (`tm-sme`, `tuning-analyst`) and the spawned specialist still runs as its real
+  self - only the PM's running commentary drifts.
+- **Some emoji render as a box / diamond-with-`?` on older Windows + Edge** (notably 🧑‍💻 and the
+  ⚖️ / ⏭️ disposition markers). The files are clean UTF-8 and declare a UTF-8 charset, so this is a
+  **font glyph-coverage gap** in that browser/OS - not corruption. The word is always kept beside the
+  emoji, so no meaning is lost; an up-to-date system renders them.
+
+<details>
+<summary>Why the name drift happens (and why it's only cosmetic)</summary>
+
+The persona names (Amara, Hassan, Theo…) are **cosmetic labels**. The system routes work and grants
+tools purely by the **role slug** (`business-analyst`, `tm-sme`, `tuning-analyst`), so a wrong *name*
+never changes who does the work or what they're allowed to touch.
+
+Each agent's own file **does** pin its name (`tm-sme.md` opens *"You are Hassan…"*) - but that line
+is only ever read by the **subagent** when it's spawned; it never enters **Morgan's** (the
+orchestrator's) context. So when Morgan *narrates* who's on a task, its only source for the name is a
+**single roster line** in `CLAUDE.md`.
+
+That name↔role mapping is an **arbitrary, non-derivable lookup** - nothing about "tuning-analyst"
+implies "Theo"; it's pure memorisation. When that one low-salience line isn't firmly in attention -
+a long session, a lot of intervening context, or after the conversation has been
+compacted/summarised - the model reconstructs the name from a fuzzy memory and, being a language
+model, emits a **plausible-but-invented** teammate name (Isla, Jordan) rather than surfacing the gap.
+It shows up more for the less-mentioned roles (the SMEs, tuning) than for the reviewers, whose names
+get reinforced by frequent use; and because the name is decorative, **nothing validates it**, so the
+drift goes uncorrected.
+
+**Net:** the *actual* subagent always knows it's Hassan/Theo (its own file says so) and always does
+the right job - only the PM's commentary occasionally mislabels it. Hence: cosmetic.
 
 </details>
 
