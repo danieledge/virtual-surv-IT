@@ -3,6 +3,15 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Fixed
+- **`render_html.py` now pins `encoding="utf-8"`** on both the `.md` read and the `.html` write.
+  Previously `Path.read_text`/`write_text` used the OS locale default - fine on UTF-8 Linux/macOS
+  (committed artifacts are clean), but on a Windows (`cp1252`) locale it mangled emoji / non-ASCII
+  into replacement boxes. The render is now byte-identical across platforms. (Existing artifacts
+  were generated on Linux and are unaffected - not re-rendered.)
+
 ## [0.7.13] - 2026-07-01
 
 ### Changed

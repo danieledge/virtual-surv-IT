@@ -271,13 +271,17 @@ def main() -> None:
     ap.add_argument("--out", type=Path, help="output .html path (default: alongside the .md)")
     args = ap.parse_args()
 
-    md_text = args.src.read_text()
+    # Pin UTF-8 explicitly: Path.read_text/write_text otherwise use the OS locale default
+    # (e.g. cp1252 on Windows), which mangles emoji / non-ASCII into replacement boxes. UTF-8
+    # keeps rendering identical on every platform, not just UTF-8-locale Linux/macOS.
+    md_text = args.src.read_text(encoding="utf-8")
     out = args.out or args.src.with_suffix(".html")
     generated = _dt.date.today().isoformat()
     out.write_text(
         render(
             md_text, _title_from(md_text, args.src.stem), source=args.src.name, generated=generated
-        )
+        ),
+        encoding="utf-8",
     )
     print(f"Rendered {args.src} -> {out}")
 
