@@ -6,6 +6,13 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ## [Unreleased]
 
 ### Changed
+- **Documented prompt-caching reality + cost-friendly design** (`docs/agent-design.md` §7). Verified
+  (via the Claude Code docs) that caching is **automatic - nothing to enable** (only env vars to
+  *disable* it); the lever the plugin owns is cache-friendly design (lean stable `CLAUDE.md` prefix,
+  fixed model tiering, batching chains within the 5-min subagent TTL). Recorded the honest upstream
+  caveats: each subagent caches from scratch, and the Agent-SDK **disables** subagent caching today
+  ([claude-code#29966](https://github.com/anthropics/claude-code/issues/29966)) - so headless
+  fan-outs shouldn't assume subagent caching.
 - **Build-demo re-run with fresh artifacts.** Re-ran the full DoD chain (8 specialists, real test
   runs, measured ATL/BTL, the fix→re-review loop) on TS-001 wash-trade and **regenerated every
   `docs/demos/build-artifacts/` artifact** to current conventions (doc-control headers, disposition

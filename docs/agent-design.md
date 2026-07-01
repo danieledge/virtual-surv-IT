@@ -134,11 +134,33 @@ sub-agent returns** are aspirational, not enforced. The **LLM-judge eval harness
 (`evals/`, `/run-evals`); the **team-size / per-role marginal-value** question is
 acknowledged-unbenchmarked (see `docs/research-virtual-team.md`), not claimed as proven.
 
-## 7. References (Anthropic agent guidance)
+## 7. Prompt caching & cost-friendly design
+
+**There is nothing to "enable" - prompt caching is automatic in Claude Code** (no `settings.json`
+field or flag; the only knobs are env vars that *disable* it for debugging, e.g.
+`DISABLE_PROMPT_CACHING`). So the lever a plugin/project actually owns is **cache-friendly design** -
+keeping the cacheable prefix stable so every session and every subagent re-uses it:
+
+- **Lean, stable always-on prefix.** The cache keys on the system prompt + `CLAUDE.md` + each agent
+  definition. `CLAUDE.md` is deliberately slim (rule detail moved to the on-engage
+  `team-operating-guide.md`) and edited rarely - a smaller, stable prefix maximises hit-rate, and it
+  is inherited by every subagent in a fan-out.
+- **Stable model/effort.** Model tiering is fixed per agent (§2); we don't switch model or effort
+  mid-run, each of which is a full prefix recompute.
+- **Batch within the TTL.** Right-sizing keeps chains short and the PM runs them close together;
+  subagents use a **5-minute** cache TTL, so a warm chain re-uses far more than a stop-start one.
+
+**Honest caveats (upstream, not ours):**
+- Each **subagent builds its own cache from scratch** (5-min TTL even on a subscription; the 1-hour
+  TTL is for the main conversation only) - so the first call of each specialist is a cache-cold read.
+- The **Claude Agent SDK currently disables prompt caching for subagents** ([claude-code#29966](https://github.com/anthropics/claude-code/issues/29966), open) - so a **headless/SDK-driven** fan-out sees little subagent cache benefit until it's fixed. Interactive Claude Code runs are unaffected. Cost estimates for headless multi-agent runs should therefore **not** assume subagent caching.
+
+## 8. References (Anthropic agent guidance)
 
 - **Building Effective Agents** - https://www.anthropic.com/engineering/building-effective-agents
 - **How we built our multi-agent research system** - https://www.anthropic.com/engineering/multi-agent-research-system
 - **Effective context engineering for AI agents** - https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- **How Claude Code uses prompt caching** - https://code.claude.com/docs/en/prompt-caching
 - **Subagents (Claude Agent SDK)** - https://code.claude.com/docs/en/agent-sdk/subagents
 - **Claude Code subagents** - https://code.claude.com/docs/en/subagents
 
