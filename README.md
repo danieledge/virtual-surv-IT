@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.12](https://img.shields.io/badge/version-0.7.12-blue)
+![Version 0.7.13](https://img.shields.io/badge/version-0.7.13-blue)
 ![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -70,16 +70,17 @@ made up). See [how real data is handled](#-handling-real-data).
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md).
 
 <details>
-<summary>✨ <b>What's new in 0.7.12</b> - README overhaul + summary-email on every close (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.7.13</b> - build-demo re-run + review/data upgrades + honest known-issues (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
 
-- **README overhauled** into a cohesive front page - jump-links bar, detailed plugin install, real
-  clickable doc links, the character-bio roster, Why / Features / Core principles, and a stronger
-  "the masking pipeline is an early PoC, expected to be replaced" honesty.
-- **The summary email now fires on every close** - it was only wired into `/engage` and
-  `/handover`, so review paths (`/deep-review`, `/audit-review`, `/remediate`, …) could finish
-  without it; now an always-on rule covers every delivery, review and build.
+- **📦 Build-demo re-ran end-to-end** with fresh artifacts - real independent reviews, the
+  fix→re-review loop (the chain caught a genuine silent false-negative *twice*), measured ATL/BTL
+  tuning, every artifact regenerated + a signed summary email.
+- **🔍 Sharper reviews, honest data, candid limits** - reviews coach vibe-coded code by **mapping
+  findings → the prompt that would have closed each**; data insights are tagged **📊 observed / 🧠
+  inferred**; and a new **"Known issues (cosmetic)"** section documents the display-only quirks
+  (agent-name drift; emoji glyphs on older Windows/Edge).
 
-Recent **0.7.x**: every engagement closes with a Morgan-signed summary email; audited against
+Recent **0.7.x**: README overhauled + summary-email on every close; audited against
 Anthropic's guidance + self-assessment made honest; memory is project-scoped (no project memory in
 the plugin); reviews coach "vibe-coded" code (prompting guidance); docs slimmed + honest masking
 framing; Morgan states the loaded version on startup; safety-hook hardening (ADR-002); citations
@@ -91,7 +92,7 @@ framing; Morgan states the loaded version on startup; safety-hook hardening (ADR
 
 ---
 
-**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [⚠️ Known issues](#-known-issues-cosmetic) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on--acknowledgements) · [📄 License](#-license)
+**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [⚠️ Known issues](#known-issues) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on--acknowledgements) · [📄 License](#-license)
 
 ---
 
@@ -747,6 +748,8 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
 </details>
 
 <sub>[↑ Back to top](#readme-top)</sub>
+
+<a id="known-issues"></a>
 
 ## ⚠️ Known issues (cosmetic)
 

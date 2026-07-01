@@ -3,9 +3,18 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.7.13] - 2026-07-01
 
 ### Changed
+- **"Known issues (cosmetic)" section in the README** - documents two display-only quirks with an
+  expanded why: Morgan sometimes narrates a wrong/invented agent name (the work is unaffected -
+  routing is by role slug; the name is a low-salience, non-derivable lookup the model confabulates
+  under context pressure), and complex emoji (🧑‍💻, ⚖️/⏭️) render as a box on older Windows/Edge
+  (a font gap, not corruption). Added to the jump-nav via an explicit anchor.
+- **Morgan's summary email never offers a phone call / meeting** - an AI PM can't take calls; it
+  closes by offering to take next steps *as actions*. Wired into the email template + operating-guide.
+- **README jump-nav fixes** - pinned the Known-issues anchor explicitly; repointed the stale "Built
+  on" link left over from the section merge. All jump-nav anchors resolve.
 - **Documented prompt-caching reality + cost-friendly design** (`docs/agent-design.md` §7). Verified
   (via the Claude Code docs) that caching is **automatic - nothing to enable** (only env vars to
   *disable* it); the lever the plugin owns is cache-friendly design (lean stable `CLAUDE.md` prefix,
