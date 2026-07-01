@@ -34,3 +34,23 @@ def test_both_guards_are_registered():
     commands = " ".join(h["command"] for entry in pre for h in entry["hooks"])
     assert "guard-raw-data.py" in commands, "raw-data guard missing from hooks"
     assert "guard-code-execution.py" in commands, "code-execution guard missing from hooks"
+
+
+def test_guards_use_portable_python_launcher():
+    """Guards must launch via the portable wrapper, never a bare `python3`.
+
+    Windows has no `python3` (the interpreter is `python` or the `py` launcher), so a hardcoded
+    `python3` meant the guards failed to start there ("python3: command not found") and did not
+    run at all. `.claude/hooks/run-guard.sh` finds whichever interpreter exists and execs it, so
+    the guards run identically on Linux, macOS and Windows (Git Bash). This test fails if anyone
+    reverts to a bare `python3` or drops the launcher.
+    """
+    assert (REPO / ".claude" / "hooks" / "run-guard.sh").exists(), (
+        "portable python launcher .claude/hooks/run-guard.sh is missing"
+    )
+    pre = _pretooluse(REPO / "hooks" / "hooks.json")
+    for entry in pre:
+        for h in entry["hooks"]:
+            cmd = h["command"]
+            assert "run-guard.sh" in cmd, f"hook bypasses the portable launcher: {cmd}"
+            assert "python3 " not in cmd, f"hook hardcodes python3 (breaks on Windows): {cmd}"

@@ -6,6 +6,16 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ## [Unreleased]
 
 ### Fixed
+- **PreToolUse safety guards now launch cross-platform** via a portable wrapper
+  (`.claude/hooks/run-guard.sh`). The hooks hardcoded `python3`, which doesn't exist on Windows
+  (the interpreter is `python` / the `py` launcher) - so on Windows the guards errored
+  (`python3: command not found`) on every tool call **and didn't run at all**, leaving only the
+  OS `permissions.deny` list enforcing. The wrapper finds `python3` / `python` / `py` and `exec`s
+  it, preserving the guard's stdin (tool payload) and exit code (`2` = block); if no Python exists
+  it exits 0 (allow), with `permissions.deny` still the hard boundary. The guard `.py` logic is
+  unchanged (only the launch path), the two hook files stay byte-identical, and a new test
+  (`test_guards_use_portable_python_launcher`) locks it in. Verified against the Claude Code hooks
+  docs (shell-form hooks run in a POSIX shell - Git Bash - on Windows).
 - **`render_html.py` now pins `encoding="utf-8"`** on both the `.md` read and the `.html` write.
   Previously `Path.read_text`/`write_text` used the OS locale default - fine on UTF-8 Linux/macOS
   (committed artifacts are clean), but on a Windows (`cp1252`) locale it mangled emoji / non-ASCII
