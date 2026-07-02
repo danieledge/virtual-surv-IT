@@ -6,6 +6,16 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ## [Unreleased]
 
 ### Fixed
+- **Windows permission-rule churn diagnosed and prevented.** A live Windows install
+  accumulated invalid auto-saved permission rules ("ignoring 7 permissions.allow entries",
+  growing with each approval): approving Morgan's ad-hoc invocations saved literal command
+  strings with mixed path separators and mixed quote styles, which the validator rejects.
+  Now: the operating guide mandates **one consistent spelling** (forward slashes + double
+  quotes - Git Bash accepts them on Windows) and a `bash --version` probe at step 0 with a
+  degrade path (skip `.sh` helpers, call analysers directly) for environments without Git
+  Bash; the README plugin quick-start gains an optional **pre-approval block** of clean
+  wildcard rules so approvals rarely trigger at all. Cleanup for affected installs:
+  `/permissions` shows each rule's source file - delete the flagged ones, paste the block.
 - **Guards 0.4.1: Windows correctness, human-applied** (both reported from a live Windows
   plugin install). The exec guard's allow-list used forward-slash-only regexes, so Windows
   backslash paths (`python C:\...\scripts\render_html.py`) were blocked; separators are now

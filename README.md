@@ -307,6 +307,42 @@ there, and instead enable it **in each project where you want the team**: from t
 > projects that actually use it. (The 2026-07-01 setup audit measured the old always-on posture
 > at ~2.7k tokens per session per project - hence this step.)
 
+<details>
+<summary>⚙️ <b>Optional: pre-approve the team's tooling</b> - avoids repeated permission prompts and brittle auto-saved rules</summary>
+
+Without pre-approval, every analyser run and helper-script call prompts you, and each "don't
+ask again" saves the *literal command string* as a rule - on Windows that accumulates
+mixed-path, mixed-quote rules the validator then flags as invalid ("ignoring N
+permissions.allow entries"). Add clean wildcard rules to the enabled project's
+`.claude/settings.json` instead:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(ruff *)",
+      "Bash(mypy *)",
+      "Bash(bandit *)",
+      "Bash(semgrep *)",
+      "Bash(shellcheck *)",
+      "Bash(python -m scripts.*)",
+      "Bash(python3 -m scripts.*)",
+      "Bash(py -m scripts.*)",
+      "Bash(*scripts/check-review-tools.sh*)",
+      "Bash(*scripts/render_html.py*)",
+      "Bash(*scripts/check_artifacts.py*)",
+      "Bash(*scripts/gen_synthetic.py*)"
+    ]
+  }
+}
+```
+
+(If you already have flagged entries: `/permissions` shows every rule and which file it came
+from - delete the flagged ones and paste the block above. Permission rules are Claude Code's
+prompting layer; the team's execution *gate* is separate and stays human-consent-only.)
+
+</details>
+
 **3. Restart Claude Code. From an enabled project, summon the team** (commands are namespaced):
 ```
 /compliance-surveillance-team:engage
