@@ -106,6 +106,28 @@ Two things worth knowing:
 - **Artifacts** are authored in Markdown and rendered to standalone HTML with
   `python -m scripts.render_html` - produce both `.md` and `.html`.
 
+## Developing in this repo: don't double-load the roster
+
+If you register this repo as a **local directory marketplace** (`/plugin marketplace add
+/path/to/virtual-surv-IT`), every session inside the repo loads the team **twice**: once bare
+from project scope (`.claude/agents/`, `.claude/skills/`) and once namespaced
+(`compliance-surveillance-team:...`) from the auto-loaded plugin manifest. Directory-source
+marketplaces load in place whenever the cwd is the plugin repo, and `enabledPlugins` does not
+suppress them - so the duplicate roster sits in context on every session here.
+
+Don't fix this by moving the agent/skill files out of `.claude/`: repo-as-project mode (the
+no-install path), the hand-pick install instructions, and the bundled-script resolution rule
+(`$CLAUDE_SKILL_DIR/../../../scripts/`, see `docs/team-operating-guide.md` §Run mode) all
+depend on the current layout. Instead, keep no standing local-directory registration of this
+repo:
+
+- remove it if present: `/plugin marketplace remove virtual-surv-it` (typed by you - `/plugin`
+  is interactive), then restart the session;
+- to test **plugin mode** from a foreign project, use `claude --plugin-dir
+  /path/to/virtual-surv-IT` there (temporary, not saved), or add the marketplace **from
+  GitHub** in that project. Consumer installs are unaffected either way - they only ever load
+  the one namespaced copy.
+
 ## Safety hooks
 
 `.claude/hooks/guard-raw-data.py` (blocks raw-data reads), `guard-code-execution.py` (gates
