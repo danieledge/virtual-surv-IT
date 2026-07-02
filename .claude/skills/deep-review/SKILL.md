@@ -13,23 +13,33 @@ and wait. Don't review an assumed target.
 
 **2. Put scope on a menu - ask, don't assume.** Ask the axes below **in ONE `AskUserQuestion`
 call** (one screen, not separate round-trips); they stay distinct questions with the stated
-`multiSelect` (don't merge them into one list):
-- **Dimensions** - **`multiSelect: true`**, default = all: 🐛 bugs & logic · 🔐 security ·
-  📐 architecture · 🧰 language-specific · 📝 docs/comments · 🔵 style & form · 📋 compliance/audit.
-  All opt-in - the user can run only the ones they want (a plain utility script may want bugs +
-  security only, no compliance). Don't force a dimension they didn't pick.
-- **Breadth** - **`multiSelect: false`** (exactly one): the working diff · named files/glob ·
-  whole module · whole repo.
-- **Mode** - **`multiSelect: false`**: change review (filter pre-existing) **or** audit (keep
-  pre-existing in scope).
-- **Origin** - **`multiSelect: false`**: was this **AI-assisted / "vibe-coded"**? (yes · mixed ·
-  no, hand-written). If **yes/mixed**, the report adds a **🧑‍💻 Prompting guidance** section (see
-  `docs/review/output-format.md`): how a better prompt would have prevented the top findings, plus
-  example prompts to reuse. (The reviewer also adds it if the findings clearly show vibe-coding.)
+`multiSelect` and header. **Hard tool limits: max 4 questions per call, max 4 options per
+question** ("Other" is added automatically) - the constructions below are sized to fit; don't
+un-bundle them back into a 7-option list:
+- **Dimensions** (header `Dimensions`, **`multiSelect: false`** - four locked bundles; a bespoke
+  mix goes through "Other", e.g. *"bugs + docs only"*):
+  - **Full review (recommended)** - all seven lenses: bugs & logic · security · architecture ·
+    language-specific · docs/comments · style & form · compliance/audit.
+  - **Core** - 🐛 bugs & logic + 🔐 security + 🧰 language-specific. *For a plain utility script.*
+  - **Core + quality** - Core plus 📐 architecture + 📝 docs/comments + 🔵 style & form.
+  - **Core + compliance** - Core plus 📋 compliance/audit (§4/§5 trail).
+  Run only what was picked - don't force a lens the user didn't choose.
+- **Breadth** (header `Breadth`, **`multiSelect: false`**, exactly one): the working diff ·
+  named files/glob · whole module · whole repo.
+- **Mode** (header `Mode`, **`multiSelect: false`**): change review (filter pre-existing) **or**
+  audit (keep pre-existing in scope).
+- **Origin** (header `Origin`, **`multiSelect: false`**): was this **AI-assisted /
+  "vibe-coded"**? (yes · mixed · no, hand-written). If **yes/mixed**, the report adds a
+  **🧑‍💻 Prompting guidance** section (see `docs/review/output-format.md`): how a better prompt
+  would have prevented the top findings, plus example prompts to reuse. (The reviewer also adds
+  it if the findings clearly show vibe-coding.)
 
 > **Do NOT re-ask the fix-cycle (report / fix / loop) here** - `engage` already captured it
 > (its Q3) and it is the single source of truth; inherit that answer. If this skill was invoked
-> **directly** (not via `engage`), *then* ask it once, batched in the same call as the three axes.
+> **directly** (not via `engage`), ask it once (header `Fix-cycle`) - but the call is already at
+> the 4-question cap, so in direct mode **swap Origin out of the first call** and ask it in the
+> follow-up screen (with jurisdiction, if 📋 compliance is in scope; otherwise on its own or
+> defaulted to "unknown - infer from the findings").
 
 **If 📋 compliance/audit is among the dimensions**, ask **jurisdiction(s)** as a follow-up -
 **`multiSelect: true`** (may operate in several) - or use the configured scope (CLAUDE.md §2 /

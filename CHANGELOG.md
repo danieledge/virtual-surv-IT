@@ -3,6 +3,37 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Fixed
+- **Morgan's question menus now fit the question tool** (question-flow audit, 2026-07-02 -
+  report in `artifacts/morgan-question-flow-audit.md`, session-local). AskUserQuestion renders
+  at most **4 questions per call and 4 options per question**, but two locked menus exceeded
+  that: the `/engage` artifact menu (11 options → now a locked two-stage structure: packaging
+  single-select, then grouped ≤4-option multi-selects) and `/deep-review`'s dimensions
+  (7 options → 4 locked bundles; direct mode swaps Origin to the follow-up screen so the call
+  stays ≤4 questions). `/performance-review`'s concerns (5 options) and free-text volume ask,
+  and `/prepare-data`'s option-less goal ask, brought within limits too. Flow fixes in
+  `/engage`: bare-invocation precedence defined (target first - the exec/data gates are
+  undecidable before it); work-type asked only when genuinely ambiguous; data attestation gated
+  like exec consent; the brief go-ahead and change-my-code confirmations are now tool questions
+  (no double-ask when Q3 already authorised fixes); Q1=None + Q2=No no longer undefined; locked
+  headers on all locked menus. The tool's hard limits + header rule added to the operating
+  guide's question rules.
+
+### Added
+- **Mechanical DoD artifact gate** (`scripts/check_artifacts.py` + 6 tests): verifies every
+  `artifacts/**/*.md` has its rendered `.html` sibling and the closing engagement-summary
+  `.txt` exists - the two DoD items CI can never see (`artifacts/` is git-ignored). Wired into
+  `/engage` step 6 and `/handover`; `docs/DEFINITION-OF-DONE.md` now carries an honest note on
+  which gates are prompt-enforced vs mechanically checked. (Its first live run flagged a real
+  missing summary email.)
+- **4 golden eval cases + a `process-discipline` rubric** for the previously untested mandated
+  behaviours: the engagement-summary-email close (incl. the never-offer-a-call rule),
+  right-sizing stated at the gate, 📊/🧠 evidence tagging under temptation, and the
+  `.md`+`.html` dual-artifact rule. Harness is now 8 rubrics / 25 cases; the CI contract tests
+  pick the new cases up automatically.
+
 ## [0.8.0] - 2026-07-02
 
 True dormancy, fail-closed guards, human-only consent, and a CI-checked eval contract — the

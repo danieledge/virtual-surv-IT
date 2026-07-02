@@ -4,7 +4,7 @@
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Version 0.8.0](https://img.shields.io/badge/version-0.8.0-blue)
-![Tests 170 passing](https://img.shields.io/badge/tests-170%20passing-brightgreen)
+![Tests 188 passing](https://img.shields.io/badge/tests-188%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
@@ -488,16 +488,16 @@ silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **170 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The
+The repo's **188 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The
 **eval harness** ([`evals/`](evals/)) checks the **quality of what the team produces** - so a prompt
 change that silently weakens a review gets caught, not shipped. (This is the regression net
 Anthropic's multi-agent guidance recommends.)
 
 <details>
-<summary>🧪 <b>What's in the harness</b> - 7 rubrics · 21 golden cases · deterministic scorer</summary>
+<summary>🧪 <b>What's in the harness</b> - 8 rubrics · 25 golden cases · deterministic scorer</summary>
 
-- **7 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety ·
-  prompt-injection · regulatory-citation) + **21 golden cases** with deliberately seeded issues
+- **8 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety · process-discipline ·
+  prompt-injection · regulatory-citation) + **25 golden cases** with deliberately seeded issues
   *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
 - **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)) - matches the team's
   findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
@@ -652,7 +652,7 @@ scripts/                        # masking (ingest), synthesise, render_html, eva
 config/                         # masking schema + regulatory register
 docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
                                 #   scenarios/ · demos/ · templates/ · adr/
-evals/                          # team-quality eval harness: 7 rubrics + 21 golden cases
+evals/                          # team-quality eval harness: 8 rubrics + 25 golden cases
 .github/workflows/ci.yml        # tests + lint + manifest validation + gitleaks + no-raw-data check
 .pre-commit-config.yaml         # local secret / raw-data guardrails
 ```
@@ -744,7 +744,7 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
 <summary>🗺️ <b>What's shipped and what's next</b></summary>
 
 **Quality & evaluation**
-- ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 7 rubrics + 21 golden cases
+- ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 8 rubrics + 25 golden cases
   (seeded issues + false-positive traps) across review, coverage, spec/traceability, tuning and
   data-safety. The deterministic scorer (`scripts/eval_score.py`) is unit-tested; `/run-evals`
   runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and

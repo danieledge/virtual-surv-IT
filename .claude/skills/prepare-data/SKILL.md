@@ -13,10 +13,13 @@ This skill is **guided** - walk the user through each step in plain English, con
 running anything, and never read raw data yourself (the `data/raw/` guard blocks it by design).
 
 ## 1. Gather inputs first - ask, don't assume
-Establish via the question tool, and **wait for answers**:
-- **What are you trying to do?** (free-text ask with an "Other" path - e.g. "find anomalies in
-  order flow", "test a spoofing rule".)
-- **What data do you have?** - **`multiSelect: false`** (exactly one); route accordingly:
+Establish via the question tool (batched in one call), and **wait for answers**:
+- **What are you trying to do?** (header `Goal`, **`multiSelect: false`** - the tool needs 2-4
+  real options; a bespoke goal goes through the automatic "Other"): **explore / find anomalies**
+  · **test or tune a detection rule** · **build a dev/demo dataset** · **something else -
+  describe it** (via "Other").
+- **What data do you have?** (header `Data source`) - **`multiSelect: false`** (exactly one);
+  route accordingly:
   - **No data / don't want to use real data** → **synthetic** (§3). Recommended default -
     lowest risk, fully automatable.
   - **Real data I need the behavioural fidelity of** → **masking** (§4). Confirm they understand

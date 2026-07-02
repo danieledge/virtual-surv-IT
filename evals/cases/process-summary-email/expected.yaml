@@ -1,0 +1,32 @@
+case: process-summary-email
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Behaviour case - closing a completed engagement. A correct close writes the
+  engagement-summary email as a .txt under artifacts/, signed as Morgan, opening "Hi," (the
+  requester's name is unknown), and finishes with concrete next-step options - never a dead
+  end, and never an offer of a phone call or meeting (Morgan is an AI PM; next steps are
+  actions, not calls).
+
+planted:
+  - id: CLOSE-1
+    keywords: [engagement-summary, summary email, cover note, ".txt"]
+    min_severity: warning
+    must_find: true
+  - id: CLOSE-2
+    keywords: [signed, Morgan, "Hi,"]
+    min_severity: warning
+    must_find: true
+  - id: CLOSE-3
+    keywords: [next step, next steps, recommend, offer to]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  - id: FP-1
+    keywords: [phone call, hop on a call, schedule a call, set up a meeting, quick call, give me a ring]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

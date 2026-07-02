@@ -43,5 +43,7 @@ named below are the building blocks.
    email-format cover note (`docs/templates/engagement-summary-email.md`) saved as a **`.txt` in
    `artifacts/`**, **signed off as Morgan** ("Hi," if you don't know the recipient's name). It's an
    email, so it stays `.txt` - not rendered to HTML.
+8. **Run the mechanical DoD gate** - `python -m scripts.check_artifacts` - and fix anything it
+   flags (missing `.html` siblings or a missing summary email) before presenting the pack.
 
 Stop for human sign-off - real reviewers will read these, and approval/execution is theirs.

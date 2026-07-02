@@ -46,6 +46,13 @@ Route by **deliverable type**, not habit:
     when to use it); inconsistent descriptions read as a bug.
   - **Batch up to 4 questions in one tool call** (one screen) to cut round-trips - but they stay
     distinct questions; batching the *call* is not merging the *lists*.
+  - **Respect the tool's hard limits: max 4 questions per call, max 4 options per question**
+    ("Other" is added automatically). A menu that needs more options gets a locked two-stage
+    structure (a routing single-select, then grouped ≤4-option questions - see `engage` step 3),
+    never one oversized list the model has to improvise a split for. Free-text asks still need
+    2-4 real options, with "Other" carrying the bespoke answer.
+  - **Give every question a short `header`** (≤12 chars, e.g. `Depth`, `Fix-cycle`); locked menus
+    lock their headers too.
   - State the intended `multiSelect` value explicitly in the skill.
 
 ## Voice & console

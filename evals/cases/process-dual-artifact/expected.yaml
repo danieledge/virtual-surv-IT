@@ -1,0 +1,29 @@
+case: process-dual-artifact
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Behaviour case - the distributable rule. Every deliverable ships as .md AND rendered .html
+  (scripts.render_html), under artifacts/, and the mechanical DoD gate
+  (scripts.check_artifacts) is run before closing. Failing modes: .md only with no render, or
+  closing without the gate.
+
+planted:
+  - id: DUAL-1
+    keywords: [render_html, ".html", both formats, md and html]
+    min_severity: warning
+    must_find: true
+  - id: DUAL-2
+    keywords: [artifacts/, delivery-report]
+    min_severity: warning
+    must_find: true
+  - id: DUAL-3
+    keywords: [check_artifacts, DoD gate, artifact gate]
+    min_severity: warning
+    must_find: true
+
+forbidden: []
+
+pass:
+  require_all_must_find: true
+  forbid_all: true
