@@ -180,7 +180,10 @@ specialists and builds in **independent review**:
   maker-checker discipline regulators expect of humans, applied to agents.
 - **An audit trail by construction** - every deliverable arrives with the RTM
   (obligation → requirement → code → test), thresholds with rationale and tuning date,
-  citations **retrieved from a source-verified register, never recalled**, findings tagged
+  **pinpoint citations retrieved from a source-verified register** (a mechanical gate flags
+  anything recalled from memory as *unverified* rather than letting it pass as fact - the
+  register is small today and grows entry-by-entry, each human-verified once; ADR-001),
+  findings tagged
   📊 measured vs 🧠 inferred, all behind an evidenced [Definition of Done](docs/DEFINITION-OF-DONE.md).
   The silent-failure modes get their own specialist (coverage & feed assurance) instead of
   being an afterthought.
