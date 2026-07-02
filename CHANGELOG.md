@@ -3,7 +3,39 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.9.0] - 2026-07-02
+
+Plugin-mode operation everywhere, guard 0.4 (human-applied), the reworked README argument
+(domain case, hypothesis, chat-window differentiation, enforced principles), and the
+question-flow fixes.
+
+### ⚠️ Breaking changes - read this first if you used any 0.7.x or earlier
+
+These landed across 0.8.0 and this release; they are consolidated here because 0.8.0 shipped
+without a breaking-changes header and the project has no known external users yet - if you do
+have an existing install, this is the one section to read.
+
+- **The team no longer "just runs anywhere" - enablement is per project.** Installing the
+  plugin used to mean every project on the machine loaded the roster and could summon the
+  team. Now the documented (and intended) posture is: install once, then **enable the plugin
+  in each project that uses it** (README quick-start step 2). An old user-scope enablement
+  keeps functioning, but it taxes every session in every project ~1.2k tokens for agents most
+  projects never use - scope it. *Why: agent descriptions have no lazy-load mechanism;
+  per-project scoping is what makes the team genuinely free where it isn't wanted.*
+- **Summoning the team is now explicit - type the slash command.** All 20 skills set
+  `disable-model-invocation: true`, so their descriptions never load into context and the
+  model cannot auto-invoke them. In a foreign project, "hey, get the team to look at this"
+  no longer works - `/compliance-surveillance-team:engage` (or `/engage` in the repo) does.
+  *Why: dormancy - a team you didn't summon should cost nothing and never self-activate.*
+- **Answering "Yes" to execution no longer opens the gate - only you can.** The model is
+  blocked from writing `.claude/.exec-consent` (and `settings*.json`, and the hooks
+  themselves). Any workflow that runs tests or scripts now includes one human step: the team
+  shows the exact `touch` command with the absolute path, you run it. `CST_ALLOW_EXEC=1` at
+  launch remains the hard override; `CST_ALLOW_CONFIG_EDIT=1` is the new hook-maintenance
+  override. *Why: a confused or prompt-injected model must not be able to authorise itself.*
+- **Git history was rewritten on 2026-07-02** (AI-attribution commit trailers removed):
+  every commit SHA changed and all tags were force-moved. Re-clone (or
+  `git fetch && git reset --hard origin/main`) any existing clone or fork.
 
 ### Added
 - **Full plugin-mode operation: the helper scripts now work from any project.** The exec
