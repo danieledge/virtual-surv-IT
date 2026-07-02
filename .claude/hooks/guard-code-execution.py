@@ -9,17 +9,18 @@ default" a harness-enforced rule, not just a prompt the model might forget (CLAU
 
 Policy (Bash tool) - ALLOW everything if execution has been authorised, else BLOCK code that
 executes. Authorisation is granted by EITHER:
-  * the consent marker file `<project>/.claude/.exec-consent` - the team writes this once the
-    user answers "yes, you may execute" at intake (the convenient path), or
+  * the consent marker file `<project>/.claude/.exec-consent` - HUMAN-created (the model is
+    blocked from writing it by guard-consent-writes.py, ADR-002 rec 5), or
   * the env var CST_ALLOW_EXEC (truthy), set by the HUMAN in the launch environment / settings
     `env` (the harder override - the model cannot set it for this hook subprocess; also handy
     for CI).
 Otherwise -> BLOCK (exit 2) commands that EXECUTE code: test runners, profilers/benchmarks, and
 running a script/interpreter on a file. Static analysers, git and read-only utilities are
-allowed, as are the team's own `scripts/` helpers.
+allowed, as are the team's own `scripts/` helpers - including the plugin's bundled copies
+invoked by absolute path from a foreign project (basename-whitelisted; see _TEAM_ALLOW).
 
-Note on strength: the marker path is convenient but soft (the model *could* write the marker),
-so this is consent-recording + a safety net, not a sandbox. The env-var path is the hard one.
+Note on strength: consent is human-only since ADR-002 rec 5; this gate plus the consent-write
+gate is consent-recording + a safety net, not a sandbox.
 
 FAIL-OPEN RESIDUAL RISK (Bash): string-matching arbitrary shell is advisory only - obscure
 constructs can bypass any lexical check (indirection, subshells, eval). This is a strong
@@ -60,7 +61,9 @@ def _exec_authorised() -> bool:
 _PY = r"python(?:3(?:\.\d+)?)?"
 
 # Commands/patterns that EXECUTE code. Evaluated PER SEGMENT (see _segments). Each carries why
-# it counts as "execution". (Hardened per docs/adr/ADR-002 Tier 1.)
+# it counts as "execution". (Hardened per docs/adr/ADR-002 Tier 1; false positives fixed in
+# 0.4: `make` anchored to segment start - it blocked commit messages containing the word;
+# `sh <file>.sh` given a lookbehind - `shellcheck a.sh b.sh` matched the ".sh " boundary.)
 _EXEC_PATTERNS = [
     r"\bpytest\b",  # Python test runner - runs the code
     rf"\b{_PY}\s+-m\s+pytest\b",  # same, module form
@@ -83,20 +86,40 @@ _EXEC_PATTERNS = [
     r"\bmvn\b|\bgradle\b|\./gradlew\b",  # JVM build/test (executes)
     r"\bjava\s+(?!-version\b|--version\b|-help\b|--help\b|-h\b)(-jar\b|-cp\b|\S+\b)",  # run Java
     r"\bruby\s+\S+\.rb\b|\bperl\s+\S+\.pl\b|\bRscript\b",  # run Ruby/Perl/R scripts
-    # Task runners / build tools that execute project code.
-    r"\buv\s+run\b|\bpoetry\s+run\b|\bpipenv\s+run\b|\btox\b|\bnox\b|\bmake\b|\bdocker\s+run\b",
+    # Task runners / build tools that execute project code. `make` is anchored to the segment
+    # start: as a bare \b pattern it blocked any text containing the word (e.g. a commit
+    # message "docs: make the case" inside a heredoc line becomes its own segment).
+    r"\buv\s+run\b|\bpoetry\s+run\b|\bpipenv\s+run\b|\btox\b|\bnox\b|^make\b|\bdocker\s+run\b",
     r"(^|\s)\./\S+",  # executing a file by path (./foo, ./x.sh)
     r"\bsource\s+\S+|(^|\s)\.\s+\S+\.(?:sh|bash)\b",  # sourcing a script
-    r"\b(?:bash|sh|zsh|dash|ksh)\s+(?:-c\b|\S+\.(?:sh|bash)\b)",  # shell -c, or running a script file
+    # shell -c, or running a script file. The lookbehind stops the trailing "sh" of a FILENAME
+    # (run-guard.sh) matching as the shell command when followed by another *.sh argument
+    # (`shellcheck run-guard.sh install.sh` was blocked as if it were `sh install.sh`).
+    r"(?<![\w.-])(?:bash|sh|zsh|dash|ksh)\s+(?:-c\b|\S+\.(?:sh|bash)\b)",
     rf"\b{_PY}\s+\S*\.py\b",  # run a .py FILE (team's scripts/ are allow-listed separately)
 ]
 _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 
-# The team's OWN trusted tooling - allowed even though it runs python. ANCHORED at the start of a
-# segment (ADR-002: the old `.search()` matched anywhere, so `echo "scripts."; pytest` waved the
-# whole line through).
+# The team's OWN trusted tooling - allowed even though it runs python. ANCHORED at the start of
+# a segment (ADR-002: the old `.search()` matched anywhere, so `echo "scripts."; pytest` waved
+# the whole line through). Two forms:
+#   * repo-as-project: `python -m scripts.x` / `python scripts/x.py` / `bash scripts/x.sh`
+#   * plugin install in a foreign project: the bundled copy invoked by path
+#     (`python "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py" ...`) - allowed only for the
+#     team's own script BASENAMES below, so `python /tmp/scripts/evil.py` stays blocked.
+#     (Lexical, like everything here: a hostile file *named* render_html.py in a scripts/ dir
+#     would pass - accepted residual, consistent with ADR-002's threat model.)
+_TEAM_SCRIPT_NAMES = (
+    r"(?:render_html|ingest|gen_synthetic|synthesise|validate_masking|validate_manifest"
+    r"|check_citations|eval_score|calibrate_spoofing|check_artifacts)\.py"
+)
 _TEAM_ALLOW = re.compile(
-    rf"^(?:{_PY}\s+-m\s+scripts\.|{_PY}\s+scripts/|bash\s+scripts/|scripts/check-review-tools\.sh)",
+    rf"^(?:{_PY}\s+-m\s+scripts\."
+    rf"|{_PY}\s+scripts/"
+    rf"|{_PY}\s+[\"']?\S*/scripts/{_TEAM_SCRIPT_NAMES}\b"
+    rf"|bash\s+[\"']?\S*/scripts/check-review-tools\.sh\b"
+    rf"|bash\s+scripts/"
+    rf"|scripts/check-review-tools\.sh)",
     re.IGNORECASE,
 )
 
@@ -111,14 +134,17 @@ def _segments(cmd: str) -> list[str]:
 
 
 def _block(cmd: str, segment: str | None = None) -> None:
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    marker = os.path.join(root, ".claude", ".exec-consent")
     sys.stderr.write(
         "Blocked (code-execution gate, CLAUDE.md §7): this command EXECUTES code, and review is "
         "static by default. Running the code under review (its tests, the script itself, or a "
         "profiler/benchmark) needs authorisation.\n"
         "To allow execution - ONLY for trusted code in a safe/dev or sandbox environment on "
-        "synthetic data - confirm at intake so the team records consent (creates "
-        ".claude/.exec-consent), or set CST_ALLOW_EXEC=1 in the launch environment. Otherwise "
-        "keep findings static / 🧠 inferred.\n"
+        "synthetic data - the USER grants consent (the model cannot): run "
+        f"`touch {marker}` in any terminal (or `! touch {marker}` as the first characters of "
+        "the prompt line), or set CST_ALLOW_EXEC=1 in the launch environment. Otherwise keep "
+        "findings static / 🧠 inferred.\n"
         f"Offending segment: {(segment or cmd)[:200]}\n"
     )
     sys.exit(2)
@@ -133,7 +159,7 @@ def main() -> None:
     if payload.get("tool_name", "") != "Bash":
         sys.exit(0)
 
-    # Execution authorised (consent marker written on "yes", or human env-var override).
+    # Execution authorised (human-created consent marker, or human env-var override).
     if _exec_authorised():
         sys.exit(0)
 

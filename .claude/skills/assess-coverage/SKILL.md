@@ -12,7 +12,8 @@ Assess **surveillance coverage** for: **$ARGUMENTS**
 > periodic umbrella review that invokes this plus tuning and data-quality and adds an
 > independent model-validator verdict, use `/validate-tm-model`.
 
-> Why this matters (FCA Market Watch 79, verified): surveillance failures often come from **data
+> Why this matters ([FCA Market Watch 79](https://www.fca.org.uk/publications/newsletters/market-watch-79),
+> May 2024, verified): surveillance failures often come from **data
 > gaps, not thresholds** - a feed left un-activated meant an insider-dealing scenario fired **zero
 > alerts for 3+ years**. And effective testing is **four-component** (parameter calibration · model
 > logic · model code · **data** comprehensiveness/accuracy), not calibration alone. This skill

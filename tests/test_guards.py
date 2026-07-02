@@ -220,6 +220,54 @@ def test_exec_guard_allows_benign_chain(no_consent):
     assert _run(_EXEC_GUARD, _bash("git diff --stat && ruff check scripts/"), no_consent) == ALLOW
 
 
+# --- 0.4 guard update: plugin-path team scripts + false-positive fixes ----------
+
+
+def test_exec_guard_allows_bundled_scripts_by_path(no_consent):
+    # Plugin mode: the team's own scripts invoked by absolute/skill-relative path must run,
+    # so /engage works from a foreign project (basename-whitelisted).
+    assert (
+        _run(
+            _EXEC_GUARD,
+            _bash('python3 "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py" artifacts/x.md'),
+            no_consent,
+        )
+        == ALLOW
+    )
+    assert (
+        _run(_EXEC_GUARD, _bash("python3 /opt/plugin/scripts/check_artifacts.py"), no_consent)
+        == ALLOW
+    )
+
+
+def test_exec_guard_blocks_non_team_script_in_a_scripts_dir(no_consent):
+    # The path allow-list is basename-whitelisted: an arbitrary file in a scripts/ dir stays
+    # blocked.
+    assert _run(_EXEC_GUARD, _bash("python3 /tmp/scripts/evil.py"), no_consent) == BLOCK
+
+
+def test_exec_guard_allows_shellcheck_over_multiple_sh_files(no_consent):
+    # False positive fixed: the trailing "sh" of one FILENAME followed by another *.sh argument
+    # matched the `sh <file>.sh` runner pattern.
+    assert (
+        _run(
+            _EXEC_GUARD,
+            _bash("shellcheck .claude/hooks/run-guard.sh scripts/install-git-hooks.sh"),
+            no_consent,
+        )
+        == ALLOW
+    )
+
+
+def test_exec_guard_allows_make_as_prose_not_command(no_consent):
+    # False positive fixed: `make` is anchored to the segment start - the word inside a commit
+    # message must not read as the build tool.
+    assert (
+        _run(_EXEC_GUARD, _bash('git commit -m "docs: make the domain case"'), no_consent) == ALLOW
+    )
+    assert _run(_EXEC_GUARD, _bash("make test"), no_consent) == BLOCK  # the real runner
+
+
 # --- Crash paths fail CLOSED (setup audit 2026-07-01) --------------------------
 # An uncaught exception used to exit 1, which Claude Code treats as NON-blocking -
 # the action proceeded and the gate was silently disarmed. The guards now wrap

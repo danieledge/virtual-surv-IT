@@ -6,6 +6,19 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ## [Unreleased]
 
 ### Added
+- **Full plugin-mode operation: the helper scripts now work from any project.** The exec
+  guard's allow-list accepts the team's bundled scripts invoked **by path** (basename-
+  whitelisted), so an installed plugin can render `.md`→`.html`, generate synthetic data and
+  run the DoD artifact gate from a foreign project - no repo checkout needed. `/engage` step 0
+  resolves the run mode once (`ls scripts/render_html.py`), states it in the opening banner,
+  and the operating guide carries the resolution rule + the plugin-mode masking prerequisites
+  (own `config/masking-schema.yaml` + `MASKING_KEY`). The README's "works everywhere vs
+  repo-as-project" memory-burden callout is replaced by self-detection. Guard changes were
+  **human-applied** (the consent-write gate blocks the model editing the guards - the user
+  copied in the prepared files); two live false positives fixed in the same update (`make`
+  inside commit messages; multi-file `shellcheck`), block messages now print absolute marker
+  paths, and 4 new regression tests cover all of it. ADR-002 → 0.4. Also: the FCA Market
+  Watch 79 citation now links to the source (fca.org.uk, verified 2026-07-02).
 - **CI pipeline documented** (`CONTRIBUTING.md`): the four GitHub-Actions jobs (tests+validators
   · lint/format/security · full-history secret scan · no-raw-data), where they run
   (GitHub-hosted ephemeral runners), triggers, how to watch runs, what CI deliberately cannot

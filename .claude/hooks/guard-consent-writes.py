@@ -12,13 +12,16 @@ spontaneously. This guard closes the loop:
   targeting:
     * `.exec-consent` (the execution-consent marker), or
     * `.claude/settings.json` / `.claude/settings.local.json` (permissions + hook wiring).
+  Also BLOCK Write/Edit of the safety hooks themselves (`.claude/hooks/*`, `hooks/hooks.json`) -
+  a model that can edit a guard can neuter it. (Write/Edit channel only: Bash rules for hook
+  paths would false-positive on legitimate static analysis and are advisory anyway, ADR-002.)
 
   ALLOW deleting the marker (closing the gate is always fail-safe: `rm .claude/.exec-consent`),
-  and read-only inspection (ls/stat/cat/test/grep without a redirect).
+  and read-only inspection (ls/stat/cat/test/grep without a redirect into a protected file).
 
 How consent is granted now (human-only paths):
-  * the user types `! touch .claude/.exec-consent` (the `!` prefix runs it as the user's own
-    shell command) or creates the file in any terminal, or
+  * the user runs `touch <project>/.claude/.exec-consent` in any terminal (or with the `!`
+    prefix as the first characters of the Claude prompt line), or
   * the user sets CST_ALLOW_EXEC=1 in the launch environment (the hard override).
 
 Maintenance escape hatch: CST_ALLOW_CONFIG_EDIT=1 (human-set in the launch environment - the
@@ -73,12 +76,16 @@ def _protected(text: str) -> bool:
 
 
 def _block(what: str) -> None:
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    marker = os.path.join(root, ".claude", ".exec-consent")
     sys.stderr.write(
         "Blocked (consent-write gate, ADR-002 rec 5): the model must not create or modify "
         f"{what}. Execution consent and harness config are HUMAN-only:\n"
-        "- to grant execution consent, the USER types `! touch .claude/.exec-consent` (or "
-        "creates the file in a terminal), or sets CST_ALLOW_EXEC=1 in the launch environment;\n"
-        "- config edits need CST_ALLOW_CONFIG_EDIT=1 set by the human in the launch environment.\n"
+        f"- to grant execution consent, the USER runs `touch {marker}` in any terminal (or "
+        f"`! touch {marker}` as the first characters of the prompt line), or sets "
+        "CST_ALLOW_EXEC=1 in the launch environment;\n"
+        "- config/hook edits need CST_ALLOW_CONFIG_EDIT=1 set by the human in the launch "
+        "environment.\n"
         "Deleting the marker (closing the gate) and read-only inspection remain allowed.\n"
     )
     sys.exit(2)
@@ -116,7 +123,7 @@ def main() -> None:
             if _SAFE_VERB.match(seg):
                 continue  # read or delete - safe direction
             # Default-deny: unknown verb touching a protected file (touch/cp/mv/sed -i/git
-            # checkout/…) - opening the gate or mutating config must come from the human.
+            # checkout/...) - opening the gate or mutating config must come from the human.
             _block(f"consent-marker/config files via Bash ({seg[:120]})")
 
     sys.exit(0)
