@@ -105,8 +105,9 @@ framing; Morgan states the loaded version on startup; safety-hook hardening (ADR
 
 ### Why surveillance & financial-crime IT is a uniquely hard place to build
 
-Surveillance technology isn't ordinary software delivery. Four things make it brutal - and make
-it exactly the domain where an AI *team* beats an AI *assistant*:
+Surveillance technology isn't ordinary software delivery. Four things make it brutal - and, as
+the next two sections argue, make it a domain where AI can genuinely help, provided it arrives
+as a *team with controls* rather than a chat window:
 
 - **The expertise doesn't live in one head.** A single change - say, tightening a spoofing
   threshold - crosses regulatory interpretation, requirements analysis, detection engineering,
@@ -127,11 +128,39 @@ it exactly the domain where an AI *team* beats an AI *assistant*:
   PII and potentially MNPI. You cannot simply paste it into an AI tool; any AI approach has to
   be *structurally* incapable of exfiltrating it, not just told to be careful.
 
-### Why a specialist team with independent review answers all four
+### The hypothesis this project explores: AI can genuinely help here
 
-A single general-purpose assistant does each of those disciplines shallowly, with nobody
-checking its work - and its output is a chat transcript, not an audit trail. Virtual Surv-IT
-splits the work across specialists and builds in **independent review**:
+Those four pressures are, on inspection, a surprisingly good match for what large language
+models are actually good at - and that match is the **hypothesis Virtual Surv-IT was built to
+test**, not an assumption it starts from:
+
+- Most of the work is **translation between formalisms**: regulation → requirement → spec →
+  code → test → evidence. Each hop is language work with a checkable output - the sweet spot
+  of an LLM, and each hop is where surveillance change is slowest today.
+- The **evidenced 80% is exactly the automatable 80%**: specs, RTMs, tuning packs, QA
+  evidence, handover docs and MI are structured documents derived from decisions - an LLM can
+  draft them consistently, in minutes, every time, while the *decisions* stay human.
+- **Consistency is a feature the domain buys, not a nicety**: a regulator comparing two tuning
+  packs from two quarters benefits from them being structurally identical; humans drift,
+  templates + agents don't.
+- The **failure modes of AI are manageable with the domain's own tools**: hallucinated
+  citations → retrieval from a verified register; unchecked output → independent review;
+  over-claiming → evidence tagging; data exposure → hard architectural blocks. The domain has
+  spent decades building controls for fallible humans - they transfer.
+
+The project's demos, worked example and [eval harness](#-self-test-eval-harness) are the
+evidence gathered so far: an end-to-end build with measured calibration on synthetic data,
+reviews that catch seeded defects without inflating clean code, and safety guards that hold
+under test (and have caught their own authors). Where the hypothesis is *not* yet proven, the
+repo says so - see the evidence basis in [`docs/house-rules.md`](docs/house-rules.md) and the
+[known issues](#known-issues).
+
+### Why a specialist *team* with independent review - not one assistant
+
+But "AI can help" is not the same as "one AI assistant can help". A single general-purpose
+assistant does each of those disciplines shallowly, with nobody checking its work - and its
+output is a chat transcript, not an audit trail. Virtual Surv-IT splits the work across
+specialists and builds in **independent review**:
 
 - **Business analysis** - turning a regulatory obligation into a buildable, unambiguous spec.
 - **Surveillance rule development** - deterministic, tested detection logic.
