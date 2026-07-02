@@ -204,6 +204,25 @@ maintainable** output than one generalist assistant - because the work is specia
 the proof-of-concept framing above: a demonstration of the architecture, for real engineers
 and reviewers to build on - not accredited regulatory tooling.)*
 
+### "I already have ChatGPT / Claude / Copilot - why would I need this?"
+
+You do already have the engine. This is the vehicle. Virtual Surv-IT *runs on* Claude - it is
+not a rival model but a demonstration of what the same model does when you stop driving it
+from a blank chat box. Concretely, a chat window cannot give you:
+
+| With a chat window | With this |
+|---|---|
+| The quality of the output depends on the quality of *today's* prompt - your best prompting on a good day, someone else's on a bad one. | The prompting **is the repo**: intake questions, review method, templates, standing rules - version-controlled, peer-reviewable, identical on every engagement, regression-tested by an eval harness. |
+| The domain knowledge has to be typed in every session: typologies, MW79, SR 11-7, ATL/BTL method, EARS syntax… | Encoded once, cited to sources, and loaded only when relevant - with a register that grows instead of a prompt that gets retyped. |
+| One context does everything: it writes the code, reviews its own code, and declares itself done. | **Segregation of duties by tool grant**: reviewers physically cannot edit, QA does not test its own build, the validator is independent of the builder - and a fresh context reviews without the author's bias. |
+| Whatever you paste **leaves** - into someone's context window, on their retention terms. | Raw data is **structurally unreachable** (hook + OS permissions + a CI check); the model works downstream of masking, and code execution needs a consent file only a human can create. |
+| The output is a transcript. Six months later an auditor asks "why this threshold?" and the answer is scrolling. | The output is an **evidence pack**: RTM, tuning rationale with dates, finding dispositions, review reports, a Definition of Done - in `.md` + `.html`, gated by a mechanical check. |
+| The discipline lives in your head and leaves with you. | The discipline lives in the harness and survives staff turnover, deadline pressure, and whoever types next. |
+
+None of that requires a better model. It requires the model to arrive inside **controls** -
+which is also why the pattern transfers: swap the surveillance domain knowledge for another
+regulated domain and the harness (dormancy, gates, segregation, evidence, evals) carries over.
+
 <sub>[↑ Back to top](#readme-top)</sub>
 
 ## ✨ Features
