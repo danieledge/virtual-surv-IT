@@ -7,9 +7,9 @@ keep contributions consistent with the project's own standards.
 ## Ground rules (non-negotiable)
 
 - **Never commit real data or secrets.** All examples and tests use **synthetic or masked** data
-  (`CLAUDE.md` §5). `data/raw/` is git-ignored and blocked from agents by a hook — keep it that way.
+  (`CLAUDE.md` §5). `data/raw/` is git-ignored and blocked from agents by a hook - keep it that way.
 - **No hard-coded credentials.** Read from the environment (e.g. `MASKING_KEY`). CI runs gitleaks.
-- **Detection logic must stay explainable and auditable** — documented thresholds with a rationale
+- **Detection logic must stay explainable and auditable** - documented thresholds with a rationale
   and tuning date, and a traceable link from alert → logic → obligation (`CLAUDE.md` §4).
 
 ## Local setup
@@ -89,22 +89,22 @@ Two things worth knowing:
 
 ## Adding or changing components
 
-- **Agent** — add `.claude/agents/<slug>.md` with frontmatter (`name`, `description`, `model`,
+- **Agent** - add `.claude/agents/<slug>.md` with frontmatter (`name`, `description`, `model`,
   `tools`). Advisory/read-only agents must **not** hold `Write`/`Edit` (`CLAUDE.md` §7). Then
-  **register it in `.claude-plugin/plugin.json`** (`agents` array) — `validate_manifest` enforces
+  **register it in `.claude-plugin/plugin.json`** (`agents` array) - `validate_manifest` enforces
   that the declared set matches the files on disk.
-- **Model tier** — if you set or change an agent's `model:`, update the tier table in
+- **Model tier** - if you set or change an agent's `model:`, update the tier table in
   **`docs/agent-design.md`** in the same change. The two are expected to stay in sync.
-- **Skill** — add `.claude/skills/<name>/SKILL.md` (the command name comes from the directory
+- **Skill** - add `.claude/skills/<name>/SKILL.md` (the command name comes from the directory
   name; frontmatter needs `description` and **must include `disable-model-invocation: true`** -
   the team's dormancy rule: skill descriptions never load into ordinary sessions, and workflows
   are chained by reading the routed skill's file, not via the Skill tool). The plugin loads the
   whole skills directory.
-- **Template** — add `docs/templates/<name>.md` carrying the document-control header
+- **Template** - add `docs/templates/<name>.md` carrying the document-control header
   (id / version / revision-history / owner / status / classification / as-of) defined in
   `docs/WAYS-OF-WORKING.md`, and reference it from the skill that produces it.
 - **Artifacts** are authored in Markdown and rendered to standalone HTML with
-  `python -m scripts.render_html` — produce both `.md` and `.html`.
+  `python -m scripts.render_html` - produce both `.md` and `.html`.
 
 ## Safety hooks
 
@@ -112,7 +112,7 @@ Two things worth knowing:
 code execution) and `guard-consent-writes.py` (blocks model writes of the consent marker,
 settings and the hooks themselves) are security controls. Their wiring is duplicated by design
 between `hooks/hooks.json` (plugin scope) and `.claude/settings.json` (project scope) and the
-two must stay byte-identical — `tests/test_hooks_in_sync.py` enforces this. **Editing the hook
+two must stay byte-identical - `tests/test_hooks_in_sync.py` enforces this. **Editing the hook
 files from inside a Claude session requires the human-set `CST_ALLOW_CONFIG_EDIT=1`** (the
 consent-write guard blocks model edits of them - by design). See `docs/house-rules.md` and
 `docs/adr/ADR-002`.

@@ -122,7 +122,7 @@ threshold leaves behind:
 | 0.50 - 0.75 | 24 | 192 | 1 : 8 |
 | 0.75 - 1.00 | 36 | 43 | ~1 : 1 |
 | 1.00 - 1.50 | 113 | 4 | 28 : 1 |
-| 1.50 + | 102 | 0 | — |
+| 1.50 + | 102 | 0 | - |
 
 **Reading the BTL:**
 - Just **under 0.75** (the 0.50-0.75 band): 24 genuine wash pairs are missed - but the band is
@@ -193,7 +193,7 @@ defensible statistical anchor (just above the legit-population P99).
 prints) and 47 false positives survive into the queue - acceptable given the §5 BTL shows the
 missed band is benign-dominated and the survivors are individually reviewable. 🧠
 
-**Honest caveat (load-bearing).** Every number here is **📊 observed on a *synthetic* distribution**
+**Caveat (load-bearing).** Every number here is **📊 observed on a *synthetic* distribution**
 with a deliberately high 12.5% wash base rate (chosen for statistical power, n=300 wash). It
 validates the **calibration method and the *relative* trade-off between thresholds** - it is **not**
 a real-world production number. Two consequences: (a) at realistic (far lower) wash base rates,

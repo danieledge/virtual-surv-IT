@@ -37,7 +37,7 @@ next-step options with a recommendation** - never a dead end.
 > "before" and show the resolved state here - do not rewrite the source** (it's the audit trail of
 > what was caught). **Distinguish two kinds of "open":** *unresolved defects* (a real problem -
 > the verdict can't be ready) vs *deferred deploy-gates* (e.g. calibrate on real data, scale-test,
-> human sign-off) that are **correctly** open and out of scope for this stage. An honest report
+> human sign-off) that are **correctly** open and out of scope for this stage. A report
 > showing the latter as open is *good*; a report that hides them to look "all green" is the failure.
 
 ## 2. Scope & what was delivered

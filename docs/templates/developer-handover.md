@@ -49,7 +49,7 @@ Inputs/outputs, classification, and how synthetic/masked data is used (CLAUDE.md
 > credentials, or connection strings to this file.
 
 ## 7. Known limitations & technical debt
-Honest list of what's incomplete, fragile, or deliberately deferred - with severity.
+A complete list of what's incomplete, fragile, or deliberately deferred - with severity.
 
 ## 8. How to extend
 Where to add a new rule / pipeline stage / script; conventions to follow; what tests to add.

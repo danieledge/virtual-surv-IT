@@ -17,7 +17,7 @@ false`): report only · apply fixes · fix→re-review loop (the default here). 
 changing the user's code.** Don't blur in the handover pack - that's a **deliverable**, offered
 from the artifact menu / at close, not mixed into this action question.
 
-Run an **evaluator–optimizer loop**:
+Run an **evaluator-optimizer loop**:
 
 1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first) - comprehensive review
    across the languages present, driving the standard analysers (ruff/mypy/bandit,
@@ -44,7 +44,7 @@ Run an **evaluator–optimizer loop**:
    the console**, with the full findings in the **clean artifact**. Give an explicit verdict
    (✅ audit-ready / ⚠️ conditional / ❌ not yet), standards cited, audit/regulatory checks, the
    🔵 style & form lane, a tooling-coverage section, **and - MANDATORY - a `## 🔵 Developer
-   guidance - improving future code` section** (2–4 points, even on a clean pass; verify it's in
+   guidance - improving future code` section** (2-4 points, even on a clean pass; verify it's in
    the artifact before presenting). Use the standalone clean review artifact by default; fold
    into the consolidated `delivery-report.md` only when audit is part of a larger handover.
 

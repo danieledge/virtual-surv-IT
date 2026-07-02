@@ -8,7 +8,7 @@ is going on anywhere in the trading floor, we want to catch it. Build us a scena
 A specification we can hand to the build team to detect suspicious trading activity.
 
 ## Detail
-That is honestly about as far as we have got. We have not said:
+That is as far as we have got. We have not said:
 
 - which **instruments** or asset classes are in scope (equities? fixed income? derivatives?
   FX? crypto?);

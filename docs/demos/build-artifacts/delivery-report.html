@@ -50,7 +50,7 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-06-30</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-02</span></header>
 <h1 id="delivery-report-ts-001-wash-trade-self-match-detection-demo">Delivery Report - TS-001 Wash Trade / Self-Match Detection (DEMO)</h1>
 <blockquote>
 <p><strong>Document control</strong> · ID <code>DLVR-001</code> · Version <code>0.1</code> · Status <code>In review</code> · Classification <code>Internal</code> · Owner <code>PM (Morgan)</code> · As-of <code>2026-06-30</code></p>
@@ -72,9 +72,9 @@ a { color: #0969da; }
 </tr>
 </tbody>
 </table>
-<p><strong>⏩ AFTER — "as-delivered" snapshot.</strong> The full DoD chain on one page, <em>after</em> the review fix-loop.
+<p><strong>⏩ AFTER - "as-delivered" snapshot.</strong> The full DoD chain on one page, <em>after</em> the review fix-loop.
 Pair it with the <a href="qa-handover.html">QA handover</a> and the review findings below (the ⏪ <em>as-found</em>
-record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo artifact, not production logic.</strong></p>
+record - preserved, not retro-edited). Synthetic only (§5); a <strong>demo artifact, not production logic.</strong></p>
 </blockquote>
 <table>
 
@@ -89,7 +89,7 @@ record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo ar
 </tr>
 <tr>
 <td><strong>Obligation</strong></td>
-<td><strong>EU MAR Art 12(1)(a)</strong> — register-<code>[VERIFIED]</code>. All other pinpoints (Art 12(2)(c) + non-EU equivalents) <strong><code>[TO-VERIFY]</code> 🧠</strong>. <code>obligation_status = PROVISIONAL</code>.</td>
+<td><strong>EU MAR Art 12(1)(a)</strong> - register-<code>[VERIFIED]</code>. All other pinpoints (Art 12(2)(c) + non-EU equivalents) <strong><code>[TO-VERIFY]</code> 🧠</strong>. <code>obligation_status = PROVISIONAL</code>.</td>
 </tr>
 <tr>
 <td><strong>Date</strong></td>
@@ -97,16 +97,16 @@ record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo ar
 </tr>
 <tr>
 <td><strong>Verdict</strong></td>
-<td>✅ <strong>Demo-complete</strong> — every chain stage ran (spec → SME → build → independent QA → code/compliance/performance review → measured tuning → delivery). <strong>Not deployable</strong> until: obligation mapping finalised (SME Q1/Q3/Q4), threshold re-confirmed on real data, the O(B×S) pairing bucketed, and a human signs off.</td>
+<td>✅ <strong>Demo-complete</strong> - every chain stage ran (spec → SME → build → independent QA → code/compliance/performance review → measured tuning → delivery). <strong>Not deployable</strong> until: obligation mapping finalised (SME Q1/Q3/Q4), threshold re-confirmed on real data, the O(B×S) pairing bucketed, and a human signs off.</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p><strong>Status in one line:</strong> code-review <strong>defects ✅ Fixed</strong> (43/43 tests green); what's open is <strong>by design</strong> — the obligation mapping (PROVISIONAL, SME blockers Q1/Q3/Q4), the performance <strong>deploy-gates</strong> (⏭️ bucket the pairing before production volume), the synthetic-only tuning number (⏭️ re-confirm on real data), and <strong>human sign-off ⛔ Pending</strong>.</p>
+<p><strong>Status in one line:</strong> code-review <strong>defects ✅ Fixed</strong> (43/43 tests green); what's open is <strong>by design</strong> - the obligation mapping (PROVISIONAL, SME blockers Q1/Q3/Q4), the performance <strong>deploy-gates</strong> (⏭️ bucket the pairing before production volume), the synthetic-only tuning number (⏭️ re-confirm on real data), and <strong>human sign-off ⛔ Pending</strong>.</p>
 </blockquote>
 <hr>
 <h2 id="1-what-was-built">1. What was built</h2>
-<p>A deterministic, explainable detector (<code>ts001_wash_trade.py</code>, self-contained — does not import the repo <code>rules/</code>). It groups trades by <code>ubo_group_id</code> (Phase-1 UBO-only, per SME Q4), pairs opposing buy/sell legs in the same instrument within a lookback, and applies <strong>off-market price as a NECESSARY early-continue condition</strong> (DR-002), spread-normalised against the <strong>time-weighted</strong> spread. Safe-harbour (DR-003) and immaterial-notional (DR-004) pairs are suppressed; accounts on a stale UBO graph are excluded per-account with a data-quality warning (DR-005); the implied-match tier (DR-006) is <strong>off</strong> at launch (SME Q5). <code>detect_wash_trades(trades, ubo_links, market_snapshots, as_of_date, params=None)</code> returns a <code>DetectionResult</code> (<code>alerts</code>, <code>data_quality_warnings</code>, <code>suppressions</code>).</p>
+<p>A deterministic, explainable detector (<code>ts001_wash_trade.py</code>, self-contained - does not import the repo <code>rules/</code>). It groups trades by <code>ubo_group_id</code> (Phase-1 UBO-only, per SME Q4), pairs opposing buy/sell legs in the same instrument within a lookback, and applies <strong>off-market price as a NECESSARY early-continue condition</strong> (DR-002), spread-normalised against the <strong>time-weighted</strong> spread. Safe-harbour (DR-003) and immaterial-notional (DR-004) pairs are suppressed; accounts on a stale UBO graph are excluded per-account with a data-quality warning (DR-005); the implied-match tier (DR-006) is <strong>off</strong> at launch (SME Q5). <code>detect_wash_trades(trades, ubo_links, market_snapshots, as_of_date, params=None)</code> returns a <code>DetectionResult</code> (<code>alerts</code>, <code>data_quality_warnings</code>, <code>suppressions</code>).</p>
 <h2 id="2-requirements-traceability-matrix-rtm">2. Requirements Traceability Matrix (RTM)</h2>
 <table>
 <thead>
@@ -183,67 +183,67 @@ record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo ar
 <td>W1 / NOTE-001</td>
 <td>code-review + QA</td>
 <td>Non-positive <code>mid</code> silently dropped (silent false-negative)</td>
-<td><strong>✅ Fixed</strong> — DQ guard added (mirrors the spread guard); test added; 43/43 green</td>
+<td><strong>✅ Fixed</strong> - DQ guard added (mirrors the spread guard); test added; 43/43 green</td>
 </tr>
 <tr>
 <td>M4</td>
 <td>code-review</td>
 <td>Multiple UBO edges handled order-dependently</td>
-<td><strong>✅ Fixed</strong> — freshest-edge-per-account; test added</td>
+<td><strong>✅ Fixed</strong> - freshest-edge-per-account; test added</td>
 </tr>
 <tr>
 <td>M3</td>
 <td>code-review</td>
 <td>Safe-harbour <strong>register</strong> branch + boundaries untested</td>
-<td><strong>✅ Covered</strong> — QA suite added register / boundary tests</td>
+<td><strong>✅ Covered</strong> - QA suite added register / boundary tests</td>
 </tr>
 <tr>
 <td>C1</td>
 <td>compliance</td>
 <td>Old QA file tested a prior API + the rejected "abort" behaviour</td>
-<td><strong>✅ Resolved</strong> — QA suite regenerated against the delivered detector (31 tests)</td>
+<td><strong>✅ Resolved</strong> - QA suite regenerated against the delivered detector (31 tests)</td>
 </tr>
 <tr>
 <td>C2 / W2</td>
 <td>compliance</td>
 <td>Old delivery report + RTM described a non-existent API; stale dates</td>
-<td><strong>✅ Resolved</strong> — this report (delivered API, 2026-06-30)</td>
+<td><strong>✅ Resolved</strong> - this report (delivered API, 2026-06-30)</td>
 </tr>
 <tr>
 <td>W1 (compliance)</td>
 <td>compliance</td>
 <td><code>.html</code> stale vs sources</td>
-<td><strong>✅ Resolved</strong> — all artifacts re-rendered at compile</td>
+<td><strong>✅ Resolved</strong> - all artifacts re-rendered at compile</td>
 </tr>
 <tr>
 <td>M1</td>
 <td>code-review</td>
 <td><code>MARKET_MAKER</code> as a per-order tag vs designated-status register</td>
-<td><strong>⏭️ Deferred</strong> — SME Q2 decision (designated-status register vs per-order capacity); obligation PROVISIONAL</td>
+<td><strong>⏭️ Deferred</strong> - SME Q2 decision (designated-status register vs per-order capacity); obligation PROVISIONAL</td>
 </tr>
 <tr>
 <td>M2</td>
 <td>code-review</td>
 <td>Off-market threshold reference frame (mid vs touch)</td>
-<td><strong>⏭️ Deferred → tuning</strong> — Theo's measured recommendation below; comment added; constant left pending real-data confirmation</td>
+<td><strong>⏭️ Deferred → tuning</strong> - Theo's measured recommendation below; comment added; constant left pending real-data confirmation</td>
 </tr>
 <tr>
 <td>PERF-F1</td>
 <td>performance</td>
-<td>Unbucketed <strong>O(B×S)</strong> pairing — will not scale</td>
-<td><strong>🔴 Open (deploy-gate)</strong> — bucket by <code>(instrument, ubo_group_id)</code> before production volume</td>
+<td>Unbucketed <strong>O(B×S)</strong> pairing - will not scale</td>
+<td><strong>🔴 Open (deploy-gate)</strong> - bucket by <code>(instrument, ubo_group_id)</code> before production volume</td>
 </tr>
 <tr>
 <td>PERF-F2</td>
 <td>performance</td>
 <td>Per-pair DQ-warning string blow-up</td>
-<td><strong>🔴 Open (deploy-gate)</strong> — dedupe by <code>(instrument, date)</code></td>
+<td><strong>🔴 Open (deploy-gate)</strong> - dedupe by <code>(instrument, date)</code></td>
 </tr>
 </tbody>
 </table>
 <p><strong>Disposition tally:</strong> ✅ 6 Fixed/Resolved · 🔴 2 Open (performance deploy-gates) · ⏭️ 2 Deferred (SME Q2; real-data tuning) · ⚖️ 0 Accepted.</p>
-<p><em>Two kinds of "open":</em> there are <strong>no unresolved defects</strong> — the build is green. The Open items are <strong>deploy-gates</strong> (production-scale performance) and the Deferred items are decisions that correctly sit with the SME / real-data calibration, not the demo.</p>
-<h2 id="4-tuning-measured-atlbtl-theo">4. Tuning (measured ATL/BTL — Theo)</h2>
+<p><em>Two kinds of "open":</em> there are <strong>no unresolved defects</strong> - the build is green. The Open items are <strong>deploy-gates</strong> (production-scale performance) and the Deferred items are decisions that correctly sit with the SME / real-data calibration, not the demo.</p>
+<h2 id="4-tuning-measured-atlbtl-theo">4. Tuning (measured ATL/BTL - Theo)</h2>
 <p>On a <strong>seeded synthetic</strong> labelled set (n=2,400; 300 wash / 2,100 legit; three liquidity segments), sweeping the off-market spread-multiple:</p>
 <table>
 <thead>
@@ -259,7 +259,7 @@ record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo ar
 <td>0.5 (the touch)</td>
 <td>0.535</td>
 <td>0.917</td>
-<td>over-alerts — untenable</td>
+<td>over-alerts - untenable</td>
 </tr>
 <tr>
 <td><strong>0.75 (recommended)</strong></td>
@@ -275,12 +275,12 @@ record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo ar
 </tr>
 </tbody>
 </table>
-<p><strong>Recommendation:</strong> <code>off_market_spread_multiple = 0.75</code>, <strong>mid-referenced</strong>, single threshold across segments (spread-normalisation holds per-segment). <strong>Honest caveat (📊→context):</strong> measured on a <em>synthetic</em> distribution with an inflated 12.5% base rate — this validates the <strong>method and the relative trade-off</strong>, <strong>not</strong> a production number; the 0.75 knee must be re-confirmed on masked/real data before go-live. The constant is therefore <strong>recorded as a recommendation, not hard-coded</strong> (kept conservative; <code>tuning_date</code> to be stamped on real-data confirmation).</p>
+<p><strong>Recommendation:</strong> <code>off_market_spread_multiple = 0.75</code>, <strong>mid-referenced</strong>, single threshold across segments (spread-normalisation holds per-segment). <strong>Caveat (📊→context):</strong> measured on a <em>synthetic</em> distribution with an inflated 12.5% base rate - this validates the <strong>method and the relative trade-off</strong>, <strong>not</strong> a production number; the 0.75 knee must be re-confirmed on masked/real data before go-live. The constant is therefore <strong>recorded as a recommendation, not hard-coded</strong> (kept conservative; <code>tuning_date</code> to be stamped on real-data confirmation).</p>
 <h2 id="5-developer-handover">5. Developer handover</h2>
 <ul>
 <li><strong>Build/run:</strong> <code>pip install -r requirements-dev.txt</code>; <code>python -m pytest docs/demos/build-artifacts/test_ts001_wash_trade.py docs/demos/build-artifacts/test_ts001_qa.py -q</code> → <strong>43 passed</strong>.</li>
 <li><strong>Entry point:</strong> <code>detect_wash_trades(trades, ubo_links, market_snapshots, as_of_date, params=None) -&gt; DetectionResult</code>. Inputs: <code>Trade</code>, <code>UBOLink(account_id, ubo_group_id, graph_as_of_date)</code>, <code>MarketSnapshot(instrument, snapshot_date, mid_price, time_weighted_spread_bps)</code>. All <code>DetectionParams</code> have documented defaults with a rationale + <code>tuning_date</code> placeholder.</li>
-<li><strong>Known limitations / tech debt (must close before production):</strong> (1) <strong>PERF-F1/F2</strong> — bucket the pairing + dedupe DQ warnings, then benchmark at 100K/1M (<code>pytest-benchmark</code>). (2) <strong>Obligation mapping PROVISIONAL</strong> — resolve SME Q1/Q3/Q4 (Legal), verify the <code>[TO-VERIFY]</code> citations against primary sources and add to the register. (3) <strong>Threshold</strong> — re-confirm 0.75 on real data. (4) <strong>M1</strong> — finalise the MM exemption taxonomy (SME Q2). (5) <strong>At-market wash</strong> is a known, accepted detection gap (DR-002) — candidate future scenario TS-003.</li>
+<li><strong>Known limitations / tech debt (must close before production):</strong> (1) <strong>PERF-F1/F2</strong> - bucket the pairing + dedupe DQ warnings, then benchmark at 100K/1M (<code>pytest-benchmark</code>). (2) <strong>Obligation mapping PROVISIONAL</strong> - resolve SME Q1/Q3/Q4 (Legal), verify the <code>[TO-VERIFY]</code> citations against primary sources and add to the register. (3) <strong>Threshold</strong> - re-confirm 0.75 on real data. (4) <strong>M1</strong> - finalise the MM exemption taxonomy (SME Q2). (5) <strong>At-market wash</strong> is a known, accepted detection gap (DR-002) - candidate future scenario TS-003.</li>
 <li><strong>Change/ops artifacts</strong> (change request, ops runbook, release notes) are not produced for a demo; templates exist for a real engagement.</li>
 </ul>
 <h2 id="6-token-usage-measured-this-run">6. Token usage (measured this run)</h2>
@@ -347,7 +347,7 @@ record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo ar
 </tbody>
 </table>
 <blockquote>
-<p>💵 <strong>Honest cost note.</strong> At ~500k tokens this run cost roughly <strong>$4-8</strong> at list prices — <strong>above</strong> the ~150-180k / ~$3-6 <em>estimate</em> given at intake. The specialists ran deeper than the estimate assumed (QA wrote 31 independent tests; tuning built and ran a real labelled harness; the fix-loop re-ran both suites). The right read: the estimate was optimistic for a genuinely thorough, real (not faked) run. 🧾 <em>Rate-card framing:</em> this full reviewed-and-calibrated deliverable is the routine ~80% of a real engagement done in minutes — the human effort it stands in for is measured in days, not dollars.</p>
+<p>💵 <strong>Cost note.</strong> At ~500k tokens this run cost roughly <strong>$4-8</strong> at list prices - <strong>above</strong> the ~150-180k / ~$3-6 <em>estimate</em> given at intake. The specialists ran deeper than the estimate assumed (QA wrote 31 independent tests; tuning built and ran a real labelled harness; the fix-loop re-ran both suites). The right read: the estimate was optimistic for a genuinely thorough, real (not faked) run. 🧾 <em>Rate-card framing:</em> this full reviewed-and-calibrated deliverable is the routine ~80% of a real engagement done in minutes - the human effort it stands in for is measured in days, not dollars.</p>
 </blockquote>
 <h2 id="7-definition-of-done-status">7. Definition-of-Done status</h2>
 <table>
@@ -377,7 +377,7 @@ record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo ar
 <tr>
 <td>Independently QA'd</td>
 <td>✅ Met</td>
-<td><code>qa-handover.md</code> — <code>qa-engineer</code> (not the builder); fresh suite vs delivered API</td>
+<td><code>qa-handover.md</code> - <code>qa-engineer</code> (not the builder); fresh suite vs delivered API</td>
 </tr>
 <tr>
 <td>Code-reviewed</td>
@@ -412,7 +412,7 @@ record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo ar
 <tr>
 <td>Signed off (human)</td>
 <td>⛔ Pending</td>
-<td>a demo cannot produce one — by design</td>
+<td>a demo cannot produce one - by design</td>
 </tr>
 </tbody>
 </table>
@@ -447,6 +447,6 @@ record — preserved, not retro-edited). Synthetic only (§5); a <strong>demo ar
 </tr>
 </tbody>
 </table>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report.md &middot; 2026-06-30</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report.md &middot; 2026-07-02</div>
 </body>
 </html>

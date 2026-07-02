@@ -53,9 +53,9 @@ flowchart LR
 | Are we monitoring everything? | `/assess-coverage` | typology→scenario→feed map + feed-health gaps (FCA MW79) |
 | Existing code (detailed review) | `/deep-review` | dimension fan-out + confidence scoring |
 | Performance / will-it-scale | `/performance-review` | profiling evidence vs target volume |
-| Existing code (audit sign-off) | `/audit-review` | evaluator–optimizer review loop |
+| Existing code (audit sign-off) | `/audit-review` | evaluator-optimizer review loop |
 | Legacy / poorly-built code | `/remediate` | assess → prioritise → fix loop → handover |
-| A requirements pack | `/build-solution` | orchestrator–workers end-to-end build |
+| A requirements pack | `/build-solution` | orchestrator-workers end-to-end build |
 | Handover pack (dev + QA evidence) | `/handover` | independent QA + developer docs |
 
 ## Documentary artifacts (the menu)
@@ -185,9 +185,9 @@ developers and QA reviewers can trust what the team hands over.
 patterns, mapped to our work:
 - **Prompt chaining** → idea → BRD → FSD → build.
 - **Routing** → the PM picks the right SME / language reviewer.
-- **Orchestrator–workers** → `/build-solution` decomposes a requirements pack and builds the
+- **Orchestrator-workers** → `/build-solution` decomposes a requirements pack and builds the
   parts.
-- **Evaluator–optimizer** → `/audit-review`'s review-fix-re-review loop.
+- **Evaluator-optimizer** → `/audit-review`'s review-fix-re-review loop.
 
 > We deliberately do **not** adopt an external multi-agent framework (CrewAI / LangGraph /
 > AutoGen). Claude Code's native subagents, slash commands and the PM orchestrator already

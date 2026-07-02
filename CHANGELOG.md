@@ -59,7 +59,7 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 - **Mechanical DoD artifact gate** (`scripts/check_artifacts.py` + 6 tests): verifies every
   `artifacts/**/*.md` has its rendered `.html` sibling and the closing engagement-summary
   `.txt` exists - the two DoD items CI can never see (`artifacts/` is git-ignored). Wired into
-  `/engage` step 6 and `/handover`; `docs/DEFINITION-OF-DONE.md` now carries an honest note on
+  `/engage` step 6 and `/handover`; `docs/DEFINITION-OF-DONE.md` now carries a note on
   which gates are prompt-enforced vs mechanically checked. (Its first live run flagged a real
   missing summary email.)
 - **4 golden eval cases + a `process-discipline` rubric** for the previously untested mandated
@@ -70,10 +70,10 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [0.8.0] - 2026-07-02
 
-True dormancy, fail-closed guards, human-only consent, and a CI-checked eval contract — the
+True dormancy, fail-closed guards, human-only consent, and a CI-checked eval contract - the
 outcome of a full setup audit against Anthropic's current published guidance (2026-07-01).
 
-### Changed — setup audit 2026-07-01 (full report: `artifacts/claude-setup-audit.md`, session-local)
+### Changed - setup audit 2026-07-01 (full report: `artifacts/claude-setup-audit.md`, session-local)
 - **True dormancy: the team now costs ~nothing until `/engage` is typed.** All 20 skills set
   `disable-model-invocation: true` (descriptions no longer load into context; commands stay
   typeable - `/engage` reads a routed workflow's `SKILL.md` when chaining instead of the Skill
@@ -171,7 +171,7 @@ outcome of a full setup audit against Anthropic's current published guidance (20
 - **Documented prompt-caching reality + cost-friendly design** (`docs/agent-design.md` §7). Verified
   (via the Claude Code docs) that caching is **automatic - nothing to enable** (only env vars to
   *disable* it); the lever the plugin owns is cache-friendly design (lean stable `CLAUDE.md` prefix,
-  fixed model tiering, batching chains within the 5-min subagent TTL). Recorded the honest upstream
+  fixed model tiering, batching chains within the 5-min subagent TTL). Recorded the upstream
   caveats: each subagent caches from scratch, and the Agent-SDK **disables** subagent caching today
   ([claude-code#29966](https://github.com/anthropics/claude-code/issues/29966)) - so headless
   fan-outs shouldn't assume subagent caching.
@@ -208,7 +208,7 @@ outcome of a full setup audit against Anthropic's current published guidance (20
   bar, the detailed plugin-install steps, **real clickable doc links**, the dense character-bio
   roster on the home page, Why / Features / Core principles (as tables), an **active-development**
   warning, and a stronger "the masking pipeline is an early PoC, **expected to be replaced**"
-  honesty. "Built on" and "Credits & acknowledgements" merged. All prior reference detail (token
+  statement. "Built on" and "Credits & acknowledgements" merged. All prior reference detail (token
   usage + rate card, the two safety hooks, eval harness, real-data handling) preserved in in-page
   collapsibles.
 
@@ -259,7 +259,7 @@ outcome of a full setup audit against Anthropic's current published guidance (20
 ## [0.7.10] - 2026-06-29
 
 ### Changed - docs
-- **`agent-design.md` self-assessment made honest (audit follow-up).** An independent audit against
+- **`agent-design.md` self-assessment corrected (audit follow-up).** An independent audit against
   Anthropic's guidance found the conformance matrix overstated a few rows. Fixed, no code changes:
   downgraded **subagent self-assessment** (a one-line convention, not an enforced loop) and
   **condensed sub-agent returns** (aspirational, not enforced) to 🟡 with reasons; reworded
@@ -303,7 +303,7 @@ _(Plus minor documentation updates.)_
   Badges moved under the title; jump-nav fixed to match section order (+ Built on / License); a
   License section added; "Layout" relocated to the end; the standalone Install section folded into
   Quick start; the two overlapping file-trees merged into one.
-- **OVERVIEW masking honesty** - the "new to LLMs" page no longer reads as if masking is
+- **OVERVIEW masking claims corrected** - the "new to LLMs" page no longer reads as if masking is
   comprehensive: it's described as a **basic** engine (tokenise identifiers + regex-redact common
   PII), explicitly **not a full anonymiser** (regex-only free-text redaction misses names/disguised
   IDs; real comms need NER; prefer synthetic).
@@ -357,7 +357,7 @@ _(Plus minor documentation updates.)_
   register (retrieve-don't-recall) with a mechanical check at the `compliance-reviewer` gate,
   instead of honour-based tagging of model-recalled citations.
 - **`docs/adr/ADR-002`** - safety-hook threat model: an adversarial red-team of both guards
-  (full bypass enumeration), the decision to represent them honestly as advisory defence-in-depth,
+  (full bypass enumeration), the decision to represent them accurately as advisory defence-in-depth,
   and a ranked additive-hardening backlog. No hook logic changed.
 
 ### Added - safety-hook hardening + citation grounding (ADR-001/002 implemented)
@@ -507,7 +507,7 @@ _(Plus minor documentation updates.)_
   build, all fixed and re-tested (dev 2/2, QA 33/33 green).
 - **Measured calibration** ([`calibrate_wash_trade.py`](docs/demos/build-artifacts/calibrate_wash_trade.py)):
   synthesises a *labelled* dataset and runs real ATL/BTL - `price_tolerance_pct` 0.10-0.50% (100%
-  precision + recall), honestly flagged as measured-on-synthetic.
+  precision + recall), flagged as measured-on-synthetic.
 - **Token usage** documented: the full 8-agent delivery cost ~182k tokens (README table + delivery report §7).
 
 ### Changed
@@ -530,7 +530,7 @@ _(Plus minor documentation updates.)_
   blackboard, challenge pass, safety gates). Three flavours: review / build / data-safety. The
   fastest way to see the team work; surfaced as the new-user entry point.
 
-### Changed - data-masking honesty (claims-vs-reality audit)
+### Changed - data-masking claims corrected (claims-vs-reality audit)
 - **`validate_masking --in <file>`** - new mode that scans **your actual masked output** for
   residual free-text PII (string fields) + k-anonymity, rather than only the built-in synthetic
   fixture (which the default mode is now clearly labelled as). +2 tests (34 → 36).
@@ -616,7 +616,7 @@ _(Plus minor documentation updates.)_
 
 ### Added
 - **Anthropic multi-agent conformance audit** (`docs/agent-design.md` §6) - the team mapped
-  honestly against Anthropic's published multi-agent standards, with the **source links** (§7 +
+  against Anthropic's published multi-agent standards, with the **source links** (§7 +
   a README "Built on" section): Building Effective Agents, the multi-agent research system,
   context engineering, and the Subagents docs.
 - **README Roadmap** - the outstanding enhancements with the rationale for each (LLM-judge eval

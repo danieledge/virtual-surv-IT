@@ -86,9 +86,9 @@ made up). See [how real data is handled](#-handling-real-data).
 - Tests **84 → 170**; full setup-audit findings + before/after token numbers in the CHANGELOG.
 
 Recent **0.7.x**: build-demo re-run with fresh artifacts; README overhauled + summary-email on every close; audited against
-Anthropic's guidance + self-assessment made honest; memory is project-scoped (no project memory in
-the plugin); reviews coach "vibe-coded" code (prompting guidance); docs slimmed + honest masking
-framing; Morgan states the loaded version on startup; safety-hook hardening (ADR-002); citations
+Anthropic's guidance + self-assessment corrected; memory is project-scoped (no project memory in
+the plugin); reviews coach "vibe-coded" code (prompting guidance); docs slimmed + masking claims
+corrected; Morgan states the loaded version on startup; safety-hook hardening (ADR-002); citations
 *retrieved, not recalled* against a source-verified
 [regulatory register](config/regulatory-register.yaml) (ADR-001).
 📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
@@ -628,7 +628,7 @@ All are wired in **two** places so they fire in either mode - `hooks/hooks.json`
 plugin) and `.claude/settings.json` (this repo opened as a project) - and a test keeps the two copies
 identical.
 
-**How strong are they? (the honest answer.)** For the file tools (`Read`/`Grep`/`Glob`) the block is
+**How strong are they?** For the file tools (`Read`/`Grep`/`Glob`) the block is
 backed by the OS-level `permissions.deny` list, so it genuinely holds. For **shell commands** the
 guards work by *reading the text of the command* - a strong default and a consent record, but **not
 a sandbox**: a determined user can dodge string-matching (e.g. hide a path in a variable). The real
@@ -889,7 +889,7 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
 ## ⚠️ Known issues (cosmetic)
 
 Both are **display-only** - they don't affect what the team does (routing, tool grants, the actual
-deliverables). Flagged honestly, in the spirit of the proof-of-concept notice at the top.
+deliverables). Flagged plainly, in the spirit of the proof-of-concept notice at the top.
 
 - **Morgan sometimes narrates the wrong agent *name*** - e.g. "Isla" for the AML SME or "Jordan"
   for the tuning analyst, instead of **Hassan** / **Theo**. The *work* is unaffected: the team

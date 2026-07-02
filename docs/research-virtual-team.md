@@ -12,14 +12,14 @@ research eval ([multi-agent-research-system](https://www.anthropic.com/engineeri
 (MetaGPT, ChatDev, AgentMesh) converge on the same lessons we've partly implemented:
 SOP/role decomposition, artifact-centric coordination, independent critics.
 
-**But two honest caveats apply directly to us:**
+**But two caveats apply directly to us:**
 1. **Cost & fit.** Multi-agent uses **~15× more tokens**, and token use alone explains ~80%
    of performance variance; it's only worth it for **high-value** work and is a **poor fit
    for tightly-coupled coding** where context must be shared. Anthropic and Cognition both say
    *start simple, add agents only when they demonstrably help*
    ([building-effective-agents](https://www.anthropic.com/research/building-effective-agents),
    [Cognition: don't build multi-agents](https://cognition.ai/blog/dont-build-multi-agents)).
-2. **Right-sizing.** No source benchmarks team size for software delivery; a lean 4–6 role
+2. **Right-sizing.** No source benchmarks team size for software delivery; a lean 4-6 role
    pipeline (AgentMesh) may match or beat a 13-agent team for a single coding task. Our
    breadth is justified for *broad* compliance deliverables, not for a one-file edit.
 
@@ -54,5 +54,5 @@ SOP/role decomposition, artifact-centric coordination, independent critics.
 - Claude Code primitives evolve fast - re-verify skills/commands/hooks schema before migrating.
 
 ## Open questions
-- Does the full team beat a lean 4–6 role pipeline for *our* domain? (unbenchmarked)
+- Does the full team beat a lean 4-6 role pipeline for *our* domain? (unbenchmarked)
 - What eval harness/rubric should gate the DoD beyond confidence-scored review?

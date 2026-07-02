@@ -1,6 +1,6 @@
 # Rubric: process discipline (any engagement close, gate or data summary)
 
-Scores the standing process rules that make the team auditable and cost-honest - the behaviours
+Scores the standing process rules that make the team auditable and cost-controlled - the behaviours
 CLAUDE.md §6/6a and the operating guide mandate but no other rubric samples. These are the most
 expensive failure modes of the system (over-spawning agents; skipping the closing artifacts;
 presenting inference as fact), so drift here matters more than a missed lint.

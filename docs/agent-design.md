@@ -72,12 +72,12 @@ to sonnet if cost must be pushed harder, accepting a small risk on deep security
 ## 4. Why 16 agents (and not fewer / more)
 
 16 is the **library** size, not a per-task spawn count. The PM engages the **minimal sufficient
-subset** (typically 2–5) for the deliverable at hand, and the team is dormant by default - so the
+subset** (typically 2-5) for the deliverable at hand, and the team is dormant by default - so the
 breadth costs nothing unless a task needs it. The roster spans the deliverables (detection rules,
 pipelines, ETL, ML, reviews across 7 languages, three surveillance domains, independent
 validation/QA/DQ). The over-fragmentation risk is controlled by: removing real overlaps (the
 `data-analyst`/`tuning-analyst` boundary), distinct non-colliding descriptions, and the right-sizing
-rule so a given task fires 2–3 agents, never all 16. We did **not** add agents for thin slices (no
+rule so a given task fires 2-3 agents, never all 16. We did **not** add agents for thin slices (no
 separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 
 ## 5. Conformance matrix (vs Claude Code subagent guidance)
@@ -102,12 +102,12 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 ## 6. Anthropic multi-agent standards - conformance
 
 > Audited against Anthropic's published guidance (links in §7). We arrived at most of these
-> independently. Honest status: ✅ conform · 🟡 partial or a deliberate fit to our *interactive,
+> independently. Status: ✅ conform · 🟡 partial or a deliberate fit to our *interactive,
 > human-gated* model · ➖ not applicable at our scale.
 
 | Anthropic multi-agent standard | Status | How we meet it (or why it differs) |
 |---|---|---|
-| Simplest thing that works; multi-agent only when it improves outcomes | ✅ | The roster is a **library, not a pipeline**: the PM engages the minimal sufficient subset per task (a narrow change uses 1 builder + 1 reviewer) and the team is dormant by default - complexity is opt-in *by selection*, not asserted by size. *(Honest caveat: whether each engaged role is optimal is a human-gated judgement, not benchmarked - see `docs/research-virtual-team.md`.)* |
+| Simplest thing that works; multi-agent only when it improves outcomes | ✅ | The roster is a **library, not a pipeline**: the PM engages the minimal sufficient subset per task (a narrow change uses 1 builder + 1 reviewer) and the team is dormant by default - complexity is opt-in *by selection*, not asserted by size. *(Caveat: whether each engaged role is optimal is a human-gated judgement, not benchmarked - see `docs/research-virtual-team.md`.)* |
 | **Orchestrator-worker** (lead plans, workers act as filters) | ✅ | `/engage` - the PM decomposes, delegates, and synthesises. |
 | Delegate with **objective · output format · tools/sources · boundaries** | ✅ | CLAUDE.md §6 + `engage` §5 require exactly those four. |
 | Subagents **inherit no parent history** - put every input in the brief | ✅ | Stated in CLAUDE.md §6 delegation. |
@@ -124,9 +124,9 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 7 rubrics + 21 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
 | Subagent **self-assessment** (plan → evaluate → refine) | 🟡 | A team-wide *convention* (CLAUDE.md §6: agents self-verify and flag gaps), but a single line - not a structured plan→evaluate→refine loop in each prompt. We lean on **independent** verification (reviewer chains, `model-validator`) instead - arguably stronger, but a different lesson. |
 | **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
-| **Dozens–hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable - right-sizing keeps us at 2–5 agents per engagement; we never reach that scale. |
+| **Dozens-hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable - right-sizing keeps us at 2-5 agents per engagement; we never reach that scale. |
 
-**Net:** strong conformance on the high-value lessons. The 🟡s are honest partials - some are
+**Net:** strong conformance on the high-value lessons. The 🟡s are deliberate partials - some are
 deliberate fits to our *interactive, human-gated* model (vs Anthropic's long-running autonomous
 research agent), and some are genuine gaps stated plainly: structured **self-assessment** is a
 one-line convention, not an enforced loop (we lean on independent review instead); **condensed
@@ -150,7 +150,7 @@ keeping the cacheable prefix stable so every session and every subagent re-uses 
 - **Batch within the TTL.** Right-sizing keeps chains short and the PM runs them close together;
   subagents use a **5-minute** cache TTL, so a warm chain re-uses far more than a stop-start one.
 
-**Honest caveats (upstream, not ours):**
+**Caveats (upstream, not ours):**
 - Each **subagent builds its own cache from scratch** (5-min TTL even on a subscription; the 1-hour
   TTL is for the main conversation only) - so the first call of each specialist is a cache-cold read.
 - The **Claude Agent SDK currently disables prompt caching for subagents** ([claude-code#29966](https://github.com/anthropics/claude-code/issues/29966), open) - so a **headless/SDK-driven** fan-out sees little subagent cache benefit until it's fixed. Interactive Claude Code runs are unaffected. Cost estimates for headless multi-agent runs should therefore **not** assume subagent caching.

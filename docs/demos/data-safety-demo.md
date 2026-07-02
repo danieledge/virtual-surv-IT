@@ -67,7 +67,7 @@ exit=1
 > 3. **🟢 The attestation** - for data that's *already* safe, you confirm it at intake. The team can't
 >    verify your data for you, so that responsibility stays with you - stated plainly, not hidden.
 >
-> **One honest caveat:** that `redact` step is **regex-only** today - great for structured fields
+> **Caveat:** that `redact` step is **regex-only** today - great for structured fields
 > (emails, IBANs, accounts), but it would **miss names and obfuscated IDs in free-text chat.** So for
 > real *comms* surveillance you'd want NER first - that's on the roadmap, and the README says so
 > rather than pretending otherwise.
@@ -79,6 +79,6 @@ exit=1
 - **🟢 Synthetic-first** - agents work on fabricated data by default.
 - **🟠 Mask + verify** - the on-ramp governs real data, and the validator *failed* a file that leaked
   PII rather than waving it through.
-- **Honest about the edge** - regex redaction isn't enough for free-text comms; the docs say so.
+- **Clear about the edge** - regex redaction isn't enough for free-text comms; the docs say so.
 
 **The keystone, end-to-end: real data never reaches the model, and it's enforced, not just promised.**

@@ -19,7 +19,7 @@ what was filtered** so the review is trustworthy and defensible.
 The scoring below is identical in both modes except for the "new vs pre-existing" criterion,
 which only applies in change review.
 
-## Confidence score (0–100)
+## Confidence score (0-100)
 
 Start at 50 and adjust:
 
@@ -28,7 +28,7 @@ Start at 50 and adjust:
 | New in this diff *(change review only)* | +20 |
 | Pre-existing, outside the diff *(change review only)* | −50 |
 | Would cause a failure, **missed alert, or false alert** | definitely +30 · likely +20 · possibly +10 |
-| Affects **auditability / regulatory traceability / data safety** (CLAUDE.md §4–§5) | +30 |
+| Affects **auditability / regulatory traceability / data safety** (CLAUDE.md §4-§5) | +30 |
 | Required by CLAUDE.md or a cited standard (OWASP ASVS / CWE / SEI CERT) | +20 |
 | Would a senior engineer flag it in review? | yes +20 · maybe +10 · no −20 |
 | Silenced by an ignore comment (`# noqa`, `// nolint`, `@SuppressWarnings`, …) | −50 |
@@ -37,9 +37,9 @@ Start at 50 and adjust:
 
 | Score | Severity | Change review | Audit review |
 |---|---|---|---|
-| 95–100 | 🔴 Critical | report | report |
-| 80–94 | 🟠 Warning | report | report |
-| 70–79 | 🟡 Medium | filter | report |
+| 95-100 | 🔴 Critical | report | report |
+| 80-94 | 🟠 Warning | report | report |
+| 70-79 | 🟡 Medium | filter | report |
 | < 70 | - | filter | filter |
 
 ## Evidence basis - measured vs inferred (state it for every claim)

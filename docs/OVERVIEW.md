@@ -158,7 +158,7 @@ Three layers, from most to least sensitive:
    the cleaned data, then generates **completely made-up** records that behave the same way
    but correspond to nobody real. This is what's safe to put in front of the AI.
 
-> Important honesty: the masking engine is **basic** (good for structured identifier fields plus
+> Important limit: the masking engine is **basic** (good for structured identifier fields plus
 > regex PII; **not** a full anonymiser), and even well-masked data is **not** anonymous - scrambled
 > bank data is still sensitive and stays locked down. "Synthetic" (made-up) data is the safe one to
 > share.
@@ -211,7 +211,7 @@ It's the template every other detection in this team would follow.
 2. **Start with the Project Manager - "Morgan".** Type `/engage` and describe whatever
    you've got - a rough idea, some code to check, or a full set of requirements. Morgan is
    warm and plain-speaking, with a can-do but realistic attitude - it'll find a way forward,
-   but tell you honestly if something's hard or risky rather than just saying yes. It's the
+   but tell you plainly if something's hard or risky rather than just saying yes. It's the
    single front door: it asks you clarifying questions, lets you **pick which documents you
    want**
    (a requirements doc? a spec? a review report?), agrees a plan, then runs the right

@@ -53,7 +53,7 @@ hardcoded password evaded its ruleset). All findings therefore 🧠 inferred fro
 > action - his findings are structured data I can now work with, not chatter.
 >
 > **Now my challenge pass - I'm a sceptic, not a relay.** I independently re-score: both Criticals
-> verified by reading; the Warning and Medium are genuine. **The honest bit:** Ravi tagged everything
+> verified by reading; the Warning and Medium are genuine. **Note:** Ravi tagged everything
 > **🧠 inferred, not 📊 measured**, *because the Python analysers aren't installed here* - only
 > gitleaks ran, and it **didn't flag the password**. So I will **not** let these reach you dressed up
 > as tool-verified facts.
@@ -92,6 +92,6 @@ false-positive traps triggered: none
 - **Model tiering** - Ravi on **opus** for security judgement; on a bigger job Pip would do the
   mechanical scoring on **haiku** for pennies.
 - **The blackboard** - structured findings flow forward; no agent-to-agent chatter.
-- **Challenge pass** - the PM re-scores as a sceptic and keeps the evidence basis honest (🧠 inferred,
+- **Challenge pass** - the PM re-scores as a sceptic and verifies the evidence basis (🧠 inferred,
   not 📊 measured - no overselling).
 - **The self-test** - the result is *proven* with a real eval score, not just claimed.

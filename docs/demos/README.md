@@ -5,7 +5,7 @@ Morgan (the PM) running a full engagement end-to-end on **safe synthetic data**,
 decision. They reproduce the actual console: the 🎩 narration, the commands and their output, the
 real agent findings, the guard hard-block, and the eval score.
 
-> Honest by design: every agent output, guard block and eval score below is **genuine** - captured
+> Every agent output, guard block and eval score below is **genuine** - captured
 > from a real run, just on synthetic data. Nothing is faked for effect. (Analyser availability and
 > exact wording will vary run to run.)
 

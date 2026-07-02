@@ -7,7 +7,7 @@
 > **Document control** · Owner `data-analyst` / `tuning-analyst` · As-of `2026-06-29`
 > · Classification `Internal` · Status `Method-validated (synthetic); real-world calibration outstanding`
 
-## Honest scope
+## Scope
 
 This validates the **method** on a synthetic distribution. It does **not** calibrate the
 real-world thresholds. Real calibration needs masked production data and `data-analyst` /

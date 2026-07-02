@@ -80,7 +80,7 @@ artifact** `artifacts/REVIEW-<slug>.md`, rendered to `.html` (`python -m scripts
 `delivery-report.md` only if this review is part of a larger build/handover.)
 
    ⚠️ **MANDATORY - the artifact is NOT complete without a `## 🔵 Developer guidance - improving
-   future code` section.** Always write it (2–4 constructive points on the author's coding
+   future code` section.** Always write it (2-4 constructive points on the author's coding
    style and what to improve next time; if the code is strong, say what's done well), **even on
    a clean pass**. Before you present, check the artifact contains this heading - if it's
    missing, you are not done; add it. This is a required deliverable, not an optional extra.

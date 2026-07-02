@@ -100,7 +100,7 @@ were verified by a pre-write Python 3.12 arithmetic check before the tests were 
 | Alert ID sequential + date-embedded | - | TestAlertFields::test_alert_ids_are_sequential_and_embed_as_of_date | NEW |
 | Alert field arithmetic consistency | - | TestAlertFields::test_alert_spread_deviation_arithmetic_consistency | NEW |
 
-### 3b. What is NOT covered (and why) - 📊 honest gap register
+### 3b. What is NOT covered (and why) - 📊 gap register
 
 | Gap | Risk level | Why not covered |
 |---|---|---|
