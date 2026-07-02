@@ -33,7 +33,9 @@ each step to the right agent and chain them in this session:
    security, maintainability) using the standard linters/analysers for the language.
 5. **compliance-reviewer** - check auditability, the alert→logic→obligation trace,
    thresholds rationale, secrets/PII, and test coverage.
-6. Produce the scenario doc from `docs/templates/scenario-doc.md`, then render it to `.html`:
+6. Produce the scenario doc from `docs/templates/scenario-doc.md` (a trade scenario's design
+   detail can use `docs/templates/trade-scenario-design.md`; a comms scenario adds
+   `comms-surveillance-policy.md` + `lexicon-spec.md`), then render it to `.html`:
    `python -m scripts.render_html artifacts/<scenario>.md` (every artifact ships as `.md` +
    `.html` - §8 / Definition of Done).
 

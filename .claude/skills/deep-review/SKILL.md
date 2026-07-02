@@ -72,7 +72,8 @@ and states what's applicable vs not.
    Downgrade or drop what fails the challenge. You are a sceptic, not a relay - and not a second
    scorer.
 
-**4. Present - scoreboard + clean artifact** (`docs/review/output-format.md`): a glanceable
+**4. Present - scoreboard + clean artifact** (`docs/review/output-format.md`; document skeleton:
+`docs/templates/review-report.md`): a glanceable
 traffic-light **scoreboard to the console**, with the **full findings written to the clean
 artifact** `artifacts/REVIEW-<slug>.md`, rendered to `.html` (`python -m scripts.render_html`).
 🔵 style & form is a non-blocking "consider in future" lane. (Fold into the consolidated

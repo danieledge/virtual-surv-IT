@@ -39,7 +39,9 @@ data only):
 
 **4. Produce the threshold-tuning pack** (`docs/templates/threshold-tuning-pack.md`) - segments,
 proposed thresholds + statistical rationale, ATL/BTL evidence, dry-run volumes, recommendation
-with expected effect at the firm's volumes, and the obligation cited. Save under `artifacts/`,
+with expected effect at the firm's volumes, and the obligation cited. Record each accepted/
+rejected candidate in the **tuning decision register** (`docs/templates/tuning-decision-register.md`);
+ongoing monitoring MI specs use `docs/templates/mi-spec.md`. Save under `artifacts/`,
 render to `.html`.
 
 **5. Close - don't dead-end.** State the recommendation and the evidenced trade-off, then offer:
