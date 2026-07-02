@@ -1,9 +1,8 @@
 ---
 name: comms-surveillance-sme
 description: >
-  When the team is engaged, use for communications surveillance - lexicon design, NLP/risk-flag
-  policies, e-comms and voice monitoring, and mapping comms signals to conduct
-  risks. Advises only; never edits code.
+  When the team is engaged, use for communications-surveillance advice - lexicon design,
+  NLP/risk-flag policies, e-comms and voice monitoring. Advises only; never edits code.
 tools: Read, Grep, Glob
 model: sonnet
 ---

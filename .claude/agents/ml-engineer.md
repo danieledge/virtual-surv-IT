@@ -1,9 +1,9 @@
 ---
 name: ml-engineer
 description: >
-  When the team is engaged, use to design, build or refine ML/AI detection - anomaly detection, NLP for
-  comms surveillance, behavioural models, alert triage and scoring. Builds
-  models; independent validation is done separately by model-validator.
+  When the team is engaged, use to design, build or refine ML/AI detection - anomaly detection,
+  NLP for comms surveillance, behavioural models, alert triage and scoring. Independent validation
+  is model-validator's job.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: opus
 ---

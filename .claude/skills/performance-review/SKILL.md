@@ -2,6 +2,7 @@
 description: Static performance & scalability review against target data volumes (findings inferred; profiling is a future opt-in)
 argument-hint: <path/glob or component to review> [at <volume/SLA> if known]
 allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*)
+disable-model-invocation: true
 ---
 
 Run a **performance & scalability review** of: **$ARGUMENTS**

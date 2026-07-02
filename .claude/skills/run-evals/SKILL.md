@@ -1,6 +1,7 @@
 ---
 description: Run the team-quality eval harness - score the team's own output against golden cases (regression net)
 argument-hint: <optional - a rubric, a single case id, or blank for all>
+disable-model-invocation: true
 ---
 
 Run the **team-quality eval harness** (`evals/`) - the regression net that checks the team still

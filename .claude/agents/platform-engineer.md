@@ -1,11 +1,9 @@
 ---
 name: platform-engineer
 description: >
-  When the team is engaged, use to design AND build surveillance data pipelines and platform engineering, on ANY
-  target - cloud, on-prem, local or hybrid: ingestion, ETL, streaming/batch transformation,
-  enrichment, transformation/utility scripts (Python, Scala, Java, PowerShell, Bash),
-  infrastructure/IaC, scaling, storage, retention, resilience and the security/data-residency
-  posture. Not cloud-specific - reach for cloud only when the solution genuinely is cloud.
+  When the team is engaged, use to design AND build surveillance data pipelines and platform
+  engineering on any target (cloud, on-prem, local or hybrid) - ingestion, ETL,
+  transformation/utility scripts, infra/IaC, storage, retention, resilience.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 ---

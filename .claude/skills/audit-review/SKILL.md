@@ -2,6 +2,7 @@
 description: Review existing code for robustness and audit/regulatory defensibility (evaluator-optimizer loop)
 argument-hint: <path/glob of code to review, or a commit range>
 allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git blame:*), Bash(git show:*)
+disable-model-invocation: true
 ---
 
 Under the PM (CLAUDE.md §6), review for robustness and whether it would **stand up to audit
@@ -34,9 +35,11 @@ Run an **evaluator–optimizer loop**:
    builder, then **re-review** - and **fix everything you safely can in this pass, don't defer
    fixable work to a later sprint**. Loop until everything fixable is fixed; the only items left
    are those needing a **human decision** (mark 🔴 Open / needs human review, not "deferred").
-4. **Morgan's challenge pass (opus).** Independently re-score the reviewers' findings, downgrade
-   or drop the weak ones, and confirm each **evidence basis** (📊 measured / 🧠 inferred - never
-   present an inference as fact) before presenting. Be a sceptic, not a relay.
+4. **Morgan's challenge pass (opus) - a spot-check, not a re-score** (the scorer already applied
+   the rubric; re-scoring everything on opus pays twice for the same judgement). Challenge every
+   🔴 Critical, anything §4/§5-regulated, any finding whose **evidence basis** looks thin (🧠
+   presented as 📊 - never let an inference reach the user as fact), and a sample of the rest;
+   downgrade or drop what fails. Be a sceptic, not a relay - and not a second scorer.
 5. Present in the shared `docs/review/output-format.md`: a clean traffic-light **scoreboard to
    the console**, with the full findings in the **clean artifact**. Give an explicit verdict
    (✅ audit-ready / ⚠️ conditional / ❌ not yet), standards cited, audit/regulatory checks, the

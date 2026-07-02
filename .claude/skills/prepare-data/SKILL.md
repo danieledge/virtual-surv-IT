@@ -2,6 +2,7 @@
 description: Guided data onboarding - get safe, governed data (synthetic or masked) ready before any agent sees it
 argument-hint: <what you want to analyse / the data you have, if any>
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash(python -m scripts.gen_synthetic:*), Bash(python -m scripts.ingest:*), Bash(python -m scripts.validate_masking:*), Bash(python -m scripts.synthesise:*), Bash(test -n "$MASKING_KEY"), Bash(ls:*)
+disable-model-invocation: true
 ---
 
 Under the PM (CLAUDE.md §6), get **safe, governed data** ready so the team can work without

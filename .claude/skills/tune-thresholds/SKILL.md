@@ -1,6 +1,7 @@
 ---
 description: Calibrate surveillance thresholds / tune scenarios with ATL-BTL evidence and the volume↔coverage trade-off
 argument-hint: <the scenario/rule to tune, and where the alert/behavioural data is>
+disable-model-invocation: true
 ---
 
 Tune detection thresholds for: **$ARGUMENTS**

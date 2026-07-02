@@ -1,6 +1,7 @@
 ---
 description: Take on legacy / poorly-built code - assess, prioritise, fix, re-review, hand over
 argument-hint: <path/glob of the legacy code>
+disable-model-invocation: true
 ---
 
 Take on existing **legacy / poorly-built code** and bring it up to standard: **$ARGUMENTS**

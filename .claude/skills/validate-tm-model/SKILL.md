@@ -1,6 +1,7 @@
 ---
 description: Periodic transaction-monitoring model validation pack (coverage, thresholds, data integrity, FP & alert-to-SAR)
 argument-hint: <the TM system/scenario set to validate, and where the alert/outcome data is>
+disable-model-invocation: true
 ---
 
 Run a periodic **transaction-monitoring model validation** of: **$ARGUMENTS**

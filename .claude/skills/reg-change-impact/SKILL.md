@@ -1,6 +1,7 @@
 ---
 description: Regulatory-change impact analysis - what a changed obligation means for scenarios, controls, data and specs
 argument-hint: <the regulatory change / new obligation, and the affected area>
+disable-model-invocation: true
 ---
 
 Assess the impact of a regulatory change: **$ARGUMENTS**

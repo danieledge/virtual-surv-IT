@@ -1,9 +1,9 @@
 ---
 name: trade-surveillance-sme
 description: >
-  When the team is engaged, use for trade / market-abuse surveillance - designing or reviewing
-  scenarios for spoofing, layering, wash trades, marking the close, ramping,
-  insider dealing and front running. Advises only; never edits code.
+  When the team is engaged, use for trade / market-abuse surveillance advice - spoofing, layering,
+  wash trades, marking the close, ramping, insider dealing and front running. Advises only; never
+  edits code.
 tools: Read, Grep, Glob
 model: sonnet
 ---

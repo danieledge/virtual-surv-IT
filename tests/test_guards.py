@@ -218,3 +218,36 @@ def test_exec_guard_blocks_chained_after_allowed_segment(no_consent):
 def test_exec_guard_allows_benign_chain(no_consent):
     # Chaining only non-executing/allowed segments stays allowed.
     assert _run(_EXEC_GUARD, _bash("git diff --stat && ruff check scripts/"), no_consent) == ALLOW
+
+
+# --- Crash paths fail CLOSED (setup audit 2026-07-01) --------------------------
+# An uncaught exception used to exit 1, which Claude Code treats as NON-blocking -
+# the action proceeded and the gate was silently disarmed. The guards now wrap
+# main() and exit 2 on any unexpected crash. Valid-JSON-but-not-a-dict payloads
+# (e.g. a bare list) are the cheapest way to reach those paths.
+
+
+def _pipe_raw_stdin(script: Path, stdin: str, env_extra: dict) -> int:
+    proc = subprocess.run(
+        [sys.executable, str(script)],
+        input=stdin,
+        text=True,
+        capture_output=True,
+        env={**{k: v for k, v in os.environ.items() if k != "CST_ALLOW_EXEC"}, **env_extra},
+    )
+    return proc.returncode
+
+
+def test_raw_guard_blocks_non_dict_payload():
+    # Valid JSON, wrong shape -> payload.get crashes -> must fail closed, not proceed.
+    assert _pipe_raw_stdin(_RAW_GUARD, "[]", _raw_env()) == BLOCK
+
+
+def test_exec_guard_blocks_non_dict_payload(tmp_path):
+    assert _pipe_raw_stdin(_EXEC_GUARD, '"x"', {"CLAUDE_PROJECT_DIR": str(tmp_path)}) == BLOCK
+
+
+def test_exec_guard_allows_malformed_payload(tmp_path):
+    # NOT-JSON stays deliberately fail-open (documented "never brick a session" carve-out);
+    # only unexpected crashes fail closed.
+    assert _pipe_raw_stdin(_EXEC_GUARD, "not json", {"CLAUDE_PROJECT_DIR": str(tmp_path)}) == ALLOW

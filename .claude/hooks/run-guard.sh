@@ -10,12 +10,20 @@
 # This wrapper is intentionally tiny and holds NO guard logic - the guards themselves
 # (guard-raw-data.py, guard-code-execution.py) are unchanged. It only selects an interpreter.
 #
-# If no Python is found we exit 0 (allow): the OS-level permissions.deny list in
-# .claude/settings.json remains the hard boundary for data/raw and secrets (see ADR-002). A hard
-# block here would brick every tool call on a Python-less host, which is not the guard's job.
+# Interpreters are version-probed: the guards need Python >= 3.9 (pathlib.Path.is_relative_to);
+# an older interpreter would crash at runtime, and we'd rather skip it and try the next one than
+# exec into a known crash.
+#
+# If no suitable Python is found we exit 0 (allow): the OS-level permissions.deny list in
+# .claude/settings.json remains the hard boundary for data/raw and secrets - but NOTE this
+# backstop covers Read/Grep/Glob only; there are no Bash() deny entries, so on a Python-less
+# host the execution gate is inert (see ADR-002 §launcher trade-off). A hard block here would
+# brick every tool call on a Python-less host, which is not the guard's job.
 for interpreter in python3 python py; do
 	if command -v "$interpreter" >/dev/null 2>&1; then
-		exec "$interpreter" "$@"
+		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
+			exec "$interpreter" "$@"
+		fi
 	fi
 done
 exit 0

@@ -1,10 +1,9 @@
 ---
 name: qa-engineer
 description: >
-  When the team is engaged, use to independently design, execute and evidence testing for a deliverable, and to
-  produce the QA handover. Independent of whoever wrote the code - verifies, does not
-  mark its own homework. Covers test planning, execution, coverage and residual-risk
-  assessment.
+  When the team is engaged, use to independently design, execute and evidence testing for a
+  deliverable and produce the QA handover. Independent of whoever wrote the code - verifies, does
+  not mark its own homework.
 tools: Read, Write, Bash, Grep, Glob
 model: sonnet
 ---

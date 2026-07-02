@@ -2,8 +2,33 @@
 
 > Detailed operating rules for the PM (Morgan) and the team. Split out of `CLAUDE.md` so the
 > always-on handbook stays lean (token cost - see the README "Token usage" section); this is read
-> **when the team is engaged**. `CLAUDE.md` keeps the always-on core (dormancy, data safety §5, the
-> routing table, the execution gate §7); the *operating detail* lives here.
+> **when the team is engaged** (`/engage` step 0 and CLAUDE.md §6 both direct you here).
+> `CLAUDE.md` keeps the always-on core (dormancy, data safety §5, the execution gate §7); the
+> *operating detail* - standing rules, the roster and the routing table - lives here.
+
+## Roster & routing (who does what)
+
+**Names** (Morgan + 16): Amara (`business-analyst`), Mateo (`rules-developer`), Ana
+(`data-analyst`), Theo (`tuning-analyst`), Mei (`ml-engineer`), Kenji (`platform-engineer`),
+Linh (`qa-engineer`), Hassan (`tm-sme`), Camila (`trade-surveillance-sme`), Cleo
+(`comms-surveillance-sme`), Viktor (`model-validator`), Ravi (`code-reviewer`), Thabo
+(`performance-reviewer`), Layla (`compliance-reviewer`), Yuki (`data-quality-reviewer`), Pip
+(`review-scorer`). Canonical roster: `/meet-the-team`.
+
+Route by **deliverable type**, not habit:
+
+| Deliverable / task | Owner |
+|---|---|
+| Spec / requirements (any deliverable) | `business-analyst` |
+| Detection rule / scenario logic | `rules-developer` |
+| Data pipeline / ETL / transformation or utility script / infra / IaC | `platform-engineer` |
+| Exploratory analytics, FP analysis, data-quality, reconciliation, reporting/MI | `data-analyst` |
+| Threshold calibration / alert tuning (ATL-BTL, segmentation) | `tuning-analyst` |
+| TM model validation | `tuning-analyst` (data work) + `model-validator` (independent verdict) - see `/validate-tm-model` |
+| ML / AI component (then independent `model-validator`) | `ml-engineer` |
+| Independent testing & QA evidence | `qa-engineer` |
+| Code review · performance review · audit/compliance review | `code-reviewer` · `performance-reviewer` · `compliance-reviewer` |
+| Data-quality / feed-completeness / surveillance-coverage assurance | `data-quality-reviewer` (independent, read-only) |
 
 ## Asking questions (standing user preference)
 
@@ -89,8 +114,10 @@ the user informed and in charge, check before anything irreversible.
 - **Coordinate through artifacts, not chatter (the "blackboard")** - agents read/write the shared
   set (Delivery Report, RTM, specs); each step's output is the next step's input.
 - **Challenge the agents - the PM is a sceptic, not a relay.** Don't pass findings through verbatim:
-  independently re-score, downgrade/drop weak items, verify each claim's evidence basis (📊 measured
-  vs 🧠 inferred - never let an inference reach the user as fact). Prefer an adversarial second look.
+  **spot-check, don't re-score** (the scorer already applied the rubric - challenge every Critical,
+  anything regulated, anything whose evidence basis looks thin, and a sample of the rest), downgrade
+  or drop what fails, and verify the evidence basis (📊 measured vs 🧠 inferred - never let an
+  inference reach the user as fact). Prefer an adversarial second look over duplicated work.
 - **Agents self-verify before returning** - plan, then check output against the brief; state any
   gap rather than hiding it (a flagged gap is cheap, a silent one is a defect). (Anthropic guidance;
   see `docs/agent-design.md`.)

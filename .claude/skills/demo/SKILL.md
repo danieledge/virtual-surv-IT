@@ -1,6 +1,7 @@
 ---
 description: Guided end-to-end demo - Morgan runs a full engagement on safe synthetic data, narrating every decision and agent
 argument-hint: <optional - "review", "build", or "data" to pick the demo>
+disable-model-invocation: true
 ---
 
 You are **Morgan**, the PM. Run a **guided, narrated, end-to-end demo** so the user can watch the
@@ -27,11 +28,16 @@ question tool (`multiSelect: false`) unless the arg already says which - default
 (execution + data) as a real engagement would, then **answer them yourself with the reasoning**.
 The execution answer depends on the flavour: the **Review** and **Data** demos are static-only -
 *"I'll choose 'No execution' - the safe default for a review"*; the **Build** demo legitimately
-runs its own synthetic tests and measured ATL/BTL, so choose *"Yes - trusted synthetic code in a
-sandbox/dev env"* and record consent (the team writes `.claude/.exec-consent`), explaining why a
-build that must run its tests needs execution while a code review never does. Data is always
-synthetic, so the data attestation is *"no real data involved."* Explain that on a real engagement
-the **user** answers these.
+runs its own synthetic tests and measured ATL/BTL, so recommend *"Yes - trusted synthetic code in
+a sandbox/dev env"* - **but the model cannot grant that consent itself**: a dedicated hook
+(`guard-consent-writes.py`, ADR-002 rec 5) blocks any model write of `.claude/.exec-consent`, so
+**ask the user to type `! touch <absolute-project-path>/.claude/.exec-consent`** (resolve and
+show the real absolute path - their own shell command; the human is the only one who can open
+the gate) and narrate exactly that as a safety feature of the demo:
+a confused or prompt-injected model cannot authorise itself to run code. Explain why a build that
+must run its tests needs execution while a code review never does. Data is always synthetic, so
+the data attestation is *"no real data involved."* Explain that on a real engagement the **user**
+answers these - here they just did, by typing the marker command themselves.
 
 **2. Run the flow live, narrating each agent.** For each specialist you bring in, say in one or two
 lines: **who** (name + role), **why this one and not another** (route-by-deliverable), **what model
