@@ -115,18 +115,33 @@ punchy, can't-miss callouts at first contact - CLAUDE.md §5):**
 > you** - keeping shared data safe and compliant is **your responsibility.** 🟢 Unsure? Go
 > synthetic or run **`/prepare-data`** first.
 
-**Batch the safety questions with the opening work-type question (step 1) - one screen, not three
-round-trips.** Show both disclaimers (text) at startup, then ask in a **single `AskUserQuestion`
-call** (up to 4 questions per call): the **work-type** question (step 1), the **execution** consent,
-and the **data attestation**. Gating to avoid premature asks:
-- **Execution consent** - *only include it when code is/looks involved* (review / build / remediate).
-  For a pure problem-scoping engagement with no code, skip it; default **No** if unsure.
-- **Data attestation** (`multiSelect: false`): *"Any data you'll share - is it safe to use?"* →
-  **Yes - synthetic/masked/anonymised, no prohibited PII** · **No / unsure - help me prepare it**
-  (→ `/prepare-data`) · **No data involved**. Always offer the "no data" option so it's one tap.
+**Sequence the opening, then batch - one screen, not three round-trips.** Two hard rules first:
+- **Precedence on a bare `/engage`** (no concrete target/inputs in the request): step 1a wins -
+  your first reply asks **only** what/where the code or inputs are. The gated questions below
+  are *undecidable* before a target exists (is code involved? is data involved?), so the
+  disclaimers + batched screen come **after** the target is known, not before.
+- **The tool's hard limits are 4 questions per call and 4 options per question** ("Other" is
+  added automatically). Never spec a menu that exceeds them; give **every** question a short
+  `header` (≤12 chars - the ones to use are named per question below).
 
-Record both; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.** Repeat
-the execution- and data-responsibility notes in the final Delivery Report.
+With the target known: show both disclaimers (text) at startup, then ask in a **single
+`AskUserQuestion` call**, including **only** the questions whose gate is met:
+- **Work-type** (header `Work type`) - *only if the classification is genuinely ambiguous after
+  reading the request* (step 1). `/engage review this script` needs no "problem / review /
+  build?" menu - classify it yourself, state the classification in one line, and let the user
+  correct it. Don't manufacture the question when the answer is in the request.
+- **Execution consent** (header `Execution`) - *only include it when code is/looks involved*
+  (review / build / remediate). For a pure problem-scoping engagement with no code, skip it;
+  default **No** if unsure.
+- **Data attestation** (header `Data safety`, `multiSelect: false`) - *only include it when data
+  is plausibly involved* (analysis / tuning / pipeline work, or the user mentions data);
+  otherwise record "no data involved" silently and move on. When asked:
+  *"Any data you'll share - is it safe to use?"* →
+  **Yes - synthetic/masked/anonymised, no prohibited PII** · **No / unsure - help me prepare it**
+  (→ `/prepare-data`) · **No data involved** (always offered, so it's one tap).
+
+Record the answers; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.**
+Repeat the execution- and data-responsibility notes in the final Delivery Report.
 
 **1. Classify the work.** Decide the entry point:
 - a *problem / idea* → discovery → requirements → build (full SDLC);
@@ -158,6 +173,8 @@ last time this was left loose the model offered "Quick **and** Deep" as a multi-
 > - **Ask Q1, Q2 and Q3 below in ONE `AskUserQuestion` call** (the tool takes up to 4 questions
 >   per call) - one screen, not three round-trips. They remain **three distinct questions**, each
 >   `multiSelect: false`; batching the *call* is not the same as merging the *lists*.
+> - **Headers:** Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle` (the tool truncates long headers;
+>   these are locked like the option wording).
 > - **Q1 (depth) is single-select** - the user picks **exactly one** depth. Quick ⊂ Deep ⊂ Audit,
 >   so selecting more than one is nonsense; the tool must not allow it.
 > - **Q2 (performance) is a SEPARATE question** (yes/no). **Never merge** the depth options and the
@@ -191,7 +208,10 @@ last time this was left loose the model offered "Quick **and** Deep" as a multi-
 | **Fix → re-review loop** | Fix, re-review, repeat until clean (no Criticals) or you call it. This is the loop "Audit" implies - now available to **Quick/Deep too**. |
 
 > Only **one** depth runs (Audit ⊃ Deep ⊃ Quick - no triple-passing). The fix-cycle (Q3) is
-> independent of depth, so e.g. *Quick + Fix→re-review loop* is valid. For taking on legacy code
+> independent of depth, so e.g. *Quick + Fix→re-review loop* is valid. **If the user picks
+> Q1 = None AND Q2 = No** there is nothing to run - don't dead-end or invent work: say so and
+> return to the outcome question via the question tool ("no review selected - what would you
+> like instead?"). For taking on legacy code
 > end-to-end (assess → fix → re-review → handover) use the heavier **`/remediate`**, not this
 > in-review loop. After the choice, the review skill asks the finer **scope** (dimensions ·
 > breadth · change-vs-audit mode) - type *then* scope, never needing a slash command.
@@ -206,24 +226,41 @@ and is the single source of truth - the review skill must NOT re-ask it** (it in
 **2a. Don't re-ask the outcome as one blurred question.** The *action* on findings is already
 its own question (the Q3 fix-cycle: report / fix / loop) and the *documents* are the artifact
 menu (step 3, where the **handover pack** lives). Keep them separate - do **not** ask a "what do
-you want delivered" question that mixes an action (fix) with a deliverable (handover). Just
-**confirm before changing any of the user's code.**
+you want delivered" question that mixes an action (fix) with a deliverable (handover). And
+**confirm before changing any of the user's code - via the question tool** (header `Apply fix?`,
+single-select: **Apply the fixes** · **Show me the diff first** · **Don't change anything**) -
+*unless Q3 already authorised it* ("Apply fixes" / the fix→re-review loop) - don't double-ask
+what the user has already answered.
 
-**3. Offer the artifact menu.** By **default, consolidate everything into a single
-Delivery Report** (`docs/templates/delivery-report.md`) - review, performance, compliance,
-QA evidence, handover and change/ops as sections of one file, not many. Ask (question tool,
-**`multiSelect: true`**) whether they want that consolidated report (the default) or specific
-**separate artifacts** (e.g. a standalone change request for a ticket) - the standalone
-templates in `docs/templates/` are the building blocks. Options:
-- (Consolidated) Delivery Report · or separate: Engagement Brief · BRD · FSD · ADRs · RTM ·
-  Code & Compliance Review · Performance Review · **Developer Handover · QA Handover** ·
-  Model Validation Report.
+**3. Offer the artifact menu - two stages, because the tool caps a question at 4 options.**
+By **default, consolidate everything into a single Delivery Report**
+(`docs/templates/delivery-report.md`) - review, performance, compliance, QA evidence, handover
+and change/ops as sections of one file, not many. **Never spec one giant multi-select of every
+template** (the tool renders at most 4 options; an 11-option list forces improvisation). Use
+exactly this structure (locked, like the Q1-Q3 menu):
+
+**Stage 1** (header `Artifacts`, `multiSelect: false`):
+*"How should the deliverables be packaged?"* →
+**Consolidated Delivery Report** (the default - everything as sections of one document) ·
+**Separate artifacts** (standalone documents, e.g. a change request for a ticket) ·
+**Both** (the consolidated report plus selected standalones).
+
+**Stage 2 - only if "Separate" or "Both"** - ONE batched call of grouped multi-selects
+(each `multiSelect: true`, each ≤4 options; skip any group irrelevant to the engagement):
+- header `Spec docs`: Engagement Brief · BRD · FSD · RTM
+- header `Reviews`: Code & Compliance Review · Performance Review · Model Validation Report · ADRs
+- header `Handover`: Developer Handover · QA Handover · Ops Runbook + Release Notes · Change Request
+Anything rarer (`docs/templates/` has the full catalogue - SAR referral, lexicon spec, …) is
+reachable via each question's automatic "Other".
+
 The **handover pack is a deliverable and belongs here** (not in the findings/fix question).
 Each is delivered in **both `.md` and `.html`**.
 
 **4. Summarise.** Write an Engagement Brief (`docs/templates/engagement-brief.md`) capturing
 decisions taken, open questions, clarifications, assumptions, the selected artifacts and the
-routing plan. Render it to HTML. Get the user's go-ahead.
+routing plan. Render it to HTML. **Get the go-ahead via the question tool** (header `Go-ahead`,
+`multiSelect: false`): **Proceed as briefed** · **Adjust something first** · **Stop here** -
+never a "shall I proceed?" buried in prose.
 
 **5. Oversee delivery (agile).** Work in small iterations. **Right-size, and say so out loud:**
 before fanning out, state in one line **how many agents you intend to spawn and why** (e.g.
@@ -238,7 +275,9 @@ the user at each gate.
 
 **6. Deliver.** Produce the selected artifacts under `artifacts/` as Markdown, then render
 each with `python -m scripts.render_html <file>.md` so every deliverable exists in `.md` and
-`.html`.
+`.html`. Before closing, run the mechanical DoD gate - `python -m scripts.check_artifacts` -
+which verifies every `.md` has its rendered `.html` sibling and the summary email exists;
+fix anything it flags (it's the one DoD check that's a command, not a claim).
 
 **7. Close with next steps - never dead-end.** Finish with a short summary of what was done
 and **concrete next-step options with your recommendation**, then offer to carry them out

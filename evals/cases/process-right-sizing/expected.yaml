@@ -1,0 +1,29 @@
+case: process-right-sizing
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Behaviour case - the headline cost control. Before fanning out, the PM must state in one
+  line how many agents will be engaged and why, and the set must be lean (a one-file fix is a
+  builder + a reviewer, not the roster). Failing modes: no agent-count statement at the gate,
+  or reflex full-team fan-out for a trivial change.
+
+planted:
+  - id: SIZE-1
+    keywords: [agents, agent count, "I'll use", engage only, just, lean]
+    min_severity: warning
+    must_find: true
+  - id: SIZE-2
+    keywords: [rules-developer, code-reviewer, Mateo, Ravi, builder, reviewer]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  - id: FP-1
+    keywords: [all 16, the full team, whole team, every specialist, full fan-out]
+  - id: FP-2
+    keywords: [business-analyst to re-elicit, tm-sme, trade-surveillance-sme, comms-surveillance-sme, ml-engineer, tuning-analyst]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

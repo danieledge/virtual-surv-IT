@@ -4,6 +4,15 @@ A delivery is "done" only when it carries the evidence a real developer, QA revi
 auditor can rely on. The PM checks this gate before handover; `compliance-reviewer` verifies
 it. Apply the items relevant to the deliverable type - not every item fits every task.
 
+> **How these gates are enforced (honest note).** Most items below are **prompt-enforced and
+> eval-sampled**, not CI-enforced: the PM and `compliance-reviewer` attest them, and the eval
+> harness (`/run-evals`) samples for drift - CI cannot see engagement deliverables because
+> `artifacts/` is deliberately git-ignored. The mechanical exceptions: the repo's own code is
+> CI-tested (pytest, lint, secret-scan, no-raw-data), and the **Distributable** +
+> **Engagement-summary email** items have a one-command check the PM runs at this gate:
+> `python -m scripts.check_artifacts` (every `artifacts/*.md` has a rendered `.html` sibling;
+> a summary `.txt` exists). Treat the rest as evidenced claims to spot-check, not guarantees.
+
 ## Every delivery
 
 - [ ] **Traceable** - each requirement links requirement → design → code → test → obligation

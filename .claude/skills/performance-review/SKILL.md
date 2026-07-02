@@ -11,12 +11,14 @@ Run a **performance & scalability review** of: **$ARGUMENTS**
 or paste it) and wait - don't assume a target.
 
 **Put scope on a menu - ask the axes below in ONE `AskUserQuestion` call** (one screen), each a
-distinct question with the stated `multiSelect`:
-- **Concerns** - **`multiSelect: true`** (default all): algorithmic complexity · memory ·
-  I/O & queries · concurrency · data-shape.
-- **Mode** - **`multiSelect: false`**: batch · streaming · both.
-- **Target data volume / SLA** - free-text ask (the number changes the verdict); offer it as a
-  question with an "Other" path rather than burying it in prose.
+distinct question with the stated header and `multiSelect` (tool limits: ≤4 questions per call,
+≤4 options per question - "Other" is automatic):
+- **Concerns** (header `Concerns`, **`multiSelect: true`**, default all): algorithmic
+  complexity · memory & data-shape · I/O & queries · concurrency.
+- **Mode** (header `Mode`, **`multiSelect: false`**): batch · streaming · both.
+- **Target volume** (header `Volume`, **`multiSelect: false`** - the number changes the verdict;
+  an exact figure goes through "Other"): < 1M events/day · 1-100M events/day · > 100M or
+  streaming/real-time · not sure - assess at multiple scales.
 
 > **Do NOT re-ask the fix-cycle (report / fix / loop) here** - `engage` already captured it (Q3);
 > inherit that answer. Only ask it (batched in the same call) if this skill was invoked **directly**,
