@@ -20,6 +20,32 @@ pip install -r requirements-review.txt      # optional: ruff, bandit, mypy, … 
 pre-commit install                          # optional but recommended
 ```
 
+## The CI pipeline
+
+CI is GitHub Actions (`.github/workflows/ci.yml`), running on **GitHub-hosted `ubuntu-latest`
+runners** - fresh, ephemeral VMs per job, nothing self-hosted. It triggers on **every push to
+`main` and every pull request**, and runs **four jobs in parallel**:
+
+| Job | What it does |
+|---|---|
+| **Tests (detection logic)** | Python 3.12 → `pip install -r requirements-dev.txt` → `pytest` (the full suite: rules, masking, renderer, all three safety guards driven via their JSON protocol, hook-config sync, the per-case eval contract, the DoD artifact checker) → `scripts.validate_masking` → `scripts.validate_manifest` |
+| **Lint & static analysis** | `ruff check` + `ruff format --check` over `scripts/ .claude/hooks/ rules/ tests/` · `bandit` (Python security) · `shellcheck` (Bash + git hooks) |
+| **Secret scan** | gitleaks over the **full history** (`fetch-depth: 0`), not just the diff |
+| **No raw data committed** | fails if any `*.csv` / `*.parquet` / `*.pcap` is tracked (`CLAUDE.md` §5) |
+
+Watch runs on the repo's **Actions** tab, or `gh run list` / `gh run watch` from a terminal.
+
+**What CI deliberately cannot cover** (see the note in `docs/DEFINITION-OF-DONE.md`):
+engagement deliverables (`artifacts/` is git-ignored - `python -m scripts.check_artifacts` is
+the gate for those), and **live team quality** (prompt regressions need `/run-evals`, which
+spends tokens; CI proves the eval harness *contract* - manifests well-formed, scorer
+discriminating - not the team's live output).
+
+There is also a **local layer in front of CI**: `pre-commit install` gives you gitleaks, a
+raw-data file block, whitespace/private-key checks, and pytest on changes to `rules/`,
+`tests/` or `scripts/`. The Claude Code safety hooks are *not* part of CI - they run inside
+Claude Code sessions only.
+
 ## Before you open a PR
 
 Run what CI runs:
@@ -29,9 +55,13 @@ pytest                                       # all unit tests must pass
 python -m scripts.validate_masking           # masking safety + detection fidelity
 python -m scripts.validate_manifest          # declared agents/skills resolve
 ruff check scripts/ .claude/hooks/ rules/ tests/
+ruff format --check scripts/ .claude/hooks/ rules/ tests/
 bandit -r scripts/ .claude/hooks/ -q
 shellcheck scripts/*.sh scripts/git-hooks/pre-commit scripts/git-hooks/pre-push
+git ls-files '*.csv' '*.parquet' '*.pcap'    # must print nothing (no raw data tracked)
 ```
+
+(Gitleaks runs via `pre-commit` locally and in CI over the full history.)
 
 ## The tooling, in plain English
 
@@ -52,9 +82,10 @@ Two things worth knowing:
 - **Ruff is Python-only.** It does not touch Bash, JSON, YAML or Markdown. Bash is linted by
   shellcheck; JSON is content-checked by `validate_manifest`; **Markdown / YAML / JSON layout is
   by hand** (e.g. the "ASCII hyphens, not en-dashes" rule is a convention, not enforced).
-- **The two safety hooks are a separate thing** from this tooling - they run *inside Claude Code*
-  to block raw-data reads and un-consented code execution. They're explained in
-  `docs/house-rules.md` and threat-modelled in `docs/adr/ADR-002`.
+- **The three safety hooks are a separate thing** from this tooling - they run *inside Claude
+  Code* to block raw-data reads, un-consented code execution, and model writes of the consent
+  marker / settings / the hooks themselves. They're explained in `docs/house-rules.md` and
+  threat-modelled in `docs/adr/ADR-002`.
 
 ## Adding or changing components
 
@@ -64,8 +95,11 @@ Two things worth knowing:
   that the declared set matches the files on disk.
 - **Model tier** — if you set or change an agent's `model:`, update the tier table in
   **`docs/agent-design.md`** in the same change. The two are expected to stay in sync.
-- **Skill** — add `.claude/skills/<name>/SKILL.md` (frontmatter `name` matching the dir +
-  `description`). The plugin loads the whole skills directory.
+- **Skill** — add `.claude/skills/<name>/SKILL.md` (the command name comes from the directory
+  name; frontmatter needs `description` and **must include `disable-model-invocation: true`** -
+  the team's dormancy rule: skill descriptions never load into ordinary sessions, and workflows
+  are chained by reading the routed skill's file, not via the Skill tool). The plugin loads the
+  whole skills directory.
 - **Template** — add `docs/templates/<name>.md` carrying the document-control header
   (id / version / revision-history / owner / status / classification / as-of) defined in
   `docs/WAYS-OF-WORKING.md`, and reference it from the skill that produces it.
@@ -74,10 +108,14 @@ Two things worth knowing:
 
 ## Safety hooks
 
-`.claude/hooks/guard-raw-data.py` (blocks raw-data reads) and `guard-code-execution.py`
-(gates code execution) are security controls. Their wiring is duplicated by design between
-`hooks/hooks.json` (plugin scope) and `.claude/settings.json` (project scope) and the two must
-stay byte-identical — `tests/test_hooks_in_sync.py` enforces this. See `docs/house-rules.md`.
+`.claude/hooks/guard-raw-data.py` (blocks raw-data reads), `guard-code-execution.py` (gates
+code execution) and `guard-consent-writes.py` (blocks model writes of the consent marker,
+settings and the hooks themselves) are security controls. Their wiring is duplicated by design
+between `hooks/hooks.json` (plugin scope) and `.claude/settings.json` (project scope) and the
+two must stay byte-identical — `tests/test_hooks_in_sync.py` enforces this. **Editing the hook
+files from inside a Claude session requires the human-set `CST_ALLOW_CONFIG_EDIT=1`** (the
+consent-write guard blocks model edits of them - by design). See `docs/house-rules.md` and
+`docs/adr/ADR-002`.
 
 ## Conventions
 
