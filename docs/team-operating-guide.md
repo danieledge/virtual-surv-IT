@@ -63,7 +63,20 @@ mode in the opening banner. **Resolve the interpreter too, never assume `python3
 `python3`, then `python`, then `py` (the same order as `run-guard.sh`) - Linux/macOS usually
 ship `python3`, but **Windows typically has `python` or the `py` launcher and no `python3`**.
 One probe at step 0 (`python3 --version`, falling back down the list) fixes `<python>` for the
-whole session; every command below uses that resolved form:
+whole session; every command below uses that resolved form.
+
+**Invoke with ONE consistent spelling - always forward slashes, always double quotes.** Git
+Bash on Windows accepts forward-slash paths (`C:/Users/...`), so never emit backslash paths or
+switch quote styles between invocations: every distinct spelling of the same command becomes
+another permission prompt for the user, and another auto-saved rule (mixed-separator and
+mixed-quote saved rules are flagged as invalid by Claude Code's validator - a real user hit
+exactly this). One spelling → one approval → one clean rule.
+
+**Don't assume `bash` exists either.** On Windows the shell tool runs Git Bash (Claude Code
+requires it there; the hosting terminal being PowerShell doesn't change that) - but if a
+`bash --version` probe fails at step 0, skip the `.sh` helpers (`check-review-tools.sh`) and
+call the analysers directly (`ruff`/`mypy`/etc. are on PATH as executables); say what was
+skipped. The Python helper scripts need only `<python>`, never bash:
 
 - **Repo-as-project** (`scripts/render_html.py` exists in the working directory): invoke as
   `python -m scripts.<name>` / `bash scripts/<name>.sh`. Everything works.
