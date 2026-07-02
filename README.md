@@ -8,38 +8,18 @@
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
-> *AI-powered Compliance Surveillance **Engineering** Team for Claude Code - a PM, builders,
-> reviewers and subject-matter experts that build and review the technology behind surveillance,
-> right inside Claude Code. Raw data is hard-blocked from the model; anything else you share
-> carries a data-safety attestation.*
+**Virtual Surv-IT is a virtual engineering team for compliance surveillance, running inside
+[Claude Code](https://claude.com/claude-code)**: a PM (Morgan) plus **16 specialist AI agents** -
+subject-matter experts who advise, builders who engineer, and reviewers who independently check -
+that design, build, test, review and document the **technology behind market-abuse and
+financial-crime detection**. Work is delivered through structured collaboration with
+**independent review**, like a real engineering team, not one assistant doing everything with
+nobody checking.
 
-> ⚗️ **Proof of concept, in active development.** An exploratory experiment in what an AI
-> "engineering team" can do inside Claude Code - **not** a production system, and **not** regulatory
-> tooling. It is **evolving quickly, will contain bugs, and may behave in unexpected ways** - expect
-> rough edges and breaking changes, and **review everything it produces.** Treat its output as a
-> starting point for real engineers and reviewers, not as assured or accredited work.
->
-> 🛑 **Dormant by default.** The team is **opt-in** and never takes over your sessions. A normal
-> `claude` session is just standard Claude Code; the agents and the "Morgan" persona wake up
-> **only** when you run `/engage` (or another team command, or simply ask for the team). The sole
-> always-on piece is the data-safety guard.
-
-Virtual Surv-IT is a **collaborative AI engineering framework**: instead of relying on a single
-AI assistant, it assembles a **team of specialist AI agents** inside Claude Code to design, build,
-review, test and document **compliance-surveillance software** - so work is reviewed, refined and
-delivered through structured collaboration, like a real engineering team.
-
-It's the **engineering** behind surveillance - it builds and reviews the **technology that detects**
-money laundering, market manipulation and trader misconduct, rather than performing the compliance,
-monitoring or investigation work itself. Detection rules are just one deliverable: it equally builds
-**data pipelines / ETL, transformation and utility scripts** (Python, Scala, Java, PowerShell, Bash),
-reconciliation and reporting jobs, and tooling - or simply **reviews** existing code. It runs in
-[Claude Code](https://claude.com/claude-code) as **a PM (Morgan) plus 16 focused subagents**:
-subject-matter experts who advise, and builders who engineer, test and review.
-
-> **New to AI agents and LLMs?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md) - a
-> plain-English tour of what this is, who the team are, how a job flows through them, and how it
-> keeps confidential data away from the AI. No prior knowledge needed.
+It builds the **engineering** behind surveillance - detection rules, data pipelines / ETL,
+transformation and utility scripts (Python, Scala, Java, PowerShell, Bash), reconciliation and
+reporting jobs, ML, code reviews and handover documentation - and does **not** perform the
+compliance, monitoring or investigation work itself.
 
 ```mermaid
 flowchart LR
@@ -51,18 +31,21 @@ flowchart LR
     Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
 ```
 
-> **Not all 16 every time.** The roster is a **library of specialists, not a fixed pipeline.**
-> The PM (Morgan) engages **only the agents a task needs** - typically **2-5** (often just a builder
-> + a reviewer), and **never all 16**. The diagram above is the *shape* of a full delivery; most
-> tasks use a leaner subset. That selection is **how the team controls cost** *and* how it stays
-> true to Anthropic's *"use the simplest thing that works"* guidance - complexity is opt-in, not the
-> default.
+> **Not all 16 every time.** The PM engages only the agents a task needs - typically **2-5**,
+> never all 16. The diagram is the *shape* of a full delivery; complexity is opt-in
+> (*"use the simplest thing that works"*).
 
-**The safety rule, in one line:** raw data under `data/raw/` is **hard-blocked** - an always-on
-guard stops any agent from reading it. For anything else you share, **you attest it's masked,
-synthetic, or anonymised** (a startup disclaimer makes this explicit - the responsibility is
-yours). Prefer **masked** (identities scrambled, behaviour preserved) or **synthetic** (entirely
-made up). See [how real data is handled](#-handling-real-data).
+> ⚗️ **Proof of concept** - an exploratory experiment, not a production system or regulatory
+> tooling; expect rough edges and breaking changes, and **review everything it produces**.
+> 🛑 **Dormant by default** - a normal `claude` session is standard Claude Code; the team wakes
+> only when you type `/engage` (or another team command).
+> 🛡️ **Data safety always on** - raw data under `data/raw/` is **hard-blocked** from the model;
+> anything else you share carries **your attestation** that it's masked or synthetic
+> ([how real data is handled](#-handling-real-data)).
+
+> **New to AI agents and LLMs?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md) - a
+> plain-English tour of what this is, who the team are, how a job flows through them, and how it
+> keeps confidential data away from the AI. No prior knowledge needed.
 
 **See it work** - a full build, end-to-end on synthetic data, captured as a readable
 **[build demo transcript](docs/demos/build-demo.md)** (every artifact in
@@ -139,38 +122,41 @@ corrected; Morgan states the loaded version on startup; safety-hook hardening (A
 
 ## 🤔 Why Virtual Surv-IT?
 
-### Why surveillance & financial-crime IT is a uniquely hard place to build
+### If you've worked in surveillance IT, you know these moments
 
-Surveillance technology isn't ordinary software delivery. Four things make it brutal - and, as
-the next two sections argue, make it a domain where AI can genuinely help, provided it arrives
-as a *team with controls* rather than a chat window:
+This project comes out of working in this domain - and out of a handful of moments most
+surveillance technologists will recognise on sight:
 
-- **The expertise doesn't live in one head.** A single change - say, tightening a spoofing
-  threshold - crosses regulatory interpretation, requirements analysis, detection engineering,
-  statistics (ATL/BTL - Above/Below-The-Line threshold testing), model risk, QA and audit
-  evidence. People who hold more than
-  two of those disciplines are rare and expensive; teams queue for them, and change backlogs grow.
-- **Failure is silent and asymmetric.** A bug in normal software shows up as a crash or a
-  complaint. In surveillance, a dead data feed or a mistuned threshold shows up as **nothing** -
-  no alert, no error, abuse flowing through undetected - until an auditor or regulator finds it
-  ([FCA Market Watch 79](https://www.fca.org.uk/publications/newsletters/market-watch-79), May
-  2024: an un-activated feed meant an insider-dealing scenario fired **zero
-  alerts for 3+ years**). The countermeasure is independent assurance of coverage, data and
-  tuning - which is staffing-intensive, so it's exactly what gets squeezed.
-- **The paperwork *is* the product.** Every threshold needs a documented rationale, every alert
-  a traceable path back to the obligation it serves, every tuning decision evidence that will
-  stand up to a regulator **years later**. In most teams the evidenced 80% - specs, RTMs
-  (requirements traceability matrices), test
-  evidence, tuning packs, handover docs, MI (management information - the metrics and
-  reporting) - consumes the experts' time and still arrives inconsistent.
-- **The data is the firm's most sensitive** - transactions, orders and communications carrying
-  PII (personally identifiable information) and potentially MNPI (material non-public
-  information). You cannot simply paste it into an AI tool; any AI approach has to
-  be *structurally* incapable of exfiltrating it, not just told to be careful.
+- **The quiet discovery that something has been broken for years.** The feed that was never
+  switched on. The venue migration that silently dropped a slice of order flow. The symbology
+  mapping nobody re-tested after the upgrade. Surveillance fails *silently*: a working system
+  and a broken one both look like "no alerts today" - and that sits in your stomach precisely
+  because nobody can say how long it's been true. The version that became public is
+  [FCA Market Watch 79](https://www.fca.org.uk/publications/newsletters/market-watch-79) (May
+  2024): a news feed never activated, so the insider-dealing scenario fired **zero alerts for
+  over three years**. Every practitioner reading that felt the same thing: *that could have
+  been us.* The countermeasure - independent assurance of coverage, data and tuning - is
+  staffing-intensive, so it's exactly what gets squeezed.
+- **The threshold nobody can explain.** Set years ago, by a contractor who has since left,
+  rationale in an inbox that was retired with them. Everyone is afraid to touch it; the
+  skilled-person review has started asking why it's 3.0 and not 2.5, and the answer on file
+  is an email chain. The evidence *is* the product in this domain - documented rationale,
+  tuning date, the alert-to-obligation trace, all of it expected to stand up **years later** -
+  and producing that evidenced 80% (specs, RTMs - requirements traceability matrices - test
+  evidence, tuning packs, MI reporting) is what actually consumes your experts.
+- **The queue behind one "simple" change.** Tighten a spoofing threshold: that's regulatory
+  interpretation, requirements, detection engineering, statistics (ATL/BTL - Above/Below-The-
+  Line threshold testing), model risk, QA and audit evidence. The people who hold more than two
+  of those disciplines are rare, everything waits on them, and the reg-change backlog grows
+  while they spend their days drafting and formatting documents instead of deciding things.
+- **The data you can't just paste anywhere.** Transactions, orders and comms carrying PII
+  (personally identifiable information) and potentially MNPI (material non-public information) -
+  the one dataset in the firm you cannot experiment with. Any AI approach has to be
+  *structurally* incapable of exfiltrating it, not just told to be careful.
 
 ### The hypothesis this project explores: AI can genuinely help here
 
-Those four pressures are, on inspection, a surprisingly good match for what large language
+Those four moments are, on inspection, a surprisingly good match for what large language
 models are actually good at - and that match is the **hypothesis Virtual Surv-IT was built to
 test**, not an assumption it starts from:
 
