@@ -3,8 +3,8 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.8.0](https://img.shields.io/badge/version-0.8.0-blue)
-![Tests 188 passing](https://img.shields.io/badge/tests-188%20passing-brightgreen)
+![Version 0.9.0](https://img.shields.io/badge/version-0.9.0-blue)
+![Tests 192 passing](https://img.shields.io/badge/tests-192%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
@@ -70,20 +70,28 @@ made up). See [how real data is handled](#-handling-real-data).
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md).
 
 <details>
-<summary>✨ <b>What's new in 0.8.0</b> - true dormancy, fail-closed guards, human-only consent, eval contract in CI (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.9.0</b> - runs fully from any project · human-applied guard update · the sharpened Why · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
 
-- **😴 True dormancy** - a session that never types `/engage` now pays ~nothing for the team:
-  skill descriptions don't load at all (`disable-model-invocation`), `CLAUDE.md` cut to a lean
-  always-on core (operating detail moved to the on-engage guide `/engage` actually reads), agent
-  descriptions trimmed, and installs are **enabled per project** (no machine-wide roster tax).
-- **🛡️ Guards fail closed + humans hold the keys** - a crash in a guard now *blocks* instead of
-  silently proceeding, and a **third hook** stops the model granting itself execution consent or
-  editing the settings/hooks: *you* create `.claude/.exec-consent` (the team gives you the exact
-  command); intake "yes" is intent, the marker is the consent (ADR-002 v0.3.1).
-- **🧪 Eval harness contract runs in CI** - every golden case's manifest is schema-checked and
-  the scorer proven to discriminate (perfect run passes, empty run fails), token-free; review
-  pipeline stops double-scoring findings; reviewers instructed that a clean verdict is valid.
-- Tests **84 → 170**; full setup-audit findings + before/after token numbers in the CHANGELOG.
+- **🧳 Plugin mode does everything now** - the bundled scripts (the `.md`→`.html` render,
+  synthetic data, the DoD artifact gate) run **by path from any project**; `/engage` detects
+  its run mode and states it at startup. The old "works everywhere vs repo-as-project" caveat
+  is gone.
+- **🔐 Guard 0.4, applied by a human** - the consent-write gate blocks the model editing the
+  guards (including for this update: the user copied the prepared files in); two live false
+  positives fixed (`make` in commit messages; multi-file `shellcheck`); block messages print
+  absolute paths. Morgan's question menus restructured to fit the question tool's hard limits
+  (4 questions/call, 4 options/question).
+- **📣 The README argues its case** - the domain pressures, the hypothesis under test, the
+  "I already have ChatGPT/Claude - why this?" answer, principles paired with what enforces
+  them, reading paths, a data-flow diagram, an acronym glossary, and the MW79 citation linked
+  to source.
+- **⚠️ Breaking for pre-0.8.0 installs** (consolidated at the top of the 0.9.0 CHANGELOG
+  entry): per-project enablement replaces runs-anywhere; summoning is slash-command-only;
+  execution consent is human-only; git history rewritten (re-clone).
+
+**0.8.0** (same 2 days): true dormancy (`disable-model-invocation`, lean CLAUDE.md, trimmed
+descriptions); guards fail closed on crash; the consent-write gate (humans hold the keys);
+eval-harness contract in CI; review pipeline stops double-scoring. Tests **84 → 192**.
 
 Recent **0.7.x**: build-demo re-run with fresh artifacts; README overhauled + summary-email on every close; audited against
 Anthropic's guidance + self-assessment corrected; memory is project-scoped (no project memory in
@@ -101,6 +109,34 @@ corrected; Morgan states the loaded version on startup; safety-hook hardening (A
 
 ---
 
+<details>
+<summary>📖 <b>Acronym glossary</b> - the domain and spec shorthand used throughout</summary>
+
+| Acronym | Meaning |
+|---|---|
+| ADR | Architecture Decision Record |
+| AML | Anti-Money Laundering |
+| ATL/BTL | Above-The-Line / Below-The-Line threshold testing (what a threshold catches vs what it just misses) |
+| BABOK | Business Analysis Body of Knowledge (the IIBA standard) |
+| BRD / FSD | Business Requirements Document / Functional Specification Document |
+| DoD | Definition of Done |
+| EARS | Easy Approach to Requirements Syntax (unambiguous requirement phrasing) |
+| FP | False Positive |
+| MAR | (EU) Market Abuse Regulation |
+| MI | Management Information (metrics/reporting) |
+| MNPI | Material Non-Public Information |
+| MW79 | [FCA Market Watch 79](https://www.fca.org.uk/publications/newsletters/market-watch-79) (May 2024) |
+| NER | Named-Entity Recognition (finding names/IDs in free text) |
+| PII | Personally Identifiable Information |
+| RTM | Requirements Traceability Matrix |
+| SAR / STR / STOR | Suspicious Activity Report / Suspicious Transaction Report / Suspicious Transaction and Order Report |
+| SME | Subject-Matter Expert |
+| SR 11-7 | The US Federal Reserve's supervisory guidance on model risk management |
+| TM | Transaction Monitoring |
+| UAT | User Acceptance Testing |
+
+</details>
+
 ## 🤔 Why Virtual Surv-IT?
 
 ### Why surveillance & financial-crime IT is a uniquely hard place to build
@@ -111,7 +147,8 @@ as a *team with controls* rather than a chat window:
 
 - **The expertise doesn't live in one head.** A single change - say, tightening a spoofing
   threshold - crosses regulatory interpretation, requirements analysis, detection engineering,
-  statistics (ATL/BTL calibration), model risk, QA and audit evidence. People who hold more than
+  statistics (ATL/BTL - Above/Below-The-Line threshold testing), model risk, QA and audit
+  evidence. People who hold more than
   two of those disciplines are rare and expensive; teams queue for them, and change backlogs grow.
 - **Failure is silent and asymmetric.** A bug in normal software shows up as a crash or a
   complaint. In surveillance, a dead data feed or a mistuned threshold shows up as **nothing** -
@@ -122,11 +159,13 @@ as a *team with controls* rather than a chat window:
   tuning - which is staffing-intensive, so it's exactly what gets squeezed.
 - **The paperwork *is* the product.** Every threshold needs a documented rationale, every alert
   a traceable path back to the obligation it serves, every tuning decision evidence that will
-  stand up to a regulator **years later**. In most teams the evidenced 80% - specs, RTMs, test
-  evidence, tuning packs, handover docs, MI - consumes the experts' time and still arrives
-  inconsistent.
+  stand up to a regulator **years later**. In most teams the evidenced 80% - specs, RTMs
+  (requirements traceability matrices), test
+  evidence, tuning packs, handover docs, MI (management information - the metrics and
+  reporting) - consumes the experts' time and still arrives inconsistent.
 - **The data is the firm's most sensitive** - transactions, orders and communications carrying
-  PII and potentially MNPI. You cannot simply paste it into an AI tool; any AI approach has to
+  PII (personally identifiable information) and potentially MNPI (material non-public
+  information). You cannot simply paste it into an AI tool; any AI approach has to
   be *structurally* incapable of exfiltrating it, not just told to be careful.
 
 ### The hypothesis this project explores: AI can genuinely help here
@@ -599,7 +638,7 @@ silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **188 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The
+The repo's **192 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The
 **eval harness** ([`evals/`](evals/)) checks the **quality of what the team produces** - so a prompt
 change that silently weakens a review gets caught, not shipped. (This is the regression net
 Anthropic's multi-agent guidance recommends.)
