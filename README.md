@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.7.13](https://img.shields.io/badge/version-0.7.13-blue)
+![Version 0.8.0](https://img.shields.io/badge/version-0.8.0-blue)
 ![Tests 170 passing](https://img.shields.io/badge/tests-170%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -70,17 +70,22 @@ made up). See [how real data is handled](#-handling-real-data).
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md).
 
 <details>
-<summary>✨ <b>What's new in 0.7.13</b> - build-demo re-run + review/data upgrades + honest known-issues (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.8.0</b> - true dormancy, fail-closed guards, human-only consent, eval contract in CI (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
 
-- **📦 Build-demo re-ran end-to-end** with fresh artifacts - real independent reviews, the
-  fix→re-review loop (the chain caught a genuine silent false-negative *twice*), measured ATL/BTL
-  tuning, every artifact regenerated + a signed summary email.
-- **🔍 Sharper reviews, honest data, candid limits** - reviews coach vibe-coded code by **mapping
-  findings → the prompt that would have closed each**; data insights are tagged **📊 observed / 🧠
-  inferred**; and a new **"Known issues (cosmetic)"** section documents the display-only quirks
-  (agent-name drift; emoji glyphs on older Windows/Edge).
+- **😴 True dormancy** - a session that never types `/engage` now pays ~nothing for the team:
+  skill descriptions don't load at all (`disable-model-invocation`), `CLAUDE.md` cut to a lean
+  always-on core (operating detail moved to the on-engage guide `/engage` actually reads), agent
+  descriptions trimmed, and installs are **enabled per project** (no machine-wide roster tax).
+- **🛡️ Guards fail closed + humans hold the keys** - a crash in a guard now *blocks* instead of
+  silently proceeding, and a **third hook** stops the model granting itself execution consent or
+  editing the settings/hooks: *you* create `.claude/.exec-consent` (the team gives you the exact
+  command); intake "yes" is intent, the marker is the consent (ADR-002 v0.3.1).
+- **🧪 Eval harness contract runs in CI** - every golden case's manifest is schema-checked and
+  the scorer proven to discriminate (perfect run passes, empty run fails), token-free; review
+  pipeline stops double-scoring findings; reviewers instructed that a clean verdict is valid.
+- Tests **84 → 170**; full setup-audit findings + before/after token numbers in the CHANGELOG.
 
-Recent **0.7.x**: README overhauled + summary-email on every close; audited against
+Recent **0.7.x**: build-demo re-run with fresh artifacts; README overhauled + summary-email on every close; audited against
 Anthropic's guidance + self-assessment made honest; memory is project-scoped (no project memory in
 the plugin); reviews coach "vibe-coded" code (prompting guidance); docs slimmed + honest masking
 framing; Morgan states the loaded version on startup; safety-hook hardening (ADR-002); citations

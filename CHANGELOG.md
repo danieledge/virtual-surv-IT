@@ -3,7 +3,10 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.8.0] - 2026-07-02
+
+True dormancy, fail-closed guards, human-only consent, and a CI-checked eval contract — the
+outcome of a full setup audit against Anthropic's current published guidance (2026-07-01).
 
 ### Changed — setup audit 2026-07-01 (full report: `artifacts/claude-setup-audit.md`, session-local)
 - **True dormancy: the team now costs ~nothing until `/engage` is typed.** All 20 skills set
