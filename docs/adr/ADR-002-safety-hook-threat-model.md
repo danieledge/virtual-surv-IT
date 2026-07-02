@@ -12,6 +12,7 @@
 > | 0.2 | 2026-07-01 | setup audit (user-authorised) | Crash paths fail closed; launcher version probe; launcher no-Python trade-off recorded; rec-7 status corrected |
 > | 0.3 | 2026-07-01 | setup audit (user-authorised) | Rec 5 implemented: `guard-consent-writes.py` blocks model writes of the consent marker + settings; consent granting is human-only |
 > | 0.3.1 | 2026-07-01 | setup audit (user-authorised) | Live false positive fixed (stderr redirect ≠ marker write); self-protection added: model Write/Edit of `.claude/hooks/*` and `hooks/hooks.json` blocked (Bash stays advisory for these paths); maintenance via `CST_ALLOW_CONFIG_EDIT=1` |
+> | 0.4 | 2026-07-02 | human-applied (the consent-write gate blocks model edits of the guards; the user copied the prepared files in) | Exec-guard `_TEAM_ALLOW` accepts the plugin's bundled scripts by path (basename-whitelisted - enables full plugin-mode operation from foreign projects; a hostile file *named* like a team script in a `scripts/` dir would pass: accepted lexical residual). Two live false positives fixed: `make` anchored to segment start (blocked commit messages containing the word), `sh <file>.sh` given a lookbehind (multi-file `shellcheck a.sh b.sh` was blocked). Both guards' block messages now print the absolute marker path from `CLAUDE_PROJECT_DIR`. |
 
 | | |
 |---|---|

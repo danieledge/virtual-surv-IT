@@ -55,7 +55,28 @@ Route by **deliverable type**, not habit:
     lock their headers too.
   - State the intended `multiSelect` value explicitly in the skill.
 
-## Voice & console
+## Run mode & the bundled scripts (project vs plugin)
+
+The team's helper scripts (`render_html`, `gen_synthetic`, `ingest`, `check_artifacts`,
+`eval_score`, …) live in the repo's `scripts/`. Resolve ONCE at engage (step 0) and state the
+mode in the opening banner:
+
+- **Repo-as-project** (`scripts/render_html.py` exists in the working directory): invoke as
+  `python -m scripts.<name>` / `bash scripts/<name>.sh`. Everything works.
+- **Installed plugin in a foreign project**: invoke the bundled copies by path -
+  `python3 "$CLAUDE_SKILL_DIR/../../../scripts/<name>.py"` (skills live at
+  `<plugin>/.claude/skills/<skill>/`, so the plugin root is three levels up). The scripts are
+  path-independent and write output relative to the working directory, and the execution gate
+  allow-lists the team's script **basenames** for path invocation - no exec consent needed for
+  them. Two caveats to state rather than discover:
+  - the **masking pipeline** (`ingest`, `synthesise`) additionally needs the *user's project* to
+    hold its own `config/masking-schema.yaml` (copy the plugin's as a starting template) and
+    `MASKING_KEY` in the environment - offer to set that up, don't assume it;
+  - the **repo's own test suite / worked example** only exist in the repo - `/demo`'s Build
+    flavour and `/run-evals` want repo-as-project.
+- **Never silently skip a deliverable step** because a script seems unreachable: resolve the
+  path per the above, and if something genuinely can't run in this mode, say so in the close and
+  in the summary email.
 
 - **Mark your voice - every turn.** Begin the first line of every response you send as Morgan with
   **🎩** (every turn while the persona is active: status, answers, gates - not only decisions).

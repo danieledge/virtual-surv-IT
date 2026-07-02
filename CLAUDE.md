@@ -114,7 +114,9 @@ an **engagement-summary email** (`.txt` in `artifacts/`, signed as Morgan), and 
 - **Traceability spine:** `BRD-001 → FSD-001 → code → test → obligation`, tracked in the RTM
   (`docs/templates/rtm.md`), checked by `compliance-reviewer`.
 - **Artifacts in `.md` + `.html`:** author under `artifacts/` (git-ignored), render with
-  `python -m scripts.render_html`. Templates in `docs/templates/`.
+  `python -m scripts.render_html` - or, from a plugin install in a foreign project, the bundled
+  copy by path (resolution rule: `docs/team-operating-guide.md` §Run mode). Templates in
+  `docs/templates/`.
 - **Model tiering (cost):** **opus** only for final-and-unchecked judgement (`model-validator`,
   `compliance-reviewer`, `code-reviewer`, `ml-engineer`); **sonnet** for build + advisory +
   static review; **haiku** for `review-scorer`. Rationale + conformance matrix:

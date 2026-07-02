@@ -69,7 +69,9 @@ Provenance for the regulatory content the team ships. This is **domain-general**
 surveillance engagement), so it lives here; per-engagement findings do not.
 - ✅ **AML/TM tuning - VERIFIED**: ATL/BTL, risk-based segmentation, SR 11-7 model validation, FFIEC
   BSA/AML.
-- ✅ **FCA Market Watch 79 - VERIFIED**: surveillance testing is **four-component** (parameter
+- ✅ **FCA Market Watch 79 - VERIFIED**
+  (<https://www.fca.org.uk/publications/newsletters/market-watch-79>, May 2024): surveillance
+  testing is **four-component** (parameter
   calibration · model logic · model code · **data** comprehensiveness/accuracy), not calibration
   alone; failures often from **data-ingestion gaps**. Drives `/assess-coverage`.
 - ✅ **Trade / market-abuse regulatory spine - VERIFIED** (EUR-Lex, legislation.gov.uk, ESMA): MAR

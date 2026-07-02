@@ -116,7 +116,8 @@ as a *team with controls* rather than a chat window:
 - **Failure is silent and asymmetric.** A bug in normal software shows up as a crash or a
   complaint. In surveillance, a dead data feed or a mistuned threshold shows up as **nothing** -
   no alert, no error, abuse flowing through undetected - until an auditor or regulator finds it
-  (FCA Market Watch 79: an un-activated feed meant an insider-dealing scenario fired **zero
+  ([FCA Market Watch 79](https://www.fca.org.uk/publications/newsletters/market-watch-79), May
+  2024: an un-activated feed meant an insider-dealing scenario fired **zero
   alerts for 3+ years**). The countermeasure is independent assurance of coverage, data and
   tuning - which is staffing-intensive, so it's exactly what gets squeezed.
 - **The paperwork *is* the product.** Every threshold needs a documented rationale, every alert
@@ -286,12 +287,14 @@ project. Then just **talk to the PM** - describe whatever you've got:
 > role for the whole session. Invoke it again only to start a new, separate piece of work, or use a
 > focused command (`…:audit-review`, `…:handover`, …) to jump straight to a specific workflow.
 
-> **What works everywhere vs repo-as-project.** The full **review/advisory** team - `engage`, all
-> the reviews, the SMEs, Morgan - works in any project. The helper-**script** steps (the
-> `.md`→`.html` render and the masking pipeline) need the plugin's `scripts/` reachable from the
-> working directory, which Claude Code doesn't expose from a foreign project - so those run cleanest
-> in **repo-as-project** mode (below). For "summon the team to review/advise on my code", the plugin
-> is exactly right.
+> **Everything works from any project - the team detects its own run mode.** At engage, Morgan
+> checks whether it's running repo-as-project or as an installed plugin, states the mode in the
+> opening banner, and resolves the helper scripts accordingly (the plugin's bundled copies run
+> by path from a foreign project - the `.md`→`.html` render included). You don't need to
+> remember any of this. Two things still want the repo opened as the project: the **masking
+> pipeline** needs your project to hold its own `config/masking-schema.yaml` + `MASKING_KEY`
+> (Morgan offers to set that up), and `/demo`'s Build flavour + `/run-evals` use the repo's own
+> test suite and golden cases.
 
 > **Data-safety guard is fully portable.** It's a hook, so it receives `CLAUDE_PROJECT_DIR` and
 > protects **your project's** `data/raw/` (not the plugin's) wherever the plugin is installed -
@@ -527,15 +530,22 @@ handbook.
 
 ## 🧭 Core principles
 
-| Principle | What it means |
-|---|---|
-| Engineering first | Assists software engineering; not compliance, legal or regulatory advice. |
-| Right-sized, not all-hands | The PM engages only the agents a task needs (typically 2-5, never all 16) - the mechanism that controls cost and keeps the team true to Anthropic's "use the simplest thing that works". |
-| Independent peer review | Reviewers and SMEs are read-only by tool grant (segregation of duties): they recommend; builders fix - an advisor can't quietly edit what it's reviewing. |
-| Human oversight | People review and approve all outputs; nothing touching live systems proceeds without sign-off. |
-| Safe development | Synthetic, masked or appropriately protected data only; raw data is hard-blocked from the model. |
-| Auditable & traceable | Every delivery carries the thread requirement → code → test → obligation, with explainable thresholds - so it survives an audit. |
-| Modular | Each specialist can evolve (or be re-tiered) independently without disturbing the rest. |
+A principle without an enforcement mechanism is a hope. This domain has controls for hopes - so
+every principle below names **what enforces it**, and where the enforcement is soft (a prompt,
+a convention), that's stated rather than dressed up.
+
+| Principle | What it means | What enforces it |
+|---|---|---|
+| **Engineering first** | Assists the engineering *behind* surveillance - not compliance, legal or regulatory advice. | Scope statement + proof-of-concept framing; obligations are cited from a verified register, never interpreted as advice. |
+| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage` - and costs ~nothing until then. | `disable-model-invocation` on all 20 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
+| **Right-sized, not all-hands** | Only the agents a task needs (typically 2-5, never all 16) - the simplest thing that works. | The PM states the intended agent count at the gate (you can veto it); a golden eval case samples the behaviour. Prompt-enforced. |
+| **Independent review** | Reviewers, SMEs and the model validator recommend; builders fix. A checker cannot edit the thing it checks; QA doesn't test its own build. | Read-only **tool grants** (no `Write`/`Edit`), not convention - segregation of duties applied to agents. |
+| **Humans hold the keys** | Execution consent, settings, and the guards themselves are human-only; nothing touches a live system without sign-off. | The consent-write gate: the model is blocked from writing the consent marker, `settings*.json` or the hook files. Consent = a file only you can create; maintenance = `CST_ALLOW_CONFIG_EDIT=1` at launch. |
+| **Safe data by architecture** | Raw data is structurally unreachable by the model; work happens downstream, on masked or synthetic data. | Raw-data hook + OS-level `permissions.deny` + `.gitignore` + a CI job that fails on tracked data files + keyed masking as the only ingest path. |
+| **Fail closed** | A crashed control blocks; it never silently allows. | Guard crash wrappers exit 2 (block); the launcher version-probes interpreters; regression tests feed the guards malformed input. |
+| **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
+| **Self-tested** | The team's own quality is regression-tested like code. | 190+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 25 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
+| **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
