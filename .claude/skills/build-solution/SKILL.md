@@ -1,6 +1,7 @@
 ---
 description: Build an end-to-end solution from a set of requirements (orchestrator-workers)
 argument-hint: <path to requirements pack / BRD+FSD, or describe it>
+disable-model-invocation: true
 ---
 
 Under the PM (CLAUDE.md §6), deliver end to end from the requirements: **$ARGUMENTS**

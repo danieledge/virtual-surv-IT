@@ -1,6 +1,7 @@
 ---
 description: Turn a BRD into a Functional Specification (ISO/IEC/IEEE 29148 + Gherkin)
 argument-hint: <path to the BRD, or paste it>
+disable-model-invocation: true
 ---
 
 Under the PM (CLAUDE.md §6), turn the BRD into an FSD: **$ARGUMENTS**

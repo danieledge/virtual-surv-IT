@@ -4,7 +4,7 @@
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Version 0.7.13](https://img.shields.io/badge/version-0.7.13-blue)
-![Tests 84 passing](https://img.shields.io/badge/tests-84%20passing-brightgreen)
+![Tests 170 passing](https://img.shields.io/badge/tests-170%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
@@ -92,7 +92,7 @@ framing; Morgan states the loaded version on startup; safety-hook hardening (ADR
 
 ---
 
-**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-two-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [⚠️ Known issues](#known-issues) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on--acknowledgements) · [📄 License](#-license)
+**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [⚠️ Known issues](#known-issues) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on--acknowledgements) · [📄 License](#-license)
 
 ---
 
@@ -137,9 +137,10 @@ and **right-sized** to each task (see below).
 
 ## 🚀 Quick start
 
-### 🔌 Install as a plugin (recommended) - summon the team from *any* project
+### 🔌 Install as a plugin (recommended) - then enable it **per project**
 
-Install once and the team is available in **every** project, summoned on demand.
+Install once, then **enable the team only in the projects that use it** - a deliberate
+token-economy step, not an oversight (the "why" is right below).
 
 > 🛑 **You must type the `/plugin` commands yourself.** `/plugin …` is an interactive command - if
 > you *ask the assistant* to "install the plugin" it may claim success without anything happening.
@@ -156,20 +157,36 @@ Install once and the team is available in **every** project, summoned on demand.
 /plugin install compliance-surveillance-team@virtual-surv-it
 ```
 
-**2. Restart Claude Code.**
+**2. Scope the enablement to the projects that need it.** If the install enabled the plugin at
+**user** scope (check `/plugin` - or `~/.claude/settings.json` → `enabledPlugins`), disable it
+there, and instead enable it **in each project where you want the team**: from that project run
+`/plugin` and enable it *for this project*, or add to that project's `.claude/settings.json`:
+```json
+{ "enabledPlugins": { "compliance-surveillance-team@virtual-surv-it": true } }
+```
 
-**3. From any project, summon the team** (commands are namespaced):
+> **Why per-project instead of "enabled everywhere"?** Claude Code loads every enabled plugin's
+> **agent descriptions into every session's context** so it can route work to them - there is no
+> lazy-load mechanism for agents. A user-scope enable therefore taxes *every* project on the
+> machine (~1.2k tokens per session, every session) for a team most of them never summon - the
+> opposite of this repo's **dormant-by-default** principle. The team's *skills* are already free
+> everywhere (they set `disable-model-invocation: true`, so their descriptions never load and the
+> commands stay typeable); the agent roster is the irreducible cost, so it's scoped to the
+> projects that actually use it. (The 2026-07-01 setup audit measured the old always-on posture
+> at ~2.7k tokens per session per project - hence this step.)
+
+**3. Restart Claude Code. From an enabled project, summon the team** (commands are namespaced):
 ```
 /compliance-surveillance-team:engage
 ```
 …and likewise `…:deep-review`, `…:audit-review`, `…:handover`, etc.
 
-**Verify:** run `/plugin` - it should list **compliance-surveillance-team** as enabled (under
-`enabledPlugins`). **If it's not listed, the install didn't run** - re-type the commands yourself.
-*(One session only? `claude --plugin-dir /path/to/virtual-surv-IT` loads it temporarily, not saved.)*
+**Verify:** in the project, run `/plugin` - **compliance-surveillance-team** should show as
+enabled for that project. *(One session only, any directory?
+`claude --plugin-dir /path/to/virtual-surv-IT` loads it temporarily, not saved.)*
 
-You get the 16 agents, the workflow commands and the raw-data guard hook in every project. Then just
-**talk to the PM** - describe whatever you've got:
+You get the 16 agents, the workflow commands and the raw-data guard hook in every **enabled**
+project. Then just **talk to the PM** - describe whatever you've got:
 
 ```
 /compliance-surveillance-team:engage I need to detect wash trades in our equities flow
@@ -330,8 +347,9 @@ get it past the reviewers **and** the change board. · *Slack:* "happy to take t
   *Slack:* "review prepped & triaged ▓▓▓░░ (JIRA raised)"
 
 > Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
-> real independent check. The restriction is enforced by the tools each agent is granted -
-> advisors get `Read, Grep, Glob` only - not by convention.
+> real independent check. The restriction is enforced by the tools each agent is granted - no
+> advisor holds `Write`/`Edit` (the SMEs hold only `Read, Grep, Glob`; the reviewers add `Bash`
+> for static analysers and `git diff`, gated by the execution hook) - not by convention.
 
 </details>
 
@@ -465,7 +483,7 @@ silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **84 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The
+The repo's **170 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The
 **eval harness** ([`evals/`](evals/)) checks the **quality of what the team produces** - so a prompt
 change that silently weakens a review gets caught, not shipped. (This is the regression net
 Anthropic's multi-agent guidance recommends.)
@@ -490,7 +508,7 @@ Anthropic's multi-agent guidance recommends.)
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
-## 🪝 The two safety hooks (plain English)
+## 🪝 The safety hooks (plain English)
 
 A *hook* is a small script Claude Code runs automatically **right before** it uses a tool, and it
 can **allow** or **block** that action. This plugin ships two, **always on** (they run even when the
@@ -508,10 +526,18 @@ synthetic data instead.
 **2. The code-execution gate** (`guard-code-execution.py`) - *reviewing code means reading it, not
 running it.* Running untrusted code is a real risk, so commands that **execute** code (test runners,
 scripts, profilers) are blocked **unless you've given consent** - a `.claude/.exec-consent` marker
-(written when you answer "yes" at intake) or `CST_ALLOW_EXEC=1`. The team's own `scripts/` helpers
-are always allowed.
+or `CST_ALLOW_EXEC=1`. The team's own `scripts/` helpers are always allowed.
 
-Both are wired in **two** places so they fire in either mode - `hooks/hooks.json` (installed as a
+**3. The consent-write gate** (`guard-consent-writes.py`) - *only a human can open the execution
+gate.* Answering "yes" at intake expresses intent, but it does not unlock anything: the model is
+blocked from writing the consent marker, the settings files, and the guard hooks themselves - so a
+confused (or prompt-injected) model cannot authorise itself to run code or quietly rewrite its own
+guardrails. **You** create the marker - the team gives you the exact command **with the absolute
+project path** (e.g. `! touch /path/to/your-project/.claude/.exec-consent`, or the same `touch`
+in any terminal); deleting it (closing the gate) and reading it stay allowed, and hook
+maintenance needs the human-set `CST_ALLOW_CONFIG_EDIT=1`.
+
+All are wired in **two** places so they fire in either mode - `hooks/hooks.json` (installed as a
 plugin) and `.claude/settings.json` (this repo opened as a project) - and a test keeps the two copies
 identical.
 
@@ -583,7 +609,7 @@ real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ �
   to put in front of an agent or to share outside the environment.
 - **`.claude/hooks/guard-raw-data.py`** - PreToolUse hook (wired in both `.claude/settings.json`
   and `hooks/hooks.json`) that blocks any agent `Read`/`Grep`/`Glob`/`Bash` touching `data/raw/`.
-  See [the safety-hooks section](#-the-two-safety-hooks-plain-english) for what "blocks" means for
+  See [the safety-hooks section](#-the-safety-hooks-plain-english) for what "blocks" means for
   shell commands vs the file tools.
 
 ```bash
@@ -686,10 +712,19 @@ Measured on a real run (the Agent tool reports actual usage; ~4 chars/token, so 
 - **Artifacts-as-blackboard** - agents return condensed results; big output goes to files, not back
   through the orchestrator's context.
 - **Clean console** - detail to artifacts, not the chat.
-- **Lean always-on context (0.5.x)** - `CLAUDE.md` was slimmed **~44%** (~5.2k → ~2.9k tokens) by
-  moving on-engage operating detail to [`docs/team-operating-guide.md`](docs/team-operating-guide.md).
-  It loads into *every* session and is inherited by *every* subagent, so this saves ~2.3k tokens per
-  session - multiplied across a fan-out (a 5-agent run saves ~11k).
+- **True dormancy (0.8.x, from the 2026-07-01 setup audit)** - a session that never types
+  `/engage` now pays almost nothing for the team:
+  - all 20 skills set `disable-model-invocation: true`, so their **descriptions don't load into
+    context at all** (they stay typeable as slash commands; `/engage` reads a routed workflow's
+    `SKILL.md` when chaining);
+  - `CLAUDE.md` slimmed again (~185 → 121 lines, ~3.1k → ~1.9k tokens), with the roster, routing
+    table and standing rules moved to [`docs/team-operating-guide.md`](docs/team-operating-guide.md)
+    - which `/engage` now **explicitly reads** (previously it was referenced but never wired in);
+  - the 16 agent descriptions trimmed to crisp routing lines;
+  - the plugin is no longer enabled at user scope, so other projects don't load the roster - and
+    this repo no longer **double-loads** everything as plugin + project config at once.
+  `CLAUDE.md` loads into *every* session and is inherited by *every* subagent, so these savings
+  multiply across a fan-out.
 
 </details>
 
@@ -739,8 +774,8 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
   [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md).
 
 **Performance / startup** *(nice-to-have)*
-- **Trim routing metadata** - the agent + skill descriptions (~2.3k tokens) load every session for
-  routing; tighten the few verbose ones to crisp "use when…" lines. *Why:* lower per-session cost.
+- ✅ **Trim routing metadata - SHIPPED (0.8.x)** - skill descriptions no longer load at all
+  (`disable-model-invocation: true`); agent descriptions trimmed to crisp routing lines.
 - **Merge the two PreToolUse guards into one `python3` call** per tool use. *Why:* the raw-data and
   code-execution guards currently spawn `python3` twice on every `Read`/`Grep`/`Glob`/`Bash` -
   halving the spawns cuts per-call latency without weakening either guard.

@@ -46,8 +46,13 @@ engagement. This file ships with the plugin and is **general by design**.
   it must *not* be re-declared in `plugin.json` - that double-loads it. See `docs/adr/ADR-002`.)
 - **Reviewing code is static by default; executing it is gated.** Running tests, the script, or a
   profiler *executes* the code. `guard-code-execution.py` blocks these unless authorised by the
-  `.claude/.exec-consent` marker (written on user "yes") or the human-set `CST_ALLOW_EXEC=1`. The
-  user is responsible for the safety of code they hand over (CLAUDE.md §7). Threat model: `ADR-002`.
+  `.claude/.exec-consent` marker or the human-set `CST_ALLOW_EXEC=1`. **The marker is human-only**
+  (since ADR-002 rec 5 / `guard-consent-writes.py` the model cannot write it - the user creates it;
+  always quote the command with the **absolute project path**, e.g.
+  `! touch /path/to/project/.claude/.exec-consent`, so a terminal in another directory can't
+  create it in the wrong place); the intake "yes" is *intent*, the marker is the *consent*.
+  The user is responsible for the safety of code they hand over (CLAUDE.md §7). Threat model:
+  `ADR-002`.
 
 ## Recurring code-review findings
 - **String-matching Bash commands in PreToolUse hooks is advisory only.** Arbitrary shell trivially

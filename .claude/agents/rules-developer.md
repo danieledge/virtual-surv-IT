@@ -1,8 +1,8 @@
 ---
 name: rules-developer
 description: >
-  When the team is engaged, use to implement, modify or refactor detection rules and scenario logic for
-  transaction monitoring and trade surveillance, from a validated specification.
+  When the team is engaged, use to implement, modify or refactor detection rules and scenario
+  logic for transaction monitoring and trade surveillance, from a validated specification.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 ---

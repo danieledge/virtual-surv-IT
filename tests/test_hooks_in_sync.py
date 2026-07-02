@@ -29,11 +29,25 @@ def test_plugin_and_project_hooks_are_identical():
     )
 
 
-def test_both_guards_are_registered():
+def test_all_guards_are_registered():
     pre = _pretooluse(REPO / "hooks" / "hooks.json")
     commands = " ".join(h["command"] for entry in pre for h in entry["hooks"])
     assert "guard-raw-data.py" in commands, "raw-data guard missing from hooks"
     assert "guard-code-execution.py" in commands, "code-execution guard missing from hooks"
+    assert "guard-consent-writes.py" in commands, "consent-write guard missing from hooks"
+
+
+def test_consent_guard_covers_write_tools():
+    """ADR-002 rec 5: the consent-write guard must match the file-writing tools, or the model
+    could Write/Edit the consent marker and settings unimpeded."""
+    pre = _pretooluse(REPO / "hooks" / "hooks.json")
+    for entry in pre:
+        if any("guard-consent-writes.py" in h["command"] for h in entry["hooks"]):
+            for tool in ("Write", "Edit", "MultiEdit", "NotebookEdit", "Bash"):
+                assert tool in entry["matcher"], f"consent-write guard matcher misses {tool}"
+            break
+    else:
+        raise AssertionError("consent-write guard not found in hooks")
 
 
 def test_guards_use_portable_python_launcher():

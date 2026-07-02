@@ -1,9 +1,9 @@
 ---
 name: tm-sme
 description: >
-  When the team is engaged, use for transaction monitoring / AML work - designing or reviewing
-  detection scenarios, typologies, thresholds, segmentation, alert logic, and
-  SAR/STR rationale. Advises only; never edits code.
+  When the team is engaged, use for transaction-monitoring / AML advice - detection scenarios,
+  typologies, thresholds, segmentation, alert logic and SAR/STR rationale. Advises only; never
+  edits code.
 tools: Read, Grep, Glob
 model: sonnet
 ---

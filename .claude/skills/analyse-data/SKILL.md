@@ -1,6 +1,7 @@
 ---
 description: Data-analyst exploratory analysis loop - question → analysis → evidenced insight report
 argument-hint: <the analytical question, and where the data is>
+disable-model-invocation: true
 ---
 
 Run an exploratory data analysis for: **$ARGUMENTS**

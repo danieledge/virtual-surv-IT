@@ -1,14 +1,16 @@
 ---
 description: BA elicitation - stakeholder analysis, requirements gathering and traceability (BABOK)
 argument-hint: <the need / obligation / problem to elicit requirements for>
+disable-model-invocation: true
 ---
 
 Run a Business-Analysis **elicitation** for: **$ARGUMENTS**
 
 Under the PM (CLAUDE.md §6), drive **business-analyst** through the BABOK elicitation → analysis
-→ specification flow. **Ask material questions via the question tool, one question per axis, and
-wait** - single-select where the axis is mutually exclusive; never invent scope, stakeholders or
-thresholds.
+→ specification flow. **Material questions reach the user only through Morgan**: the
+business-analyst subagent has no user channel, so it **returns open questions** in its output, and
+Morgan puts them to the user via the question tool (one question per axis, single-select where the
+axis is mutually exclusive) and waits - never invent scope, stakeholders or thresholds.
 
 > If the need is already clear and you just need the BRD, use `/write-brd`.
 

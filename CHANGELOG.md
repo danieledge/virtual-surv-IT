@@ -5,7 +5,73 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
+### Changed — setup audit 2026-07-01 (full report: `artifacts/claude-setup-audit.md`, session-local)
+- **True dormancy: the team now costs ~nothing until `/engage` is typed.** All 20 skills set
+  `disable-model-invocation: true` (descriptions no longer load into context; commands stay
+  typeable - `/engage` reads a routed workflow's `SKILL.md` when chaining instead of the Skill
+  tool). `CLAUDE.md` slimmed 185 → 121 lines (~3.1k → ~1.9k tokens) - the roster, routing table
+  and standing rules moved to `docs/team-operating-guide.md`, which `/engage` now **explicitly
+  reads** (it was previously described as "read on-engage" but wired to nothing). The 16 agent
+  descriptions trimmed to crisp routing lines. Dual registration resolved: the plugin is no
+  longer enabled at user scope, so this repo stops double-loading every agent/skill (plugin +
+  project copies) and other projects stop loading the roster at all.
+- **Reviewer prompts counter reviewer bias** - the five read-only reviewers now carry the
+  official guidance that a clean verdict is a valid outcome (flag only gaps that affect
+  correctness, safety or stated requirements).
+- **Subagent bodies no longer instruct the impossible** - "ask the user and wait" wordings in
+  `business-analyst`/`compliance-reviewer` (subagents have no user channel) reworded to "return
+  open questions to the orchestrator; Morgan asks".
+- **Removed `docs/claude-code-setup-review.md`** - stale 2026-06-19 self-review that praised
+  "use proactively" description phrasing the repo deliberately removed; superseded by the
+  2026-07-01 setup audit.
+- **Distribution posture: per-project enablement is now the documented install path.** Agent
+  descriptions load into every session of every project where a plugin is enabled (no lazy-load
+  mechanism for agents), so user-scope enablement taxes unrelated projects ~1.2k tokens/session.
+  The README quick-start now has an explicit "scope the enablement" step with the rationale;
+  skills cost nothing anywhere thanks to `disable-model-invocation: true`.
+
+### Added
+- **Consent-write gate (`guard-consent-writes.py`) - ADR-002 Tier-1 rec 5, the biggest residual
+  closed.** The model can no longer grant itself execution consent: a third PreToolUse guard
+  (matcher `Write|Edit|MultiEdit|NotebookEdit|Bash`, dual-wired in `hooks/hooks.json` +
+  `.claude/settings.json`) blocks any model write of `.claude/.exec-consent` or
+  `.claude/settings*.json`. Deleting the marker (closing the gate) and read-only inspection stay
+  allowed; `CST_ALLOW_CONFIG_EDIT=1` (human-set) is the maintenance override. Consent is now
+  granted only by the human - type `! touch .claude/.exec-consent` (or any terminal) or set
+  `CST_ALLOW_EXEC=1`. `/engage` and `/demo` updated accordingly (the demo now *narrates* the
+  self-grant block as a safety feature). 18 new tests (`tests/test_guard_consent.py`) + sync-test
+  coverage; ADR-002 bumped to 0.3/0.3.1. Field notes from the first hours live: the guard blocked
+  the very session that authored it from writing the marker (working as designed), and a real
+  false positive (`ls … 2>/dev/null` counted as a redirect-write) was fixed - redirects now block
+  only when their *target* is protected. The guard also **protects the hooks themselves**: model
+  Write/Edit of `.claude/hooks/*` or `hooks/hooks.json` is blocked (editing a guard could neuter
+  it), so hook maintenance now requires the human-set `CST_ALLOW_CONFIG_EDIT=1`.
+
+- **Eval-harness contract now runs in CI** (`tests/test_eval_cases.py`): for every golden case,
+  the manifest is validated against the schema the scorer actually reads, a synthetic
+  manifest-derived "perfect run" must PASS, and an empty run must FAIL (except the two
+  deliberate zero-finding cases - `coverage-complete`, `review-clean-code` - guarded by an
+  explicit two-way allowlist). Token-free, so a manifest/scorer drift now fails the build;
+  `evals/README.md` no longer overstates this as "the deterministic layer runs in CI" - live
+  team quality still needs `/run-evals`.
+
 ### Fixed
+- **Review pipeline no longer scores every finding twice.** `review-scorer` (haiku) applies the
+  rubric once; Morgan's opus challenge pass is now a targeted **spot-check** (every Critical,
+  anything regulated, thin evidence bases, a sample of the rest) instead of a full re-score -
+  same scepticism, roughly half the judgement cost per review (`deep-review`, `audit-review`,
+  `code-reviewer`, operating guide). Also fixed the "lenses run as parallel passes, each blind
+  to the others" claim - a single agent's passes share one context; the wording now says
+  sequential focused passes and stops claiming independence that wasn't real.
+- **Safety guards no longer fail open on crash.** Claude Code treats hook exit 1 (any uncaught
+  crash) as NON-blocking - the action proceeds. Both guards could crash at import on Python ≤3.9
+  (PEP 604/585 annotations) and on valid-JSON-non-dict payloads, silently disarming the gates -
+  and the execution gate has no `permissions.deny` backstop. Now: `from __future__ import
+  annotations`, `main()` wrapped to exit 2 (block) on any unexpected error, `run-guard.sh`
+  version-probes for ≥3.9 before exec'ing, and 3 new regression tests. The deliberate exit-0 for
+  non-JSON payloads is retained and now tested. ADR-002 bumped to 0.2 recording the exit-code
+  semantics, the launcher's no-Python trade-off (raw guard keeps the deny-list backstop; the
+  exec gate is inert on a Python-less host), and the corrected Tier-2 rec-7 status.
 - **PreToolUse safety guards now launch cross-platform** via a portable wrapper
   (`.claude/hooks/run-guard.sh`). The hooks hardcoded `python3`, which doesn't exist on Windows
   (the interpreter is `python` / the `py` launcher) - so on Windows the guards errored

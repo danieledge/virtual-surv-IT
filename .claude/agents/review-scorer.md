@@ -1,11 +1,9 @@
 ---
 name: review-scorer
 description: >
-  The cheap-tier mechanical helper for the review pipeline. When the team is engaged, use for the rote, low-judgement
-  steps so the expensive reviewers don't pay opus rates for bookkeeping: context/language
-  detection, lens selection (per the router), confidence scoring of candidate findings, and
-  filter accounting (the Found/Reported/Filtered counts). Read-only; it does the arithmetic and
-  detection, not the judgement - `code-reviewer` and Morgan own the judgement on findings.
+  The cheap-tier mechanical helper for the review pipeline - context/language detection, lens
+  selection per the router, confidence scoring of candidate findings, and Found/Reported/Filtered
+  accounting. Read-only; judgement stays with code-reviewer and Morgan.
 tools: Read, Grep, Glob, Bash
 model: haiku
 ---

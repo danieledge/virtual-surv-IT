@@ -31,6 +31,12 @@ Protocol: read the PreToolUse JSON on stdin; exit 2 to block (stderr is fed to t
 exit 0 to allow. Only the Bash tool is in scope.
 """
 
+from __future__ import annotations
+
+# ^ Makes the PEP 604/585 annotations below (str | None, list[str]) lazy strings, so the
+# module still *imports* on older interpreters instead of crashing at def-time - a crash
+# would exit 1, which Claude Code treats as NON-blocking (the command would proceed).
+
 import json
 import os
 import re
@@ -147,4 +153,16 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # Any unexpected crash would exit 1, which Claude Code treats as a NON-blocking error
+        # - the command would PROCEED, silently disarming the gate. Unlike the raw-data guard,
+        # this gate has no permissions.deny backstop (there are no Bash() deny entries), so a
+        # crash here must fail CLOSED. The deliberate exit-0 for malformed JSON in main() is
+        # unaffected (sys.exit raises SystemExit, which is not an Exception).
+        sys.stderr.write(
+            "guard-code-execution crashed unexpectedly; failing closed (blocked). "
+            "See docs/adr/ADR-002-safety-hook-threat-model.md.\n"
+        )
+        sys.exit(2)

@@ -24,6 +24,13 @@ FAIL-OPEN RESIDUAL RISK (Bash):
 See CLAUDE.md §5 and scripts/ingest.py for the full data-safety contract.
 """
 
+from __future__ import annotations
+
+# ^ Makes the PEP 585 annotations below (list[str]) lazy strings, so the module still
+# *imports* on older interpreters instead of crashing at def-time - a crash would exit 1,
+# which Claude Code treats as NON-blocking (the read would proceed). Note the runtime still
+# needs Python >= 3.9 for Path.is_relative_to; run-guard.sh probes for that.
+
 import json
 import os
 import sys
@@ -154,4 +161,16 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # Any unexpected crash (e.g. a payload shape main() doesn't handle) would exit 1,
+        # which Claude Code treats as a NON-blocking error - the read would PROCEED. Fail
+        # CLOSED instead: the deny-list backstop covers Read/Grep/Glob, but blocking here is
+        # still the right default for a data guard. The deliberate exit-0 for malformed JSON
+        # in main() is unaffected (sys.exit raises SystemExit, not an Exception).
+        sys.stderr.write(
+            "guard-raw-data crashed unexpectedly; failing closed (blocked). "
+            "See docs/adr/ADR-002-safety-hook-threat-model.md.\n"
+        )
+        sys.exit(2)

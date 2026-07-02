@@ -13,8 +13,11 @@ packs - so a prompt change that silently degrades rigour gets **caught**, not sh
 
 1. **Deterministic** (`scripts/eval_score.py`, unit-tested, no tokens) - matches the team's
    normalized **findings** against a golden **ground-truth manifest** (`expected.yaml`): recall on
-   planted issues, must-find criticals, and false-positive traps. This is the backbone and runs in
-   CI without spending a token.
+   planted issues, must-find criticals, and false-positive traps. This is the backbone. What runs
+   in CI token-free is the harness **contract**, not the team: the scorer's unit tests
+   (`tests/test_eval_score.py`) plus per-case contract tests (`tests/test_eval_cases.py`) that
+   check every manifest parses, a synthetic perfect run passes and an empty run fails per case.
+   Scoring the *live team's* output still requires running `/run-evals` (spends tokens).
 2. **Qualitative** (the `/run-evals` skill + an LLM judge) - scores the dimensions the
    deterministic layer can't: clarity, traceability, evidence-basis, usability. 0-1 + pass/fail
    per the rubric.
@@ -33,7 +36,8 @@ All eval inputs are **synthetic** (CLAUDE.md §5) - seeded with known issues on 
 output to findings JSON, scores it deterministically (`python -m scripts.eval_score`), adds the
 LLM-judge dimensions, and prints an aggregate scoreboard (cases passed, recall, traps triggered).
 **Running the full set spends tokens** (each case spawns the team) - run it at milestones / before
-a release, not every commit. The deterministic scorer's own tests run free in CI.
+a release, not every commit. The deterministic scorer's own tests and the per-case contract tests
+(`tests/test_eval_cases.py`) run free in CI.
 
 ## A case (`expected.yaml`)
 
@@ -60,4 +64,7 @@ pass:
 1. `mkdir evals/cases/<id>/`, add a **synthetic** input with deliberately seeded issues.
 2. Write `expected.yaml` (planted + forbidden + pass rules) - the ground truth.
 3. Point `rubric:` at the relevant `evals/rubrics/*.md`.
-4. Sanity-check the scorer against a hand-written findings JSON before relying on it.
+4. Sanity-check the scorer against a hand-written findings JSON before relying on it. CI's
+   contract tests (`tests/test_eval_cases.py`) pick the new case up automatically and verify the
+   manifest parses, a perfect run passes and an empty run fails (or passes, for zero-finding
+   cases - add those to `ZERO_FINDING_CASES`).

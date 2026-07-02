@@ -1,6 +1,7 @@
 ---
 description: Turn an idea into a Business Requirements Document (BABOK + EARS)
 argument-hint: <the idea / business need>
+disable-model-invocation: true
 ---
 
 Under the PM (CLAUDE.md §6), turn this idea into a BRD: **$ARGUMENTS**

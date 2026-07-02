@@ -1,6 +1,7 @@
 ---
 description: Surveillance coverage assessment - are all in-scope risks detected, and are the data feeds actually live?
 argument-hint: <the surveillance area / book / desk to assess>
+disable-model-invocation: true
 ---
 
 Assess **surveillance coverage** for: **$ARGUMENTS**

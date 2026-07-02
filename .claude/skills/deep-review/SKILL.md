@@ -2,6 +2,7 @@
 description: Detailed multi-dimension code review (bugs, security, architecture, impact) with confidence scoring
 argument-hint: <path/glob, commit range, or nothing for the working diff>
 allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git blame:*), Bash(git show:*)
+disable-model-invocation: true
 ---
 
 Run a **deep (detailed) code review** of: **$ARGUMENTS**.
@@ -42,19 +43,24 @@ and states what's applicable vs not.
    files/lines, check for CLAUDE.md, and select the minimal lens set per the router. This is
    rote work - run it on the cheap tier, not opus.
 2. **Load lenses** progressively via the router - only those `review-scorer` selected.
-3. **Analyse** - drive `code-reviewer` to run the loaded lenses as **parallel passes** (each
-   blind to the others), plus the standard analysers (ruff/mypy/bandit, Checkstyle/PMD/SpotBugs,
-   scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep). Deep adds the **architecture**
-   lens, **impact analysis**, and test/doc coverage.
+3. **Analyse** - drive `code-reviewer` to run the loaded lenses as **sequential focused passes**
+   (one lens at a time, so each dimension gets full attention - a single agent cannot be "blind"
+   to its own earlier passes; true independence would need separate agents, which this pipeline
+   deliberately doesn't spend), plus the standard analysers (ruff/mypy/bandit,
+   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep). Deep adds
+   the **architecture** lens, **impact analysis**, and test/doc coverage.
 4. **Score & filter** *(delegate to `review-scorer`, haiku)* - apply the scoring rubric and
    produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). Tag each finding's
    **evidence basis** (📊 measured / 🧠 inferred). **Never** filter regulated findings (secrets,
    PII/raw data §5, undocumented thresholds / broken traceability §4) - those stay with
    `code-reviewer`/`compliance-reviewer`, not the scorer.
 5. For anything touching detection logic, hand to **compliance-reviewer** for the §4/§5 trail.
-6. **Morgan's challenge pass** *(opus)* - independently re-score the lenses' findings, downgrade
-   or drop the weak ones, and confirm each evidence basis before anything reaches the user. You
-   are a sceptic, not a relay.
+6. **Morgan's challenge pass** *(opus)* - a **spot-check, not a re-score**: the scorer already
+   applied the rubric (step 4), and re-scoring everything on opus pays twice for the same
+   judgement. Challenge the findings that *matter*: every 🔴 Critical, anything §4/§5-regulated,
+   any finding whose evidence basis looks thin (🧠 presented as 📊), and a sample of the rest.
+   Downgrade or drop what fails the challenge. You are a sceptic, not a relay - and not a second
+   scorer.
 
 **4. Present - scoreboard + clean artifact** (`docs/review/output-format.md`): a glanceable
 traffic-light **scoreboard to the console**, with the **full findings written to the clean

@@ -175,7 +175,7 @@ developers and QA reviewers can trust what the team hands over.
 - **SR 11-7 / PRA SS1/23** - model-risk governance for any ML detection.
 
 **Agent orchestration** - Anthropic's
-[Building Effective Agents](https://www.anthropic.com/research/building-effective-agents)
+[Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents)
 patterns, mapped to our work:
 - **Prompt chaining** → idea → BRD → FSD → build.
 - **Routing** → the PM picks the right SME / language reviewer.

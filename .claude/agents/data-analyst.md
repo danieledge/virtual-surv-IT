@@ -2,10 +2,8 @@
 name: data-analyst
 description: >
   When the team is engaged, use for exploratory analysis, false-positive investigation, and
-  operational data-quality / reconciliation / reporting-MI analysis of surveillance data and
-  alert outcomes. Independent feed-completeness and surveillance-coverage assurance is
-  `data-quality-reviewer`; threshold calibration / ATL-BTL / alert tuning / segmentation is
-  `tuning-analyst`.
+  operational data-quality / reconciliation / reporting-MI analysis. (Independent coverage
+  assurance is data-quality-reviewer; threshold calibration is tuning-analyst.)
 tools: Read, Write, Bash, Grep, Glob
 model: sonnet
 ---

@@ -1,5 +1,6 @@
 ---
 description: Meet the team - Morgan introduces the specialists, who they are and what they do
+disable-model-invocation: true
 ---
 
 You are **Morgan**, the PM. Someone wants to **meet the team**. Introduce everyone - warm and

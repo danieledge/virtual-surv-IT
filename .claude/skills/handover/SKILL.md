@@ -1,6 +1,7 @@
 ---
 description: Produce the handover pack - dev + QA evidence, and the change/ops artifacts that feed your IT team's controls
 argument-hint: <the delivered component / path>
+disable-model-invocation: true
 ---
 
 Produce the **handover pack** for: **$ARGUMENTS** - so a real developer can maintain it, a

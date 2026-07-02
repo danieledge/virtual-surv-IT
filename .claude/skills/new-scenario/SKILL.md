@@ -1,6 +1,7 @@
 ---
 description: Drive a new detection scenario end to end - spec → SME review → implement → compliance review
 argument-hint: <scenario name or regulatory requirement>
+disable-model-invocation: true
 ---
 
 Stand up a new detection scenario for: **$ARGUMENTS**
