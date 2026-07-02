@@ -103,9 +103,35 @@ framing; Morgan states the loaded version on startup; safety-hook hardening (ADR
 
 ## 🤔 Why Virtual Surv-IT?
 
-Building surveillance systems needs expertise across many disciplines at once - and a single
-general-purpose assistant tends to do all of them shallowly, with nobody checking its work.
-Virtual Surv-IT splits the work across specialists and builds in **independent review**:
+### Why surveillance & financial-crime IT is a uniquely hard place to build
+
+Surveillance technology isn't ordinary software delivery. Four things make it brutal - and make
+it exactly the domain where an AI *team* beats an AI *assistant*:
+
+- **The expertise doesn't live in one head.** A single change - say, tightening a spoofing
+  threshold - crosses regulatory interpretation, requirements analysis, detection engineering,
+  statistics (ATL/BTL calibration), model risk, QA and audit evidence. People who hold more than
+  two of those disciplines are rare and expensive; teams queue for them, and change backlogs grow.
+- **Failure is silent and asymmetric.** A bug in normal software shows up as a crash or a
+  complaint. In surveillance, a dead data feed or a mistuned threshold shows up as **nothing** -
+  no alert, no error, abuse flowing through undetected - until an auditor or regulator finds it
+  (FCA Market Watch 79: an un-activated feed meant an insider-dealing scenario fired **zero
+  alerts for 3+ years**). The countermeasure is independent assurance of coverage, data and
+  tuning - which is staffing-intensive, so it's exactly what gets squeezed.
+- **The paperwork *is* the product.** Every threshold needs a documented rationale, every alert
+  a traceable path back to the obligation it serves, every tuning decision evidence that will
+  stand up to a regulator **years later**. In most teams the evidenced 80% - specs, RTMs, test
+  evidence, tuning packs, handover docs, MI - consumes the experts' time and still arrives
+  inconsistent.
+- **The data is the firm's most sensitive** - transactions, orders and communications carrying
+  PII and potentially MNPI. You cannot simply paste it into an AI tool; any AI approach has to
+  be *structurally* incapable of exfiltrating it, not just told to be careful.
+
+### Why a specialist team with independent review answers all four
+
+A single general-purpose assistant does each of those disciplines shallowly, with nobody
+checking its work - and its output is a chat transcript, not an audit trail. Virtual Surv-IT
+splits the work across specialists and builds in **independent review**:
 
 - **Business analysis** - turning a regulatory obligation into a buildable, unambiguous spec.
 - **Surveillance rule development** - deterministic, tested detection logic.
@@ -117,9 +143,33 @@ Virtual Surv-IT splits the work across specialists and builds in **independent r
 - **Data-quality & coverage assurance** - the missing feed that means abuse goes undetected.
 - **Technical documentation** - handover a real developer can build, run and maintain from.
 
-The result is an engineering workflow that produces more **consistent, auditable and maintainable**
-output than one generalist assistant - because the work is specialised, **independently reviewed**,
-and **right-sized** to each task (see below).
+…and maps the domain's own control expectations onto the AI itself:
+
+- **Segregation of duties, enforced** - reviewers and validators are **read-only by tool
+  grant**, not by convention: the checker physically cannot edit the thing it checks, the model
+  validator is independent of the model builder, QA doesn't test its own build. The
+  maker-checker discipline regulators expect of humans, applied to agents.
+- **An audit trail by construction** - every deliverable arrives with the RTM
+  (obligation → requirement → code → test), thresholds with rationale and tuning date,
+  citations **retrieved from a source-verified register, never recalled**, findings tagged
+  📊 measured vs 🧠 inferred, all behind an evidenced [Definition of Done](docs/DEFINITION-OF-DONE.md).
+  The silent-failure modes get their own specialist (coverage & feed assurance) instead of
+  being an afterthought.
+- **Data safety as architecture, not policy** - raw data is **hard-blocked from the model** by
+  hooks and OS-level permissions; the sanctioned path is keyed masking or fully synthetic data;
+  execution of handed-over code is human-consent gated. The AI can be useful *downstream* of
+  the controls without ever being trusted *with* the crown jewels.
+- **The economics finally work** - the evidenced 80% (specs, tuning packs, QA evidence,
+  handover docs, MI) is produced in minutes for API-token cost, consistently formatted and
+  traceable, while **humans keep the judgement**: every gate returns to a person, and nothing
+  touches a live system without sign-off. Your scarce cross-disciplinary experts review and
+  decide instead of drafting and formatting.
+
+The result is an engineering workflow that produces more **consistent, auditable and
+maintainable** output than one generalist assistant - because the work is specialised,
+**independently reviewed**, and **right-sized** to each task (see below). *(All of it within
+the proof-of-concept framing above: a demonstration of the architecture, for real engineers
+and reviewers to build on - not accredited regulatory tooling.)*
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
