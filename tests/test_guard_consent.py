@@ -64,7 +64,11 @@ def test_blocks_edit_of_settings():
 def test_blocks_edit_of_settings_local():
     payload = {
         "tool_name": "Edit",
-        "tool_input": {"file_path": ".claude/settings.local.json", "old_string": "a", "new_string": "b"},
+        "tool_input": {
+            "file_path": ".claude/settings.local.json",
+            "old_string": "a",
+            "new_string": "b",
+        },
     }
     assert _run(payload) == BLOCK
 
