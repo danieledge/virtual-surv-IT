@@ -6,6 +6,15 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ## [Unreleased]
 
 ### Added
+- **CI pipeline documented** (`CONTRIBUTING.md`): the four GitHub-Actions jobs (tests+validators
+  · lint/format/security · full-history secret scan · no-raw-data), where they run
+  (GitHub-hosted ephemeral runners), triggers, how to watch runs, what CI deliberately cannot
+  cover (git-ignored artifacts → `check_artifacts`; live team quality → `/run-evals`), and the
+  local pre-commit layer in front of it. Drift fixed while in there: "two safety hooks" → three
+  (consent-write guard + its `CST_ALLOW_CONFIG_EDIT` maintenance rule), `ruff format --check` +
+  the no-raw-data check added to the "run what CI runs" list, and the skill-authoring bullet now
+  states the `disable-model-invocation: true` dormancy requirement (and that command names come
+  from the directory, not a `name:` field).
 - **README "Why" section makes the domain case in three movements** - (1) the four domain
   pressures (cross-disciplinary scarcity; silent, asymmetric failure - MW79's
   zero-alerts-for-3-years feed; evidence as the product; crown-jewel data); (2) **the
