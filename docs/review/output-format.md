@@ -65,7 +65,7 @@ guess whether anything was actioned.
 **No straightforward fix? Say so - don't fudge.** If a finding has no safe, obvious fix (it
 needs a design decision, domain knowledge, or a risky change), **do not invent or hand-wave
 one.** Mark it **🔴 Open - needs human developer review**, state plainly *why* it's not
-auto-fixable and what the options/trade-offs are, and leave it for a human. An honest "this one
+auto-fixable and what the options/trade-offs are, and leave it for a human. A plain "this one
 needs a person" beats a confident wrong fix.
 
 **Console cleanliness (hard rule).** Never print **code blocks, `diff` fixes, or large tables**
@@ -84,7 +84,7 @@ Every reported finding carries: `file:line`, a **confidence** score (`docs/code-
 the **standard/tool** cited, an **evidence basis** (📊 measured / 🧠 inferred - never conflate),
 and a concrete **`diff`-style fix + "why this works."**
 
-### 🔴 Critical (95–100) - must fix
+### 🔴 Critical (95-100) - must fix
 ```markdown
 ### 🔴 {{title}}
 **Location:** `{{file}}:{{line}}`  ·  **Confidence:** {{score}}/100  ·  **Basis:** 📊 measured / 🧠 inferred
@@ -100,10 +100,10 @@ and a concrete **`diff`-style fix + "why this works."**
 *Why this works:* {{explanation}}
 ```
 
-### 🟠 Warning (80–94) - should fix
+### 🟠 Warning (80-94) - should fix
 Same shape as Critical.
 
-### 🟡 Medium (70–79) - *deep / audit only*
+### 🟡 Medium (70-79) - *deep / audit only*
 Same shape; lighter.
 
 ### 🔵 Style & form - non-blocking, **for future consideration** *(ALWAYS include this section)*
@@ -117,8 +117,8 @@ Per-item:
 **This section is mandatory even on a clean review.** Always end it with a short
 **"General considerations for future code"** - constructive, developer-friendly guidance on the
 *original coding style overall* (patterns, structure, naming, testing/docs habits) and how the
-author could improve next time. **Scale it to the change:** 2–4 points for a substantial review,
-but a single honest sentence is fine on a trivial diff - don't manufacture filler. If the code is
+author could improve next time. **Scale it to the change:** 2-4 points for a substantial review,
+but a single plain sentence is fine on a trivial diff - don't manufacture filler. If the code is
 genuinely strong, say so and name what's done well. The point is the developer always leaves with
 something to learn, not just a pass/fail.
 
@@ -167,7 +167,7 @@ Affected files · blast radius · breaking changes.
 
 ### 🔬 Tooling coverage
 Which analysers/profilers ran, which couldn't (and why) - so the review's confidence is
-honest. A claim with no executed evidence is 🧠 inferred; say so here rather than implying it
+accurate. A claim with no executed evidence is 🧠 inferred; say so here rather than implying it
 was measured.
 
 ## Icons

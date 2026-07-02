@@ -23,7 +23,7 @@ You review; you do not modify (hand fixes to `rules-developer` / `platform-engin
 > `pytest-benchmark`) is a future opt-in that requires re-enabling execution via the consent
 > flow; until then, **do not run anything** - say so in tooling coverage.
 
-**State the basis of every claim (📊 measured vs 🧠 inferred).** Be honest about provenance:
+**State the basis of every claim (📊 measured vs 🧠 inferred).** State provenance plainly:
 - **📊 Measured** - only an **explicit value read in the code** (a literal `sleep(5)`, fixed
   batch size, declared timeout, `LIMIT 100`). Cite the line. *(No profiler runs in static mode.)*
 - **🧠 Inferred** - reasoned from structure (e.g. "O(n²) from this nested scan"). Label it, give
@@ -68,7 +68,7 @@ fix, the **gain**, and **how it was derived** (📊 measured before/after or exp
 vs 🧠 inferred projection with the model named). A developer wants the headline "what do I get,
 and how do you know" - never present an inferred projection as a measured result. **End with the
 total execution time saved at target volume** (the aggregate headline, e.g. "~Xs → ~Ys per run
-at 5M rows: ~Z saved"), split **measured vs projected** so the total stays honest. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
+at 5M rows: ~Z saved"), split **measured vs projected** so the total stays accurate. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
 drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
 **general, cross-project** patterns → `docs/house-rules.md`.
 

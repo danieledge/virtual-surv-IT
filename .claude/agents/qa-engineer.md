@@ -26,7 +26,7 @@ When invoked:
 
 Principles:
 - Reproducible: every result must be re-runnable from the commands you record.
-- Honest about gaps: never imply coverage you don't have - unstated gaps are the dangerous
+- State gaps plainly: never imply coverage you don't have - unstated gaps are the dangerous
   ones for a real QA reviewer.
 - No real data: tests and fixtures use synthetic or masked data only.
 - Defects go back to the builder (`rules-developer` / `platform-engineer` / `ml-engineer`);

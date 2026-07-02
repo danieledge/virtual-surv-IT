@@ -11,7 +11,7 @@ data**, narrating each step: which specialist, **why that one**, what they produ
 to the next, and the **pattern** being shown (right-sizing, model tiering, the blackboard, the
 safety gates, evidence basis). Teach by doing.
 
-Lead with 🎩. Keep it lively but honest - this is a **real run on synthetic data** (it spends some
+Lead with 🎩. Keep it lively and factual - this is a **real run on synthetic data** (it spends some
 tokens; nothing touches real data or executes anything risky). Narrate in crisp prose, not walls.
 
 **0. Set up the demo.** Briefly explain what's about to happen, then pick the flavour via the
@@ -71,14 +71,14 @@ agents). State the token ballpark so the choice is informed. Pick a small, safe 
 5. **code-reviewer + qa-engineer + compliance-reviewer** (independent, in parallel) - real findings,
    each with an evidence basis and a disposition; compliance gates the **Definition of Done**.
 6. **tuning-analyst** - don't leave thresholds illustrative: **synthesise a *labelled* dataset** and
-   run **measured ATL/BTL** (precision/recall vs ground truth) to recommend a value. Honest caveat:
+   run **measured ATL/BTL** (precision/recall vs ground truth) to recommend a value. Caveat:
    measured on a synthetic distribution, so it validates the *method*, not the real-world number.
 7. **performance-reviewer** (static) - will it scale at surveillance volume?
 8. **Compile the delivery** - the PM writes the consolidated **delivery report** (RTM, finding
    dispositions, DoD status, developer handover, **token-usage table**) and renders every artifact to
    `.md` + `.html` under `artifacts/` (or, for a keepable showcase, `docs/demos/build-artifacts/`).
 
-**Be honest about the gates:** the delivery is *demo-complete* but **say plainly it's NOT deployable**
+**State the gates plainly:** the delivery is *demo-complete* but **say plainly it's NOT deployable**
 until the deploy gates close (re-calibrate on real labelled data, fix any scalability finding, and
 **human sign-off** - which a demo cannot produce). Action any advisory recommendations per
 CLAUDE.md §6 (recommend → PM commits): **general** patterns → `docs/house-rules.md`;
@@ -86,7 +86,7 @@ CLAUDE.md §6 (recommend → PM commits): **general** patterns → `docs/house-r
 
 **3c. For the Data-safety demo specifically:** show synthetic generation, then **attempt a read of
 `data/raw/`** so the user *sees the guard hard-block it* (it will), and explain the layered defence
-(hook + attestation + masking on-ramp). Honest note: free-text masking is regex-only today (NER is
+(hook + attestation + masking on-ramp). Note: free-text masking is regex-only today (NER is
 on the roadmap).
 
 **4. Close - explain what was shown and how to do it for real.** Recap the patterns demonstrated in
@@ -96,6 +96,6 @@ flavour. Never dead-end. *(For the Build demo, a committed reference run lives a
 `docs/demos/build-artifacts/` - point the user there to read a complete delivery without spending
 the tokens.)*
 
-> Honesty throughout: narrate what genuinely happened (real agent outputs, real guard blocks, real
+> Narrate what genuinely happened (real agent outputs, real guard blocks, real
 > eval scores) - never fake a step for effect. If an analyser is missing or a finding is inferred,
 > say so. The demo's value is that it's *real*, just on safe data.

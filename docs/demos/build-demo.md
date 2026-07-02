@@ -21,7 +21,7 @@ Definition-of-Done chain - 8 specialists, the blackboard, the fix→re-review lo
 > - 🛡️ **Data?** → **Synthetic, no real data.**
 >
 > **Right-sizing, out loud:** this is the *heavy* demo - a full DoD delivery is **8 specialists**
-> (build + 3 independent reviews + tuning + performance). It is **not** cheap (see the honest token
+> (build + 3 independent reviews + tuning + performance). It is **not** cheap (see the token
 > note at the end); a lighter ask would use far fewer.
 
 ### → Step 1: Amara (`business-analyst`, sonnet) writes the spec
@@ -72,7 +72,7 @@ $ cd docs/demos/build-artifacts && python3 -m pytest test_ts001_wash_trade.py -q
 - **Ravi (`code-reviewer`, opus):** ⚠️ conditional pass. **W1 - a non-positive market price was
   *silently dropped* with no audit record** (a silent false-negative). Plus items for the SME/tuning
   (MM-as-tag vs designated register; the mid-vs-touch threshold frame) and order-dependent UBO edges.
-  Honest caveat: the Python analysers aren't installed here, so his logic findings are **🧠 inferred**.
+  Caveat: the Python analysers aren't installed here, so his logic findings are **🧠 inferred**.
 - **Linh (`qa-engineer`, sonnet):** wrote a **31-test** independent suite (boundaries, the exemption
   register, observability) - and independently hit the **same bad-mid silent drop** (NOTE-001). She
   also found the *previous* run's QA file was stale (tested an API that no longer exists) and
@@ -101,7 +101,7 @@ $ python3 -m pytest test_ts001_wash_trade.py test_ts001_qa.py -q
 - **Theo (`tuning-analyst`):** thresholds stay un-invented, but now **measured**. He built a seeded
   synthetic labelled set and swept the off-market threshold ([tuning pack](build-artifacts/threshold-tuning-pack.md)):
   recommend **0.75× the spread from mid** - precision **0.84** / recall **0.84** (F1 0.84). 0.5× (the
-  touch) over-alerts; 1.0× misses 28%. **Honest caveat:** synthetic distribution - it validates the
+  touch) over-alerts; 1.0× misses 28%. **Caveat:** synthetic distribution - it validates the
   *method*, not a production number; re-confirm on real data before go-live.
 - **Thabo (`performance-reviewer`):** [won't scale as-is](build-artifacts/performance-review.md) -
   the O(buys×sells) pairing; fix is to pre-bucket by `(instrument, ubo_group_id)`. A **deploy-gate**,
@@ -113,7 +113,7 @@ The consolidated [**delivery report**](build-artifacts/delivery-report.md) ties 
 (against the *delivered* API), every finding dispositioned, the DoD gate, the developer handover, the
 measured token table - and it closes with the **[engagement-summary email](build-artifacts/engagement-summary-email.txt)**.
 
-> 🎩 **The honest verdict.** This is **demo-complete** - every stage ran on synthetic data. But it is
+> 🎩 **The verdict.** This is **demo-complete** - every stage ran on synthetic data. But it is
 > **NOT deployable**, and I'll say exactly why: the obligation mapping is PROVISIONAL (SME blockers),
 > the 0.75× threshold is a synthetic number that needs real-data confirmation, the O(B×S) pairing
 > needs bucketing before volume, and a **human still has to sign off** - which a demo cannot do. A
@@ -129,5 +129,5 @@ measured token table - and it closes with the **[engagement-summary email](build
   are flagged `[TO-VERIFY]`, and the obligation mapping is held `PROVISIONAL`.
 - **No invented thresholds; measured, not guessed** - flagged in the spec, then calibrated with a real
   labelled harness (with the synthetic-data caveat stated).
-- **Honest gates** - demo-complete, but plainly **not deployable** until the mapping is finalised,
+- **Gates** - demo-complete, but plainly **not deployable** until the mapping is finalised,
   the threshold is re-confirmed on real data, the O(B×S) pairing is bucketed, and a human signs off.

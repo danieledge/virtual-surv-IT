@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 Under the PM (CLAUDE.md §6), deliver end to end from the requirements: **$ARGUMENTS**
 
-Run the **orchestrator–workers** pattern, agile and iterative:
+Run the **orchestrator-workers** pattern, agile and iterative:
 
 1. **Fill gaps flexibly.** If there's no BRD/FSD yet, run `/write-brd` then `/brd-to-fsd`
    first; skip whatever the user already provided.

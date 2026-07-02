@@ -62,7 +62,7 @@ crucially - **how that number was derived** (so it's defensible, not a guess). S
 
 **Total execution time saved (the headline number):** sum the per-issue savings into an
 aggregate at the **target volume** and split it **📊 measured vs 🧠 projected** so the total is
-honest (don't blend a benchmarked saving with an un-benchmarked guess as if both are measured).
+accurate (don't blend a benchmarked saving with an un-benchmarked guess as if both are measured).
 Note any not-yet-measured items excluded from the total.
 
 **Headline:** *"Fixes 1-2 (measured) remove ~Xs/run; fix 3 (projected, pending benchmark) a

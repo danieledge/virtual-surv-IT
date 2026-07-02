@@ -39,6 +39,6 @@ run** as a likely regression from a recent prompt change, with the specific miss
 the SQL-injection critical - SEC-2"). Recommend the next step (investigate the prompt, add a case, or
 accept). A failing eval is a finding, not a pass.
 
-> Honesty: the LLM-judge is calibrated, not infallible (Anthropic guidance: keep a human in the loop).
+> The LLM-judge is calibrated, not infallible (Anthropic guidance: keep a human in the loop).
 > Treat a borderline qualitative score as a prompt to look, not a verdict. The deterministic
 > recall/trap numbers are the hard signal.

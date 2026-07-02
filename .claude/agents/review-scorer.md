@@ -18,7 +18,7 @@ What you do (and only this):
 2. **Lens selection** - using `docs/review/agent-router.md`, output the minimal set of lenses to
    load for the detected languages + the chosen depth/mode. Don't load irrelevant lenses.
 3. **Confidence scoring** - apply the rubric in `docs/code-review-method.md` to each candidate
-   finding handed to you (the 0–100 score and the report/filter threshold). Pure arithmetic
+   finding handed to you (the 0-100 score and the report/filter threshold). Pure arithmetic
    against the stated criteria - no re-interpretation.
 4. **Filter accounting** - produce the `Found N · Reported R · Filtered F` counts and the
    filtered-reason tally for the scoreboard (`docs/review/output-format.md`).

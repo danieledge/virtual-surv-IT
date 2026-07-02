@@ -27,7 +27,7 @@ Two always-on PreToolUse hooks are the plugin's headline safety controls:
 `.claude/hooks/guard-code-execution.py` (block code execution without consent). A red-team of
 both was performed. The finding that frames everything: **both are advisory lexical filters, not
 enforcement boundaries.** They raise the bar for a *cooperative* agent but stop a *motivated* one
-only where the OS `permissions.deny` layer backs them up — and that layer covers `Read`/`Grep`/
+only where the OS `permissions.deny` layer backs them up - and that layer covers `Read`/`Grep`/
 `Glob` but leaves the `Bash` tool almost entirely uncovered. The hooks' own docstrings
 (`guard-code-execution.py:24-28`, `guard-raw-data.py:14-22`) and `docs/house-rules.md:124-128`
 already concede this as accepted residual risk; this ADR records the decision and the hardening
@@ -39,7 +39,7 @@ Two structural facts dominate:
   `.claude/settings.json` matchers are `Read|Grep|Glob|Bash` and `Bash`). So the model can author
   a script, or write the consent marker itself, then run it through an allowed path.
 - **`permissions.deny` has zero `Bash(...)` entries** (`.claude/settings.json:4-16`). Every
-  Bash-based bypass below has no OS backstop — only the soft hook.
+  Bash-based bypass below has no OS backstop - only the soft hook.
 
 > **Live posture note (updated 0.3):** `.claude/.exec-consent` does not currently exist in this
 > repo - the gate is closed. Since 0.3 the model **cannot create it**: `guard-consent-writes.py`
@@ -71,7 +71,7 @@ Two structural facts dominate:
 
 ## Consequences
 
-- **Positive:** the security posture is documented and honest; the hardening backlog shrinks the
+- **Positive:** the security posture is documented and accurate; the hardening backlog shrinks the
   *accidental / easy* bypass surface materially; auditors get a truthful control description.
 - **Negative / accepted:** the irreducible residual risk (below) remains until a real sandbox or
   filesystem-ACL boundary is added; the backlog is work; some lexical hardening may marginally
@@ -79,8 +79,8 @@ Two structural facts dominate:
 
 ## Hardening backlog (ranked, additive only)
 
-**Tier 1 — closes the widest holes, lexical:**
-1. **Segment-split Bash before matching (both hooks)** — split on `;`, `&&`, `||`, `|`, newlines;
+**Tier 1 - closes the widest holes, lexical:**
+1. **Segment-split Bash before matching (both hooks)** - split on `;`, `&&`, `||`, `|`, newlines;
    evaluate each segment independently so `_TEAM_ALLOW` exempts only the matching *segment*, not
    the whole line (kills the "allowed-substring-anywhere" bypass) and the raw guard inspects each
    piped sub-command.
@@ -96,7 +96,7 @@ Two structural facts dominate:
    `.claude/.exec-consent` and `.claude/settings*.json` (closes consent self-grant) and warns on
    new files under `scripts/` (which `_TEAM_ALLOW` would then run).
 
-**Tier 2 — the OS boundary (`permissions.deny`):**
+**Tier 2 - the OS boundary (`permissions.deny`):**
 6. Add absolute-path `Grep`/`Glob` deny variants mirroring `Read`
    (`/*/data/raw/**`, `/**/data/raw/**`).
 7. Treat path-less `Grep`/`Glob` as in-scope in the raw guard (search root defaults to cwd, which
@@ -105,20 +105,20 @@ Two structural facts dominate:
 8. Extend the secret denies (`.env`, `*.pem`, `secrets/`) to absolute / non-`./` forms; note
    neither guard covers secret reads via Bash.
 
-**Tier 3 — the only thing that actually contains Bash:**
+**Tier 3 - the only thing that actually contains Bash:**
 9. Filesystem ACLs / uid-separation so the agent process cannot open `data/raw/`, or keep raw data
    off the box entirely. This is the real boundary; everything above is belt-and-braces over it.
 
 ## Hook exit-code semantics and the launcher (added 0.2)
 
-Claude Code treats hook **exit 2 as block, exit 0 as allow, and *any other* exit code —
-including 1, the conventional Unix failure code — as a NON-blocking error: the tool call
+Claude Code treats hook **exit 2 as block, exit 0 as allow, and *any other* exit code -
+including 1, the conventional Unix failure code - as a NON-blocking error: the tool call
 proceeds.** That makes every *crash* path in a guard a fail-open path. The 2026-07-01 setup
 audit found two concrete instances, both fixed the same day (user-authorised, per Decision 2):
 
 1. **Import-time crash on older Pythons.** `guard-code-execution.py` used PEP 604 (`str | None`)
    and both guards used PEP 585 (`list[str]`) annotations, which raise at def-time on
-   Python ≤ 3.9 — traceback → exit 1 → every command proceeds, gate silently inert. Fixed with
+   Python ≤ 3.9 - traceback → exit 1 → every command proceeds, gate silently inert. Fixed with
    `from __future__ import annotations`; both guards additionally wrap `main()` so **any**
    unexpected exception now exits 2 (fail closed). The deliberate exit-0 for a malformed
    (non-JSON) payload is retained and now covered by regression tests, as is the
@@ -135,8 +135,8 @@ audit found two concrete instances, both fixed the same day (user-authorised, pe
 
 ## Alternatives considered
 
-- **Represent the hooks as a preventive control / "good enough".** Rejected: dishonest to an
-  auditor and false comfort; a motivated actor bypasses the lexical layer trivially.
+- **Represent the hooks as a preventive control / "good enough".** Rejected: it misrepresents the control to an
+  auditor and gives false comfort; a motivated actor bypasses the lexical layer trivially.
 - **Try to make the lexical matcher complete.** Rejected as impossible: string-matching arbitrary
   shell is undecidable (env indirection `X=python;$X f`, `$(…)`, `eval`, `base64|sh`, heredocs).
 - **Remove the hooks (rely only on `permissions.deny` + discipline).** Rejected: the hooks add
@@ -145,7 +145,7 @@ audit found two concrete instances, both fixed the same day (user-authorised, pe
 
 ## Residual risk (cannot be closed lexically)
 
-After Tiers 1–2, the irreducible core remains: env-var indirection, command substitution, `eval`,
+After Tiers 1-2, the irreducible core remains: env-var indirection, command substitution, `eval`,
 `base64 | sh`, heredocs, and dynamic path assembly can always reconstruct a blocked operation from
 unblocked tokens. For **execution**, only the `CST_ALLOW_EXEC` env-var path (which the model cannot
 set for the hook subprocess) plus a real sandbox on synthetic data and trusted-code discipline is

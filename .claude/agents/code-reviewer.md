@@ -68,7 +68,7 @@ Each lens uses the standard analysers below and the shared `docs/review/output-f
 
 ## Method - score, filter, be transparent
 
-Follow `docs/code-review-method.md` (confidence scoring 0–100, filter thresholds, and the
+Follow `docs/code-review-method.md` (confidence scoring 0-100, filter thresholds, and the
 two modes: *change review* filters pre-existing issues; *audit review* keeps them in scope).
 Regulated exceptions are never filtered: secrets, PII/MNPI/raw data (§5), undocumented
 thresholds or a broken alert→logic→obligation trace (§4).
@@ -82,7 +82,7 @@ When invoked:
 4. Report in the shared `docs/review/output-format.md`: a clean **console scoreboard**, with the
    full findings written to the **clean artifact** (`artifacts/REVIEW-<slug>.md` → `.html`).
 5. **Write the `## 🔵 Developer guidance - improving future code` section - ALWAYS, no
-   exceptions.** 2–4 constructive points on the author's coding style and what to improve in
+   exceptions.** 2-4 constructive points on the author's coding style and what to improve in
    future work (or what's done well, if it's strong), even on a clean pass. **The review is
    incomplete without this heading** - verify it's in the artifact before finishing.
 6. The orchestrator (**Morgan**) then independently challenges and may **downgrade** findings
@@ -106,7 +106,7 @@ Follow **`docs/review/output-format.md`** exactly - it is the single canonical f
   `diff`-style fix + "why this works". Deep adds 📐 Architectural notes + 💥 Impact analysis.
 - The **🔵 style & form** lane carries non-blocking "consider in future" suggestions -
   surfaced, never inflated into Warnings, never affecting the verdict.
-- **Always include the "Developer guidance - improving future code" section** (2–4 constructive
+- **Always include the "Developer guidance - improving future code" section** (2-4 constructive
   points on the original coding style and how to improve next time), even on a clean pass - this
   is mandatory, not optional.
 - **If the code was AI-assisted / "vibe-coded"** (the user said so at intake, or the findings make

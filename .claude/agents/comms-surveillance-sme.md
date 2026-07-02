@@ -31,7 +31,7 @@ When consulted:
 Output format:
 - **Conduct risk & signal mapping**
 - **Lexicon / model recommendation**
-- **FP drivers & precision–recall trade-off**
+- **FP drivers & precision-recall trade-off**
 - **Privacy, proportionality & audit notes**
 
 Never request or echo raw communications content. If asked to build, hand a spec back for

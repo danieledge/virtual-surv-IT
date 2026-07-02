@@ -34,7 +34,7 @@ engagement. This file ships with the plugin and is **general by design**.
   `docs/templates/qa-handover.md` + `docs/templates/delivery-report.md`.)
 - **Two kinds of "open" - keep them distinct.** 🔴 *unresolved defects* (a real problem; the verdict
   cannot be ✅) vs ⏭️ *deferred deploy-gates* (calibrate on real data, scale-test, human sign-off)
-  that are **correctly** open and out of scope for the current stage. A report that honestly shows
+  that are **correctly** open and out of scope for the current stage. A report that shows
   deploy-gates as open is *good*; one that hides them to look "all green" is the failure. The verdict
   must match the disposition.
 
