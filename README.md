@@ -561,8 +561,21 @@ operating notes are in [`docs/house-rules.md`](docs/house-rules.md).
 ## 🔒 Handling real data
 
 **Raw data under `data/raw/` is hard-blocked** - the guard stops any agent reading it, and
-anything an agent reads goes to the model provider as context. Two safe ways to get data to the
-team:
+anything an agent reads goes to the model provider as context. The whole safety story in one
+picture:
+
+```mermaid
+flowchart LR
+    Real[(real data)] --> Raw["data/raw/ 🔴<br/>agent-blocked"]
+    Raw -- "python -m scripts.ingest<br/>(keyed masking, local)" --> Masked["data/masked/ 🟠<br/>pseudonymised, governed"]
+    Gen["scripts.gen_synthetic /<br/>scripts.synthesise"] --> Synth["data/synthetic/ 🟢<br/>no real records"]
+    Masked --> Agents[agents 🤖]
+    Synth --> Agents
+    Agents -- "everything they read" --> Provider([model provider ☁️])
+    Raw -. "Read/Grep/Glob/Bash ⛔<br/>guard-raw-data.py + permissions.deny" .-x Agents
+```
+
+Two safe ways to get data to the team:
 
 1. **Mask it** through the pipeline (recommended for real data) → point agents at `data/masked/`;
    or **synthesise** it (safest, shareable).
@@ -835,15 +848,32 @@ the right job - only the PM's commentary occasionally mislabels it. Hence: cosme
 
 ## 📖 Documentation
 
+**Reading paths - the repo has 130+ doc files; start with the path that matches your goal:**
+
+- 🆕 **New here** → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
+  this README → [`CLAUDE.md`](CLAUDE.md) (the always-on handbook) → type **`/demo`**.
+- 🔧 **Extending the team** (agents/skills/menus) → [`docs/agent-design.md`](docs/agent-design.md)
+  (design rationale + conformance matrix) → [`docs/team-operating-guide.md`](docs/team-operating-guide.md)
+  (standing rules, roster, routing, question-tool limits) → [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md)
+  (frameworks + the canonical template catalogue).
+- 🕵️ **Auditing / assessing it** → [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) →
+  [`docs/code-review-method.md`](docs/code-review-method.md) → [`docs/adr/`](docs/adr/) (citation
+  grounding ADR-001; safety-hook threat model ADR-002) → [`evals/README.md`](evals/README.md).
+- 📊 **Data & tuning** → [Handling real data](#-handling-real-data) (above) →
+  [`docs/prepare-data-roadmap.md`](docs/prepare-data-roadmap.md) →
+  [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md) (the worked example, incl. calibration).
+
 | Guide | What it covers |
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Plain-English tour - start here if you're new to agents/LLMs |
-| [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) | Frameworks, the artifact menu, the traceability spine |
+| [`docs/team-operating-guide.md`](docs/team-operating-guide.md) | Standing rules, roster + routing table, question construction (read on-engage) |
+| [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) | Frameworks, the canonical template catalogue, the traceability spine |
 | [`docs/agent-design.md`](docs/agent-design.md) | Per-agent rationale + the Anthropic best-practice conformance matrix |
 | [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) | The evidenced gate every delivery must pass before handover |
 | [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack - customise to yours |
 | [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
 | [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
+| [`docs/adr/`](docs/adr/) | Architecture decision records - citation grounding, safety-hook threat model |
 | [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
 
 <sub>[↑ Back to top](#readme-top)</sub>

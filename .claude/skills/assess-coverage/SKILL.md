@@ -35,7 +35,8 @@ question per axis; make any mutually-exclusive axis (e.g. a single jurisdiction)
 4. **Coverage gaps** - consolidate: unmonitored typologies, scenarios with broken feeds, channels
    not captured (incl. **off-channel** comms risk). Each gap = potential undetected abuse.
 
-Output: a **surveillance coverage assessment** (`docs/templates/surveillance-coverage-assessment.md`)
+Output: a **surveillance coverage assessment** (`docs/templates/surveillance-coverage-assessment.md`;
+a standalone obligation→control map uses `docs/templates/control-mapping.md`)
 - the typology→scenario→feed map, feed health, and gaps by severity with the obligation each
 serves and a remediation owner (`platform-engineer` for feeds, `rules-developer` for new scenarios,
 `business-analyst` for spec). Save under `artifacts/`, render to `.html`.

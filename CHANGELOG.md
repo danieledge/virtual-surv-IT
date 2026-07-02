@@ -5,6 +5,20 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
+### Added
+- **Legibility bundle** (from the setup audit's discoverability findings): README gains
+  **reading paths** (new user / extending / auditing / data & tuning - the repo has 130+ doc
+  files and needed a "start here" map) and a **Mermaid data-flow diagram** of the safety story
+  (real data → agent-blocked `data/raw/` → keyed masking → governed/synthetic → agents → model
+  provider, with the guard shown blocking the direct path). The **18 orphan templates** are
+  wired: 14 now referenced inline by their owning skills (data-dictionary/lineage/segmentation/
+  process-map → `/analyse-data`; tuning-decision-register/mi-spec → `/tune-thresholds`;
+  control-mapping → `/assess-coverage`; user-stories/decision-log → `/elicit-requirements`;
+  model-validation-report → `/validate-tm-model`; trade-scenario-design/comms-policy/
+  lexicon-spec → `/new-scenario`; adr → `/build-solution`; review-report → `/deep-review`;
+  uat-plan → `/handover`), and `docs/WAYS-OF-WORKING.md` now declares its catalogue the
+  **canonical template index** covering the rare remainder.
+
 ### Fixed
 - **Morgan's question menus now fit the question tool** (question-flow audit, 2026-07-02 -
   report in `artifacts/morgan-question-flow-audit.md`, session-local). AskUserQuestion renders

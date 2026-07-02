@@ -68,6 +68,12 @@ to a ticket); the templates below are the building blocks. Everything is produce
 and `.html`** (via `scripts/render_html.py`) - the **one exception** is the engagement-summary
 email, which is an email and stays a `.txt` (see the last row).
 
+> **This catalogue is the canonical template index.** The skills reference their common domain
+> templates inline (e.g. `/tune-thresholds` → the tuning decision register), but a template
+> **not** named in any skill is still a first-class deliverable - it is reached from here, or
+> via the artifact menu's "Other" option. If a template is neither in this table nor referenced
+> by a skill, it's an orphan - fix the table.
+
 | Artifact | Template | Standard it follows |
 |---|---|---|
 | **Consolidated Delivery Report (default)** | `delivery-report.md` | all sections in one file |

@@ -38,7 +38,9 @@ named below are the building blocks.
    disposition** (✅ fixed · 🔴 open · ⚖️ accepted · ⏭️ deferred) and reconcile it with the verdict -
    a pack that mentions blocking findings must make clear whether the rework addressed them or
    they're still open (🔴 Open / needs human developer review), never ambiguous.
-6. Save under `artifacts/` and render to `.html` (`python -m scripts.render_html`).
+6. Save under `artifacts/` and render to `.html` (`python -m scripts.render_html`). If the
+   receiving team runs its own acceptance testing, include a **UAT plan**
+   (`docs/templates/uat-plan.md`).
 7. **Engagement-summary email** (required closing artifact - Definition of Done): a short
    email-format cover note (`docs/templates/engagement-summary-email.md`) saved as a **`.txt` in
    `artifacts/`**, **signed off as Morgan** ("Hi," if you don't know the recipient's name). It's an

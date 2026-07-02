@@ -27,7 +27,9 @@ axis is mutually exclusive) and waits - never invent scope, stakeholders or thre
    SME/`tuning-analyst` decisions - flag them, don't invent.
 
 Output: an **elicitation/requirements doc** (`docs/templates/elicitation-requirements.md`) +
-stakeholder analysis, under `artifacts/`, rendered to `.html`.
+stakeholder analysis, under `artifacts/`, rendered to `.html`. Where the elicitation calls for
+them: **user stories** (`docs/templates/user-stories.md`), a **decision log**
+(`decision-log.md`) for the dispositioned open questions, a **process map** (`process-map.md`).
 
 **Close - don't dead-end.** Summarise the requirements + open questions, then offer the next
 step with a recommendation: proceed to the FSD (`/brd-to-fsd`) or the build (`/build-solution`),

@@ -25,7 +25,8 @@ Run the **orchestrator–workers** pattern, agile and iterative:
 4. **Review** - `code-reviewer` (deep) and, where it processes data at volume,
    `performance-reviewer`; then `compliance-reviewer`. Loop fixes until no Critical remains.
 5. **Maintain the RTM** (`docs/templates/rtm.md`): every requirement → code → test →
-   obligation. A gap is a blocker - surface it to the user.
+   obligation. A gap is a blocker - surface it to the user. Record significant design decisions
+   as **ADRs** (`docs/templates/adr.md`).
 6. **Keep a status log**; return to the user at each gate with decisions and blockers.
 7. **Meet the Definition of Done** (`docs/DEFINITION-OF-DONE.md`) and run `/handover`.
    **By default deliver one consolidated Delivery Report** (`docs/templates/delivery-report.md`

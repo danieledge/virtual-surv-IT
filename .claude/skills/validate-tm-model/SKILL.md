@@ -34,7 +34,8 @@ verdict; `tm-sme` for typology coverage):**
   trends and **stability over time** (decay).
 - **Segmentation** - still valid for the current book/customer base?
 
-**3. Produce the model-validation pack** (`docs/templates/tm-model-validation.md`) - findings by
+**3. Produce the model-validation pack** (`docs/templates/tm-model-validation.md`; a general
+statistical/ML model outside TM uses `docs/templates/model-validation-report.md`) - findings by
 severity, evidence, the **applicable obligations**, and a verdict (✅ fit / ⚠️ conditional / ❌
 revalidate). Each finding carries a **disposition** (fixed / open / accepted / 🔴 open-needs-human).
 Save under `artifacts/`, render to `.html`.

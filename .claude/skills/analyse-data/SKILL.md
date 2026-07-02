@@ -22,9 +22,10 @@ Make any mutually-exclusive axis **single-select**.
 4. **Recommend** - the action the analysis supports (e.g. a tuning direction → `/tune-thresholds`;
    a data-quality concern → `data-quality-reviewer`; a coverage gap → SME/`business-analyst`).
 
-Output: an **exploratory-analysis report** (`docs/templates/exploratory-analysis.md`) (and a
-**data dictionary** / **segmentation analysis** where relevant), under `artifacts/`, rendered to
-`.html`.
+Output: an **exploratory-analysis report** (`docs/templates/exploratory-analysis.md`) - and where
+relevant a **data dictionary** (`docs/templates/data-dictionary.md`), **data lineage**
+(`data-lineage.md`), **segmentation analysis** (`segmentation-analysis.md`) or **process map**
+(`process-map.md`) - under `artifacts/`, rendered to `.html`.
 
 **Close - don't dead-end.** State the headline insight + recommendation, then offer the next step
 (tune, validate, escalate a data-quality issue, or hand over).
