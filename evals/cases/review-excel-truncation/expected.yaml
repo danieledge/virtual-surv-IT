@@ -1,0 +1,41 @@
+case: review-excel-truncation
+workflow: /deep-review
+rubric: code-review
+input: input_excel_extract.py
+description: >
+  A flawed Excel-extraction utility that silently truncates data three ways (a hardcoded row
+  cap, except-and-continue over the row loop, value slicing) and ships no source-vs-output
+  reconciliation - the extract then feeds onward analysis. Models the classic incident: bad
+  extraction code contaminating every downstream number, discovered late. Tests that the
+  review catches silent truncation and the missing reconciliation, and does NOT flag the
+  documented, correct column bound.
+
+planted:
+  - id: TRUNC-1
+    keywords: [max_row, row cap, "1000", truncat, silently dropped]
+    location: input_excel_extract.py:31
+    min_severity: critical
+    must_find: true
+  - id: TRUNC-2
+    keywords: [except, continue, swallow, dropped rows, silently skipped]
+    location: input_excel_extract.py:37
+    min_severity: critical
+    must_find: true
+  - id: TRUNC-3
+    keywords: [slice, "[:32]", value truncation, free-text, 32 characters]
+    location: input_excel_extract.py:47
+    min_severity: warning
+    must_find: false
+  - id: RECON-1
+    keywords: [reconcil, control total, source count, completeness check, row count]
+    location: input_excel_extract.py:18
+    min_severity: critical
+    must_find: true
+
+forbidden:
+  - id: FP-1
+    keywords: [EXPECTED_COLUMNS, column bound, max_col, documented column]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

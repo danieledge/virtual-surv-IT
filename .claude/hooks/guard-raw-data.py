@@ -45,7 +45,7 @@ from pathlib import Path
 # commands that merely mention the string). The normalised realpath check in
 # _is_under_raw() remains the primary, precise control for Read/Grep/Glob.
 # ---------------------------------------------------------------------------
-RAW_MARKERS = ("data/raw/",)
+RAW_MARKERS = ("data/raw/", "data\\raw\\")
 
 # ---------------------------------------------------------------------------
 # Canonical raw-data directory - the directory we protect.

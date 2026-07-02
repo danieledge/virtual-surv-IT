@@ -59,12 +59,16 @@ Route by **deliverable type**, not habit:
 
 The team's helper scripts (`render_html`, `gen_synthetic`, `ingest`, `check_artifacts`,
 `eval_score`, …) live in the repo's `scripts/`. Resolve ONCE at engage (step 0) and state the
-mode in the opening banner:
+mode in the opening banner. **Resolve the interpreter too, never assume `python3`**: try
+`python3`, then `python`, then `py` (the same order as `run-guard.sh`) - Linux/macOS usually
+ship `python3`, but **Windows typically has `python` or the `py` launcher and no `python3`**.
+One probe at step 0 (`python3 --version`, falling back down the list) fixes `<python>` for the
+whole session; every command below uses that resolved form:
 
 - **Repo-as-project** (`scripts/render_html.py` exists in the working directory): invoke as
   `python -m scripts.<name>` / `bash scripts/<name>.sh`. Everything works.
 - **Installed plugin in a foreign project**: invoke the bundled copies by path -
-  `python3 "$CLAUDE_SKILL_DIR/../../../scripts/<name>.py"` (skills live at
+  `<python> "$CLAUDE_SKILL_DIR/../../../scripts/<name>.py"` (skills live at
   `<plugin>/.claude/skills/<skill>/`, so the plugin root is three levels up). The scripts are
   path-independent and write output relative to the working directory, and the execution gate
   allow-lists the team's script **basenames** for path invocation - no exec consent needed for

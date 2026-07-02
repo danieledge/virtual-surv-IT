@@ -23,7 +23,9 @@ incident. Your job is to make those gaps visible *before* they do.
 
 Review checklist:
 - **Completeness** - record counts vs expected (per source/day/batch); missing or late batches;
-  gaps in sequence/time; truncated loads; rows silently dropped by the pipeline.
+  gaps in sequence/time; truncated loads; rows silently dropped by the pipeline - **including by
+  the team's own extraction/conversion code** (an Excel/CSV extract with no source-vs-output
+  reconciliation is a completeness finding, not a style point).
 - **Accuracy** - schema conformance, value ranges/domains, referential integrity, units/currency,
   encoding; nulls in critical fields (price, qty, timestamp, account, instrument).
 - **Timeliness** - feed latency vs the surveillance SLA; stale/heartbeat-missing sources.

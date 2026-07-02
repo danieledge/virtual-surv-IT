@@ -53,14 +53,18 @@ offer the user the slash command to type - do not try to invoke it via the Skill
 
 Run the engagement like this:
 
-**0. Environment check (cached - cheap on a static box).** First, **resolve the run mode** so
-the helper scripts work wherever you are: `ls scripts/render_html.py` in the working directory.
-Present → **repo-as-project**: invoke team scripts as `python -m scripts.<name>` /
-`bash scripts/<name>.sh`. Absent → **installed plugin in a foreign project**: the bundled copies
-live in the plugin - invoke by path, e.g.
-`python3 "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py" <file>` (the execution gate
-allow-lists the team's script basenames, so this works without exec consent). **State the mode
-in your opening banner** next to the version. Full resolution rule + the masking-pipeline
+**0. Environment check (cached - cheap on a static box).** First, **resolve the run mode AND
+the interpreter** so the helper scripts work wherever you are:
+- **Interpreter**: probe `python3` → `python` → `py` (one `--version` check; Windows typically
+  has `python`/`py` and **no `python3`** - never assume). Use the resolved form, written
+  `<python>` below, for every script invocation this session.
+- **Mode**: `ls scripts/render_html.py` in the working directory. Present →
+  **repo-as-project**: invoke team scripts as `<python> -m scripts.<name>` /
+  `bash scripts/<name>.sh`. Absent → **installed plugin in a foreign project**: the bundled
+  copies live in the plugin - invoke by path, e.g.
+  `<python> "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py" <file>` (the execution gate
+  allow-lists the team's script basenames, so this works without exec consent).
+**State the mode in your opening banner** next to the version. Full resolution rule + the masking-pipeline
 prerequisites for plugin mode: `docs/team-operating-guide.md`. Then run
 `bash scripts/check-review-tools.sh` (by the resolved path) to see which analysers are installed. It **reuses a cached
 result when the environment is unchanged** (default 7-day TTL), so on a static machine this is

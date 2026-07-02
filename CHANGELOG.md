@@ -3,6 +3,39 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Fixed
+- **Guards 0.4.1: Windows correctness, human-applied** (both reported from a live Windows
+  plugin install). The exec guard's allow-list used forward-slash-only regexes, so Windows
+  backslash paths (`python C:\...\scripts\render_html.py`) were blocked; separators are now
+  `[/\\]`. Worse, the `py` launcher was invisible to the guard entirely - `py evil.py` was
+  **not blocked** and `py -m scripts.x` was **not allowed** - it's now part of the interpreter
+  token, fixing both directions. The raw-data guard's Bash marker gains the `data\raw\`
+  backslash variant. 5 new regression tests; ADR-002 → 0.4.1.
+- **Morgan no longer assumes `python3` when invoking the bundled scripts** (reported from a
+  Windows plugin install, where the interpreter is `python`/`py` and `python3` doesn't exist).
+  Engage step 0 now resolves the interpreter once (probe `python3` → `python` → `py`, the same
+  order as `run-guard.sh`) alongside the run mode, and the operating guide's script-resolution
+  rule uses the resolved `<python>` form throughout.
+
+### Added
+- **Silent-extraction-truncation defences at every layer.** The incident class: the team
+  writes Python to extract data from an Excel file, the code silently truncates (a hardcoded
+  row cap, `except`-and-continue over rows, value slicing), and the incomplete extract feeds
+  onward analysis - the domain's signature silent failure, applied to the team's own code.
+  Now: a **house rule** (extraction/conversion code must prove completeness mechanically -
+  source-vs-output counts + a control total, asserted by tests, citing the existing
+  `ingest.py`/`validate_masking.detection_fidelity` patterns); a **review-lens check cluster**
+  in `bugs.md` (loads for any code) + pandas/openpyxl pitfalls in the Python lens, with the
+  meta-check that missing reconciliation is itself a finding; a **golden eval case**
+  (`review-excel-truncation`: 4 planted issues incl. the missing reconciliation, plus a
+  documented-column-bound false-positive trap); **DoD** "Tested" now requires the completeness
+  reconciliation for extract/convert deliverables; and briefs updated so `platform-engineer`
+  builds the reconciliation in, `data-analyst`/`analyse-data` refuse to analyse an
+  unreconciled extract, and `data-quality-reviewer` treats team-written extraction code as in
+  scope. Harness: 26 cases.
+
 ## [0.9.0] - 2026-07-02
 
 Plugin-mode operation everywhere, guard 0.4 (human-applied), the reworked README argument

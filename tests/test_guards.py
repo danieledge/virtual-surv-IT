@@ -268,6 +268,45 @@ def test_exec_guard_allows_make_as_prose_not_command(no_consent):
     assert _run(_EXEC_GUARD, _bash("make test"), no_consent) == BLOCK  # the real runner
 
 
+# --- 0.4.1: Windows paths + the `py` launcher -----------------------------------
+
+
+def test_exec_guard_allows_bundled_scripts_windows_paths(no_consent):
+    # Windows commands carry backslash paths; the slash-only allow-list blocked them.
+    assert (
+        _run(
+            _EXEC_GUARD,
+            _bash('python "C:\\plugin\\scripts\\render_html.py" out.md'),
+            no_consent,
+        )
+        == ALLOW
+    )
+    assert (
+        _run(_EXEC_GUARD, _bash("py C:\\plugin\\scripts\\check_artifacts.py"), no_consent) == ALLOW
+    )
+
+
+def test_exec_guard_covers_the_py_launcher(no_consent):
+    # `py` was invisible to the guard - neither blocked as a runner nor allowed for team
+    # scripts, so Windows sessions were wrong in both directions.
+    assert _run(_EXEC_GUARD, _bash("py evil.py"), no_consent) == BLOCK
+    assert _run(_EXEC_GUARD, _bash('py -c "import os"'), no_consent) == BLOCK
+    assert _run(_EXEC_GUARD, _bash("py -m scripts.render_html x.md"), no_consent) == ALLOW
+
+
+def test_exec_guard_blocks_non_team_script_windows_path(no_consent):
+    assert _run(_EXEC_GUARD, _bash("python C:\\tmp\\scripts\\evil.py"), no_consent) == BLOCK
+
+
+def test_raw_guard_blocks_bash_windows_backslash_raw():
+    code = _run(
+        _RAW_GUARD,
+        {"tool_name": "Bash", "tool_input": {"command": "type data\\raw\\orders.jsonl"}},
+        _raw_env(),
+    )
+    assert code == BLOCK
+
+
 # --- Crash paths fail CLOSED (setup audit 2026-07-01) --------------------------
 # An uncaught exception used to exit 1, which Claude Code treats as NON-blocking -
 # the action proceeded and the gate was silently disarmed. The guards now wrap

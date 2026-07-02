@@ -26,6 +26,12 @@ Language-specific checks for Python.
 - String concatenation in loops (use `join`); repeated dict lookups; loading large files wholly
   into memory instead of streaming; per-row work that should be vectorised.
 
+### Data extraction (pandas / openpyxl pitfalls)
+- `nrows=`/`skipfooter=`/`ws.max_row` caps that silently truncate; `wb.active` when the data
+  sheet isn't first; `pd.read_*(..., errors="coerce")` turning bad values into silent NaNs;
+  `dtype=str` vs mixed-type columns; `encoding errors="ignore"` eating bytes. Extraction with
+  no source-vs-output reconciliation is a finding (see `lenses/bugs.md`).
+
 ## Output
 
 Use the shared format in `docs/review/output-format.md`: `file:line`, confidence, evidence
