@@ -6,12 +6,17 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ## [Unreleased]
 
 ### Added
-- **README "Why" section makes the domain case** - why surveillance/fincrime IT specifically
-  rewards an AI *team* over an AI *assistant*: the four domain pressures (cross-disciplinary
-  scarcity; silent, asymmetric failure - MW79's zero-alerts-for-3-years feed; evidence as the
-  product; crown-jewel data), each mapped to the architectural answer (tool-grant segregation
-  of duties, audit trail by construction, data safety as architecture, humans keep the
-  judgement). Stays inside the proof-of-concept framing.
+- **README "Why" section makes the domain case in three movements** - (1) the four domain
+  pressures (cross-disciplinary scarcity; silent, asymmetric failure - MW79's
+  zero-alerts-for-3-years feed; evidence as the product; crown-jewel data); (2) **the
+  hypothesis the project exists to test: AI can genuinely help this domain** - the work is
+  translation between formalisms, the evidenced 80% is the automatable 80%, consistency is a
+  regulatory feature, and AI's failure modes are manageable with the domain's own controls -
+  with the demos/evals named as the evidence so far and the unproven parts signposted;
+  (3) why that requires a specialist *team* with independent review rather than one assistant,
+  each domain pressure mapped to its architectural control (tool-grant segregation of duties,
+  audit trail by construction, data safety as architecture, humans keep the judgement).
+  Stays inside the proof-of-concept framing.
 - **Legibility bundle** (from the setup audit's discoverability findings): README gains
   **reading paths** (new user / extending / auditing / data & tuning - the repo has 130+ doc
   files and needed a "start here" map) and a **Mermaid data-flow diagram** of the safety story
