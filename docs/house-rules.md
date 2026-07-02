@@ -21,6 +21,15 @@ engagement. This file ships with the plugin and is **general by design**.
 - **Never let an unresolved mapping masquerade as finalised.** If a regulatory mapping or scope is
   still an open decision, carry an explicit status (e.g. `PROVISIONAL`) or reference it via an
   RTM/decision-log id - don't embed a lone citation literal that *looks* final.
+- **Extraction/conversion code must prove completeness mechanically.** Any code that extracts or
+  converts data (Excel/CSV/exports → analysis input) ships with a **source-vs-output
+  reconciliation** - record counts plus a control total on a value column - built into the
+  deliverable and asserted by its tests; it fails loudly, never `except`-and-continue over rows,
+  never silent value coercion/truncation. Onward analysis states its reconciliation basis (📊).
+  Why: extraction fails *silently* - a truncated extract looks complete and contaminates every
+  downstream number until someone reconciles it, sometimes years later. House implementations of
+  the pattern: `scripts/ingest.py` (skip-tracking + loud warning) and
+  `scripts/validate_masking.py::detection_fidelity` (count + shape tie-out).
 
 ## Reporting & audit conventions
 - **Disposition every open question before sign-off (don't let them dangle).** When a spec/BRD/review

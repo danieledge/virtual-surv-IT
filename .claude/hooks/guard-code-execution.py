@@ -17,7 +17,8 @@ executes. Authorisation is granted by EITHER:
 Otherwise -> BLOCK (exit 2) commands that EXECUTE code: test runners, profilers/benchmarks, and
 running a script/interpreter on a file. Static analysers, git and read-only utilities are
 allowed, as are the team's own `scripts/` helpers - including the plugin's bundled copies
-invoked by absolute path from a foreign project (basename-whitelisted; see _TEAM_ALLOW).
+invoked by absolute path from a foreign project (basename-whitelisted; see _TEAM_ALLOW), with
+Windows backslash paths and the `py` launcher covered (0.4.1).
 
 Note on strength: consent is human-only since ADR-002 rec 5; this gate plus the consent-write
 gate is consent-recording + a safety net, not a sandbox.
@@ -56,9 +57,15 @@ def _exec_authorised() -> bool:
     return os.path.isfile(os.path.join(root, ".claude", ".exec-consent"))
 
 
-# Interpreter token allowing versioned names: python / python3 / python3.11 (ADR-002: the old
-# `python3?` let `python3.11 evil.py` slip past because `.11` broke the `\s` anchor).
-_PY = r"python(?:3(?:\.\d+)?)?"
+# Interpreter token: python / python3 / python3.11 (ADR-002: the old `python3?` let
+# `python3.11 evil.py` slip past because `.11` broke the `\s` anchor) - and, since 0.4.1, the
+# Windows `py` launcher: without it, `py evil.py` was not blocked AND `py -m scripts.x` was
+# not allow-listed, so Windows sessions were wrong in both directions.
+_PY = r"(?:python(?:3(?:\.\d+)?)?|py)"
+
+# Path separator: forward slash OR backslash - Windows commands arrive with backslash paths
+# (`python C:\plugin\scripts\render_html.py`) and a slash-only allow-list blocked them (0.4.1).
+_SEP = r"[/\\]"
 
 # Commands/patterns that EXECUTE code. Evaluated PER SEGMENT (see _segments). Each carries why
 # it counts as "execution". (Hardened per docs/adr/ADR-002 Tier 1; false positives fixed in
@@ -105,8 +112,9 @@ _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 # the whole line through). Two forms:
 #   * repo-as-project: `python -m scripts.x` / `python scripts/x.py` / `bash scripts/x.sh`
 #   * plugin install in a foreign project: the bundled copy invoked by path
-#     (`python "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py" ...`) - allowed only for the
-#     team's own script BASENAMES below, so `python /tmp/scripts/evil.py` stays blocked.
+#     (`python "$CLAUDE_SKILL_DIR/../../../scripts/render_html.py"`, or a Windows
+#     `py "C:\...\scripts\render_html.py"`) - allowed only for the team's own script BASENAMES
+#     below, so `python /tmp/scripts/evil.py` stays blocked.
 #     (Lexical, like everything here: a hostile file *named* render_html.py in a scripts/ dir
 #     would pass - accepted residual, consistent with ADR-002's threat model.)
 _TEAM_SCRIPT_NAMES = (
@@ -115,11 +123,11 @@ _TEAM_SCRIPT_NAMES = (
 )
 _TEAM_ALLOW = re.compile(
     rf"^(?:{_PY}\s+-m\s+scripts\."
-    rf"|{_PY}\s+scripts/"
-    rf"|{_PY}\s+[\"']?\S*/scripts/{_TEAM_SCRIPT_NAMES}\b"
-    rf"|bash\s+[\"']?\S*/scripts/check-review-tools\.sh\b"
-    rf"|bash\s+scripts/"
-    rf"|scripts/check-review-tools\.sh)",
+    rf"|{_PY}\s+scripts{_SEP}"
+    rf"|{_PY}\s+[\"']?\S*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}\b"
+    rf"|bash\s+[\"']?\S*{_SEP}scripts{_SEP}check-review-tools\.sh\b"
+    rf"|bash\s+scripts{_SEP}"
+    rf"|scripts{_SEP}check-review-tools\.sh)",
     re.IGNORECASE,
 )
 

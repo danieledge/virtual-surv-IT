@@ -23,7 +23,9 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       "touched in passing". Any 🔴 / blocking item is reflected in the verdict.
 - [ ] **Tested** - tests appropriate to the deliverable exist and **pass**:
   - detection logic → true-positive **and** false-positive cases;
-  - pipeline/transform → input/output, schema and edge-case tests;
+  - pipeline/transform → input/output, schema and edge-case tests, **including a completeness
+    reconciliation** (source vs output record counts / control totals) for anything that
+    extracts or converts data;
   - script → idempotency and error-path tests.
 - [ ] **Independently QA'd** - `qa-engineer` (not the builder) has produced a **QA handover**
       (`qa-handover.md`) evidencing what ran, results, coverage, gaps and residual risk.

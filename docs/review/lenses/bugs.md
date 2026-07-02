@@ -21,6 +21,14 @@ Avoid nitpicks (those are 🔵 style/form or filtered).
   (false negative) or a **false alert** (false positive)? Wrong threshold comparison
   (`>` vs `>=`), boundary handling, timezone/epoch mistakes, dropped records in a filter. These
   rank as high-confidence bugs because they break surveillance coverage.
+- **Data extraction & conversion (silent truncation)** - code that reads Excel/CSV/exports and
+  produces data for onward use fails *silently* in this domain, so check hard for: hardcoded
+  row/sheet caps (`max_row=`, `nrows=`, `head()`, first-sheet-only reads, legacy 65k limits);
+  `except`-and-continue inside a row loop (records vanish uncounted); value truncation via
+  slicing, dtype coercion or `errors="ignore"` encodings; header misdetection. **And the
+  meta-check: extraction/conversion code with no source-vs-output reconciliation (record
+  counts + a control total) is itself a finding** - without it, every truncation above is
+  invisible downstream (house rule in `docs/house-rules.md`).
 
 ## Output
 

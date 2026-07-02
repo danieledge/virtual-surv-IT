@@ -19,13 +19,17 @@ SQL/Python). Follow whatever CLAUDE.md specifies once it is customised.
 
 When invoked:
 1. Clarify the question (e.g. "why is scenario X producing too many alerts?").
-2. Write efficient, well-commented SQL/Python analysis. Work on synthetic, masked or
+2. **If the input data is an extract or conversion** (from Excel/CSV/an export the team or user
+   produced), confirm its **source-vs-output reconciliation** exists before analysing; if it
+   doesn't, reconcile first (counts + a control total) - a truncated extract contaminates every
+   downstream number, and the analysis must state its reconciliation basis (📊).
+3. Write efficient, well-commented SQL/Python analysis. Work on synthetic, masked or
    properly governed data only - never expose raw PII/MNPI in outputs, commits or logs.
-3. Analyse: alert volumes, true/false-positive rates and FP drivers, precision/recall proxies,
+4. Analyse: alert volumes, true/false-positive rates and FP drivers, precision/recall proxies,
    coverage, reconciliation breaks, data-quality issues, and segment behaviour - to explain
    and evidence what's happening, and to feed reporting/MI. (Setting or calibrating the
    thresholds themselves is `tuning-analyst`'s - surface the evidence and hand the tuning over.)
-4. Present findings with the assumptions and data caveats stated explicitly.
+5. Present findings with the assumptions and data caveats stated explicitly.
 
 Output format:
 - **Question**

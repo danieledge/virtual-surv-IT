@@ -37,6 +37,9 @@ When invoked:
 2. Propose the simplest design that fits, with the trade-offs stated.
 3. Where code/IaC/scripts are appropriate, draft them - but flag anything that touches live
    systems for explicit human approval.
+4. **Any extraction/conversion deliverable ships with its reconciliation built in** - source vs
+   output record counts + a control total, asserted by a test that fails on dropped rows; fail
+   loudly, never `except`-and-continue over records (house rule in `docs/house-rules.md`).
 
 Output: design proposal, key trade-offs, security & retention posture, and open decisions.
 Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP

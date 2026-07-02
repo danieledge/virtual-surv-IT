@@ -11,7 +11,10 @@ tool, one question per axis; don't assume:** the precise question; where the dat
 (synthetic, masked, or data you've **attested is safe** - at intake, or **confirm now if you
 invoked this skill directly** rather than via `/engage`, §5 - if raw/unprepared use
 `/prepare-data`; `data/raw/` is hard-blocked); and what a useful answer looks like.
-Make any mutually-exclusive axis **single-select**.
+Make any mutually-exclusive axis **single-select**. **If the data is an extract or conversion**
+(from Excel/CSV/an export), confirm its source-vs-output **reconciliation** before analysing -
+if none exists, reconcile first (counts + a control total, house rule in
+`docs/house-rules.md`): a truncated extract contaminates every downstream number.
 
 1. **Frame** the question and the assumptions/caveats up front.
 2. **Analyse** - efficient, well-commented SQL/Python on synthetic/masked data: distributions,
