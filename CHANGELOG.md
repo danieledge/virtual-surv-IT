@@ -3,7 +3,10 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.9.1] - 2026-07-02
+
+Windows field fixes (from a live plugin install: interpreter resolution, guard path handling,
+permission-rule churn) and silent-extraction-truncation defences at every layer.
 
 ### Fixed
 - **Windows permission-rule churn diagnosed and prevented.** A live Windows install

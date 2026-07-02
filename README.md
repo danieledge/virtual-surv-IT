@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.9.0](https://img.shields.io/badge/version-0.9.0-blue)
+![Version 0.9.1](https://img.shields.io/badge/version-0.9.1-blue)
 ![Tests 199 passing](https://img.shields.io/badge/tests-199%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -53,7 +53,16 @@ flowchart LR
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md).
 
 <details>
-<summary>✨ <b>What's new in 0.9.0</b> - runs fully from any project · human-applied guard update · the sharpened Why · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.9.x</b> - runs fully from any project · Windows field fixes · extraction-truncation defences · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.9.1** - fixes from a live Windows plugin install (interpreter resolution
+`python3` → `python` → `py`; backslash paths + the `py` launcher covered by the guards;
+permission-rule churn prevented with one consistent invocation spelling + a pre-approval
+block), and **silent-extraction-truncation defences** at every layer (house rule, review-lens
+checks, a seeded golden eval case, DoD reconciliation requirement) - the "bad Excel extraction
+contaminated the analysis" incident class, encoded as controls.
+
+**0.9.0:**
 
 - **🧳 Plugin mode does everything now** - the bundled scripts (the `.md`→`.html` render,
   synthetic data, the DoD artifact gate) run **by path from any project**; `/engage` detects
