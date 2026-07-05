@@ -28,4 +28,16 @@ __pycache__/
 venv/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 .ipynb_checkpoints/
+
+# One-time guard-hardening maintenance run (ADR-002 recs 10-13) + its backups - not committed
+apply-guard-hardening.sh
+.guard-hardening-backup-*/
+
+# One-time guard-fix maintenance run (ADR-002 rec 14) - same rationale; its backup dir
+# (.guard-hardening-backup-fixes-*/) is covered by the glob above
+apply-guard-fixes.sh
+
+# One-shot wrapper for the human-only steps of the 2026-07-05 audit fix pass
+human-steps.sh
