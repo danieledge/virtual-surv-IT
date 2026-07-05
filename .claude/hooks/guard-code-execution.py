@@ -72,9 +72,10 @@ _SEP = r"[/\\]"
 # 0.4: `make` anchored to segment start - it blocked commit messages containing the word;
 # `sh <file>.sh` given a lookbehind - `shellcheck a.sh b.sh` matched the ".sh " boundary.)
 _EXEC_PATTERNS = [
-    r"\bpytest\b",  # Python test runner - runs the code
+    r"^(?:\w+=\S+\s+)*pytest\b",  # test runner - anchored so 'pytest' in prose is not the command
     rf"\b{_PY}\s+-m\s+pytest\b",  # same, module form
-    r"\bunittest\b",  # Python unit tests
+    r"^(?:\w+=\S+\s+)*unittest\b",  # bare unittest command (anchored, see pytest)
+    rf"\b{_PY}\s+-m\s+unittest\b",  # python -m unittest
     r"Invoke-Pester\b",  # PowerShell tests
     r"Measure-Command\b",  # PowerShell timing - RUNS the script block
     r"\bpwsh\b|\bpowershell\b",  # running PowerShell
@@ -97,6 +98,8 @@ _EXEC_PATTERNS = [
     # start: as a bare \b pattern it blocked any text containing the word (e.g. a commit
     # message "docs: make the case" inside a heredoc line becomes its own segment).
     r"\buv\s+run\b|\bpoetry\s+run\b|\bpipenv\s+run\b|\btox\b|\bnox\b|^make\b|\bdocker\s+run\b",
+    r"\bcargo\s+(?:run|test|bench)\b|\bswift\s+(?:run|test)\b|\bbundle\s+exec\b",  # rec 12
+    r"\bjest\b|\bvitest\b|\bphp\s+\S+\.php\b|\bjulia\s+\S+\.jl\b|\blua\s+\S+\.lua\b",  # rec 12
     r"(^|\s)\./\S+",  # executing a file by path (./foo, ./x.sh)
     r"\bsource\s+\S+|(^|\s)\.\s+\S+\.(?:sh|bash)\b",  # sourcing a script
     # shell -c, or running a script file. The lookbehind stops the trailing "sh" of a FILENAME

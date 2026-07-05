@@ -13,6 +13,12 @@
       "Glob(data/raw/**)",
       "Glob(/*/data/raw/**)",
       "Glob(/**/data/raw/**)",
+      "Write(./data/raw/**)",
+      "Write(data/raw/**)",
+      "Write(/**/data/raw/**)",
+      "Edit(./data/raw/**)",
+      "Edit(data/raw/**)",
+      "Edit(/**/data/raw/**)",
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(.env)",
@@ -33,6 +39,7 @@
       "Bash(python -m scripts.gen_synthetic:*)",
       "Bash(python3 -m scripts.gen_synthetic:*)",
       "Bash(python -m scripts.ingest:*)",
+      "Bash(python3 -m scripts.ingest:*)",
       "Bash(python -m scripts.validate_masking:*)",
       "Bash(python3 -m scripts.validate_masking:*)",
       "Bash(pre-commit run:*)",
@@ -52,7 +59,6 @@
       "Bash(spotbugs:*)",
       "Bash(scalafmt:*)",
       "Bash(scalafix:*)",
-      "Bash(pwsh -Command Invoke-ScriptAnalyzer:*)",
       "Bash(python -m scripts.render_html:*)",
       "Bash(python3 -m scripts.render_html:*)"
     ]

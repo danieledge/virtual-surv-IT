@@ -55,7 +55,17 @@ _SEGMENT_SPLIT = re.compile(r";|&&|\|\||\||\n|`|\$\(")
 
 # Verbs that only read or delete the protected files - safe directions. Deleting the marker
 # CLOSES the gate; reading config leaks nothing the model didn't already load.
-_SAFE_VERB = re.compile(r"^(rm|unlink|ls|stat|test|\[|file|wc|cat|head|tail|grep|find|diff)\b")
+_SAFE_VERB = re.compile(r"^(rm|unlink|ls|stat|test|\[|file|wc|cat|head|tail|grep|find|diff|jq)\b")
+
+# Read-only git subcommands may legitimately touch a protected path (e.g. `git check-ignore
+# .claude/.exec-consent`, `git diff .claude/settings.json`) - they inspect, never mutate. Only
+# unambiguously read-only subcommands: NOT checkout/restore/stash/config, which can revert or
+# rewrite the protected file (ADR-002 rec 11).
+_SAFE_GIT = re.compile(
+    r"^git\s+(status|diff|log|show|blame|ls-files|check-ignore|cat-file|rev-parse|describe)\b"
+)
+# `find ... -exec/-execdir/-delete` mutates - it must NOT ride the safe `find` verb above.
+_FIND_MUTATE = re.compile(r"^find\b.*\s-(?:exec(?:dir)?|delete)\b")
 
 # A redirect is only a write to a protected file if its TARGET is one - `ls x 2>/dev/null` is a
 # read with a harmless stderr redirect (a real false positive found in live use, 2026-07-01).
@@ -120,6 +130,10 @@ def main() -> None:
             # but only when the redirect TARGET is protected (stderr-to-/dev/null is a read).
             if _REDIRECT_INTO_PROTECTED.search(seg):
                 _block("consent-marker/config files via a shell redirect")
+            if _FIND_MUTATE.search(seg):
+                _block(f"consent-marker/config files via find -exec/-delete ({seg[:120]})")
+            if _SAFE_GIT.match(seg):
+                continue  # read-only git inspection of a protected path (ADR-002 rec 11)
             if _SAFE_VERB.match(seg):
                 continue  # read or delete - safe direction
             # Default-deny: unknown verb touching a protected file (touch/cp/mv/sed -i/git

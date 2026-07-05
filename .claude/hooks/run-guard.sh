@@ -14,11 +14,12 @@
 # an older interpreter would crash at runtime, and we'd rather skip it and try the next one than
 # exec into a known crash.
 #
-# If no suitable Python is found we exit 0 (allow): the OS-level permissions.deny list in
-# .claude/settings.json remains the hard boundary for data/raw and secrets - but NOTE this
-# backstop covers Read/Grep/Glob only; there are no Bash() deny entries, so on a Python-less
-# host the execution gate is inert (see ADR-002 §launcher trade-off). A hard block here would
-# brick every tool call on a Python-less host, which is not the guard's job.
+# If no suitable Python is found we exit 0 (allow). In repo-as-project mode the OS-level
+# permissions.deny list in .claude/settings.json still backs Read/Grep/Glob for data/raw and
+# secrets - but a plugin install ships no deny list (recreate it in the host project, see
+# ADR-002 rec 10), and there are no Bash() deny entries either, so on a Python-less host the
+# guards are inert (see ADR-002 §launcher trade-off). A hard block here would brick every tool
+# call on a Python-less host, which is not the guard's job.
 for interpreter in python3 python py; do
 	if command -v "$interpreter" >/dev/null 2>&1; then
 		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then

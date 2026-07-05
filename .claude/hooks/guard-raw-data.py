@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -46,6 +47,12 @@ from pathlib import Path
 # _is_under_raw() remains the primary, precise control for Read/Grep/Glob.
 # ---------------------------------------------------------------------------
 RAW_MARKERS = ("data/raw/", "data\\raw\\")
+
+# Word-bounded, case-insensitive marker: also catches `data/raw` WITHOUT a trailing slash
+# (`cd data/raw && cat *`, `cp -r data/raw ...`) and case-folded variants (`DATA/RAW`), which
+# the fixed-string RAW_MARKERS miss (ADR-002 rec 12). The lookbehind keeps it off unrelated
+# paths like `metadata/rawlog` (preceded by a word char).
+_RAW_MARKER_RE = re.compile(r"(?<![\w.-])data[/\\]raw(?![\w])", re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # Canonical raw-data directory - the directory we protect.
@@ -135,8 +142,9 @@ def main() -> None:
     try:
         payload = json.load(sys.stdin)
     except Exception:
-        # Malformed hook payload - fail open so we never brick a session.
-        # The deny list in settings.json remains active as the hard boundary.
+        # Malformed hook payload - fail open so we never brick a session. In repo-as-project
+        # mode the settings.json deny list still backs Read/Grep/Glob; a plugin install ships no
+        # deny list, so recreate it in the host project (docs/house-rules.md, ADR-002 rec 10).
         sys.exit(0)
 
     tool = payload.get("tool_name", "")
@@ -154,7 +162,7 @@ def main() -> None:
         if _is_under_raw(candidate):
             _block(f"resolved path under data/raw/ - tool={tool}")
         # 2. Substring fallback (catches relative refs and Bash commands).
-        if any(marker in candidate for marker in RAW_MARKERS):
+        if any(marker in candidate for marker in RAW_MARKERS) or _RAW_MARKER_RE.search(candidate):
             _block(f"raw-data marker in input - tool={tool}")
 
     sys.exit(0)
