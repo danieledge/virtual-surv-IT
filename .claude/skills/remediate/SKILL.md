@@ -21,10 +21,13 @@ This is **audit mode** - pre-existing issues are in scope, not filtered out.
    risk × impact × effort, with a recommended order. Surface anything regulatory (secrets,
    PII, broken traceability, undocumented thresholds) as top priority - never deferred.
 3. **Establish a safety net.** Have `qa-engineer` add characterisation tests that capture
-   current behaviour **before** refactoring, so changes are provably safe.
+   current behaviour **before** refactoring, so changes are provably safe. **Running** those tests
+   needs the **execution-consent gate** (CLAUDE.md §7); if the guard blocks, ask the user to grant
+   consent (it is human-only) before executing anything.
 4. **Fix everything you safely can - in this pass, not a "next sprint".** Route fixes to the
    right builder (`rules-developer` / `platform-engineer` / `ml-engineer`); after each batch,
-   **re-review and re-profile** to show the finding is closed and nothing regressed. **Do not
+   **re-review** to show the finding is closed and nothing regressed - any **re-profiling**
+   requires the **execution-consent gate** (CLAUDE.md §7). **Do not
    defer fixable work** - keep going until everything that *can* be safely fixed *is* fixed
    (Critical → Warning → Medium → the worthwhile 🔵 style items). The only things left unfixed
    are those that genuinely need a **human decision** (a design call, a risky change, missing

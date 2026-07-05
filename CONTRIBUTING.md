@@ -22,16 +22,17 @@ pre-commit install                          # optional but recommended
 
 ## The CI pipeline
 
-CI is GitHub Actions (`.github/workflows/ci.yml`), running on **GitHub-hosted `ubuntu-latest`
-runners** - fresh, ephemeral VMs per job, nothing self-hosted. It triggers on **every push to
-`main` and every pull request**, and runs **four jobs in parallel**:
+CI is GitHub Actions (`.github/workflows/ci.yml`), running on **GitHub-hosted runners**
+(`ubuntu-latest` + `windows-latest`) - fresh, ephemeral VMs per job, nothing self-hosted. It
+triggers on **every push to `main` and every pull request**, and runs **four jobs in parallel**
+(the test job fans out as a 3-leg matrix):
 
 | Job | What it does |
 |---|---|
-| **Tests (detection logic)** | Python 3.12 → `pip install -r requirements-dev.txt` → `pytest` (the full suite: rules, masking, renderer, all three safety guards driven via their JSON protocol, hook-config sync, the per-case eval contract, the DoD artifact checker) → `scripts.validate_masking` → `scripts.validate_manifest` |
+| **Tests (detection logic)** | A **3-leg matrix** - ubuntu Python 3.10 (the supported floor), ubuntu Python 3.12, and windows-latest Python 3.12 (the guards and launcher have Windows-specific paths) → `pip install -r requirements-dev.txt` → `pytest` (the full suite: rules, masking, renderer, all three safety guards driven via their JSON protocol, hook-config sync, the per-case eval contract, the DoD artifact checker) → `scripts.validate_masking` → `scripts.validate_manifest` |
 | **Lint & static analysis** | `ruff check` + `ruff format --check` over `scripts/ .claude/hooks/ rules/ tests/` · `bandit` (Python security) · `shellcheck` (Bash + git hooks) |
 | **Secret scan** | gitleaks over the **full history** (`fetch-depth: 0`), not just the diff |
-| **No raw data committed** | fails if any `*.csv` / `*.parquet` / `*.pcap` is tracked (`CLAUDE.md` §5) |
+| **No raw data committed** | fails if any `*.csv` / `*.tsv` / `*.parquet` / `*.pcap` / `*.jsonl` / `*.xlsx` / `*.xls` is tracked (`CLAUDE.md` §5) |
 
 Watch runs on the repo's **Actions** tab, or `gh run list` / `gh run watch` from a terminal.
 
@@ -57,8 +58,8 @@ python -m scripts.validate_manifest          # declared agents/skills resolve
 ruff check scripts/ .claude/hooks/ rules/ tests/
 ruff format --check scripts/ .claude/hooks/ rules/ tests/
 bandit -r scripts/ .claude/hooks/ -q
-shellcheck scripts/*.sh scripts/git-hooks/pre-commit scripts/git-hooks/pre-push
-git ls-files '*.csv' '*.parquet' '*.pcap'    # must print nothing (no raw data tracked)
+shellcheck scripts/*.sh scripts/git-hooks/pre-commit scripts/git-hooks/pre-push .claude/hooks/run-guard.sh
+git ls-files '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls'   # must print nothing (no raw data tracked)
 ```
 
 (Gitleaks runs via `pre-commit` locally and in CI over the full history.)
@@ -142,7 +143,9 @@ repo:
 code execution) and `guard-consent-writes.py` (blocks model writes of the consent marker,
 settings and the hooks themselves) are security controls. Their wiring is duplicated by design
 between `hooks/hooks.json` (plugin scope) and `.claude/settings.json` (project scope) and the
-two must stay byte-identical - `tests/test_hooks_in_sync.py` enforces this. **Editing the hook
+two `PreToolUse` blocks must stay equivalent - `tests/test_hooks_in_sync.py` enforces this by
+asserting parsed-JSON equality of the `PreToolUse` block (`.claude/settings.json` also carries
+the permissions list, so the whole files differ by design). **Editing the hook
 files from inside a Claude session requires the human-set `CST_ALLOW_CONFIG_EDIT=1`** (the
 consent-write guard blocks model edits of them - by design). See `docs/house-rules.md` and
 `docs/adr/ADR-002`.

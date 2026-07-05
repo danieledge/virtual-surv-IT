@@ -15,7 +15,8 @@ how to start. Use roughly this shape (keep it current with `.claude/agents/`; on
 
 (Before the roster, **state the team version** - read `version` from the plugin manifest
 (`$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json`, or `.claude-plugin/plugin.json` at the repo
-root) and show it, e.g. *"Compliance Surveillance team **v0.7.5**"*, so the loaded build is
+root) and show it, e.g. *"Compliance Surveillance team **vX.Y.Z**"* (read the current version from the
+manifest - never hardcode it), so the loaded build is
 visible. If unresolvable, say so rather than guess.)
 
 **🔧 The builders** (they write code, specs and analysis):

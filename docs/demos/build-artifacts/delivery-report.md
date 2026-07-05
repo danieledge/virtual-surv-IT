@@ -31,12 +31,12 @@ A deterministic, explainable detector (`ts001_wash_trade.py`, self-contained - d
 | Req | Logic (code) | Test(s) | Obligation |
 |---|---|---|---|
 | DR-001 pair opposing legs in same instrument, same UBO group, within lookback | pairing loop + `lookback_days` | `test_tp_cross_account_off_market_same_ubo`, `test_tp_single_account_both_sides`, QA lookback-boundary tests | MAR 12(1)(a) |
-| DR-002 off-market price = NECESSARY condition (spread-normalised, mid-referenced, early-continue) | `_price_deviation_bps` ÷ `time_weighted_spread_bps` vs `off_market_spread_multiple` | QA spread-multiple boundary tests (at / just-over); `test_fp_at_market_not_alerted` | MAR 12(1)(a) |
+| DR-002 off-market price = NECESSARY condition (spread-normalised, mid-referenced, early-continue) | `_price_deviation_bps` ÷ `time_weighted_spread_bps` vs `off_market_spread_multiple` | QA spread-multiple boundary tests (at / just-over); `test_fp_affiliated_funds_at_market`, `test_normalised_below_threshold_no_alert` | MAR 12(1)(a) |
 | DR-003 suppress safe-harboured pairs | `_safe_harbour_reason` (`exempt_account_ids` register + `exempt_strategy_tags`) | QA register + `RISKLESS_PRINCIPAL` + non-exempt tests | MAR 12 (MM/riskless-principal) |
 | DR-004 immaterial-notional floor | `min_pair_notional` (smaller-leg governs) | QA at/just-below floor | risk-appetite (no false signal) |
-| DR-005 stale-UBO-graph → per-account exclude + DQ warning (not abort) | freshest-edge-per-account index | `test_multiple_ubo_edges_freshest_wins...`, QA partial-stale/one-over | coverage control |
-| DR-006 implied-match tier OFF at launch | `enable_implied_match_tier=False` guard | `test_implied_match_tier_disabled` | SME Q5 |
-| Alert carries obligation + keystone as **fields** | `WashTradeAlert.obligation_reference`, `.obligation_status`, `.ubo_group_id`, `.spread_normalised_deviation` | `test_tp_..._obligation_fields` | MAR 12(1)(a) traceability |
+| DR-005 stale-UBO-graph → per-account exclude + DQ warning (not abort) | freshest-edge-per-account index | `test_multiple_ubo_edges_freshest_wins_no_spurious_staleness`, QA partial-stale/one-over | coverage control |
+| DR-006 implied-match tier OFF at launch | `enable_implied_match_tier=False` guard | `test_implied_match_tier_disabled_raises` | SME Q5 |
+| Alert carries obligation + keystone as **fields** | `WashTradeAlert.obligation_reference`, `.obligation_status`, `.ubo_group_id`, `.spread_normalised_deviation` | `test_alert_carries_all_mandatory_obligation_fields` | MAR 12(1)(a) traceability |
 | Bad market data not silently dropped | `mid_price<=0` / `spread<=0` → DQ warning + continue | `test_non_positive_mid_is_dq_warning_not_silent_drop` | §4 audit/coverage |
 
 ## 3. Findings & disposition (consolidated across the review chain)
@@ -73,7 +73,7 @@ On a **seeded synthetic** labelled set (n=2,400; 300 wash / 2,100 legit; three l
 ## 5. Developer handover
 
 - **Build/run:** `pip install -r requirements-dev.txt`; `python -m pytest docs/demos/build-artifacts/test_ts001_wash_trade.py docs/demos/build-artifacts/test_ts001_qa.py -q` → **43 passed**.
-- **Entry point:** `detect_wash_trades(trades, ubo_links, market_snapshots, as_of_date, params=None) -> DetectionResult`. Inputs: `Trade`, `UBOLink(account_id, ubo_group_id, graph_as_of_date)`, `MarketSnapshot(instrument, snapshot_date, mid_price, time_weighted_spread_bps)`. All `DetectionParams` have documented defaults with a rationale + `tuning_date` placeholder.
+- **Entry point:** `detect_wash_trades(trades, ubo_links, market_snapshots, as_of_date, params=None) -> DetectionResult`. Inputs: `Trade`, `UBOLink(account_id, ubo_group_id, graph_as_of_date)`, `MarketSnapshot(instrument, snapshot_date, mid_price, time_weighted_spread_bps)`. Five of the seven `DetectionParams` fields default to named constants with a documented rationale + `tuning_date` placeholder; the two safe-harbour registers (`exempt_account_ids`, `exempt_strategy_tags`) default inline without one - document them before production.
 - **Known limitations / tech debt (must close before production):** (1) **PERF-F1/F2** - bucket the pairing + dedupe DQ warnings, then benchmark at 100K/1M (`pytest-benchmark`). (2) **Obligation mapping PROVISIONAL** - resolve SME Q1/Q3/Q4 (Legal), verify the `[TO-VERIFY]` citations against primary sources and add to the register. (3) **Threshold** - re-confirm 0.75 on real data. (4) **M1** - finalise the MM exemption taxonomy (SME Q2). (5) **At-market wash** is a known, accepted detection gap (DR-002) - candidate future scenario TS-003.
 - **Change/ops artifacts** (change request, ops runbook, release notes) are not produced for a demo; templates exist for a real engagement.
 
@@ -108,6 +108,7 @@ The Agent tool reports actual per-specialist usage (~4 chars/token, ±15%):
 | Performance-reviewed | ✅ Met (gate open) | `performance-review.md`; O(B×S) = ⏭️ deploy-gate |
 | Compliance-reviewed | ✅ Met | data-safety clean; citations grounded; obligation PROVISIONAL correct |
 | Documented for handover | ✅ Met | §5 (matches the delivered API) |
+| Handover docs clear & usable | ✅ Met | §5 stands alone: copy-pastable build/test command, full entry-point signature + input types, limitations enumerated; usability checked at the compliance gate (C2 regenerated this report against the delivered API) |
 | Engagement-summary email | ✅ Met | `engagement-summary-email.txt` (this run) |
 | Distributable (.md + .html) | ✅ Met | all artifacts re-rendered at compile |
 | Signed off (human) | ⛔ Pending | a demo cannot produce one - by design |

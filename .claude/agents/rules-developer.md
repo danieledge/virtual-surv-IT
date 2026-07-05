@@ -22,7 +22,8 @@ When invoked:
 2. Implement the rule logic following the stack and conventions in CLAUDE.md.
 3. Write tests covering known true-positive and false-positive cases, using synthetic or
    masked data only - never real records.
-4. Run the tests and report results.
+4. Run the tests and report results. Running tests needs the execution-consent gate (CLAUDE.md §7);
+   if the guard blocks, hand back and ask the user to grant consent (it is human-only).
 5. Summarise what you built and hand off to `compliance-reviewer`.
 
 Output: the implementation, the tests, and a short note mapping the code to the acceptance

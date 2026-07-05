@@ -3,8 +3,8 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.9.1](https://img.shields.io/badge/version-0.9.1-blue)
-![Tests 199 passing](https://img.shields.io/badge/tests-199%20passing-brightgreen)
+![Version 0.10.0](https://img.shields.io/badge/version-0.10.0-blue)
+![Tests 220+ passing](https://img.shields.io/badge/tests-220%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
@@ -93,7 +93,8 @@ contaminated the analysis" incident class, encoded as controls.
 
 **0.8.0** (same 2 days): true dormancy (`disable-model-invocation`, lean CLAUDE.md, trimmed
 descriptions); guards fail closed on crash; the consent-write gate (humans hold the keys);
-eval-harness contract in CI; review pipeline stops double-scoring. Tests **84 → 192**.
+eval-harness contract in CI; review pipeline stops double-scoring. Tests **84 → ~171**
+(~192 by 0.9.0).
 
 Recent **0.7.x**: build-demo re-run with fresh artifacts; README overhauled + summary-email on every close; audited against
 Anthropic's guidance + self-assessment corrected; memory is project-scoped (no project memory in
@@ -372,7 +373,7 @@ prompting layer; the team's execution *gate* is separate and stays human-consent
 enabled for that project. *(One session only, any directory?
 `claude --plugin-dir /path/to/virtual-surv-IT` loads it temporarily, not saved.)*
 
-You get the 16 agents, the workflow commands and the raw-data guard hook in every **enabled**
+You get the 16 agents, the workflow commands and all three safety hooks in every **enabled**
 project. Then just **talk to the PM** - describe whatever you've got:
 
 ```
@@ -395,10 +396,14 @@ project. Then just **talk to the PM** - describe whatever you've got:
 > (Morgan offers to set that up), and `/demo`'s Build flavour + `/run-evals` use the repo's own
 > test suite and golden cases.
 
-> **Data-safety guard is fully portable.** It's a hook, so it receives `CLAUDE_PROJECT_DIR` and
-> protects **your project's** `data/raw/` (not the plugin's) wherever the plugin is installed -
-> backed by the OS-level `permissions.deny`. (The hook runs `python3`; without Python the guard is
-> inert - the deny-list still applies.)
+> **Data-safety guard is portable, with one caveat.** It's a hook, so it receives
+> `CLAUDE_PROJECT_DIR` and protects **your project's** `data/raw/` (not the plugin's) wherever the
+> plugin is installed. But a plugin can carry hooks, **not** a `permissions.deny` list - so a plugin
+> install ships the hook alone, and installers should recreate the OS-level backstop by copying the
+> `Read`/`Grep`/`Glob` `data/raw/**` deny entries from this repo's `.claude/settings.json` into
+> their own project's (see [`docs/house-rules.md`](docs/house-rules.md)). The hook launcher probes
+> `python3` → `python` → `py`; on a host with no Python at all the guards are inert - which is
+> exactly why that deny backstop matters.
 
 > Don't have Claude Code yet? Install it from <https://claude.com/claude-code>.
 
@@ -568,12 +573,18 @@ deliverable in both `.md` and `.html`** under `artifacts/`. Focused commands for
 | `/write-brd` | idea → Business Requirements (BABOK + EARS) | prompt chaining |
 | `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
 | `/deep-review` | detailed code review (bugs, security, architecture, impact) | dimension fan-out + scoring |
-| `/performance-review` | performance & scalability vs target data volumes | profiling evidence |
+| `/performance-review` | performance & scalability vs target data volumes | static analysis (profiling only under the §7 exec gate) |
 | `/audit-review` | existing code → robust & audit-ready? | evaluator-optimizer loop |
 | `/remediate` | legacy / poorly-built code → assess, fix, hand over | assess → prioritise → fix loop |
 | `/build-solution` | full requirements → end-to-end build | orchestrator-workers |
 | `/handover` | developer + QA test-evidence handover pack | independent QA + dev docs |
 | `/new-scenario` | a single detection scenario | spec → SME → build → review |
+| `/elicit-requirements` | scope/stakeholders unclear → structured elicitation | question-led discovery |
+| `/analyse-data` | exploratory / FP analysis / reporting-MI on safe data | evidence-tagged analysis |
+| `/tune-thresholds` | calibrate one scenario's thresholds (ATL/BTL, segmentation) | dry-run + decision register |
+| `/assess-coverage` | are we monitoring everything? typology→scenario→feed map | coverage + feed-health gaps |
+| `/validate-tm-model` | periodic TM model validation (coverage/threshold/data/MI) | data work + independent verdict |
+| `/reg-change-impact` | a regulatory change → impacted scenarios/controls | change-impact assessment |
 
 **Example requests** (the PM routes each to the right specialists - and only those):
 
@@ -643,7 +654,7 @@ a convention), that's stated rather than dressed up.
 | **Safe data by architecture** | Raw data is structurally unreachable by the model; work happens downstream, on masked or synthetic data. | Raw-data hook + OS-level `permissions.deny` + `.gitignore` + a CI job that fails on tracked data files + keyed masking as the only ingest path. |
 | **Fail closed** | A crashed control blocks; it never silently allows. | Guard crash wrappers exit 2 (block); the launcher version-probes interpreters; regression tests feed the guards malformed input. |
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
-| **Self-tested** | The team's own quality is regression-tested like code. | 190+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 26 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
+| **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 26 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -670,6 +681,11 @@ lean). The rest install via the OS / build tooling:
 | Scala | `scalafmt`, `scapegoat`/`wartremover` via sbt plugins |
 | Any | Semgrep (`pip`) for multi-language; gitleaks for secrets |
 
+> **PowerShell note:** the execution gate treats any `pwsh` invocation as code execution, so
+> `Invoke-ScriptAnalyzer` only runs once a human has opened the CLAUDE.md §7 consent gate - the
+> settings allow-list entry for it was removed for exactly this reason. Before consent, PowerShell
+> review stays static (🧠).
+
 The agent runs whatever is present and reports which analysers were unavailable - nothing is
 silently skipped.
 
@@ -679,7 +695,7 @@ silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **199 passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The
+The repo's **220+ passing unit tests** (plus 1 skipped without `bleach[css]`) check the *code*. The
 **eval harness** ([`evals/`](evals/)) checks the **quality of what the team produces** - so a prompt
 change that silently weakens a review gets caught, not shipped. (This is the regression net
 Anthropic's multi-agent guidance recommends.)
@@ -707,12 +723,12 @@ Anthropic's multi-agent guidance recommends.)
 ## 🪝 The safety hooks (plain English)
 
 A *hook* is a small script Claude Code runs automatically **right before** it uses a tool, and it
-can **allow** or **block** that action. This plugin ships two, **always on** (they run even when the
+can **allow** or **block** that action. This plugin ships three, **always on** (they run even when the
 team is dormant). The newcomer-friendly version of the whole safety story is in
 [`docs/OVERVIEW.md` §5](docs/OVERVIEW.md); the operational detail is below.
 
 <details>
-<summary>🪝 <b>The raw-data guard + the code-execution gate</b> - what they do and how strong they are</summary>
+<summary>🪝 <b>The raw-data guard, the code-execution gate + the consent-write gate</b> - what they do and how strong they are</summary>
 
 **1. The raw-data guard** (`guard-raw-data.py`) - *agents must never read real, unmasked data.*
 Anything an agent reads is sent to the AI model, so real records (PII/MNPI) can't go that way. The
@@ -737,13 +753,17 @@ All are wired in **two** places so they fire in either mode - `hooks/hooks.json`
 plugin) and `.claude/settings.json` (this repo opened as a project) - and a test keeps the two copies
 identical.
 
-**How strong are they?** For the file tools (`Read`/`Grep`/`Glob`) the block is
-backed by the OS-level `permissions.deny` list, so it genuinely holds. For **shell commands** the
-guards work by *reading the text of the command* - a strong default and a consent record, but **not
-a sandbox**: a determined user can dodge string-matching (e.g. hide a path in a variable). The real
-boundary for shell is OS file permissions / keeping raw data off the box. The full bypass analysis
-and the hardening backlog are in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md);
-operating notes are in [`docs/house-rules.md`](docs/house-rules.md).
+**How strong are they?** For the file tools (`Read`/`Grep`/`Glob`) the guard hook fires in both
+modes, and **when this repo is opened as a project** it is additionally backed by the OS-level
+`permissions.deny` list in `.claude/settings.json`, so it genuinely holds. **A plugin install into a
+foreign project ships the hook but not that deny list** (a plugin can carry hooks, not permissions),
+so the hook is then the sole file-tool control - installers who want the belt-and-braces backstop
+should copy the `Read`/`Grep`/`Glob` deny entries into their own project's `.claude/settings.json`
+(see [`docs/house-rules.md`](docs/house-rules.md)). For **shell commands** the guards work by
+*reading the text of the command* - a strong default and a consent record, but **not a sandbox**: a
+determined user can dodge string-matching (e.g. hide a path in a variable). The real boundary for
+shell is OS file permissions / keeping raw data off the box. The full bypass analysis and the
+hardening backlog are in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
 
 </details>
 
@@ -898,23 +918,25 @@ Multi-agent setups cost tokens, so the team is built to be cost-conscious - the 
 <details>
 <summary>💰 <b>Measured per-run numbers + the optimisations in place</b></summary>
 
-Measured on a real run (the Agent tool reports actual usage; ~4 chars/token, so ±15%):
+Rows marked **measured** come from a real run (the Agent tool reports actual usage; ~4 chars/token,
+so ±15%); the rest are estimates with no run behind them yet:
 
 | What | Tokens | ~API cost | When it's paid |
 |---|---|---|---|
-| One quick `code-reviewer` review (small file, opus) | **~18.7k** | **~$0.80** | per review agent |
-| A lean engagement (intake + scorer + reviewer + synthesis) | ~35-50k | ~$0.50-1.00 | per engagement |
-| A **full build → 3 reviews → tuning → performance** delivery (8 agents, measured) | **~182k** | **~$3-6** | the heavy end - a complete reviewed+calibrated deliverable (see the [build demo](docs/demos/build-artifacts/delivery-report.md) §7) |
-| A full fan-out (right-sizing off) | ~150k+ | ~$3-7 | rarely - reserved for broad work |
+| One `code-reviewer` review (opus; **measured** in the build demo) | **~51k** | **~$2** | per review agent |
+| A lean engagement (intake + scorer + reviewer + synthesis) - *estimate* | ~35-50k | ~$0.50-1.00 | per engagement |
+| A **full build → 3 reviews → tuning → performance** delivery (9 agent runs, **measured**) | **~500k** | **~$4-8** | the heavy end - a complete reviewed+calibrated deliverable (see the [build demo](docs/demos/build-artifacts/delivery-report.md) §6) |
+| A full fan-out (right-sizing off) - *estimate* | ~500k+ | ~$5-10 | rarely - reserved for broad work |
 
 > 💵 **Cost basis (rough, ±2×).** At list prices - **opus ~$15/$75, sonnet ~$3/$15, haiku ~$1/$5**
 > per million input/output tokens. The reported token counts are *totals* (no input/output split), so
 > these assume a ~50/50 mix; actual cost varies with the split, prices change, and prompt-caching can
 > cut it substantially. Treat as order-of-magnitude, not a quote.
 >
-> 🧾 **For fun:** the build demo's delivery report has a [tongue-in-cheek **rate card**](docs/demos/build-artifacts/delivery-report.md)
-> - that full 8-agent delivery (~$3-6 API, ~9 min) is ~£2-4k of human consulting effort. *The boring
-> 80% in minutes, so people spend their day on the judgement that matters.*
+> 🧾 **Perspective:** the build demo's [delivery report](docs/demos/build-artifacts/delivery-report.md) §6
+> puts it plainly - that full 9-run delivery (~$4-8 API) is the routine ~80% of a real engagement
+> done in minutes, standing in for human effort measured in days, not dollars. *So people spend
+> their day on the judgement that matters.*
 
 **Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
 - **Right-sizing** - the headline lever: a narrow change fires 2-3 agents, not 16; the PM states the
@@ -929,7 +951,7 @@ Measured on a real run (the Agent tool reports actual usage; ~4 chars/token, so 
   - all 20 skills set `disable-model-invocation: true`, so their **descriptions don't load into
     context at all** (they stay typeable as slash commands; `/engage` reads a routed workflow's
     `SKILL.md` when chaining);
-  - `CLAUDE.md` slimmed again (~185 → 121 lines, ~3.1k → ~1.9k tokens), with the roster, routing
+  - `CLAUDE.md` slimmed again (from ~185 lines / ~3.1k tokens to roughly 125 / ~2k), with the roster, routing
     table and standing rules moved to [`docs/team-operating-guide.md`](docs/team-operating-guide.md)
     - which `/engage` now **explicitly reads** (previously it was referenced but never wired in);
   - the 16 agent descriptions trimmed to crisp routing lines;
@@ -945,7 +967,8 @@ Measured on a real run (the Agent tool reports actual usage; ~4 chars/token, so 
 ## 🗺️ Roadmap
 
 Tracked enhancements, with the rationale for each. *(Done this cycle: **subagent self-assessment** -
-agents now self-verify against their brief and flag gaps before returning, CLAUDE.md §6.)*
+agents now self-verify against their brief and flag gaps before returning; standing rule in
+[`docs/team-operating-guide.md`](docs/team-operating-guide.md).)*
 
 <details>
 <summary>🗺️ <b>What's shipped and what's next</b></summary>
@@ -988,9 +1011,11 @@ agents now self-verify against their brief and flag gaps before returning, CLAUD
 **Performance / startup** *(nice-to-have)*
 - ✅ **Trim routing metadata - SHIPPED (0.8.x)** - skill descriptions no longer load at all
   (`disable-model-invocation: true`); agent descriptions trimmed to crisp routing lines.
-- **Merge the two PreToolUse guards into one `python3` call** per tool use. *Why:* the raw-data and
-  code-execution guards currently spawn `python3` twice on every `Read`/`Grep`/`Glob`/`Bash` -
-  halving the spawns cuts per-call latency without weakening either guard.
+- **Merge the three PreToolUse guards into one interpreter call** per tool use. *Why:* the raw-data,
+  code-execution and consent-write guards each launch via `run-guard.sh` (which probes
+  `python3`/`python`/`py`), so a `Bash` call currently spawns the interpreter three times (matchers
+  overlap on `Bash`) - collapsing them into a single dispatcher cuts per-call latency without
+  weakening any guard.
 
 </details>
 
@@ -1022,7 +1047,8 @@ never changes who does the work or what they're allowed to touch.
 Each agent's own file **does** pin its name (`tm-sme.md` opens *"You are Hassan…"*) - but that line
 is only ever read by the **subagent** when it's spawned; it never enters **Morgan's** (the
 orchestrator's) context. So when Morgan *narrates* who's on a task, its only source for the name is a
-**single roster line** in `CLAUDE.md`.
+**single roster line** in `docs/team-operating-guide.md` (moved out of `CLAUDE.md` in 0.8.0 to keep
+the always-on handbook lean; read on `/engage`).
 
 That name↔role mapping is an **arbitrary, non-derivable lookup** - nothing about "tuning-analyst"
 implies "Theo"; it's pure memorisation. When that one low-salience line isn't firmly in attention -

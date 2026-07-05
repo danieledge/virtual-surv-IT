@@ -14,7 +14,10 @@ Under the PM (CLAUDE.md §6), turn the BRD into an FSD: **$ARGUMENTS**
    cases. Note data handling (synthetic/masked only - §5).
 3. Update the **Requirements Traceability Matrix** (`docs/templates/rtm.md`) linking
    BRD → FSD.
-4. Save `artifacts/FSD-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
+4. Save `artifacts/FSD-<slug>.md` and render to `.html` (`<python> -m scripts.render_html`).
+   (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
+   installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
+   "Run mode & the bundled scripts".)
 
 **Close - don't dead-end (CLAUDE.md §6).** Summarise the FSD (functional requirements, the
 BRD→FSD traceability, any gaps), then offer the next step with a recommendation: proceed to the

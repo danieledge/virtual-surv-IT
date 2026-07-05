@@ -19,8 +19,10 @@ each step to the right agent and chain them in this session:
 1. **business-analyst** - turn "$ARGUMENTS" into a spec using
    `docs/templates/scenario-spec.md` (obligation, data, detection requirements,
    true-positive / false-positive acceptance criteria). **Cite the obligation by RETRIEVING it
-   from the regulatory register** (`python -m scripts.check_citations --typology <x>` /
-   `config/regulatory-register.yaml`) - never invent a pinpoint article/section/rule; flag any
+   from the regulatory register** (`<python> -m scripts.check_citations --typology <x>` /
+   `config/regulatory-register.yaml`)
+   (`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the bundled scripts")
+   - never invent a pinpoint article/section/rule; flag any
    citation not in the register as to-verify (ADR-001; `compliance-reviewer` runs the check).
 2. **Domain SME** - pick by domain: `trade-surveillance-sme`, `tm-sme`, or
    `comms-surveillance-sme`. Have them review the proposed detection logic and thresholds.
@@ -36,12 +38,13 @@ each step to the right agent and chain them in this session:
 6. Produce the scenario doc from `docs/templates/scenario-doc.md` (a trade scenario's design
    detail can use `docs/templates/trade-scenario-design.md`; a comms scenario adds
    `comms-surveillance-policy.md` + `lexicon-spec.md`), then render it to `.html`:
-   `python -m scripts.render_html artifacts/<scenario>.md` (every artifact ships as `.md` +
+   `<python> -m scripts.render_html artifacts/<scenario>.md` (every artifact ships as `.md` +
    `.html` - §8 / Definition of Done).
 
 Confirm the **project's test suite** passes (`pytest` in this repo; Pester / JUnit / ScalaTest /
-Jest / etc. in other stacks - use whatever the target uses), and check the result against
-`docs/DEFINITION-OF-DONE.md` for the
+Jest / etc. in other stacks - use whatever the target uses). Running tests needs the
+execution-consent gate (CLAUDE.md §7); if the guard blocks, ask the user to grant it (consent is
+human-only). Check the result against `docs/DEFINITION-OF-DONE.md` for the
 items that apply to a detection scenario (traceable, tested, reviewed, documented).
 
 **Close - don't dead-end (CLAUDE.md §6).** Summarise what was built (the rule, its tests, the

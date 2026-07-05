@@ -30,7 +30,9 @@ When invoked:
 2. Choose an approach appropriate to the risk and data, justifying it (favour interpretable
    methods unless complexity is warranted and explainability is preserved).
 3. Implement training, evaluation and inference, with metrics for precision, recall,
-   coverage, stability and bias.
+   coverage, stability and bias. Running training or evaluation code needs the execution-consent
+   gate (CLAUDE.md §7); if the guard blocks, hand back and ask the user to grant consent (it is
+   human-only).
 4. Produce model documentation: data lineage, assumptions, performance, limitations,
    monitoring plan, threshold rationale.
    **Build the ongoing-monitoring in, not as an afterthought:** define and (where code is in

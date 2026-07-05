@@ -28,20 +28,20 @@ decision. [Back to demos](README.md).*
 
 ```
 Findings
-🔴 Critical - Hardcoded credential - input_alert_export.py:9 - 🧠 inferred (gitleaks ran but did
+🔴 Critical - Hardcoded credential - input_alert_export.py:8 - 🧠 inferred (gitleaks ran but did
    not flag; reasoned by reading). CWE-798. DB_PASSWORD = "s3cr3t-..." is a plaintext secret.
    Fix: read from os.environ["DB_PASSWORD"]; never hardcode.
-🔴 Critical - SQL injection - input_alert_export.py:19 - 🧠 inferred. CWE-89. trader_name is
+🔴 Critical - SQL injection - input_alert_export.py:15 - 🧠 inferred. CWE-89. trader_name is
    string-concatenated into the query.
    Fix: cur.execute("SELECT * FROM alerts WHERE trader = ?", (trader_name,))  # parameterised
-🟠 Warning - Resource leak - input_alert_export.py:32-35 - 🧠 inferred. open_db returns a cursor
+🟠 Warning - Resource leak - input_alert_export.py:27-29 - 🧠 inferred. open_db returns a cursor
    but the connection is never closed.
-🟡 Medium - O(n^2) dedupe - input_alert_export.py:23-29 - 🧠 inferred. `a not in unique` is a
+🟡 Medium - O(n^2) dedupe - input_alert_export.py:19-24 - 🧠 inferred. `a not in unique` is a
    linear scan in a loop. Fix: track membership with a set().
-🔵 Style - missing docstrings - input_alert_export.py:16,23,32,38 - 🧠 inferred. Non-blocking.
+🔵 Style - missing docstrings - input_alert_export.py:13,19,27,32 - 🧠 inferred. Non-blocking.
 
 Deliberately NOT flagged
-- LARGE_ORDER_MULTIPLE = 5.0 (line 13): correctly documented threshold with rationale + tuning
+- LARGE_ORDER_MULTIPLE = 5.0 (line 10): correctly documented threshold with rationale + tuning
   date per CLAUDE.md §4 - this is the planted FP-trap; flagging it would be a false positive.
 
 Tooling coverage: ruff/bandit/mypy/semgrep MISSING; gitleaks ran (no leaks reported - note the
@@ -62,10 +62,10 @@ hardcoded password evaded its ruleset). All findings therefore 🧠 inferred fro
 
 | | Finding | Basis |
 |---|---|---|
-| 🔴 | Hardcoded credential (`:9`) | 🧠 inferred |
-| 🔴 | SQL injection (`:19`) | 🧠 inferred |
-| 🟠 | Connection leak (`:32-35`) | 🧠 inferred |
-| 🟡 | O(n²) dedupe (`:23-29`) | 🧠 inferred |
+| 🔴 | Hardcoded credential (`:8`) | 🧠 inferred |
+| 🔴 | SQL injection (`:15`) | 🧠 inferred |
+| 🟠 | Connection leak (`:27-29`) | 🧠 inferred |
+| 🟡 | O(n²) dedupe (`:19-24`) | 🧠 inferred |
 | 🔵 | Missing docstrings | 🧠 inferred |
 | ✅ | Documented threshold - *correctly NOT flagged* | - |
 
@@ -75,15 +75,22 @@ hardcoded password evaded its ruleset). All findings therefore 🧠 inferred fro
 
 ```console
 $ python3 -m scripts.eval_score --expected evals/cases/review-seeded-bugs-py/expected.yaml --findings review.json
-VERDICT: PASS ✅
-recall = 1.0 (found all planted issues)
-must-find criticals missed: none
-false-positive traps triggered: none
+{
+  "case": "review-seeded-bugs-py",
+  "passed": true,
+  "recall": 1.0,
+  "planted_total": 4,
+  "planted_found": ["SEC-1", "SEC-2", "PERF-1", "BUG-1"],
+  "planted_missed": [],
+  "must_find_missed": [],
+  "false_positive_traps_triggered": []
+}
 ```
 
-> 🎩 **And there's the proof - VERDICT: PASS, recall 1.0, zero false alarms.** The eval harness
-> independently confirmed Ravi caught *every* planted issue and didn't trip the documented-threshold
-> trap. If a future prompt tweak quietly weakened that review, this score would drop and we'd catch it.
+> 🎩 **And there's the proof** - my reading of that JSON: **passed, recall 1.0, no must-find
+> criticals missed, zero false-positive traps triggered.** The eval harness independently
+> confirmed Ravi caught *every* planted issue and didn't trip the documented-threshold trap. If a
+> future prompt tweak quietly weakened that review, this score would drop and we'd catch it.
 
 ---
 

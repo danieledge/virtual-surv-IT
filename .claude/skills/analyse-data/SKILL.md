@@ -15,8 +15,9 @@ Make any mutually-exclusive axis **single-select**. **If the data is an extract 
 (from Excel/CSV/an export), confirm its source-vs-output **reconciliation** before analysing -
 if none exists, reconcile first (counts + a control total, house rule in
 `docs/house-rules.md`): a truncated extract contaminates every downstream number. Any
-conversion the team does itself goes through `python -m scripts.convert_file` (lossless
+conversion the team does itself goes through `<python> -m scripts.convert_file` (lossless
 defaults, schema gates, JSON evidence report - attach it); never hand-parse.
+(`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the bundled scripts".)
 
 1. **Frame** the question and the assumptions/caveats up front.
 2. **Analyse** - efficient, well-commented SQL/Python on synthetic/masked data: distributions,

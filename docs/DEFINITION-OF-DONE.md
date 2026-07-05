@@ -34,7 +34,9 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       accepted / deferred) and the review carries a **🔵 Developer guidance - improving future
       code** section (always present, even on a clean pass).
 - [ ] **Performance-reviewed** - where it processes data at volume, `performance-reviewer`
-      assessed it against expected volumes with profiling evidence.
+      assessed it against expected volumes. **Static by default** (🧠 inferred from code structure);
+      📊 measured profiling evidence only when execution was consented (§7) - the verdict must state
+      which basis it carries.
 - [ ] **Compliance-reviewed** - auditability, data safety (no secrets/PII/raw data, §5),
       documented thresholds (§4).
 - [ ] **Documented for handover** - a **developer handover** (`developer-handover.md`): how

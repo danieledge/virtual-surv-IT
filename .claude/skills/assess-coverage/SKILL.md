@@ -23,7 +23,10 @@ Under the PM (CLAUDE.md §6), drive **business-analyst** (scope/obligations), **
 (feed health), **tuning-analyst** (scenario performance) and the relevant **`*-sme`** (typologies).
 **Establish the jurisdiction(s) and in-scope population first - ask via the question tool, one
 question per axis; make any mutually-exclusive axis (e.g. a single jurisdiction) single-select**
-(CLAUDE.md §2).
+(CLAUDE.md §2). **Before touching any feed data** - and **confirm now if you invoked this skill
+directly** rather than via `/engage` - check via the question tool that any data in scope is
+synthetic/masked or carries no prohibited PII/MNPI (§5); on a no/unsure answer, prefer
+`/prepare-data` (`data/raw/` is hard-blocked either way).
 
 1. **Map the scope** - in-scope risks / typologies / products / venues / desks / comms channels
    (from the obligation; the SME confirms what *should* be surveilled).

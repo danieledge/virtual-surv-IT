@@ -3,6 +3,54 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased] - setup consistency & eval-integrity pass
+
+### Fixed
+- **Eval harness could not fail.** The golden inputs under `evals/cases/` carried their own graded
+  answers (planted-issue labels in the code the reviewer reads; "what a correct response does"
+  prose in behaviour `scenario.md`), so a live `/run-evals` stayed green even if the prompts
+  degraded. Stripped the answer keys from the input files (the planted defects/traps remain,
+  unlabelled), moved behaviour grading notes into per-case `notes.md` sidecars, and rewrote
+  `/run-evals` to spawn each workflow in a **fresh subagent fed only the input** so blindness is
+  structural, not willpower. Ground truth stays in `expected.yaml`; the contract tests
+  (`tests/test_eval_cases.py`) read only that, so they are unaffected.
+- **Plugin-mode raw-data backstop.** A plugin install ships the guard hook but not the
+  `permissions.deny` list the fail-open paths and README leaned on; documented that installers must
+  recreate the deny entries (`docs/house-rules.md`, README, SECURITY.md, ADR-002 rec 10) instead of
+  asserting a backstop that may be absent.
+- **Skill `allowed-tools` contradictions.** `audit-review`, `deep-review`, `performance-review` and
+  `prepare-data` declared tool lists that forbade the subagent-spawning / question-asking /
+  artifact-writing their own bodies require; removed the key (matching the other 16 skills).
+- **Plugin-mode script invocation.** Replaced literal `python -m scripts.*` with the resolved
+  `<python>` convention across the directly-invocable skills, so they work on hosts without a bare
+  `python` and in installed-plugin sessions.
+- **Static-only vs profiling.** Removed the stale "re-profile" / "profiling evidence" instructions
+  that contradicted the static-by-default posture (`performance-reviewer`, `performance-review`,
+  `remediate`, Definition of Done, WAYS-OF-WORKING); profiling now consistently gated on §7 consent.
+- **Exec-consent visibility.** `qa-engineer`, `rules-developer`, `ml-engineer` and the skills that
+  run tests (`build-solution`, `new-scenario`, `remediate`) now point to the §7 consent gate so they
+  are not silently hard-blocked mid-task; `assess-coverage` gained the §5 data-attestation gate.
+- **Doc consistency.** `review-scorer` description gained the dormancy trigger; README badges →
+  0.10.0 / 220+ tests; "two hooks" → three (README) and the consent-write gate added to SECURITY.md
+  scope; CLAUDE.md §7 reworded to the human-only consent model; the 📊 evidence-tag legend now names
+  both registers (measured vs observed) as a single source; SME + review-scorer rows added to the
+  routing table and the missing skills added to the README command index; stale roster-location and
+  "two guards" claims corrected; `agent-design.md` eval counts → 8 rubrics / 26 cases.
+- **CI / hygiene.** Test job now runs a `windows-latest` leg and a 3.10 floor leg; analysers pinned;
+  `shellcheck` now covers `run-guard.sh`; the no-raw-data gate (CI + pre-commit) now includes
+  `.jsonl`/`.xlsx`/`.xls`/`.tsv`; `.ruff_cache/` gitignored; removed the stale root
+  `team-update-2026-06-30.txt`.
+
+- **Guard hardening (ADR-002 recs 10-13), applied by a human maintenance run**
+  (`apply-guard-hardening.sh`, since the consent-write gate blocks model edits of the guards):
+  the consent guard now allows read-only `git`/`jq` on protected paths while still blocking
+  mutating `git checkout` and `find … -exec/-delete`; `pytest`/`unittest` are anchored so the word
+  in prose/commit messages is not read as the command; the exec-runner list is broadened
+  (`cargo`/`swift`/`bundle exec`/`jest`/`vitest`/…); the raw-data marker is word-bounded and
+  case-insensitive (catches `cd data/raw && …` and `DATA/RAW` without false-positiving on
+  `metadata/rawlog`); the misleading `pwsh` allow entry was removed and a `python3 -m scripts.ingest`
+  twin added; `data/raw/` is now write-protected. Regression coverage: `tests/test_guard_hardening.py`.
+
 ## [0.10.0] - 2026-07-05
 
 ### Added
@@ -53,7 +101,7 @@ permission-rule churn) and silent-extraction-truncation defences at every layer.
   `[/\\]`. Worse, the `py` launcher was invisible to the guard entirely - `py evil.py` was
   **not blocked** and `py -m scripts.x` was **not allowed** - it's now part of the interpreter
   token, fixing both directions. The raw-data guard's Bash marker gains the `data\raw\`
-  backslash variant. 5 new regression tests; ADR-002 → 0.4.1.
+  backslash variant. 4 new regression tests; ADR-002 → 0.4.1.
 - **Morgan no longer assumes `python3` when invoking the bundled scripts** (reported from a
   Windows plugin install, where the interpreter is `python`/`py` and `python3` doesn't exist).
   Engage step 0 now resolves the interpreter once (probe `python3` → `python` → `py`, the same
@@ -226,7 +274,7 @@ outcome of a full setup audit against Anthropic's current published guidance (20
   allowed; `CST_ALLOW_CONFIG_EDIT=1` (human-set) is the maintenance override. Consent is now
   granted only by the human - type `! touch .claude/.exec-consent` (or any terminal) or set
   `CST_ALLOW_EXEC=1`. `/engage` and `/demo` updated accordingly (the demo now *narrates* the
-  self-grant block as a safety feature). 18 new tests (`tests/test_guard_consent.py`) + sync-test
+  self-grant block as a safety feature). 17 new tests (`tests/test_guard_consent.py`) + sync-test
   coverage; ADR-002 bumped to 0.3/0.3.1. Field notes from the first hours live: the guard blocked
   the very session that authored it from writing the marker (working as designed), and a real
   false positive (`ls … 2>/dev/null` counted as a redirect-write) was fixed - redirects now block
@@ -266,7 +314,8 @@ outcome of a full setup audit against Anthropic's current published guidance (20
   OS `permissions.deny` list enforcing. The wrapper finds `python3` / `python` / `py` and `exec`s
   it, preserving the guard's stdin (tool payload) and exit code (`2` = block); if no Python exists
   it exits 0 (allow), with `permissions.deny` still the hard boundary. The guard `.py` logic is
-  unchanged (only the launch path), the two hook files stay byte-identical, and a new test
+  unchanged (only the launch path), the two hook wirings stay in sync (the sync test asserts
+  parsed-JSON equality of their `PreToolUse` blocks; `settings.json` also carries permissions), and a new test
   (`test_guards_use_portable_python_launcher`) locks it in. Verified against the Claude Code hooks
   docs (shell-form hooks run in a POSIX shell - Git Bash - on Windows).
 - **`render_html.py` now pins `encoding="utf-8"`** on both the `.md` read and the `.html` write.
@@ -624,7 +673,8 @@ _(Plus minor documentation updates.)_
 - **The full chain ran end-to-end** (build → code/QA/compliance review → tuning → performance →
   delivery), demonstrating the fix→re-review loop: independent review found **7 real defects** in the
   build, all fixed and re-tested (dev 2/2, QA 33/33 green).
-- **Measured calibration** ([`calibrate_wash_trade.py`](docs/demos/build-artifacts/calibrate_wash_trade.py)):
+- **Measured calibration** ([`ts001_threshold_tuning_harness.py`](docs/demos/build-artifacts/ts001_threshold_tuning_harness.py),
+  calibrating [`ts001_wash_trade.py`](docs/demos/build-artifacts/ts001_wash_trade.py)):
   synthesises a *labelled* dataset and runs real ATL/BTL - `price_tolerance_pct` 0.10-0.50% (100%
   precision + recall), flagged as measured-on-synthetic.
 - **Token usage** documented: the full 8-agent delivery cost ~182k tokens (README table + delivery report §7).

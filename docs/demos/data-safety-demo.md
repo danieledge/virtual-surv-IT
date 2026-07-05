@@ -54,6 +54,7 @@ PreToolUse:Bash hook error:
 
 ```console
 $ python3 -m scripts.validate_masking --in masked-with-a-leak.jsonl
+[INFO] Scanning masked file masked-with-a-leak.jsonl (residual PII + k-anonymity). Note: 'no original identifier survived' and detection fidelity need the originals and are NOT checked in this mode.
 [FAIL] no residual PII in masked file (string fields): ['EMAIL', 'IBAN', 'PHONE', 'ACCT']
 [PASS] k-anonymity: no quasi-identifiers declared - skipped (declare to enforce)
 RESULT: FAIL

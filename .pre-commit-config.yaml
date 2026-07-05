@@ -25,7 +25,8 @@ repos:
         name: block raw market/comms data files (use synthetic data - CLAUDE.md §5)
         entry: "Raw data files must not be committed. Generate synthetic data with scripts/gen_synthetic.py."
         language: fail
-        files: '\.(csv|parquet|pcap)$'
+        # Match CI's no-raw-data gate: include the pipeline's own .jsonl and the converter's .xlsx/.xls/.tsv.
+        files: '\.(csv|tsv|parquet|pcap|jsonl|xlsx|xls)$'
 
       # Definition-of-Done gate: tests must pass before a commit lands (automatic, not
       # prompt-dependent). Runs on changes to rules/, tests/ or scripts/.

@@ -81,6 +81,12 @@ engagement. This file ships with the plugin and is **general by design**.
   is the `permissions.deny` list in `.claude/settings.json`, `data/raw/` in `.gitignore`, and
   masking-at-source via `scripts/ingest.py`. Any new file-reading tool must be added to the guard
   matcher. (Full bypass enumeration + hardening backlog: `docs/adr/ADR-002`.)
+- **Plugin installs don't ship the `permissions.deny` backstop - recreate it.** A plugin can carry
+  hooks (`hooks/hooks.json`) but **not** a `permissions.deny` list, so a foreign project that installs
+  this plugin gets the raw-data *guard hook* but not the OS-level deny backstop the fail-open paths
+  and README lean on. When you install the plugin into a real project, copy the `Read`/`Grep`/`Glob`
+  `data/raw/**` deny entries from this repo's `.claude/settings.json` into that project's own
+  `.claude/settings.json`. (Acknowledged residual: `docs/adr/ADR-002`.)
 - **Lexical/regex redaction is best-effort and order-sensitive.** Every new PII pattern needs an
   ordering rationale *and* an overlap test (date vs phone vs account); never rely on it as the sole
   control - free-text comms needs NER before real data. The masking engine is **basic** by design.

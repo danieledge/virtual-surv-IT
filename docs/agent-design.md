@@ -15,8 +15,11 @@
    **Advisory/reviewer agents hold no `Write`/`Edit`** - that independence is a *tool grant*, not a
    polite request. (Six also hold `Bash` for static analysers / `git diff`; execution of the *code
    under review* is gated by `guard-code-execution.py` (§7) - so the precise claim is "no
-   Write/Edit", not strictly "read-only".) Build agents get exactly what they need (analysts hold
-   `Write` for their own scripts but **not** `Edit`, so they never alter live detection source).
+   Write/Edit", not strictly "read-only".) Build agents get exactly what they need
+   (`data-analyst`, `tuning-analyst` and `qa-engineer` hold `Write` for their own
+   scripts/evidence but **not** `Edit`, so they never alter live detection source;
+   `business-analyst` is a build agent whose `Edit` grant covers spec/doc authoring - its
+   boundary is that it does not build detection code).
 3. **Match the model to the work (see §2).** Cheap tier for mechanical, top tier only where it
    changes outcomes.
 4. **Right-size every engagement.** Multi-agent costs ~15× the tokens; the PM uses the *leanest*
@@ -96,8 +99,9 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | Observability | ✅ | PM marks every turn 🎩; states agent count at the gate. |
 | Avoid anti-patterns (monolith, over-planning, weak delegation, exec-without-consent) | ✅ | Specialised roles; lean intake; explicit briefs; execution gated by §7. |
 
-*Maintenance: when you add/retier an agent, update §2 and the per-agent `model:` together; the
-`tests/` and this matrix are the guard against drift.*
+*Maintenance: when you add/retier an agent, update §2 and the per-agent `model:` together;
+`tests/test_docs_consistency.py` checks each agent's `model:` against this table, so the test
+and this matrix are the guard against drift.*
 
 ## 6. Anthropic multi-agent standards - conformance
 
@@ -121,7 +125,7 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
 | Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |
 | **External memory** for long horizons | ✅ | **Project-scoped:** project-specific memory lives in the working project's own `CLAUDE.md` (the plugin ships no project memory - it's installed across many projects); `docs/house-rules.md` holds only **general, cross-project** conventions. Subagent context isolation (CLAUDE.md §6). |
-| **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 7 rubrics + 21 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
+| **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 8 rubrics + 26 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
 | Subagent **self-assessment** (plan → evaluate → refine) | 🟡 | A team-wide *convention* (CLAUDE.md §6: agents self-verify and flag gaps), but a single line - not a structured plan→evaluate→refine loop in each prompt. We lean on **independent** verification (reviewer chains, `model-validator`) instead - arguably stronger, but a different lesson. |
 | **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
 | **Dozens-hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable - right-sizing keeps us at 2-5 agents per engagement; we never reach that scale. |

@@ -1,7 +1,6 @@
 ---
 description: Review existing code for robustness and audit/regulatory defensibility (evaluator-optimizer loop)
 argument-hint: <path/glob of code to review, or a commit range>
-allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git blame:*), Bash(git show:*)
 disable-model-invocation: true
 ---
 
@@ -19,7 +18,8 @@ from the artifact menu / at close, not mixed into this action question.
 
 Run an **evaluator-optimizer loop**:
 
-1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first) - comprehensive review
+1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first, telling it to inherit
+   **Mode = audit** and the **compliance** dimension and not to re-ask those) - comprehensive review
    across the languages present, driving the standard analysers (ruff/mypy/bandit,
    Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep),
    citing OWASP ASVS / CWE / SEI CERT, with confidence scoring and filter transparency
@@ -48,7 +48,10 @@ Run an **evaluator-optimizer loop**:
    the artifact before presenting). Use the standalone clean review artifact by default; fold
    into the consolidated `delivery-report.md` only when audit is part of a larger handover.
 
-Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`python -m scripts.render_html`).
+Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`<python> -m scripts.render_html`).
+(`<python>`: resolve your interpreter - try python3, then python, then py - and in an
+installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
+"Run mode & the bundled scripts".)
 
 **Close with a clear disposition - never leave it ambiguous.** State the verdict **and the
 disposition of every finding**: ✅ fixed (what changed) · 🔴 open · ⚖️ accepted (rationale) ·

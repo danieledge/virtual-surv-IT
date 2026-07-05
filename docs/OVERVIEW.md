@@ -58,8 +58,10 @@ its job, and the PM hands the right task to the right specialist.
 
 There are two kinds of team member.
 
-**🧠 Advisors** can only *read and recommend* - they literally cannot change any code.
-They're your experts and reviewers, kept "read-only" on purpose so they stay independent.
+**🧠 Advisors** can only *read and recommend* - they have no file-editing tools, so they
+can't change the code they review. (A few hold a terminal for running static analysis tools;
+the safety hooks stop that being used to run the code itself without a human's consent.)
+They're your experts and reviewers, kept that way on purpose so they stay independent.
 
 **🔧 Builders** can *write code and tests*.
 
@@ -82,9 +84,10 @@ They're your experts and reviewers, kept "read-only" on purpose so they stay ind
 | **Yuki** `data-quality-reviewer` | 🧠 Advisor | Independently checks the data is complete & accurate, and that nothing in scope goes unmonitored |
 | **Pip** `review-scorer` | ⚙️ Helper | Cheap-tier (haiku) assistant that does the rote review steps - context detection, scoring, filtering - so the expensive reviewers don't have to |
 
-> Why "read-only" matters: a reviewer who could quietly fix the thing they're reviewing
-> isn't really an independent check. Making advisors read-only is enforced by the tools
-> each one is given - not just a polite request.
+> Why this matters: a reviewer who could quietly fix the thing they're reviewing isn't
+> really an independent check. Advisor independence is enforced by the tools each one is
+> given (no file-editing tools) - not just a polite request - with the safety hooks gating
+> any code execution behind human consent.
 
 ---
 

@@ -1,7 +1,6 @@
 ---
 description: Detailed multi-dimension code review (bugs, security, architecture, impact) with confidence scoring
 argument-hint: <path/glob, commit range, or nothing for the working diff>
-allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(git blame:*), Bash(git show:*)
 disable-model-invocation: true
 ---
 
@@ -75,7 +74,10 @@ and states what's applicable vs not.
 **4. Present - scoreboard + clean artifact** (`docs/review/output-format.md`; document skeleton:
 `docs/templates/review-report.md`): a glanceable
 traffic-light **scoreboard to the console**, with the **full findings written to the clean
-artifact** `artifacts/REVIEW-<slug>.md`, rendered to `.html` (`python -m scripts.render_html`).
+artifact** `artifacts/REVIEW-<slug>.md`, rendered to `.html` (`<python> -m scripts.render_html`;
+`<python>`: resolve your interpreter - try python3, then python, then py - and in an
+installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
+"Run mode & the bundled scripts").
 🔵 style & form is a non-blocking "consider in future" lane. (Fold into the consolidated
 `delivery-report.md` only if this review is part of a larger build/handover.)
 

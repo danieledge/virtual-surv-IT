@@ -16,7 +16,10 @@ question per axis; make any mutually-exclusive axis (e.g. a single jurisdiction)
    requirement (get the `*-sme` to read it; don't interpret regulation unaided). **Ground every
    pinpoint citation against the regulatory register** (`config/regulatory-register.yaml`); a new
    or amended obligation belongs in the register first, not asserted from memory (ADR-001). Run
-   `python -m scripts.check_citations <artifact>` over the output and resolve any UNVERIFIED hits.
+   `<python> -m scripts.check_citations <artifact>` over the output and resolve any UNVERIFIED hits.
+   (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
+   installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
+   "Run mode & the bundled scripts".)
 2. **Trace the blast radius** - which **detection scenarios**, **controls**, **data feeds/
    lineage**, **specs (BRD/FSD/RTM)** and **thresholds** are affected. Use the RTM to find what's
    linked to the old obligation.

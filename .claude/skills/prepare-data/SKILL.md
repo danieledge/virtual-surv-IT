@@ -1,7 +1,6 @@
 ---
 description: Guided data onboarding - get safe, governed data (synthetic or masked) ready before any agent sees it
 argument-hint: <what you want to analyse / the data you have, if any>
-allowed-tools: Read, Write, Edit, Grep, Glob, Bash(python -m scripts.gen_synthetic:*), Bash(python -m scripts.ingest:*), Bash(python -m scripts.validate_masking:*), Bash(python -m scripts.synthesise:*), Bash(test -n "$MASKING_KEY"), Bash(ls:*)
 disable-model-invocation: true
 ---
 
@@ -31,7 +30,8 @@ Unless real-data fidelity genuinely matters, **recommend synthetic.** State the 
 plainly so the user chooses with eyes open, then proceed with their decision.
 
 ## 3. Synthetic path (automatable)
-- **Built-in generator:** `python -m scripts.gen_synthetic --kind <kind> --out data/synthetic/<name>.jsonl`.
+- **Built-in generator:** `<python> -m scripts.gen_synthetic --kind <kind> --out data/synthetic/<name>.jsonl`
+  (`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the bundled scripts").
   Check `--kind` choices first; if the user's scenario isn't covered, this is a small build
   task - route to **platform-engineer** / **data-analyst** to extend the generator, *then* run it.
 - **Fit-and-sample:** for data shaped like an existing non-raw corpus, use `scripts.synthesise`
@@ -54,12 +54,12 @@ The mechanics auto-run, but three prerequisites are the user's to supply - confi
 
 Then run:
 ```
-python -m scripts.ingest --in data/raw/<file>.jsonl --out data/masked/<file>.jsonl
+<python> -m scripts.ingest --in data/raw/<file>.jsonl --out data/masked/<file>.jsonl
 ```
 Per-record failures are reported by **row index only** (never record content - §5).
 
 ## 5. Validate - the gate before any agent sees the data
-Always run `python -m scripts.validate_masking`. It must show **no residual identifiers/PII in
+Always run `<python> -m scripts.validate_masking`. It must show **no residual identifiers/PII in
 any output field** and **identical detection results on masked vs. original**. If it fails,
 fix the schema and re-run - do **not** hand the data on until it passes.
 

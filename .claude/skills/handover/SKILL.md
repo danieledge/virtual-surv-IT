@@ -38,14 +38,17 @@ named below are the building blocks.
    disposition** (✅ fixed · 🔴 open · ⚖️ accepted · ⏭️ deferred) and reconcile it with the verdict -
    a pack that mentions blocking findings must make clear whether the rework addressed them or
    they're still open (🔴 Open / needs human developer review), never ambiguous.
-6. Save under `artifacts/` and render to `.html` (`python -m scripts.render_html`). If the
+6. Save under `artifacts/` and render to `.html` (`<python> -m scripts.render_html`). If the
    receiving team runs its own acceptance testing, include a **UAT plan**
    (`docs/templates/uat-plan.md`).
+   (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
+   installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
+   "Run mode & the bundled scripts".)
 7. **Engagement-summary email** (required closing artifact - Definition of Done): a short
    email-format cover note (`docs/templates/engagement-summary-email.md`) saved as a **`.txt` in
    `artifacts/`**, **signed off as Morgan** ("Hi," if you don't know the recipient's name). It's an
    email, so it stays `.txt` - not rendered to HTML.
-8. **Run the mechanical DoD gate** - `python -m scripts.check_artifacts` - and fix anything it
+8. **Run the mechanical DoD gate** - `<python> -m scripts.check_artifacts` - and fix anything it
    flags (missing `.html` siblings or a missing summary email) before presenting the pack.
 
 Stop for human sign-off - real reviewers will read these, and approval/execution is theirs.

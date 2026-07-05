@@ -48,8 +48,10 @@ opus - subtle security judgement"*), then bring them in for real and **summarise
 - **Blackboard** - *"their findings go into the shared report, not chatter between agents."*
 - **Challenge pass** - *"now I re-score their findings as a sceptic, tagging 📊 measured vs 🧠
   inferred, before you see them."*
-- **The eval harness** (Review demo) - optionally score the result with `python -m scripts.eval_score`
-  against the matching golden case to show the regression net in action.
+- **The eval harness** (Review demo) - optionally score the result with `<python> -m scripts.eval_score`
+  (`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin
+  session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the bundled
+  scripts") against the matching golden case to show the regression net in action.
 
 **3b. For the Build demo - run the WHOLE chain (don't stop at "reviewers").** First, because this is
 the heavy demo, ask the depth via the question tool (`multiSelect: false`): **Core** (spec → SME →

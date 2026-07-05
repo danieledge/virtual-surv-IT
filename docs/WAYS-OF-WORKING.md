@@ -52,7 +52,7 @@ flowchart LR
 | Periodic TM model check | `/validate-tm-model` | coverage / threshold / data-integrity / MI validation |
 | Are we monitoring everything? | `/assess-coverage` | typology→scenario→feed map + feed-health gaps (FCA MW79) |
 | Existing code (detailed review) | `/deep-review` | dimension fan-out + confidence scoring |
-| Performance / will-it-scale | `/performance-review` | profiling evidence vs target volume |
+| Performance / will-it-scale | `/performance-review` | static analysis vs target volume (profiling only under the §7 exec gate) |
 | Existing code (audit sign-off) | `/audit-review` | evaluator-optimizer review loop |
 | Legacy / poorly-built code | `/remediate` | assess → prioritise → fix loop → handover |
 | A requirements pack | `/build-solution` | orchestrator-workers end-to-end build |
@@ -149,8 +149,12 @@ single source; templates copy it verbatim.
 | Human approver (or `[IT team]`) | | | |
 ```
 
-**Shared legends** (use consistently; don't rely on emoji alone - keep the word):
-- **Evidence basis:** 📊 *measured* (an analyser/benchmark ran) · 🧠 *inferred* (reasoned, not measured).
+**Shared legends** (the single source - use consistently; don't rely on emoji alone, keep the word):
+- **Evidence basis:** 📊 first-hand evidence · 🧠 *inferred* (reasoned, not first-hand). 📊 takes one
+  of two register-specific words, and they are not interchangeable: **📊 *measured*** for a
+  computed or executed number (code/performance/QA review - an analyser, benchmark or test actually
+  ran) and **📊 *observed*** for something seen directly in the data (analysis/tuning - a metric,
+  sample or query result). Everything else is 🧠 *inferred*.
 - **Severity:** 🔴 Critical · 🟠 High/Warning · 🟡 Medium · 🔵 Low/Style · 🔇 Filtered.
 - **Disposition:** ✅ Fixed/Answered · 🔴 Open · ⏭️ Deferred/Needs-input · ⚖️ Accepted.
 - Every findings-bearing doc ends with a **disposition tally** (✅ _N_ · 🔴 _N_ · ⏭️ _N_ · ⚖️ _N_).

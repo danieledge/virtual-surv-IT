@@ -7,13 +7,26 @@ on:
 
 jobs:
   test:
-    name: Tests (detection logic)
-    runs-on: ubuntu-latest
+    name: Tests (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Floor of the supported range (pyproject requires-python >= 3.10)
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.12"
+          # Windows leg: the guards + launcher have Windows-specific paths (py launcher,
+          # backslash separators); several past regressions were Windows-only.
+          - os: windows-latest
+            python: "3.12"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - run: pip install -r requirements-dev.txt
       - run: pytest
       - name: Validate masking (safety + detection fidelity)
@@ -30,7 +43,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install analysers
-        run: pip install ruff bandit
+        # Pinned so a new analyser release can't red an untouched repo (ruff format is version-sensitive).
+        run: pip install "ruff==0.15.20" "bandit>=1.7,<2"
       - name: ruff (lint)
         run: ruff check scripts/ .claude/hooks/ rules/ tests/
       - name: ruff (format check)
@@ -38,7 +52,7 @@ jobs:
       - name: bandit (security)
         run: bandit -r scripts/ .claude/hooks/ -q
       - name: shellcheck (Bash)
-        run: shellcheck scripts/*.sh scripts/git-hooks/pre-commit scripts/git-hooks/pre-push
+        run: shellcheck scripts/*.sh scripts/git-hooks/pre-commit scripts/git-hooks/pre-push .claude/hooks/run-guard.sh
 
   secret-scan:
     name: Secret scan
@@ -59,9 +73,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fail if raw data files are present (CLAUDE.md §5)
         run: |
-          if git ls-files '*.csv' '*.parquet' '*.pcap' | grep -q .; then
+          # Cover the pipeline's own formats too: .jsonl is the ingest/masking format and
+          # .xlsx/.xls/.tsv are first-class converter inputs, not just csv/parquet/pcap.
+          if git ls-files '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls' | grep -q .; then
             echo "::error::Raw data files committed. Use synthetic data only (CLAUDE.md §5)."
-            git ls-files '*.csv' '*.parquet' '*.pcap'
+            git ls-files '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls'
             exit 1
           fi
           echo "OK - no raw data files tracked."

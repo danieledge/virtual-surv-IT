@@ -62,10 +62,12 @@ When invoked:
    anything that *would need a benchmark to confirm* as 🧠 inferred and name that benchmark.
 
 Output: use `docs/templates/performance-report.md` - workload & targets, findings with
-evidence and severity, before/after if a fix was profiled, and a verdict (will it scale?).
+evidence and severity, before/after **only if a fix was actually profiled under the
+execution-consent gate** (CLAUDE.md §7; off in static mode), and a verdict (will it scale?).
 **Always include the §4 potential-gains summary** - per issue: current cost → projected after
-fix, the **gain**, and **how it was derived** (📊 measured before/after or explicit coded value
-vs 🧠 inferred projection with the model named). A developer wants the headline "what do I get,
+fix, the **gain**, and **how it was derived** (📊 measured - an explicit coded value, or a
+profiler before/after **only if profiling was run under the consent gate** - vs 🧠 inferred
+projection with the model named). A developer wants the headline "what do I get,
 and how do you know" - never present an inferred projection as a measured result. **End with the
 total execution time saved at target volume** (the aggregate headline, e.g. "~Xs → ~Ys per run
 at 5M rows: ~Z saved"), split **measured vs projected** so the total stays accurate. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP

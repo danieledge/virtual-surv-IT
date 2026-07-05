@@ -12,8 +12,10 @@
 > act of any engagement is to **read `docs/team-operating-guide.md`**: the standing rules,
 > roster and routing table live there, not here.
 >
-> The one always-on exception is **data safety**: never read raw data from `data/raw/` and
-> never put real PII/MNPI or secrets into context (enforced by the read-guard hook and §5).
+> The one always-on exception is **safety**: all **three** guard hooks stay armed even in a
+> dormant session - the `data/raw/` read block (§5), the code-execution gate and the consent-write
+> gate (§7) - so a blocked command outside an engagement is expected, not a bug. Never put real
+> PII/MNPI or secrets into context (§5).
 
 > ℹ️ The regulatory scope (§2) and tech stack (§3) ship as **example defaults** in
 > `docs/scope-and-stack.md` so the team works out of the box - replace them with your real
@@ -59,7 +61,8 @@ cloud-agnostic default - customise to your environment.
 - **`data/raw/` must never reach an agent** - hard-blocked by the read-guard hook
   (`.claude/hooks/guard-raw-data.py`), **always-on even when the team is dormant**. Anything an
   agent reads is sent to the model provider as prompt context.
-- Any other data proceeds **only on the user's attestation** (`engage` step 0) that it is
+- Any other data proceeds **only on the user's attestation** (asked in `engage`'s batched
+  opening gate) that it is
   anonymised/masked or carries no prohibited PII/MNPI - that responsibility is the **user's**.
   Prefer synthetic; **recommend `/prepare-data`** (masking via `scripts.ingest` +
   `config/masking-schema.yaml`, validated by `scripts.validate_masking`, key from `MASKING_KEY`)
@@ -82,7 +85,8 @@ and the **deliverable → owner routing table** all live there.
 - **Tag data insights 📊 observed / 🧠 inferred** - never present an inference as observed fact;
   state the assumption. Applies to every agent and to the PM summarising their work.
 - **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `performance-reviewer`,
-  `compliance-reviewer`, `data-quality-reviewer`) are **read-only**; build agents implement.
+  `compliance-reviewer`, `data-quality-reviewer`) hold **no Write/Edit** (six hold Bash for
+  analysers/diffs, execution-gated by §7); build agents implement.
   **Route by deliverable type, not habit** (table in the operating guide).
 
 ## 6a. Definition of Done
@@ -96,10 +100,11 @@ an **engagement-summary email** (`.txt` in `artifacts/`, signed as Morgan), and 
 
 - **Never execute the code/script under review without authorisation (non-negotiable).** Review
   is **static by default** - read it + static analysers only. Executing it (tests, the script, a
-  profiler/benchmark) needs: explicit consent asked **once** at intake (recorded in
-  `.claude/.exec-consent`, or the human-set `CST_ALLOW_EXEC=1`), a safe/sandbox env on
-  synthetic/masked data only (§5), and **never** untrusted provenance - enforced by the
-  `.claude/hooks/guard-code-execution.py` hook. Unauthorised dynamic/perf findings stay
+  profiler/benchmark) needs: explicit consent - asked **once** at intake, then granted by the
+  **human only** (the user creates the `.claude/.exec-consent` marker, or sets `CST_ALLOW_EXEC=1`;
+  the model is blocked from writing either, so the intake "yes" is intent, not the grant -
+  `guard-consent-writes.py`), a safe/sandbox env on synthetic/masked data only (§5), and **never**
+  untrusted provenance - enforced by the `.claude/hooks/guard-code-execution.py` hook. Unauthorised dynamic/perf findings stay
   **🧠 inferred**. Threat model & residual risk: `docs/adr/ADR-002-safety-hook-threat-model.md`.
 - An advisory agent that wants to edit code hands back to the orchestrator instead.
 - `model-validator` is independent of `ml-engineer` by design - free to challenge.
@@ -117,7 +122,8 @@ an **engagement-summary email** (`.txt` in `artifacts/`, signed as Morgan), and 
   `python -m scripts.render_html` - or, from a plugin install in a foreign project, the bundled
   copy by path (resolution rule: `docs/team-operating-guide.md` §Run mode). Templates in
   `docs/templates/`.
-- **Model tiering (cost):** **opus** only for final-and-unchecked judgement (`model-validator`,
-  `compliance-reviewer`, `code-reviewer`, `ml-engineer`); **sonnet** for build + advisory +
-  static review; **haiku** for `review-scorer`. Rationale + conformance matrix:
-  `docs/agent-design.md` - keep `model:` and that doc in sync when you retier.
+- **Model tiering (cost):** **opus** for the highest-stakes judgement - the final, unchecked word
+  (`model-validator`, `compliance-reviewer`, `code-reviewer`) and novel ML design where a subtle
+  failure is costly to catch later (`ml-engineer`, itself re-checked by `model-validator`); **sonnet**
+  for build + advisory + static review; **haiku** for `review-scorer`. Rationale + conformance
+  matrix: `docs/agent-design.md` - keep `model:` and that doc in sync when you retier.

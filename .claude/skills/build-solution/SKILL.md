@@ -33,6 +33,8 @@ Run the **orchestrator-workers** pattern, agile and iterative:
    - RTM, review, performance, compliance, QA, handover, change/ops as sections); split into
    separate artifacts only if asked. Save under `artifacts/`, as `.md` and rendered `.html`.
    Confirm the **project's test suite** passes (use the target's framework - `pytest`, Pester,
-   JUnit/ScalaTest, Jest, etc. - not an assumed one) and record the exact command.
+   JUnit/ScalaTest, Jest, etc. - not an assumed one) and record the exact command. Running tests
+   needs the execution-consent gate (CLAUDE.md §7); if the guard blocks, ask the user to grant it
+   (consent is human-only).
 
 Stop for human approval before anything that touches live systems.

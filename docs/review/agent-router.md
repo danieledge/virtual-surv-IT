@@ -33,8 +33,10 @@ diff. The review skills (`/deep-review`, `/audit-review`) and `code-reviewer` us
 3. Load minimum lenses→ core (bugs+security) + per-language + architecture (deep)
 4. Run lenses in parallel (each blind to the others → catches more), then merge + dedupe
 5. Score & filter     → docs/code-review-method.md  (mechanical; cheap tier)
-6. Morgan challenges  → independently re-scores, downgrades/filters, then presents
-                        the scoreboard (console) + the clean artifact
+6. Morgan challenges  → spot-checks, not re-scores (every Critical, anything regulated,
+                        anything with a thin evidence basis, plus a sample of the rest),
+                        downgrades/drops what fails, then presents the scoreboard
+                        (console) + the clean artifact
 ```
 
 ## Model tiering (per `code-review-method.md` / CLAUDE.md §8)

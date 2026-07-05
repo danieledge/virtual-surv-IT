@@ -1,7 +1,7 @@
 ---
 name: review-scorer
 description: >
-  The cheap-tier mechanical helper for the review pipeline - context/language detection, lens
+  When the team is engaged, use as the cheap-tier mechanical helper for the review pipeline - context/language detection, lens
   selection per the router, confidence scoring of candidate findings, and Found/Reported/Filtered
   accounting. Read-only; judgement stays with code-reviewer and Morgan.
 tools: Read, Grep, Glob, Bash

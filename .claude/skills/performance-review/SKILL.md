@@ -1,7 +1,6 @@
 ---
 description: Static performance & scalability review against target data volumes (findings inferred; profiling is a future opt-in)
 argument-hint: <path/glob or component to review> [at <volume/SLA> if known]
-allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git status:*)
 disable-model-invocation: true
 ---
 
@@ -63,11 +62,15 @@ Drive **performance-reviewer** (CLAUDE.md §6):
    evidence-backed findings (with 📊/🧠 basis) in the **clean artifact**, impact at target
    volume, and a scale verdict.
 
-Fixes route to `rules-developer` / `platform-engineer` / `ml-engineer`, then **re-profile** to
-show the before/after. Save `artifacts/PERF-<slug>.md` and render to `.html`
-(`python -m scripts.render_html`).
+Fixes route to `rules-developer` / `platform-engineer` / `ml-engineer`; any **before/after
+profiling** requires the **execution-consent gate** (CLAUDE.md §7) - the default posture stays
+static / 🧠 inferred, so don't promise measured before/after unless execution has been consented.
+Save `artifacts/PERF-<slug>.md` and render to `.html` (`<python> -m scripts.render_html`;
+`<python>`: resolve your interpreter - try python3, then python, then py - and in an
+installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
+"Run mode & the bundled scripts").
 
 **Close - don't dead-end (CLAUDE.md §6).** Give the scale verdict (does it hold at target
-volume?), then offer next steps with a recommendation - apply the fixes and re-profile, run a
-full `/remediate` loop if the findings are deep, or produce a `/handover` pack - and wait for
-the user's choice.
+volume?), then offer next steps with a recommendation - apply the fixes (any before/after
+profiling only via the execution-consent gate, CLAUDE.md §7), run a full `/remediate` loop if the
+findings are deep, or produce a `/handover` pack - and wait for the user's choice.
