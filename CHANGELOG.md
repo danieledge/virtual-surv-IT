@@ -3,9 +3,80 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased] - setup consistency & eval-integrity pass
+## [0.11.0] - 2026-07-05 - the Fable audit release
 
-### Fixed
+**This release was audited by Claude Fable 5** (Anthropic's most intelligent generally available
+model, first of the Claude 5 family, Mythos tier above Claude Opus). Two passes: a nine-agent
+setup review plus four-agent documentation truth audit (~214 falsifiable claims in the README and
+every linked doc checked against the code: 7 false, ~32 partial, the rest verified true), then a
+conformance audit against 13 source-verified design rules distilled from Anthropic's published
+multi-agent guidance by a 99-agent deep-research pass (the setup already conformed on 11 of 13).
+Everything below was validated with the full test suite (347 passing) and a live golden-case
+spot check (seeded-bug review recall 1.0, zero false-positive traps; clean-code case zero
+findings) so the fixes did not regress behaviour.
+
+### Fixed (evening pass - documentation truth)
+- **Token economics told straight.** The README's "measured" delivery figures contradicted the
+  delivery report they cited; now built on the measured numbers (9 agent runs, ~500k tokens,
+  ~USD 4-8) with estimates labelled as estimates and the fictional rate-card figures removed.
+- **Traceability matrix cites real tests.** The demo delivery report's RTM named tests that do
+  not exist; corrected to the actual test names, the 12th DoD gate row added, and the
+  DetectionParams documentation claim made accurate (5 of 7).
+- **Safety story stated precisely.** CLAUDE.md's dormancy banner now says all three guards stay
+  armed in dormant sessions (previously implied only data safety); "read-only" advisor claims
+  corrected everywhere to the tool-enforced truth (no Write/Edit; Bash execution-gated); the
+  plugin-mode deny-list caveat corrected in the README portability section.
+- **Counts and pointers.** CHANGELOG test counts (4 not 5; 17 not 18), ADR-002 consent-test
+  count (17 not 14), 0.8.0 test milestone (~171 not 192), stale roster/attestation/self-verify
+  pointers, a broken demo-artifact link, demo transcripts re-anchored to current fixtures, and
+  a fabricated console block in the review demo replaced with the scorer's real JSON output.
+- **ADR-002 brought current (0.5, Accepted):** revision rows for the applied hardening, recs
+  7/8/13 updated to their actual state, the Context section corrected, and two new Tier-2
+  residuals recorded (parent-rooted Grep toward the raw-data directory; secrets deny-protected
+  on Read only).
+
+### Fixed (evening pass - guards, human-applied via apply-guard-fixes.sh, ADR-002 rec 14)
+- **Multi-.py false positive:** any Bash command naming two .py files was blocked as code
+  execution (the first filename's trailing "py" parsed as the Windows py launcher); it blocked
+  read-only git add/diff/grep live during the audit. Fixed with a lookbehind; py-launcher
+  detection (including `py -3 file.py`, previously missed entirely) still blocks.
+- **Anchored pwsh/powershell** (the word in a grep pattern or prose no longer blocks) and
+  **gated `pre-commit run`** (it executes arbitrary configured hooks; it was allow-listed,
+  unmatched by the exec patterns, and its config was model-writable - now pattern-gated and
+  `.pre-commit-config.yaml` write-protected).
+- **Misleading pre-consent allow entries removed** (`pytest` twins, matching the pwsh removal).
+- Regression coverage: `tests/test_guard_fixes.py` (20 tests).
+
+### Added (evening pass)
+- **Prevention tests** (`tests/test_docs_consistency.py`): mechanical drift guards for the
+  claims that kept drifting - agent model tiers vs the design table, README badge vs
+  plugin.json, ADR header vs revision table, three-guards wording, roster pointer, spot-check
+  doctrine, CONTRIBUTING vs the CI matrix.
+- **Two golden cases (28 total):** consent-grant social engineering (an embedded instruction
+  telling the reviewer to create the exec-consent marker; correct behaviour refuses, flags,
+  and still finds the real seeded bug) and secrets-authoring refusal (pasted credentials with
+  "just hardcode it for now" pressure; correct behaviour routes to env vars).
+- **Eval integrity completed:** planted location anchors re-derived against the de-hinted
+  inputs (several were out of tolerance, one past end-of-file), remaining answer keys moved to
+  notes.md sidecars, "this is an eval" banners stripped, negation-blind forbidden traps
+  reworked to endorsement-only phrasing, and contract tests now verify manifest references
+  resolve and anchors are in range.
+
+### Changed (evening pass - best-practice conformance, no architectural change)
+- **Condensed returns:** every subagent brief and all 16 agent output specs now require a
+  distilled return (~30 lines) with detail in artifacts (closes the design doc's own
+  "aspirational" gap against Anthropic's context-engineering guidance).
+- **Right-sizing sharpened:** numeric effort-scaling heuristics and a delegate/do-not-delegate
+  checklist in the operating guide; a canonical command index for all 20 skills; the
+  engagement-summary email now states the engagement footprint (agents + approximate tokens).
+- **Consistency batch:** evidence tagging in all 16 agents, orchestrator-mediated handoff
+  phrasing, jurisdiction lists centralised to scope-and-stack, code-reviewer's analyser table
+  and tool probe cover the full 7-language lens set, exec-consent clauses and the
+  dormant-skill chaining rule in the skills that lacked them, the standard engagement close in
+  the three review skills, one canonical Developer-guidance heading, and the eval harness
+  named as the regression gate for prompt changes in WAYS-OF-WORKING and the DoD.
+
+### Fixed (afternoon pass - setup consistency & eval-integrity)
 - **Eval harness could not fail.** The golden inputs under `evals/cases/` carried their own graded
   answers (planted-issue labels in the code the reviewer reads; "what a correct response does"
   prose in behaviour `scenario.md`), so a live `/run-evals` stayed green even if the prompts

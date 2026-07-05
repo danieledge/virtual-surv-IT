@@ -3,8 +3,8 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.10.0](https://img.shields.io/badge/version-0.10.0-blue)
-![Tests 220+ passing](https://img.shields.io/badge/tests-220%2B%20passing-brightgreen)
+![Version 0.11.0](https://img.shields.io/badge/version-0.11.0-blue)
+![Tests 340+ passing](https://img.shields.io/badge/tests-340%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
@@ -43,6 +43,18 @@ flowchart LR
 > anything else you share carries **your attestation** that it's masked or synthetic
 > ([how real data is handled](#-handling-real-data)).
 
+> 🔍 **Audited with Claude Fable (this release).** On 5 July 2026 we turned
+> [Claude Fable 5](https://www.anthropic.com/news/claude-fable-5-mythos-5) - Anthropic's most
+> intelligent generally available model, the first of the Claude 5 family in the Mythos tier
+> above Claude Opus - loose on this repo to try and pick holes in the approach and the
+> documentation: nine parallel review agents over the agents/skills/hooks/docs/evals, a
+> four-agent truth audit that checked ~214 falsifiable claims in this README and every linked
+> doc against the code, and a conformance audit against 13 source-verified rules from
+> Anthropic's published multi-agent guidance. **Release 0.11.0 fixes what it found** - stale
+> and overstated claims, guard false positives, an eval harness whose inputs leaked their own
+> answers - and every fix was gated on the full test suite and a live golden-case eval run so
+> nothing regressed. Findings and fixes: [`CHANGELOG.md`](CHANGELOG.md).
+
 > **New to AI agents and LLMs?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md) - a
 > plain-English tour of what this is, who the team are, how a job flows through them, and how it
 > keeps confidential data away from the AI. No prior knowledge needed.
@@ -53,7 +65,17 @@ flowchart LR
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md).
 
 <details>
-<summary>✨ <b>What's new in 0.10 / 0.9.x</b> - the file-conversion front door (vendored, no pip) · runs fully from any project · Windows field fixes · extraction-truncation defences · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.11 / 0.10</b> - the Fable audit release (truth-checked docs, hardened guards, an eval harness that can fail, best-practice conformance) · the file-conversion front door (vendored, no pip) · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.11.0** - **the Fable audit release.** Claude Fable 5 audited the whole setup and its
+documentation (nine review agents + a four-agent truth audit + a best-practice conformance
+audit against Anthropic's multi-agent guidance); this release fixes everything it found:
+documentation claims corrected to match the code (token economics, RTM test names, safety
+wording), four guard defects fixed by a human-applied maintenance run, the eval harness made
+genuinely blind and failable (28 golden cases, two new safety cases), mechanical
+docs-consistency and tier-drift tests, and condensed-return/right-sizing rules from the
+conformance audit. Full suite 347 passing; a live golden-case spot check confirmed no
+behaviour regression.
 
 **0.10.0** - **`scripts/convert_file.py`, the file-conversion front door.** Excel
 (`.xlsx`/`.xlsm`/`.xls`), CSV/TSV, PDF and Word `.docx` in; CSV/JSONL or Markdown/text out,
