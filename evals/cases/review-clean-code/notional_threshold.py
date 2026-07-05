@@ -1,8 +1,7 @@
-"""Synthetic eval input - a small, genuinely clean helper.
+"""Outsized-order threshold helper for trade-surveillance triage.
 
-NOT production code, but written to a clean standard on purpose: this case tests
-that a tidy, well-documented function does NOT attract inflated findings. All
-data is synthetic. See expected.yaml - planted is empty.
+A small, self-contained utility with a single documented constant and one
+pure function. Synthetic sample data only.
 """
 
 # Outsized-order threshold: an order at or above this multiple of the desk's

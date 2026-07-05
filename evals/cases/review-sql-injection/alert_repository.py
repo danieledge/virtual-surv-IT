@@ -1,28 +1,22 @@
-"""Synthetic eval input - a deliberately flawed alert data-access layer.
+"""Alert data-access layer for the surveillance platform.
 
-NOT production code. Seeded with known issues for the team-quality eval harness
-(evals/). All data is synthetic. See expected.yaml for the planted ground truth.
+Read helpers for alerts by desk, open alerts, and alerts by trader.
+Synthetic sample data only.
 """
 import sqlite3
 
 
 def find_alerts_by_desk(db, desk_name):
-    """SEC-1 (planted, critical): SQL injection.
-
-    desk_name is interpolated straight into the query via an f-string, so a
-    value like ``x' OR '1'='1`` returns every row. Must be parameterized.
-    """
+    """Return all alerts for a given desk."""
     cur = db.cursor()
     cur.execute(f"SELECT alert_id, score FROM alerts WHERE desk = '{desk_name}'")
     return cur.fetchall()
 
 
 def load_open_alerts(db):
-    """PERF-1 (planted, medium): SELECT * in a hot path.
+    """Return all currently open alerts.
 
-    This runs per polling cycle over the full alerts table and pulls every
-    column (including large free-text rationale blobs) when only three are
-    used downstream. Should project just the needed columns.
+    Runs per polling cycle over the full alerts table.
     """
     cur = db.cursor()
     cur.execute("SELECT * FROM alerts WHERE status = 'OPEN'")
@@ -30,11 +24,7 @@ def load_open_alerts(db):
 
 
 def find_alerts_by_trader(db, trader_id):
-    """OK (forbidden / FP-trap): correct parameterized query.
-
-    trader_id is bound as a parameter, not interpolated. A reviewer must NOT
-    flag this as SQL injection - it is the safe pattern.
-    """
+    """Return alerts for a given trader."""
     cur = db.cursor()
     cur.execute("SELECT alert_id, score FROM alerts WHERE trader_id = ?", (trader_id,))
     return cur.fetchall()

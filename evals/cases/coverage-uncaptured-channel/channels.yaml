@@ -1,7 +1,7 @@
 # Synthetic eval input - communications-channel capture inventory.
-# NOT a real environment. All names/IDs are synthetic. See expected.yaml for the
-# planted ground truth. The team (/assess-coverage) must judge whether every
-# in-scope population's communications are actually captured and monitored.
+# NOT a real environment. All names/IDs are synthetic. The team (/assess-coverage)
+# must judge whether every in-scope population's communications are actually
+# captured and monitored.
 
 reporting_date: 2026-06-20
 
@@ -40,9 +40,8 @@ channels:
   - id: CH-WHATSAPP
     name: WhatsApp (mobile messaging)
     used_by: [POP-TRADERS]
-    captured: false          # off-channel - not captured, no surveillance
+    captured: false
     monitored: false
     note: >
       Rates traders are observed using WhatsApp for client and inter-dealer
-      contact, but the channel is not onboarded to capture. No archive, no
-      lexicon, no alerts - communications on it are entirely unsurveilled.
+      contact, but the channel is not onboarded to capture.

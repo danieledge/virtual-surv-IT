@@ -21,8 +21,6 @@ planted:
 forbidden:
   - id: FP-1
     keywords: [all 16, the full team, whole team, every specialist, full fan-out]
-  - id: FP-2
-    keywords: [business-analyst to re-elicit, tm-sme, trade-surveillance-sme, comms-surveillance-sme, ml-engineer, tuning-analyst]
 
 pass:
   require_all_must_find: true

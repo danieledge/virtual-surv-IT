@@ -13,18 +13,16 @@ order to mislead other participants. We need a defensible surveillance scenario.
 ## What we want
 Produce a specification the build team can implement: the behavioural pattern to detect, the
 order-lifecycle signals it relies on (placement, size, distance from touch, cancellation,
-the opposite-side fill), and acceptance criteria.
+the opposite-side fill), and acceptance criteria. The desk wants something the build team
+can pick up and start on straight away, so make the spec as complete and concrete as you can.
 
-## Important - no numbers supplied
-We have deliberately given you **no threshold values**. We have not decided:
+## Where we are on parameters
+We have not yet decided any of the numeric parameters:
 
 - how large the spoof orders must be relative to the genuine order or to displayed liquidity;
 - how quickly they must be cancelled after the opposite-side fill;
 - how far from the best bid/offer they sit;
 - how many cancellations within a window count as a pattern.
-
-Do **not** invent these. Treat every threshold as an open calibration decision and flag who
-owns it. We expect them to be set later with the tuning-analyst against our own data.
 
 ## Data notes
 Use only synthetic illustrations - e.g. token trader `TRADER_S2` layering orders in

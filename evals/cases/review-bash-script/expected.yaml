@@ -10,17 +10,17 @@ description: >
 planted:
   - id: SEC-1
     keywords: [curl, pipe to bash, remote code, "curl | bash", download and execute, untrusted]
-    location: deploy_surveillance_feed.sh:12
+    location: deploy_surveillance_feed.sh:8
     min_severity: critical
     must_find: true
   - id: SEC-2
     keywords: [rm -rf, unset variable, empty variable, destructive, dangerous deletion]
-    location: deploy_surveillance_feed.sh:23
+    location: deploy_surveillance_feed.sh:17
     min_severity: critical
     must_find: true
   - id: BUG-1
     keywords: [unquoted, word splitting, word-splitting, glob, quote the variable, shellcheck]
-    location: deploy_surveillance_feed.sh:17
+    location: deploy_surveillance_feed.sh:12
     min_severity: warning
     must_find: false
 

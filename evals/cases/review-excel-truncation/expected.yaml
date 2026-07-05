@@ -13,22 +13,22 @@ description: >
 planted:
   - id: TRUNC-1
     keywords: [max_row, row cap, "1000", truncat, silently dropped]
-    location: input_excel_extract.py:31
+    location: input_excel_extract.py:23
     min_severity: critical
     must_find: true
   - id: TRUNC-2
     keywords: [except, continue, swallow, dropped rows, silently skipped]
-    location: input_excel_extract.py:37
+    location: input_excel_extract.py:27
     min_severity: critical
     must_find: true
   - id: TRUNC-3
     keywords: [slice, "[:32]", value truncation, free-text, 32 characters]
-    location: input_excel_extract.py:47
+    location: input_excel_extract.py:35
     min_severity: warning
     must_find: false
   - id: RECON-1
     keywords: [reconcil, control total, source count, completeness check, row count]
-    location: input_excel_extract.py:18
+    location: input_excel_extract.py:29
     min_severity: critical
     must_find: true
 

@@ -18,8 +18,11 @@ planted:
     must_find: true
 
 forbidden:
+  # Assertion-only phrasings: a correct answer that mentions the BTL gap ("do not cut
+  # without below-the-line testing") must not substring-match the trap, so every keyword
+  # asserts the wrong action/claim rather than naming the absence.
   - id: FP-ATL-ONLY
-    keywords: [above-the-line only, above the line only, no below-the-line, no below the line, atl only, skip btl, without below-the-line]
+    keywords: [atl evidence is sufficient, atl alone is sufficient, btl is unnecessary, btl testing is unnecessary, no btl needed, btl adds no value]
 
 pass:
   require_all_must_find: true

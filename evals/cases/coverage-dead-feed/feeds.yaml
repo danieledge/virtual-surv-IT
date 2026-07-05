@@ -1,7 +1,7 @@
 # Synthetic eval input - in-scope surveillance scenarios and their data feeds.
-# NOT a real environment. All names/IDs are synthetic. See expected.yaml for the
-# planted ground truth. The team (/assess-coverage) must judge whether every
-# in-scope risk is detected AND whether the feeds those scenarios rely on are live.
+# NOT a real environment. All names/IDs are synthetic. The team (/assess-coverage)
+# must judge whether every in-scope risk is detected AND whether the feeds those
+# scenarios rely on are live.
 
 reporting_date: 2026-06-20
 
@@ -34,8 +34,6 @@ scenarios:
     name: End-of-day price ramping
     covers: TYP-RAMP
     feeds_required: [orders, executions, market_data]
-  # NOTE: there is NO scenario mapped to TYP-WASH (wash trades). That typology
-  # is in scope but has no detection logic deployed against it.
 
 # Data feeds the scenarios depend on, with their live/health status.
 feeds:
@@ -60,6 +58,4 @@ feeds:
     last_updated: 2025-11-03T14:00:00Z   # stale - not refreshed in ~7 months
     completeness: 0%
     note: >
-      Feed onboarding was paused and never resumed. SCN-001 (insider dealing)
-      depends on this feed; with it dead the scenario produces no alerts even
-      though it shows as deployed.
+      Feed onboarding was paused and never resumed.

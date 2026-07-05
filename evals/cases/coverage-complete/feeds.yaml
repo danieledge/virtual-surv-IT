@@ -1,8 +1,5 @@
-# Synthetic eval input - a FULLY COVERED surveillance inventory.
-# NOT a real environment. All names/IDs are synthetic. See expected.yaml for the
-# planted ground truth. Every in-scope typology has a scenario, every channel is
-# captured and monitored, and every feed is live and complete. There is NO gap.
-# This case tests that the assessment does NOT invent a gap to look thorough.
+# Synthetic eval input - a surveillance coverage inventory for assessment.
+# NOT a real environment. All names/IDs are synthetic.
 
 reporting_date: 2026-06-20
 
@@ -53,7 +50,7 @@ feeds:
     last_updated: 2026-06-20T04:00:00Z
     completeness: 100%
 
-# Communications channels - all captured and monitored.
+# Communications channels.
 in_scope_populations:
   - id: POP-TRADERS
     name: Front-office traders

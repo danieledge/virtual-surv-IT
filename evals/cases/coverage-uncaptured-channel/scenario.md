@@ -1,7 +1,6 @@
-# Scenario - coverage assessment with an uncaptured comms channel
+# Scenario - coverage assessment of a comms-channel inventory
 
-**Synthetic eval input.** All data is synthetic. See `expected.yaml` for the
-planted ground truth.
+**Synthetic eval input.** All data is synthetic.
 
 ## What the team is asked to do
 
@@ -13,15 +12,3 @@ capture and monitoring status.
 Assess whether **every in-scope population's communications are actually
 captured and monitored**. Report any uncaptured (off-channel) gaps, route each
 to the right owner, and close with prioritised remediation.
-
-## Seeded issue (for the harness - not shown to the team)
-
-1. **Uncaptured channel.** CH-WHATSAPP is used by the Rates traders
-   (POP-TRADERS) but `captured: false` / `monitored: false` - no archive, no
-   lexicon, no alerts. Communications on it are entirely off-channel and
-   unsurveilled.
-
-## False-positive trap
-
-Email, trader-turret voice and Bloomberg chat are all captured AND monitored.
-A thorough assessment must NOT flag a captured-and-monitored channel as a gap.

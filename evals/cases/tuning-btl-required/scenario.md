@@ -1,7 +1,6 @@
 # Scenario - cut false positives on a spoofing threshold
 
-**Synthetic eval input.** All data is synthetic. See `expected.yaml` for the
-planted ground truth.
+**Synthetic eval input.** All data is synthetic.
 
 ## What the team is asked to do
 
@@ -26,20 +25,5 @@ Current threshold: order_to_trade_ratio >= 8.0 (single global threshold).
 Notes:
 - Confirmed true positives are concentrated in lower-volume segments; the
   high-volume Rates desk generates most of the noise.
-- No below-the-line (sub-threshold) sample has been pulled yet. We do not know
-  how many genuine spoofing patterns sit just below ratio 8.0.
-
-## Seeded expectations (for the harness - not shown to the team)
-
-A defensible tuning answer MUST:
-1. Run / require **below-the-line (BTL) testing** before cutting the threshold,
-   so it knows what genuine patterns would be missed below the line (false
-   negatives / coverage loss).
-2. **Segment** the calibration (per risk-based segment) rather than moving one
-   global threshold - the FP profile differs sharply by segment.
-
-## Failure to catch (forbidden)
-
-A recommendation that simply raises the threshold using **above-the-line only**,
-with **no below-the-line** testing - that silently trades away coverage and is
-the headline failure mode this case exists to catch.
+- The labelled sample above covers generated alerts only - orders that scored
+  at or above the current 8.0 threshold over the 90-day window.

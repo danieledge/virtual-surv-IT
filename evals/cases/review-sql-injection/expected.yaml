@@ -10,12 +10,12 @@ description: >
 planted:
   - id: SEC-1
     keywords: [sql injection, injection, parameterize, parameterise, f-string, interpolat, bind parameter]
-    location: alert_repository.py:16
+    location: alert_repository.py:12
     min_severity: critical
     must_find: true
   - id: PERF-1
     keywords: ["select *", select star, projection, project columns, hot path, over-fetch]
-    location: alert_repository.py:28
+    location: alert_repository.py:22
     min_severity: medium
     must_find: false
 

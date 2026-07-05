@@ -10,22 +10,22 @@ description: >
 planted:
   - id: SEC-1
     keywords: [hardcoded, secret, credential, password, api key]
-    location: input_alert_export.py:11
+    location: input_alert_export.py:8
     min_severity: critical
     must_find: true
   - id: SEC-2
     keywords: [sql injection, injection, parameterize, interpolat]
-    location: input_alert_export.py:24
+    location: input_alert_export.py:15
     min_severity: critical
     must_find: true
   - id: PERF-1
     keywords: ["o(n^2)", "o(n2)", quadratic, set, membership]
-    location: input_alert_export.py:31
+    location: input_alert_export.py:22
     min_severity: medium
     must_find: false
   - id: BUG-1
     keywords: [resource leak, connection, not closed, unclosed, context manager]
-    location: input_alert_export.py:40
+    location: input_alert_export.py:28
     min_severity: warning
     must_find: false
 

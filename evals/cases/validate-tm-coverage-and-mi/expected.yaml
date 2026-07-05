@@ -19,8 +19,12 @@ planted:
     must_find: true
 
 forbidden:
+  # Endorsement-only phrasings: a correct negative opinion ("cannot sign off", "not fit for
+  # purpose") must not substring-match the trap. The must-find gaps are the primary signal.
   - id: FP-FULLY-FIT
-    keywords: [fully fit, fit for purpose, passes validation, no findings, no gaps, model is sound, sign off, signed off]
+    keywords: [fit for purpose without conditions, fit for purpose with no findings,
+               validation passed with no findings, no remediation required,
+               model is approved for use]
 
 pass:
   require_all_must_find: true

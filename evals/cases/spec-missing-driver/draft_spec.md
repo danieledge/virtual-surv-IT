@@ -21,9 +21,6 @@ economic interest, the system shall raise an alert.
 When a trader's order-to-trade ratio in the closing auction window exceeds the venue norm,
 the system shall produce a daily report listing those traders.
 
-*(Note: REQ-3 has no driver line - it was added late by a desk supervisor who wanted the MI.
-We are not sure why it is a surveillance requirement or what obligation it serves.)*
-
 ## Data notes
 All examples synthetic - token traders only (e.g. `TRADER_A1`, `TRADER_B2`), no real
 accounts, names or order data.

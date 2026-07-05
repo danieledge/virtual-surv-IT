@@ -24,8 +24,23 @@ import yaml
 
 from scripts.eval_score import score
 
-CASES_ROOT = Path(__file__).resolve().parents[1] / "evals" / "cases"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CASES_ROOT = REPO_ROOT / "evals" / "cases"
 CASE_DIRS = sorted(p for p in CASES_ROOT.iterdir() if p.is_dir())
+RUBRICS_ROOT = REPO_ROOT / "evals" / "rubrics"
+SKILLS_ROOT = REPO_ROOT / ".claude" / "skills"
+
+# Ground-truth markers that must never appear in an agent-visible input: the blind run
+# briefs the team-under-test with the case's input file, so an answer-key section or an
+# "you are being evaluated" banner in it invalidates the case. That content belongs in
+# the case's notes.md sidecar (see evals/README.md).
+ANSWER_KEY_MARKERS = (
+    "seeded issue",
+    "for the harness",
+    "not shown to the team",
+    "expected.yaml",
+    "behaviour eval",
+)
 
 # Canonical severity vocabulary the scorer ranks (scripts.eval_score._SEVERITY_RANK).
 # Manifests must use it for min_severity floors: the scorer resolves synonyms ("high",
@@ -145,6 +160,82 @@ def test_manifest_matches_scorer_schema(case_dir):
     for key in ("require_all_must_find", "forbid_all"):
         if key in rules:
             assert isinstance(rules[key], bool), f"{case_dir.name}: pass.{key} must be boolean"
+
+
+def test_manifest_references_resolve(case_dir):
+    """The manifest's file pointers all resolve: the blind run depends on every one.
+
+    `input:` is the (only) file the team-under-test is briefed with, `rubric:` is what the
+    LLM judge scores against, and `workflow:` names the skill whose SKILL.md the runner
+    inlines into the blind brief - a dangling pointer breaks /run-evals silently.
+    """
+    expected = _load_expected(case_dir)
+
+    input_name = expected.get("input")
+    assert input_name, f"{case_dir.name}: manifest has no 'input:' file"
+    assert (case_dir / input_name).is_file(), (
+        f"{case_dir.name}: input file {input_name!r} not found in the case directory"
+    )
+
+    rubric = expected.get("rubric")
+    assert rubric, f"{case_dir.name}: manifest has no 'rubric:'"
+    assert (RUBRICS_ROOT / f"{rubric}.md").is_file(), (
+        f"{case_dir.name}: rubric {rubric!r} does not resolve to evals/rubrics/{rubric}.md"
+    )
+
+    workflow = expected.get("workflow")
+    if workflow:
+        skill_dir = SKILLS_ROOT / str(workflow).lstrip("/")
+        assert skill_dir.is_dir(), (
+            f"{case_dir.name}: workflow {workflow!r} does not resolve to a skill directory "
+            f"under {SKILLS_ROOT}"
+        )
+
+
+def test_planted_line_anchors_within_input(case_dir):
+    """Every numeric line anchor points inside the input file.
+
+    The scorer matches planted locations within +/- 3 lines, so a stale anchor (input
+    edited, manifest not re-anchored) silently kills the location channel - and
+    test_perfect_run_passes cannot catch it because _perfect_findings copies the
+    manifest's own location back. An anchor past end-of-file is proof of drift.
+    """
+    expected = _load_expected(case_dir)
+    input_name = expected.get("input")
+    if not input_name or not (case_dir / input_name).is_file():
+        pytest.skip("no resolvable input file (covered by test_manifest_references_resolve)")
+    line_count = len((case_dir / input_name).read_text(encoding="utf-8").splitlines())
+
+    for spec in expected.get("planted", []) or []:
+        loc = spec.get("location")
+        if not loc:
+            continue
+        parts = str(loc).rsplit(":", 1)
+        if len(parts) != 2 or not parts[1].isdigit():
+            continue  # symbolic anchors (e.g. feeds.yaml:TYP-WASH) carry no line number
+        line = int(parts[1])
+        assert 1 <= line <= line_count, (
+            f"{case_dir.name}/{spec.get('id')}: location {loc!r} points at line {line} "
+            f"but {input_name} has {line_count} lines - stale anchor, re-anchor it"
+        )
+
+
+def test_scenario_contains_no_answer_key(case_dir):
+    """scenario.md files carry no ground truth or eval banner.
+
+    scenario.md is agent-visible (for many cases it IS the input the blind subagent gets),
+    so seeded-issue sections, pointers at expected.yaml, and "this is a behaviour eval"
+    announcements invalidate the case. That content lives in notes.md.
+    """
+    scenario = case_dir / "scenario.md"
+    if not scenario.is_file():
+        pytest.skip("case has no scenario.md")
+    text = _norm(scenario.read_text(encoding="utf-8"))
+    leaked = [m for m in ANSWER_KEY_MARKERS if m in text]
+    assert not leaked, (
+        f"{case_dir.name}: scenario.md contains answer-key markers {leaked} - move the "
+        "grading content to notes.md (see evals/README.md)"
+    )
 
 
 def test_perfect_run_passes(case_dir):
