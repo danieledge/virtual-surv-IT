@@ -61,7 +61,10 @@ def _exec_authorised() -> bool:
 # `python3.11 evil.py` slip past because `.11` broke the `\s` anchor) - and, since 0.4.1, the
 # Windows `py` launcher: without it, `py evil.py` was not blocked AND `py -m scripts.x` was
 # not allow-listed, so Windows sessions were wrong in both directions.
-_PY = r"(?:python(?:3(?:\.\d+)?)?|py)"
+# The bare `py` alternative carries a negative lookbehind: it must be a standalone token, not
+# the tail of a filename/word (`a.py b.py` blocked read-only git/grep/wc over two .py files -
+# the third prose/argument FP, after `make` and `sh <file>.sh`; ADR-002 rec 14a).
+_PY = r"(?:python(?:3(?:\.\d+)?)?|(?<![\w.-])py)"
 
 # Path separator: forward slash OR backslash - Windows commands arrive with backslash paths
 # (`python C:\plugin\scripts\render_html.py`) and a slash-only allow-list blocked them (0.4.1).
@@ -76,9 +79,10 @@ _EXEC_PATTERNS = [
     rf"\b{_PY}\s+-m\s+pytest\b",  # same, module form
     r"^(?:\w+=\S+\s+)*unittest\b",  # bare unittest command (anchored, see pytest)
     rf"\b{_PY}\s+-m\s+unittest\b",  # python -m unittest
+    r"^(?:\w+=\S+\s+)*pre-commit\b",  # pre-commit runs arbitrary hook entries (rec 14c)
     r"Invoke-Pester\b",  # PowerShell tests
     r"Measure-Command\b",  # PowerShell timing - RUNS the script block
-    r"\bpwsh\b|\bpowershell\b",  # running PowerShell
+    r"^(?:\w+=\S+\s+)*(?:pwsh|powershell)\b",  # running PowerShell (anchored, see pytest)
     r"\bpy-spy\b|\bscalene\b|\bpyinstrument\b|\bmemory_profiler\b",  # Python profilers
     rf"\b{_PY}\s+-m\s+cProfile\b",  # Python profiler
     r"\bhyperfine\b",  # CLI benchmark - runs the command repeatedly
@@ -106,7 +110,7 @@ _EXEC_PATTERNS = [
     # (run-guard.sh) matching as the shell command when followed by another *.sh argument
     # (`shellcheck run-guard.sh install.sh` was blocked as if it were `sh install.sh`).
     r"(?<![\w.-])(?:bash|sh|zsh|dash|ksh)\s+(?:-c\b|\S+\.(?:sh|bash)\b)",
-    rf"\b{_PY}\s+\S*\.py\b",  # run a .py FILE (team's scripts/ are allow-listed separately)
+    rf"\b{_PY}(?:\s+-\S+)*\s+\S*\.py\b",  # run a .py FILE, flags ok: `py -3 f.py` (rec 14a)
 ]
 _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 

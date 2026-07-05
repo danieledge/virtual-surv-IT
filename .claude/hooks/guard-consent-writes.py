@@ -11,7 +11,8 @@ spontaneously. This guard closes the loop:
   BLOCK (exit 2) any model-driven Write/Edit/NotebookEdit - and, lexically, any Bash write -
   targeting:
     * `.exec-consent` (the execution-consent marker), or
-    * `.claude/settings.json` / `.claude/settings.local.json` (permissions + hook wiring).
+    * `.claude/settings.json` / `.claude/settings.local.json` (permissions + hook wiring), or
+    * `.pre-commit-config.yaml` (its hook entries execute via `git commit` - ADR-002 rec 14c).
   Also BLOCK Write/Edit of the safety hooks themselves (`.claude/hooks/*`, `hooks/hooks.json`) -
   a model that can edit a guard can neuter it. (Write/Edit channel only: Bash rules for hook
   paths would false-positive on legitimate static analysis and are advisory anyway, ADR-002.)
@@ -44,6 +45,11 @@ import sys
 _MARKER = ".exec-consent"
 _SETTINGS_RE = re.compile(r"\.claude[/\\]settings(\.local)?\.json")
 
+# .pre-commit-config.yaml is execution config: `git commit` runs its hook entries
+# (`language: system` executes any command), so a model-writable config is a consent-free
+# execution path (ADR-002 rec 14c). Write-protected; read-only inspection rides _SAFE_VERB.
+_PRECOMMIT_RE = re.compile(r"\.pre-commit-config\.ya?ml\b")
+
 # The guards themselves + their wiring: a model that can edit these can neuter every gate.
 # Enforced on the precise Write/Edit channel only - Bash rules for these paths would false-
 # positive on legitimate static analysis (shellcheck/shfmt of the hooks) and stay advisory
@@ -70,7 +76,7 @@ _FIND_MUTATE = re.compile(r"^find\b.*\s-(?:exec(?:dir)?|delete)\b")
 # A redirect is only a write to a protected file if its TARGET is one - `ls x 2>/dev/null` is a
 # read with a harmless stderr redirect (a real false positive found in live use, 2026-07-01).
 _REDIRECT_INTO_PROTECTED = re.compile(
-    r">\s*\S*(\.exec-consent|\.claude[/\\]settings(\.local)?\.json)"
+    r">\s*\S*(\.exec-consent|\.claude[/\\]settings(\.local)?\.json|\.pre-commit-config\.ya?ml)"
 )
 
 _WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
@@ -82,7 +88,7 @@ def _truthy(val: str | None) -> bool:
 
 def _protected(text: str) -> bool:
     norm = (text or "").replace("\\", "/")
-    return _MARKER in norm or bool(_SETTINGS_RE.search(norm))
+    return _MARKER in norm or bool(_SETTINGS_RE.search(norm)) or bool(_PRECOMMIT_RE.search(norm))
 
 
 def _block(what: str) -> None:

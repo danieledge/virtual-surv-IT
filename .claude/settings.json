@@ -33,16 +33,12 @@
       "Read(/**/*.key)"
     ],
     "allow": [
-      "Bash(pytest:*)",
-      "Bash(python -m pytest:*)",
-      "Bash(python3 -m pytest:*)",
       "Bash(python -m scripts.gen_synthetic:*)",
       "Bash(python3 -m scripts.gen_synthetic:*)",
       "Bash(python -m scripts.ingest:*)",
       "Bash(python3 -m scripts.ingest:*)",
       "Bash(python -m scripts.validate_masking:*)",
       "Bash(python3 -m scripts.validate_masking:*)",
-      "Bash(pre-commit run:*)",
       "Bash(git diff:*)",
       "Bash(ruff:*)",
       "Bash(black:*)",
