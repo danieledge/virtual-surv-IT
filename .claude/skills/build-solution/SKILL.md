@@ -6,10 +6,16 @@ disable-model-invocation: true
 
 Under the PM (CLAUDE.md §6), deliver end to end from the requirements: **$ARGUMENTS**
 
+**Scope note:** `/build-solution` is the full orchestrator-workers fan-out for a *multi-unit*
+deliverable built from a requirements pack. For a *single* detection scenario (one rule,
+spec → SME → build → review), use `/new-scenario` - the lean path - instead.
+
 Run the **orchestrator-workers** pattern, agile and iterative:
 
 1. **Fill gaps flexibly.** If there's no BRD/FSD yet, run `/write-brd` then `/brd-to-fsd`
-   first; skip whatever the user already provided.
+   first; skip whatever the user already provided. **Chained skills are dormant** - read
+   `.claude/skills/<name>/SKILL.md` and follow it in this session; do not invoke it via the
+   Skill tool (full rule + plugin-mode path: `/engage`). Same for `/handover` at step 7.
 2. **Decompose** the FSD into discrete, independently buildable units. **Route each unit to
    the right builder by type** (CLAUDE.md §6): detection logic → `rules-developer`; data
    pipeline / ETL / transformation or utility script / infra → `platform-engineer`; analytics

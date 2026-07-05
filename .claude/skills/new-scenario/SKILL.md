@@ -11,7 +11,10 @@ domain (TM, trade, or comms), and wait - don't invent a scenario from a bare `/n
 
 **Scope note:** `/new-scenario` is the lean path for a *single* detection scenario (one rule,
 spec → SME → build → review). For a multi-unit deliverable built from a full requirements
-pack, use `/build-solution` (the full orchestrator-workers fan-out) instead.
+pack, use `/build-solution` (the full orchestrator-workers fan-out) instead. **Chained skills
+are dormant** - when this workflow routes to another (`/build-solution`, `/handover`,
+`/audit-review`), read `.claude/skills/<name>/SKILL.md` and follow it in this session; do not
+invoke it via the Skill tool (full rule + plugin-mode path: `/engage`).
 
 You are the orchestrator (CLAUDE.md §6). Do **not** write detection logic yourself - route
 each step to the right agent and chain them in this session:

@@ -20,6 +20,8 @@ named below are the building blocks.
 1. **QA evidence (independent).** Route to **qa-engineer**: run the tests, capture exact
    commands, results and counts; assess coverage and **what is NOT covered**; list residual
    risk, defects, and items the QA team should re-verify. → *QA* section (or `qa-handover.md`).
+   Running the tests needs the execution-consent gate (CLAUDE.md §7); if the guard blocks, ask
+   the user to grant consent (it is human-only) - never work around it.
 2. **Developer handover.** Route to the relevant builder (and `platform-engineer` for
    pipelines/infra): build/run/test, configuration, key design decisions (link ADRs), known
    limitations and tech debt, how to extend. → *Developer handover* section (or `developer-handover.md`).

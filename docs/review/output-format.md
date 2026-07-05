@@ -114,10 +114,11 @@ Per-item:
 ### 🔵 {{title}}  ·  `{{file}}:{{line}}`
 {{suggestion}} - *consider in future work.*
 ```
-**This section is mandatory even on a clean review.** Always end it with a short
-**"General considerations for future code"** - constructive, developer-friendly guidance on the
-*original coding style overall* (patterns, structure, naming, testing/docs habits) and how the
-author could improve next time. **Scale it to the change:** 2-4 points for a substantial review,
+**This section is mandatory even on a clean review.** Always follow it with the closing
+guidance block under the exact heading `## 🔵 Developer guidance - improving future code`
+(verbatim - the review skills mechanically check the artifact for it) - constructive,
+developer-friendly guidance on the *original coding style overall* (patterns, structure,
+naming, testing/docs habits) and how the author could improve next time. **Scale it to the change:** 2-4 points for a substantial review,
 but a single plain sentence is fine on a trivial diff - don't manufacture filler. If the code is
 genuinely strong, say so and name what's done well. The point is the developer always leaves with
 something to learn, not just a pass/fail.

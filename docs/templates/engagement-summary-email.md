@@ -17,6 +17,8 @@ closing artifact** (Definition of Done).
 - Keep it skimmable: a one-line headline, a few section headers, where-things-stand, optional
   next steps. The detail lives in the Delivery Report - this is the **cover note**, not a re-run
   of it.
+- **State the engagement footprint** - one line giving the approximate token spend and the number
+  of agents used, so the multi-agent cost multiplier is tracked, never hidden.
 
 ---
 
@@ -38,6 +40,7 @@ WHAT WE DID
 WHERE THINGS STAND
 ------------------
 - [status: tested / reviewed / signed-off; what's evidenced; any open or blocking items]
+- Engagement footprint: ~[N] agents, roughly [approx tokens] tokens
 
 NEXT STEPS (optional)
 ---------------------

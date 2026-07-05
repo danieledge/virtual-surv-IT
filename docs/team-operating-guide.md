@@ -29,8 +29,31 @@ Route by **deliverable type**, not habit:
 | Independent testing & QA evidence | `qa-engineer` |
 | Code review · performance review · audit/compliance review | `code-reviewer` · `performance-reviewer` · `compliance-reviewer` |
 | Data-quality / feed-completeness / surveillance-coverage assurance | `data-quality-reviewer` (independent; no Write/Edit - Bash for analysers/diffs, execution-gated per CLAUDE.md §7) |
-| Domain / typology advice (AML · market abuse · e-comms/voice) | `tm-sme` · `trade-surveillance-sme` · `comms-surveillance-sme` (advise only, never edit) |
+| Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
+
+## Command index (canonical - all 20 skills)
+
+- `/engage` - front door: intake + orchestration for any request (problem, review or build)
+- `/meet-the-team` - Morgan introduces the roster (canonical intro)
+- `/prepare-data` - safe data onboarding (synthetic or masked) before any agent sees it
+- `/demo` - guided end-to-end demo on synthetic data, every decision narrated
+- `/write-brd` - idea → Business Requirements Document (BABOK + EARS)
+- `/elicit-requirements` - stakeholder analysis + requirements gathering (BABOK)
+- `/brd-to-fsd` - BRD → Functional Spec (ISO/IEC/IEEE 29148 + Gherkin)
+- `/new-scenario` - new detection scenario end to end: spec → SME review → build → compliance review
+- `/build-solution` - end-to-end build from a requirements pack (orchestrator-workers)
+- `/analyse-data` - exploratory analysis → evidenced insight report
+- `/tune-thresholds` - threshold calibration: ATL-BTL, segmentation, volume↔coverage trade-off
+- `/validate-tm-model` - periodic TM model validation pack (coverage, thresholds, data integrity)
+- `/assess-coverage` - are all in-scope risks monitored? typology→scenario→feed map + feed health
+- `/reg-change-impact` - regulatory change → affected scenarios, controls, data, specs
+- `/deep-review` - detailed multi-dimension code review with confidence scoring
+- `/audit-review` - audit/regulatory-defensibility review (evaluator-optimizer loop)
+- `/performance-review` - static performance & scalability review vs target volumes
+- `/remediate` - legacy / poorly-built code: assess → prioritise → fix → re-review → hand over
+- `/handover` - handover pack: dev docs + independent QA evidence + change/ops artifacts
+- `/run-evals` - team-quality eval harness against golden cases (regression net)
 
 ## Asking questions (standing user preference)
 
@@ -130,7 +153,9 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    **Morgan** - address the requester if you know their name, otherwise open with "Hi,". **Never
    offer a phone call, meeting or "hop on a call"** (Morgan is an AI PM - close by offering to take
    next steps *as actions*, not by proposing to talk). It is a required closing artifact (Definition
-   of Done, CLAUDE.md §6a); if you haven't produced it, the engagement isn't done.
+   of Done, CLAUDE.md §6a); if you haven't produced it, the engagement isn't done. The email states
+   the **engagement footprint** - approximate token spend and agent count - so the multi-agent
+   multiplier is tracked, never hidden.
 
 ## Memory scope & evidence basis
 
@@ -159,11 +184,19 @@ the user informed and in charge, check before anything irreversible.
 
 - **Right-size first.** Multi-agent costs ~15× the tokens - use the **leanest** set that fits (a
   narrow change → one builder + one reviewer, not the whole team). State the intended agent count
-  out loud at the gate. Reserve full fan-out for high-value, broad deliverables.
+  out loud at the gate. Reserve full fan-out for high-value, broad deliverables. Numeric
+  heuristic: simple fact-finding → 1 agent, 3-10 tool calls; direct comparison → 2-4 agents,
+  10-15 calls each; full delivery → the minimal sufficient chain.
+- **Don't delegate:** iterative back-and-forth, phases sharing significant context, quick
+  targeted changes, latency-sensitive steps - those stay in the main loop. **Do delegate:**
+  verbose self-contained work, tool-restricted review, research that returns a summary.
 - **Delegate with explicit, non-overlapping briefs** (weak delegation is the #1 failure): objective,
   scope boundaries (what *another* agent owns), inputs/artifacts to read, expected output format.
   **A subagent inherits none of the conversation** - its brief is the only channel in, so put every
   needed input in it; an underspecified brief is what makes two agents duplicate work or leave a gap.
+- **Condensed returns (standing rule).** Every brief instructs the subagent to return a distilled
+  summary - target under ~30 lines; the artifact carries the detail. The orchestrator's context is
+  an attention budget (Anthropic's context-engineering guidance).
 - **Coordinate through artifacts, not chatter (the "blackboard")** - agents read/write the shared
   set (Delivery Report, RTM, specs); each step's output is the next step's input.
 - **Challenge the agents - the PM is a sceptic, not a relay.** Don't pass findings through verbatim:

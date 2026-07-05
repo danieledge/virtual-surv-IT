@@ -16,6 +16,10 @@ FFIEC BSA/AML). It is **independent** of whoever tuned/built the model.
 > that one slice: `/tune-thresholds` to calibrate one scenario's numbers, `/assess-coverage` to
 > map typology→scenario→feed gaps. Use this skill for the whole periodic validation pack.
 
+**Chained skills are dormant** - where a step invokes a component workflow (`/assess-coverage`,
+`/tune-thresholds`, `/prepare-data`), read `.claude/skills/<name>/SKILL.md` and follow it in this
+session; do not invoke it via the Skill tool (full rule + plugin-mode path: `/engage`).
+
 **1. Gather inputs - ask via the question tool, one question per axis; don't assume.** Ask as
 discrete, structured questions: which **scenario set / TM system**; where the **alert + outcome
 data** is (synthetic, masked, or data **attested safe** - at intake, or **confirm now if you

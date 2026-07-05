@@ -14,8 +14,8 @@ how detection behaves and surface evidenced insight. **Threshold calibration / A
 tuning / segmentation are `tuning-analyst`'s** - hand those over rather than doing them here.
 Any change to live logic must be implemented by `rules-developer` and reviewed before deployment.
 
-Stack note: CLAUDE.md ships with an example warehouse/analysis stack (columnar warehouse +
-SQL/Python). Follow whatever CLAUDE.md specifies once it is customised.
+Stack note: `docs/scope-and-stack.md` ships with an example warehouse/analysis stack (columnar
+warehouse + SQL/Python). Follow whatever it specifies once it is customised.
 
 When invoked:
 1. Clarify the question (e.g. "why is scenario X producing too many alerts?").
@@ -52,4 +52,8 @@ deployment (and the tuning itself is `tuning-analyst`'s).
 
 **Tag every data insight 📊 observed / 🧠 inferred** (CLAUDE.md §6) - distinguish what you saw in the
 data (cite the metric / sample / query) from what you reasoned beyond it; state the assumption behind
-any inference, and never present an inference as observed fact.
+any inference, and never present an inference as observed fact. Return a distilled summary (target
+under ~30 lines) to the orchestrator; the full analysis goes to the artifact, not the return message.
+Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (FP drivers, reconciliation
+breaks, data caveats, MI signal patterns) → the working **project's own memory** (its `CLAUDE.md`);
+only **general, cross-project** patterns → `docs/house-rules.md`.

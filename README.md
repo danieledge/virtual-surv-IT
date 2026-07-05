@@ -654,7 +654,7 @@ a convention), that's stated rather than dressed up.
 | **Safe data by architecture** | Raw data is structurally unreachable by the model; work happens downstream, on masked or synthetic data. | Raw-data hook + OS-level `permissions.deny` + `.gitignore` + a CI job that fails on tracked data files + keyed masking as the only ingest path. |
 | **Fail closed** | A crashed control blocks; it never silently allows. | Guard crash wrappers exit 2 (block); the launcher version-probes interpreters; regression tests feed the guards malformed input. |
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
-| **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 26 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
+| **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 28 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -701,10 +701,10 @@ change that silently weakens a review gets caught, not shipped. (This is the reg
 Anthropic's multi-agent guidance recommends.)
 
 <details>
-<summary>🧪 <b>What's in the harness</b> - 8 rubrics · 26 golden cases · deterministic scorer</summary>
+<summary>🧪 <b>What's in the harness</b> - 8 rubrics · 28 golden cases · deterministic scorer</summary>
 
 - **8 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety · process-discipline ·
-  prompt-injection · regulatory-citation) + **26 golden cases** with deliberately seeded issues
+  prompt-injection · regulatory-citation) + **28 golden cases** with deliberately seeded issues
   *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
 - **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)) - matches the team's
   findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
@@ -879,7 +879,7 @@ vendor/                         # convert_file's deps, bundled (pure Python, pin
 config/                         # masking schema + regulatory register + feed-schema example
 docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
                                 #   scenarios/ · demos/ · templates/ · adr/
-evals/                          # team-quality eval harness: 8 rubrics + 26 golden cases
+evals/                          # team-quality eval harness: 8 rubrics + 28 golden cases
 .github/workflows/ci.yml        # tests + lint + manifest validation + gitleaks + no-raw-data check
 .pre-commit-config.yaml         # local secret / raw-data guardrails
 ```
@@ -974,7 +974,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
 <summary>🗺️ <b>What's shipped and what's next</b></summary>
 
 **Quality & evaluation**
-- ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 8 rubrics + 26 golden cases
+- ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 8 rubrics + 28 golden cases
   (seeded issues + false-positive traps) across review, coverage, spec/traceability, tuning and
   data-safety. The deterministic scorer (`scripts/eval_score.py`) is unit-tested; `/run-evals`
   runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and

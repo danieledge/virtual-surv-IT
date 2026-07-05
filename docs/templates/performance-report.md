@@ -69,7 +69,7 @@ Note any not-yet-measured items excluded from the total.
 further ~Ys. Total at 5M approximately Z faster."*
 Never present an inferred projection as a measured result; if a gain isn't yet measured, say so.
 
-## 5. Before / after (where a fix was actually profiled)
+## 5. Before / after *(only where a fix was actually profiled under the execution-consent gate, §7 - omit for a static-only review)*
 | Metric | Before | After | Delta |
 |--------|--------|-------|-------|
 | Wall-clock @ <vol> | | | |
@@ -77,8 +77,9 @@ Never present an inferred projection as a measured result; if a gain isn't yet m
 
 ## 6. Recommendation
 What to change, in priority order, with the expected effect at target volume (from §4). Fixes
-route to `rules-developer` / `platform-engineer` / `ml-engineer`, then **re-profile to confirm the
-projected gain became a measured one**.
+route to `rules-developer` / `platform-engineer` / `ml-engineer`. Confirming a projected gain
+became a measured one takes a before/after profile - only under the execution-consent gate
+(CLAUDE.md §7); otherwise the gain stays 🧠 projected and the report says so.
 
 **Disposition tally:** ✅ _N_ Fixed/Answered · 🔴 _N_ Open · ⏭️ _N_ Deferred/Needs-input · ⚖️ _N_ Accepted - reconcile with the recommendation above (a non-pass makes the Open items explicit).
 

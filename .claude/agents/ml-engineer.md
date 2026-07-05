@@ -40,9 +40,13 @@ When invoked:
    drift, and performance decay vs a baseline - with the **retraining/recalibration triggers**
    and who is alerted. A surveillance model silently decaying = missed alerts; a regulator will
    ask how you'd know. Document the metrics, thresholds and cadence.
-5. Hand off to `model-validator` for independent validation.
+5. Recommend to the orchestrator that `model-validator` picks this up for validation.
 
-Output: the model code, evaluation results, and the model documentation. Be explicit about
-limitations and residual risk. **Tag every data/eval insight 📊 observed / 🧠 inferred** (CLAUDE.md §6)
+Output: the model code, evaluation results, and the model documentation - the full detail lives
+there; return a distilled summary (target under ~30 lines) to the orchestrator. Be explicit
+about limitations and residual risk. **Tag every data/eval insight 📊 observed / 🧠 inferred** (CLAUDE.md §6)
 - measured metrics (cite the eval set) vs expected or extrapolated behaviour; state the assumption
-behind any inference, and never present an inference as a measured result.
+behind any inference, and never present an inference as a measured result. Recommend durable
+lessons (CLAUDE.md §6): **project-specific** ones (model/method choices, leakage traps, drift
+signals, feature quirks) → the working **project's own memory** (its `CLAUDE.md`); only
+**general, cross-project** patterns → `docs/house-rules.md`.

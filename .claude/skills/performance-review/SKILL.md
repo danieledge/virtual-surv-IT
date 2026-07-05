@@ -74,3 +74,9 @@ installed-plugin session invoke the bundled `scripts/` copy by path; see the ope
 volume?), then offer next steps with a recommendation - apply the fixes (any before/after
 profiling only via the execution-consent gate, CLAUDE.md §7), run a full `/remediate` loop if the
 findings are deep, or produce a `/handover` pack - and wait for the user's choice.
+
+**Standard close (Definition of Done - applies even when this skill is invoked directly):**
+write the **engagement-summary email** (`docs/templates/engagement-summary-email.md`) as a
+`.txt` in `artifacts/`, **signed off as Morgan**, then run the mechanical gate -
+`<python> -m scripts.check_artifacts` - and fix anything it flags (missing `.html` siblings or
+a missing email) before handing back. Detail: `docs/team-operating-guide.md`.

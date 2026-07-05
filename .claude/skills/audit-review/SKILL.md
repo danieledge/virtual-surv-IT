@@ -16,6 +16,10 @@ false`): report only · apply fixes · fix→re-review loop (the default here). 
 changing the user's code.** Don't blur in the handover pack - that's a **deliverable**, offered
 from the artifact menu / at close, not mixed into this action question.
 
+**Chained skills are dormant** - where a step routes to another workflow (`/deep-review`), read
+`.claude/skills/<name>/SKILL.md` and follow it in this session; do not invoke it via the Skill
+tool (full rule + plugin-mode path: `/engage`).
+
 Run an **evaluator-optimizer loop**:
 
 1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first, telling it to inherit
@@ -61,3 +65,9 @@ review)** with the reason and options rather than guessing. Then offer concrete 
 a recommendation - e.g. *"Verdict: conditional - 2 fixed, 1 open (needs your call on the
 threshold). I can fix the 2 remaining warnings, escalate the open one, or produce the handover
 pack. Which next?"*
+
+**Standard close (Definition of Done - applies even when this skill is invoked directly):**
+write the **engagement-summary email** (`docs/templates/engagement-summary-email.md`) as a
+`.txt` in `artifacts/`, **signed off as Morgan**, then run the mechanical gate -
+`<python> -m scripts.check_artifacts` - and fix anything it flags (missing `.html` siblings or
+a missing email) before handing back. Detail: `docs/team-operating-guide.md`.

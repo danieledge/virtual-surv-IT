@@ -95,7 +95,10 @@ State explicitly which analysers were unavailable - nothing silently skipped.
 - **Blast radius:** ... (what else could this change break?)
 - **Breaking changes:** ...
 
-## 7. Developer guidance - improving future code *(always include, even on a clean pass)*
+<!-- Section 7. The heading below is canonical and mechanically checked by the review skills
+     (/deep-review, /audit-review) - keep it verbatim: no number, no extra annotation. -->
+## 🔵 Developer guidance - improving future code
+*(Always include, even on a clean pass.)*
 Constructive, non-blocking guidance on the **original coding style overall** and how the author
 could improve in **future** work - patterns, structure, naming, testing/documentation habits.
 2-4 short points. If the code is strong, say so and name what's done well. The developer should

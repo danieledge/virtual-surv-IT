@@ -22,7 +22,9 @@ defaults, schema gates, JSON evidence report - attach it); never hand-parse.
 1. **Frame** the question and the assumptions/caveats up front.
 2. **Analyse** - efficient, well-commented SQL/Python on synthetic/masked data: distributions,
    segments, cohorts, trends, false-positive sources, correlations. Never expose raw PII/MNPI in
-   outputs, commits or logs.
+   outputs, commits or logs. Running that analysis code needs the execution-consent gate
+   (CLAUDE.md §7); if the guard blocks, ask the user to grant consent (it is human-only) - never
+   work around it.
 3. **Evidence the findings** - figures with the basis stated (📊 measured from the data /
    🧠 inferred), and the limitations.
 4. **Recommend** - the action the analysis supports (e.g. a tuning direction → `/tune-thresholds`;

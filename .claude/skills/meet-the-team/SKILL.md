@@ -13,9 +13,10 @@ how to start. Use roughly this shape (keep it current with `.claude/agents/`; on
 > plan, then bring in the right specialists and keep you in charge at every gate. Here's the team
 > behind me:
 
-(Before the roster, **state the team version** - read `version` from the plugin manifest
-(`$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json`, or `.claude-plugin/plugin.json` at the repo
-root) and show it, e.g. *"Compliance Surveillance team **vX.Y.Z**"* (read the current version from the
+(Before the roster, **state the team version** - read `version` from the plugin manifest at
+`$CLAUDE_SKILL_DIR/../../../.claude-plugin/plugin.json` (`$CLAUDE_SKILL_DIR` is always set, so
+this one path resolves in both a repo-as-project and an installed-plugin session) and show it,
+e.g. *"Compliance Surveillance team **vX.Y.Z**"* (read the current version from the
 manifest - never hardcode it), so the loaded build is
 visible. If unresolvable, say so rather than guess.)
 

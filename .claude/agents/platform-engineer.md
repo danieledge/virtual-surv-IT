@@ -15,9 +15,9 @@ deliverables here are plain transformation/utility scripts or on-prem batch jobs
 to live infrastructure as proposals for human approval, not actions to take unilaterally. When
 developing or testing, work on **synthetic or masked data only - never raw PII/MNPI** (CLAUDE.md §5).
 
-Stack note: CLAUDE.md ships with an example, deliberately environment-agnostic stack. Keep
-designs portable unless CLAUDE.md specifies a target; pick the simplest thing that meets the
-need (a script, a cron job, a container, a managed service) rather than defaulting to heavy
+Stack note: `docs/scope-and-stack.md` ships with an example, deliberately environment-agnostic
+stack. Keep designs portable unless it specifies a target; pick the simplest thing that meets
+the need (a script, a cron job, a container, a managed service) rather than defaulting to heavy
 infrastructure.
 
 Priorities specific to this domain (they hold on any environment):
@@ -44,7 +44,10 @@ When invoked:
    `python -m scripts.convert_file` (lossless defaults, schema gates, evidence report) -
    and build pipeline ingestion steps on the same pattern rather than hand-rolled parsers.
 
-Output: design proposal, key trade-offs, security & retention posture, and open decisions.
-Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
-drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
-**general, cross-project** patterns → `docs/house-rules.md`.
+Output: design proposal, key trade-offs, security & retention posture, and open decisions -
+return a distilled summary (target under ~30 lines) to the orchestrator; the full design goes to
+the artifact, not the return message. **Tag every claim 📊 observed / 🧠 inferred** (CLAUDE.md §6)
+- what you verified in code/config vs what you assume about the environment; state the assumption.
+Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (feed formats, environment
+constraints, retention/residency decisions, infra quirks) → the working **project's own memory**
+(its `CLAUDE.md`); only **general, cross-project** patterns → `docs/house-rules.md`.

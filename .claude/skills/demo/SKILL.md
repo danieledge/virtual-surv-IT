@@ -19,7 +19,7 @@ question tool (`multiSelect: false`) unless the arg already says which - default
 - **Review** - review the repo's own synthetic spoofing detector (`rules/spoofing.py`); shows the
   review pipeline (scorer → code-reviewer → Morgan's challenge → scoreboard).
 - **Build** - build a new detection from scratch and take it **through the full Definition-of-Done
-  chain**; shows orchestrator-workers end to end (see step 3b). Cost-aware: ask the depth first
+  chain**; shows orchestrator-workers end to end (see step 3). Cost-aware: ask the depth first
   (it's the heavy demo).
 - **Data safety** - show `/prepare-data` and the raw-data guard *actually blocking* a read; shows
   the §5 keystone.
@@ -53,7 +53,7 @@ opus - subtle security judgement"*), then bring them in for real and **summarise
   session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the bundled
   scripts") against the matching golden case to show the regression net in action.
 
-**3b. For the Build demo - run the WHOLE chain (don't stop at "reviewers").** First, because this is
+**3. For the Build demo - run the WHOLE chain (don't stop at "reviewers").** First, because this is
 the heavy demo, ask the depth via the question tool (`multiSelect: false`): **Core** (spec → SME →
 build + tests; ~50k tokens) or **Full DoD delivery** (the complete chain below; ~150-180k tokens, 8
 agents). State the token ballpark so the choice is informed. Pick a small, safe synthetic scenario
@@ -86,12 +86,12 @@ until the deploy gates close (re-calibrate on real labelled data, fix any scalab
 CLAUDE.md §6 (recommend → PM commits): **general** patterns → `docs/house-rules.md`;
 **project-specific** learnings → the project's own memory - so the loop visibly closes.
 
-**3c. For the Data-safety demo specifically:** show synthetic generation, then **attempt a read of
+**4. For the Data-safety demo specifically:** show synthetic generation, then **attempt a read of
 `data/raw/`** so the user *sees the guard hard-block it* (it will), and explain the layered defence
 (hook + attestation + masking on-ramp). Note: free-text masking is regex-only today (NER is
 on the roadmap).
 
-**4. Close - explain what was shown and how to do it for real.** Recap the patterns demonstrated in
+**5. Close - explain what was shown and how to do it for real.** Recap the patterns demonstrated in
 3-4 bullets, then hand back: *"That's the team end-to-end. To put it to work on your own code, type
 `/engage` and describe what you've got - I'll take it from there."* Offer to run a different demo
 flavour. Never dead-end. *(For the Build demo, a committed reference run lives at

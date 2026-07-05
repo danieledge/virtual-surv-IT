@@ -19,15 +19,19 @@ Operating rules:
 
 When invoked:
 1. Confirm the spec and the acceptance criteria.
-2. Implement the rule logic following the stack and conventions in CLAUDE.md.
+2. Implement the rule logic following the stack in `docs/scope-and-stack.md` and the
+   conventions in CLAUDE.md.
 3. Write tests covering known true-positive and false-positive cases, using synthetic or
    masked data only - never real records.
 4. Run the tests and report results. Running tests needs the execution-consent gate (CLAUDE.md §7);
    if the guard blocks, hand back and ask the user to grant consent (it is human-only).
-5. Summarise what you built and hand off to `compliance-reviewer`.
+5. Summarise what you built; recommend to the orchestrator that `code-reviewer` **and**
+   `compliance-reviewer` review it (both mandatory for detection logic, CLAUDE.md §4).
 
 Output: the implementation, the tests, and a short note mapping the code to the acceptance
-criteria and the regulatory obligation. Never hard-code secrets or embed real data.
+criteria and the regulatory obligation - return a distilled summary (target under ~30 lines) to
+the orchestrator; the detail lives in the code/tests. **Tag behaviour claims 📊 observed (a test
+that ran) / 🧠 inferred** (CLAUDE.md §6). Never hard-code secrets or embed real data.
 
 Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
 drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only

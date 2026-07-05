@@ -183,6 +183,9 @@ developers and QA reviewers can trust what the team hands over.
   architecture, impact analysis); regulated findings (secrets, PII, broken traceability) are
   never filtered.
 - **SR 11-7 / PRA SS1/23** - model-risk governance for any ML detection.
+- **Eval regression gate** - prompt/skill/agent-definition changes are validated by the eval
+  harness (`/run-evals`): full pytest (contract + docs-consistency tests) plus a live golden-slice
+  spot check for prompt changes; a change that drops a previously passing golden case does not land.
 
 **Agent orchestration** - Anthropic's
 [Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents)

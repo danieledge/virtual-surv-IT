@@ -91,5 +91,11 @@ installed-plugin session invoke the bundled `scripts/` copy by path; see the ope
 with a recommendation - *"3 🔴, 5 🟠. I can fix the criticals, run `/remediate`, or produce a
 handover pack. Which?"* - and offer to carry them out.
 
+**Standard close (Definition of Done - applies even when this skill is invoked directly):**
+write the **engagement-summary email** (`docs/templates/engagement-summary-email.md`) as a
+`.txt` in `artifacts/`, **signed off as Morgan**, then run the mechanical gate -
+`<python> -m scripts.check_artifacts` - and fix anything it flags (missing `.html` siblings or
+a missing email) before handing back. Detail: `docs/team-operating-guide.md`.
+
 > For audit/regulatory sign-off with a fix→re-review loop, use `/audit-review` (which runs this
 > deep review as its first step).

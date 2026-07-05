@@ -72,4 +72,6 @@ fix the schema and re-run - do **not** hand the data on until it passes.
 Confirm what's ready (the governed dataset path + validation result), then offer the next step
 with a recommendation - typically straight into the analysis the user wanted (`/engage`,
 `/new-scenario`, or `data-analyst`/`ml-engineer` for anomaly work) **pointed at the governed
-data**, never the raw file. Offer to carry it out and wait for the go-ahead.
+data**, never the raw file. Offer to carry it out and wait for the go-ahead. **Chained skills
+are dormant** - to run one yourself, read `.claude/skills/<name>/SKILL.md` and follow it in
+this session; do not invoke it via the Skill tool (full rule + plugin-mode path: `/engage`).

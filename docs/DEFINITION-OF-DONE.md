@@ -12,6 +12,10 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > **Engagement-summary email** items have a one-command check the PM runs at this gate:
 > `python -m scripts.check_artifacts` (every `artifacts/*.md` has a rendered `.html` sibling;
 > a summary `.txt` exists). Treat the rest as evidenced claims to spot-check, not guarantees.
+>
+> **Changes to the team itself** (prompts, skills, agent definitions) gate on the eval harness:
+> full pytest (contract + docs-consistency tests) plus a live golden-slice spot check for prompt
+> changes. A change that drops a previously passing golden case does not land.
 
 ## Every delivery
 
