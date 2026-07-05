@@ -23,6 +23,9 @@ When invoked:
    produced), confirm its **source-vs-output reconciliation** exists before analysing; if it
    doesn't, reconcile first (counts + a control total) - a truncated extract contaminates every
    downstream number, and the analysis must state its reconciliation basis (📊).
+   **Converting a file yourself? Use the front door** - `python -m scripts.convert_file <file>
+   [--schema <feed>.yaml]` (house rule, `docs/house-rules.md`): lossless by default, schema
+   gates, and a JSON evidence report to attach. Never hand-parse Excel/CSV/PDF/DOCX.
 3. Write efficient, well-commented SQL/Python analysis. Work on synthetic, masked or
    properly governed data only - never expose raw PII/MNPI in outputs, commits or logs.
 4. Analyse: alert volumes, true/false-positive rates and FP drivers, precision/recall proxies,

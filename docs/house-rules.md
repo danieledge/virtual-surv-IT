@@ -28,8 +28,20 @@ engagement. This file ships with the plugin and is **general by design**.
   never silent value coercion/truncation. Onward analysis states its reconciliation basis (📊).
   Why: extraction fails *silently* - a truncated extract looks complete and contaminates every
   downstream number until someone reconciles it, sometimes years later. House implementations of
-  the pattern: `scripts/ingest.py` (skip-tracking + loud warning) and
-  `scripts/validate_masking.py::detection_fidelity` (count + shape tie-out).
+  the pattern: `scripts/convert_file.py` (below), `scripts/ingest.py` (skip-tracking + loud
+  warning) and `scripts/validate_masking.py::detection_fidelity` (count + shape tie-out).
+- **File conversion goes through the front door - never hand-parse.** Any Excel / CSV / PDF /
+  Word input an agent needs as data or text is read via
+  `python -m scripts.convert_file <file> [--schema <feed>.yaml]` - not ad-hoc pandas/openpyxl
+  one-offs, not a quick `csv.reader`, not "I'll just export it". The converter is lossless by
+  default (zero type inference - the float-mangled account ID and the guessed date format are
+  the two classic silent corrupters), validates against a per-feed schema when given one
+  (`config/feed-schema-example.yaml`), applies the reconciliation rule above mechanically
+  (ragged rows, truncation signs, row counts, control totals), and **emits a JSON evidence
+  report every run** - attach that report (or its summary) to the deliverable; a conversion
+  without its report is not evidence (📊). Its dependencies are vendored in `vendor/`, so it
+  works from a bare `git clone` with no pip access. PDFs are text extraction only - table
+  structure in a PDF is layout, not data; get the upstream Excel/CSV instead.
 
 ## Reporting & audit conventions
 - **Disposition every open question before sign-off (don't let them dangle).** When a spec/BRD/review

@@ -53,7 +53,17 @@ flowchart LR
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md).
 
 <details>
-<summary>✨ <b>What's new in 0.9.x</b> - runs fully from any project · Windows field fixes · extraction-truncation defences · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.10 / 0.9.x</b> - the file-conversion front door (vendored, no pip) · runs fully from any project · Windows field fixes · extraction-truncation defences · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.10.0** - **`scripts/convert_file.py`, the file-conversion front door.** Excel
+(`.xlsx`/`.xlsm`/`.xls`), CSV/TSV, PDF and Word `.docx` in; CSV/JSONL or Markdown/text out,
+with a **JSON evidence report on every run**. Lossless by default (zero type inference - no
+float-mangled account IDs, no guessed date formats); an optional per-feed schema
+(`config/feed-schema-example.yaml`) turns conversion into a hard gate (types, ID patterns,
+header order, row counts, Decimal control totals). Dependencies are **vendored in `vendor/`**
+(pure Python, MIT/BSD/PSF, pinned), so a plain `git clone` works with **no pip access** -
+built for locked-down corporate environments. House rule: all file conversion goes through
+it, and a conversion without its report attached is a review finding.
 
 **0.9.1** - fixes from a live Windows plugin install (interpreter resolution
 `python3` → `python` → `py`; backslash paths + the `py` launcher covered by the guards;
@@ -842,8 +852,11 @@ CLAUDE.md                       # shared team handbook (example defaults - custo
 .claude/hooks/ + settings.json  # always-on data-safety + code-execution guards
 rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
 scripts/                        # masking (ingest), synthesise, render_html, eval_score,
-                                #   calibrate_spoofing, check_citations, validate_* helpers
-config/                         # masking schema + regulatory register
+                                #   calibrate_spoofing, check_citations, validate_* helpers,
+                                #   convert_file (the file-conversion front door)
+vendor/                         # convert_file's deps, bundled (pure Python, pinned - no pip
+                                #   needed; licences in THIRD-PARTY-LICENSES.md)
+config/                         # masking schema + regulatory register + feed-schema example
 docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
                                 #   scenarios/ · demos/ · templates/ · adr/
 evals/                          # team-quality eval harness: 8 rubrics + 26 golden cases

@@ -76,6 +76,7 @@ What each tool is and does (all of these run automatically in CI on every push/P
 | **shellcheck** | A linter for **Bash** scripts (catches shell bugs/quoting issues). Lint only - it does not reformat. | the `*.sh` + git-hook scripts |
 | **validate_masking** | Proves the masking config is both **safe** (no original PII survives) and **useful** (detection still fires on masked data). `--in <file>` scans your actual masked output. | `scripts/`, `config/masking-schema.yaml` |
 | **validate_manifest** | Checks the plugin manifest (`plugin.json`) matches the repo - every declared agent/skill/hook actually exists. | `.claude-plugin/` |
+| **convert_file** | The file-conversion front door: Excel/CSV/PDF/DOCX in, CSV/JSONL/MD out, lossless by default, schema-gated on request, JSON evidence report every run. Dependencies vendored in `vendor/` (no pip needed). | `scripts/convert_file.py`, `vendor/`, `config/feed-schema-example.yaml` |
 
 Two things worth knowing:
 
@@ -105,6 +106,13 @@ Two things worth knowing:
   `docs/WAYS-OF-WORKING.md`, and reference it from the skill that produces it.
 - **Artifacts** are authored in Markdown and rendered to standalone HTML with
   `python -m scripts.render_html` - produce both `.md` and `.html`.
+- **Helper script** - a new `scripts/<name>.py` runs consent-free as `python -m scripts.<name>`
+  in repo mode, but plugin-mode **path invocation** is allow-listed by basename in
+  `guard-code-execution.py` (`_TEAM_SCRIPT_NAMES`). Adding the basename is a **human edit by
+  design** - the consent-writes guard blocks the model from touching hook files - so a PR that
+  adds an agent-invoked script must include that one-token change (and keep ADR-002 in mind).
+- **Vendored dependency** - pure Python only, licence recorded in `THIRD-PARTY-LICENSES.md`,
+  procedure in `vendor/README.md`. Never edit vendored code.
 
 ## Developing in this repo: don't double-load the roster
 

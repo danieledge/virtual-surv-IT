@@ -40,6 +40,9 @@ When invoked:
 4. **Any extraction/conversion deliverable ships with its reconciliation built in** - source vs
    output record counts + a control total, asserted by a test that fails on dropped rows; fail
    loudly, never `except`-and-continue over records (house rule in `docs/house-rules.md`).
+   For reading/converting Excel/CSV/PDF/DOCX inputs, **use the front door** -
+   `python -m scripts.convert_file` (lossless defaults, schema gates, evidence report) -
+   and build pipeline ingestion steps on the same pattern rather than hand-rolled parsers.
 
 Output: design proposal, key trade-offs, security & retention posture, and open decisions.
 Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP

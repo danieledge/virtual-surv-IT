@@ -1,0 +1,55 @@
+# Example feed schema for scripts/convert_file.py --schema
+#
+# One file per feed. The schema is the contract that makes conversion a GATE rather than a
+# hope: column names/order, types, patterns and reconciliation expectations are declared
+# once, and any breach fails the conversion (non-zero exit) instead of leaking silently
+# corrupt data downstream. Copy this file per real feed (e.g. config/feeds/trades-eod.yaml)
+# and tune it; keep `feed` unique.
+#
+# Types: string | integer | decimal | date | datetime | boolean
+#   - decimal uses exact Decimal arithmetic (never float) - use it for money/quantities.
+#   - IDs are STRINGS, always, even when they look numeric: integer/float typing is exactly
+#     how leading zeros vanish and 16+ digit account numbers get rounded. The converter
+#     additionally warns when a string-typed column arrives stored as a NUMBER in the
+#     workbook, because that damage happened at source.
+#   - date/datetime accept ISO 8601 by default; add `format: "%d/%m/%Y"` per column for
+#     anything else. There is deliberately no format guessing (03/04 must never be
+#     ambiguous between March and April).
+
+feed: trades-eod-example
+
+columns:
+  - name: trade_id
+    type: string
+    required: true
+    pattern: "^TR[0-9]{8}$"     # anchor the shape of every ID you rely on for joins
+  - name: account_id
+    type: string                 # numeric-looking ID: string, per the rule above
+    required: true
+    pattern: "^[0-9]{10}$"
+  - name: isin
+    type: string
+    pattern: "^[A-Z]{2}[A-Z0-9]{9}[0-9]$"
+  - name: trade_date
+    type: date                   # ISO (2026-07-05); add format: for locale-specific feeds
+    required: true
+  - name: quantity
+    type: integer
+    required: true
+  - name: gross_amount
+    type: decimal
+    required: true
+  - name: is_cancel
+    type: boolean
+
+# Header must match `columns` names in order; extra columns are an error unless allowed.
+allow_extra_columns: false
+
+# Reconciliation expectations - the truncation/corruption gate. Take these numbers from the
+# SOURCE system (row count report, control-total report), not from the extract itself:
+# reconciling a file against itself proves nothing.
+expect:
+  min_rows: 1
+  row_count: null                # set to the exact expected count when the source reports one
+  control_totals:
+    quantity: 0                  # sum of the column, exact Decimal compare - replace per run

@@ -1,7 +1,7 @@
 {
   "name": "compliance-surveillance-team",
   "description": "A POC virtual compliance-surveillance ENGINEERING team for Claude Code: 16 subagents (PM-orchestrated builders + read-only reviewers) that build, test, review and hand over surveillance solutions - detection rules, data pipelines, transformation scripts, ML - with a data-safety pipeline, a modular code-review subsystem (review lenses + scoreboard, integrating turingmind-code-review, MIT), and audit-ready, evidenced deliverables.",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "author": { "name": "Daniel Edge" },
   "repository": "https://github.com/danieledge/virtual-surv-IT",
   "license": "MIT",

@@ -3,6 +3,34 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.10.0] - 2026-07-05
+
+### Added
+- **`scripts/convert_file.py` - the file-conversion front door**, closing out the extraction
+  incident class at the tooling layer (0.9.1 added the house rule; this adds the mechanism).
+  One command reads Excel (`.xlsx`/`.xlsm`/`.xls`), CSV/TSV (encoding + delimiter defences,
+  never silent), PDF (text only - PDF tables are layout, not data) and Word `.docx`, and
+  emits CSV/JSONL or Markdown/text plus a **JSON evidence report every run** (hashes, counts,
+  encoding decisions, warnings, check results). Lossless by default (zero type inference - no
+  float-mangled IDs, no guessed date formats); an optional per-feed schema
+  (`config/feed-schema-example.yaml`) turns conversion into a **gate**: types, ID patterns,
+  header order, row counts and Decimal control totals all fail loudly on breach. Refuses
+  `data/raw/` (masking pipeline owns raw). ~30 tests cover the field failure modes.
+- **`vendor/` - dependencies bundled in the repo.** The converter's libraries (openpyxl,
+  et_xmlfile, xlrd, pypdf, defusedxml - all MIT/BSD/PSF, pure Python, pinned, unmodified)
+  ship inside the repo so a plain `git clone` works with **no pip access** (corporate
+  environments). Licences recorded in `THIRD-PARTY-LICENSES.md`; update procedure in
+  `vendor/README.md`. Vendored copies win over site-packages for determinism.
+- **Routing:** house rule in `docs/house-rules.md` (conversions outside the front door, or
+  without the report attached, are a finding); directives in `data-analyst`,
+  `platform-engineer`, `tuning-analyst`, `qa-engineer`, `data-quality-reviewer` and
+  `/analyse-data`.
+- **Guard allow-list, human-applied:** `convert_file` added to `_TEAM_SCRIPT_NAMES` in
+  `guard-code-execution.py` by the user (the consent-writes gate blocks the model editing
+  guards, as designed), so plugin-mode path invocation of the bundled converter is
+  consent-free like the other team helpers. CONTRIBUTING now documents this step for any
+  new agent-invoked script.
+
 ## [0.9.1] - 2026-07-02
 
 Windows field fixes (from a live plugin install: interpreter resolution, guard path handling,

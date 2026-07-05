@@ -7,8 +7,12 @@ repos:
       - id: detect-private-key
       - id: check-added-large-files
         args: ["--maxkb=512"]
+      # vendor/ is third-party code shipped verbatim (vendor/README.md) - auto-fixing its
+      # whitespace would modify it, breaking the clean-diff-against-upstream rule.
       - id: end-of-file-fixer
+        exclude: ^vendor/
       - id: trailing-whitespace
+        exclude: ^vendor/
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.4

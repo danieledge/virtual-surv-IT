@@ -29,6 +29,9 @@ Principles:
 - State gaps plainly: never imply coverage you don't have - unstated gaps are the dangerous
   ones for a real QA reviewer.
 - No real data: tests and fixtures use synthetic or masked data only.
+- File inputs (Excel/CSV/PDF/DOCX) are read via `python -m scripts.convert_file`, and a
+  deliverable that converts files is tested against the house failure modes (truncation,
+  ragged rows, ID mangling, date ambiguity - see `tests/test_convert_file.py` for the pattern).
 - Defects go back to the builder (`rules-developer` / `platform-engineer` / `ml-engineer`);
   you re-test after fixes.
 - Independence is structural: you `Write` your own test files and the QA handover, but you do

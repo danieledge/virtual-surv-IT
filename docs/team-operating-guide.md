@@ -90,7 +90,11 @@ skipped. The Python helper scripts need only `<python>`, never bash:
     hold its own `config/masking-schema.yaml` (copy the plugin's as a starting template) and
     `MASKING_KEY` in the environment - offer to set that up, don't assume it;
   - the **repo's own test suite / worked example** only exist in the repo - `/demo`'s Build
-    flavour and `/run-evals` want repo-as-project.
+    flavour and `/run-evals` want repo-as-project;
+  - **file conversion** (`convert_file`) needs no pip anywhere: its libraries are vendored in
+    `<plugin>/vendor/` and resolved relative to the script itself, so the bundled copy works
+    from a foreign project the same as in the repo (house rule: all Excel/CSV/PDF/DOCX
+    reading goes through it - `docs/house-rules.md`).
 - **Never silently skip a deliverable step** because a script seems unreachable: resolve the
   path per the above, and if something genuinely can't run in this mode, say so in the close and
   in the summary email.

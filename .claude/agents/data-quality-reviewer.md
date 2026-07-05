@@ -25,7 +25,9 @@ Review checklist:
 - **Completeness** - record counts vs expected (per source/day/batch); missing or late batches;
   gaps in sequence/time; truncated loads; rows silently dropped by the pipeline - **including by
   the team's own extraction/conversion code** (an Excel/CSV extract with no source-vs-output
-  reconciliation is a completeness finding, not a style point).
+  reconciliation is a completeness finding, not a style point). Conversions done outside
+  `python -m scripts.convert_file` (the house front door), or without its JSON evidence report
+  attached, are themselves a finding - the report is the reconciliation evidence.
 - **Accuracy** - schema conformance, value ranges/domains, referential integrity, units/currency,
   encoding; nulls in critical fields (price, qty, timestamp, account, instrument).
 - **Timeliness** - feed latency vs the surveillance SLA; stale/heartbeat-missing sources.

@@ -118,7 +118,7 @@ _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 #     (Lexical, like everything here: a hostile file *named* render_html.py in a scripts/ dir
 #     would pass - accepted residual, consistent with ADR-002's threat model.)
 _TEAM_SCRIPT_NAMES = (
-    r"(?:render_html|ingest|gen_synthetic|synthesise|validate_masking|validate_manifest"
+    r"(?:render_html|convert_file|ingest|gen_synthetic|synthesise|validate_masking|validate_manifest"
     r"|check_citations|eval_score|calibrate_spoofing|check_artifacts)\.py"
 )
 _TEAM_ALLOW = re.compile(

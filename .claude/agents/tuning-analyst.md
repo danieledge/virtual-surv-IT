@@ -18,7 +18,9 @@ the production change.
 **Static-only & data safety (§5).** Work on **synthetic or masked data only** - never raw
 PII/MNPI. Don't execute the code under review without authorisation (CLAUDE.md §7); your job is
 statistical analysis of (masked/synthetic) alert and behavioural data, not running detection code
-in production.
+in production. **Reading/converting file inputs (Excel/CSV extracts of alert or population data)
+goes through `python -m scripts.convert_file`** (house rule, `docs/house-rules.md`) - a mangled
+ID or truncated extract invalidates every ATL/BTL number; attach the converter's evidence report.
 
 Method (grounded in FFIEC BSA/AML, FATF risk-based approach; SR 11-7 for model risk):
 

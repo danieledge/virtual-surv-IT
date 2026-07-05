@@ -5,6 +5,26 @@ copyright notice is reproduced below, as required by its terms.
 
 ---
 
+## Vendored Python libraries (`vendor/`)
+
+The file-conversion front door (`scripts/convert_file.py`) depends on pure-Python libraries
+vendored verbatim under `vendor/`, so a plain `git clone` works in environments without pip
+access (corporate networks). Each package's own licence text ships inside its
+`vendor/<name>-<version>.dist-info/` directory; the summary:
+
+| Package | Version | Licence | Source | Used for |
+|---------|---------|---------|--------|----------|
+| openpyxl | 3.1.5 | MIT | <https://foss.heptapod.net/openpyxl/openpyxl> | reading `.xlsx`/`.xlsm` |
+| et_xmlfile | 2.0.0 | MIT | <https://foss.heptapod.net/openpyxl/et_xmlfile> | openpyxl dependency |
+| xlrd | 2.0.2 | BSD-3-Clause | <https://github.com/python-excel/xlrd> | reading legacy `.xls` |
+| pypdf | 6.14.2 | BSD-3-Clause | <https://github.com/py-pdf/pypdf> | PDF text extraction |
+| defusedxml | 0.7.1 | PSF-2.0 | <https://github.com/tiran/defusedxml> | safe XML parsing (entity-expansion defence) |
+
+The vendored code is unmodified. Update procedure and pinned-version rationale:
+`vendor/README.md`.
+
+---
+
 ## turingmind-code-review
 
 - **Project:** turingmind-code-review
