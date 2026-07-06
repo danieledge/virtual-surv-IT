@@ -67,13 +67,13 @@ They're your experts and reviewers, kept that way on purpose so they stay indepe
 
 | Member | Type | What they do (in plain terms) |
 |---|---|---|
-| **Amara** `business-analyst` | 🔧 Builder | Full BA: elicitation, stakeholder & process analysis, requirements, UAT, reg-change impact, obligation→detection |
+| **Amara** `business-analyst` | 🔧 Builder | Turns what a regulation requires into clear, testable written requirements, and works out how a rule change affects the detection already in place |
 | **Hassan** `tm-sme` | 🧠 Advisor | Money-laundering expert (transaction monitoring) |
 | **Camila** `trade-surveillance-sme` | 🧠 Advisor | Market-abuse expert (spoofing, insider dealing…) |
 | **Cleo** `comms-surveillance-sme` | 🧠 Advisor | Trader-chat / email monitoring expert |
 | **Mateo** `rules-developer` | 🔧 Builder | Writes the detection code + tests |
 | **Ana** `data-analyst` | 🔧 Builder | Exploratory analysis, false-positive analysis, data-quality, reconciliation, reporting/MI |
-| **Theo** `tuning-analyst` | 🔧 Builder | Calibrates alert thresholds with ATL/BTL testing, segmentation & model-performance MI |
+| **Theo** `tuning-analyst` | 🔧 Builder | Sets and defends the alert thresholds - how sensitive each rule is - and shows the trade-off between catching more and raising too many false alarms |
 | **Mei** `ml-engineer` | 🔧 Builder | Builds smarter AI-based detection when needed |
 | **Linh** `qa-engineer` | 🔧 Builder | Independently tests it and evidences what was checked (for a real QA team) |
 | **Viktor** `model-validator` | 🧠 Advisor | Independently checks any AI model is sound and fair |
@@ -82,7 +82,7 @@ They're your experts and reviewers, kept that way on purpose so they stay indepe
 | **Thabo** `performance-reviewer` | 🧠 Advisor | Checks it's fast enough and will scale to real data volumes |
 | **Layla** `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |
 | **Yuki** `data-quality-reviewer` | 🧠 Advisor | Independently checks the data is complete & accurate, and that nothing in scope goes unmonitored |
-| **Pip** `review-scorer` | ⚙️ Helper | Cheap-tier (haiku) assistant that does the rote review steps - context detection, scoring, filtering - so the expensive reviewers don't have to |
+| **Pip** `review-scorer` | ⚙️ Helper | A lightweight, low-cost assistant that does the routine review prep - working out what kind of code it is, scoring findings, filtering noise - so the senior reviewers spend their effort on judgement |
 
 > Why this matters: a reviewer who could quietly fix the thing they're reviewing isn't
 > really an independent check. Advisor independence is enforced by the tools each one is
@@ -128,11 +128,11 @@ processed. For an ordinary app that's fine. For **bank records** - real customer
 trades, confidential information - it absolutely is not.
 
 **The solution:** the most sensitive data - anything in the `data/raw/` folder - is
-**hard-blocked**: a guard physically stops any agent from reading it. For anything else, you
-either **clean it first** (mask or synthesise, below) or, if it's already safe, **confirm that**
-via a startup disclaimer (*"this is masked / synthetic / anonymised, no prohibited PII"*). The
-team can't verify that for you, so the confirmation is **your responsibility**. And whatever you
-share, what gets written **into the repo** (examples, tests, reports) is *always* the cleaned or
+**hard-blocked**: a guard physically stops any agent from reading it. For anything else you have
+two options. Clean it first (mask or synthesise, below). Or, if it is already safe, say so at
+startup by confirming it is masked, synthetic or anonymised with no prohibited personal data. The
+team cannot check that claim for you, so that confirmation is **your responsibility**. And whatever
+you share, what gets written **into the repo** (examples, tests, reports) is *always* the cleaned or
 made-up version.
 
 ```mermaid
@@ -149,14 +149,15 @@ Three layers, from most to least sensitive:
    guard (a small script that runs before every file read) blocks any agent that tries to
    open it.
 2. **🟠 Masking** (`scripts/ingest.py`) is a **basic** cleaning step - useful, but deliberately
-   simple, **not a comprehensive anonymiser.** It tokenises the *identifiers* (names, account
-   numbers, traders → meaningless codes; dates shifted) and runs **regex redaction** of common PII
-   (emails, phones, card/IBAN/account numbers) in free text, while keeping the *behaviour* (amounts,
-   timing, patterns) so detection still works. A checker (`scripts/validate_masking.py`) verifies
-   the configured fields were cleaned and that detection still fires. **Its limits matter:** the
-   free-text redaction is regex-only, so it will **miss names and disguised identifiers** buried in
-   narrative or chat. Real communications need proper NER (named-entity recognition), and for
-   anything leaving the environment you should prefer synthetic data (below).
+   simple, **not a comprehensive anonymiser.** It replaces the *identifiers* (names, account
+   numbers, traders) with meaningless codes and shifts the dates, and it does a **pattern-based
+   find-and-remove** of common personal details (emails, phone numbers, card and bank-account
+   numbers) in free text, while keeping the *behaviour* (amounts, timing, patterns) so detection
+   still works. A checker (`scripts/validate_masking.py`) verifies the configured fields were
+   cleaned and that detection still fires. **Its limits matter:** the free-text step matches known
+   patterns only, so it will **miss names and disguised identifiers** buried in narrative or chat.
+   Real chat and email need software that can spot names in running text (named-entity recognition),
+   and for anything leaving the environment you should prefer synthetic data (below).
 3. **🟢 Synthetic data** (`scripts/synthesise.py`) is the safest: it studies the *shape* of
    the cleaned data, then generates **completely made-up** records that behave the same way
    but correspond to nobody real. This is what's safe to put in front of the AI.

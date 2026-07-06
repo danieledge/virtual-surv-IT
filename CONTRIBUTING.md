@@ -29,7 +29,7 @@ triggers on **every push to `main` and every pull request**, and runs **four job
 
 | Job | What it does |
 |---|---|
-| **Tests (detection logic)** | A **3-leg matrix** - ubuntu Python 3.10 (the supported floor), ubuntu Python 3.12, and windows-latest Python 3.12 (the guards and launcher have Windows-specific paths) → `pip install -r requirements-dev.txt` → `pytest` (the full suite: rules, masking, renderer, all three safety guards driven via their JSON protocol, hook-config sync, the per-case eval contract, the DoD artifact checker) → `scripts.validate_masking` → `scripts.validate_manifest` |
+| **Tests (detection logic)** | Runs on **three legs**: Python 3.10 on ubuntu (the lowest supported version), Python 3.12 on ubuntu, and Python 3.12 on windows-latest (the guards and launcher have Windows-specific paths). Each leg installs `requirements-dev.txt`, runs the full `pytest` suite, then `scripts.validate_masking` and `scripts.validate_manifest`. The suite covers rules, masking, the renderer, all three safety guards (driven via their JSON protocol), hook-config sync, the per-case eval contract, and the DoD artifact checker. |
 | **Lint & static analysis** | `ruff check` + `ruff format --check` over `scripts/ .claude/hooks/ rules/ tests/` · `bandit` (Python security) · `shellcheck` (Bash + git hooks) |
 | **Secret scan** | gitleaks over the **full history** (`fetch-depth: 0`), not just the diff |
 | **No raw data committed** | fails if any `*.csv` / `*.tsv` / `*.parquet` / `*.pcap` / `*.jsonl` / `*.xlsx` / `*.xls` is tracked (`CLAUDE.md` §5) |

@@ -10,21 +10,24 @@
 
 <img src="docs/assets/fable5-audited.svg" alt="Audited with Claude Fable 5" height="60">
 
-**Virtual Surv-IT is a virtual engineering team for compliance surveillance, running inside
-[Claude Code](https://claude.com/claude-code)**: a PM (Morgan) plus **16 specialist AI agents**
-who design, build, test, review and document the **engineering behind market-abuse and
-financial-crime detection** - detection rules, data pipelines / ETL, utility scripts (Python,
-Scala, Java, PowerShell, Bash), reconciliation and reporting jobs, ML, reviews and handover
-docs - with **independent review** built in, like a real team, not one assistant with nobody
-checking. It does **not** perform the compliance, monitoring or investigation work itself.
+**Virtual Surv-IT is a virtual engineering team for compliance surveillance that runs inside
+[Claude Code](https://claude.com/claude-code)**: a PM (Morgan) plus **16 specialist AI agents**.
+Together they design, build, test, review and document the **software behind market-abuse and
+financial-crime detection**: detection rules, data pipelines, utility scripts (Python, Scala,
+Java, PowerShell, Bash), reconciliation and reporting jobs, machine-learning models, code reviews
+and handover documents. Every piece of work is checked by a **separate agent** before it counts as
+done, the way a real team reviews itself instead of one assistant marking its own homework. The
+team builds the tooling; it does **not** perform the compliance, monitoring or investigation work
+itself.
 
 > ⚗️ **Proof of concept** - not production or regulatory tooling; **review everything it produces**.
 
-> 🔍 **Audited with Claude Fable (this release).** We turned
+> 🔍 **Audited and hardened with Claude Fable.** We pointed
 > [Claude Fable 5](https://www.anthropic.com/news/claude-fable-5-mythos-5) - Anthropic's most
-> intelligent generally available model, the Mythos tier above Claude Opus - loose on this repo to
-> pick holes in the approach and the documentation. **Release 0.11.0 fixes what it found**, with
-> every fix regression-gated on the test suite and a live eval run. Full story: [`CHANGELOG.md`](CHANGELOG.md).
+> capable widely released model, a step above Claude Opus - at this repo to find weaknesses in the
+> approach and the documentation. **Releases 0.11.0 and 0.12.0 fix what it found**, and every fix
+> has to pass the automated test suite plus a live quality check before it lands. Full story:
+> [`CHANGELOG.md`](CHANGELOG.md).
 
 **New to AI agents?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md), a plain-English tour.
 **See it work:** the end-to-end [build demo](docs/demos/build-demo.md) on synthetic data
@@ -32,7 +35,14 @@ checking. It does **not** perform the compliance, monitoring or investigation wo
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) transcripts.
 
 <details>
-<summary>✨ <b>What's new in 0.11 / 0.10</b> - the Fable audit release (truth-checked docs, hardened guards, genuinely blind evals that catch regressions, best-practice conformance) · the file-conversion front door (vendored, no pip) · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.12 / 0.11</b> - the Fable send-off (every foundational domain claim checked against primary sources, a masking-pipeline design, a security review of the safety guards, a Fable-judged quality baseline) and the Fable audit release before it (docs checked against the code, tightened safety guards, self-tests that catch quality slips before release) · a front door for turning Excel/CSV/PDF files into the formats the team reads (dependencies bundled, so no extra install) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.12.0** - **the Fable send-off.** With Claude Fable 5 leaving subscription plans, the remaining
+window went into strengthening the project: every one of the 56 foundational domain claims verified
+against primary sources (none unsupported, nothing fabricated), a build-ready design for the
+automatic data-masking pipeline, a security review of the safety guards (six new findings, logged
+rather than silently patched), and a Fable-judged quality baseline across the 28 test cases. Full
+detail: [`CHANGELOG.md`](CHANGELOG.md).
 
 **0.11.0** - **the Fable audit release.** Claude Fable 5 audited the setup and its documentation
 (setup review + truth audit + best-practice conformance against Anthropic's multi-agent guidance);
