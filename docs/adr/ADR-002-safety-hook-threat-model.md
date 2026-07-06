@@ -3,8 +3,8 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-002` · Version `0.5` · Status `Accepted (implemented)`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-05`
+> **Document control** · ID `ADR-002` · Version `0.6` · Status `Accepted (implemented)`
+> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-06`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
@@ -16,6 +16,7 @@
 > | 0.4.1 | 2026-07-02 | human-applied (reported from a live Windows plugin install) | Windows correctness: `_TEAM_ALLOW` path separators accept backslashes (`[/\\]` - slash-only regexes blocked `python C:\...\scripts\render_html.py`); the `py` launcher added to the interpreter token (it was invisible to the guard - `py evil.py` was NOT blocked and `py -m scripts.x` was NOT allowed); raw-data marker gains the `data\raw\` backslash variant for Bash string matching. |
 > | 0.4.2 | 2026-07-05 | human-applied via `apply-guard-hardening.sh` | Recs 10-13 applied: anchored `pytest`/`unittest`, broader runner list (cargo/swift/bundle exec/jest/vitest/php/julia/lua), consent guard gains read-only `jq` + read-only `git` safe verbs and a `find -exec/-delete` block, raw guard gains a word-bounded case-insensitive marker (no-trailing-slash + case-fold), plugin-mode fail-open comments softened, `data/raw` write-protect + `python3 -m scripts.ingest` twin in settings, `pwsh` allow entry removed. Regression: `tests/test_guard_hardening.py`. |
 > | 0.5 | 2026-07-05 | evening setup review + truth audit (PREPARED 2026-07-05; human applies via `apply-guard-fixes.sh`) | Rec 14 recorded (four defects: multi-`.py` launcher false positive, unanchored `pwsh`/`powershell`, `pre-commit` consent-free execution path incl. `.pre-commit-config.yaml` write-protect, pytest allow-entry contradiction); Tier-2 backlog recs 15-16 added (parent-rooted/wildcard Grep vs `data/raw`; secrets deny-protected on `Read` only); staleness fixed (status to Accepted, Context three-hook present, rec 7/8/13 texts, test count 14 to 17, pin-cites, launcher trade-off extended to the consent-write gate). Regression: `tests/test_guard_fixes.py`. |
+> | 0.6 | 2026-07-06 | Fable 5 static red-team (analysis only; NOT fixed in this pass) | Backlog recs 17-22 added from an adversarial static pass on all three guards: exec-guard wrapper-prefix bypass of the segment-anchored runners (`timeout 5 pytest`), backslash line-continuation split (`python3 \`+newline+`evil.py`), absolute/tilde/`../` shebang-direct exec, `python < file` stdin redirect, novel launcher gaps (`deno test`/`bun test`/`node --test`/`xargs`), and the read-tool coverage gap for non-`{Read,Grep,Glob,Bash}` tools. Recs 15-16 (Grep/Glob vs `data/raw`; secrets Grep/Glob) re-confirmed with concrete PoCs; rec-5 remainder (model-authored `scripts/` file becomes `_TEAM_ALLOW`-runnable) re-confirmed. All fixes are human-apply-only (guard `.py`/`settings.json`/tests are model-blocked). No guard logic changed. |
 
 | | |
 |---|---|
@@ -194,6 +195,61 @@ rec 5 / house rule "don't edit the guards"). Regression tests: `tests/test_guard
 16. **Secrets are deny-protected on `Read` only.** `Grep(pattern="KEY=", path=".env")` egresses
     secret lines; there are no `Grep`/`Glob` deny entries for `.env` / `*.pem` / `secrets/`, and
     neither guard checks secret paths. Extends rec 8's residual.
+
+**Tier-1/Tier-2 backlog additions (logged 2026-07-06 from the Fable 5 static red-team; NOT fixed
+in this pass; all fixes human-apply-only per the standing "don't edit the guards" rule).** Recs
+15-16 above were re-confirmed with PoCs in the same pass (`Grep(pattern="account_number",
+path="data")` and `Grep(pattern="KEY=", path=".env")` respectively), as was the rec-5 remainder
+(a model-authored `scripts/evil.py` is accepted by `_TEAM_ALLOW` alt-1 `{_PY}\s+-m\s+scripts\.`
+and then runnable via `python -m scripts.evil`). New findings:
+
+17. **Wrapper-prefix defeats the segment-start-anchored runners (Tier-1, med).** The runner
+    patterns are anchored `^(?:\w+=\S+\s+)*<runner>` (guard-code-execution.py:78 `pytest`, :82
+    `pre-commit`, :85 `pwsh`/`powershell`, :104 `^make`). A leading wrapper word that is not a
+    `KEY=VAL` assignment breaks `^`, and no bare-runner `\b` pattern backs it up. PoC:
+    `Bash("timeout 5 pytest")`, `Bash("nice make")`, `Bash("nohup pre-commit run")`,
+    `Bash("setsid pwsh -File x.ps1")`. The anchoring was added to kill prose false positives
+    (recs 11/14b) and opened this. Interpreter+file and `python -m pytest` forms use `\b` and are
+    unaffected. *Additive fix:* regression test asserting these block; guard-logic fix (tolerate a
+    known wrapper-word set before the anchor, or a tighter non-prose boundary) is human-applied.
+18. **Backslash line-continuation splits interpreter from file (Tier-1, med).** `_SEGMENT_SPLIT`
+    (:144) splits on `\n`, so `python3 \`+newline+`  evil.py` becomes two segments (`python3 \`,
+    `evil.py`), neither matching `\b{_PY}(?:\s+-\S+)*\s+\S*\.py\b` (:113); the shell reassembles
+    and runs it. PoC: `Bash("python3 \\\n  evil.py")`. *Additive fix:* regression test; human fix
+    collapses `\`+newline before segmenting.
+19. **Absolute / tilde / parent shebang-direct exec (Tier-1, low).** The file-by-path pattern is
+    `(^|\s)\./\S+` (:107) - only `./`-rooted. A shebang-bearing script run directly by an
+    absolute/`~`/`../` path has no `./`. PoC: `Bash("/tmp/evil.sh")`, `Bash("~/evil.sh")`,
+    `Bash("../build/evil.sh")`. (The `bash /tmp/evil.sh` form is still caught by :112.) *Additive
+    fix:* regression test; human fix broadens the path-exec pattern.
+20. **`python < file` stdin-redirect exec (Tier-1, low).** The stdin form is only
+    `\b{_PY}\s+-\s*$` (:91, i.e. `python -`); a `<` file redirect is neither that nor the
+    file-run pattern (the ` < ` breaks `(?:\s+-\S+)*\s+\S*\.py`). PoC: `Bash("python3 < evil.py")`.
+    Same residual family as heredoc/stdin (rec-3 class), concrete missed form. *Additive fix:*
+    regression test; human fix adds a stdin-redirect pattern.
+21. **Novel/partial-coverage launchers (Tier-1, low).** `deno\s+(run|eval)` and `bun\s+run` (:92)
+    cover `run` but not `test`; `node\s+\S+\.[mc]?js` (:95) needs a `.js` file so `node --test`
+    slips; `xargs` is not a token (`echo evil.py | xargs python3` splits so `.py` never sits next
+    to `python`). PoC: `Bash("deno test")`, `Bash("bun test")`, `Bash("node --test")`,
+    `Bash("echo evil.py | xargs python3")`. Extends the rec-12 exec-runner-miss class. *Additive
+    fix:* regression test; human fix adds the tokens.
+22. **Raw/read guard enumerates a fixed tool set (Tier-2, low; not exploitable today).**
+    `_extract_path_candidates` (guard-raw-data.py:92-127) returns `[]` for any tool outside
+    `{Read,Grep,Glob,Bash}`, and the hook matcher + deny list name only those, so a read tool
+    outside the set (`NotebookRead`, a local-FS MCP `read_file`) targeting `data/raw/` is covered
+    by nothing. No such tool is installed today (the session's deferred MCP tools are
+    Gmail/GDrive/Cloudflare/UniFi - none read local FS), so this is an architectural coverage gap,
+    not a live hole. *Additive fix:* a docs/deployment rule - when installing any new read tool,
+    add it to the hook matcher, to `_extract_path_candidates`, and to the deny list; regression
+    test asserting unknown-read-tool handling.
+
+> **Scope note.** All of recs 17-21 are lexical bypasses of the *advisory* exec guard on the
+> **Bash** channel, which by design has no OS `permissions.deny` backstop - so each is only as
+> severe as the missing Tier-3 boundary behind it (guardrail against a *cooperative* agent, not a
+> *motivated* one; §Context). They raise no new class of risk beyond the one this ADR already
+> records; they are individual lexical gaps worth closing to keep the advisory guard honest. The
+> sync check found **no** matcher divergence between `hooks/hooks.json` and `.claude/settings.json`
+> (the only divergence is the deny/allow lists living solely in `settings.json` - that is rec 10).
 
 ## Hook exit-code semantics and the launcher (added 0.2)
 

@@ -72,6 +72,16 @@ All thresholds live in `SpoofingThresholds`; none are hard-coded inline (§4).
 Thresholds are injectable so `data-analyst` can recalibrate and evidence the
 volume/coverage trade-off without touching detection logic.
 
+> **Enforcement-statistics context (evidence pass 2026-07-06, `docs/evidence-base.md` C41).** These
+> defaults are deliberately **conservative catch-alls, not case-derived constants**. The spoofing
+> mechanics and signature are verified against the Coscia and Sarao records (MAR Art 12), but the
+> published case statistics are *tighter* than these thresholds: in *US v Coscia* the large
+> (spoof) orders filled at ~0.08% (vs the 0.10 default here) and were generally open for under
+> 500ms (vs 2000ms here); Sarao's layering used 4-6 orders stacked one price level apart. So a rule
+> at these defaults comfortably catches the known cases with headroom - but the numbers are
+> illustrative starting points that **must be calibrated on production data** (see the calibration
+> note below), never treated as empirically-derived values.
+
 > **Calibration note (2026-06-29).** The genuine-baseline change re-bases the effective
 > outsized threshold for every trader (excluding spoof-shaped orders lowers the median for a
 > spoofer, but can raise it for a legitimate fast-cancel/market-making profile). A **measured

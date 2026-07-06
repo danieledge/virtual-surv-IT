@@ -3,6 +3,71 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased] - 2026-07-06 - the Fable send-off pass
+
+**Context.** Claude Fable 5 was included in Claude subscription plans only through 2026-07-07, after
+which it moves to usage-based credits. Rather than let the remaining window lapse, the author put
+Fable's deep-research and long-horizon strengths to work on the highest-value hardening the project
+still had open - the evidence-verification pass it had deferred, and an adversarial guard red-team -
+plus a build-ready design for the masking roadmap. This entry records that work; it is prepared,
+not yet cut as a release.
+
+### Added
+- **Domain practice claims verified (`docs/evidence-base.md`).** The four clusters `house-rules.md`
+  had marked "STILL UNVERIFIED - treat as foundational" (comms-surveillance practice,
+  coverage-assurance methodology, detection-tuning practice, the DA/BA/role boundary) are now
+  primary-sourced. A five-agent pass inventoried **56 falsifiable practice claims** and verified
+  each: **33 verified · 8 partial · 15 industry-standard-uncited · 0 unsupported - no claim false or
+  fabricated.** The new register carries the per-claim verdict + citation; `house-rules.md`
+  §"Domain evidence base" is upgraded from 🟡-foundational to a 🟢 tiered summary pointing at it.
+- **Masking-pipeline design spec (`docs/prepare-data-design.md`).** The `/prepare-data` roadmap's
+  option table turned into a buildable specification - schema-inference profiler, format adapters
+  through the existing `convert_file.py` front door, an NER redaction backend, and a hardened
+  auto-validation gate - each with a component contract, a threat-model row, acceptance tests and a
+  build order, preserving every safety non-negotiable (agents never read `data/raw/`, `MASKING_KEY`
+  required, `validate_masking` stays the hard gate). Implementation is a later build.
+
+### Fixed (evidence corrections from the verification pass)
+- **Lexicon exclusion overclaim (`lexicon-spec.md`, C7).** "Exclusion rules / allow-lists that
+  suppress [FPs] without creating coverage gaps" overstated the property - an exclusion trades
+  recall for precision. Reworded to require each exclusion to record its coverage impact.
+- **Spoofing defaults contextualised (`spoofing.md`, C41).** Added the enforcement statistics
+  (Coscia large-order fill ~0.08% and lifetimes <500ms; Sarao 4-6 stacked orders) showing the
+  repo's `5x / 2000ms / 0.10 / 3000ms` defaults are deliberately conservative catch-alls, looser
+  than the cases and requiring production calibration - not empirically-derived constants.
+- **MW79 scope caveat recorded.** FCA Market Watch 79 is a data/model-governance authority, not an
+  e-comms-lexicon authority; `house-rules.md` and `evidence-base.md` now say so, so later docs don't
+  miscite it for lexicon design.
+
+### Security (guard red-team - `docs/adr/ADR-002` rev 0.6)
+- **Six new advisory-guard bypasses recorded (recs 17-22), two Tier-2 residuals + the rec-5
+  remainder re-confirmed with PoCs.** A static adversarial pass on the three PreToolUse guards found
+  wrapper-prefix evasion of the segment-anchored runners (`timeout 5 pytest`), backslash
+  line-continuation splitting (`python3 \`+newline+`evil.py`), absolute/tilde/`../` shebang-direct
+  exec, `python < file` stdin redirect, novel launcher gaps (`deno test`/`bun test`/`node --test`/
+  `xargs`), and the read-tool coverage gap for tools outside `{Read,Grep,Glob,Bash}`. All are
+  lexical bypasses of the *advisory* Bash-channel guard (no OS backstop by design - §Context), so
+  none raises a new risk class; each is a gap worth closing to keep the advisory guard honest. **No
+  guard logic was edited** (standing rule); the fixes + regression tests are recorded for
+  human application via a guard-hardening script.
+
+### Added (eval baseline)
+- **Fable-judged eval baseline (`docs/eval-baseline-2026-07-06.md`).** With execution consent
+  granted, all 28 golden cases were run blind with Fable 5 as the model and scored deterministically.
+  Raw result **20/28**; verification traced 7 of the 8 fails to normalization artifacts of the manual
+  run method (severity-floor under-tagging on behaviour cases; a trap substring-matching a *correct*
+  refusal) and only 1 to a genuine over-report (the `/deep-review` flagged a documented, intentional
+  column bound on `review-excel-truncation` - substance-adjusted read **27/28**). The findings-shaped
+  clusters (code-review, coverage, spec, tuning, citation, TM-validation) are the trustworthy
+  comparators; behaviour cases should be re-baselined via a canonical user-invoked `/run-evals`.
+  **One genuine action:** note to `/deep-review` not to flag documented rationale-carrying bounds.
+
+### Deferred / not done this pass
+- Per-file inline-citation threading and the guard-hardening apply-run remain mechanical follow-ups
+  (`docs/evidence-base.md` §Deferred; `ADR-002` recs 17-22).
+- Re-baseline the behaviour eval cases via a user-invoked `/run-evals` (canonical normalizer) to make
+  them comparable; and the `/deep-review` documented-bound prompt note above.
+
 ## [0.11.0] - 2026-07-05 - the Fable audit release
 
 **This release was audited by Claude Fable 5** (Anthropic's most intelligent generally available

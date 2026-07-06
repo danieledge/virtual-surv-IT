@@ -108,7 +108,28 @@ surveillance engagement), so it lives here; per-engagement findings do not.
   Art 16(7) + CDR (EU) 2017/565 Art 76 (UK SYSC 10A); Exchange Act 17a-4(b)(4) + FINRA 4511(b); WORM
   / Oct-2022 audit-trail alternative; the off-channel sweep. Folded into
   `comms-surveillance-policy.md` + `lexicon-spec.md`.
-- 🟡 **STILL UNVERIFIED - treat as foundational**: comms-surveillance **practice** (lexicon design,
-  NLP risk-scoring, voice transcription, FP reduction) and **coverage-assurance methodology**;
-  per-scenario detection-tuning practice; the DA-vs-BA boundary in trade/comms. Run a dedicated pass
-  before relying on these in a real engagement.
+- 🟢 **PRACTICE CLAIMS VERIFIED (2026-07-06)** - a dedicated pass inventoried 56 falsifiable
+  practice claims across the four previously-foundational clusters (comms-surveillance practice;
+  coverage-assurance methodology; detection-tuning practice; the DA/BA/role boundary) and checked
+  each against primary/authoritative sources. Result: **33 verified · 8 partial · 15
+  industry-standard-uncited · 0 unsupported; no claim false or fabricated.** The full verdict
+  register with citations is `docs/evidence-base.md`. What that pass establishes:
+  - **Verified with a primary source:** the tuning methodology cluster (ATL/BTL, risk-based
+    segmentation, statistical thresholds, post-deployment MI, change-management logging) grounds in
+    SR 11-7, FFIEC RBA, RTS 25 and vendor methodology; the spoofing/layering typology and signature
+    ground in MAR Art 12 and the Coscia/Sarao enforcement records; DQ dimensions and coverage
+    independence ground in BCBS 239 and the IIA Three Lines Model; voice-transcription pipelines,
+    off-channel controls (SEC/CFTC), worker-monitoring constraints (ICO), and BA scope (BABOK v3 +
+    EARS) all have authoritative anchors.
+  - **Legitimate practice, keep labelled as such (no single citable source):** several taxonomy and
+    enumeration framings (conduct-signal kinds, FP-driver lists, re-tune trigger lists) and the
+    **role-boundary RACI** - the independence/segregation *principle* is mandated (SR 11-7, IIA
+    Three Lines, FCA SYSC 3.2), but the mapping onto this team's specific named roles is
+    operating-model convention, not a regulator mandate.
+  - **Corrected this pass:** a lexicon exclusion claim that overstated "no coverage gaps"
+    (`lexicon-spec.md`); enforcement-statistics context added to the spoofing defaults
+    (`spoofing.md`), which are looser catch-alls than the cases (Coscia ~0.08% fill, <500ms).
+  - **Caveat carried forward:** FCA Market Watch 79 is a data/model-governance authority, **not** an
+    e-comms-lexicon authority - cite it only for testing/coverage/governance, never for lexicon
+    design. Per-file inline-citation threading is a mechanical follow-up (`docs/evidence-base.md`
+    §Deferred).

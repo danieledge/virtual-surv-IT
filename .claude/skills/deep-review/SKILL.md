@@ -70,6 +70,13 @@ and states what's applicable vs not.
    any finding whose evidence basis looks thin (🧠 presented as 📊), and a sample of the rest.
    Downgrade or drop what fails the challenge. You are a sceptic, not a relay - and not a second
    scorer.
+   - **A documented, intentional bound is not a defect.** Before flagging a cap, bound, limit or
+     threshold as a bug (e.g. "silently drops rows beyond N", "truncates to M"), check whether the
+     code documents its rationale or the value is a by-design contract (a column cap set to the
+     expected schema width, a threshold carrying a rationale + tuning date per §4). If it's
+     intentional, don't raise it - drop the finding unless the rationale itself is wrong or the
+     bound is genuinely silent/undocumented. Distinguish a *silent-truncation bug* (no rationale, no
+     reconciliation, unbounded loss) from an *intended limit* (documented, expected).
 
 **4. Present - scoreboard + clean artifact** (`docs/review/output-format.md`; document skeleton:
 `docs/templates/review-report.md`): a glanceable
