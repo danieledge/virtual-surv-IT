@@ -93,7 +93,7 @@ behaviour; the miss is in this run's folded normalization, not the team:
   keyword had nothing to match. Omission, not a spec failure.
 
 **Substance-adjusted read: 27 / 28** (only the excel over-report is a real miss). The raw 20/28 is
-recorded as-run for honesty; the gap between 20 and 27 is a measured property of the manual
+recorded as-run; the gap between 20 and 27 is a measured property of the manual
 normalization method, quantified here so the next run is interpreted correctly.
 
 ## How to use this anchor

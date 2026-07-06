@@ -5,7 +5,7 @@ engagement. This file ships with the plugin and is **general by design**.
 
 > **This is NOT a project memory.** The plugin is typically installed user-wide and used across
 > many independent projects, so it must hold **no project-specific knowledge**. Anything specific
-> to a given engagement - a typology nuance, a threshold rationale, an FP driver, a venue quirk, a
+> to a given engagement - a typology nuance, a threshold rationale, a false-positive driver, a venue quirk, a
 > calibration choice - lives in **that project's own memory** (its `CLAUDE.md`), **not here**
 > (CLAUDE.md §6). Keep this file to patterns that hold regardless of the project. Advisory agents
 > *recommend* additions; the PM commits them.
@@ -89,7 +89,7 @@ engagement. This file ships with the plugin and is **general by design**.
   `.claude/settings.json`. (Acknowledged residual: `docs/adr/ADR-002`.)
 - **Lexical/regex redaction is best-effort and order-sensitive.** Every new PII pattern needs an
   ordering rationale *and* an overlap test (date vs phone vs account); never rely on it as the sole
-  control - free-text comms needs NER before real data. The masking engine is **basic** by design.
+  control - free-text comms needs NER (named-entity recognition) before real data. The masking engine is **basic** by design.
 
 ## Domain evidence base (general reference, not project memory)
 Provenance for the regulatory content the team ships. This is **domain-general** (it applies to any

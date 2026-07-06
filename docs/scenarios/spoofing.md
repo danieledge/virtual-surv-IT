@@ -147,7 +147,7 @@ detect_spoofing(spoofing_session(seed=1), SpoofingThresholds(large_qty_multiple=
 - Single-account heuristic; does not yet detect **layering** (multiple orders at
   successive price levels) or **cross-account** coordination.
 - Median baseline is per-session; production should use a rolling per-trader baseline.
-- No price-context check (distance from touch) - a candidate enhancement.
+- No price-context check (distance from the touch, i.e. the best bid or offer) - a candidate enhancement.
 - **No genuine baseline anywhere (2026-06-29):** if neither the trader nor any other trader has
   a genuine order in the instrument, "outsized" cannot be defined and **no alert is raised**.
   This is a deliberate, documented choice (don't guess a baseline); it is a rare degenerate case

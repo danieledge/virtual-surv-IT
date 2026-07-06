@@ -20,7 +20,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 ## Every delivery
 
 - [ ] **Traceable** - each requirement links requirement → design → code → test → obligation
-      in the RTM (`docs/templates/rtm.md`).
+      in the RTM (requirements traceability matrix, `docs/templates/rtm.md`).
 - [ ] **Open questions dispositioned** - every open question raised upstream (spec/BRD/review, e.g.
       a BA's questions for an SME) is **formally closed** by its owner (✅ answered / ⏭️ needs
       deployment input / 🔴 open-decision-required) in a tracked decision log - not left dangling or
@@ -44,7 +44,8 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 - [ ] **Compliance-reviewed** - auditability, data safety (no secrets/PII/raw data, §5),
       documented thresholds (§4).
 - [ ] **Documented for handover** - a **developer handover** (`developer-handover.md`): how
-      to build/run/test, design decisions (ADRs), known limitations and tech debt. When
+      to build/run/test, design decisions (ADRs - architecture decision records), known
+      limitations and tech debt. When
       handing to an IT team with its own controls, also draft the artifacts those controls
       consume (**change request**, **ops runbook + release notes**) with approval/owner
       fields left for the IT team - the team drafts, it does not approve or deploy.

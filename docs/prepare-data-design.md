@@ -14,7 +14,7 @@
 
 ## 1. Scope
 
-Turns the roadmap's recommended trio (**#1 schema-inference profiler · #2 NER redaction · #3
+Turns the roadmap's recommended trio (**#1 schema-inference profiler · #2 NER (named-entity recognition) redaction · #3
 format adapters**) plus the **#5 auto-validation gate** into a buildable specification. Real
 synthetic (#4 SDV/CTGAN) and pluggable transforms (#6) are out of scope here - noted as extension
 points, not specified.
@@ -38,14 +38,14 @@ real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ �
 
 Established contracts this design must preserve:
 
-- **Roles** (`scripts/ingest.py`): `drop`, `token` (keyed HMAC, referential integrity), `shift`
+- **Roles** (`scripts/ingest.py`): `drop`, `token` (keyed HMAC - a keyed one-way hash - with referential integrity), `shift`
   (per-entity time shift), `keep` (signal-bearing), `generalise` (bucket/map), `redact` (typed
   free-text surrogates). `on_unknown: drop` is the safe default.
 - **Key handling:** `MASKING_KEY` from the environment (`~/.secrets`); **no insecure default** -
   `ingest` refuses to run unbounded without it (a fixed non-secret constant exists in
   `validate_masking` for the config self-test *only*).
 - **The hard gate:** `scripts/validate_masking.py` proves privacy (no residual identifiers/PII,
-  direct-identifier-passthrough check, k-anonymity over declared quasi-identifiers) **and** utility
+  direct-identifier-passthrough check, k-anonymity (each record indistinguishable from at least k-1 others) over declared quasi-identifiers - the attribute combinations that could re-identify someone) **and** utility
   (detection fidelity - the spoofing rule fires identically masked-vs-original). Nothing reaches an
   agent until this passes.
 - **The reconciliation house rule** (`docs/house-rules.md`): any extract/convert step ships a
@@ -202,7 +202,7 @@ blocking gate** run automatically after ingest, and adds re-identification risk 
 
 - **NER over the output:** run the NER scanner (§7) over the masked output's string fields, not
   just regex - catches a name the schema failed to redact. **BLOCK on any residual PII hit.**
-- **Re-identification risk scoring:** add l-diversity / t-closeness on top of the existing
+- **Re-identification risk scoring:** add l-diversity / t-closeness (finer re-identification measures) on top of the existing
   k-anonymity, over the declared quasi-identifiers. Report the risk; block below a configured
   floor.
 - **Gate semantics:** exit non-zero on any residual identifier, any residual PII hit, k-anonymity

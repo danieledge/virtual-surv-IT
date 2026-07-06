@@ -54,5 +54,5 @@ regression test).
 
 - Replay against **masked production data** (or a higher-fidelity synthesised distribution from
   `scripts/synthesise.py`) to estimate real precision/recall and the volume↔coverage trade-off.
-- `tuning-analyst` ATL/BTL with the thresholds, and `trade-surveillance-sme` confirmation of the
+- `tuning-analyst` ATL/BTL (above-the-line / below-the-line) testing with the thresholds, and `trade-surveillance-sme` confirmation of the
   genuine-baseline exclusion against legitimate high-cancel / market-making profiles.

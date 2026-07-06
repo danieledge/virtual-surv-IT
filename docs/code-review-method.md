@@ -1,7 +1,7 @@
 # Code review method - confidence scoring, filtering & transparency
 
 How `code-reviewer` decides what's worth reporting. The goal is high signal: surface what a
-senior engineer (and an auditor) would genuinely flag, filter the noise, and **always show
+senior engineer (and an auditor) would flag, filter the noise, and **always show
 what was filtered** so the review is trustworthy and defensible.
 
 > Adapted from **turingmind-code-review** (MIT, © 2026 TuringMind) -
@@ -13,7 +13,7 @@ what was filtered** so the review is trustworthy and defensible.
 
 | Mode | When | Pre-existing issues |
 |---|---|---|
-| **Change review** | reviewing a diff / PR (`/new-scenario`, a code change) | filtered out - only flag what the change introduces |
+| **Change review** | reviewing a diff / PR (pull request) (`/new-scenario`, a code change) | filtered out - only flag what the change introduces |
 | **Audit review** | reviewing existing code for audit-readiness (`/audit-review`) | **in scope** - the existing code *is* the subject; never silently drop them |
 
 The scoring below is identical in both modes except for the "new vs pre-existing" criterion,

@@ -19,8 +19,8 @@ This is a plugin, not a hosted service. The security-relevant surfaces are the t
 (always-on PreToolUse) plus the data-handling scripts:
 
 - **The data-safety guard** (`.claude/hooks/guard-raw-data.py`) - blocks tool calls that target
-  raw, un-masked data under `data/raw/`, so PII/MNPI cannot egress to the model provider as
-  prompt context (`CLAUDE.md` §5). Bypasses that let raw data reach an agent are in scope.
+  raw, un-masked data under `data/raw/`, so PII/MNPI (personal data / material non-public
+  information) cannot reach the model provider as prompt context (`CLAUDE.md` §5). Bypasses that let raw data reach an agent are in scope.
 - **The code-execution gate** (`.claude/hooks/guard-code-execution.py`) - keeps code review
   *static by default*; execution requires explicit consent (`.claude/.exec-consent`) or
   `CST_ALLOW_EXEC` (`CLAUDE.md` §7). Note: as documented in the hook, string-matching of shell

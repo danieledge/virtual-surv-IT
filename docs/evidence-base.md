@@ -23,7 +23,7 @@
 
 ## Cross-cutting findings (read these first)
 
-1. **The independence/separation backbone is citable; the named-role RACI is convention.** Every
+1. **The independence/separation backbone is citable; the named-role RACI (responsible/accountable/consulted/informed) is convention.** Every
    role-boundary claim (C50-C56) rests on a genuinely mandated principle - SR 11-7 (model
    development independent of validation), the IIA Three Lines Model (first- vs second-line), FCA
    SYSC 3.2 (segregation of duties), BABOK v3 (the BA specifies, does not build), EARS/Mavin

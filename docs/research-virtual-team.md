@@ -10,7 +10,7 @@ exactly Anthropic's architecture, which beat single-agent Opus 4 by **90.2%** on
 research eval ([multi-agent-research-system](https://www.anthropic.com/engineering/multi-agent-research-system),
 [subagents docs](https://docs.anthropic.com/en/docs/claude-code/subagents)). The frameworks
 (MetaGPT, ChatDev, AgentMesh) converge on the same lessons we've partly implemented:
-SOP/role decomposition, artifact-centric coordination, independent critics.
+SOP (standard operating procedure) / role decomposition, artifact-centric coordination, independent critics.
 
 **But two caveats apply directly to us:**
 1. **Cost & fit.** Multi-agent uses **~15× more tokens**, and token use alone explains ~80%

@@ -93,7 +93,7 @@ surveillance technologists will recognise on sight:
   is an email chain. The evidence *is* the product in this domain - documented rationale,
   tuning date, the alert-to-obligation trace, all of it expected to stand up **years later** -
   and producing that evidenced 80% (specs, RTMs - requirements traceability matrices - test
-  evidence, tuning packs, MI reporting) is what actually consumes your experts.
+  evidence, tuning packs, MI (management information) reporting) is what actually consumes your experts.
 - **The queue behind one "simple" change.** Tighten a spoofing threshold: that's regulatory
   interpretation, requirements, detection engineering, statistics (ATL/BTL - Above/Below-The-
   Line threshold testing), model risk, QA and audit evidence. The people who hold more than two
@@ -140,7 +140,7 @@ specialists and builds in **independent review**:
 
 - **Business analysis** - turning a regulatory obligation into a buildable, unambiguous spec.
 - **Surveillance rule development** - deterministic, tested detection logic.
-- **Data engineering** - pipelines, ETL, transformation/utility scripts.
+- **Data engineering** - pipelines, ETL (extract, transform, load), transformation/utility scripts.
 - **Data analysis & threshold tuning** - false-positive analysis, ATL/BTL calibration, MI.
 - **ML / AI detection** - and *independent* model validation.
 - **QA** - independent test design and evidence (it doesn't mark its own homework).

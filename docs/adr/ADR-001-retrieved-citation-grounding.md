@@ -20,7 +20,7 @@
 ## Context
 
 The team's central promise is **auditability**: a traceable link from `alert → logic →
-regulatory obligation`, recorded in the RTM and checked by `compliance-reviewer`. That spine is
+regulatory obligation`, recorded in the RTM (requirements traceability matrix) and checked by `compliance-reviewer`. That spine is
 only as trustworthy as the regulatory references in it.
 
 How the model works makes this a first-order risk. An LLM emits citations like "MAR Article 12",
