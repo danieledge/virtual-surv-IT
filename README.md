@@ -16,24 +16,7 @@ Scala, Java, PowerShell, Bash), reconciliation and reporting jobs, ML, reviews a
 docs - with **independent review** built in, like a real team, not one assistant with nobody
 checking. It does **not** perform the compliance, monitoring or investigation work itself.
 
-```mermaid
-flowchart LR
-    You([You: a problem,<br/>a review, or a build]) --> PM[PM<br/>clarify + plan]
-    PM --> RA[business-analyst<br/>spec]
-    RA --> Build[right builder<br/>rule · pipeline · script · ML]
-    Build --> QA[qa-engineer<br/>independent tests]
-    QA --> Rev[review<br/>code · performance · compliance]
-    Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
-```
-
-> **Not all 16 every time.** The PM engages only the agents a task needs - typically **2-5**,
-> never all 16. The diagram is the *shape* of a full delivery; complexity is opt-in
-> (*"use the simplest thing that works"*).
-
 > ⚗️ **Proof of concept** - not production or regulatory tooling; **review everything it produces**.
-> 🛑 **Dormant by default** - a normal `claude` session is standard Claude Code until you type `/engage`.
-> 🛡️ **Data safety always on** - raw data under `data/raw/` is **hard-blocked** from the model;
-> anything else carries **your attestation** it's masked or synthetic ([details](#-handling-real-data)).
 
 > 🔍 **Audited with Claude Fable (this release).** We turned
 > [Claude Fable 5](https://www.anthropic.com/news/claude-fable-5-mythos-5) - Anthropic's most
@@ -399,9 +382,22 @@ ships together - see the manifest.)
 **Morgan** (PM & orchestrator) leads **16 agents** - fifteen specialists and a tireless junior
 (Pip) - the seventeen in the photo above. Each has a day job, a name, strong opinions, and a Slack
 status that tells you more than their job title does. (Type `/meet-the-team` and Morgan does the
-introductions live.) **🧠 Advisors** are read-only - your *independent* check, so they can critique
-all day but can't touch the code (segregation of duties, basically). **🔧 Builders** write the stuff.
-Morgan engages only the ones a task needs - **not all of them every time**.
+introductions live.) **🧠 Advisors** hold no file-editing tools - your *independent* check, so they
+can critique all day but can't change the code (segregation of duties, basically). **🔧 Builders**
+write the stuff. Morgan engages only the ones a task needs - **not all of them every time**.
+
+```mermaid
+flowchart LR
+    You([You: a problem,<br/>a review, or a build]) --> PM[PM<br/>clarify + plan]
+    PM --> RA[business-analyst<br/>spec]
+    RA --> Build[right builder<br/>rule · pipeline · script · ML]
+    Build --> QA[qa-engineer<br/>independent tests]
+    QA --> Rev[review<br/>code · performance · compliance]
+    Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
+```
+
+*The shape of a full delivery - a typical task fires only **2-5** of the 16; complexity is opt-in
+("use the simplest thing that works").*
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
 > a PowerShell transform → `platform-engineer`; a reconciliation/reporting job → `data-analyst`;
@@ -494,6 +490,11 @@ the specialists.
 ```
 /engage <a problem, code to review, or a set of requirements>
 ```
+
+> 🛑 **Dormant by default** - a normal `claude` session is standard Claude Code until you type
+> `/engage` (or another team command).
+> 🛡️ **Data safety always on** - raw data under `data/raw/` is **hard-blocked** from the model;
+> anything else carries **your attestation** it's masked or synthetic ([details](#-handling-real-data)).
 
 The PM **asks clarifying questions** (and waits for your answers - it won't guess scope,
 jurisdiction, data or success criteria), offers a **menu of documentary artifacts** to choose from
