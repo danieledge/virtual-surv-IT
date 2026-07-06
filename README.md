@@ -973,6 +973,9 @@ agents now self-verify against their brief and flag gaps before returning; stand
 
 ## ⚠️ Known issues (cosmetic)
 
+<details>
+<summary>⚠️ <b>Two display-only quirks</b> - the PM sometimes narrates the wrong teammate name, and some emoji miss their glyph on older Windows + Edge; neither affects what the team does</summary>
+
 Both are **display-only** - they don't affect what the team does (routing, tool grants, the actual
 deliverables). Flagged plainly, in the spirit of the proof-of-concept notice at the top.
 
@@ -1009,6 +1012,8 @@ drift goes uncorrected.
 
 **Net:** the *actual* subagent always knows it's Hassan/Theo (its own file says so) and always does
 the right job - only the PM's commentary occasionally mislabels it. Hence: cosmetic.
+
+</details>
 
 </details>
 
