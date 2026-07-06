@@ -3,10 +3,12 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.11.0](https://img.shields.io/badge/version-0.11.0-blue)
+![Version 0.12.0](https://img.shields.io/badge/version-0.12.0-blue)
 ![Tests 340+ passing](https://img.shields.io/badge/tests-340%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
+
+<img src="docs/assets/fable5-audited.svg" alt="Audited with Claude Fable 5" height="60">
 
 **Virtual Surv-IT is a virtual engineering team for compliance surveillance, running inside
 [Claude Code](https://claude.com/claude-code)**: a PM (Morgan) plus **16 specialist AI agents**

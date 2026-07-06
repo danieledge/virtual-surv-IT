@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased] - 2026-07-06 - the Fable send-off pass
+## [0.12.0] - 2026-07-06 - the Fable send-off pass
 
 **Context.** Claude Fable 5 was included in Claude subscription plans only through 2026-07-07, after
 which it moves to usage-based credits. Rather than let the remaining window lapse, the author put
