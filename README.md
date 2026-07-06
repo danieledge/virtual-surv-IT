@@ -9,17 +9,12 @@
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
 **Virtual Surv-IT is a virtual engineering team for compliance surveillance, running inside
-[Claude Code](https://claude.com/claude-code)**: a PM (Morgan) plus **16 specialist AI agents** -
-subject-matter experts who advise, builders who engineer, and reviewers who independently check -
-that design, build, test, review and document the **technology behind market-abuse and
-financial-crime detection**. Work is delivered through structured collaboration with
-**independent review**, like a real engineering team, not one assistant doing everything with
-nobody checking.
-
-It builds the **engineering** behind surveillance - detection rules, data pipelines / ETL,
-transformation and utility scripts (Python, Scala, Java, PowerShell, Bash), reconciliation and
-reporting jobs, ML, code reviews and handover documentation - and does **not** perform the
-compliance, monitoring or investigation work itself.
+[Claude Code](https://claude.com/claude-code)**: a PM (Morgan) plus **16 specialist AI agents**
+who design, build, test, review and document the **engineering behind market-abuse and
+financial-crime detection** - detection rules, data pipelines / ETL, utility scripts (Python,
+Scala, Java, PowerShell, Bash), reconciliation and reporting jobs, ML, reviews and handover
+docs - with **independent review** built in, like a real team, not one assistant with nobody
+checking. It does **not** perform the compliance, monitoring or investigation work itself.
 
 ```mermaid
 flowchart LR
@@ -35,96 +30,40 @@ flowchart LR
 > never all 16. The diagram is the *shape* of a full delivery; complexity is opt-in
 > (*"use the simplest thing that works"*).
 
-> ⚗️ **Proof of concept** - an exploratory experiment, not a production system or regulatory
-> tooling; expect rough edges and breaking changes, and **review everything it produces**.
-> 🛑 **Dormant by default** - a normal `claude` session is standard Claude Code; the team wakes
-> only when you type `/engage` (or another team command).
+> ⚗️ **Proof of concept** - not production or regulatory tooling; **review everything it produces**.
+> 🛑 **Dormant by default** - a normal `claude` session is standard Claude Code until you type `/engage`.
 > 🛡️ **Data safety always on** - raw data under `data/raw/` is **hard-blocked** from the model;
-> anything else you share carries **your attestation** that it's masked or synthetic
-> ([how real data is handled](#-handling-real-data)).
+> anything else carries **your attestation** it's masked or synthetic ([details](#-handling-real-data)).
 
-> 🔍 **Audited with Claude Fable (this release).** On 5 July 2026 we turned
+> 🔍 **Audited with Claude Fable (this release).** We turned
 > [Claude Fable 5](https://www.anthropic.com/news/claude-fable-5-mythos-5) - Anthropic's most
-> intelligent generally available model, the first of the Claude 5 family in the Mythos tier
-> above Claude Opus - loose on this repo to try and pick holes in the approach and the
-> documentation: nine parallel review agents over the agents/skills/hooks/docs/evals, a
-> four-agent truth audit that checked ~214 falsifiable claims in this README and every linked
-> doc against the code, and a conformance audit against 13 source-verified rules from
-> Anthropic's published multi-agent guidance. **Release 0.11.0 fixes what it found** - stale
-> and overstated claims, guard false positives, an eval harness whose inputs leaked their own
-> answers - and every fix was gated on the full test suite and a live golden-case eval run so
-> nothing regressed. Findings and fixes: [`CHANGELOG.md`](CHANGELOG.md).
+> intelligent generally available model, the Mythos tier above Claude Opus - loose on this repo to
+> pick holes in the approach and the documentation. **Release 0.11.0 fixes what it found**, with
+> every fix regression-gated on the test suite and a live eval run. Full story: [`CHANGELOG.md`](CHANGELOG.md).
 
-> **New to AI agents and LLMs?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md) - a
-> plain-English tour of what this is, who the team are, how a job flows through them, and how it
-> keeps confidential data away from the AI. No prior knowledge needed.
-
-**See it work** - a full build, end-to-end on synthetic data, captured as a readable
-**[build demo transcript](docs/demos/build-demo.md)** (every artifact in
-[`docs/demos/build-artifacts/`](docs/demos/build-artifacts/)). Other transcripts:
-[review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md).
+**New to AI agents?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md), a plain-English tour.
+**See it work:** the end-to-end [build demo](docs/demos/build-demo.md) on synthetic data
+(artifacts in [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/)) ·
+[review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) transcripts.
 
 <details>
 <summary>✨ <b>What's new in 0.11 / 0.10</b> - the Fable audit release (truth-checked docs, hardened guards, genuinely blind evals that catch regressions, best-practice conformance) · the file-conversion front door (vendored, no pip) · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
 
-**0.11.0** - **the Fable audit release.** Claude Fable 5 audited the whole setup and its
-documentation (nine review agents + a four-agent truth audit + a best-practice conformance
-audit against Anthropic's multi-agent guidance); this release fixes everything it found:
-documentation claims corrected to match the code (token economics, RTM test names, safety
-wording), four guard defects fixed by a human-applied maintenance run, the eval harness made
-genuinely blind and failable (28 golden cases, two new safety cases), mechanical
-docs-consistency and tier-drift tests, and condensed-return/right-sizing rules from the
-conformance audit. Full suite 347 passing; a live golden-case spot check confirmed no
-behaviour regression.
+**0.11.0** - **the Fable audit release.** Claude Fable 5 audited the setup and its documentation
+(setup review + truth audit + best-practice conformance against Anthropic's multi-agent guidance);
+this release fixes everything it found: docs corrected to match the code, four guard defects fixed
+by a human-applied run, genuinely blind evals (28 golden cases), mechanical docs-consistency and
+tier-drift tests. Full suite 347 passing; a live golden-case spot check confirmed no regression.
 
-**0.10.0** - **`scripts/convert_file.py`, the file-conversion front door.** Excel
-(`.xlsx`/`.xlsm`/`.xls`), CSV/TSV, PDF and Word `.docx` in; CSV/JSONL or Markdown/text out,
-with a **JSON evidence report on every run**. Lossless by default (zero type inference - no
-float-mangled account IDs, no guessed date formats); an optional per-feed schema
-(`config/feed-schema-example.yaml`) turns conversion into a hard gate (types, ID patterns,
-header order, row counts, Decimal control totals). Dependencies are **vendored in `vendor/`**
-(pure Python, MIT/BSD/PSF, pinned), so a plain `git clone` works with **no pip access** -
-built for locked-down corporate environments. House rule: all file conversion goes through
-it, and a conversion without its report attached is a review finding.
+**0.10.0** - **`scripts/convert_file.py`, the file-conversion front door.** Excel/CSV/TSV/PDF/docx
+in, CSV/JSONL/Markdown out, a JSON evidence report on every run, lossless by default, optional
+per-feed schema gate. Dependencies vendored (pure Python, pinned) so `git clone` works with no
+pip access. House rule: all file conversion goes through it.
 
-**0.9.1** - fixes from a live Windows plugin install (interpreter resolution
-`python3` → `python` → `py`; backslash paths + the `py` launcher covered by the guards;
-permission-rule churn prevented with one consistent invocation spelling + a pre-approval
-block), and **silent-extraction-truncation defences** at every layer (house rule, review-lens
-checks, a seeded golden eval case, DoD reconciliation requirement) - the "bad Excel extraction
-contaminated the analysis" incident class, encoded as controls.
-
-**0.9.0:**
-
-- **🧳 Plugin mode does everything now** - the bundled scripts (the `.md`→`.html` render,
-  synthetic data, the DoD artifact gate) run **by path from any project**; `/engage` detects
-  its run mode and states it at startup. The old "works everywhere vs repo-as-project" caveat
-  is gone.
-- **🔐 Guard 0.4, applied by a human** - the consent-write gate blocks the model editing the
-  guards (including for this update: the user copied the prepared files in); two live false
-  positives fixed (`make` in commit messages; multi-file `shellcheck`); block messages print
-  absolute paths. Morgan's question menus restructured to fit the question tool's hard limits
-  (4 questions/call, 4 options/question).
-- **📣 The README argues its case** - the domain pressures, the hypothesis under test, the
-  "I already have ChatGPT/Claude - why this?" answer, principles paired with what enforces
-  them, reading paths, a data-flow diagram, an acronym glossary, and the MW79 citation linked
-  to source.
-- **⚠️ Breaking for pre-0.8.0 installs** (consolidated at the top of the 0.9.0 CHANGELOG
-  entry): per-project enablement replaces runs-anywhere; summoning is slash-command-only;
-  execution consent is human-only; git history rewritten (re-clone).
-
-**0.8.0** (same 2 days): true dormancy (`disable-model-invocation`, lean CLAUDE.md, trimmed
-descriptions); guards fail closed on crash; the consent-write gate (humans hold the keys);
-eval-harness contract in CI; review pipeline stops double-scoring. Tests **84 → ~171**
-(~192 by 0.9.0).
-
-Recent **0.7.x**: build-demo re-run with fresh artifacts; README overhauled + summary-email on every close; audited against
-Anthropic's guidance + self-assessment corrected; memory is project-scoped (no project memory in
-the plugin); reviews coach "vibe-coded" code (prompting guidance); docs slimmed + masking claims
-corrected; Morgan states the loaded version on startup; safety-hook hardening (ADR-002); citations
-*retrieved, not recalled* against a source-verified
-[regulatory register](config/regulatory-register.yaml) (ADR-001).
-📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
+Earlier: **0.9.x** (plugin mode runs everything from any project; Windows fixes;
+extraction-truncation defences; breaking changes for pre-0.8.0 installs), **0.8.0** (true
+dormancy; guards fail closed; human-only consent gate), **0.7.x** (demos, regulatory register,
+ADR-001/002). 📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
 
 </details>
 
@@ -134,33 +73,7 @@ corrected; Morgan states the loaded version on startup; safety-hook hardening (A
 
 ---
 
-<details>
-<summary>📖 <b>Acronym glossary</b> - the domain and spec shorthand used throughout</summary>
-
-| Acronym | Meaning |
-|---|---|
-| ADR | Architecture Decision Record |
-| AML | Anti-Money Laundering |
-| ATL/BTL | Above-The-Line / Below-The-Line threshold testing (what a threshold catches vs what it just misses) |
-| BABOK | Business Analysis Body of Knowledge (the IIBA standard) |
-| BRD / FSD | Business Requirements Document / Functional Specification Document |
-| DoD | Definition of Done |
-| EARS | Easy Approach to Requirements Syntax (unambiguous requirement phrasing) |
-| FP | False Positive |
-| MAR | (EU) Market Abuse Regulation |
-| MI | Management Information (metrics/reporting) |
-| MNPI | Material Non-Public Information |
-| MW79 | [FCA Market Watch 79](https://www.fca.org.uk/publications/newsletters/market-watch-79) (May 2024) |
-| NER | Named-Entity Recognition (finding names/IDs in free text) |
-| PII | Personally Identifiable Information |
-| RTM | Requirements Traceability Matrix |
-| SAR / STR / STOR | Suspicious Activity Report / Suspicious Transaction Report / Suspicious Transaction and Order Report |
-| SME | Subject-Matter Expert |
-| SR 11-7 | The US Federal Reserve's supervisory guidance on model risk management |
-| TM | Transaction Monitoring |
-| UAT | User Acceptance Testing |
-
-</details>
+📖 **Acronym glossary** - the domain and spec shorthand used throughout: [`docs/glossary.md`](docs/glossary.md)
 
 ## 🤔 Why Virtual Surv-IT?
 
