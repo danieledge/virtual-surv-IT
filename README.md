@@ -65,7 +65,7 @@ flowchart LR
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md).
 
 <details>
-<summary>✨ <b>What's new in 0.11 / 0.10</b> - the Fable audit release (truth-checked docs, hardened guards, an eval harness that can fail, best-practice conformance) · the file-conversion front door (vendored, no pip) · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.11 / 0.10</b> - the Fable audit release (truth-checked docs, hardened guards, genuinely blind evals that catch regressions, best-practice conformance) · the file-conversion front door (vendored, no pip) · ⚠️ breaking changes for pre-0.8.0 installs (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
 
 **0.11.0** - **the Fable audit release.** Claude Fable 5 audited the whole setup and its
 documentation (nine review agents + a four-agent truth audit + a best-practice conformance
