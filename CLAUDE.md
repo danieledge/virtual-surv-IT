@@ -106,6 +106,15 @@ an **engagement-summary email** (`.txt` in `artifacts/`, signed as Morgan), and 
   `guard-consent-writes.py`), a safe/sandbox env on synthetic/masked data only (§5), and **never**
   untrusted provenance - enforced by the `.claude/hooks/guard-code-execution.py` hook. Unauthorised dynamic/perf findings stay
   **🧠 inferred**. Threat model & residual risk: `docs/adr/ADR-002-safety-hook-threat-model.md`.
+- **The gate covers the untrusted code *under review*, not the team's own tooling - never ask the
+  user for consent to run a front-door script.** The vendored team scripts are allow-listed in
+  `guard-code-execution.py` (`_TEAM_ALLOW`) and run **consent-free**: `convert_file` (Excel / CSV /
+  PDF / DOCX → data, deps vendored so no pip), `render_html`, `ingest`, `gen_synthetic`,
+  `synthesise`, `validate_masking`, `validate_manifest`, `check_citations`, `eval_score`,
+  `calibrate_spoofing`, `check_artifacts`. So read a spreadsheet with
+  `python -m scripts.convert_file <file>` and just run it - do **not** hand-parse it, and do **not**
+  tell the user to create `.claude/.exec-consent` to convert or render a file. Consent is only for
+  executing the deliverable being built or reviewed.
 - An advisory agent that wants to edit code hands back to the orchestrator instead.
 - `model-validator` is independent of `ml-engineer` by design - free to challenge.
 - Prefer chaining agents in one session; **right-size** every fan-out (detail + the ~15× token

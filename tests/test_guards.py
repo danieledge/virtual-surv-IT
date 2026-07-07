@@ -154,6 +154,15 @@ def test_exec_guard_allows_team_scripts(no_consent):
     assert _run(_EXEC_GUARD, _bash("python -m scripts.ingest data/raw"), no_consent) == ALLOW
 
 
+def test_exec_guard_allows_convert_file_without_consent(no_consent):
+    # The file-conversion front door is team tooling (deps vendored), not code under review,
+    # so converting a spreadsheet must never require the .exec-consent marker. Both documented
+    # invocation forms are on _TEAM_ALLOW. (CLAUDE.md §7; house-rules "Execution safety".)
+    assert _run(_EXEC_GUARD, _bash("python -m scripts.convert_file report.xlsx"), no_consent) == ALLOW
+    assert _run(_EXEC_GUARD, _bash("python scripts/convert_file.py report.xlsx"), no_consent) == ALLOW
+    assert _run(_EXEC_GUARD, _bash("python -m scripts.render_html artifacts/x.md"), no_consent) == ALLOW
+
+
 def test_exec_guard_allows_static_analysers(no_consent):
     assert _run(_EXEC_GUARD, _bash("ruff check scripts/"), no_consent) == ALLOW
     assert _run(_EXEC_GUARD, _bash("git diff --stat"), no_consent) == ALLOW

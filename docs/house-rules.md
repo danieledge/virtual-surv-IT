@@ -73,7 +73,11 @@ engagement. This file ships with the plugin and is **general by design**.
   `! touch /path/to/project/.claude/.exec-consent`, so a terminal in another directory can't
   create it in the wrong place); the intake "yes" is *intent*, the marker is the *consent*.
   The user is responsible for the safety of code they hand over (CLAUDE.md §7). Threat model:
-  `ADR-002`.
+  `ADR-002`. **The gate covers the code under review, not the team's own vendored front-door
+  scripts** - `convert_file`, `render_html`, `ingest`, `validate_masking` and the rest are
+  allow-listed in the guard and run **consent-free**, so read a spreadsheet with
+  `python -m scripts.convert_file <file>` and just run it; never ask the user to create the
+  `.exec-consent` marker to convert or render a file.
 
 ## Recurring code-review findings
 - **String-matching Bash commands in PreToolUse hooks is advisory only.** Arbitrary shell trivially
