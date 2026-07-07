@@ -8,7 +8,7 @@
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
-<img src="docs/assets/fable5-audited.svg" alt="Audited with Claude Fable 5" height="60">
+<img src="docs/assets/fable5-audited.svg" alt="Audited with Claude Fable 5" height="20">
 
 **Virtual Surv-IT is a virtual engineering team for compliance surveillance that runs inside
 [Claude Code](https://claude.com/claude-code)**: a PM (Morgan) plus **16 specialist AI agents**.
