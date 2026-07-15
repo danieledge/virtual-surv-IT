@@ -66,6 +66,14 @@ a recommendation - e.g. *"Verdict: conditional - 2 fixed, 1 open (needs your cal
 threshold). I can fix the 2 remaining warnings, escalate the open one, or produce the handover
 pack. Which next?"*
 
+**Standard open (Definition of Done - the opening bookend; do this before delivering the review
+above, and it applies even when this skill is invoked directly):** unless you arrived via
+`/engage` (which already wrote it), write a **proportionate Engagement Brief**
+(`docs/templates/engagement-brief.md`) as `.md` + `.html` in `artifacts/` - the target, the scope
+and decisions taken, assumptions, and the plan; **right-size it** (a few lines for a small review,
+not a full programme). The brief is the opening artifact of **every** engagement and the bookend to
+the summary email below.
+
 **Standard close (Definition of Done - applies even when this skill is invoked directly):**
 write the **engagement-summary email** (`docs/templates/engagement-summary-email.md`) as a
 `.txt` in `artifacts/`, **signed off as Morgan**, then run the mechanical gate -

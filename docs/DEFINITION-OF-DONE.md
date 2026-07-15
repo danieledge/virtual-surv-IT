@@ -19,6 +19,12 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 
 ## Every delivery
 
+- [ ] **Briefed** - the engagement **opens** with an **Engagement Brief**
+      (`docs/templates/engagement-brief.md`, `.md` + `.html`) capturing the target/scope, the
+      decisions and assumptions taken, and the plan - **right-sized** to the work (a few lines for a
+      small review, a fuller brief for a build). Present for **every** engagement and every entry
+      point: written by `/engage`, or by the invoked skill's *standard open* when it is called
+      directly. It is the opening bookend to the engagement-summary email below.
 - [ ] **Traceable** - each requirement links requirement → design → code → test → obligation
       in the RTM (requirements traceability matrix, `docs/templates/rtm.md`).
 - [ ] **Open questions dispositioned** - every open question raised upstream (spec/BRD/review, e.g.
