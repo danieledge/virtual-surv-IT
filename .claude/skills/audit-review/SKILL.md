@@ -64,7 +64,10 @@ disposition of every finding**: ✅ fixed (what changed) · 🔴 open · ⚖️ 
 review)** with the reason and options rather than guessing. Then offer concrete follow-ups with
 a recommendation - e.g. *"Verdict: conditional - 2 fixed, 1 open (needs your call on the
 threshold). I can fix the 2 remaining warnings, escalate the open one, or produce the handover
-pack. Which next?"*
+pack. Which next?"* **Among the follow-ups, offer a dedicated deep security audit
+(`/security-audit`)** - and recommend it when the code touches a security-sensitive surface or the
+audit surfaced any security finding; it goes deeper on security (OWASP ASVS / CWE + a threat model)
+than this audit's security lens.
 
 **Standard open (Definition of Done - the opening bookend; do this before delivering the review
 above, and it applies even when this skill is invoked directly):** unless you arrived via

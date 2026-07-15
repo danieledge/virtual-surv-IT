@@ -161,7 +161,12 @@ Repeat the execution- and data-responsibility notes in the final Delivery Report
 
 **1. Classify the work.** Decide the entry point:
 - a *problem / idea* → discovery → requirements → build (full SDLC);
-- a *review* → the audit-review loop (`/audit-review`);
+- a *review* → the audit-review loop (`/audit-review`). **When the work is a code review, offer a
+  dedicated security audit up front** via the question tool (header `Security`, `multiSelect:
+  false`): *review only* · *review + a dedicated security audit* (`/security-audit`) - **recommend
+  the latter** when the code touches a security-sensitive surface (auth, input parsing, DB access,
+  external I/O, crypto, secrets, or PII/data handling). It is offered again at the review's close as
+  a backstop;
 - a *build from requirements* → orchestrator-workers delivery (`/build-solution`).
 Be flexible: skip any stage already satisfied by what the user gave you. The deliverable
 could be **any** surveillance-engineering output - a detection rule, a data pipeline / ETL,

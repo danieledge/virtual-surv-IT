@@ -8,8 +8,8 @@ name: Review Output Format
 > lane, the §4/§5 never-filter rule, artifact-first output) are ours. See `THIRD-PARTY-LICENSES.md`.
 
 The single canonical format for every team review (`code-reviewer`, the dimension lenses,
-`/deep-review`, `/audit-review`). Scoring and filtering live in `docs/code-review-method.md`;
-this file defines **what the user sees**. Two surfaces:
+`/deep-review`, `/audit-review`, `/security-audit`). Scoring and filtering live in
+`docs/code-review-method.md`; this file defines **what the user sees**. Two surfaces:
 
 - **Console** → a clean, glanceable **scoreboard** (below). Never a wall of tables.
 - **Artifact** → the full findings, diffs and evidence, written to

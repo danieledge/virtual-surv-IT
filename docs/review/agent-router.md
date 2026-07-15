@@ -8,7 +8,9 @@ name: Review Lens Router
 
 Selects which **review lenses** (`docs/review/lenses/*`) to load for a given target. Loading
 *only* the relevant lenses keeps signal high and cost low - don't run the Java lens on a Python
-diff. The review skills (`/deep-review`, `/audit-review`) and `code-reviewer` use this.
+diff. The review skills (`/deep-review`, `/audit-review`, `/security-audit`) and `code-reviewer`
+use this. `/security-audit` loads the **security + per-language + architecture** lenses and drives
+them hard (it skips the general bugs/style breadth - that is `/deep-review`'s job).
 
 ## Selection matrix
 

@@ -3,6 +3,30 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.13.0] - 2026-07-15 - the security-audit release
+
+### Added
+- **`/security-audit` - a dedicated deep security audit skill** (21st workflow). Follows the same
+  conventions as `/audit-review` (evaluator-optimizer loop, verdict + per-finding disposition,
+  OWASP ASVS / CWE / SEI CERT cited, Morgan's challenge pass, the brief/email DoD bookends) but
+  aimed entirely at security depth: a threat-model framing (attack surface, trust boundaries,
+  sensitive data flows), the security + per-language + architecture lenses driven hard with the
+  security analysers (bandit/semgrep/gitleaks/find-sec-bugs/ShellCheck) and a dependency /
+  supply-chain scan, and the §5 data-safety trail. It **complements** the general review's inline
+  security lens, it does not replace it.
+- **Scope routing to Anthropic's `/security-review` pipeline.** With a real change set (branch/PR/
+  commit-range/uncommitted diff) the audit additionally runs `/security-review` and merges its
+  findings; with arbitrary local code and no diff it uses the team's own deep pass, because
+  `/security-review` falls back to a general-purpose agent (not the security pipeline) when there is
+  no diff.
+- **It's offered up front and at the close.** `/engage` offers the security audit when it
+  classifies a code review (the intake "what do you want to do" flow: *review only* · *review + a
+  dedicated security audit*), and `/deep-review` and `/audit-review` also surface it as a close-out
+  option - both recommend it when the code touches a security-sensitive surface or a security
+  finding appeared.
+- Registered in the canonical command index (`docs/team-operating-guide.md`), the review router /
+  output-format consumer lists, and the README command table; workflow count updated to 21.
+
 ## [0.12.0] - 2026-07-06 - the Fable send-off pass
 
 **Context.** Claude Fable 5 was included in Claude subscription plans only through 2026-07-07, after

@@ -96,7 +96,11 @@ installed-plugin session invoke the bundled `scripts/` copy by path; see the ope
 
 **5. Close - don't dead-end.** Summarise from the scoreboard, then offer concrete next steps
 with a recommendation - *"3 🔴, 5 🟠. I can fix the criticals, run `/remediate`, or produce a
-handover pack. Which?"* - and offer to carry them out.
+handover pack. Which?"* - and offer to carry them out. **Always include a deep security audit
+(`/security-audit`) among the options**, and **recommend** it when the review touched a
+security-sensitive surface (auth, input parsing, DB access, external I/O, crypto, secrets, or
+PII/data handling) or surfaced any security finding - it runs a dedicated OWASP ASVS / CWE +
+threat-model pass beyond this review's inline security lens.
 
 **Standard open (Definition of Done - the opening bookend; do this before delivering the review
 above, and it applies even when this skill is invoked directly):** unless you arrived via

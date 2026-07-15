@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.12.0](https://img.shields.io/badge/version-0.12.0-blue)
+![Version 0.13.0](https://img.shields.io/badge/version-0.13.0-blue)
 ![Tests 340+ passing](https://img.shields.io/badge/tests-340%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -35,7 +35,13 @@ itself.
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) transcripts.
 
 <details>
-<summary>✨ <b>What's new in 0.12 / 0.11</b> - the Fable send-off (every foundational domain claim checked against primary sources, a masking-pipeline design, a security review of the safety guards, a Fable-judged quality baseline) and the Fable audit release before it (docs checked against the code, tightened safety guards, self-tests that catch quality slips before release) · a front door for turning Excel/CSV/PDF files into the formats the team reads (dependencies bundled, so no extra install) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.13 / 0.12</b> - the security-audit release (a dedicated `/security-audit` skill offered when you ask for a code review: OWASP ASVS / CWE + a threat model, following the audit-review conventions) · the Fable send-off before it (every foundational domain claim checked against primary sources, a masking-pipeline design, a security review of the safety guards, a Fable-judged quality baseline) · a front door for turning Excel/CSV/PDF files into the formats the team reads (dependencies bundled, so no extra install) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.13.0** - **the security-audit release.** A dedicated `/security-audit` workflow (21st skill):
+a deep, defensible security review that follows the `/audit-review` conventions but focuses entirely
+on security - a threat model, the security lenses driven hard with the security analysers and a
+dependency scan, and the §5 data-safety trail. Morgan offers it when you ask for a code review (up
+front and at the close), and it routes to Anthropic's `/security-review` pipeline when there's a diff.
 
 **0.12.0** - **the Fable send-off.** With Claude Fable 5 leaving subscription plans, the remaining
 window went into strengthening the project: every one of the 56 foundational domain claims verified
@@ -368,7 +374,7 @@ Prefer to hand-pick the team into a repo you already have, without the marketpla
 
 1. `CLAUDE.md` to your repo root (merge if you already have one) - the shared handbook.
 2. `.claude/agents/` - the 16 subagents.
-3. `.claude/skills/` - the 20 workflows (`/engage`, `/audit-review`, …); without these you
+3. `.claude/skills/` - the 21 workflows (`/engage`, `/audit-review`, …); without these you
    get agents but no front door.
 4. `.claude/hooks/` **and** `.claude/settings.json` - the always-on data-safety guard and its
    wiring. Don't skip these: they are the §5 control that keeps real data away from the model.
@@ -523,6 +529,7 @@ deliverable in both `.md` and `.html`** under `artifacts/`. Focused commands for
 | `/deep-review` | detailed code review (bugs, security, architecture, impact) | dimension fan-out + scoring |
 | `/performance-review` | performance & scalability vs target data volumes | static analysis (profiling only under the §7 exec gate) |
 | `/audit-review` | existing code → robust & audit-ready? | evaluator-optimizer loop |
+| `/security-audit` | deep security audit (OWASP ASVS / CWE + threat model) | evaluator-optimizer loop, security-focused |
 | `/remediate` | legacy / poorly-built code → assess, fix, hand over | assess → prioritise → fix loop |
 | `/build-solution` | full requirements → end-to-end build | orchestrator-workers |
 | `/handover` | developer + QA test-evidence handover pack | independent QA + dev docs |
@@ -595,7 +602,7 @@ a convention), that's stated rather than dressed up.
 | Principle | What it means | What enforces it |
 |---|---|---|
 | **Engineering first** | Assists the engineering *behind* surveillance - not compliance, legal or regulatory advice. | Scope statement + proof-of-concept framing; obligations are cited from a verified register, never interpreted as advice. |
-| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage` - and costs ~nothing until then. | `disable-model-invocation` on all 20 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
+| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage` - and costs ~nothing until then. | `disable-model-invocation` on all 21 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
 | **Right-sized, not all-hands** | Only the agents a task needs (typically 2-5, never all 16) - the simplest thing that works. | The PM states the intended agent count at the gate (you can veto it); a golden eval case samples the behaviour. Prompt-enforced. |
 | **Independent review** | Reviewers, SMEs and the model validator recommend; builders fix. A checker cannot edit the thing it checks; QA doesn't test its own build. | Read-only **tool grants** (no `Write`/`Edit`), not convention - segregation of duties applied to agents. |
 | **Humans hold the keys** | Execution consent, settings, and the guards themselves are human-only; nothing touches a live system without sign-off. | The consent-write gate: the model is blocked from writing the consent marker, `settings*.json` or the hook files. Consent = a file only you can create; maintenance = `CST_ALLOW_CONFIG_EDIT=1` at launch. |
@@ -815,7 +822,7 @@ CLAUDE.md                       # shared team handbook (example defaults - custo
                                   model-validator · code-reviewer · performance-reviewer ·
                                   compliance-reviewer · data-quality-reviewer
    helper                         review-scorer (haiku - review prep, scoring, filter tallies)
-.claude/skills/                 # 20 workflows: /engage, /deep-review, /audit-review, /handover,
+.claude/skills/                 # 21 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
                                 #   /new-scenario, /tune-thresholds, … (see "Using them")
 .claude/hooks/ + settings.json  # always-on data-safety + code-execution guards
 rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
@@ -896,7 +903,7 @@ so ±15%); the rest are estimates with no run behind them yet:
 - **Clean console** - detail to artifacts, not the chat.
 - **True dormancy (0.8.x, from the 2026-07-01 setup audit)** - a session that never types
   `/engage` now pays almost nothing for the team:
-  - all 20 skills set `disable-model-invocation: true`, so their **descriptions don't load into
+  - all 21 skills set `disable-model-invocation: true`, so their **descriptions don't load into
     context at all** (they stay typeable as slash commands; `/engage` reads a routed workflow's
     `SKILL.md` when chaining);
   - `CLAUDE.md` slimmed again (from ~185 lines / ~3.1k tokens to roughly 125 / ~2k), with the roster, routing
