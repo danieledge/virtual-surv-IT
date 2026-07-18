@@ -42,7 +42,7 @@ criteria cases covered. Threshold: **met**.
 # Environment: Python 3.12.3, pytest 9.0.1, platform linux
 # From repo root - detector and tests both live in docs/demos/build-artifacts/
 
-cd ./docs/demos/build-artifacts
+cd docs/demos/build-artifacts
 
 # Developer suite only
 python3 -m pytest test_ts001_wash_trade.py -v
@@ -64,7 +64,7 @@ All fixtures are fully synthetic (CLAUDE.md §5); no real data is required.
 **Environment:**
 - Python 3.12.3
 - pytest 9.0.1, pluggy 1.6.0
-- Platform: linux (host)
+- Platform: linux
 - Commit: `8dc8044`
 
 **Test data provenance:**
