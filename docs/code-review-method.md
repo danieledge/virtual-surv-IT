@@ -88,8 +88,9 @@ the §4/§5 regulated calls pay **opus** (CLAUDE.md §8). See `docs/review/agent
 
 ## Always filter out (noise)
 
-> The same list, with turingmind's wording and the 🔵 style-vs-filter distinction, is in
-> `docs/review/false-positive-rules.md`. Keep the two consistent; this file leads on scoring.
+> `docs/review/false-positive-rules.md` no longer restates these rules - it summarises the
+> regulated exceptions and the 🔵 style-vs-filter distinction and points back here as canonical,
+> so there is nothing to keep in sync; this file leads on scoring.
 
 1. **Linter/formatter territory** - formatting, import order, unused vars (ruff/black/
    prettier handle these). Run the tools; don't hand-report their job.

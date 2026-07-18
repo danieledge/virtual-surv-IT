@@ -155,3 +155,66 @@ def test_contributing_ci_description_matches_workflow():
         assert token in contributing, (
             f"CONTRIBUTING.md does not mention {token!r} though ci.yml runs it"
         )
+
+
+# --- (h) inventory derived from the filesystem, not hand-synced -----------------
+# The recurring stale-count defect class (skill/agent/eval-case counts, the command
+# index) drifted repeatedly because it was hand-maintained across README, the
+# operating guide and plugin.json. These tests DERIVE the truth from disk so any
+# drift fails CI proactively, instead of being pinned only after it burns.
+
+
+def _skill_names() -> set[str]:
+    root = _ROOT / ".claude" / "skills"
+    return {d.name for d in root.iterdir() if d.is_dir() and (d / "SKILL.md").is_file()}
+
+
+def _agent_count() -> int:
+    return len(list((_ROOT / ".claude" / "agents").glob("*.md")))
+
+
+def _eval_case_count() -> int:
+    root = _ROOT / "evals" / "cases"
+    return len([d for d in root.iterdir() if d.is_dir()])
+
+
+def test_command_index_lists_exactly_the_skills_on_disk():
+    """The canonical command index in the operating guide must list every skill
+    directory - no more, no less. Catches 'added a skill but forgot to register it'."""
+    guide = _read("docs/team-operating-guide.md")
+    m = re.search(r"## Command index.*?\n(.*?)(?:\n## |\Z)", guide, re.S)
+    assert m, "operating guide: 'Command index' section not found"
+    listed = set(re.findall(r"^- `/([a-z0-9-]+)`", m.group(1), re.M))
+    on_disk = _skill_names()
+    missing = on_disk - listed
+    extra = listed - on_disk
+    assert not missing, f"skills on disk missing from the command index: {sorted(missing)}"
+    assert not extra, f"command index lists non-existent skills: {sorted(extra)}"
+
+
+def test_skill_count_references_match_filesystem():
+    n = len(_skill_names())
+    for rel in ("README.md", "docs/team-operating-guide.md"):
+        for found in re.findall(r"(\d+)\s+(?:skills|workflows)\b", _read(rel)):
+            assert int(found) == n, (
+                f"{rel}: says {found} skills/workflows but {n} skill dirs exist on disk"
+            )
+
+
+def test_agent_count_references_match_filesystem():
+    n = _agent_count()
+    for rel in ("README.md", ".claude-plugin/plugin.json"):
+        for found in re.findall(r"(\d+)\s+(?:specialist|subagent)", _read(rel)):
+            assert int(found) == n, (
+                f"{rel}: says {found} specialists/subagents but {n} agent files exist on disk"
+            )
+
+
+def test_eval_case_count_references_match_filesystem():
+    # The dated eval-baseline-*.md is a point-in-time record - excluded on purpose.
+    n = _eval_case_count()
+    for rel in ("README.md", "docs/agent-design.md"):
+        for found in re.findall(r"(\d+)\s+golden cases", _read(rel)):
+            assert int(found) == n, (
+                f"{rel}: says {found} golden cases but {n} eval-case dirs exist on disk"
+            )
