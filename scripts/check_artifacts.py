@@ -25,7 +25,9 @@ No third-party dependencies. Usage:
 from __future__ import annotations
 
 import re
-import subprocess
+
+# Used for one fixed-argv git query below - no shell, no untrusted argv.
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
@@ -59,7 +61,9 @@ def find_codebase_map(project_dir: Path) -> Path | None:
 def _anchor_resolves(sha: str, repo_dir: Path) -> bool | None:
     """True/False if git could answer; None when git/repo is unavailable (skip check)."""
     try:
-        result = subprocess.run(
+        # argv list (no shell); `git` from PATH is deliberate (a pinned absolute path
+        # would break Windows/mac); sha is regex-validated hex by the caller.
+        result = subprocess.run(  # nosec B603 B607
             ["git", "-C", str(repo_dir), "cat-file", "-e", f"{sha}^{{commit}}"],
             capture_output=True,
             timeout=10,
