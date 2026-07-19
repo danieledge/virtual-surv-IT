@@ -31,6 +31,11 @@ stakeholder analysis, under `artifacts/`, rendered to `.html`. Where the elicita
 them: **user stories** (`docs/templates/user-stories.md`), a **decision log**
 (`decision-log.md`) for the dispositioned open questions, a **process map** (`process-map.md`).
 
+**Record clarification rounds as they happen** (elicitation template §10, append-only): each
+question the BA raises gets a row - who answered (SME / user via Morgan), the answer, and
+which spec section/version changed as a result. Unanswered rounds stay visibly 🔴 open;
+the register is how "v0.3" stays traceable to the answers that produced it.
+
 **Close - don't dead-end.** Summarise the requirements + open questions, then offer the next
 step with a recommendation: proceed to the FSD (`/brd-to-fsd`) or the build (`/build-solution`),
 or resolve open questions first.

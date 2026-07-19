@@ -37,7 +37,10 @@ Run an **evaluator-optimizer loop**:
    rationale, secrets/PII, test coverage, and change control.
 3. If any **Critical/Warning** findings (and fixes are in scope), route fixes to the right
    builder, then **re-review** - and **fix everything you safely can in this pass, don't defer
-   fixable work to a later sprint**. Loop until everything fixable is fixed; the only items left
+   fixable work to a later sprint**. **Record every pass as it happens** in the Delivery
+   Report's iteration log (§1a: journey strip + append-only hand-off row per review pass, fix
+   routing and re-review - operating guide, Outcome discipline 5); earlier pass verdicts are
+   never rewritten. Loop until everything fixable is fixed; the only items left
    are those needing a **human decision** (mark 🔴 Open / needs human review, not "deferred").
 4. **Morgan's challenge pass (opus) - a spot-check, not a re-score** (the scorer already applied
    the rubric; re-scoring everything on opus pays twice for the same judgement). Challenge every

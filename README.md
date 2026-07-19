@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.13.0](https://img.shields.io/badge/version-0.13.0-blue)
+![Version 0.14.0](https://img.shields.io/badge/version-0.14.0-blue)
 ![Tests 340+ passing](https://img.shields.io/badge/tests-340%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -35,7 +35,17 @@ itself.
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) transcripts.
 
 <details>
-<summary>✨ <b>What's new in 0.13 / 0.12</b> - the security-audit release (a dedicated `/security-audit` skill offered when you ask for a code review: OWASP ASVS / CWE + a threat model, following the audit-review conventions) · the Fable send-off before it (every foundational domain claim checked against primary sources, a masking-pipeline design, a security review of the safety guards, a Fable-judged quality baseline) · a front door for turning Excel/CSV/PDF files into the formats the team reads (dependencies bundled, so no extra install) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.14 / 0.13</b> - the memory & transparency release (a per-project codebase map the team reads at open and updates at close, audit-skeleton reviews by default, and iteration logs that show every failed-and-fixed pass) · the security-audit release before it (a dedicated `/security-audit` skill: OWASP ASVS / CWE + a threat model, following the audit-review conventions) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.14.0** - **the memory & transparency release.** The team now remembers and shows its working.
+A PM-curated **codebase map** per working project (ADR-003: bounded, SHA-anchored, 📊/🧠-tagged,
+advisory-only - read at every engagement open, updated/corrected/deprecated at every close, hygiene
+mechanically checked by `check_artifacts`). Reviews ship the **audit-compatible skeleton at every
+depth** (scope at a commit, methodology, findings dispositions, and an always-include Limitations &
+residual risk section), with governance extras opt-in. And the documentation **shows the journey**:
+an iteration log with a journey strip in the Delivery Report, append-only QA test cycles where a
+failed pass 1 stays visible forever, and a clarification-rounds register tracing every spec version
+to the SME/user answer that produced it - worked examples in `docs/demos/iteration-examples/`.
 
 **0.13.0** - **the security-audit release.** A dedicated `/security-audit` workflow (21st skill):
 a deep, defensible security review that follows the `/audit-review` conventions but focuses entirely

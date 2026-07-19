@@ -171,6 +171,13 @@ Which analysers/profilers ran, which couldn't (and why) - so the review's confid
 accurate. A claim with no executed evidence is 🧠 inferred; say so here rather than implying it
 was measured.
 
+### 🧾 Limitations & residual risk *(ALWAYS include - the audit skeleton's load-bearing section)*
+What this review did **not** do, stated plainly: paths/modules out of scope, static-only basis
+(nothing executed) and what that leaves unverified, analysers unavailable, assumptions made,
+and any residual risk the reader accepts by relying on this review. A governance or audit
+reviewer reads this section first; a review with an empty limitations section reads as
+overclaiming, not as thorough.
+
 ## Icons
 ✅ good · ⚠️ needs attention · ❌ problem · 📊 measured · 🧠 inferred · 🔇 filtered
 

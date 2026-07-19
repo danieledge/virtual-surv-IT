@@ -3,6 +3,41 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.14.0] - 2026-07-19 - the memory & transparency release
+
+### Added
+- **Engagement memory - the codebase map (ADR-003).** Each working project gets one PM-curated,
+  advisory-only memory document (`docs/templates/codebase-map.md`, default location
+  `docs/codebase-map.md` in the working project): bounded to ~200 lines, entries carry 📊/🧠
+  basis tags, as-of dates and commit-SHA anchors, corrections go to a dated Deprecated section.
+  `/engage` reads it at open (flagging entries whose anchors no longer resolve) and updates it
+  at close - a new Definition-of-Done gate. Subagents recommend entries; **only the PM writes**
+  (the poisoning defence). Design, threat model and rejected alternatives in
+  `docs/adr/ADR-003-engagement-memory.md`; grounded in an adversarially verified research pass
+  (bounded curated index + lifecycle management is what the evidence supports; append-only
+  accumulation is the documented failure mode). Per-agent memory recorded as deferred.
+- **Map hygiene in the mechanical DoD gate.** `scripts/check_artifacts.py` now validates any
+  codebase map it finds: size cap, As-of/Anchor header fields, basis tags per entry,
+  secret-shaped content, and best-effort anchor resolution via git (9 new tests).
+- **Audit-compatible structure by default; governance depth by choice.** Every review ships the
+  audit skeleton at every depth (document control, scope at a stated commit, independence,
+  methodology + tooling coverage, findings register with dispositions, filtered transparency,
+  and a new always-include **Limitations & residual risk** section in the review report and
+  `docs/review/output-format.md`); governance extras (control mappings, validation opinions,
+  ops/change packs) stay opt-in via the artifact menu. Outputs are framed as *consumable by*
+  audit/model-governance reviewers, never as "SR 11-7 / SS1/23 compliant" (that scope claim
+  failed adversarial verification - the team makes no compliance claims).
+- **Iteration transparency - show the journey.** When work loops, the documentation now shows
+  every pass instead of a polished end state: the Delivery Report gains an always-include
+  **iteration log** (§1a - an emoji journey strip plus an append-only actor→actor hand-off
+  table); the QA handover gains a **test cycles** table (failed verdicts stay forever) and
+  defect-lifecycle columns (raised in pass → routed to → fix evidence → verified fixed in
+  pass); the elicitation template gains a **clarification rounds** register (BA question → SME/
+  user answer → which spec section/version changed). `build-solution`, `audit-review` and
+  `elicit-requirements` write the rows as passes happen; two DoD gates enforce it ("a
+  multi-pass engagement whose docs read first-pass-clean fails this gate"). Worked examples for
+  all three: `docs/demos/iteration-examples/` (fictional TS-002 layering engagement).
+
 ## [0.13.0] - 2026-07-15 - the security-audit release
 
 ### Added

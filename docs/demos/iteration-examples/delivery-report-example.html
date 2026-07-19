@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delivery Report - TS-002 Layering Detection *(worked example)*</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-19</span></header>
+<h1 id="delivery-report-ts-002-layering-detection-worked-example">Delivery Report - TS-002 Layering Detection <em>(worked example)</em></h1>
+<blockquote>
+<p><strong>Worked example</strong> of the iteration-log capability - the journey strip plus the
+append-only hand-off table (§1a). Fictional engagement, synthetic throughout; excerpted to
+the sections that show the capability (a real report carries all template sections).</p>
+<p><strong>Document control</strong> · ID <code>DR-002</code> · Version <code>1.0</code> · Status <code>Approved</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-19</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1.0</td>
+<td>2026-07-19</td>
+<td>Morgan (PM)</td>
+<td>Final consolidated report</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<h2 id="1-executive-summary-next-steps">1. Executive summary &amp; next steps</h2>
+<p>TS-002 layering detection delivered and <strong>ready with conditions</strong>: all review findings and QA
+defects fixed and re-verified (see §1a - nothing was first-pass clean, and that is the
+evidence the control loop operates); the one open item is the <strong>deploy-gate</strong> on live-volume
+calibration (clarification round 3), which is <em>correctly</em> open at this stage. <strong>Next steps:</strong>
+calibrate thresholds on production volumes (needs deployment input) · extend to a TS-003
+cross-product variant (watch item).</p>
+<h2 id="1a-iteration-log-how-we-got-here-always-include">1a. Iteration log - how we got here <em>(always include)</em></h2>
+<blockquote>
+<p>🧭 Elicitation R1 (<code>tm-sme</code>) ✅ → R2 (user) ✅ → 🔨 Build → 🔎 Review P1 ❌ <em>(1 Critical,
+1 Warning)</em> → 🔧 Fix (<code>rules-developer</code>) → 🔎 Review P2 ✅ → 🧪 QA P1 ❌ <em>(D-1, D-2)</em> →
+🔧 Fix (<code>rules-developer</code>) → 🧪 QA P2 ✅ → 📦 Handover <em>(R3 deploy-gate open)</em></p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Date</th>
+<th>Hand-off (actor → actor)</th>
+<th>Trigger</th>
+<th>Outcome</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>2026-07-19</td>
+<td><code>business-analyst</code> → <code>tm-sme</code></td>
+<td>Round 1: thresholds &amp; window</td>
+<td>Per-asset-class config; 120s window → spec v0.2</td>
+<td><a href="elicitation-requirements-example.html">ELC-002 §10</a></td>
+</tr>
+<tr>
+<td>2</td>
+<td>2026-07-19</td>
+<td>Morgan → user</td>
+<td>Round 2: venue scope</td>
+<td>XLON+XETR only → spec v0.3</td>
+<td>ELC-002 §10</td>
+</tr>
+<tr>
+<td>3</td>
+<td>2026-07-19</td>
+<td><code>rules-developer</code> → <code>code-reviewer</code></td>
+<td>build complete (<code>3f9c2a1</code>)</td>
+<td>Review pass 1: ❌ 1 Critical (threshold hardcoded, breaks REQ-B-002), 1 Warning</td>
+<td>review report (as-found)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>2026-07-19</td>
+<td><code>code-reviewer</code> → <code>rules-developer</code></td>
+<td>findings routed</td>
+<td>Fixed: thresholds moved to <code>ts002-thresholds.conf</code></td>
+<td>commit <code>6b02c9d</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>2026-07-19</td>
+<td><code>rules-developer</code> → <code>code-reviewer</code></td>
+<td>re-review request</td>
+<td>Review pass 2: ✅ clean</td>
+<td>review report</td>
+</tr>
+<tr>
+<td>6</td>
+<td>2026-07-19</td>
+<td><code>qa-engineer</code> (independent)</td>
+<td>QA pass 1 (full suite)</td>
+<td>❌ Fail: D-1 (FP on partial-fill chase), D-2 (0.8 boundary)</td>
+<td><a href="qa-handover-example.html">QAH-002 §1</a> (as-found)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>2026-07-19</td>
+<td><code>qa-engineer</code> → <code>rules-developer</code></td>
+<td>defects routed</td>
+<td>Fixed in <code>8d417be</code> (+ boundary regression test)</td>
+<td>QAH-002 §5</td>
+</tr>
+<tr>
+<td>8</td>
+<td>2026-07-19</td>
+<td><code>rules-developer</code> → <code>qa-engineer</code></td>
+<td>re-test request</td>
+<td>QA pass 2: ✅ Pass (22/22)</td>
+<td>QAH-002 §1</td>
+</tr>
+<tr>
+<td>9</td>
+<td>2026-07-19</td>
+<td><code>tuning-analyst</code> → user</td>
+<td>Round 3: volume ceiling</td>
+<td>⏭️ open - deploy-gate, needs production volumes</td>
+<td>ELC-002 §10</td>
+</tr>
+</tbody>
+</table>
+<h2 id="7-qa-test-evidence-independent-qa-engineer">7. QA / test evidence <em>(independent - qa-engineer)</em></h2>
+<p>Two cycles; pass 1 failed as-found (D-1, D-2), both fixed and verified in pass 2 - full
+lifecycle in <a href="qa-handover-example.html">QAH-002</a>. <strong>Disposition:</strong> ✅ 2 fixed · 🔴 0 open ·
+⏭️ 1 deploy-gate (calibration) · ⚖️ 0 accepted. Verdict reconciles: ready with conditions.</p>
+<h2 id="sign-off">Sign-off</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td>Morgan (PM)</td>
+<td>Ready with conditions</td>
+<td>2026-07-19</td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td>compliance-reviewer</td>
+<td>Iteration log complete; verdicts reconcile</td>
+<td>2026-07-19</td>
+</tr>
+<tr>
+<td>Human approver</td>
+<td><em>(example - unsigned)</em></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report-example.md &middot; 2026-07-19</div>
+</body>
+</html>

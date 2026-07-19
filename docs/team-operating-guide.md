@@ -157,6 +157,25 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    of Done, CLAUDE.md §6a); if you haven't produced it, the engagement isn't done. The email states
    the **engagement footprint** - approximate token spend and agent count - so the multi-agent
    multiplier is tracked, never hidden.
+4. **Audit-compatible structure by default; governance depth by choice.** Every codebase-review
+   response ships in the audit skeleton at **every** depth (quick included): scope at a stated
+   commit, reviewer independence, methodology + tooling coverage, findings register with
+   dispositions, filtered transparency, and **limitations & residual risk** - it is what lets a
+   third party reconstruct what was done, and retrofitting it later is expensive and lossy. The
+   governance **extras** (control mappings, model-validation opinions, ops runbook / change
+   request, split artifact packs) stay opt-in via the artifact menu - right-sizing still applies.
+   Frame outputs as *consumable by a model-governance or audit reviewer*, never as "SR 11-7 /
+   SS1/23 compliant" (formal MRM scope for surveillance code review is contested; make no
+   compliance claims). Spec: `docs/templates/review-report.md` + `docs/review/output-format.md`.
+5. **Show the journey - iteration history is evidence, not noise.** When work loops (QA fail →
+   fix → re-test, review → fix → re-review, BA question → SME answer → spec change), the
+   documentation must show **each pass explicitly**: the Delivery Report's **iteration log**
+   (journey strip + append-only hand-off table, template §1a), the QA handover's **test
+   cycles** table (failed verdicts stay forever), and the elicitation **clarification
+   rounds** register. The model's instinct is to present the polished end state - resist it: a
+   caught-routed-fixed-re-verified failure is **proof the control loop operates**, and a
+   suspiciously clean narrative is what draws auditor scrutiny. Record hand-offs at gates,
+   not every tool call. Append-only: later passes add rows, never rewrite earlier verdicts.
 
 ## Memory scope & evidence basis
 
@@ -166,6 +185,14 @@ skipped. The Python helper scripts need only `<python>`, never bash:
   **specific to the engagement** (a typology, threshold rationale, FP driver, venue quirk,
   calibration choice) → recommend it for the **working project's own memory** (its `CLAUDE.md`), so
   it stays with that project. Advisors recommend; the PM commits.
+- **The codebase map is the working project's durable engagement memory** (ADR-003; template
+  `docs/templates/codebase-map.md`; default location `docs/codebase-map.md` in the working
+  project). Read at every engagement open, then added-to, corrected and deprecated at every
+  close (a DoD gate). **PM-written only** - subagents recommend entries in their reports; the
+  PM persists its own synthesis, never verbatim reviewed-code text and never data values,
+  secrets, PII or MNPI (§5). It is **advisory context, not enforcement** (the guard hooks stay
+  the only enforcement layer), kept under ~200 lines, with SHA anchors, as-of dates and 📊/🧠
+  tags so staleness stays visible. Hygiene: `python -m scripts.check_artifacts`.
 - **Tag data insights: observed vs inferred.** Any insight drawn from data carries **📊 observed**
   (seen directly in the data - cite the metric / sample / query) or **🧠 inferred** (reasoning or
   extrapolation beyond what was measured, with the assumption stated). Inference is fine *if tagged*;
