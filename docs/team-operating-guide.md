@@ -121,7 +121,9 @@ skipped. The Python helper scripts need only `<python>`, never bash:
   - **file conversion** (`convert_file`) needs no pip anywhere: its libraries are vendored in
     `<plugin>/vendor/` and resolved relative to the script itself, so the bundled copy works
     from a foreign project the same as in the repo (house rule: all Excel/CSV/PDF/DOCX
-    reading goes through it - `docs/house-rules.md`).
+    reading goes through it - `docs/house-rules.md`). One **optional system package**
+    sharpens it: `poppler-utils` (`pdftotext`) recovers PDF pages the vendored pypdf can't
+    extract - without it those pages are reported MISSING (see `requirements-dev.txt`).
 - **Never silently skip a deliverable step** because a script seems unreachable: resolve the
   path per the above, and if something genuinely can't run in this mode, say so in the close and
   in the summary email.
