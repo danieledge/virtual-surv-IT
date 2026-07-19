@@ -225,7 +225,9 @@ regulated domain and the harness (dormancy, gates, segregation, evidence, evals)
 | Built-in independent review | Reviewers are read-only by tool grant (segregation of duties): they recommend, builders fix. |
 | More than detection rules | Pipelines/ETL, transformation scripts, ML, reviews and docs - not just rules. |
 | Data-safety by design | Raw data hard-blocked from the model; masking + synthetic on-ramp. |
-| Evidence-based & auditable | Alert → logic → obligation traceability, behind a Definition of Done. |
+| Evidence-based & auditable | Alert → logic → obligation traceability behind a Definition of Done - and every review ships the audit skeleton (scope at a commit, dispositions, limitations & residual risk) at every depth. |
+| Engagement memory | A per-project **codebase map** (PM-curated, SHA-anchored, advisory-only) read at engagement open and updated at close - repeat engagements start warm instead of re-exploring. |
+| Shows its working | An **iteration log** in every delivery: the journey strip plus append-only review/QA cycles, so a caught-fixed-re-verified failure stays visible as evidence the control loop ran. |
 | Self-tested | An eval harness (rubrics + golden cases) catches quality regressions. |
 | Claude Code native | Install as a plugin; dormant by default until you invoke it. |
 | Extensible & modular | Add or re-tier specialists independently. |
@@ -619,6 +621,8 @@ a convention), that's stated rather than dressed up.
 | **Safe data by architecture** | Raw data is structurally unreachable by the model; work happens downstream, on masked or synthetic data. | Raw-data hook + OS-level `permissions.deny` + `.gitignore` + a CI job that fails on tracked data files + keyed masking as the only ingest path. |
 | **Fail closed** | A crashed control blocks; it never silently allows. | Guard crash wrappers exit 2 (block); the launcher version-probes interpreters; regression tests feed the guards malformed input. |
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
+| **Remembers, safely** | Each working project gets one codebase map: bounded, SHA-anchored, 📊/🧠-tagged, PM-written only, **advisory context never enforcement** - and no PII/MNPI/secrets, ever. | ADR-003 + a DoD gate (read at open, update/correct/deprecate at close) + `check_artifacts` map hygiene (size, header, basis tags, secret patterns, anchor resolution - mechanical). The guard hooks stay the only enforcement layer. |
+| **Show the journey** | Iteration history is evidence: failed review/QA passes stay visible append-only (journey strip, test cycles, clarification rounds) - never smoothed into a clean narrative. | Two DoD gates ("a multi-pass engagement whose docs read first-pass-clean fails") + the templates' append-only structures. Prompt-enforced, eval-sampled. |
 | **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 28 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
@@ -1048,7 +1052,8 @@ the right job - only the PM's commentary occasionally mislabels it. Hence: cosme
   (frameworks + the canonical template catalogue).
 - 🕵️ **Auditing / assessing it** → [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) →
   [`docs/code-review-method.md`](docs/code-review-method.md) → [`docs/adr/`](docs/adr/) (citation
-  grounding ADR-001; safety-hook threat model ADR-002) → [`evals/README.md`](evals/README.md).
+  grounding ADR-001; safety-hook threat model ADR-002; engagement memory ADR-003) →
+  [`evals/README.md`](evals/README.md).
 - 📊 **Data & tuning** → [Handling real data](#-handling-real-data) (above) →
   [`docs/prepare-data-roadmap.md`](docs/prepare-data-roadmap.md) →
   [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md) (the worked example, incl. calibration).
@@ -1063,7 +1068,7 @@ the right job - only the PM's commentary occasionally mislabels it. Hence: cosme
 | [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack - customise to yours |
 | [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
 | [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
-| [`docs/adr/`](docs/adr/) | Architecture decision records - citation grounding, safety-hook threat model |
+| [`docs/adr/`](docs/adr/) | Architecture decision records - citation grounding, safety-hook threat model, engagement memory |
 | [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
 
 <sub>[↑ Back to top](#readme-top)</sub>
