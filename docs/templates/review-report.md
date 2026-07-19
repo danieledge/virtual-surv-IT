@@ -7,6 +7,17 @@
 > **Format source of truth:** `docs/review/output-format.md` - the console scoreboard, the
 > severity lanes (incl. style & form), the evidence basis (📊/🧠) and the diff-fix shape. This
 > template is that format laid out as a standalone file; keep them consistent.
+>
+> **Audit-compatible by default.** The skeleton below (document control, scope at a stated
+> commit, reviewer independence, methodology + tooling coverage, findings register with
+> dispositions, filtered transparency, limitations & residual risk, sign-off) is the
+> **always-on default at every depth** - it is what lets a third party reconstruct what was
+> done, and a quick review in this skeleton is still short. The **opt-in governance extras**
+> (control mappings, model-validation opinions, ops runbook / change request, a split
+> artifact pack) are selected via the artifact menu, never assumed. Frame the output as
+> *structured so a model-governance or audit reviewer can consume it* - never as "SR 11-7 /
+> SS1/23 compliant" (whether surveillance code review falls in formal MRM scope is contested;
+> make no compliance claims).
 
 > **Document control** · ID `REV-001` · Version `0.1` · Status `Draft | In review | Approved`
 > · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
@@ -95,7 +106,13 @@ State explicitly which analysers were unavailable - nothing silently skipped.
 - **Blast radius:** ... (what else could this change break?)
 - **Breaking changes:** ...
 
-<!-- Section 7. The heading below is canonical and mechanically checked by the review skills
+## 7. Limitations & residual risk *(always include)*
+What this review did **not** do, stated plainly: paths/modules out of scope, static-only
+basis (nothing executed) and what that leaves unverified, analysers unavailable, assumptions
+made, residual risk accepted by relying on this review. This is the section a governance
+reviewer reads first - an empty one reads as overclaiming, not thoroughness.
+
+<!-- Section 7a. The heading below is canonical and mechanically checked by the review skills
      (/deep-review, /audit-review) - keep it verbatim: no number, no extra annotation. -->
 ## 🔵 Developer guidance - improving future code
 *(Always include, even on a clean pass.)*

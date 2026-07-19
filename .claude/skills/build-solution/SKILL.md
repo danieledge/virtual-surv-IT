@@ -28,8 +28,13 @@ Run the **orchestrator-workers** pattern, agile and iterative:
    appropriate to the deliverable: true-positive and false-positive cases for detection
    logic; input/output, schema and edge-case tests for pipelines/transforms; idempotency/
    error-path tests for scripts. Synthetic data only (§5); thresholds documented (§4).
+   **Every QA pass gets a test-cycles row at the time it runs** (qa-handover §1, append-only);
+   a Fail routes defects to the builder and the re-test is a **new pass row** - failed
+   verdicts are never rewritten (operating guide, Outcome discipline 5).
 4. **Review** - `code-reviewer` (deep) and, where it processes data at volume,
-   `performance-reviewer`; then `compliance-reviewer`. Loop fixes until no Critical remains.
+   `performance-reviewer`; then `compliance-reviewer`. Loop fixes until no Critical remains -
+   **recording each pass/fix/re-review hand-off in the Delivery Report's iteration log (§1a)
+   as it happens**, journey strip included.
 5. **Maintain the RTM** (`docs/templates/rtm.md`): every requirement → code → test →
    obligation. A gap is a blocker - surface it to the user. Record significant design decisions
    as **ADRs** (`docs/templates/adr.md`).

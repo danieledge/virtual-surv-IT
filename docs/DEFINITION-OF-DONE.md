@@ -30,7 +30,9 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 - [ ] **Open questions dispositioned** - every open question raised upstream (spec/BRD/review, e.g.
       a BA's questions for an SME) is **formally closed** by its owner (✅ answered / ⏭️ needs
       deployment input / 🔴 open-decision-required) in a tracked decision log - not left dangling or
-      "touched in passing". Any 🔴 / blocking item is reflected in the verdict.
+      "touched in passing". Any 🔴 / blocking item is reflected in the verdict. The
+      **clarification-rounds register** (elicitation template §10) shows each round's who /
+      when / what-changed trail, append-only.
 - [ ] **Tested** - tests appropriate to the deliverable exist and **pass**:
   - detection logic → true-positive **and** false-positive cases;
   - pipeline/transform → input/output, schema and edge-case tests, **including a completeness
@@ -38,11 +40,22 @@ it. Apply the items relevant to the deliverable type - not every item fits every
     extracts or converts data;
   - script → idempotency and error-path tests.
 - [ ] **Independently QA'd** - `qa-engineer` (not the builder) has produced a **QA handover**
-      (`qa-handover.md`) evidencing what ran, results, coverage, gaps and residual risk.
+      (`qa-handover.md`) evidencing what ran, results, coverage, gaps and residual risk -
+      **with the full cycle history**: one test-cycles row per pass (append-only, failed
+      verdicts preserved) and defect lifecycle (raised in pass → routed to → fix evidence →
+      verified fixed in pass). A multi-pass engagement whose docs read first-pass-clean fails
+      this gate.
 - [ ] **Code-reviewed (deep)** - `code-reviewer` ran; **no Critical findings open**;
       filtered/ reported counts recorded; every finding has a **disposition** (fixed / open /
       accepted / deferred) and the review carries a **🔵 Developer guidance - improving future
       code** section (always present, even on a clean pass).
+- [ ] **Audit-compatible skeleton (default, every review depth)** - the review output carries
+      document control, scope at a stated commit, reviewer independence, methodology + tooling
+      coverage, the findings register with dispositions, filtered transparency and a
+      **limitations & residual risk** section (operating guide §Outcome discipline 4;
+      `docs/review/output-format.md`). Governance extras (control mappings, validation
+      opinions, ops/change artifacts) are **opt-in** via the artifact menu - and outputs are
+      framed as consumable by audit/model-governance reviewers, never as compliance claims.
 - [ ] **Performance-reviewed** - where it processes data at volume, `performance-reviewer`
       assessed it against expected volumes. **Static by default** (🧠 inferred from code structure);
       📊 measured profiling evidence only when execution was consented (§7) - the verdict must state
@@ -68,6 +81,12 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       (`docs/templates/engagement-summary-email.md`). Address it to the requester **only if the name
       is known** - otherwise open with "Hi,"; sign off as Morgan. (It's an email, so it stays `.txt`
       and is the one artifact not rendered to HTML.)
+- [ ] **Codebase map updated** - the working project's codebase map (`docs/codebase-map.md`,
+      template `docs/templates/codebase-map.md`, decision ADR-003) was **read at open and
+      updated at close**: entries added with 📊/🧠 tags, dates and SHA anchors; stale or wrong
+      entries corrected or moved to Deprecated (never silently dropped); engagement-history
+      row appended. PM-written only; advisory-only; no PII/MNPI/secrets/raw-data content (§5).
+      Mechanical hygiene is part of the `python -m scripts.check_artifacts` gate.
 - [ ] **Signed off** - human approval recorded at the gate; nothing touching live systems
       proceeds without it.
 

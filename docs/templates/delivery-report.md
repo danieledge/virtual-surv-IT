@@ -40,6 +40,20 @@ next-step options with a recommendation** - never a dead end.
 > human sign-off) that are **correctly** open and out of scope for this stage. A report
 > showing the latter as open is *good*; a report that hides them to look "all green" is the failure.
 
+## 1a. Iteration log - how we got here *(always include)*
+The engagement's journey at a glance, then the append-only pass record. **A failed pass that
+was caught, routed, fixed and re-verified is proof the control loop operates - show it, never
+smooth it into a clean narrative.** One row per gate-level hand-off (build, review pass, QA
+pass, clarification round) - not per tool call. First-pass-clean is one strip and one row.
+
+> 🔨 Build → 🔎 Review P1 ❌ *(3 Critical)* → 🔧 Fix (`rules-developer`) → 🔎 Review P2 ✅ →
+> 🧪 QA P1 ❌ *(2 defects)* → 🔧 Fix → 🧪 QA P2 ✅
+
+| # | Date | Hand-off (actor → actor) | Trigger | Outcome | Evidence |
+|---|------|--------------------------|---------|---------|----------|
+| 1 | <YYYY-MM-DD> | `qa-engineer` → `rules-developer` | QA pass 1: Fail (QAH-001 defects D-1, D-2) | Fixes applied to `<files>` | [`qa-handover`](qa-handover.md) (as-found) |
+| 2 | <YYYY-MM-DD> | `rules-developer` → `qa-engineer` | re-test request | QA pass 2: Pass | §7 below |
+
 ## 2. Scope & what was delivered
 What was reviewed or built, the languages/components involved, and what's explicitly out of
 scope.

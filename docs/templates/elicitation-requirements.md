@@ -87,8 +87,16 @@ EARS phrasing required; use the REQ-NF-### series for stable IDs.
 | REQ-NF-003 | The system shall process <n> events per day with end-to-end latency not exceeding <t> minutes | Performance | <internal SLA> | Must |
 | REQ-NF-004 | The system shall operate without storing PII or MNPI outside the approved data classification boundary | Data safety | GDPR / CLAUDE.md §5 | Must |
 
-## 10. Open questions
-Material unknowns the PM is clarifying with the user (never guessed).
+## 10. Clarification rounds & open questions
+Material unknowns the PM is clarifying with the user or an SME (never guessed). **The rounds
+are the audit trail of how the spec evolved - append-only, one row per question raised**, so
+"BRD v0.3" is traceable to *which answer changed which section*. Unanswered rounds stay
+visibly open; they never dissolve.
+
+| Round | Date | Question (raised by) | Answered by | Answer (summary) | Spec change (section · version) | Status |
+|-------|------|----------------------|-------------|------------------|---------------------------------|--------|
+| 1 | <YYYY-MM-DD> | <e.g. segment thresholds per asset class?> (`business-analyst`) | `tm-sme` | <one line> | §6 · v0.2 | ✅ answered |
+| 2 | <YYYY-MM-DD> | <...> (`business-analyst`) | user (via Morgan) | - | - | 🔴 open |
 
 > Traceability: REQ-B/F-### flow into the FSD and the RTM (`docs/templates/rtm.md`):
 > BRD → FSD → code → test → obligation. Keep the RTM updated as these firm up.

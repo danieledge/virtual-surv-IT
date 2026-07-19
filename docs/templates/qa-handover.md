@@ -26,7 +26,16 @@
 | **Date** | <YYYY-MM-DD> |
 | **Overall** | ready for QA / ready with notes / not ready |
 
-## 1. Test execution summary
+## 1. Test cycles *(append-only - one row per pass, failed verdicts stay forever)*
+Every QA pass gets a row **at the time it runs**; later passes append, never overwrite. A
+two-cycle engagement whose only visible verdict is "Pass" is a defect in this document.
+
+| Pass | Date | Scope | Verdict | Defects raised | Routed to |
+|------|------|-------|---------|----------------|-----------|
+| 1 | <YYYY-MM-DD> | full suite | ❌ Fail | D-1, D-2 | `rules-developer` |
+| 2 | <YYYY-MM-DD> | re-test D-1, D-2 + regression | ✅ Pass | - | - |
+
+## 2. Test execution summary *(latest pass; earlier passes stay in §1 and §5)*
 | Suite | Tests | Passed | Failed | Skipped |
 |-------|-------|--------|--------|---------|
 | unit | | | | |
@@ -46,20 +55,20 @@ How to reproduce (exact commands - use the project's test framework, not an assu
 
 ```
 
-## 2. Environment & test data
+## 3. Environment & test data
 - Environment / versions:
 - Test data: **synthetic / masked only** (§5) - provenance and how it was generated.
 
-## 3. Coverage
+## 4. Coverage
 - **Covered:** scenarios, true-positive and false-positive cases, edge cases, error paths.
 - **NOT covered (and why):** be explicit - unstated gaps are the dangerous ones.
 - **Residual risk:** what could still go wrong in production.
 
-## 4. Defects & known issues
-| ID | Severity | Description | Status |
-|----|----------|-------------|--------|
+## 5. Defects & known issues *(lifecycle - never delete a row once raised)*
+| ID | Severity | Description | Raised in pass | Routed to | Fix evidence | Verified fixed in pass | Status |
+|----|----------|-------------|----------------|-----------|--------------|------------------------|--------|
 
-## 5. Items for the QA team to note / re-verify
+## 6. Items for the QA team to note / re-verify
 Things a human reviewer should manually confirm (e.g. regulatory mapping, alert wording,
 threshold rationale, anything not fully automatable).
 
