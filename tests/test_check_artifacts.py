@@ -17,7 +17,9 @@ from scripts.check_artifacts import check, check_map, find_codebase_map
 
 def _touch(path, content="x"):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content)
+    # UTF-8 explicitly: map fixtures carry emoji basis tags, and Windows' default
+    # locale encoding (cp1252) raises UnicodeEncodeError on them.
+    path.write_text(content, encoding="utf-8")
 
 
 def test_missing_dir_is_not_a_failure(tmp_path):

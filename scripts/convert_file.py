@@ -575,13 +575,19 @@ def _pdftotext_pages(source: Path) -> list[str] | None:
     result); pages split on the form-feed separators pdftotext emits.
     """
     import shutil
-    import subprocess
+
+    # Used for one fixed-argv call below - no shell, resolved binary path.
+    import subprocess  # nosec B404
 
     exe = shutil.which("pdftotext")
     if not exe:
         return None
     try:
-        proc = subprocess.run([exe, "-layout", str(source), "-"], capture_output=True, timeout=120)
+        # argv list (no shell), executable resolved via shutil.which, source is a local
+        # file path already validated by the caller.
+        proc = subprocess.run(  # nosec B603
+            [exe, "-layout", str(source), "-"], capture_output=True, timeout=120
+        )
     except (OSError, subprocess.SubprocessError):
         return None
     if proc.returncode != 0:
