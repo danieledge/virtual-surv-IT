@@ -32,7 +32,7 @@ Route by **deliverable type**, not habit:
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
-## Command index (canonical - all 21 skills)
+## Command index (canonical - all 22 skills)
 
 - `/engage` - front door: intake + orchestration for any request (problem, review or build)
 - `/meet-the-team` - Morgan introduces the roster (canonical intro)
@@ -50,6 +50,7 @@ Route by **deliverable type**, not habit:
 - `/reg-change-impact` - regulatory change → affected scenarios, controls, data, specs
 - `/deep-review` - detailed multi-dimension code review with confidence scoring
 - `/audit-review` - audit/regulatory-defensibility review (evaluator-optimizer loop)
+- `/beta-assess-quantexa` - (beta) Quantexa TM estate vs BRD/TSD traceability assessment, with platform KB
 - `/security-audit` - deep security audit: OWASP ASVS / CWE + threat model, security-focused evaluator-optimizer loop
 - `/performance-review` - static performance & scalability review vs target volumes
 - `/remediate` - legacy / poorly-built code: assess → prioritise → fix → re-review → hand over
