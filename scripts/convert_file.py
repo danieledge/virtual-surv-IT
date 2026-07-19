@@ -564,6 +564,35 @@ def read_docx(source: Path, report: Report) -> dict:
     return {"blocks": blocks}
 
 
+def _pdftotext_pages(source: Path) -> list[str] | None:
+    """
+    Poppler fallback: extract page texts via `pdftotext` (system package poppler-utils).
+
+    Optional by design - pypdf (vendored, pure Python) stays the primary engine so the
+    no-pip promise holds, but its extraction is weak on PDFs with unusual encodings or
+    complex layouts. When poppler is installed, pages pypdf could not read get a second
+    chance here. Returns None when pdftotext is absent or fails (caller keeps pypdf's
+    result); pages split on the form-feed separators pdftotext emits.
+    """
+    import shutil
+    import subprocess
+
+    exe = shutil.which("pdftotext")
+    if not exe:
+        return None
+    try:
+        proc = subprocess.run([exe, "-layout", str(source), "-"], capture_output=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    text = proc.stdout.decode("utf-8", errors="replace")
+    pages = text.split("\f")
+    if pages and not pages[-1].strip():
+        pages.pop()  # pdftotext ends output with a trailing form feed
+    return pages
+
+
 def read_pdf(source: Path, report: Report) -> list[str]:
     try:
         from pypdf import PdfReader
@@ -579,13 +608,39 @@ def read_pdf(source: Path, report: Report) -> list[str]:
     pages = [page.extract_text() or "" for page in reader.pages]
     report.data["format"] = "pdf"
     report.data["pages"] = len(pages)
-    empty = [str(i + 1) for i, t in enumerate(pages) if not t.strip()]
+    report.data["pdf_engine"] = "pypdf"
+    empty_idx = [i for i, t in enumerate(pages) if not t.strip()]
+    if empty_idx:
+        alt = _pdftotext_pages(source)
+        if alt is not None:
+            recovered = []
+            for i in empty_idx:
+                if i < len(alt) and alt[i].strip():
+                    pages[i] = alt[i]
+                    recovered.append(str(i + 1))
+            if recovered:
+                report.data["pdf_engine"] = "pypdf+pdftotext"
+                report.warn(
+                    f"{len(recovered)} page(s) had no pypdf-extractable text and were "
+                    f"recovered via pdftotext/poppler (pages {', '.join(recovered[:10])}"
+                    f"{'…' if len(recovered) > 10 else ''}) - layout-derived text; verify "
+                    "against the source for anything load-bearing."
+                )
+            empty_idx = [i for i, t in enumerate(pages) if not t.strip()]
+    empty = [str(i + 1) for i in empty_idx]
     if empty:
+        import shutil
+
+        hint = (
+            ""
+            if shutil.which("pdftotext")
+            else " Installing poppler-utils (pdftotext) may recover pages like these."
+        )
         report.warn(
             f"{len(empty)} of {len(pages)} page(s) have NO extractable text (pages "
             f"{', '.join(empty[:10])}{'…' if len(empty) > 10 else ''}) - likely scanned "
             "images. OCR is out of scope; treat content from those pages as MISSING, "
-            "not empty."
+            "not empty." + hint
         )
     report.warn(
         "PDF extraction is TEXT only - table structure in PDFs is layout, not data, and "

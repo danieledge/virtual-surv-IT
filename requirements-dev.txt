@@ -10,3 +10,10 @@ bleach[css]>=6.0 # scripts/render_html.py - sanitises rendered HTML (XSS guard);
 
 # The Python analysers used by the code-reviewer agent live in requirements-review.txt
 # (kept separate so the core dev/test install stays lean).
+
+# System packages (OS package manager, not pip):
+#   poppler-utils  - optional but recommended: provides `pdftotext`, which
+#                    scripts/convert_file.py uses as a fallback for PDF pages the vendored
+#                    pypdf cannot extract (complex encodings/layouts). Without it those
+#                    pages are reported as MISSING. Debian/Ubuntu: apt install poppler-utils
+#                    · macOS: brew install poppler · Windows: poppler via conda/choco.

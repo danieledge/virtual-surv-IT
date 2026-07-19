@@ -366,12 +366,29 @@ def test_pdf_text_extracted(tmp_path):
     assert any("TEXT only" in w for w in read_report(out)["warnings"])
 
 
-def test_pdf_scanned_page_flagged_as_missing(tmp_path):
+def test_pdf_scanned_page_flagged_as_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(cf, "_pdftotext_pages", lambda _src: None)  # poppler absent/failed
     src = tmp_path / "scan.pdf"
     make_pdf(src, None)
     out = tmp_path / "out.txt"
     assert run(str(src), "--to", "txt", "--out", str(out)) == 0
     assert any("NO extractable text" in w for w in read_report(out)["warnings"])
+    assert read_report(out)["pdf_engine"] == "pypdf"
+
+
+def test_pdf_poppler_fallback_recovers_unreadable_page(tmp_path, monkeypatch):
+    """A page pypdf can't read is recovered via pdftotext when poppler is present."""
+    monkeypatch.setattr(cf, "_pdftotext_pages", lambda _src: ["Recovered via poppler"])
+    src = tmp_path / "scan.pdf"
+    make_pdf(src, None)
+    out = tmp_path / "out.txt"
+    assert run(str(src), "--to", "txt", "--out", str(out)) == 0
+    assert "Recovered via poppler" in out.read_text(encoding="utf-8")
+    rep = read_report(out)
+    assert rep["pdf_engine"] == "pypdf+pdftotext"
+    assert any("recovered via pdftotext" in w for w in rep["warnings"])
+    # Recovery means the page is no longer reported as MISSING.
+    assert not any("NO extractable text" in w for w in rep["warnings"])
 
 
 # ---------------------------------------------------------------------------
