@@ -82,7 +82,16 @@ the terminal only ever sees the scoreboard.)
 
 Every reported finding carries: `file:line`, a **confidence** score (`docs/code-review-method.md`),
 the **standard/tool** cited, an **evidence basis** (📊 measured / 🧠 inferred - never conflate),
-and a concrete **`diff`-style fix + "why this works."**
+a plain-language **Problem** explanation, a one-line **Impact if unaddressed**, and a concrete
+**`diff`-style fix + "why this works."**
+
+> **Problem and Impact are written for a reader who did not build the code and was not in the
+> session** - a finding that only *names* the defect forces the reader to re-derive why it
+> matters (a live engagement had to iterate the document for exactly this). **Problem** says
+> what is wrong and how we know, in plain language. **Impact** states the consequence in the
+> domain's terms - missed detections / false negatives, alert-volume or tuning effects,
+> audit/regulatory exposure, data-integrity or operational cost - and carries its own 📊/🧠
+> basis when the consequence is projected rather than observed. No finding ships without both.
 
 ### 🔴 Critical (95-100) - must fix
 ```markdown
@@ -90,7 +99,9 @@ and a concrete **`diff`-style fix + "why this works."**
 **Location:** `{{file}}:{{line}}`  ·  **Confidence:** {{score}}/100  ·  **Basis:** 📊 measured / 🧠 inferred
 **Standard:** {{CWE / OWASP ASVS / CLAUDE.md §}}
 
-**Problem:** {{reason}}  (if inferred: the measurement that would confirm it)
+**Problem:** {{what is wrong and how we know - plain language}}  (if inferred: the measurement that would confirm it)
+
+**Impact if unaddressed:** {{consequence in domain terms - detection gap / false negatives / alert volume / audit exposure / operational}}
 
 **Fix:**
 ```diff
