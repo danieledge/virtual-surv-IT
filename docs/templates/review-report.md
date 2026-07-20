@@ -42,7 +42,10 @@ anything) must change first.
 
 ## 2. Findings
 Confidence score per `docs/code-review-method.md` (Critical 95-100, Warning 80-94, Medium
-70-79 - deep only). **Each finding carries a concrete `diff`-style fix + "why it works"**, a
+70-79 - deep only). **Each finding carries a plain-language Problem explanation, a one-line
+"Impact if unaddressed" in domain terms (detection gap / false negatives / alert volume /
+audit exposure / operational - with its own 📊/🧠 basis when projected), a concrete
+`diff`-style fix + "why it works"**, a
 **Basis** tag (📊 measured / 🧠 inferred), and a **Status** (`docs/review/output-format.md`):
 Open · Fixed · Accepted · Deferred · **Open (needs human review)** when there's no
 straightforward/safe fix. If there are none: *No significant issues found* (still show the
