@@ -354,7 +354,19 @@ the user at each gate.
 each with `<python> -m scripts.render_html <file>.md` so every deliverable exists in `.md` and
 `.html`. **When the delivery has more than one artifact, write `artifacts/START-HERE.md`
 LAST** (template `docs/templates/start-here.md`): the reader's entry point - verdict, reading
-order, every artifact listed with its purpose, open items. Render it too. Before closing, run
+order, every artifact listed with its purpose, open items. Render it too.
+
+**Citations gate (present it, don't just run it).** Run `<python> -m scripts.check_citations`
+over the artifacts. If anything is flagged TO-VERIFY, present it as a short list - each
+citation with the claim sentence it supports and its source permalink (FCA Handbook cites:
+construct `handbook.fca.org.uk/handbook/<BOOK>/<ch>/<sec>.html` from the pinpoint; irregular
+shapes → the Handbook's search) - then ask via the **question tool** (header `Citations`,
+single-select): **Verified - record them** · **Some verified (I'll say which)** · **Ship
+flagged** (artifact keeps visible *citation to-verify* annotations) · **Remove the
+citations**. On confirmation, record entries in the **working project's**
+`config/regulatory-register.yaml` overlay with today's `verified_on` - the three checks are
+documented in the register header; **never mark verified without the user's explicit
+confirmation**, and never present "Ship flagged" as a failure - it is the honest state. Before closing, run
 the mechanical DoD gate - `<python> -m scripts.check_artifacts` -
 which verifies every `.md` has its rendered `.html` sibling and the summary email exists;
 fix anything it flags (it's the one DoD check that's a command, not a claim).
