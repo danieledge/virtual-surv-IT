@@ -1,0 +1,35 @@
+case: review-finding-shape
+workflow: /deep-review
+rubric: code-review
+input: input_position_limit_check.py
+description: >
+  Finding-SHAPE case (5 C's discipline, docs/review/output-format.md). One planted critical
+  (string-built SQL) in an otherwise small, clean script. The test is not only whether the
+  defect is found - it is whether the finding is WRITTEN to the required shape: a
+  plain-language problem, a "Likely cause" line, and an "Impact if unaddressed" line stating
+  the consequence in domain terms. A review that names the defect without cause and impact
+  fails this case even though detection succeeded - that exact gap forced an iteration round
+  in a live engagement (2026-07-21).
+
+planted:
+  - id: SEC-1
+    keywords: [sql injection, injection, parameterize, parameterise, interpolat, string-built]
+    location: input_position_limit_check.py:17
+    min_severity: critical
+    must_find: true
+  - id: SHAPE-IMPACT
+    keywords: [impact if unaddressed, "impact:"]
+    min_severity: warning
+    must_find: true
+  - id: SHAPE-CAUSE
+    keywords: [likely cause, root cause, "cause:"]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  - id: FP-1
+    keywords: [hardcoded threshold, magic number, undocumented limit]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

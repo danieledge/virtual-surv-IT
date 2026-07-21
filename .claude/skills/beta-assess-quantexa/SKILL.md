@@ -66,7 +66,8 @@ and UI config.
      correction / client decision needed).
   This is the audit profession's **5 C's** (criteria / condition / cause / consequence /
   corrective action) in the team's shape. The same applies to reverse-traceability findings
-  (unmapped scorers, unwired scorecards). Format reference: `docs/review/output-format.md`.
+  (unmapped scorers, unwired scorecards). Format reference: `docs/review/output-format.md`;
+  **anchor on the worked verdict exemplar in `docs/review/gold-findings.md` before writing.**
 - **Reverse (artifact → requirement):** inventory every scorer and score-producing config in
   the estate and map each back to a requirement. **Verify scorecard wiring for every scorer**
   - a scorer not wired into a scorecard contributes nothing to alerts (KB-confirmed) and is

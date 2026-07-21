@@ -95,6 +95,7 @@ a plain-language **Problem** explanation, a one-line **Impact if unaddressed**, 
 > Together with **Likely cause** and the fix, the shape covers the audit profession's **5 C's**
 > (criteria · condition · cause · consequence · corrective action): the standard-cited line is
 > the criteria, Problem the condition, and the diff the corrective action.
+> **Worked exemplars to anchor on: [`gold-findings.md`](gold-findings.md).**
 
 ### 🔴 Critical (95-100) - must fix
 ```markdown
