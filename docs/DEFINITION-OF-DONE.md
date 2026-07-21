@@ -79,6 +79,10 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       the code could build, run and safely change it from the doc **alone** (no tribal knowledge,
       no unexplained jargon, commands copy-pastable). `compliance-reviewer` checks usability at
       this gate, not merely existence.
+- [ ] **Indexed - a START-HERE entry point** - deliveries with more than one artifact close
+      with `artifacts/START-HERE.md` (template `docs/templates/start-here.md`), written
+      **last**: verdict, reading order, every artifact listed with one line of purpose, and
+      the open items a reader should know about. Mechanically checked (`MISSING-INDEX`).
 - [ ] **Distributable** - evidence produced in `.md` **and** `.html`
       (`python -m scripts.render_html`). **By default one consolidated Delivery Report**
       (`docs/templates/delivery-report.md`) holds all sections; split into separate artifacts

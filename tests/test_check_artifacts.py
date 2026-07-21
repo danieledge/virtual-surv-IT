@@ -104,6 +104,36 @@ def test_artifact_without_finding_blocks_not_flagged(tmp_path):
     assert check(art) == []
 
 
+# --- START-HERE index gate ----------------------------------------------------------------
+
+
+def test_multi_artifact_delivery_requires_index(tmp_path):
+    art = tmp_path / "artifacts"
+    for stem in ("delivery-report", "qa-handover"):
+        _touch(art / f"{stem}.md")
+        _touch(art / f"{stem}.html")
+    _touch(art / "engagement-summary-x.txt")
+    findings = check(art)
+    assert len(findings) == 1 and "MISSING-INDEX" in findings[0]
+
+
+def test_index_satisfies_gate(tmp_path):
+    art = tmp_path / "artifacts"
+    for stem in ("delivery-report", "qa-handover", "START-HERE"):
+        _touch(art / f"{stem}.md")
+        _touch(art / f"{stem}.html")
+    _touch(art / "engagement-summary-x.txt")
+    assert check(art) == []
+
+
+def test_single_artifact_needs_no_index(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "delivery-report.md")
+    _touch(art / "delivery-report.html")
+    _touch(art / "engagement-summary-x.txt")
+    assert check(art) == []
+
+
 # --- code-without-QA gate (the 2026-07-21 live failure) ----------------------------------
 
 

@@ -314,7 +314,10 @@ the user at each gate.
 
 **6. Deliver.** Produce the selected artifacts under `artifacts/` as Markdown, then render
 each with `<python> -m scripts.render_html <file>.md` so every deliverable exists in `.md` and
-`.html`. Before closing, run the mechanical DoD gate - `<python> -m scripts.check_artifacts` -
+`.html`. **When the delivery has more than one artifact, write `artifacts/START-HERE.md`
+LAST** (template `docs/templates/start-here.md`): the reader's entry point - verdict, reading
+order, every artifact listed with its purpose, open items. Render it too. Before closing, run
+the mechanical DoD gate - `<python> -m scripts.check_artifacts` -
 which verifies every `.md` has its rendered `.html` sibling and the summary email exists;
 fix anything it flags (it's the one DoD check that's a command, not a claim).
 

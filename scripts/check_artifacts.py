@@ -211,6 +211,17 @@ def check(artifacts_dir: Path) -> list[str]:
                 "(DoD 'Tested')"
             )
 
+    # An engagement with several deliverables needs an entry point: the START-HERE index
+    # (docs/templates/start-here.md), written LAST, listing every artifact and the reading
+    # order. Below two .md artifacts there is nothing to index.
+    non_index_md = [m for m in md_files if m.name.upper() != "START-HERE.MD"]
+    if len(non_index_md) >= 2 and not any(m.name.upper() == "START-HERE.MD" for m in md_files):
+        findings.append(
+            f"MISSING-INDEX: {len(non_index_md)} artifacts but no START-HERE.md - the "
+            "index artifact is the reader's entry point (docs/templates/start-here.md); "
+            "write it last, listing everything"
+        )
+
     # The summary email is required per engagement close; mechanically we can only assert
     # "at least one exists once there are deliverables to summarise".
     has_deliverables = bool(md_files)
