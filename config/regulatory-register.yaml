@@ -28,6 +28,14 @@
 #   verified_on   date a human last checked it against the source ("-" = not yet)
 #   status        verified | example
 
+# FCA HANDBOOK ENTRIES (explored 2026-07-21): the Handbook has stable per-rule permalinks
+# (https://www.handbook.fca.org.uk/handbook/<SOURCEBOOK>/<chapter>/<section>.html, e.g.
+# SYSC/6/1.html) and a point-in-time "Timeline" - use the permalink as `source` and verify
+# against the live page. NOTE: no public API/machine-readable export was found, pages are
+# JS-rendered (bulk scraping unreliable), and the footer asserts "All rights reserved" - so
+# this register stores ONLY pinpoints + our own typology mapping + the URL, never Handbook
+# text. Review the FCA's terms before any future bulk-text ingestion.
+
 obligations:
   - id: MAR-ART12-1A
     regime: EU MAR (Regulation (EU) No 596/2014)
@@ -105,3 +113,25 @@ obligations:
     source: https://www.finra.org/rules-guidance/rulebooks/finra-rules/4511
     verified_on: "2026-06-29"
     status: verified
+
+  # --- FCA Handbook seeds (UK) - added 2026-07-21, awaiting human verification ---
+  - id: FCA-SYSC-6-1-1
+    regime: FCA Handbook (SYSC)
+    jurisdiction: UK
+    typology: compliance monitoring, surveillance governance, adequate policies and procedures
+    pinpoint: SYSC 6.1.1R
+    aliases: ["SYSC 6.1.1", "FCA SYSC 6.1.1R"]
+    effective_date: "-"
+    source: https://www.handbook.fca.org.uk/handbook/SYSC/6/1.html
+    verified_on: "-"
+    status: example
+  - id: FCA-MAR-1-6
+    regime: FCA Handbook (MAR - Market Conduct)
+    jurisdiction: UK
+    typology: market manipulation, manipulating transactions, wash trades
+    pinpoint: MAR 1.6
+    aliases: ["FCA MAR 1.6", "Market Conduct 1.6"]
+    effective_date: "-"
+    source: https://www.handbook.fca.org.uk/handbook/MAR/1/6.html
+    verified_on: "-"
+    status: example
