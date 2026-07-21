@@ -41,3 +41,31 @@ def test_rule_obligation_string_is_register_grounded():
     obligation = SpoofingAlert.__dataclass_fields__["obligation"].default
     res = check_text(obligation)
     assert res["unverified"] == []
+
+
+# --- working-project overlay (plugin-mode commit path) ------------------------------------
+
+
+def test_overlay_extends_and_overrides(tmp_path, monkeypatch):
+    """Entries in the working project's config/regulatory-register.yaml merge with the
+    bundled register: new ids extend, matching ids override (verified locally)."""
+    from scripts.check_citations import _load_register
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "regulatory-register.yaml").write_text(
+        "obligations:\n"
+        "  - id: LOCAL-1\n"
+        "    pinpoint: Rule 99-1\n"
+        "    status: verified\n"
+        "  - id: MAR-ART12-1A\n"
+        "    pinpoint: MAR Art.12(1)(a)\n"
+        "    status: verified\n"
+        "    verified_on: '2026-07-21'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    reg = _load_register()
+    by_id = {o["id"]: o for o in reg["obligations"]}
+    assert "LOCAL-1" in by_id  # extended
+    assert by_id["MAR-ART12-1A"]["verified_on"] == "2026-07-21"  # overridden
+    assert len(by_id) > 2  # bundled entries still present
