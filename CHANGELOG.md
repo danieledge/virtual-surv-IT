@@ -3,6 +3,51 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.15.0] - 2026-07-21 - the quality-loop release
+
+Every substantive change in this release was driven by a live engagement failure or an
+adversarially verified research pass - the team's controls are now increasingly made of its
+own recorded lessons.
+
+### Added
+- **Findings follow the audit profession's 5 C's.** The canonical finding shape
+  (`docs/review/output-format.md`) gains mandatory **"Likely cause"** and **"Impact if
+  unaddressed"** lines alongside Problem and Fix - written for a reader who was not in the
+  session, with impact stated in domain terms (detection gap / false negatives / alert
+  volume / audit exposure) and its own 📊/🧠 basis when projected. Driven by a live
+  assessment document that named defects without explaining them and needed an iteration
+  round. `beta-assess-quantexa` verdicts follow the same six-part shape.
+- **Standards-grounded critique gates.** Research-backed (draft-critique-revise helps ONLY
+  with an external signal; ungrounded self-review can regress quality): every pre-delivery
+  critique names its standard - 5 C's for findings, BABOK quality criteria for requirements
+  (stated in the BRD template), ISO/IEC 29119-shaped completeness for QA evidence (stated in
+  the QA handover) - the critic is never the author, and "look it over again" passes are
+  banned (operating guide, Outcome discipline 6; new DoD gate).
+- **Gold-standard finding exemplars** (`docs/review/gold-findings.md`): worked specimens of
+  the 5 C's code finding and the six-part assessment verdict, wired as the anchor from the
+  format spec and the assessment skill.
+- **`review-finding-shape` golden eval case** (29th): a review that names a planted defect
+  without cause and impact FAILS even though detection succeeded; the code-review rubric
+  gains an "Explanation & impact (5 C's)" dimension.
+- **The code-without-QA path is closed** (live failure 2026-07-21: a phase-2 model
+  implementation shipped from inside `/analyse-data` with no QA pass or tests):
+  `check_artifacts` gains mechanical **CODE-NO-QA / CODE-NO-TESTS** gates; `/analyse-data`
+  and `/engage` gain the per-phase re-classification rule (deliverable code always runs
+  under `/build-solution`'s chain); operating guide Outcome discipline 4a states it as a
+  standing rule.
+- **`FINDING-NO-IMPACT` mechanical gate** in `check_artifacts`: block-format 🔴/🟠 findings
+  must carry the Impact line - the cheap binary check the evidence says captures most of a
+  critique pass's value.
+- **Poppler `pdftotext` fallback in `convert_file`**: PDF pages the vendored pypdf cannot
+  extract get a second pass when the optional system package `poppler-utils` is installed
+  (documented in `requirements-dev.txt`); the report records the engine per run, and
+  recovered pages carry a verify-against-source warning.
+
+### Fixed
+- Bandit findings on the new subprocess usage (nosec with justifications) and a
+  Windows-only UnicodeEncodeError in test fixtures (UTF-8 written explicitly) - both caught
+  by CI after three red runs and now part of the check-CI-after-push routine.
+
 ## [0.14.0] - 2026-07-19 - the memory & transparency release
 
 ### Added
