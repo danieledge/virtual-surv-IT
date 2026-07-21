@@ -369,9 +369,14 @@ section) and a one-liner in the closing email:
 > (it updates this project's `config/regulatory-register.yaml` overlay with today's date),
 > or edit that file directly per its header instructions.
 
-Include each flagged citation's source permalink next to it (FCA Handbook cites: construct
-`handbook.fca.org.uk/handbook/<BOOK>/<ch>/<sec>.html` from the pinpoint; irregular shapes →
-the Handbook's search). **Do not ask a verification question at the close** - verification
+Include each flagged citation's source permalink next to it, resolved in this order:
+(1) the citation is already in the register (any status) → use its stored `source` URL;
+(2) new citation → construct from the **permalink schemes in the register header**
+(`config/regulatory-register.yaml` documents EUR-Lex, legislation.gov.uk, eCFR, FINRA, FCA
+Handbook, MAS and FATF/ESMA schemes - read them, don't guess); (3) neither fits → the
+official site's search, or ship "source link to be confirmed". **Never invent a
+plausible-looking URL** - a constructed link is only ever a proposal until the human
+verification confirms the page shows the cited provision. **Do not ask a verification question at the close** - verification
 is the user's act at their own pace; when they later say "mark X verified", update the
 overlay register with today's `verified_on` (the three checks are in the register header).
 Never record verified without that explicit user statement; never present to-verify as a
