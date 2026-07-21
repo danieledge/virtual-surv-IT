@@ -31,7 +31,7 @@ The execution answer depends on the flavour: the **Review** and **Data** demos a
 runs its own synthetic tests and measured ATL/BTL, so recommend *"Yes - trusted synthetic code in
 a sandbox/dev env"* - **but the model cannot grant that consent itself**: a dedicated hook
 (`guard-consent-writes.py`, ADR-002 rec 5) blocks any model write of `.claude/.exec-consent`, so
-**ask the user to type `! touch <absolute-project-path>/.claude/.exec-consent`** (resolve and
+**ask the user to type `! touch <absolute-project-path>/.claude/.exec-consent`** (works on every OS - the `!` shell is Git Bash on Windows; from a native Windows terminal give PowerShell `ni "<absolute-project-path>\.claude\.exec-consent" -Force` instead) (resolve and
 show the real absolute path - their own shell command; the human is the only one who can open
 the gate) and narrate exactly that as a safety feature of the demo:
 a confused or prompt-injected model cannot authorise itself to run code. Explain why a build that
