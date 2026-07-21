@@ -69,3 +69,38 @@ def test_overlay_extends_and_overrides(tmp_path, monkeypatch):
     assert "LOCAL-1" in by_id  # extended
     assert by_id["MAR-ART12-1A"]["verified_on"] == "2026-07-21"  # overridden
     assert len(by_id) > 2  # bundled entries still present
+
+
+# --- handbook-style detection + status-aware verification (demo-found gaps) ---------------
+
+
+def test_handbook_style_citations_detected():
+    from scripts.check_citations import find_citations
+
+    found = find_citations("Prohibited under FCA MAR 1.6; see SYSC 6.1.1R and MAR Art.12(1)(a).")
+    assert "MAR 1.6" in found and "SYSC 6.1.1R" in found
+    # prose numbers and undotted codes stay out
+    assert not any(
+        "chapter" in f.lower() for f in find_citations("in chapter 6 we discuss ISO 29119")
+    )
+
+
+def test_unverified_register_entries_flag_to_verify():
+    """status: example (or missing verified_on) is in the ledger but NOT human-verified -
+    citing it must flag, not pass. The FCA seeds are exactly this state."""
+    from scripts.check_citations import check_text
+
+    reg = {
+        "obligations": [
+            {"id": "A", "pinpoint": "MAR 1.6", "status": "example", "verified_on": "-"},
+            {
+                "id": "B",
+                "pinpoint": "SYSC 6.1.1R",
+                "status": "verified",
+                "verified_on": "2026-07-21",
+            },
+        ]
+    }
+    out = check_text("cites MAR 1.6 and SYSC 6.1.1R", register=reg)
+    assert out["unverified"] == ["MAR 1.6"]
+    assert out["verified"] == ["SYSC 6.1.1R"]

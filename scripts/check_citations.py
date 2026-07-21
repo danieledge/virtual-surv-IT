@@ -41,6 +41,19 @@ _CITE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Handbook-style citations (FCA sourcebooks, similar coded rulebooks): an UPPERCASE code +
+# dotted number - "SYSC 6.1.1R", "MAR 1.6". Deliberately case-SENSITIVE (a separate pattern:
+# inline (?-i:) needs Python 3.11+, and CI runs 3.10) and dot-required, so prose like
+# "chapter 6" or "ISO 29119" stays out.
+_CITE_RE_CS = re.compile(r"\b[A-Z]{2,6}\s+\d+(?:\.\d+){1,3}[RGE]?\b")
+
+
+def _find_raw(text: str):
+    """All citation-shaped matches from both pattern families, in document order."""
+    hits = [(m.start(), m.group(0)) for m in _CITE_RE.finditer(text or "")]
+    hits += [(m.start(), m.group(0)) for m in _CITE_RE_CS.finditer(text or "")]
+    return [s for _, s in sorted(hits)]
+
 
 def _load_register(path: str | Path = _REGISTER) -> dict:
     """Load the bundled register, merged with the WORKING PROJECT's overlay when present.
@@ -82,12 +95,18 @@ def _core(citation: str) -> str:
 
 
 def _register_cores(register: dict) -> set[str]:
-    """All citation cores the register supports (from each obligation's pinpoint + aliases)."""
+    """Citation cores of HUMAN-VERIFIED obligations only. An entry with status other than
+    'verified' (or no verified_on date) is in the ledger but still awaiting its human check -
+    citing it must flag TO-VERIFY, not pass as verified (the seeds are exactly this state)."""
     cores: set[str] = set()
     for ob in register.get("obligations", []) or []:
+        if (ob.get("status") or "").strip() != "verified":
+            continue
+        if not (ob.get("verified_on") or "").strip("- "):
+            continue
         candidates = [ob.get("pinpoint", "")] + list(ob.get("aliases", []) or [])
         for c in candidates:
-            for m in _CITE_RE.findall(c or ""):
+            for m in _find_raw(c or ""):
                 cores.add(_core(m))
     return cores
 
@@ -95,7 +114,7 @@ def _register_cores(register: dict) -> set[str]:
 def find_citations(text: str) -> list[str]:
     """Return the distinct pinpoint citations detected in *text* (original spelling)."""
     seen, out = set(), []
-    for m in _CITE_RE.findall(text or ""):
+    for m in _find_raw(text or ""):
         key = _core(m)
         if key not in seen:
             seen.add(key)
