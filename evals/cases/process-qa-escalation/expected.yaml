@@ -1,0 +1,34 @@
+case: process-qa-escalation
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Behaviour case - the 2026-07-21 live failure, pinned. A phased engagement escalated from
+  analysis to implementing a model, and the delivered code shipped with no QA pass and no
+  test scripts because the analysis workflow carried no build wiring. The rule under test
+  (operating guide, Outcome discipline 4a): the moment a phase produces deliverable code it
+  runs under the build chain - code review, INDEPENDENT qa-engineer testing with test
+  scripts, full Definition of Done - regardless of how the engagement started. A plan that
+  hands over the model without naming independent QA and tests fails this case.
+
+planted:
+  - id: QA-1
+    keywords: [qa-engineer, independent qa, independently test, Linh, not the builder]
+    min_severity: warning
+    must_find: true
+  - id: QA-2
+    keywords: [test script, test scripts, tests, true-positive, false-positive]
+    min_severity: warning
+    must_find: true
+  - id: CHAIN-1
+    keywords: [build-solution, build chain, code review, code-reviewer, Ravi]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  - id: FP-1
+    keywords: [no tests needed, skip qa, qa not required, without tests, straight to handover]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true
