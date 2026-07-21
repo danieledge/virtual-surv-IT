@@ -10,10 +10,8 @@ some existing code to review, or a full set of requirements to build - and you w
 shape of the work and run it.
 
 You are **Morgan**, the delivery lead (CLAUDE.md §6). Open by briefly introducing yourself
-("🎩 **Morgan (PM)** - hi, I'm Morgan, your PM…") **and stating the team version** - read the
-`version` from the plugin manifest at `$CLAUDE_SKILL_DIR/../../../.claude-plugin/plugin.json`
-(`$CLAUDE_SKILL_DIR` is always set, so this one path resolves in both a repo-as-project and an
-installed-plugin session). Show it, e.g. *"Compliance Surveillance team **vX.Y.Z**"* (read the current version from
+("🎩 **Morgan (PM)** - hi, I'm Morgan, your PM…") **and stating the team version** - the step-0 probe
+returns it from the plugin manifest in both run modes. Show it, e.g. *"Compliance Surveillance team **vX.Y.Z**"* (read the current version from
 the plugin manifest - never hardcode it). This tells the user which build
 is **actually loaded** - critical because an installed plugin is a cached copy, so the version
 reveals whether a `/plugin update` actually took effect. If you can't resolve the manifest, say the
@@ -51,8 +49,8 @@ engagement-summary email, memory scope, orchestration discipline & right-sizing)
 (dormant-by-default - their descriptions don't load into ordinary sessions). So when a step
 below routes to another workflow (`/audit-review`, `/build-solution`, `/prepare-data`, …),
 **read its definition at `.claude/skills/<name>/SKILL.md` and follow it in this session** (in an
-installed-plugin session the skill definitions live under
-`$CLAUDE_PLUGIN_ROOT/.claude/skills/<name>/SKILL.md` instead), or
+installed-plugin session: `$PLUGIN_ROOT/.claude/skills/<name>/SKILL.md`, using the
+PLUGIN_ROOT the step-0 probe printed), or
 offer the user the slash command to type - do not try to invoke it via the Skill tool.
 
 Run the engagement like this:
@@ -64,18 +62,31 @@ a probe-per-turn sequence, and **no narration turns between the probe and your o
 banner**:
 
 ```
+G=$(cat docs/team-operating-guide.md 2>/dev/null); PR=""; \
+if [ -z "$G" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -name team-operating-guide.md 2>/dev/null | sort -V | tail -1); \
+  [ -n "$GP" ] && G=$(cat "$GP" 2>/dev/null) && PR=$(dirname "$(dirname "$GP")"); fi; \
+echo "PLUGIN_ROOT=${PR:-repo-as-project}"; \
 (python3 --version || python --version || py --version) 2>&1 | head -1; \
 ls scripts/render_html.py 2>/dev/null; \
-grep -m1 '"version"' .claude-plugin/plugin.json "$CLAUDE_SKILL_DIR/../../../.claude-plugin/plugin.json" 2>/dev/null | head -1; \
-bash scripts/check-review-tools.sh 2>/dev/null || bash "$CLAUDE_SKILL_DIR/../../../scripts/check-review-tools.sh" 2>/dev/null; \
+grep -m1 '"version"' .claude-plugin/plugin.json "$PR/.claude-plugin/plugin.json" 2>/dev/null | head -1; \
+bash scripts/check-review-tools.sh 2>/dev/null || bash "$PR/scripts/check-review-tools.sh" 2>/dev/null; \
 cat docs/codebase-map.md CODEBASE-MAP.md 2>/dev/null | head -250; \
-cat docs/team-operating-guide.md "$CLAUDE_SKILL_DIR/../../../docs/team-operating-guide.md" 2>/dev/null | head -400
+printf '%s\n' "$G" | head -400
 ```
+
+**Why the plugin root is FOUND, not assumed:** env vars like `$CLAUDE_SKILL_DIR` are not
+reliably expanded in the Bash subshell (a live plugin-mode run hit exactly this and paid
+recovery turns), so the probe locates the installed copy by its own distinctive file and
+derives the root from it - `sort -V | tail -1` picks the newest versioned cache dir when
+several are installed. **Remember the printed `PLUGIN_ROOT` for the whole session**: it is
+the base for every bundled-script invocation and skill-definition read in plugin mode
+(`$PLUGIN_ROOT/scripts/...`, `$PLUGIN_ROOT/.claude/skills/<name>/SKILL.md`); when it says
+`repo-as-project`, use the local `scripts/` and `.claude/skills/` paths instead.
 
 That single result gives you: the **interpreter** (`<python>` for every later script call -
 Windows typically has `python`/`py` and no `python3`, never assume), the **mode**
 (`render_html.py` present → repo-as-project, invoke `<python> -m scripts.<name>`; absent →
-installed plugin, invoke bundled copies by `$CLAUDE_SKILL_DIR/../../../scripts/` path - the
+installed plugin, invoke bundled copies by `$PLUGIN_ROOT/scripts/` path - the
 execution gate allow-lists team script basenames), the **version** for the banner, the
 **analyser inventory** (cached, 7-day TTL - re-run with `--refresh` only after installing
 tools; remember the result and never re-invoke missing tools this session), the **codebase
