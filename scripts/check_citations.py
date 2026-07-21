@@ -43,11 +43,33 @@ _CITE_RE = re.compile(
 
 
 def _load_register(path: str | Path = _REGISTER) -> dict:
+    """Load the bundled register, merged with the WORKING PROJECT's overlay when present.
+
+    In plugin mode the bundled register lives in the plugin cache - not a repo the user
+    commits to, and replaced on every update - so engagement-verified entries need a home
+    that travels with the project: `config/regulatory-register.yaml` in the working
+    directory (same two-tier pattern as the codebase map). Overlay entries EXTEND the
+    bundled set; an overlay entry with the same `id` overrides the bundled one (e.g. a
+    project flips a seeded `status: example` to `verified` locally). In repo-as-project
+    the two paths resolve to the same file and no merge happens.
+    """
     try:
         import yaml
     except ImportError:  # pragma: no cover - exercised only without pyyaml
         raise RuntimeError("pyyaml is required: pip install -r requirements-dev.txt")
-    return yaml.safe_load(Path(path).read_text()) or {}
+    base = yaml.safe_load(Path(path).read_text()) or {}
+    overlay_path = Path.cwd() / "config" / "regulatory-register.yaml"
+    try:
+        same = overlay_path.resolve() == Path(path).resolve()
+    except OSError:
+        same = True
+    if not same and overlay_path.is_file():
+        overlay = yaml.safe_load(overlay_path.read_text()) or {}
+        merged = {ob.get("id"): ob for ob in (base.get("obligations") or [])}
+        for ob in overlay.get("obligations") or []:
+            merged[ob.get("id")] = ob
+        base["obligations"] = list(merged.values())
+    return base
 
 
 def _core(citation: str) -> str:
