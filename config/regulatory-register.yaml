@@ -36,6 +36,19 @@
 # this register stores ONLY pinpoints + our own typology mapping + the URL, never Handbook
 # text. Review the FCA's terms before any future bulk-text ingestion.
 
+# HOW A HUMAN VERIFIES AN ENTRY (the three checks - all of them, not just the click):
+#   1. EXISTS   - the linked page shows the cited provision itself (rule number visible,
+#                 not a neighbour, not "[deleted]").
+#   2. SUPPORTS - read the rule text and confirm it says what the ARTIFACT claims it says
+#                 (a citation can exist and still be wrong for the sentence it's attached
+#                 to - that mismatch is the confabulation this register exists to catch).
+#   3. MAPS     - the entry's typology keywords are right (future engagements retrieve by
+#                 typology).
+# Then set verified_on to today and status: verified, and commit through normal review.
+# In plugin mode, record it in the WORKING PROJECT's own config/regulatory-register.yaml
+# (an overlay check_citations merges over this bundled file - entries extend, same id
+# overrides). A minute or two per obligation, once per obligation - not per engagement.
+
 obligations:
   - id: MAR-ART12-1A
     regime: EU MAR (Regulation (EU) No 596/2014)
