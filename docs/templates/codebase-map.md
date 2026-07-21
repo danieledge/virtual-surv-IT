@@ -40,9 +40,12 @@ One short paragraph: purpose, tech stack, entry points, how it is built/run/test
 
 ## 3. Engagement history
 
-| Date | Engagement | What was delivered | Key artifacts |
-|------|-----------|--------------------|---------------|
-| <YYYY-MM-DD> | <slug> | <one line> | <paths> |
+| Date | Engagement | Team ver | What was delivered | Key artifacts |
+|------|-----------|----------|--------------------|---------------|
+| <YYYY-MM-DD> | <slug> | <vX.Y.Z> | <one line> | <paths> |
+
+(The **Team ver** column powers the what's-new banner: the next engagement compares it
+against the loaded version and mentions headline changes when they differ.)
 
 ## 4. Open questions & watch items
 

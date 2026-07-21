@@ -3,6 +3,35 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.16.0] - 2026-07-21 - the front-door release
+
+### Added
+- **What's-new banner.** After a plugin update, `/engage`'s opening banner tells the user in
+  one line what changed since this project's last engagement (up to three headline changes,
+  compared via the new **Team ver** column in the codebase map's engagement history) - and
+  shows nothing when versions match. This release announces itself.
+- **START-HERE index artifact.** Every multi-artifact delivery closes with an entry-point
+  document (template `docs/templates/start-here.md`, written last: verdict, reading order,
+  every artifact listed, open items) - mechanically enforced (`MISSING-INDEX`) and a new
+  Definition-of-Done item.
+
+### Changed
+- **Fast open: two turns to the first question.** `/engage`'s opening was 7-10 sequential
+  tool calls (measured root cause of the slow first prompt - the analyser probe itself is
+  ~15ms); it is now ONE compound probe returning interpreter, mode, version, tooling
+  inventory, codebase map, newest changelog block and the operating guide together, with no
+  narration turns before the banner and map anchors verified lazily instead of at open.
+- **Plugin-root resolution is registry-first and env-independent.** A live plugin-mode run
+  showed `$CLAUDE_SKILL_DIR` does not reliably expand in the Bash subshell; the probe now
+  resolves the installed copy from `installed_plugins.json`'s `installPath` (authoritative
+  for GitHub, git-URL and locally-cloned-directory installs alike; resolves to the versioned
+  cache copy actually loaded) with a find-based fallback.
+- **Windows-native consent commands.** Every place the consent act is instructed now gives
+  the command matched to the user's shell (PowerShell `ni -Force` / cmd `type nul >` /
+  `touch` in any bash, including the `!` prefix's Git Bash on Windows) - and the rule that
+  consent is never wrapped in a helper script is now stated explicitly (a script would be
+  exec-guard allow-listed by basename and would bypass the consent-write gate lexically).
+
 ## [0.15.0] - 2026-07-21 - the quality-loop release
 
 Every substantive change in this release was driven by a live engagement failure or an
