@@ -63,8 +63,12 @@ banner**:
 
 ```
 G=$(cat docs/team-operating-guide.md 2>/dev/null); PR=""; \
-if [ -z "$G" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -name team-operating-guide.md 2>/dev/null | sort -V | tail -1); \
-  [ -n "$GP" ] && G=$(cat "$GP" 2>/dev/null) && PR=$(dirname "$(dirname "$GP")"); fi; \
+if [ -z "$G" ]; then \
+  for d in $(grep -o '"installPath": *"[^"]*"' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null | cut -d'"' -f4); do \
+    grep -q 'compliance-surveillance-team' "$d/.claude-plugin/plugin.json" 2>/dev/null && PR="$d" && break; done; \
+  if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -name team-operating-guide.md 2>/dev/null | sort -V | tail -1); \
+    [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; \
+  [ -n "$PR" ] && G=$(cat "$PR/docs/team-operating-guide.md" 2>/dev/null); fi; \
 echo "PLUGIN_ROOT=${PR:-repo-as-project}"; \
 (python3 --version || python --version || py --version) 2>&1 | head -1; \
 ls scripts/render_html.py 2>/dev/null; \
@@ -76,9 +80,11 @@ printf '%s\n' "$G" | head -400
 
 **Why the plugin root is FOUND, not assumed:** env vars like `$CLAUDE_SKILL_DIR` are not
 reliably expanded in the Bash subshell (a live plugin-mode run hit exactly this and paid
-recovery turns), so the probe locates the installed copy by its own distinctive file and
-derives the root from it - `sort -V | tail -1` picks the newest versioned cache dir when
-several are installed. **Remember the printed `PLUGIN_ROOT` for the whole session**: it is
+recovery turns). Resolution order: (1) the install registry
+(`installed_plugins.json` `installPath`, verified by the manifest name) - authoritative for
+EVERY install source: GitHub marketplace, git URL, or a locally cloned directory added as a
+marketplace; (2) a find over the cache/marketplace dirs (`sort -V` picks the newest
+versioned copy) for registries that predate the current schema. **Remember the printed `PLUGIN_ROOT` for the whole session**: it is
 the base for every bundled-script invocation and skill-definition read in plugin mode
 (`$PLUGIN_ROOT/scripts/...`, `$PLUGIN_ROOT/.claude/skills/<name>/SKILL.md`); when it says
 `repo-as-project`, use the local `scripts/` and `.claude/skills/` paths instead.
