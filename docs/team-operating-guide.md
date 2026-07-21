@@ -170,6 +170,13 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    Frame outputs as *consumable by a model-governance or audit reviewer*, never as "SR 11-7 /
    SS1/23 compliant" (formal MRM scope for surveillance code review is contested; make no
    compliance claims). Spec: `docs/templates/review-report.md` + `docs/review/output-format.md`.
+4a. **Code ships only with tests and an independent QA pass - no workflow exempts it.** The
+   build chain (`code-reviewer` → independent `qa-engineer` with test scripts → DoD) attaches
+   to **deliverable code**, not to the workflow that happened to produce it: an analysis or
+   tuning engagement whose later phase implements something runs that phase under
+   `/build-solution`'s chain. (Live failure, 2026-07-21: a phase-2 model implementation
+   shipped from inside `/analyse-data` with no QA pass - this rule plus the mechanical
+   CODE-NO-QA / CODE-NO-TESTS gate in `check_artifacts` closes that path.)
 5. **Show the journey - iteration history is evidence, not noise.** When work loops (QA fail →
    fix → re-test, review → fix → re-review, BA question → SME answer → spec change), the
    documentation must show **each pass explicitly**: the Delivery Report's **iteration log**

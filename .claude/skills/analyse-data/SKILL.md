@@ -35,6 +35,18 @@ relevant a **data dictionary** (`docs/templates/data-dictionary.md`), **data lin
 (`data-lineage.md`), **segmentation analysis** (`segmentation-analysis.md`) or **process map**
 (`process-map.md`) - under `artifacts/`, rendered to `.html`.
 
+**If the engagement escalates from analysing to BUILDING - the build chain applies, no
+exceptions.** A live engagement (2026-07-21) went "phase 1: analyse suitability, phase 2:
+implement the model" and phase 2 shipped code with **no QA pass and no tests**, because this
+workflow carries no build wiring. The rule: the moment any phase produces **deliverable code**
+(a model, detection logic, a pipeline or script that will be handed over - as opposed to
+throwaway exploration snippets), that phase runs under `/build-solution`'s chain regardless of
+how the engagement started: `code-reviewer` review, **independent `qa-engineer` testing with
+test scripts**, and the full Definition of Done. Read
+`.claude/skills/build-solution/SKILL.md` and follow it for that phase. **Analysis does not
+exempt code from QA.** The mechanical gate (`check_artifacts`: CODE-NO-QA / CODE-NO-TESTS)
+will fail the close if code sits in `artifacts/` without a QA handover and tests.
+
 **Close - don't dead-end.** State the headline insight + recommendation, then offer the next step
 (tune, validate, escalate a data-quality issue, or hand over).
 
