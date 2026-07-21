@@ -122,9 +122,15 @@ to perform the actual consent act **themselves** - and **always show the command
 absolute project path** (resolve the project root first, e.g. from `pwd`; never a bare relative
 path, which silently creates the marker in the wrong place if their terminal is elsewhere):
 type **`! touch /absolute/path/to/project/.claude/.exec-consent`** (`!` as the *first* character
-of the prompt line runs it as their own shell command; if the `!` prefix doesn't execute on
-their client, the same `touch` command in any terminal works), or set `CST_ALLOW_EXEC=1` in the
-launch environment (the hard override - also human-only). **Verify the marker exists** (a
+of the prompt line runs it as their own shell command - on Windows the `!` shell is Git Bash,
+so `touch` works there too). **Give the command matched to where the user will type it** - a
+Windows user pasting into their own terminal has no `touch`:
+- PowerShell: `ni "C:\absolute\path\.claude\.exec-consent" -Force`
+- cmd.exe: `type nul > "C:\absolute\path\.claude\.exec-consent"`
+- any bash/zsh terminal (macOS/Linux/Git Bash): `touch /absolute/path/.claude/.exec-consent`
+On Windows, show the PowerShell form alongside the `!` form by default. Alternatively
+`CST_ALLOW_EXEC=1` in the launch environment (the hard override - also human-only). **Never
+wrap consent-granting in a helper script** - the act stays a literal command the human types. **Verify the marker exists** (a
 read-only `ls .claude/.exec-consent` is allowed)
 before executing anything; if the user answered "Yes" but the marker never appears, execution
 is still blocked - say so plainly, keep dynamic findings 🧠 inferred, and never present the menu

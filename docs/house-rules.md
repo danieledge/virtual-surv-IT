@@ -70,7 +70,7 @@ engagement. This file ships with the plugin and is **general by design**.
   `.claude/.exec-consent` marker or the human-set `CST_ALLOW_EXEC=1`. **The marker is human-only**
   (since ADR-002 rec 5 / `guard-consent-writes.py` the model cannot write it - the user creates it;
   always quote the command with the **absolute project path**, e.g.
-  `! touch /path/to/project/.claude/.exec-consent`, so a terminal in another directory can't
+  `! touch /path/to/project/.claude/.exec-consent` (native Windows terminals: PowerShell `ni "C:\path\.claude\.exec-consent" -Force` or cmd `type nul > ...` - no `touch` there), so a terminal in another directory can't
   create it in the wrong place); the intake "yes" is *intent*, the marker is the *consent*.
   The user is responsible for the safety of code they hand over (CLAUDE.md §7). Threat model:
   `ADR-002`. **The gate covers the code under review, not the team's own vendored front-door

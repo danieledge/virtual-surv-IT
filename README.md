@@ -723,7 +723,10 @@ gate.* Answering "yes" at intake expresses intent, but it does not unlock anythi
 blocked from writing the consent marker, the settings files, and the guard hooks themselves - so a
 confused (or prompt-injected) model cannot authorise itself to run code or quietly rewrite its own
 guardrails. **You** create the marker - the team gives you the exact command **with the absolute
-project path** (e.g. `! touch /path/to/your-project/.claude/.exec-consent`, or the same `touch`
+project path** (e.g. `! touch /path/to/your-project/.claude/.exec-consent` - the `!` shell is
+Git Bash on Windows too, so this works everywhere; from your **own** Windows terminal use
+PowerShell `ni "C:\path\to\project\.claude\.exec-consent" -Force` or cmd
+`type nul > "C:\path\to\project\.claude\.exec-consent"` instead - or the same `touch`
 in any terminal); deleting it (closing the gate) and reading it stay allowed, and hook
 maintenance needs the human-set `CST_ALLOW_CONFIG_EDIT=1`.
 
