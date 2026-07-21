@@ -360,10 +360,12 @@ order, every artifact listed with its purpose, open items. Render it too.
 over the artifacts. If anything is flagged TO-VERIFY, present it as a short list - each
 citation with the claim sentence it supports and its source permalink (FCA Handbook cites:
 construct `handbook.fca.org.uk/handbook/<BOOK>/<ch>/<sec>.html` from the pinpoint; irregular
-shapes → the Handbook's search) - then ask via the **question tool** (header `Citations`,
-single-select): **Verified - record them** · **Some verified (I'll say which)** · **Ship
-flagged** (artifact keeps visible *citation to-verify* annotations) · **Remove the
-citations**. On confirmation, record entries in the **working project's**
+shapes → the Handbook's search) - then ask via the **question tool** (header `Citations`). **1-4 flagged
+citations → one `multiSelect: true` question with a citation per option** ("tick the ones
+you verified against the link") - per-citation precision in one screen; unticked stay
+flagged. **5+ → the single-select summary menu**: **Verified - record them** · **Some
+verified (I'll say which)** · **Ship flagged** (artifact keeps visible *citation to-verify*
+annotations) · **Remove the citations**. On confirmation, record entries in the **working project's**
 `config/regulatory-register.yaml` overlay with today's `verified_on` - the three checks are
 documented in the register header; **never mark verified without the user's explicit
 confirmation**, and never present "Ship flagged" as a failure - it is the honest state. Before closing, run
