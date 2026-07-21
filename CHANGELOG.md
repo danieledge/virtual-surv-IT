@@ -3,6 +3,13 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.16.1] - 2026-07-21
+
+### Fixed
+- The what's-new line is explicitly part of the opening banner (a live first-engagement run
+  on 0.16.0 skipped the current-release form, substituting the no-map remark - user-reported
+  within the hour). Prompt-only fix; bumped so installed copies actually receive it.
+
 ## [0.16.0] - 2026-07-21 - the front-door release
 
 ### Added
