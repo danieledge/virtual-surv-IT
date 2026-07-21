@@ -49,6 +49,15 @@ _SECRET_PATTERNS = [
 _SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 
+# Code-without-QA gate: a live engagement (2026-07-21) delivered phase-2 implementation
+# code from inside an analysis workflow and no QA pass ever ran - the DoD items are
+# PM-attested, so nothing mechanical caught it. This check does: deliverable code in
+# artifacts/ requires a QA handover and at least one test file. (Code delivered into the
+# working repo's source tree is out of this gate's sight - the skill/operating-guide
+# escalation rule covers that path; this is the belt for the common artifacts/ case.)
+_CODE_EXTS = {".py", ".scala", ".sql", ".sh", ".ps1", ".java", ".js", ".ts"}
+_TEST_FILE_RE = re.compile(r"(^test_|_test\.|\.spec\.|^conftest\.py$)", re.I)
+
 # Finding-shape gate: a reported Critical/Warning finding block (output-format shape,
 # `### 🔴 {{title}}` / `### 🟠 {{title}}`) must state its impact - the cheap binary check
 # the evidence says captures most of a critique pass's value (operating guide, Outcome
@@ -178,6 +187,28 @@ def check(artifacts_dir: Path) -> list[str]:
                 f"FINDING-NO-IMPACT: {md} has {heads} Critical/Warning finding block(s) but "
                 f"only {impacts} '**Impact if unaddressed:**' line(s) - every finding must "
                 "state its impact (docs/review/output-format.md)"
+            )
+
+    code_files = [
+        f for f in artifacts_dir.rglob("*") if f.is_file() and f.suffix.lower() in _CODE_EXTS
+    ]
+    non_test_code = [f for f in code_files if not _TEST_FILE_RE.search(f.name)]
+    if non_test_code:
+        qa_handovers = sorted(artifacts_dir.rglob("qa-handover*.md")) + sorted(
+            artifacts_dir.rglob("*qa-handover*.md")
+        )
+        if not qa_handovers:
+            findings.append(
+                f"CODE-NO-QA: {len(non_test_code)} code file(s) in {artifacts_dir} but no "
+                "qa-handover*.md - delivered code requires an independent QA pass "
+                "(DoD; no workflow exempts it)"
+            )
+        test_files = [f for f in code_files if _TEST_FILE_RE.search(f.name)]
+        if not test_files:
+            findings.append(
+                f"CODE-NO-TESTS: {len(non_test_code)} code file(s) in {artifacts_dir} but no "
+                "test files (test_*/-_test.*/*.spec.*) - delivered code ships with its tests "
+                "(DoD 'Tested')"
             )
 
     # The summary email is required per engagement close; mechanically we can only assert

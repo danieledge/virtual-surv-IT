@@ -104,6 +104,38 @@ def test_artifact_without_finding_blocks_not_flagged(tmp_path):
     assert check(art) == []
 
 
+# --- code-without-QA gate (the 2026-07-21 live failure) ----------------------------------
+
+
+def test_code_without_qa_handover_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "wash_trade_model.py", "def score(): ...")
+    _touch(art / "report.md")
+    _touch(art / "report.html")
+    _touch(art / "engagement-summary-x.txt")
+    codes = "".join(check(art))
+    assert "CODE-NO-QA" in codes and "CODE-NO-TESTS" in codes
+
+
+def test_code_with_qa_and_tests_passes(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "wash_trade_model.py", "def score(): ...")
+    _touch(art / "test_wash_trade_model.py", "def test_score(): ...")
+    _touch(art / "qa-handover.md")
+    _touch(art / "qa-handover.html")
+    _touch(art / "engagement-summary-x.txt")
+    assert check(art) == []
+
+
+def test_test_files_alone_do_not_trigger_gate(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "test_something.py", "def test_x(): ...")
+    _touch(art / "engagement-summary-x.txt")
+    _touch(art / "notes.md")
+    _touch(art / "notes.html")
+    assert check(art) == []
+
+
 # --- codebase-map hygiene (ADR-003) ------------------------------------------------------
 
 

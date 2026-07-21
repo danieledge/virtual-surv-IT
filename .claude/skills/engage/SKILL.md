@@ -179,6 +179,12 @@ Repeat the execution- and data-responsibility notes in the final Delivery Report
   external I/O, crypto, secrets, or PII/data handling). It is offered again at the review's close as
   a backstop;
 - a *build from requirements* → orchestrator-workers delivery (`/build-solution`).
+**Phased engagements re-classify per phase.** "Phase 1 analyse, phase 2 implement" is TWO
+classifications: the analysis phase runs its workflow, and the moment a phase produces
+**deliverable code** it runs under `/build-solution`'s chain - `code-reviewer`, independent
+`qa-engineer` with test scripts, full DoD - regardless of how the engagement started
+(operating guide, Outcome discipline 4a; a live engagement shipped un-QA'd code because this
+re-classification didn't happen).
 Be flexible: skip any stage already satisfied by what the user gave you. The deliverable
 could be **any** surveillance-engineering output - a detection rule, a data pipeline / ETL,
 a transformation or utility script (Python/Scala/PowerShell/Bash), a reconciliation or
