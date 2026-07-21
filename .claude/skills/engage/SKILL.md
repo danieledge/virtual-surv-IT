@@ -356,19 +356,26 @@ each with `<python> -m scripts.render_html <file>.md` so every deliverable exist
 LAST** (template `docs/templates/start-here.md`): the reader's entry point - verdict, reading
 order, every artifact listed with its purpose, open items. Render it too.
 
-**Citations gate (present it, don't just run it).** Run `<python> -m scripts.check_citations`
-over the artifacts. If anything is flagged TO-VERIFY, present it as a short list - each
-citation with the claim sentence it supports and its source permalink (FCA Handbook cites:
-construct `handbook.fca.org.uk/handbook/<BOOK>/<ch>/<sec>.html` from the pinpoint; irregular
-shapes → the Handbook's search) - then ask via the **question tool** (header `Citations`). **1-4 flagged
-citations → one `multiSelect: true` question with a citation per option** ("tick the ones
-you verified against the link") - per-citation precision in one screen; unticked stay
-flagged. **5+ → the single-select summary menu**: **Verified - record them** · **Some
-verified (I'll say which)** · **Ship flagged** (artifact keeps visible *citation to-verify*
-annotations) · **Remove the citations**. On confirmation, record entries in the **working project's**
-`config/regulatory-register.yaml` overlay with today's `verified_on` - the three checks are
-documented in the register header; **never mark verified without the user's explicit
-confirmation**, and never present "Ship flagged" as a failure - it is the honest state. Before closing, run
+**Citations gate (default: ship flagged, teach the fix - never block the close).** Run
+`<python> -m scripts.check_citations` over the artifacts. Anything flagged TO-VERIFY is
+**assumed unverified and shipped that way**: mark each such citation in the artifact
+*(citation to-verify)*, and add this standard note to the report (in the limitations
+section) and a one-liner in the closing email:
+
+> **Citations marked to-verify** have not yet been human-checked against their linked
+> sources. If you are happy they are accurate - the linked page shows the provision, it
+> says what this document claims, and the typology fits - have them recorded as verified
+> for future engagements: tell the team *"mark <citation> as verified"* in any session
+> (it updates this project's `config/regulatory-register.yaml` overlay with today's date),
+> or edit that file directly per its header instructions.
+
+Include each flagged citation's source permalink next to it (FCA Handbook cites: construct
+`handbook.fca.org.uk/handbook/<BOOK>/<ch>/<sec>.html` from the pinpoint; irregular shapes →
+the Handbook's search). **Do not ask a verification question at the close** - verification
+is the user's act at their own pace; when they later say "mark X verified", update the
+overlay register with today's `verified_on` (the three checks are in the register header).
+Never record verified without that explicit user statement; never present to-verify as a
+failure - it is the honest state. Before closing, run
 the mechanical DoD gate - `<python> -m scripts.check_artifacts` -
 which verifies every `.md` has its rendered `.html` sibling and the summary email exists;
 fix anything it flags (it's the one DoD check that's a command, not a claim).
