@@ -111,7 +111,9 @@ plain words, ending *"(full detail: CHANGELOG.md)"*. When versions match, show n
 feature must never become a wall of release notes, and it never delays the first question.
 **No prior version on record** (no codebase map yet, an older map without the Team ver
 column, or a skipped close)?
-Say *"🆕 In the current release (vY): ..."* - never guess what the user last saw. The whole
+Say *"🆕 In the current release (vY): ..."* - never guess what the user last saw. Either
+form is **part of the opening banner itself, not optional** - a live first-engagement run
+skipped it; the no-map remark does not substitute for it. The whole
 comparison is local files only (the map + the bundled manifest and CHANGELOG), so it works
 identically for manually copied / air-gapped installs with no git or network access.
 
