@@ -179,6 +179,19 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    caught-routed-fixed-re-verified failure is **proof the control loop operates**, and a
    suspiciously clean narrative is what draws auditor scrutiny. Record hand-offs at gates,
    not every tool call. Append-only: later passes add rows, never rewrite earlier verdicts.
+6. **Ground every critique in a named external standard - never "look it over again".** The
+   peer-reviewed evidence is unambiguous: draft-critique-revise measurably improves output,
+   but **only when the critique has an external signal** - a named standard, checklist, rubric
+   or verifier; ungrounded self-review is unreliable and can make output *worse* (models fail
+   at finding their own mistakes, not at fixing pointed-at ones). So: every pre-delivery
+   critique step names the standard it checks against - the **5 C's** for findings
+   (`docs/review/output-format.md`), **BABOK quality criteria** for requirements
+   (unambiguous · testable · atomic · consistent · complete), **ISO/IEC 29119-shaped**
+   completeness for QA evidence, **SR 11-7-style** documentation expectations for validation
+   reports - the critic is never the author, and the deliverable records which standard it was
+   checked against. A critique step with no named standard is a defect in the process, not
+   diligence. Prefer cheap binary gate checks (present / absent → regenerate) over critique
+   prose where a mechanical check exists (`check_artifacts` covers the greppable ones).
 
 ## Memory scope & evidence basis
 

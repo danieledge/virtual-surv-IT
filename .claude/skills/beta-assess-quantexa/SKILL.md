@@ -50,21 +50,23 @@ and UI config.
   config, commit SHA), checking **all** candidate artifact classes before a "missing" verdict.
 - **Every non-clean verdict is a fully explained finding - first pass, no iteration needed.**
   A live engagement had to iterate the assessment document because verdicts named the gap but
-  did not explain it. Each partial / missing / contradicts verdict carries **all five**, written
+  did not explain it. Each partial / missing / contradicts verdict carries **all six**, written
   for a reader who did not build the code and was not in the session:
   1. **Expected:** what the TSD/BRD requires (cited - document § and version);
   2. **Found:** what the implementation actually does (cited evidence, 📊/🧠 tagged);
   3. **Why this is an issue:** the discrepancy in plain language - no Quantexa jargon
      without a gloss, no "see code" hand-waves;
-  4. **Potential impact if unaddressed:** the consequence in the domain's terms - missed
+  4. **Likely cause:** why the gap exists - spec drift, config error, misunderstanding,
+     regression ("undetermined - needs investigation" is allowed; silence is not);
+  5. **Potential impact if unaddressed:** the consequence in the domain's terms - missed
      detections / false negatives, alert-volume or tuning effects, scorecard/alerting
      behaviour changes, audit or regulatory exposure, operational cost - tagged 🧠 when
      projected rather than observed, and honest about magnitude uncertainty;
-  5. **Recommended action:** concrete and routed (code change / config change / TSD
+  6. **Recommended action:** concrete and routed (code change / config change / TSD
      correction / client decision needed).
-  The same shape applies to reverse-traceability findings (unmapped scorers, unwired
-  scorecards). Format reference: the Problem / Impact / Fix shape in
-  `docs/review/output-format.md`.
+  This is the audit profession's **5 C's** (criteria / condition / cause / consequence /
+  corrective action) in the team's shape. The same applies to reverse-traceability findings
+  (unmapped scorers, unwired scorecards). Format reference: `docs/review/output-format.md`.
 - **Reverse (artifact → requirement):** inventory every scorer and score-producing config in
   the estate and map each back to a requirement. **Verify scorecard wiring for every scorer**
   - a scorer not wired into a scorecard contributes nothing to alerts (KB-confirmed) and is

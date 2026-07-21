@@ -4,6 +4,12 @@
 > results, what is **not** covered, and what the QA team should note or re-verify. Authored
 > in `.md`, rendered to `.html`.
 >
+> **Critique standard for this document** (operating guide, Outcome discipline 6):
+> ISO/IEC 29119-shaped completeness - a reader can determine **what was tested** (scope +
+> cycles), **against what** (environment, data provenance), **with what result** (per-pass
+> verdicts, defect lifecycle), **what was NOT tested and why**, and **what risk remains**.
+> A handover missing any of the five goes back, not forward.
+>
 > **This is the "as-found" record - do NOT retro-edit it once defects are fixed.** QA evidence is
 > an audit trail of *what was caught*; rewriting it to "look passed" destroys that. If a re-review
 > loop fixes the findings, **preserve this doc as-found** and record the **resolved** state in the

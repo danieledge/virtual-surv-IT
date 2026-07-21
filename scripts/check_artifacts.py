@@ -49,6 +49,14 @@ _SECRET_PATTERNS = [
 _SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 
+# Finding-shape gate: a reported Critical/Warning finding block (output-format shape,
+# `### 🔴 {{title}}` / `### 🟠 {{title}}`) must state its impact - the cheap binary check
+# the evidence says captures most of a critique pass's value (operating guide, Outcome
+# discipline 6). Table-format findings aren't parseable this way and are left to the
+# critic; this gate only asserts block-format findings carry the mandatory line.
+_FINDING_HEAD_RE = re.compile(r"^###\s+[🔴🟠]\s+\S", re.M)
+_IMPACT_LINE_RE = re.compile(r"^\*\*Impact if unaddressed:?\*\*", re.M)
+
 
 def find_codebase_map(project_dir: Path) -> Path | None:
     """The map's conventional locations in a working project (ADR-003)."""
@@ -161,6 +169,15 @@ def check(artifacts_dir: Path) -> list[str]:
                 f"MISSING-HTML: {md} has no rendered sibling {html.name} "
                 "(run: python -m scripts.render_html "
                 f"{md})"
+            )
+        text = md.read_text(encoding="utf-8", errors="replace")
+        heads = len(_FINDING_HEAD_RE.findall(text))
+        impacts = len(_IMPACT_LINE_RE.findall(text))
+        if heads and impacts < heads:
+            findings.append(
+                f"FINDING-NO-IMPACT: {md} has {heads} Critical/Warning finding block(s) but "
+                f"only {impacts} '**Impact if unaddressed:**' line(s) - every finding must "
+                "state its impact (docs/review/output-format.md)"
             )
 
     # The summary email is required per engagement close; mechanically we can only assert
