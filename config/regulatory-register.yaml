@@ -36,6 +36,23 @@
 # this register stores ONLY pinpoints + our own typology mapping + the URL, never Handbook
 # text. Review the FCA's terms before any future bulk-text ingestion.
 
+# PERMALINK SCHEMES BY REGIME (construct the source link from the pinpoint, then a human
+# verifies per the three checks below - links only, no rule text stored, all regimes):
+#   EUR-Lex (EU regs/directives - MAR, MiFID II, CDRs, MiCA):
+#     https://eur-lex.europa.eu/eli/reg/<year>/<number>/oj  (per-article anchors exist on
+#     consolidated versions; EU legal texts carry an open reuse policy).
+#   legislation.gov.uk (UK SIs/acts - e.g. MLRs 2017):
+#     https://www.legislation.gov.uk/uksi/<year>/<no>/regulation/<n>  (per-provision URLs;
+#     Open Government Licence - the friendliest reuse terms of the lot).
+#   eCFR (US CFR incl. SEC rules - e.g. 17 CFR 240.10b-5, 240.17a-4):
+#     https://www.ecfr.gov/current/title-17/section-240.<rule>  (US federal materials are
+#     public domain).
+#   FINRA rulebook: https://www.finra.org/rules-guidance/rulebooks/finra-rules/<number>
+#   FCA Handbook: https://www.handbook.fca.org.uk/handbook/<BOOK>/<ch>/<sec>.html
+#     (JS-rendered site, all-rights-reserved footer - links only; see note above).
+#   FATF / ESMA guidance: link the official publication page (PDF documents); cite the
+#     recommendation/paragraph in the pinpoint.
+#
 # HOW A HUMAN VERIFIES AN ENTRY (the three checks - all of them, not just the click):
 #   1. EXISTS   - the linked page shows the cited provision itself (rule number visible,
 #                 not a neighbour, not "[deleted]").
