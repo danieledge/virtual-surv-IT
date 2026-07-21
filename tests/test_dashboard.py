@@ -99,6 +99,47 @@ def test_render_escapes_and_reports(tmp_path):
     assert "PASS" in out
 
 
+def test_discovery_config_and_fingerprint_and_exclusion(tmp_path):
+    from scripts.dashboard import discover_projects
+
+    home = tmp_path / ".claude"
+    (home / "projects").mkdir(parents=True)
+
+    # config-enabled project (path with a dash - the slug-ambiguity case)
+    cfg_proj = tmp_path / "work-projects" / "estate"
+    cfg_proj.mkdir(parents=True)
+    (tmp_path / ".claude.json").write_text(
+        json.dumps(
+            {
+                "projects": {
+                    str(cfg_proj): {"enabledPlugins": ["compliance-surveillance-team@mp"]},
+                    str(tmp_path / "plain"): {"allowedTools": []},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    # fingerprint project: transcripts + team traces on disk
+    fp_proj = _mk_project(tmp_path, name="fp-proj")
+    tdir = home / "projects" / "slug-fp"
+    tdir.mkdir(parents=True)
+    (tdir / "s.jsonl").write_text(json.dumps({"cwd": str(fp_proj)}) + "\n", encoding="utf-8")
+
+    # ordinary project: transcripts but NO team traces - must be excluded
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    tdir2 = home / "projects" / "slug-plain"
+    tdir2.mkdir(parents=True)
+    (tdir2 / "s.jsonl").write_text(json.dumps({"cwd": str(plain)}) + "\n", encoding="utf-8")
+
+    found = discover_projects(home)
+    bases = {str(d["path"]): d["basis"] for d in found}
+    assert bases[str(cfg_proj)] == "config"
+    assert bases[str(fp_proj)] == "fingerprint"
+    assert str(plain) not in bases
+
+
 def test_main_end_to_end(tmp_path, capsys):
     p = _mk_project(tmp_path)
     home = tmp_path / ".claude"

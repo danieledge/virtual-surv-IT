@@ -173,6 +173,115 @@ def transcripts_dir_for(project: Path, claude_home: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# Auto-discovery: which projects on this machine used the team?
+# ---------------------------------------------------------------------------
+_PLUGIN_NAME = "compliance-surveillance-team"
+
+
+def _contains_plugin_name(obj) -> bool:
+    """Defensively search a config entry for the plugin name - the enablement key's exact
+    name is Claude Code internal and has no compatibility promise."""
+    if isinstance(obj, str):
+        return _PLUGIN_NAME in obj
+    if isinstance(obj, dict):
+        return any(_contains_plugin_name(k) or _contains_plugin_name(v) for k, v in obj.items())
+    if isinstance(obj, list):
+        return any(_contains_plugin_name(v) for v in obj)
+    return False
+
+
+def _cwd_from_transcripts(tdir: Path) -> str | None:
+    """Recover the project's real path from a transcript dir.
+
+    The dir name flattens '/' to '-', which is ambiguous when the path itself contains
+    dashes - but session lines carry a `cwd` field, which is authoritative. Read a bounded
+    number of lines; never guess from the slug."""
+    for jl in sorted(tdir.glob("*.jsonl")):
+        try:
+            with jl.open(encoding="utf-8", errors="replace") as fh:
+                for i, line in enumerate(fh):
+                    if i > 50:
+                        break
+                    try:
+                        obj = json.loads(line)
+                    except ValueError:
+                        continue
+                    cwd = obj.get("cwd") if isinstance(obj, dict) else None
+                    if (
+                        isinstance(cwd, str)
+                        and cwd.startswith(("/", "\\"))
+                        or (isinstance(cwd, str) and len(cwd) > 2 and cwd[1] == ":")
+                    ):
+                        return cwd
+        except OSError:
+            continue
+    return None
+
+
+def _has_team_fingerprint(project: Path) -> bool:
+    """Did the TEAM run here (vs ordinary Claude Code use)? Any one trace qualifies."""
+    artifacts = project / "artifacts"
+    if artifacts.is_dir() and next(artifacts.glob("engagement-summary-*.txt"), None):
+        return True
+    if find_codebase_map(project) is not None:
+        return True
+    if (project / ".claude" / ".exec-consent").is_file():
+        return True
+    manifest = project / ".claude-plugin" / "plugin.json"
+    if manifest.is_file():
+        try:
+            if json.loads(manifest.read_text(encoding="utf-8")).get("name") == _PLUGIN_NAME:
+                return True
+        except (OSError, ValueError):
+            pass
+    return False
+
+
+def discover_projects(claude_home: Path) -> list[dict]:
+    """Union of the machine's evidence for team usage, each entry labelled by basis:
+
+      config      - the Claude Code config marks the plugin enabled there (authoritative)
+      fingerprint - transcripts exist AND the directory carries team traces (heuristic)
+      historical  - transcripts exist but the directory is gone (usage still happened)
+
+    Ordinary Claude Code projects (transcripts, no team traces) are excluded rather than
+    listed - the dashboard is about the team, not everything Claude ever touched.
+    """
+    found: dict[str, dict] = {}
+
+    config = claude_home.parent / ".claude.json"
+    try:
+        entries = json.loads(config.read_text(encoding="utf-8")).get("projects", {})
+    except (OSError, ValueError):
+        entries = {}
+    for path_str, entry in entries.items():
+        if _contains_plugin_name(entry):
+            found[path_str] = {"path": Path(path_str), "basis": "config"}
+
+    projects_root = claude_home / "projects"
+    if projects_root.is_dir():
+        for tdir in sorted(p for p in projects_root.iterdir() if p.is_dir()):
+            cwd = _cwd_from_transcripts(tdir)
+            if not cwd or cwd in found:
+                continue
+            p = Path(cwd)
+            if not p.is_dir():
+                # Deleted/moved: only surface it if we can't rule team usage out AND it
+                # was config-known - otherwise it is ordinary history, skip.
+                continue
+            if _has_team_fingerprint(p):
+                found[cwd] = {"path": p, "basis": "fingerprint"}
+
+    out = []
+    for path_str, info in sorted(found.items()):
+        info["exists"] = info["path"].is_dir()
+        if not info["exists"]:
+            info["basis"] = "historical"
+        out.append(info)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Rendering - one self-contained page, no scripts, everything escaped.
 # ---------------------------------------------------------------------------
 _CSS = """
@@ -217,16 +326,23 @@ def render(projects: list[dict], usage_by_project: dict, generated: str) -> str:
             map_cell = f'<span class="bad">{len(p["map_findings"])} finding(s)</span>'
         else:
             map_cell = '<span class="ok">healthy</span>'
+        basis = p.get("basis", "explicit")
+        basis_cell = {
+            "config": '<span class="ok" title="plugin enabled in Claude config">config</span>',
+            "fingerprint": '<span class="warn" title="inferred from team traces on disk">traces</span>',
+            "explicit": '<span class="muted">given</span>',
+        }.get(basis, _E(basis))
         rows.append(
             f"<tr><td>{_E(p['name'])}</td>"
+            f"<td>{basis_cell}</td>"
             f"<td>{_E(p['version'] or '-')}</td>"
             f"<td class='num'>{p['artifact_count']}</td>"
             f"<td class='num'>{len(p['emails'])}</td>"
             f"<td>{gate}</td><td>{map_cell}</td><td>{consent}</td></tr>"
         )
     project_table = (
-        "<table><tr><th>Project</th><th>Version</th><th>Artifacts</th><th>Closing "
-        "emails</th><th>DoD gate</th><th>Codebase map</th><th>Exec consent</th></tr>"
+        "<table><tr><th>Project</th><th>Found via</th><th>Version</th><th>Artifacts</th>"
+        "<th>Closing emails</th><th>DoD gate</th><th>Codebase map</th><th>Exec consent</th></tr>"
         + "".join(rows)
         + "</table>"
     )
@@ -287,7 +403,12 @@ stay deliberate human acts in the terminal. Regenerate with
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Generate the local static team dashboard.")
-    ap.add_argument("projects", nargs="*", default=[], help="working project dirs (default: cwd)")
+    ap.add_argument(
+        "projects",
+        nargs="*",
+        default=[],
+        help="working project dirs (default: auto-discover from the Claude home; cwd if none found)",
+    )
     ap.add_argument("--out", type=Path, default=Path("dashboard.html"))
     ap.add_argument(
         "--claude-home",
@@ -297,8 +418,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
-    project_dirs = [Path(p) for p in (args.projects or ["."])]
+    basis_by_path: dict = {}
+    if args.projects:
+        project_dirs = [Path(p) for p in args.projects]
+    else:
+        discovered = discover_projects(args.claude_home)
+        project_dirs = [d["path"] for d in discovered if d["exists"]]
+        basis_by_path = {str(d["path"].resolve()): d["basis"] for d in discovered}
+        if not project_dirs:
+            project_dirs = [Path(".")]
     projects = [project_summary(p.resolve()) for p in project_dirs if p.is_dir()]
+    for p in projects:
+        p["basis"] = basis_by_path.get(str(p["path"]), "explicit")
     cache_version = plugin_cache_version(args.claude_home)
     for p in projects:
         if p["version"] is None and cache_version:
