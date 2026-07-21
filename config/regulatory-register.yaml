@@ -134,7 +134,7 @@ obligations:
     jurisdiction: US
     typology: books and records; communications retention
     pinpoint: SEC 17a-4(b)(4)
-    aliases: ["17a-4(b)(4)", "Rule 17a-4"]
+    aliases: ["17a-4(b)(4)", "Rule 17a-4", "17a-4", "17a-4(b)"]
     effective_date: "-"
     source: https://www.law.cornell.edu/cfr/text/17/240.17a-4
     verified_on: "2026-06-29"
