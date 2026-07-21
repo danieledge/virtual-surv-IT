@@ -92,6 +92,9 @@ a plain-language **Problem** explanation, a one-line **Impact if unaddressed**, 
 > domain's terms - missed detections / false negatives, alert-volume or tuning effects,
 > audit/regulatory exposure, data-integrity or operational cost - and carries its own 📊/🧠
 > basis when the consequence is projected rather than observed. No finding ships without both.
+> Together with **Likely cause** and the fix, the shape covers the audit profession's **5 C's**
+> (criteria · condition · cause · consequence · corrective action): the standard-cited line is
+> the criteria, Problem the condition, and the diff the corrective action.
 
 ### 🔴 Critical (95-100) - must fix
 ```markdown
@@ -100,6 +103,8 @@ a plain-language **Problem** explanation, a one-line **Impact if unaddressed**, 
 **Standard:** {{CWE / OWASP ASVS / CLAUDE.md §}}
 
 **Problem:** {{what is wrong and how we know - plain language}}  (if inferred: the measurement that would confirm it)
+
+**Likely cause:** {{why the gap exists - spec drift / config error / misunderstanding / regression; "undetermined - needs investigation" is allowed, silence is not}}
 
 **Impact if unaddressed:** {{consequence in domain terms - detection gap / false negatives / alert volume / audit exposure / operational}}
 

@@ -2,6 +2,13 @@
 
 > Drafted by `business-analyst`, overseen by the PM. Structure follows BABOK v3;
 > requirements are written in **EARS** syntax. Authored in `.md`, rendered to `.html`.
+>
+> **Quality gate (BABOK requirement criteria - the critique standard for this document,
+> operating guide Outcome discipline 6).** Before sign-off, a critic who is not the author
+> checks every requirement: **unambiguous** (one reading only) · **testable** (a checkable
+> pass/fail exists) · **atomic** (one requirement per statement) · **consistent** (no
+> contradiction with another requirement) · **complete** (no TBDs in a Must) · **traceable**
+> (an ID the RTM can carry). A requirement failing any criterion goes back, not forward.
 
 > **Document control** · ID `BRD-001` · Version `0.1` · Status `Draft | In review | Approved`
 > · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`

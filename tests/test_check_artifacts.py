@@ -67,6 +67,43 @@ def test_nested_artifacts_are_checked(tmp_path):
     assert "sub" in findings[0]
 
 
+# --- finding-shape gate (every 🔴/🟠 block states its impact) -----------------------------
+
+
+def _finding_block(with_impact):
+    impact = "**Impact if unaddressed:** missed detections on venue X.\n" if with_impact else ""
+    return (
+        "### 🔴 Threshold hardcoded\n"
+        "**Location:** `x.py:42`\n"
+        "**Problem:** threshold is in code, spec says config.\n" + impact + "**Fix:** move it.\n"
+    )
+
+
+def test_finding_without_impact_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "REVIEW-x.md", _finding_block(with_impact=False))
+    _touch(art / "REVIEW-x.html")
+    _touch(art / "engagement-summary-x.txt")
+    findings = check(art)
+    assert len(findings) == 1 and "FINDING-NO-IMPACT" in findings[0]
+
+
+def test_finding_with_impact_passes(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "REVIEW-x.md", _finding_block(with_impact=True) + _finding_block(True))
+    _touch(art / "REVIEW-x.html")
+    _touch(art / "engagement-summary-x.txt")
+    assert check(art) == []
+
+
+def test_artifact_without_finding_blocks_not_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "delivery-report.md", "# Report\n\nProse only, tables elsewhere.\n")
+    _touch(art / "delivery-report.html")
+    _touch(art / "engagement-summary-x.txt")
+    assert check(art) == []
+
+
 # --- codebase-map hygiene (ADR-003) ------------------------------------------------------
 
 
