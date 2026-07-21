@@ -41,3 +41,4 @@ apply-guard-fixes.sh
 
 # One-shot wrapper for the human-only steps of the 2026-07-05 audit fix pass
 human-steps.sh
+docs/executive-brief-draft.html
