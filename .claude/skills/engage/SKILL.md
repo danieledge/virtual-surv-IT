@@ -75,6 +75,7 @@ ls scripts/render_html.py 2>/dev/null; \
 grep -m1 '"version"' .claude-plugin/plugin.json "$PR/.claude-plugin/plugin.json" 2>/dev/null | head -1; \
 bash scripts/check-review-tools.sh 2>/dev/null || bash "$PR/scripts/check-review-tools.sh" 2>/dev/null; \
 cat docs/codebase-map.md CODEBASE-MAP.md 2>/dev/null | head -250; \
+awk '/^## \[/{n++} n==1' CHANGELOG.md "$PR/CHANGELOG.md" 2>/dev/null | head -30; \
 printf '%s\n' "$G" | head -400
 ```
 
@@ -101,6 +102,13 @@ the opening summary and **verify anchors lazily** - `git` checks happen when an 
 actually relied on or at close, never as open-time round-trips; no map → one gets created at
 close), and the **operating guide** (standing rules, roster, routing - if the `cat` came back
 empty, Read it before proceeding; an engagement without it misses standing user preferences).
+
+**What's new (banner, one short line only).** The probe returns the newest CHANGELOG
+release block. Compare the loaded version against the **Team ver** of the codebase map's most
+recent engagement-history row: when they differ (or on a project's first engagement), add ONE
+line to the banner - *"🆕 Since last time (vX → vY): "* + up to three headline changes in
+plain words, ending *"(full detail: CHANGELOG.md)"*. When versions match, show nothing - the
+feature must never become a wall of release notes, and it never delays the first question.
 
 **Then your VERY NEXT output is the opening banner + disclaimers + the batched question
 below.** Target: two turns from invocation to the user's first question - the probe call,

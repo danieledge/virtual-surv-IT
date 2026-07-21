@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.15.0](https://img.shields.io/badge/version-0.15.0-blue)
+![Version 0.16.0](https://img.shields.io/badge/version-0.16.0-blue)
 ![Tests 340+ passing](https://img.shields.io/badge/tests-340%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -35,7 +35,13 @@ itself.
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) transcripts.
 
 <details>
-<summary>✨ <b>What's new in 0.15 / 0.14</b> - the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA - each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.16 / 0.15</b> - the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA - each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.16.0** - **the front-door release.** `/engage` opens in two turns (one compound probe
+instead of a 7-10-call crawl), resolves the installed plugin from the install registry on every
+install source, gives Windows users native consent commands, closes multi-artifact deliveries
+with a START-HERE index, and - new - tells you **what changed since your last engagement** in
+one banner line after an update.
 
 **0.15.0** - **the quality-loop release.** The team's output-writing discipline is now a control
 surface: every finding carries the 5 C's (criteria, condition, **cause**, consequence, corrective
