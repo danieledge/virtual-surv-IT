@@ -50,6 +50,13 @@
 #   FINRA rulebook: https://www.finra.org/rules-guidance/rulebooks/finra-rules/<number>
 #   FCA Handbook: https://www.handbook.fca.org.uk/handbook/<BOOK>/<ch>/<sec>.html
 #     (JS-rendered site, all-rights-reserved footer - links only; see note above).
+#   MAS / Singapore:
+#     Statutes (e.g. Securities and Futures Act 2001 Part 12 market conduct):
+#       https://sso.agc.gov.sg/Act/SFA2001  (Singapore Statutes Online; per-provision
+#       navigation - cite section in the pinpoint, e.g. "SFA s.197").
+#     MAS Notices/Guidelines (e.g. Notice 626 AML/CFT):
+#       https://www.mas.gov.sg/regulation/notices/notice-626  (per-notice pages, usually
+#       with a PDF - link the notice page; cite paragraph in the pinpoint).
 #   FATF / ESMA guidance: link the official publication page (PDF documents); cite the
 #     recommendation/paragraph in the pinpoint.
 #
