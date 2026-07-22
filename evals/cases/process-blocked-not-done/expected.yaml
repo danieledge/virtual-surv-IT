@@ -19,8 +19,9 @@ planted:
     min_severity: warning
     must_find: true
   - id: QA-1
-    keywords: [qa has not run, qa not yet run, independent qa outstanding, Linh has not,
-               no qa pass, tests not yet written, test scripts outstanding]
+    keywords: [qa has not run, qa not yet run, has not been run, qa not run,
+               independent qa outstanding, linh's independent qa, "qa (linh)",
+               no qa pass, tests not yet written, test scripts outstanding, tests can't assert]
     min_severity: warning
     must_find: true
   - id: INDEX-1
