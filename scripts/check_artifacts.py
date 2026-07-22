@@ -9,9 +9,17 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
 
   1. every `artifacts/**/*.md` has a rendered `.html` sibling (same stem, same directory) -
      the `.md` + `.html` dual-artifact rule (CLAUDE.md §8);
-  2. at least one `engagement-summary-*.txt` exists (the required closing email, §6a) -
-     unless the artifacts directory is empty, in which case there is nothing to gate;
-  3. if the working project has a codebase map (ADR-003: `docs/codebase-map.md` or root
+  2. the START-HERE living index exists from the FIRST artifact onward, carries an
+     engagement Status (⏳ in progress / ⛔ blocked / ✅ closed), and stays current: every
+     artifact file is listed in it, every local link in it resolves. Born of a live
+     failure (2026-07-22): an engagement stalled on an unanswered clarification, the user
+     read an interim report as the delivery, and QA never ran - state must be visible;
+  3. close-only artifacts stay close-only: `delivery-report*.md` / `final-*` and the
+     `engagement-summary-*.txt` email may exist only when the index Status is ✅ closed
+     (before that they mislabel work-in-progress as a delivery);
+  4. at least one `engagement-summary-*.txt` exists once the engagement is ✅ closed (or in
+     a legacy folder with no status to read) - the required closing email, §6a;
+  5. if the working project has a codebase map (ADR-003: `docs/codebase-map.md` or root
      `CODEBASE-MAP.md`), it passes mechanical hygiene: bounded size, an As-of date and a
      commit-SHA anchor in the header, 📊/🧠 basis tags on map entries, no secret-shaped
      content, and (best effort, when `git` is available) an anchor that still resolves.
@@ -65,6 +73,41 @@ _TEST_FILE_RE = re.compile(r"(^test_|_test\.|\.spec\.|^conftest\.py$)", re.I)
 # critic; this gate only asserts block-format findings carry the mandatory line.
 _FINDING_HEAD_RE = re.compile(r"^###\s+[🔴🟠]\s+\S", re.M)
 _IMPACT_LINE_RE = re.compile(r"^\*\*Impact if unaddressed:?\*\*", re.M)
+
+# Engagement-state gate: the START-HERE index is a LIVING document (created at open,
+# updated on every artifact write, finalised at close) and carries the engagement Status.
+# A live failure (2026-07-22) motivated it: an engagement paused on an unanswered
+# clarification, the close never ran, no DoD gate ever fired, and an interim report with a
+# final-sounding name was read as the delivery - with QA never run. The status makes
+# "not done" visible; the close-only rules below stop interim work masquerading as final.
+_STATUS_LINE_RE = re.compile(r"(?im)^.*\bstatus\b.*$")
+# Local link targets in the index ([text](file.md)) - no scheme, no pure-anchor links.
+_LOCAL_LINK_RE = re.compile(r"\]\(([^)#][^)]*)\)")
+# Files that may only exist once the engagement is closed.
+_CLOSE_ONLY_MD_RE = re.compile(r"(?i)^(delivery-report.*|final-.*)\.md$")
+
+
+def _index_status(text: str) -> str | None:
+    """Read the engagement status from START-HERE text: 'open' | 'blocked' | 'closed'.
+
+    Emoji first (the template's canonical form), then words, scanning only lines that
+    mention "status" so prose elsewhere can't masquerade as state. None = no status found.
+    """
+    for line in _STATUS_LINE_RE.findall(text):
+        if "✅" in line:
+            return "closed"
+        if "⛔" in line:
+            return "blocked"
+        if "⏳" in line:
+            return "open"
+        lowered = line.lower()
+        if re.search(r"\bclosed\b", lowered):
+            return "closed"
+        if re.search(r"\bblocked\b", lowered):
+            return "blocked"
+        if re.search(r"\bin progress\b|\bopen\b", lowered):
+            return "open"
+    return None
 
 
 def find_codebase_map(project_dir: Path) -> Path | None:
@@ -211,26 +254,85 @@ def check(artifacts_dir: Path) -> list[str]:
                 "(DoD 'Tested')"
             )
 
-    # An engagement with several deliverables needs an entry point: the START-HERE index
-    # (docs/templates/start-here.md), written LAST, listing every artifact and the reading
-    # order. Below two .md artifacts there is nothing to index.
+    # The START-HERE living index: created at OPEN (with the first artifact), updated on
+    # every artifact write, finalised at close (docs/templates/start-here.md). It is also
+    # the engagement's state record - the one place a reader learns "this is not done yet".
     non_index_md = [m for m in md_files if m.name.upper() != "START-HERE.MD"]
-    if len(non_index_md) >= 2 and not any(m.name.upper() == "START-HERE.MD" for m in md_files):
+    start_here = next((m for m in md_files if m.name.upper() == "START-HERE.MD"), None)
+    status: str | None = None
+    if non_index_md and start_here is None:
         findings.append(
-            f"MISSING-INDEX: {len(non_index_md)} artifacts but no START-HERE.md - the "
-            "index artifact is the reader's entry point (docs/templates/start-here.md); "
-            "write it last, listing everything"
+            f"MISSING-INDEX: {len(non_index_md)} artifact(s) but no START-HERE.md - the "
+            "living index is created at engagement OPEN and updated with every artifact "
+            "(docs/templates/start-here.md), not written at the end"
         )
+    if start_here is not None:
+        index_text = start_here.read_text(encoding="utf-8", errors="replace")
+        status = _index_status(index_text)
+        if status is None:
+            findings.append(
+                f"INDEX-NO-STATUS: {start_here} has no readable engagement Status line "
+                "(⏳ in progress / ⛔ blocked - awaiting input / ✅ closed) - state must be "
+                "visible so an interim pack is never mistaken for a delivery"
+            )
+        # Every artifact file must be listed in the index (by name), and every local link
+        # in the index must resolve - the two directions of index staleness.
+        listable = (
+            [m for m in non_index_md]
+            + sorted(artifacts_dir.rglob("engagement-summary-*.txt"))
+            + [
+                f
+                for f in artifacts_dir.rglob("*")
+                if f.is_file() and f.suffix.lower() in _CODE_EXTS
+            ]
+        )
+        for f in listable:
+            if f.name not in index_text:
+                findings.append(
+                    f"STALE-INDEX: {f.name} exists in {artifacts_dir} but is not listed in "
+                    "START-HERE.md - the index is updated with every artifact write, "
+                    "nothing in the folder goes unlisted"
+                )
+        for target in _LOCAL_LINK_RE.findall(index_text):
+            target = target.strip()
+            if "://" in target or target.startswith("mailto:"):
+                continue
+            if not (start_here.parent / target).exists():
+                findings.append(
+                    f"STALE-INDEX: START-HERE.md links to {target!r} which does not exist - "
+                    "remove the row or restore the artifact"
+                )
 
-    # The summary email is required per engagement close; mechanically we can only assert
-    # "at least one exists once there are deliverables to summarise".
-    has_deliverables = bool(md_files)
+    # Close-only artifacts: the delivery report and the summary email SIGNAL a close, so
+    # while the index says the engagement is still open/blocked they must not exist yet -
+    # an interim pack carrying them is how work-in-progress gets read as done.
     summaries = sorted(artifacts_dir.rglob("engagement-summary-*.txt"))
-    if has_deliverables and not summaries:
-        findings.append(
-            "MISSING-SUMMARY-EMAIL: no artifacts/engagement-summary-*.txt found - the "
-            "closing email (DoD / CLAUDE.md §6a) is a required artifact"
-        )
+    if status in ("open", "blocked"):
+        for md in non_index_md:
+            if _CLOSE_ONLY_MD_RE.match(md.name):
+                findings.append(
+                    f"FINAL-BEFORE-CLOSE: {md.name} exists but START-HERE.md says the "
+                    f"engagement is still {status} - the delivery report is written at "
+                    "close only; interim output takes a pass-scoped name "
+                    "(review-pass-N / qa-cycle-N / interim-*)"
+                )
+        if summaries:
+            findings.append(
+                f"SUMMARY-BEFORE-CLOSE: {len(summaries)} engagement-summary-*.txt present "
+                f"but START-HERE.md says the engagement is still {status} - the summary "
+                "email is the closing artifact; a blocked engagement ends its turn stating "
+                "what is outstanding instead"
+            )
+    elif status == "closed" or start_here is None:
+        # Closed - or legacy (no index at all): the closing email is required once there
+        # are deliverables to summarise. (An index with an unreadable status already got
+        # INDEX-NO-STATUS; piling the email demand on top would point at the wrong fix.)
+        has_deliverables = bool(md_files)
+        if has_deliverables and not summaries:
+            findings.append(
+                "MISSING-SUMMARY-EMAIL: no artifacts/engagement-summary-*.txt found - the "
+                "closing email (DoD / CLAUDE.md §6a) is a required artifact"
+            )
 
     return findings
 

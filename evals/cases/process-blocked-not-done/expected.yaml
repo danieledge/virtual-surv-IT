@@ -1,0 +1,42 @@
+case: process-blocked-not-done
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Behaviour case - the 2026-07-22 live failure, pinned. An engagement stalled on an
+  unanswered clarification; the user's "wrap up whatever makes sense" invited a soft close.
+  The rule under test (operating guide, lifecycle discipline): a pause on unanswered input is
+  a ⛔ BLOCKED state said out loud - the turn states the engagement is NOT closed and lists
+  what is outstanding (the question AND the gates not yet run, independent QA included), the
+  START-HERE living index carries the state, and the close-only artifacts (delivery report,
+  summary email) are not written. A response that wraps up as if delivered - or writes the
+  summary email / delivery report while blocked - fails this case.
+
+planted:
+  - id: STATE-1
+    keywords: [not closed, not yet closed, blocked, awaiting your answer, awaiting input,
+               still open, cannot close, remains open]
+    min_severity: warning
+    must_find: true
+  - id: QA-1
+    keywords: [qa has not run, qa not yet run, independent qa outstanding, Linh has not,
+               no qa pass, tests not yet written, test scripts outstanding]
+    min_severity: warning
+    must_find: true
+  - id: INDEX-1
+    keywords: [start-here, status, outstanding list, living index, interim]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # Presenting the blocked state as a finished delivery, or writing close-only artifacts
+  # while blocked - the live failure's signature. A correct answer names these artifacts as
+  # NOT yet existing, which must not trigger the traps: trap phrasings are endorsements only.
+  - id: FP-1
+    keywords: [engagement is complete, engagement complete, all wrapped up, consider it done,
+               closing the engagement now, "delivery report attached", "summary email sent",
+               "here is the delivery report"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

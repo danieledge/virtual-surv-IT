@@ -8,10 +8,13 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > eval-sampled**, not CI-enforced: the PM and `compliance-reviewer` attest them, and the eval
 > harness (`/run-evals`) samples for drift - CI cannot see engagement deliverables because
 > `artifacts/` is deliberately git-ignored. The mechanical exceptions: the repo's own code is
-> CI-tested (pytest, lint, secret-scan, no-raw-data), and the **Distributable** +
-> **Engagement-summary email** items have a one-command check the PM runs at this gate:
-> `python -m scripts.check_artifacts` (every `artifacts/*.md` has a rendered `.html` sibling;
-> a summary `.txt` exists). Treat the rest as evidenced claims to spot-check, not guarantees.
+> CI-tested (pytest, lint, secret-scan, no-raw-data), and the **Distributable**,
+> **Engagement-summary email**, **Indexed** and **Stateful** items have a one-command check
+> the PM runs at this gate - and can run at ANY point mid-engagement, since the living index
+> makes the gate meaningful before close: `python -m scripts.check_artifacts` (every
+> `artifacts/*.md` has a rendered `.html` sibling; the START-HERE index exists, has a status,
+> and lists everything; close-only artifacts don't exist early; a summary `.txt` exists at
+> close). Treat the rest as evidenced claims to spot-check, not guarantees.
 >
 > **Changes to the team itself** (prompts, skills, agent definitions) gate on the eval harness:
 > full pytest (contract + docs-consistency tests) plus a live golden-slice spot check for prompt
@@ -79,19 +82,32 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       the code could build, run and safely change it from the doc **alone** (no tribal knowledge,
       no unexplained jargon, commands copy-pastable). `compliance-reviewer` checks usability at
       this gate, not merely existence.
-- [ ] **Indexed - a START-HERE entry point** - deliveries with more than one artifact close
-      with `artifacts/START-HERE.md` (template `docs/templates/start-here.md`), written
-      **last**: verdict, reading order, every artifact listed with one line of purpose, and
-      the open items a reader should know about. Mechanically checked (`MISSING-INDEX`).
+- [ ] **Indexed - a LIVING START-HERE entry point** - `artifacts/START-HERE.md` (template
+      `docs/templates/start-here.md`) is **created at engagement open** alongside the brief,
+      gains a row **the moment each artifact is written**, and is finalised at close: verdict,
+      reading order, every artifact listed with one line of purpose, and the open items a
+      reader should know about. Never "written last" - a stalled engagement must still show
+      its state. Mechanically checked (`MISSING-INDEX`, `STALE-INDEX`).
+- [ ] **Stateful - never silently dangling** - the engagement's state (⏳ in progress ·
+      ⛔ blocked - awaiting input · ✅ closed) is recorded in START-HERE and kept truthful. A
+      pause on unanswered input sets ⛔ with the outstanding list (questions + gates not yet
+      run) and the turn says plainly "NOT closed - outstanding: …". Interim artifacts carry
+      the interim banner and **pass-scoped names** (`review-pass-N`, `qa-cycle-N`,
+      `interim-*`); `delivery-report.md` / `final-*` and the summary email exist **only at ✅
+      close**. Mechanically checked (`INDEX-NO-STATUS`, `FINAL-BEFORE-CLOSE`,
+      `SUMMARY-BEFORE-CLOSE`). (Lesson, 2026-07-22: a blocked engagement's interim report was
+      read as the delivery and QA never ran - the close-time gates never fired.)
 - [ ] **Distributable** - evidence produced in `.md` **and** `.html`
       (`python -m scripts.render_html`). **By default one consolidated Delivery Report**
       (`docs/templates/delivery-report.md`) holds all sections; split into separate artifacts
       only if a control requires it.
 - [ ] **Engagement-summary email** - the PM (**Morgan**) has written a short email-format cover
       note summarising what was done and where it stands, saved as a **`.txt` in `artifacts/`**
-      (`docs/templates/engagement-summary-email.md`). Address it to the requester **only if the name
-      is known** - otherwise open with "Hi,"; sign off as Morgan. (It's an email, so it stays `.txt`
-      and is the one artifact not rendered to HTML.)
+      (`docs/templates/engagement-summary-email.md`). **Written at ✅ close only** - its existence
+      is the signal the engagement closed, so a blocked/in-progress engagement must not have one
+      (`SUMMARY-BEFORE-CLOSE`). Address it to the requester **only if the name is known** -
+      otherwise open with "Hi,"; sign off as Morgan. (It's an email, so it stays `.txt` and is
+      the one artifact not rendered to HTML.)
 - [ ] **Codebase map updated** - the working project's codebase map (`docs/codebase-map.md`,
       template `docs/templates/codebase-map.md`, decision ADR-003) was **read at open and
       updated at close**: entries added with 📊/🧠 tags, dates and SHA anchors; stale or wrong
