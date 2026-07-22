@@ -56,6 +56,8 @@ _SECRET_PATTERNS = [
 
 _SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+# Honest no-VCS anchor: a working project with no git repo has no SHA to anchor to.
+_NOVCS_ANCHOR_RE = re.compile(r"(?i)\bno[\s-]?(?:vcs|git)\b")
 
 # Code-without-QA gate: a live engagement (2026-07-21) delivered phase-2 implementation
 # code from inside an analysis workflow and no QA pass ever ran - the DoD items are
@@ -160,18 +162,24 @@ def check_map(map_path: Path) -> list[str]:
         )
     anchor_line = next((ln for ln in lines[:30] if "Anchor" in ln), "")
     anchor_sha = _SHA_RE.search(anchor_line)
-    if not anchor_sha:
-        findings.append(
-            f"MAP-NO-ANCHOR: {map_path} header has no `Anchor <commit sha>` - entries "
-            "cannot be checked against the code they describe"
-        )
-    else:
+    if anchor_sha:
         resolves = _anchor_resolves(anchor_sha.group(0), map_path.parent)
         if resolves is False:
             findings.append(
                 f"MAP-STALE-ANCHOR: header anchor {anchor_sha.group(0)} does not resolve "
                 "in this repository - refresh the anchor (and re-verify entries) at close"
             )
+    elif _NOVCS_ANCHOR_RE.search(anchor_line):
+        # A working project with no git repo has no commit SHA to anchor to. An honest
+        # `Anchor no-vcs` (the team is instructed to write exactly this, with a note) is a
+        # valid anchor, not a defect - entries anchor to the delivered file state instead.
+        pass
+    else:
+        findings.append(
+            f"MAP-NO-ANCHOR: {map_path} header has no `Anchor <commit sha>` - entries "
+            "cannot be checked against the code they describe (a working project with no "
+            "git repo writes `Anchor no-vcs`)"
+        )
 
     # Every map-entry table row needs a 📊/🧠 basis tag. Entry rows are the data rows of
     # the "Map entries" section's table (skip its header and |---| divider rows).

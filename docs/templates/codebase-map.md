@@ -8,7 +8,7 @@
 
 > **Document control** · ID `MAP-001` · Version `0.1` · Status `Live`
 > · Classification `Internal` · Owner `Morgan (PM)` · As-of `<YYYY-MM-DD>`
-> · Anchor `<full or short commit SHA the map was last verified against>`
+> · Anchor `<full or short commit SHA the map was last verified against; write `no-vcs` if the working project has no git repo>`
 >
 > | Version | Date | Engagement | Change |
 > |---|---|---|---|
@@ -16,7 +16,8 @@
 
 **Rules (from ADR-003, enforced at the DoD gate):**
 
-- Every entry carries **As-of** (date), **Anchor** (commit SHA, where it describes code) and a
+- Every entry carries **As-of** (date), **Anchor** (commit SHA, where it describes code - or
+  `no-vcs` in a working project with no git repo, anchoring to the delivered file state) and a
   basis tag: **📊 observed** (verified directly, cite where) or **🧠 inferred** (reasoning;
   state the assumption).
 - **The PM writes this file; subagents recommend entries in their reports.** Never paste

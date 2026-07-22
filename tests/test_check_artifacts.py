@@ -396,6 +396,36 @@ def test_map_outside_git_skips_anchor_check(tmp_path):
     assert check_map(m) == []
 
 
+def test_map_novcs_anchor_accepted(tmp_path):
+    # A working project with no git repo writes `Anchor no-vcs` - a valid anchor, not a
+    # defect (surfaced by the 2026-07-22 end-to-end validation: two engagements in git-less
+    # working projects could never pass the gate otherwise).
+    m = tmp_path / "nogit" / "docs" / "codebase-map.md"
+    _touch(
+        m,
+        "# Map - Proj\n\n"
+        "> **Document control** · Owner `Morgan (PM)` · As-of `2026-07-22` · Anchor `no-vcs`\n\n"
+        "## 2. Map entries\n\n"
+        "| # | Area | Entry | Basis | As-of | Anchor |\n"
+        "|---|------|-------|-------|-------|--------|\n"
+        "| 1 | rules | threshold in x.py | 📊 seen | 2026-07-22 | no-vcs |\n",
+    )
+    assert check_map(m) == []
+
+
+def test_map_no_anchor_still_flagged_without_sentinel(tmp_path):
+    # The escape is explicit: a header with neither a SHA nor a no-vcs token still fails.
+    m = tmp_path / "docs" / "codebase-map.md"
+    _touch(
+        m,
+        "# Map\n\n> Owner `Morgan` · As-of `2026-07-22` · Anchor `TBD`\n\n"
+        "## 2. Map entries\n\n| # | Entry | Basis |\n|---|-------|-------|\n"
+        "| 1 | x | 📊 seen |\n",
+    )
+    codes = "".join(check_map(m))
+    assert "MAP-NO-ANCHOR" in codes
+
+
 def test_map_too_long_flagged(tmp_path):
     repo, sha = _map_repo(tmp_path)
     m = repo / "docs" / "codebase-map.md"
