@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.16.2](https://img.shields.io/badge/version-0.16.2-blue)
+![Version 0.16.3](https://img.shields.io/badge/version-0.16.3-blue)
 ![Tests 340+ passing](https://img.shields.io/badge/tests-340%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -36,6 +36,14 @@ itself.
 
 <details>
 <summary>✨ <b>What's new in 0.16 / 0.15</b> - the engagement-lifecycle release (every engagement has a visible state - in progress / blocked / closed - carried by a living START-HERE index; interim work can never masquerade as a delivery) · the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA - each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.16.3** - **the lifecycle-validation release.** Three real end-to-end test engagements
+(review→close, a build that blocks on an unanswered question, a full build with executed QA)
+were run against 0.16.2 with actual artifact writes and audited against the new gates - all
+conformed, and a negative test confirmed the close-only guards fire on a real folder. Two gaps
+found and fixed: git-less working projects can now close clean (`Anchor no-vcs` accepted), and
+two lifecycle ambiguities (interim-banner scope, `REVIEW-<slug>` vs `review-pass-N` naming) are
+resolved.
 
 **0.16.2** - **the engagement-lifecycle release.** Born of a recorded live lesson: an
 engagement stalled on an unanswered question, the close never ran, no DoD gate ever fired -
