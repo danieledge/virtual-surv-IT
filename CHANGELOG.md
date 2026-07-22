@@ -29,6 +29,14 @@ at close is no gate when the close never happens.
   "wrap up whatever makes sense" while blocked, Morgan must hold the state honest, name the
   un-run QA, and not produce close-only artifacts.
 
+### Fixed
+- **Codebase map: git-less working projects can now close clean.** `check_artifacts` demanded
+  a hex commit SHA on the map's Anchor line unconditionally, so a working project with no git
+  repo could never pass the gate (surfaced by end-to-end validation: two of three test
+  engagements hit `MAP-NO-ANCHOR` on an honest git-less close). An explicit `Anchor no-vcs`
+  is now accepted (anchoring entries to the delivered file state); a missing or placeholder
+  anchor still fails. Template documents the option.
+
 ### Changed
 - **START-HERE is a living index, not a closing artifact.** Created at engagement open
   alongside the brief (status ⏳), a row appended the moment each artifact is written
