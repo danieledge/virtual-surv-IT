@@ -3,6 +3,65 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.16.3] - 2026-07-22 - the lifecycle-validation release
+
+Three real end-to-end test engagements (quick-review→close, a build that blocks on an
+unanswered question, and a full build with executed QA→close) were run against 0.16.2 with
+actual artifact writes, then audited against the new gates. All three conformed - the blocked
+engagement correctly refused to close and a negative test confirmed the close-only guards
+fire on a real folder. The run surfaced two gaps, fixed here.
+
+### Fixed
+- **Codebase map: git-less working projects can now close clean.** `check_artifacts` demanded
+  a hex commit SHA on the map's Anchor line unconditionally, so a working project with no git
+  repo could never pass the gate (two of the three test engagements hit `MAP-NO-ANCHOR` on an
+  honest git-less close). An explicit `Anchor no-vcs` is now accepted (anchoring entries to
+  the delivered file state); a missing or placeholder anchor (e.g. `TBD`) still fails.
+  Template documents the option.
+
+### Changed
+- **Two lifecycle ambiguities resolved** (both PM sub-agents hit them independently): the
+  interim banner's scope is now explicit - every pre-close content artifact carries it
+  **including the engagement brief**, with `START-HERE.md` the sole exception (its Status
+  field is the state); and review-artifact naming is reconciled - interim passes are
+  `review-pass-N.md`, while `REVIEW-<slug>.md` is a **close-name** (folds into
+  `delivery-report.md` by default, or is finalised as a separate artifact).
+
+## [0.16.2] - 2026-07-22 - the engagement-lifecycle release
+
+Born of a recorded live lesson (2026-07-22): an engagement stalled on an unanswered
+clarification, the close never ran so no Definition-of-Done gate ever fired, an interim
+report with a final-sounding filename was read as the delivery - and independent QA never
+ran ("test scripts to be developed" was cited, none were developed). A gate that only runs
+at close is no gate when the close never happens.
+
+### Added
+- **Engagement state, visible between gates.** Every engagement is now in exactly one state -
+  ⏳ in progress · ⛔ blocked - awaiting input · ✅ closed - recorded in START-HERE. Pausing on
+  an unanswered question is a ⛔ said out loud: the turn ends "this engagement is NOT closed -
+  outstanding: …" with the unanswered question(s) and every un-run gate listed (operating
+  guide, lifecycle discipline; `/engage` step 5a; new DoD item **Stateful**).
+- **Filename register.** `delivery-report.md` / `final-*` and the engagement-summary email
+  are close-only; interim output takes pass-scoped names (`review-pass-N`, `qa-cycle-N`,
+  `interim-*`) and opens with a one-line interim banner - a name may not imply finality
+  before the DoD has run.
+- **Mechanical state gates** in `check_artifacts` (runnable at ANY point mid-engagement, not
+  just close): `INDEX-NO-STATUS`, `STALE-INDEX` (both directions: unlisted files and dangling
+  links), `FINAL-BEFORE-CLOSE`, `SUMMARY-BEFORE-CLOSE`; `MISSING-INDEX` now fires from the
+  FIRST artifact. Legacy folders without an index keep the old email-gate behaviour.
+- **Golden case `process-blocked-not-done` (31st)** pinning the behavioural half: invited to
+  "wrap up whatever makes sense" while blocked, Morgan must hold the state honest, name the
+  un-run QA, and not produce close-only artifacts.
+
+### Changed
+- **START-HERE is a living index, not a closing artifact.** Created at engagement open
+  alongside the brief (status ⏳), a row appended the moment each artifact is written
+  (re-rendered every update), outstanding list kept current, finalised at close (template
+  rewritten; `/engage` steps 4/5a/6; DoD "Indexed" item). Interim artifacts are indexed the
+  moment they exist - a reader opening the folder mid-engagement sees the true state.
+- The engagement-summary email is explicitly **close-only** (its existence signals the
+  close); writing it while blocked is itself a defect (operating guide Outcome discipline 3).
+
 ## [0.16.1] - 2026-07-21
 
 ### Fixed

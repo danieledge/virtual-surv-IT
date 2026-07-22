@@ -4,7 +4,9 @@
 > (review, performance, compliance, QA, handover, change/ops) live in this single file
 > instead of many - easier to read and distribute. Omit or mark **N/A** any section that
 > doesn't apply; split into separate artifacts only if the user/their controls require it.
-> Authored in `.md`, rendered to `.html`.
+> Authored in `.md`, rendered to `.html`. **Close-only artifact:** this filename may exist
+> only once START-HERE says ✅ closed (`FINAL-BEFORE-CLOSE`) - interim output takes a
+> pass-scoped name (`review-pass-N`, `qa-cycle-N`, `interim-*`) instead.
 
 > **Document control** · ID `DLVR-001` · Version `0.1` · Status `Draft | In review | Approved`
 > · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
