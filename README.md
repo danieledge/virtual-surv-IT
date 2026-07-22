@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.16.1](https://img.shields.io/badge/version-0.16.1-blue)
+![Version 0.16.3](https://img.shields.io/badge/version-0.16.3-blue)
 ![Tests 340+ passing](https://img.shields.io/badge/tests-340%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -35,7 +35,26 @@ itself.
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) transcripts.
 
 <details>
-<summary>✨ <b>What's new in 0.16 / 0.15</b> - the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA - each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>What's new in 0.16 / 0.15</b> - the engagement-lifecycle release (every engagement has a visible state - in progress / blocked / closed - carried by a living START-HERE index; interim work can never masquerade as a delivery) · the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA - each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.16.3** - **the lifecycle-validation release.** Three real end-to-end test engagements
+(review→close, a build that blocks on an unanswered question, a full build with executed QA)
+were run against 0.16.2 with actual artifact writes and audited against the new gates - all
+conformed, and a negative test confirmed the close-only guards fire on a real folder. Two gaps
+found and fixed: git-less working projects can now close clean (`Anchor no-vcs` accepted), and
+two lifecycle ambiguities (interim-banner scope, `REVIEW-<slug>` vs `review-pass-N` naming) are
+resolved.
+
+**0.16.2** - **the engagement-lifecycle release.** Born of a recorded live lesson: an
+engagement stalled on an unanswered question, the close never ran, no DoD gate ever fired -
+and an interim report was read as the delivery, with QA never run. Now every engagement is in
+exactly one visible state (⏳ in progress · ⛔ blocked - awaiting input · ✅ closed), carried
+by a **living START-HERE index** created at open and updated with every artifact; pausing on
+a question is a ⛔ said out loud ("this engagement is NOT closed - outstanding: …");
+`delivery-report.md` and the summary email are close-only, interim output takes pass-scoped
+names (`review-pass-N`, `qa-cycle-N`) - all mechanically checked, at any point mid-engagement,
+by `check_artifacts` (`INDEX-NO-STATUS` / `STALE-INDEX` / `FINAL-BEFORE-CLOSE` /
+`SUMMARY-BEFORE-CLOSE`), and pinned by a new golden case (`process-blocked-not-done`).
 
 **0.16.0** - **the front-door release.** `/engage` opens in two turns (one compound probe
 instead of a 7-10-call crawl), resolves the installed plugin from the install registry on every
@@ -78,7 +97,7 @@ detail: [`CHANGELOG.md`](CHANGELOG.md).
 **0.11.0** - **the Fable audit release.** Claude Fable 5 audited the setup and its documentation
 (setup review + truth audit + best-practice conformance against Anthropic's multi-agent guidance);
 this release fixes everything it found: docs corrected to match the code, four guard defects fixed
-by a human-applied run, genuinely blind evals (30 golden cases), mechanical docs-consistency and
+by a human-applied run, genuinely blind evals (a 30-case golden set), mechanical docs-consistency and
 tier-drift tests. Full suite 347 passing; a live golden-case spot check confirmed no regression.
 
 **0.10.0** - **`scripts/convert_file.py`, the file-conversion front door.** Excel/CSV/TSV/PDF/docx
@@ -638,7 +657,7 @@ a convention), that's stated rather than dressed up.
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
 | **Remembers, safely** | Each working project gets one codebase map: bounded, SHA-anchored, 📊/🧠-tagged, PM-written only, **advisory context never enforcement** - and no PII/MNPI/secrets, ever. | ADR-003 + a DoD gate (read at open, update/correct/deprecate at close) + `check_artifacts` map hygiene (size, header, basis tags, secret patterns, anchor resolution - mechanical). The guard hooks stay the only enforcement layer. |
 | **Show the journey** | Iteration history is evidence: failed review/QA passes stay visible append-only (journey strip, test cycles, clarification rounds) - never smoothed into a clean narrative. | Two DoD gates ("a multi-pass engagement whose docs read first-pass-clean fails") + the templates' append-only structures. Prompt-enforced, eval-sampled. |
-| **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 30 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
+| **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 31 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -685,10 +704,10 @@ change that silently weakens a review gets caught, not shipped. (This is the reg
 Anthropic's multi-agent guidance recommends.)
 
 <details>
-<summary>🧪 <b>What's in the harness</b> - 8 rubrics · 30 golden cases · deterministic scorer</summary>
+<summary>🧪 <b>What's in the harness</b> - 8 rubrics · 31 golden cases · deterministic scorer</summary>
 
 - **8 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety · process-discipline ·
-  prompt-injection · regulatory-citation) + **30 golden cases** with deliberately seeded issues
+  prompt-injection · regulatory-citation) + **31 golden cases** with deliberately seeded issues
   *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
 - **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)) - matches the team's
   findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
@@ -866,7 +885,7 @@ vendor/                         # convert_file's deps, bundled (pure Python, pin
 config/                         # masking schema + regulatory register + feed-schema example
 docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
                                 #   scenarios/ · demos/ · templates/ · adr/
-evals/                          # team-quality eval harness: 8 rubrics + 30 golden cases
+evals/                          # team-quality eval harness: 8 rubrics + 31 golden cases
 .github/workflows/ci.yml        # tests + lint + manifest validation + gitleaks + no-raw-data check
 .pre-commit-config.yaml         # local secret / raw-data guardrails
 ```
@@ -961,7 +980,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
 <summary>🗺️ <b>What's shipped and what's next</b></summary>
 
 **Quality & evaluation**
-- ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 8 rubrics + 30 golden cases
+- ✅ **Team-quality eval harness - SHIPPED (0.5.0)** - `evals/` has 8 rubrics + 31 golden cases
   (seeded issues + false-positive traps) across review, coverage, spec/traceability, tuning and
   data-safety. The deterministic scorer (`scripts/eval_score.py`) is unit-tested; `/run-evals`
   runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and

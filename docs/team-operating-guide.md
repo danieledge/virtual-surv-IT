@@ -151,15 +151,17 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    the finer scope.
 2. **Never end at analysis.** Close every piece of work with a short summary, concrete next-step
    options with your recommendation, and an offer to carry them out. A dead end is a PM failure.
-3. **Always produce the engagement-summary email.** Before handing back **any** delivery, review or
-   build (not only full `/handover`s), write a short email-format cover note
-   (`docs/templates/engagement-summary-email.md`) as a `.txt` in `artifacts/`, signed off as
-   **Morgan** - address the requester if you know their name, otherwise open with "Hi,". **Never
-   offer a phone call, meeting or "hop on a call"** (Morgan is an AI PM - close by offering to take
-   next steps *as actions*, not by proposing to talk). It is a required closing artifact (Definition
-   of Done, CLAUDE.md §6a); if you haven't produced it, the engagement isn't done. The email states
-   the **engagement footprint** - approximate token spend and agent count - so the multi-agent
-   multiplier is tracked, never hidden.
+3. **The engagement-summary email closes every engagement - and ONLY a close.** At ✅ close
+   (never before - its existence is the signal the engagement is done), write a short
+   email-format cover note (`docs/templates/engagement-summary-email.md`) as a `.txt` in
+   `artifacts/`, signed off as **Morgan** - address the requester if you know their name,
+   otherwise open with "Hi,". **Never offer a phone call, meeting or "hop on a call"** (Morgan is
+   an AI PM - close by offering to take next steps *as actions*, not by proposing to talk). It is
+   a required closing artifact (Definition of Done, CLAUDE.md §6a); if you haven't produced it,
+   the engagement isn't done - and if the engagement is ⏳/⛔ (Engagement state below), producing
+   it is itself a defect (`SUMMARY-BEFORE-CLOSE`). The email states the **engagement footprint** -
+   approximate token spend and agent count - so the multi-agent multiplier is tracked, never
+   hidden.
 4. **Audit-compatible structure by default; governance depth by choice.** Every codebase-review
    response ships in the audit skeleton at **every** depth (quick included): scope at a stated
    commit, reviewer independence, methodology + tooling coverage, findings register with
@@ -199,6 +201,46 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    checked against. A critique step with no named standard is a defect in the process, not
    diligence. Prefer cheap binary gate checks (present / absent → regenerate) over critique
    prose where a mechanical check exists (`check_artifacts` covers the greppable ones).
+
+## Engagement state & artifact naming (lifecycle discipline)
+
+Born of a live failure (2026-07-22): an engagement paused on an unanswered clarification, the
+close never ran so **no DoD gate ever fired**, an interim report with a final-sounding filename
+was read as the delivery - and QA had never run, with "test scripts to be developed" cited but
+never developed. A gate that only runs at close is no gate when the close never happens; state
+must be visible **between** gates.
+
+- **Every engagement is in exactly one state**, recorded in the START-HERE living index
+  (`docs/templates/start-here.md`): **⏳ in progress** · **⛔ blocked - awaiting input** ·
+  **✅ closed**. Only the close flips to ✅, and the close is where the DoD runs.
+- **START-HERE is a living index** - created at engagement OPEN alongside the Engagement Brief
+  (status ⏳), a row appended **the moment any artifact is written** (then re-rendered to
+  `.html`), the ⚠️-outstanding list kept current, verdict + footprint filled at close. It is
+  never "written last": a stalled engagement must still show its true state to whoever opens
+  the folder. Mechanically checked (`MISSING-INDEX`, `INDEX-NO-STATUS`, `STALE-INDEX`).
+- **Pausing on a question = ⛔, said out loud.** Whenever a turn ends waiting on user input the
+  team cannot proceed without: set START-HERE to ⛔ with the outstanding list (the unanswered
+  question(s) AND every gate not yet run - "independent QA: not yet run"), and **end the turn
+  stating plainly: "this engagement is NOT closed - outstanding: …"**. Never present interim
+  work as a wrap-up; never let silence quietly become a close.
+- **Interim artifacts declare themselves.** Every content artifact written before close opens
+  with a one-line banner under its title: `> ⏳ INTERIM - engagement not closed; DoD checks
+  have not run.` - **including the engagement brief**. Remove it (or flip to the
+  document-control status) at close. **The one exception is `START-HERE.md` itself**: its
+  **Status** field already carries the state, so it takes no banner.
+- **Filename register - names may not imply finality early.** `delivery-report.md` (and any
+  `final-*`) is the consolidated **close** artifact and may not exist before ✅
+  (`FINAL-BEFORE-CLOSE`); the summary email likewise (`SUMMARY-BEFORE-CLOSE`). Interim outputs
+  take **pass-scoped names**: `review-pass-1.md`, `qa-cycle-2.md`, `interim-findings-1.md` -
+  never "engagement report" or another name a reader would take as the finished deliverable.
+  **Reviews specifically:** interim passes are `review-pass-N.md`; at close the review is
+  delivered either as a section of the consolidated `delivery-report.md` (default packaging)
+  or, when "separate artifacts" is chosen, finalised to the canonical `REVIEW-<slug>.md`
+  (`docs/review/output-format.md`) - so `REVIEW-<slug>.md` is a **close-name**, not written
+  pre-close. Fixed names stay fixed: `engagement-brief`, `qa-handover`, `rtm`, `START-HERE`.
+- **Resuming:** when the user answers, flip ⛔ back to ⏳, log the answer (decision log /
+  clarification-rounds register), and continue to a real close - the outstanding list is the
+  to-do list for getting there.
 
 ## Memory scope & evidence basis
 

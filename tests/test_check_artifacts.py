@@ -3,9 +3,11 @@ Tests for the mechanical DoD artifact gate (scripts/check_artifacts.py).
 
 The gate asserts the DoD items CI can never see (artifacts/ is git-ignored; the codebase
 map lives in the working project): every .md deliverable has a rendered .html sibling, the
-closing engagement-summary-*.txt email exists once there are deliverables, and any codebase
-map (ADR-003) passes mechanical hygiene (size, As-of/Anchor header, basis tags, no
-secret-shaped content, resolvable anchor).
+START-HERE living index exists from the first artifact and carries the engagement Status
+(⏳/⛔/✅) with every file listed and every link resolving, close-only artifacts
+(delivery-report / summary email) exist only once the status is ✅ closed, the closing
+engagement-summary-*.txt exists at close, and any codebase map (ADR-003) passes mechanical
+hygiene (size, As-of/Anchor header, basis tags, no secret-shaped content, resolvable anchor).
 """
 
 from __future__ import annotations
@@ -14,12 +16,23 @@ import subprocess
 
 from scripts.check_artifacts import check, check_map, find_codebase_map
 
+STATUS_OPEN = "⏳ IN PROGRESS"
+STATUS_BLOCKED = "⛔ BLOCKED - awaiting input"
+STATUS_CLOSED = "✅ CLOSED 2026-07-22"
+
 
 def _touch(path, content="x"):
     path.parent.mkdir(parents=True, exist_ok=True)
     # UTF-8 explicitly: map fixtures carry emoji basis tags, and Windows' default
     # locale encoding (cp1252) raises UnicodeEncodeError on them.
     path.write_text(content, encoding="utf-8")
+
+
+def _index(art, status=STATUS_CLOSED, listed=()):
+    """A minimal valid START-HERE living index: a Status line + one row per artifact."""
+    rows = "\n".join(f"- `{name}` - purpose" for name in listed)
+    _touch(art / "START-HERE.md", f"# START HERE\n\n| **Status** | {status} |\n\n{rows}\n")
+    _touch(art / "START-HERE.html")
 
 
 def test_missing_dir_is_not_a_failure(tmp_path):
@@ -35,6 +48,7 @@ def test_md_without_html_is_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "REVIEW-foo.md")
     _touch(art / "engagement-summary-foo.txt")
+    _index(art, listed=["REVIEW-foo.md", "engagement-summary-foo.txt"])
     findings = check(art)
     assert len(findings) == 1
     assert "MISSING-HTML" in findings[0]
@@ -45,6 +59,7 @@ def test_missing_summary_email_is_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "delivery-report.md")
     _touch(art / "delivery-report.html")
+    _index(art, listed=["delivery-report.md"])
     findings = check(art)
     assert len(findings) == 1
     assert "MISSING-SUMMARY-EMAIL" in findings[0]
@@ -55,6 +70,7 @@ def test_complete_gate_passes(tmp_path):
     _touch(art / "delivery-report.md")
     _touch(art / "delivery-report.html")
     _touch(art / "engagement-summary-spoofing.txt")
+    _index(art, listed=["delivery-report.md", "engagement-summary-spoofing.txt"])
     assert check(art) == []
 
 
@@ -62,6 +78,7 @@ def test_nested_artifacts_are_checked(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "sub" / "spec.md")
     _touch(art / "engagement-summary-x.txt")
+    _index(art, listed=["spec.md", "engagement-summary-x.txt"])
     findings = check(art)
     assert len(findings) == 1
     assert "sub" in findings[0]
@@ -84,6 +101,7 @@ def test_finding_without_impact_flagged(tmp_path):
     _touch(art / "REVIEW-x.md", _finding_block(with_impact=False))
     _touch(art / "REVIEW-x.html")
     _touch(art / "engagement-summary-x.txt")
+    _index(art, listed=["REVIEW-x.md", "engagement-summary-x.txt"])
     findings = check(art)
     assert len(findings) == 1 and "FINDING-NO-IMPACT" in findings[0]
 
@@ -93,6 +111,7 @@ def test_finding_with_impact_passes(tmp_path):
     _touch(art / "REVIEW-x.md", _finding_block(with_impact=True) + _finding_block(True))
     _touch(art / "REVIEW-x.html")
     _touch(art / "engagement-summary-x.txt")
+    _index(art, listed=["REVIEW-x.md", "engagement-summary-x.txt"])
     assert check(art) == []
 
 
@@ -101,37 +120,145 @@ def test_artifact_without_finding_blocks_not_flagged(tmp_path):
     _touch(art / "delivery-report.md", "# Report\n\nProse only, tables elsewhere.\n")
     _touch(art / "delivery-report.html")
     _touch(art / "engagement-summary-x.txt")
+    _index(art, listed=["delivery-report.md", "engagement-summary-x.txt"])
     assert check(art) == []
 
 
-# --- START-HERE index gate ----------------------------------------------------------------
+# --- START-HERE living-index gate ---------------------------------------------------------
+# The index is created at engagement OPEN (with the first artifact), carries the Status,
+# and is updated on every artifact write - born of the 2026-07-22 dangling-engagement
+# failure, where an unindexed interim pack was read as a finished delivery.
 
 
-def test_multi_artifact_delivery_requires_index(tmp_path):
+def test_any_artifact_requires_index(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md")
+    _touch(art / "review-pass-1.html")
+    findings = check(art)
+    assert any("MISSING-INDEX" in f for f in findings)
+
+
+def test_index_satisfies_gate(tmp_path):
     art = tmp_path / "artifacts"
     for stem in ("delivery-report", "qa-handover"):
         _touch(art / f"{stem}.md")
         _touch(art / f"{stem}.html")
     _touch(art / "engagement-summary-x.txt")
-    findings = check(art)
-    assert len(findings) == 1 and "MISSING-INDEX" in findings[0]
-
-
-def test_index_satisfies_gate(tmp_path):
-    art = tmp_path / "artifacts"
-    for stem in ("delivery-report", "qa-handover", "START-HERE"):
-        _touch(art / f"{stem}.md")
-        _touch(art / f"{stem}.html")
-    _touch(art / "engagement-summary-x.txt")
+    _index(art, listed=["delivery-report.md", "qa-handover.md", "engagement-summary-x.txt"])
     assert check(art) == []
 
 
-def test_single_artifact_needs_no_index(tmp_path):
+def test_index_without_status_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md")
+    _touch(art / "review-pass-1.html")
+    _touch(art / "START-HERE.md", "# START HERE\n\n- `review-pass-1.md` - first pass\n")
+    _touch(art / "START-HERE.html")
+    findings = check(art)
+    assert len(findings) == 1 and "INDEX-NO-STATUS" in findings[0]
+
+
+def test_unlisted_artifact_is_stale_index(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md")
+    _touch(art / "review-pass-1.html")
+    _touch(art / "qa-cycle-1.md")
+    _touch(art / "qa-cycle-1.html")
+    _index(art, status=STATUS_OPEN, listed=["review-pass-1.md"])
+    findings = check(art)
+    assert len(findings) == 1
+    assert "STALE-INDEX" in findings[0] and "qa-cycle-1.md" in findings[0]
+
+
+def test_dangling_index_link_is_stale_index(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md")
+    _touch(art / "review-pass-1.html")
+    _touch(
+        art / "START-HERE.md",
+        "# START HERE\n\n| **Status** | ⏳ IN PROGRESS |\n\n"
+        "- [`review-pass-1.md`](review-pass-1.md)\n- [`rtm.md`](rtm.md)\n",
+    )
+    _touch(art / "START-HERE.html")
+    findings = check(art)
+    assert len(findings) == 1
+    assert "STALE-INDEX" in findings[0] and "rtm.md" in findings[0]
+
+
+def test_external_links_in_index_are_ignored(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md")
+    _touch(art / "review-pass-1.html")
+    _touch(
+        art / "START-HERE.md",
+        "# START HERE\n\n| **Status** | ⏳ IN PROGRESS |\n\n"
+        "- [`review-pass-1.md`](review-pass-1.md)\n"
+        "- [MAR Art.12](https://eur-lex.europa.eu/x)\n",
+    )
+    _touch(art / "START-HERE.html")
+    assert check(art) == []
+
+
+def test_word_status_forms_are_readable(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "notes-1.md")
+    _touch(art / "notes-1.html")
+    _touch(
+        art / "START-HERE.md",
+        "# START HERE\n\nStatus: in progress\n\n- `notes-1.md` - notes\n",
+    )
+    _touch(art / "START-HERE.html")
+    assert check(art) == []
+
+
+# --- close-only artifacts (state gate) ----------------------------------------------------
+
+
+def test_delivery_report_before_close_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "delivery-report.md")
     _touch(art / "delivery-report.html")
+    _index(art, status=STATUS_BLOCKED, listed=["delivery-report.md"])
+    findings = check(art)
+    assert len(findings) == 1 and "FINAL-BEFORE-CLOSE" in findings[0]
+
+
+def test_summary_email_before_close_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md")
+    _touch(art / "review-pass-1.html")
     _touch(art / "engagement-summary-x.txt")
+    _index(art, status=STATUS_OPEN, listed=["review-pass-1.md", "engagement-summary-x.txt"])
+    findings = check(art)
+    assert len(findings) == 1 and "SUMMARY-BEFORE-CLOSE" in findings[0]
+
+
+def test_blocked_engagement_with_interim_names_passes(tmp_path):
+    art = tmp_path / "artifacts"
+    for stem in ("engagement-brief", "review-pass-1"):
+        _touch(art / f"{stem}.md")
+        _touch(art / f"{stem}.html")
+    _index(art, status=STATUS_BLOCKED, listed=["engagement-brief.md", "review-pass-1.md"])
     assert check(art) == []
+
+
+def test_open_engagement_needs_no_summary_email(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "engagement-brief.md")
+    _touch(art / "engagement-brief.html")
+    _index(art, status=STATUS_OPEN, listed=["engagement-brief.md"])
+    assert check(art) == []
+
+
+def test_legacy_folder_without_index_keeps_email_gate(tmp_path):
+    # Pre-lifecycle folders have no index: they get MISSING-INDEX plus the legacy
+    # email requirement, never a crash on the missing status.
+    art = tmp_path / "artifacts"
+    _touch(art / "delivery-report.md")
+    _touch(art / "delivery-report.html")
+    findings = check(art)
+    codes = "".join(findings)
+    assert "MISSING-INDEX" in codes and "MISSING-SUMMARY-EMAIL" in codes
 
 
 # --- code-without-QA gate (the 2026-07-21 live failure) ----------------------------------
@@ -143,6 +270,7 @@ def test_code_without_qa_handover_flagged(tmp_path):
     _touch(art / "report.md")
     _touch(art / "report.html")
     _touch(art / "engagement-summary-x.txt")
+    _index(art, listed=["wash_trade_model.py", "report.md", "engagement-summary-x.txt"])
     codes = "".join(check(art))
     assert "CODE-NO-QA" in codes and "CODE-NO-TESTS" in codes
 
@@ -154,6 +282,15 @@ def test_code_with_qa_and_tests_passes(tmp_path):
     _touch(art / "qa-handover.md")
     _touch(art / "qa-handover.html")
     _touch(art / "engagement-summary-x.txt")
+    _index(
+        art,
+        listed=[
+            "wash_trade_model.py",
+            "test_wash_trade_model.py",
+            "qa-handover.md",
+            "engagement-summary-x.txt",
+        ],
+    )
     assert check(art) == []
 
 
@@ -163,6 +300,7 @@ def test_test_files_alone_do_not_trigger_gate(tmp_path):
     _touch(art / "engagement-summary-x.txt")
     _touch(art / "notes.md")
     _touch(art / "notes.html")
+    _index(art, listed=["test_something.py", "engagement-summary-x.txt", "notes.md"])
     assert check(art) == []
 
 
@@ -256,6 +394,36 @@ def test_map_outside_git_skips_anchor_check(tmp_path):
     m = tmp_path / "nogit" / "docs" / "codebase-map.md"
     _touch(m, _good_map("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"))
     assert check_map(m) == []
+
+
+def test_map_novcs_anchor_accepted(tmp_path):
+    # A working project with no git repo writes `Anchor no-vcs` - a valid anchor, not a
+    # defect (surfaced by the 2026-07-22 end-to-end validation: two engagements in git-less
+    # working projects could never pass the gate otherwise).
+    m = tmp_path / "nogit" / "docs" / "codebase-map.md"
+    _touch(
+        m,
+        "# Map - Proj\n\n"
+        "> **Document control** · Owner `Morgan (PM)` · As-of `2026-07-22` · Anchor `no-vcs`\n\n"
+        "## 2. Map entries\n\n"
+        "| # | Area | Entry | Basis | As-of | Anchor |\n"
+        "|---|------|-------|-------|-------|--------|\n"
+        "| 1 | rules | threshold in x.py | 📊 seen | 2026-07-22 | no-vcs |\n",
+    )
+    assert check_map(m) == []
+
+
+def test_map_no_anchor_still_flagged_without_sentinel(tmp_path):
+    # The escape is explicit: a header with neither a SHA nor a no-vcs token still fails.
+    m = tmp_path / "docs" / "codebase-map.md"
+    _touch(
+        m,
+        "# Map\n\n> Owner `Morgan` · As-of `2026-07-22` · Anchor `TBD`\n\n"
+        "## 2. Map entries\n\n| # | Entry | Basis |\n|---|-------|-------|\n"
+        "| 1 | x | 📊 seen |\n",
+    )
+    codes = "".join(check_map(m))
+    assert "MAP-NO-ANCHOR" in codes
 
 
 def test_map_too_long_flagged(tmp_path):

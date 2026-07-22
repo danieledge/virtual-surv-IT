@@ -332,9 +332,15 @@ reachable via each question's automatic "Other".
 The **handover pack is a deliverable and belongs here** (not in the findings/fix question).
 Each is delivered in **both `.md` and `.html`**.
 
-**4. Summarise.** Write an Engagement Brief (`docs/templates/engagement-brief.md`) capturing
-decisions taken, open questions, clarifications, assumptions, the selected artifacts and the
-routing plan. Render it to HTML. **Get the go-ahead via the question tool** (header `Go-ahead`,
+**4. Summarise - and open the living index.** Write an Engagement Brief
+(`docs/templates/engagement-brief.md`) capturing decisions taken, open questions,
+clarifications, assumptions, the selected artifacts and the routing plan. Render it to HTML.
+**At the same moment, create `artifacts/START-HERE.md`** (template
+`docs/templates/start-here.md`) with **Status ⏳ IN PROGRESS**, the brief as its first listed
+artifact, and the ⚠️-outstanding list seeded with the gates still ahead (independent QA, DoD
+check) - render it too. It is a **living index**: from here on, append a row and re-render
+**every time any artifact is written**, and keep its status truthful (lifecycle discipline,
+operating guide). **Get the go-ahead via the question tool** (header `Go-ahead`,
 `multiSelect: false`): **Proceed as briefed** · **Adjust something first** · **Stop here** -
 never a "shall I proceed?" buried in prose.
 
@@ -350,11 +356,29 @@ duplicate-work/gap failures and keeps agent returns from flooding the context wi
 not conversation. Review each output against the brief, keep a short status log, and return to
 the user at each gate.
 
+**5a. Blocked on the user? Say so - never let silence become a close.** When a turn ends
+waiting on input the team cannot proceed without (a clarification, a go-ahead, missing
+inputs): set START-HERE's **Status to ⛔ BLOCKED - awaiting input**, list in its
+⚠️-outstanding section the unanswered question(s) **and every gate not yet run** ("independent
+QA (Linh): not yet run" · "DoD check: not yet run"), re-render it, and **end the turn stating
+plainly: "this engagement is NOT closed - outstanding: …"**. Do **not** write the summary
+email or `delivery-report.md` (close-only - the mechanical gate flags them as
+`SUMMARY-BEFORE-CLOSE` / `FINAL-BEFORE-CLOSE`); interim output takes pass-scoped names
+(`review-pass-1`, `qa-cycle-2`, `interim-*`) and opens with the one-line interim banner
+(`> ⏳ INTERIM - engagement not closed; DoD checks have not run.`). When the user answers,
+flip ⛔ back to ⏳, log the answer, and continue to a real close. (Lifecycle discipline,
+operating guide - born of a live 2026-07-22 failure where a stalled engagement's interim
+report was read as the delivery and QA never ran.)
+
 **6. Deliver.** Produce the selected artifacts under `artifacts/` as Markdown, then render
 each with `<python> -m scripts.render_html <file>.md` so every deliverable exists in `.md` and
-`.html`. **When the delivery has more than one artifact, write `artifacts/START-HERE.md`
-LAST** (template `docs/templates/start-here.md`): the reader's entry point - verdict, reading
-order, every artifact listed with its purpose, open items. Render it too.
+`.html` - **appending a row to `artifacts/START-HERE.md` (and re-rendering it) as each one
+lands**; nothing in the folder goes unlisted. `delivery-report.md` and the summary email are
+written **only now, at close**. **Finalise START-HERE last**: Status → ✅ CLOSED <date>,
+verdict and footprint filled, the ⚠️-outstanding section replaced with "Nothing - closed
+<date>", interim banners removed from artifacts that became final. The mechanical gate below
+verifies all of this (`MISSING-INDEX` / `INDEX-NO-STATUS` / `STALE-INDEX` /
+`FINAL-BEFORE-CLOSE` / `SUMMARY-BEFORE-CLOSE`).
 
 **Citations gate (default: ship flagged, teach the fix - never block the close).** Run
 `<python> -m scripts.check_citations` over the artifacts. Anything flagged TO-VERIFY is

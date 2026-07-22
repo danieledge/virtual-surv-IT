@@ -1,7 +1,9 @@
 # Engagement Brief - <TITLE>
 
 > The PM's intake summary. Produced at the start of every engagement, before work begins,
-> and updated as decisions are made. Authored in `.md`, rendered to `.html`.
+> and updated as decisions are made. Authored in `.md`, rendered to `.html`. Created
+> **together with** `artifacts/START-HERE.md` (the living index, status ⏳) - the brief is
+> the opening bookend, the index is the state record a reader checks first.
 
 > **Document control** · ID `ENG-001` · Version `0.1` · Status `Draft | In review | Approved`
 > · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
