@@ -223,15 +223,21 @@ must be visible **between** gates.
   question(s) AND every gate not yet run - "independent QA: not yet run"), and **end the turn
   stating plainly: "this engagement is NOT closed - outstanding: …"**. Never present interim
   work as a wrap-up; never let silence quietly become a close.
-- **Interim artifacts declare themselves.** Anything written before close opens with a one-line
-  banner under its title: `> ⏳ INTERIM - engagement not closed; DoD checks have not run.`
-  Remove (or flip to the document-control status) at close.
+- **Interim artifacts declare themselves.** Every content artifact written before close opens
+  with a one-line banner under its title: `> ⏳ INTERIM - engagement not closed; DoD checks
+  have not run.` - **including the engagement brief**. Remove it (or flip to the
+  document-control status) at close. **The one exception is `START-HERE.md` itself**: its
+  **Status** field already carries the state, so it takes no banner.
 - **Filename register - names may not imply finality early.** `delivery-report.md` (and any
   `final-*`) is the consolidated **close** artifact and may not exist before ✅
   (`FINAL-BEFORE-CLOSE`); the summary email likewise (`SUMMARY-BEFORE-CLOSE`). Interim outputs
   take **pass-scoped names**: `review-pass-1.md`, `qa-cycle-2.md`, `interim-findings-1.md` -
   never "engagement report" or another name a reader would take as the finished deliverable.
-  Fixed names stay fixed: `engagement-brief`, `qa-handover`, `rtm`, `START-HERE`.
+  **Reviews specifically:** interim passes are `review-pass-N.md`; at close the review is
+  delivered either as a section of the consolidated `delivery-report.md` (default packaging)
+  or, when "separate artifacts" is chosen, finalised to the canonical `REVIEW-<slug>.md`
+  (`docs/review/output-format.md`) - so `REVIEW-<slug>.md` is a **close-name**, not written
+  pre-close. Fixed names stay fixed: `engagement-brief`, `qa-handover`, `rtm`, `START-HERE`.
 - **Resuming:** when the user answers, flip ⛔ back to ⏳, log the answer (decision log /
   clarification-rounds register), and continue to a real close - the outstanding list is the
   to-do list for getting there.
