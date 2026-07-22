@@ -3,6 +3,30 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.16.3] - 2026-07-22 - the lifecycle-validation release
+
+Three real end-to-end test engagements (quick-review→close, a build that blocks on an
+unanswered question, and a full build with executed QA→close) were run against 0.16.2 with
+actual artifact writes, then audited against the new gates. All three conformed - the blocked
+engagement correctly refused to close and a negative test confirmed the close-only guards
+fire on a real folder. The run surfaced two gaps, fixed here.
+
+### Fixed
+- **Codebase map: git-less working projects can now close clean.** `check_artifacts` demanded
+  a hex commit SHA on the map's Anchor line unconditionally, so a working project with no git
+  repo could never pass the gate (two of the three test engagements hit `MAP-NO-ANCHOR` on an
+  honest git-less close). An explicit `Anchor no-vcs` is now accepted (anchoring entries to
+  the delivered file state); a missing or placeholder anchor (e.g. `TBD`) still fails.
+  Template documents the option.
+
+### Changed
+- **Two lifecycle ambiguities resolved** (both PM sub-agents hit them independently): the
+  interim banner's scope is now explicit - every pre-close content artifact carries it
+  **including the engagement brief**, with `START-HERE.md` the sole exception (its Status
+  field is the state); and review-artifact naming is reconciled - interim passes are
+  `review-pass-N.md`, while `REVIEW-<slug>.md` is a **close-name** (folds into
+  `delivery-report.md` by default, or is finalised as a separate artifact).
+
 ## [0.16.2] - 2026-07-22 - the engagement-lifecycle release
 
 Born of a recorded live lesson (2026-07-22): an engagement stalled on an unanswered
@@ -28,14 +52,6 @@ at close is no gate when the close never happens.
 - **Golden case `process-blocked-not-done` (31st)** pinning the behavioural half: invited to
   "wrap up whatever makes sense" while blocked, Morgan must hold the state honest, name the
   un-run QA, and not produce close-only artifacts.
-
-### Fixed
-- **Codebase map: git-less working projects can now close clean.** `check_artifacts` demanded
-  a hex commit SHA on the map's Anchor line unconditionally, so a working project with no git
-  repo could never pass the gate (surfaced by end-to-end validation: two of three test
-  engagements hit `MAP-NO-ANCHOR` on an honest git-less close). An explicit `Anchor no-vcs`
-  is now accepted (anchoring entries to the delivered file state); a missing or placeholder
-  anchor still fails. Template documents the option.
 
 ### Changed
 - **START-HERE is a living index, not a closing artifact.** Created at engagement open
