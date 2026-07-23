@@ -99,6 +99,11 @@ the §4/§5 regulated calls pay **opus** (CLAUDE.md §8). See `docs/review/agent
    data-safety violation; see exception).
 4. **Intentional changes** - deliberate functionality or style matching existing patterns.
 5. **Style not in CLAUDE.md** - preferences not actually required.
+6. **Documented, intentional bounds** - a constraint that carries a rationale (an explaining
+   comment, a named constant like `max_col=EXPECTED_COLUMNS`, or a documented threshold with a
+   tuning date) is correct-by-design; don't flag it as a defect. Mirror of §4: an *undocumented*
+   threshold is a finding, a *documented* one is not. Flag it only if the rationale is demonstrably
+   wrong or the value contradicts its stated intent.
 
 ## Never filter (regulated exceptions)
 
