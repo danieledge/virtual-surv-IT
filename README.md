@@ -10,29 +10,172 @@
 
 <img src="docs/assets/fable5-audited.svg" alt="Audited with Claude Fable 5" height="20">
 
-**Virtual Surv-IT is a virtual engineering team for compliance surveillance that runs inside
-[Claude Code](https://claude.com/claude-code)**: a PM (Morgan) plus **16 specialist AI agents**.
-Together they design, build, test, review and document the **software behind market-abuse and
-financial-crime detection**: detection rules, data pipelines, utility scripts (Python, Scala,
-Java, PowerShell, Bash), reconciliation and reporting jobs, machine-learning models, code reviews
-and handover documents. Every piece of work is checked by a **separate agent** before it counts as
-done, the way a real team reviews itself instead of one assistant marking its own homework. The
-team builds the tooling; it does **not** perform the compliance, monitoring or investigation work
-itself.
+**Virtual Surv-IT is a virtual engineering team for the software that catches financial crime and
+market abuse.** A project manager (Morgan) and **16 specialist AI agents** run it inside
+[Claude Code](https://claude.com/claude-code).
 
-> ⚗️ **Proof of concept** - not production or regulatory tooling; **review everything it produces**.
+Banks and trading firms spot money laundering and market manipulation with software: detection
+rules, data pipelines, threshold tuning, test evidence, and the audit paperwork a regulator can
+still question years later. That software is slow to build, risky to change, and heavy on
+documentation. Virtual Surv-IT is a proof of concept for building it with a *team* of AI agents
+instead of a single chatbot. Each agent is a specialist, and **every piece of work is checked by
+a different agent** before it counts as done, the way a real team reviews itself instead of one
+assistant marking its own homework.
+
+The team builds the tooling. It does **not** do the compliance, monitoring or investigation
+itself, and a person signs off every step.
+
+![The Engagement Machine - one engagement end to end: a single front door (Morgan the PM plans the job and sets the headcount), specialists working in their own sealed workspaces, every hand-off a written artifact pinned to a shared board, a delivery pack that grows as it passes spec, build, independent QA and review, guards that keep real data and secrets out and let no code run without a human turning the key, a done-gate checklist that cannot be skipped, and a human signature before anything ships](docs/assets/engagement-machine.png)
+
+> ⚗️ **Proof of concept.** Not production or regulatory tooling; **review everything it produces**.
 
 > 🔍 **Audited and hardened with Claude Fable.** We pointed
-> [Claude Fable 5](https://www.anthropic.com/news/claude-fable-5-mythos-5) - Anthropic's most
-> capable widely released model, a step above Claude Opus - at this repo to find weaknesses in the
-> approach and the documentation. **Releases 0.11.0 and 0.12.0 fix what it found**, and every fix
-> has to pass the automated test suite plus a live quality check before it lands. Full story:
+> [Claude Fable 5](https://www.anthropic.com/news/claude-fable-5-mythos-5), Anthropic's most
+> capable widely released model and a step above Claude Opus, at this repo to find weaknesses in
+> the approach and the documentation. **Releases 0.11.0 and 0.12.0 fix what it found**, and every
+> fix has to pass the automated test suite plus a live quality check before it lands. Full story:
 > [`CHANGELOG.md`](CHANGELOG.md).
 
 **New to AI agents?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md), a plain-English tour.
 **See it work:** the end-to-end [build demo](docs/demos/build-demo.md) on synthetic data
 (artifacts in [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/)) ·
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) transcripts.
+
+---
+
+**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [⚠️ Known issues](#known-issues) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on--acknowledgements) · [📄 License](#-license)
+
+---
+
+📖 **Acronym glossary** - the domain and spec shorthand used throughout: [`docs/glossary.md`](docs/glossary.md)
+
+## 🤔 Why Virtual Surv-IT?
+
+### If you've worked in surveillance IT, you know these moments
+
+This project comes out of working in this domain, and out of a handful of moments most
+surveillance technologists will recognise on sight:
+
+- **The quiet discovery that something has been broken for years.** The feed that was never
+  switched on. The venue migration that silently dropped a slice of order flow. The symbology
+  mapping nobody re-tested after the upgrade. Surveillance fails *silently*: a working system
+  and a broken one both look like "no alerts today", and that sits in your stomach precisely
+  because nobody can say how long it has been true. The version that became public is
+  [FCA Market Watch 79](https://www.fca.org.uk/publications/newsletters/market-watch-79) (May
+  2024): a news feed never activated, so the insider-dealing scenario fired **zero alerts for
+  over three years**. Every practitioner reading that felt the same thing: *that could have
+  been us.* The countermeasure, independently assuring that every feed, instrument and threshold
+  is actually working, is staffing-intensive, so it is exactly what gets squeezed.
+- **The threshold nobody can explain.** Set years ago by a contractor who has since left, the
+  rationale lost with their inbox. Everyone is afraid to touch it; the regulator's review is
+  asking why it's 3.0 and not 2.5, and the answer on file is an email chain. In this domain the
+  evidence *is* the product: the documented rationale, the tuning date, the trail from an alert
+  back to the rule it serves, all expected to stand up **years later**. Producing that evidence
+  (the specs, the traceability, the test packs, the reporting) is what quietly consumes your
+  scarce experts.
+- **The queue behind one "simple" change.** Tighten a spoofing threshold and you have touched
+  regulatory interpretation, requirements, detection engineering, statistics, model risk, QA and
+  audit evidence. The people who hold more than two of those disciplines are rare, everything
+  waits on them, and the backlog grows while they spend their days drafting and formatting
+  documents instead of deciding things.
+- **The data you can't just paste anywhere.** Transactions, orders and communications carry
+  personal data, and potentially inside information: the one dataset in the firm you cannot
+  experiment with. Any AI approach has to be *structurally* incapable of leaking it, not just
+  told to be careful.
+
+### The hypothesis this project explores: AI can genuinely help here
+
+Those four moments turn out to match what large language models are genuinely good at, and that
+match is the **hypothesis Virtual Surv-IT was built to test**, not an assumption it starts from:
+
+- Most of the work is **translation between formalisms**: regulation → requirement → spec →
+  code → test → evidence. Each hop is language work with a checkable output, which is what an
+  LLM does well, and each hop is where surveillance change is slowest today.
+- The **evidenced 80% is exactly the automatable 80%**: specs, RTMs, tuning packs, QA
+  evidence, handover docs and MI are structured documents derived from decisions, so an LLM can
+  draft them consistently, in minutes, every time, while the *decisions* stay human.
+- **Consistency is something the domain actively wants**: a regulator comparing two tuning
+  packs from two quarters benefits from them being structurally identical. Humans drift;
+  templates and agents don't.
+- The **failure modes of AI are manageable with the domain's own tools**: hallucinated
+  citations → retrieval from a verified register; unchecked output → independent review;
+  over-claiming → evidence tagging; data exposure → hard architectural blocks. The domain has
+  spent decades building controls for fallible humans, and those controls transfer.
+
+The project's demos, worked example and [eval harness](#-self-test-eval-harness) are the
+evidence gathered so far: an end-to-end build with measured calibration on synthetic data,
+reviews that catch seeded defects without inflating clean code, and safety guards that hold
+under test (and have caught their own authors). Where the hypothesis is *not* yet proven, the
+repo says so; see the evidence basis in [`docs/house-rules.md`](docs/house-rules.md) and the
+[known issues](#known-issues).
+
+### Why a specialist *team* with independent review, not one assistant
+
+"AI can help" is not the same as "one AI assistant can help". A single general-purpose
+assistant does each of those disciplines shallowly, with nobody checking its work, and its
+output is a chat transcript rather than an audit trail. Virtual Surv-IT splits the work across
+specialists and builds in **independent review**:
+
+- **Business analysis**: turning a regulatory obligation into a buildable, unambiguous spec.
+- **Surveillance rule development**: deterministic, tested detection logic.
+- **Data engineering**: pipelines, ETL (extract, transform, load), transformation and utility scripts.
+- **Data analysis and threshold tuning**: false-positive analysis, ATL/BTL calibration, MI.
+- **ML / AI detection**, with *independent* model validation.
+- **QA**: independent test design and evidence (it does not mark its own homework).
+- **Code, performance and compliance review**: quality, scalability and audit-readiness.
+- **Data-quality and coverage assurance**: the missing feed that means abuse goes undetected.
+- **Technical documentation**: handover a real developer can build, run and maintain from.
+
+It also maps the domain's own control expectations onto the AI itself:
+
+- **Segregation of duties, enforced.** Reviewers and validators are **read-only by tool grant**,
+  not by convention: the checker physically cannot edit the thing it checks, the model validator
+  is independent of the model builder, and QA does not test its own build. It is the maker-checker
+  discipline regulators expect of humans, applied to agents.
+- **An audit trail by construction.** Every deliverable arrives with the RTM
+  (obligation → requirement → code → test), thresholds with rationale and tuning date, and
+  **pinpoint citations retrieved from a source-verified register** (a mechanical gate flags
+  anything recalled from memory as *unverified* rather than letting it pass as fact; the register
+  is small today and grows entry by entry, each human-verified once; ADR-001). Findings are tagged
+  📊 measured vs 🧠 inferred, all behind an evidenced [Definition of Done](docs/DEFINITION-OF-DONE.md).
+  The silent-failure modes get their own specialist (coverage and feed assurance) instead of
+  being an afterthought.
+- **Data safety as architecture, not policy.** Raw data is **hard-blocked from the model** by
+  hooks and OS-level permissions; the sanctioned path is keyed masking or fully synthetic data;
+  execution of handed-over code is human-consent gated. The AI is useful *downstream* of the
+  controls without ever being trusted *with* the data itself.
+- **The economics work.** The evidenced 80% (specs, tuning packs, QA evidence, handover docs,
+  MI) is produced in minutes for API-token cost, consistently formatted and traceable, while
+  **humans keep the judgement**: every gate returns to a person, and nothing touches a live
+  system without sign-off. Your scarce cross-disciplinary experts review and decide instead of
+  drafting and formatting.
+
+The result is an engineering workflow that produces more **consistent, auditable and
+maintainable** output than one generalist assistant, because the work is specialised,
+**independently reviewed**, and **right-sized** to each task (see below). *(All of it within
+the proof-of-concept framing above: a demonstration of the architecture, for real engineers
+and reviewers to build on, not accredited regulatory tooling.)*
+
+### "I already have ChatGPT / Claude / Copilot, so why would I need this?"
+
+You already have the engine; this is the vehicle. Virtual Surv-IT *runs on* Claude. It is not a
+rival model, but a demonstration of what the same model does when you stop driving it from a
+blank chat box. A chat window cannot give you:
+
+| With a chat window | With this |
+|---|---|
+| The quality of the output depends on *today's* prompt: your best prompting on a good day, someone else's on a bad one. | The prompting **is the repo**: intake questions, review method, templates and standing rules, version-controlled, peer-reviewable, identical on every engagement, and regression-tested by an eval harness. |
+| The domain knowledge has to be typed in every session: typologies, MW79, SR 11-7, ATL/BTL method, EARS syntax… | Encoded once, cited to sources, and loaded only when relevant, with a register that grows instead of a prompt that gets retyped. |
+| One context does everything: it writes the code, reviews its own code, and declares itself done. | **Segregation of duties by tool grant**: reviewers physically cannot edit, QA does not test its own build, the validator is independent of the builder, and a fresh context reviews without the author's bias. |
+| Whatever you paste **leaves**: into someone's context window, on their retention terms. | Raw data is **structurally unreachable** (hook + OS permissions + a CI check); the model works downstream of masking, and code execution needs a consent file only a human can create. |
+| The output is a transcript. Six months later an auditor asks "why this threshold?" and the answer is scrolling. | The output is an **evidence pack**: RTM, tuning rationale with dates, finding dispositions, review reports, and a Definition of Done, in `.md` + `.html`, gated by a mechanical check. |
+| The discipline lives in your head and leaves with you. | The discipline lives in the harness and survives staff turnover, deadline pressure, and whoever types next. |
+
+None of that requires a better model. It requires the model to arrive inside **controls**, which
+is also why the pattern transfers: swap the surveillance domain knowledge for another regulated
+domain and the harness (dormancy, gates, segregation, evidence, evals) carries over.
+
+<sub>[↑ Back to top](#readme-top)</sub>
 
 <details>
 <summary>✨ <b>What's new in 0.16 / 0.15</b> - the engagement-lifecycle release (every engagement has a visible state - in progress / blocked / closed - carried by a living START-HERE index; interim work can never masquerade as a delivery) · the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA - each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
@@ -111,142 +254,6 @@ dormancy; guards fail closed; human-only consent gate), **0.7.x** (demos, regula
 ADR-001/002). 📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
 
 </details>
-
----
-
-**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [⚠️ Known issues](#known-issues) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on--acknowledgements) · [📄 License](#-license)
-
----
-
-📖 **Acronym glossary** - the domain and spec shorthand used throughout: [`docs/glossary.md`](docs/glossary.md)
-
-## 🤔 Why Virtual Surv-IT?
-
-### If you've worked in surveillance IT, you know these moments
-
-This project comes out of working in this domain - and out of a handful of moments most
-surveillance technologists will recognise on sight:
-
-- **The quiet discovery that something has been broken for years.** The feed that was never
-  switched on. The venue migration that silently dropped a slice of order flow. The symbology
-  mapping nobody re-tested after the upgrade. Surveillance fails *silently*: a working system
-  and a broken one both look like "no alerts today" - and that sits in your stomach precisely
-  because nobody can say how long it's been true. The version that became public is
-  [FCA Market Watch 79](https://www.fca.org.uk/publications/newsletters/market-watch-79) (May
-  2024): a news feed never activated, so the insider-dealing scenario fired **zero alerts for
-  over three years**. Every practitioner reading that felt the same thing: *that could have
-  been us.* The countermeasure - independent assurance of coverage, data and tuning - is
-  staffing-intensive, so it's exactly what gets squeezed.
-- **The threshold nobody can explain.** Set years ago, by a contractor who has since left,
-  rationale in an inbox that was retired with them. Everyone is afraid to touch it; the
-  skilled-person review has started asking why it's 3.0 and not 2.5, and the answer on file
-  is an email chain. The evidence *is* the product in this domain - documented rationale,
-  tuning date, the alert-to-obligation trace, all of it expected to stand up **years later** -
-  and producing that evidenced 80% (specs, RTMs - requirements traceability matrices - test
-  evidence, tuning packs, MI (management information) reporting) is what actually consumes your experts.
-- **The queue behind one "simple" change.** Tighten a spoofing threshold: that's regulatory
-  interpretation, requirements, detection engineering, statistics (ATL/BTL - Above/Below-The-
-  Line threshold testing), model risk, QA and audit evidence. The people who hold more than two
-  of those disciplines are rare, everything waits on them, and the reg-change backlog grows
-  while they spend their days drafting and formatting documents instead of deciding things.
-- **The data you can't just paste anywhere.** Transactions, orders and comms carrying PII
-  (personally identifiable information) and potentially MNPI (material non-public information) -
-  the one dataset in the firm you cannot experiment with. Any AI approach has to be
-  *structurally* incapable of exfiltrating it, not just told to be careful.
-
-### The hypothesis this project explores: AI can genuinely help here
-
-Those four moments are, on inspection, a surprisingly good match for what large language
-models are actually good at - and that match is the **hypothesis Virtual Surv-IT was built to
-test**, not an assumption it starts from:
-
-- Most of the work is **translation between formalisms**: regulation → requirement → spec →
-  code → test → evidence. Each hop is language work with a checkable output - the sweet spot
-  of an LLM, and each hop is where surveillance change is slowest today.
-- The **evidenced 80% is exactly the automatable 80%**: specs, RTMs, tuning packs, QA
-  evidence, handover docs and MI are structured documents derived from decisions - an LLM can
-  draft them consistently, in minutes, every time, while the *decisions* stay human.
-- **Consistency is a feature the domain buys, not a nicety**: a regulator comparing two tuning
-  packs from two quarters benefits from them being structurally identical; humans drift,
-  templates + agents don't.
-- The **failure modes of AI are manageable with the domain's own tools**: hallucinated
-  citations → retrieval from a verified register; unchecked output → independent review;
-  over-claiming → evidence tagging; data exposure → hard architectural blocks. The domain has
-  spent decades building controls for fallible humans - they transfer.
-
-The project's demos, worked example and [eval harness](#-self-test-eval-harness) are the
-evidence gathered so far: an end-to-end build with measured calibration on synthetic data,
-reviews that catch seeded defects without inflating clean code, and safety guards that hold
-under test (and have caught their own authors). Where the hypothesis is *not* yet proven, the
-repo says so - see the evidence basis in [`docs/house-rules.md`](docs/house-rules.md) and the
-[known issues](#known-issues).
-
-### Why a specialist *team* with independent review - not one assistant
-
-But "AI can help" is not the same as "one AI assistant can help". A single general-purpose
-assistant does each of those disciplines shallowly, with nobody checking its work - and its
-output is a chat transcript, not an audit trail. Virtual Surv-IT splits the work across
-specialists and builds in **independent review**:
-
-- **Business analysis** - turning a regulatory obligation into a buildable, unambiguous spec.
-- **Surveillance rule development** - deterministic, tested detection logic.
-- **Data engineering** - pipelines, ETL (extract, transform, load), transformation/utility scripts.
-- **Data analysis & threshold tuning** - false-positive analysis, ATL/BTL calibration, MI.
-- **ML / AI detection** - and *independent* model validation.
-- **QA** - independent test design and evidence (it doesn't mark its own homework).
-- **Code, performance & compliance review** - quality, scalability and audit-readiness.
-- **Data-quality & coverage assurance** - the missing feed that means abuse goes undetected.
-- **Technical documentation** - handover a real developer can build, run and maintain from.
-
-…and maps the domain's own control expectations onto the AI itself:
-
-- **Segregation of duties, enforced** - reviewers and validators are **read-only by tool
-  grant**, not by convention: the checker physically cannot edit the thing it checks, the model
-  validator is independent of the model builder, QA doesn't test its own build. The
-  maker-checker discipline regulators expect of humans, applied to agents.
-- **An audit trail by construction** - every deliverable arrives with the RTM
-  (obligation → requirement → code → test), thresholds with rationale and tuning date,
-  **pinpoint citations retrieved from a source-verified register** (a mechanical gate flags
-  anything recalled from memory as *unverified* rather than letting it pass as fact - the
-  register is small today and grows entry-by-entry, each human-verified once; ADR-001),
-  findings tagged
-  📊 measured vs 🧠 inferred, all behind an evidenced [Definition of Done](docs/DEFINITION-OF-DONE.md).
-  The silent-failure modes get their own specialist (coverage & feed assurance) instead of
-  being an afterthought.
-- **Data safety as architecture, not policy** - raw data is **hard-blocked from the model** by
-  hooks and OS-level permissions; the sanctioned path is keyed masking or fully synthetic data;
-  execution of handed-over code is human-consent gated. The AI can be useful *downstream* of
-  the controls without ever being trusted *with* the crown jewels.
-- **The economics finally work** - the evidenced 80% (specs, tuning packs, QA evidence,
-  handover docs, MI) is produced in minutes for API-token cost, consistently formatted and
-  traceable, while **humans keep the judgement**: every gate returns to a person, and nothing
-  touches a live system without sign-off. Your scarce cross-disciplinary experts review and
-  decide instead of drafting and formatting.
-
-The result is an engineering workflow that produces more **consistent, auditable and
-maintainable** output than one generalist assistant - because the work is specialised,
-**independently reviewed**, and **right-sized** to each task (see below). *(All of it within
-the proof-of-concept framing above: a demonstration of the architecture, for real engineers
-and reviewers to build on - not accredited regulatory tooling.)*
-
-### "I already have ChatGPT / Claude / Copilot - why would I need this?"
-
-You do already have the engine. This is the vehicle. Virtual Surv-IT *runs on* Claude - it is
-not a rival model but a demonstration of what the same model does when you stop driving it
-from a blank chat box. Concretely, a chat window cannot give you:
-
-| With a chat window | With this |
-|---|---|
-| The quality of the output depends on the quality of *today's* prompt - your best prompting on a good day, someone else's on a bad one. | The prompting **is the repo**: intake questions, review method, templates, standing rules - version-controlled, peer-reviewable, identical on every engagement, regression-tested by an eval harness. |
-| The domain knowledge has to be typed in every session: typologies, MW79, SR 11-7, ATL/BTL method, EARS syntax… | Encoded once, cited to sources, and loaded only when relevant - with a register that grows instead of a prompt that gets retyped. |
-| One context does everything: it writes the code, reviews its own code, and declares itself done. | **Segregation of duties by tool grant**: reviewers physically cannot edit, QA does not test its own build, the validator is independent of the builder - and a fresh context reviews without the author's bias. |
-| Whatever you paste **leaves** - into someone's context window, on their retention terms. | Raw data is **structurally unreachable** (hook + OS permissions + a CI check); the model works downstream of masking, and code execution needs a consent file only a human can create. |
-| The output is a transcript. Six months later an auditor asks "why this threshold?" and the answer is scrolling. | The output is an **evidence pack**: RTM, tuning rationale with dates, finding dispositions, review reports, a Definition of Done - in `.md` + `.html`, gated by a mechanical check. |
-| The discipline lives in your head and leaves with you. | The discipline lives in the harness and survives staff turnover, deadline pressure, and whoever types next. |
-
-None of that requires a better model. It requires the model to arrive inside **controls** -
-which is also why the pattern transfers: swap the surveillance domain knowledge for another
-regulated domain and the harness (dormancy, gates, segregation, evidence, evals) carries over.
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
