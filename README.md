@@ -1078,6 +1078,22 @@ and `Bash(...)` entries to `permissions.deny` and to segment-split the Bash guar
 guards are a real control for a cooperative agent, not a boundary against an adversarial one; the
 standing mitigation is to keep real data off the machine (the §5 posture). Tracked, not a surprise.
 
+**The persona and soft discipline can fade on a long session (re-anchoring backlogged).** The
+`/engage` persona - Morgan's voice, the 🎩 marker, the named specialists, the prompt-enforced
+discipline (question-tool, the fix-list gate) - loads **once** when you type `/engage` and is
+**never re-asserted**; it lives only in the conversation history. On a long engagement, or after
+Claude Code **compacts/summarises** the context, that history erodes and the model drifts back
+toward default Claude Code: plain voice, generic "Agent A/B/C" subagent labels, the wrong-name
+drift below. **What is NOT affected:** the hard controls - the raw-data block, the execution-
+consent gate and the consent-write gate - are enforced by Claude Code **hooks**, independent of
+the model's persona, so they hold regardless of how faded Morgan is (the critical rails were put
+in hooks precisely for this). What decays is *presentation* and *soft* discipline. **Mitigation
+now:** re-invoke `/engage` (or `/meet-the-team`) to reload the persona, and don't let a single
+engagement run excessively long. **Backlogged fix:** a dormancy-aware re-anchoring mechanism (a
+per-turn `UserPromptSubmit` hook that re-injects a tiny persona+roster anchor **only while the
+team is engaged**, so it survives compaction yet stays free in ordinary sessions). Same root
+cause as the name-drift quirk below.
+
 <details>
 <summary>⚠️ <b>Two display-only quirks</b>: the PM sometimes narrates the wrong teammate name, and some emoji miss their glyph on older Windows + Edge; neither affects what the team does</summary>
 
