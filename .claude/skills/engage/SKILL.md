@@ -72,10 +72,10 @@ if [ -z "$G" ]; then \
 echo "PLUGIN_ROOT=${PR:-repo-as-project}"; \
 (python3 --version || python --version || py --version) 2>&1 | head -1; \
 ls scripts/render_html.py 2>/dev/null; \
-grep -m1 '"version"' .claude-plugin/plugin.json "$PR/.claude-plugin/plugin.json" 2>/dev/null | head -1; \
+grep -m1 '"version"' "${PR:-.}/.claude-plugin/plugin.json" 2>/dev/null | head -1; \
 bash scripts/check-review-tools.sh 2>/dev/null || bash "$PR/scripts/check-review-tools.sh" 2>/dev/null; \
 cat docs/codebase-map.md CODEBASE-MAP.md 2>/dev/null | head -250; \
-awk '/^## \[/{n++} n==1' CHANGELOG.md "$PR/CHANGELOG.md" 2>/dev/null | head -30; \
+awk '/^## \[/{n++} n==1' "${PR:-.}/CHANGELOG.md" 2>/dev/null | head -30; \
 printf '%s\n' "$G" | head -400
 ```
 
@@ -104,11 +104,18 @@ close), and the **operating guide** (standing rules, roster, routing - if the `c
 empty, Read it before proceeding; an engagement without it misses standing user preferences).
 
 **What's new (banner, one short line only).** The probe returns the newest CHANGELOG
-release block. Compare the loaded version against the **Team ver** of the codebase map's most
-recent engagement-history row: when they differ (or on a project's first engagement), add ONE
-line to the banner - *"🆕 Since last time (vX → vY): "* + up to three headline changes in
-plain words, ending *"(full detail: CHANGELOG.md)"*. When versions match, show nothing - the
-feature must never become a wall of release notes, and it never delays the first question.
+release block - read from the **plugin's** changelog (`"${PR:-.}/CHANGELOG.md"`: the plugin
+root in installed mode, the repo itself in repo-as-project; **not** the working project's own
+CHANGELOG, which is unrelated). Compare the loaded version against the **Team ver** of the
+codebase map's most recent engagement-history row: when they differ (or on a project's first
+engagement), add ONE line to the banner - *"🆕 Since last time (vX → vY): "* + up to three
+headline changes in plain words, ending *"(full detail: CHANGELOG.md)"*. When versions match,
+show nothing - the feature must never become a wall of release notes, and it never delays the
+first question.
+**If the changelog block came back empty** (a broken/partial install): show the banner and
+version as normal and simply **omit the what's-new line** - never surface probe mechanics to
+the user (e.g. "changelog not readable from the probe output" is an internal detail, not
+something Morgan says). Silent graceful degradation, not an error message.
 **No prior version on record** (no codebase map yet, an older map without the Team ver
 column, or a skipped close)?
 Say *"🆕 In the current release (vY): ..."* - never guess what the user last saw. Either
@@ -185,6 +192,11 @@ punchy, can't-miss callouts at first contact - CLAUDE.md §5):**
   your first reply asks **only** what/where the code or inputs are. The gated questions below
   are *undecidable* before a target exists (is code involved? is data involved?), so the
   disclaimers + batched screen come **after** the target is known, not before.
+  **BUT the opening banner still comes first** - the intro line, the team version, and the
+  what's-new line (step 0) lead your very first reply **regardless**, then the single
+  target question follows in the same turn. Only the *disclaimers + batched screen* defer;
+  the banner never does. (A live empty-project run skipped the banner entirely by reading this
+  as "defer everything until a target exists" - it is not: banner first, always.)
 - **The tool's hard limits are 4 questions per call and 4 options per question** ("Other" is
   added automatically). Never spec a menu that exceeds them; give **every** question a short
   `header` (≤12 chars - the ones to use are named per question below).

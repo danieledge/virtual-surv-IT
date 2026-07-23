@@ -3,6 +3,27 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.16.4] - 2026-07-23 - `/engage` opening fixes
+
+Two user-reported bugs opening `/engage` in a fresh, empty project (installed-plugin mode).
+
+### Fixed
+- **What's-new line said "changelog not readable".** The step-0 probe read the changelog with
+  `awk ... CHANGELOG.md "$PR/CHANGELOG.md"`; in an empty working project the local
+  `CHANGELOG.md` is missing and **awk aborts fatally on the missing first file** before it
+  reaches the plugin's copy, so the block came back empty. Now reads the plugin's changelog
+  directly and robustly (`"${PR:-.}/CHANGELOG.md"` - plugin root when installed, repo when
+  repo-as-project), which also fixes a latent bug where a working project's *own* unrelated
+  CHANGELOG would be read instead of the plugin's. The version line got the same
+  `"${PR:-.}/..."` treatment. If the block is genuinely empty (broken install), the banner now
+  degrades silently - shows the version, omits the what's-new line - instead of surfacing probe
+  mechanics to the user. Works in Git Bash on Windows (POSIX `${PR:-.}`, forward-slash paths).
+- **Opening banner skipped on a bare `/engage`.** On a bare `/engage` (no target) the workflow
+  correctly defers the disclaimers + batched question until a target is known - but this was
+  being read as "defer *everything*", so Morgan's opening banner (intro + version + what's-new)
+  was skipped and the user landed straight in questions. Now explicit: the banner **always**
+  leads the first reply; only the disclaimers + batched screen defer.
+
 ## [0.16.3] - 2026-07-22 - the lifecycle-validation release
 
 Three real end-to-end test engagements (quick-review→close, a build that blocks on an
