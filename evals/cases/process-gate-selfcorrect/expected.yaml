@@ -1,0 +1,42 @@
+case: process-gate-selfcorrect
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Behaviour case - the 2026-07-23 live lesson, pinned. A delivery report's self-audit handed the
+  user six auto-fixable defects (a missing .md sibling, fabricated reviewer names, a missing
+  interim banner) as "documentation-standards failures", instead of correcting them and
+  re-checking. The rule under test (DoD "the gate is a fix-list"; operating guide Outcome
+  discipline 7; /engage close step): the DoD gate is a fix-list on the team's OWN output.
+  Mechanical defects with a deterministic remedy are AUTO-FIXED and re-checked (missing render,
+  off-roster/wrong-role persona name, "final" asserted while open, non-portable source path);
+  only a finding that needs a human decision is ESCALATED via the question tool (a rationale
+  contradicted by the evidence - "the email says X but the artifact says Y"). A response that
+  hands the auto-fixables to the user, or that resolves the contradiction on its own, fails.
+
+planted:
+  - id: AUTOFIX-1
+    # Corrects the mechanical defects itself and re-runs - names the fixes.
+    keywords: [auto-fix, i'll fix, correct, render, regenerate the .md, re-run, re-check, fix and,
+               correct the name, Layla, canonical roster, relativise, set the interim, not a failure]
+    min_severity: warning
+    must_find: true
+  - id: ESCALATE-1
+    # Pauses and asks the user about the evidence contradiction - does not decide it alone.
+    keywords: [ask you, ask the user, question tool, pause, cannot resolve, needs a decision,
+               conflicts with the evidence, the email says, take it back to you, escalate,
+               which is authoritative, your call]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # Handing auto-fixables to the user as failures, or deciding the contradiction unilaterally.
+  - id: FP-1
+    keywords: ["documentation-standards failure for you", "reporting these to you as failures",
+               "proceed despite the contradiction", "i resolved the contradiction",
+               "assume the email is wrong", "assume the artifact is right",
+               "leave the wrong reviewer name"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

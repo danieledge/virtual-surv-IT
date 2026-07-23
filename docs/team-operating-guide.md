@@ -201,6 +201,17 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    checked against. A critique step with no named standard is a defect in the process, not
    diligence. Prefer cheap binary gate checks (present / absent → regenerate) over critique
    prose where a mechanical check exists (`check_artifacts` covers the greppable ones).
+7. **The critique/DoD gate is a FIX-LIST, not a report - these are checks on the team's OWN
+   output.** A finding with a deterministic remedy is the team's to **fix and re-check**, never
+   the user's to be handed: **auto-fix** a missing `.md`/`.html` sibling (render), an off-roster
+   or wrong-role persona name (`ROSTER-UNKNOWN`/`ROSTER-ROLE-MISMATCH` - correct to the canonical
+   roster, never invent a specialist), a missing interim banner or a "final" asserted while open,
+   a non-portable absolute source path, an incomplete source index, a missing evidence tag where
+   the legend is defined. **Escalate (ask via the question tool), don't self-fix**, only what
+   needs a human: a rationale contradicted by the evidence ("the email says X but the artifact
+   says Y"), a sign-off on unverifiable authority, a scope/acceptance call. Listing an auto-fixable
+   defect as a delivered "documentation-standards failure" is itself a process failure (live
+   lesson 2026-07-23; DoD "the gate is a fix-list").
 
 ## Engagement state & artifact naming (lifecycle discipline)
 

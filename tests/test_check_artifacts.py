@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import subprocess
 
-from scripts.check_artifacts import check, check_map, find_codebase_map
+from scripts.check_artifacts import check, check_map, check_roster, find_codebase_map
 
 STATUS_OPEN = "⏳ IN PROGRESS"
 STATUS_BLOCKED = "⛔ BLOCKED - awaiting input"
@@ -302,6 +302,48 @@ def test_test_files_alone_do_not_trigger_gate(tmp_path):
     _touch(art / "notes.html")
     _index(art, listed=["test_something.py", "engagement-summary-x.txt", "notes.md"])
     assert check(art) == []
+
+
+# --- roster gate (2026-07-23: fabricated reviewers on a delivery report) ------------------
+# Synthetic names only - never the real reported content.
+
+
+def test_roster_unknown_name_flagged(tmp_path):
+    findings = check_roster("Quinn (code-reviewer) reviewed it.", tmp_path / "d.md")
+    assert len(findings) == 1
+    assert "ROSTER-UNKNOWN" in findings[0] and "Quinn" in findings[0] and "Ravi" in findings[0]
+
+
+def test_roster_role_mismatch_flagged(tmp_path):
+    # A real roster name in the wrong role: Ravi is the code-reviewer, not the TM-SME.
+    findings = check_roster("Ravi (tm-sme) advised on typology.", tmp_path / "d.md")
+    assert len(findings) == 1
+    assert "ROSTER-ROLE-MISMATCH" in findings[0] and "Hassan" in findings[0]
+
+
+def test_roster_correct_attributions_pass(tmp_path):
+    text = "Ravi (code-reviewer), Layla (compliance-reviewer), Hassan (tm-sme), Amara (BA), Morgan (PM)."
+    assert check_roster(text, tmp_path / "d.md") == []
+
+
+def test_roster_ignores_non_team_parentheticals(tmp_path):
+    # Stakeholders / tools / headings with a parenthetical that is not a team role never trip.
+    text = "Jordan (sponsor) confirmed. Sam (product owner) noted. Output (final) delivered."
+    assert check_roster(text, tmp_path / "d.md") == []
+
+
+def test_roster_deduplicates(tmp_path):
+    text = "Quinn (code-reviewer) did X. Later, Quinn (code-reviewer) did Y."
+    assert len(check_roster(text, tmp_path / "d.md")) == 1
+
+
+def test_roster_check_runs_inside_check(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md", "Quinn (compliance-reviewer) signed off.")
+    _touch(art / "review-pass-1.html")
+    _index(art, status=STATUS_OPEN, listed=["review-pass-1.md"])
+    codes = "".join(check(art))
+    assert "ROSTER-UNKNOWN" in codes
 
 
 # --- codebase-map hygiene (ADR-003) ------------------------------------------------------

@@ -3,6 +3,32 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.16.6] - 2026-07-23 - the gate is a fix-list, not a report
+
+User-reported: a delivery report's self-audit handed the user eight "documentation-standards
+failures" - and six were **auto-fixable defects in the team's own output** (a missing `.md`
+sibling, fabricated reviewer names - "Chidi (code-reviewer)", "Priya (compliance-reviewer)",
+Ravi mislabelled TM-SME - a missing interim banner, a non-portable source path, an understated
+source count). The point: these are checks on the team's OWN output, so there is "no point
+telling the user and not self-correcting". The other two (a rationale contradicted by the
+evidence email; a sign-off on verbal-only authority) were correct to pause on.
+
+### Fixed
+- **The DoD gate / pre-delivery critique is now a fix-list, not a report** (DoD header;
+  operating-guide Outcome discipline 7; `/engage` close step). Two tiers: **auto-fix and re-run**
+  the mechanical defects (missing render, off-roster/wrong-role persona name, "final" asserted
+  while open, non-portable source path, incomplete source index, missing evidence tag) - never
+  hand them to the user; **escalate via the question tool** only what needs a human (a rationale
+  contradicted by the evidence, a sign-off on unverifiable authority, a scope call).
+- **Roster gate** in `check_artifacts`: `ROSTER-UNKNOWN` (a persona not on the team) and
+  `ROSTER-ROLE-MISMATCH` (a real name in the wrong role) - so the fabricated-reviewer auto-fix is
+  reliable. Fires only on `Name (team-role)` attributions, so a stakeholder like `Aymen (sponsor)`
+  never trips it. A docs-consistency test pins the script's roster to the operating guide.
+
+### Added
+- Golden case `process-gate-selfcorrect` (33rd): given a mixed gate result, the team auto-fixes
+  the four mechanical items and asks the user about the one evidence contradiction.
+
 ## [0.16.5] - 2026-07-23 - the codebase map is a map, not a diary
 
 User-reported: the codebase map a review engagement produced "wasn't a code map - it was a

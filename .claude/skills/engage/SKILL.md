@@ -417,9 +417,25 @@ is the user's act at their own pace; when they later say "mark X verified", upda
 overlay register with today's `verified_on` (the three checks are in the register header).
 Never record verified without that explicit user statement; never present to-verify as a
 failure - it is the honest state. Before closing, run
-the mechanical DoD gate - `<python> -m scripts.check_artifacts` -
-which verifies every `.md` has its rendered `.html` sibling and the summary email exists;
-fix anything it flags (it's the one DoD check that's a command, not a claim).
+the mechanical DoD gate - `<python> -m scripts.check_artifacts`.
+
+**Treat the gate output as a FIX-LIST, not a report - these are checks on the team's OWN
+output.** Two tiers (DoD "the gate is a fix-list"):
+- **AUTO-FIX and re-run, never hand to the user:** `MISSING-HTML` → render it · `ROSTER-UNKNOWN`
+  / `ROSTER-ROLE-MISMATCH` → correct the persona to the canonical roster (a specialist name is
+  never invented; the role is the anchor) · `MISSING-INDEX`/`STALE-INDEX`/`INDEX-NO-STATUS` →
+  fix the living index · a missing interim banner or a "final/v1.0" asserted while still open →
+  set the correct state · a non-portable absolute source path → relativise or mark external · an
+  incomplete/miscounted source index or a missing per-finding evidence tag → complete it.
+  Re-run `check_artifacts` until only judgement items remain; note auto-corrections in one line.
+- **ESCALATE via the question tool (do NOT self-fix):** a rationale contradicted by the evidence
+  ("the email says X but the artifact says Y"), a closure/sign-off on authority you cannot verify
+  (verbal only, no written authority), a scope/acceptance call. Pause and ask what to do - these
+  are real decisions, not defects. (A `🔴`/`FINAL-BEFORE-CLOSE`/`SUMMARY-BEFORE-CLOSE` is
+  auto-fix; an evidence contradiction is escalate.)
+
+Never deliver a self-correctable defect as a reported "documentation-standards failure" - fixing
+it silently is the job (it's the one DoD check that's a command, not a claim).
 
 **6a. Update the codebase map at close (ADR-003 - a DoD gate).** Before the engagement
 closes, **update the working project's codebase map** (`docs/codebase-map.md`; create it from
