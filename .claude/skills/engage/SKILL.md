@@ -423,10 +423,19 @@ fix anything it flags (it's the one DoD check that's a command, not a claim).
 
 **6a. Update the codebase map at close (ADR-003 - a DoD gate).** Before the engagement
 closes, **update the working project's codebase map** (`docs/codebase-map.md`; create it from
-`docs/templates/codebase-map.md` on a first engagement): **add** what this engagement learned
-(architecture facts, decisions, quirks - with 📊/🧠 tags, as-of dates and fresh SHA anchors),
-**correct or deprecate** anything found wrong or stale (to the Deprecated section, dated,
-with a reason - never silently), and append the engagement-history row. **You write it -
+`docs/templates/codebase-map.md` on a first engagement): **add** the **durable architecture**
+this engagement taught you about the code - how it is built, its load-bearing decisions, its
+quirks and sharp edges (with 📊/🧠 tags, as-of dates and fresh SHA anchors), **correct or
+deprecate** anything found wrong or stale (to the Deprecated section, dated, with a reason -
+never silently), and append the engagement-history row. **The map is a map of the CODE, not a
+log of what the team did** - a map entry is a fact that stays true after this engagement's
+findings are fixed. Do **not** write findings, severities, review dispositions
+("reported/open/fixed"), or a "what we did this time" summary into the entries - that is
+engagement activity: it belongs in the review artifact and the one-line §3 history row, never
+in the map entries. (Reviews/audits especially: the output is findings, so capture the
+*architecture you learned by reading the code*, not a findings recap. A live failure produced
+a map that was a summary of testing activity instead of a code map - the template §2 has the
+✅/❌ contrast.) **You write it -
 subagents only recommend entries in their reports**; persist your own synthesis, never
 verbatim text from reviewed code, and never data values, secrets, PII or MNPI (§5). Keep it
 under ~200 lines - link to artifacts for detail. `check_artifacts` (step 6) validates its

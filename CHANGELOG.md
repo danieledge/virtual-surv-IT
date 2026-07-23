@@ -3,6 +3,33 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.16.5] - 2026-07-23 - the codebase map is a map, not a diary
+
+User-reported: the codebase map a review engagement produced "wasn't a code map - it was a
+summary of some of the things done in recent testing". The map is meant to be the working
+project's **durable memory of the code** (ADR-003), read at the next engagement's open - but
+for a review/audit the whole output is findings, so the model poured findings/activity into
+the map entries, which then go stale the moment the findings are fixed.
+
+### Fixed
+- **Codebase-map entries are durable architecture, not an activity log.** Template §2 now draws
+  the line with a ✅/❌ contrast (✅ "thresholds are hardcoded in `rules.py:22`" - a fact · ❌ "we
+  reviewed the thresholds and reported a 🟠 this engagement" - activity); `/engage` step 6a and
+  the operating-guide memory rule repeat it; reviews/audits get an explicit steer to capture
+  *the architecture learned by reading the code*, not a findings recap. Findings/severities/
+  dispositions belong in the review artifact and the one-line history row, never the entries.
+- Golden case `process-codebase-map-architecture` (32nd) pins it: closing a review, the map
+  entries describe how the code is built and keep engagement activity out.
+
+### Added
+- **ADR-004 (proposed): a session-end capture backstop.** Designs a `SessionEnd`/`Stop` hook
+  that, when a session ends without a clean close, prompts to capture learnings into the right
+  place (codebase map / a lessons-candidate file) as **proposals** - never auto-editing the
+  shipped, lean, versioned `CLAUDE.md`. Documents the strict overlap with this release: the
+  content fix defines *what* good capture is, the hook (later, on sign-off) guarantees *when* it
+  happens - and a hook without the content fix would only capture more activity-summaries.
+  Proposed only; not wired into `hooks.json`.
+
 ## [0.16.4] - 2026-07-23 - `/engage` opening fixes
 
 Two user-reported bugs opening `/engage` in a fresh, empty project (installed-plugin mode).
