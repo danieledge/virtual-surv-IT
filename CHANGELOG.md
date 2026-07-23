@@ -3,6 +3,37 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.16.7] - 2026-07-23 - gate hardening (adversarial review)
+
+A comprehensive adversarial review of `check_artifacts.py` (the mechanical DoD gate) found
+several checks that gave wrong verdicts on realistic input - two of them fail-*unsafe*. All
+are fixed here, each pinned by a regression test using the exact reproduced input.
+
+### Fixed
+- **CRITICAL - a non-closed engagement could read as "closed".** `_index_status` matched the
+  word "closed" as a bare substring, so `"not closed"`, `"blocked, cannot be closed until
+  sign-off"`, and a legend line listing all three status emojis all returned **closed** -
+  silently disabling the `FINAL-BEFORE-CLOSE` / `SUMMARY-BEFORE-CLOSE` guards (the exact
+  interim-as-final failure the gate exists to stop). Now fail-safe: a line with more than one
+  status emoji is a legend (ignored), blocked/open resolve before closed, and a negated/
+  qualified "closed" does not count.
+- **STALE-INDEX substring false-negative.** `f.name not in index_text` treated `report.md` as
+  listed when only `final-report.md` appeared. Now matches whole filename tokens.
+- **STALE-INDEX link false-positive.** A valid `[Spec](spec.md#requirements)` or
+  `[Spec](spec.md "title")` was flagged as dangling. The `#fragment` and `"title"` are now
+  stripped before the existence check.
+- **Roster false positives (0.16.6 regression).** The short-form aliases collided with real
+  content - `"Airflow (orchestrator)"`, `"Independent (QA)"`, `"Second (QA) cycle"`,
+  `"Aisha (BA) from the client"` all false-alarmed and would have driven a wrong auto-rename.
+  The check now requires a **full hyphenated team role slug** (short forms `qa`/`ba`/`pm`/
+  `orchestrator` dropped); the real fabrication (`"Chidi (code-reviewer)"`) is still caught.
+  `ROSTER-UNKNOWN` is now verify-then-fix (a genuine external person keeps their name).
+- **FINDING-NO-IMPACT counted globally.** One finding block with two impact lines masked
+  another with none; the check is now per-block.
+- **Unreadable status left close-only artifacts ungated.** A `None` (unparseable) status is
+  now treated as not-closed for the close-only checks, so a delivery report can't slip through
+  on a status the gate couldn't read.
+
 ## [0.16.6] - 2026-07-23 - the gate is a fix-list, not a report
 
 User-reported: a delivery report's self-audit handed the user eight "documentation-standards

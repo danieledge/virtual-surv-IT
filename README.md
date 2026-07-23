@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.16.6](https://img.shields.io/badge/version-0.16.6-blue)
+![Version 0.16.7](https://img.shields.io/badge/version-0.16.7-blue)
 ![Tests 220+ passing](https://img.shields.io/badge/tests-220%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -182,6 +182,14 @@ domain and the harness (dormancy, gates, segregation, evidence, evals) carries o
 
 <details>
 <summary>✨ <b>What's new in 0.16 / 0.15</b>: the engagement-lifecycle release (every engagement has a visible state (in progress / blocked / closed), carried by a living START-HERE index; interim work can never masquerade as a delivery) · the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA, each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+
+**0.16.7** - **gate hardening.** A comprehensive adversarial review of the mechanical DoD gate
+(`check_artifacts.py`) found checks that gave wrong verdicts on realistic input - two fail-unsafe.
+Fixed, each with a regression test: a non-closed engagement could read as "closed" (`"not
+closed"`, a status legend line); STALE-INDEX substring false-negatives and `#fragment`/`"title"`
+false-positives; the 0.16.6 roster check false-alarming on `"Airflow (orchestrator)"` /
+`"Independent (QA)"`; a global (not per-block) impact count; and an unreadable status leaving
+close-only artifacts ungated.
 
 **0.16.6** - **the gate is a fix-list, not a report.** User-reported: a delivery report's
 self-audit handed the user eight "documentation-standards failures" - six of them auto-fixable

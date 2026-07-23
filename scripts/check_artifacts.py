@@ -103,31 +103,15 @@ _ROSTER = {
     "pip": "review-scorer",
 }
 _ROLE_TO_NAME = {slug: name for name, slug in _ROSTER.items()}
-# Short forms an artifact might use in a `Name (role)` attribution, mapped to the canonical slug.
-# Deliberately conservative - a bare "sme" is ambiguous (three SMEs) and is NOT matched.
-_ROLE_ALIASES = {
-    "pm": "pm",
-    "project-manager": "pm",
-    "orchestrator": "pm",
-    "ba": "business-analyst",
-    "qa": "qa-engineer",
-    "qa-engineer": "qa-engineer",
-    "code-reviewer": "code-reviewer",
-    "compliance-reviewer": "compliance-reviewer",
-    "performance-reviewer": "performance-reviewer",
-    "data-quality-reviewer": "data-quality-reviewer",
-    "model-validator": "model-validator",
-    "tm-sme": "tm-sme",
-    "trade-surveillance-sme": "trade-surveillance-sme",
-    "comms-surveillance-sme": "comms-surveillance-sme",
-    "rules-developer": "rules-developer",
-    "data-analyst": "data-analyst",
-    "tuning-analyst": "tuning-analyst",
-    "ml-engineer": "ml-engineer",
-    "platform-engineer": "platform-engineer",
-    "business-analyst": "business-analyst",
-    "review-scorer": "review-scorer",
-}
+# A `Name (role)` attribution is only treated as a team-persona claim when the parenthetical is
+# a FULL, hyphenated team role slug. Short forms (`qa`, `ba`, `orchestrator`, `pm`) are
+# DELIBERATELY excluded: they collide with real content - "Airflow (orchestrator)",
+# "Independent (QA)", "Second (QA) cycle", "Aisha (BA) from the client" - and would both
+# false-alarm and drive a wrong auto-rename (2026-07-23 review). The one live failure used full
+# slugs ("Chidi (code-reviewer)"), so full-slug matching still catches the real thing. `project-
+# manager` is kept (unambiguous); a bare `sme` is ambiguous (three SMEs) and is not matched.
+_ROLE_ALIASES = {slug: slug for slug in _ROSTER.values() if slug != "pm"}
+_ROLE_ALIASES["project-manager"] = "pm"
 # Persona attribution pattern: "Name (role)". Name is a single capitalised word.
 _PERSONA_RE = re.compile(r"\b([A-Z][a-z]{2,})\s*\(([A-Za-z][A-Za-z /_-]{1,40})\)")
 
@@ -160,7 +144,9 @@ def check_roster(text: str, where: Path) -> list[str]:
             findings.append(
                 f"ROSTER-UNKNOWN: {where} attributes work to '{m.group(1)} ({role_raw})' - "
                 f"{m.group(1)} is not on the team; {role} is {expected.capitalize()} "
-                "(auto-fix: replace with the canonical persona, never invent a specialist)"
+                "(verify-then-fix: if a fabricated specialist, replace with the canonical "
+                "persona; if a genuine external person, keep the name and mark them external - "
+                "never rename a real external to a team member)"
             )
     return findings
 
@@ -172,32 +158,51 @@ def check_roster(text: str, where: Path) -> list[str]:
 # final-sounding name was read as the delivery - with QA never run. The status makes
 # "not done" visible; the close-only rules below stop interim work masquerading as final.
 _STATUS_LINE_RE = re.compile(r"(?im)^.*\bstatus\b.*$")
+_STATUS_EMOJI = {"✅": "closed", "⛔": "blocked", "⏳": "open"}
 # Local link targets in the index ([text](file.md)) - no scheme, no pure-anchor links.
 _LOCAL_LINK_RE = re.compile(r"\]\(([^)#][^)]*)\)")
 # Files that may only exist once the engagement is closed.
 _CLOSE_ONLY_MD_RE = re.compile(r"(?i)^(delivery-report.*|final-.*)\.md$")
+# Filename-shaped tokens ("review-pass-1.md") - used for whole-token index-listing checks so a
+# short name is not treated as listed just because it is a substring of a longer listed name.
+_FILENAME_TOKEN_RE = re.compile(r"[\w.\-]+\.[A-Za-z0-9]+")
+
+
+def _closed_is_negated(lowered: str) -> bool:
+    """True if every 'closed' on the line is negated/qualified ('not', 'cannot be', 'to be')."""
+    for m in re.finditer(r"\bclosed\b", lowered):
+        pre = lowered[max(0, m.start() - 30) : m.start()]
+        if not re.search(r"\b(not|never|cannot|can|to|before|once|when|until|isn|aren)\b", pre):
+            return False  # at least one unqualified 'closed'
+    return True
 
 
 def _index_status(text: str) -> str | None:
-    """Read the engagement status from START-HERE text: 'open' | 'blocked' | 'closed'.
+    """Read the engagement status from START-HERE: 'open' | 'blocked' | 'closed', or None.
 
-    Emoji first (the template's canonical form), then words, scanning only lines that
-    mention "status" so prose elsewhere can't masquerade as state. None = no status found.
+    Fail-SAFE by construction (a wrong 'closed' silently disables the close-only guards, which
+    is the exact failure the gate exists to stop):
+    - A status line carrying MORE THAN ONE distinct status emoji is a legend/key, not a state -
+      it is skipped, not read as closed.
+    - Exactly one emoji -> that state (the template's canonical form).
+    - Word fallback (no emoji): blocked/open are resolved BEFORE closed (not-done wins on
+      ambiguity), and a negated/qualified 'closed' ('not closed', 'cannot be closed') does not
+      count. Only lines that mention 'status' are considered, so prose elsewhere can't pose as
+      state.
     """
     for line in _STATUS_LINE_RE.findall(text):
-        if "✅" in line:
-            return "closed"
-        if "⛔" in line:
-            return "blocked"
-        if "⏳" in line:
-            return "open"
+        emojis = {e for e in _STATUS_EMOJI if e in line}
+        if len(emojis) > 1:
+            continue  # a legend line lists all three symbols - not the engagement's state
+        if len(emojis) == 1:
+            return _STATUS_EMOJI[next(iter(emojis))]
         lowered = line.lower()
-        if re.search(r"\bclosed\b", lowered):
-            return "closed"
         if re.search(r"\bblocked\b", lowered):
             return "blocked"
         if re.search(r"\bin progress\b|\bopen\b", lowered):
             return "open"
+        if re.search(r"\bclosed\b", lowered) and not _closed_is_negated(lowered):
+            return "closed"
     return None
 
 
@@ -320,12 +325,17 @@ def check(artifacts_dir: Path) -> list[str]:
                 f"{md})"
             )
         text = md.read_text(encoding="utf-8", errors="replace")
-        heads = len(_FINDING_HEAD_RE.findall(text))
-        impacts = len(_IMPACT_LINE_RE.findall(text))
-        if heads and impacts < heads:
+        # Per-BLOCK impact check: split the file at each `### ` header and require each block
+        # that opens with a 🔴/🟠 finding head to carry its own impact line. A global count let
+        # one block with two impact lines mask another with none (2026-07-23 review).
+        blocks = re.split(r"(?m)^(?=###\s)", text)
+        without_impact = sum(
+            1 for b in blocks if _FINDING_HEAD_RE.match(b) and not _IMPACT_LINE_RE.search(b)
+        )
+        if without_impact:
             findings.append(
-                f"FINDING-NO-IMPACT: {md} has {heads} Critical/Warning finding block(s) but "
-                f"only {impacts} '**Impact if unaddressed:**' line(s) - every finding must "
+                f"FINDING-NO-IMPACT: {md} has {without_impact} Critical/Warning finding "
+                "block(s) with no '**Impact if unaddressed:**' line - every finding must "
                 "state its impact (docs/review/output-format.md)"
             )
         findings.extend(check_roster(text, md))
@@ -384,16 +394,23 @@ def check(artifacts_dir: Path) -> list[str]:
                 if f.is_file() and f.suffix.lower() in _CODE_EXTS
             ]
         )
+        # Match filenames as whole tokens, not raw substrings - else a short name (`report.md`)
+        # is treated as listed just because a longer listed name (`final-report.md`) contains
+        # it (2026-07-23 review).
+        listed_names = set(_FILENAME_TOKEN_RE.findall(index_text))
         for f in listable:
-            if f.name not in index_text:
+            if f.name not in listed_names:
                 findings.append(
                     f"STALE-INDEX: {f.name} exists in {artifacts_dir} but is not listed in "
                     "START-HERE.md - the index is updated with every artifact write, "
                     "nothing in the folder goes unlisted"
                 )
         for target in _LOCAL_LINK_RE.findall(index_text):
-            target = target.strip()
-            if "://" in target or target.startswith("mailto:"):
+            # Strip a Markdown link title (`file.md "the spec"`) and a #fragment before the
+            # existence check - both are valid links to an existing file (2026-07-23 review).
+            target = re.sub(r'\s+"[^"]*"$', "", target.strip())
+            target = target.split("#", 1)[0].strip()
+            if not target or "://" in target or target.startswith("mailto:"):
                 continue
             if not (start_here.parent / target).exists():
                 findings.append(
@@ -402,24 +419,26 @@ def check(artifacts_dir: Path) -> list[str]:
                 )
 
     # Close-only artifacts: the delivery report and the summary email SIGNAL a close, so
-    # while the index says the engagement is still open/blocked they must not exist yet -
-    # an interim pack carrying them is how work-in-progress gets read as done.
+    # while the engagement is not yet closed they must not exist. An index with an UNREADABLE
+    # status (None) is treated as NOT closed here too - fail-safe, so a delivery report can't
+    # slip through on a status the gate couldn't parse (2026-07-23 review).
     summaries = sorted(artifacts_dir.rglob("engagement-summary-*.txt"))
-    if status in ("open", "blocked"):
+    not_closed = status in ("open", "blocked") or (start_here is not None and status is None)
+    if not_closed:
+        state = status or "not readable"
         for md in non_index_md:
             if _CLOSE_ONLY_MD_RE.match(md.name):
                 findings.append(
-                    f"FINAL-BEFORE-CLOSE: {md.name} exists but START-HERE.md says the "
-                    f"engagement is still {status} - the delivery report is written at "
-                    "close only; interim output takes a pass-scoped name "
-                    "(review-pass-N / qa-cycle-N / interim-*)"
+                    f"FINAL-BEFORE-CLOSE: {md.name} exists but START-HERE.md status is "
+                    f"'{state}', not closed - the delivery report is written at close only; "
+                    "interim output takes a pass-scoped name (review-pass-N / qa-cycle-N / "
+                    "interim-*)"
                 )
         if summaries:
             findings.append(
                 f"SUMMARY-BEFORE-CLOSE: {len(summaries)} engagement-summary-*.txt present "
-                f"but START-HERE.md says the engagement is still {status} - the summary "
-                "email is the closing artifact; a blocked engagement ends its turn stating "
-                "what is outstanding instead"
+                f"but START-HERE.md status is '{state}', not closed - the summary email is the "
+                "closing artifact; a not-yet-closed engagement states what is outstanding instead"
             )
     elif status == "closed" or start_here is None:
         # Closed - or legacy (no index at all): the closing email is required once there
