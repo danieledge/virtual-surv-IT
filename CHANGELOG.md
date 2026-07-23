@@ -3,6 +3,63 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.16.7] - 2026-07-23 - gate hardening (adversarial review)
+
+A comprehensive adversarial review of `check_artifacts.py` (the mechanical DoD gate) found
+several checks that gave wrong verdicts on realistic input - two of them fail-*unsafe*. All
+are fixed here, each pinned by a regression test using the exact reproduced input.
+
+### Fixed
+- **CRITICAL - a non-closed engagement could read as "closed".** `_index_status` matched the
+  word "closed" as a bare substring, so `"not closed"`, `"blocked, cannot be closed until
+  sign-off"`, and a legend line listing all three status emojis all returned **closed** -
+  silently disabling the `FINAL-BEFORE-CLOSE` / `SUMMARY-BEFORE-CLOSE` guards (the exact
+  interim-as-final failure the gate exists to stop). Now fail-safe: a line with more than one
+  status emoji is a legend (ignored), blocked/open resolve before closed, and a negated/
+  qualified "closed" does not count.
+- **STALE-INDEX substring false-negative.** `f.name not in index_text` treated `report.md` as
+  listed when only `final-report.md` appeared. Now matches whole filename tokens.
+- **STALE-INDEX link false-positive.** A valid `[Spec](spec.md#requirements)` or
+  `[Spec](spec.md "title")` was flagged as dangling. The `#fragment` and `"title"` are now
+  stripped before the existence check.
+- **Roster false positives (0.16.6 regression).** The short-form aliases collided with real
+  content - `"Airflow (orchestrator)"`, `"Independent (QA)"`, `"Second (QA) cycle"`,
+  `"Aisha (BA) from the client"` all false-alarmed and would have driven a wrong auto-rename.
+  The check now requires a **full hyphenated team role slug** (short forms `qa`/`ba`/`pm`/
+  `orchestrator` dropped); the real fabrication (`"Chidi (code-reviewer)"`) is still caught.
+  `ROSTER-UNKNOWN` is now verify-then-fix (a genuine external person keeps their name).
+- **FINDING-NO-IMPACT counted globally.** One finding block with two impact lines masked
+  another with none; the check is now per-block.
+- **Unreadable status left close-only artifacts ungated.** A `None` (unparseable) status is
+  now treated as not-closed for the close-only checks, so a delivery report can't slip through
+  on a status the gate couldn't read.
+
+## [0.16.6] - 2026-07-23 - the gate is a fix-list, not a report
+
+User-reported: a delivery report's self-audit handed the user eight "documentation-standards
+failures" - and six were **auto-fixable defects in the team's own output** (a missing `.md`
+sibling, fabricated reviewer names - "Chidi (code-reviewer)", "Priya (compliance-reviewer)",
+Ravi mislabelled TM-SME - a missing interim banner, a non-portable source path, an understated
+source count). The point: these are checks on the team's OWN output, so there is "no point
+telling the user and not self-correcting". The other two (a rationale contradicted by the
+evidence email; a sign-off on verbal-only authority) were correct to pause on.
+
+### Fixed
+- **The DoD gate / pre-delivery critique is now a fix-list, not a report** (DoD header;
+  operating-guide Outcome discipline 7; `/engage` close step). Two tiers: **auto-fix and re-run**
+  the mechanical defects (missing render, off-roster/wrong-role persona name, "final" asserted
+  while open, non-portable source path, incomplete source index, missing evidence tag) - never
+  hand them to the user; **escalate via the question tool** only what needs a human (a rationale
+  contradicted by the evidence, a sign-off on unverifiable authority, a scope call).
+- **Roster gate** in `check_artifacts`: `ROSTER-UNKNOWN` (a persona not on the team) and
+  `ROSTER-ROLE-MISMATCH` (a real name in the wrong role) - so the fabricated-reviewer auto-fix is
+  reliable. Fires only on `Name (team-role)` attributions, so a stakeholder like `Aymen (sponsor)`
+  never trips it. A docs-consistency test pins the script's roster to the operating guide.
+
+### Added
+- Golden case `process-gate-selfcorrect` (33rd): given a mixed gate result, the team auto-fixes
+  the four mechanical items and asks the user about the one evidence contradiction.
+
 ## [0.16.5] - 2026-07-23 - the codebase map is a map, not a diary
 
 User-reported: the codebase map a review engagement produced "wasn't a code map - it was a
