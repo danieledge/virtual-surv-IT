@@ -41,4 +41,9 @@ apply-guard-fixes.sh
 
 # One-shot wrapper for the human-only steps of the 2026-07-05 audit fix pass
 human-steps.sh
+
+# One-shot human-only wiring for the DoD Stop-hook (0.17.0). The durable artifacts are the
+# committed config edits (.claude/settings.json + hooks/hooks.json) and scripts/dod_stop_gate.py;
+# this apply-script has done its job once those are committed - same convention as apply-guard-*.sh.
+scripts/apply-dod-stop-hook.sh
 docs/executive-brief-draft.html

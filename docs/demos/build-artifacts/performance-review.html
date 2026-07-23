@@ -73,7 +73,7 @@ a { color: #0969da; }
 </tbody>
 </table>
 </blockquote>
-<p><strong>Review basis:</strong> <strong>Static only</strong> (CLAUDE.md §7 - the detector was <strong>not executed</strong>, no profiler run). Every complexity/scaling finding is <strong>🧠 inferred</strong> from code structure; an explicitly coded value is <strong>📊 measured</strong>. Legend: severity 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low/Info; evidence 📊 measured · 🧠 inferred.</p>
+<p><strong>Review basis:</strong> <strong>Static only</strong> (CLAUDE.md §7 - the detector was <strong>not executed</strong>, no profiler run). Every complexity/scaling finding is <strong>🧠 inferred</strong> from code structure; an explicitly coded value read from source is <strong>📄 coded</strong> (a fact, but not a run - never 📊 measured in static mode). Legend: severity 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low/Info; evidence 📄 coded · 📊 measured · 🧠 inferred.</p>
 <hr>
 <h2 id="1-workload-targets">1. Workload &amp; targets</h2>
 <ul>

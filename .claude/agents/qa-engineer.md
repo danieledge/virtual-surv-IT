@@ -20,7 +20,10 @@ When invoked:
 2. **Build & run** - add missing tests (synthetic/masked data only - §5), **run the COMPLETE
    suite - never a subset** - and capture **exact commands, results and counts**
    (passed/failed/skipped). Running tests needs the execution-consent gate (CLAUDE.md §7); if
-   the guard blocks, hand back and ask the user to grant consent (it is human-only).
+   the guard blocks, hand back and ask the user to grant consent (it is human-only). **If consent
+   stays withheld, do not fake a pass:** author the full plan and test code, report the run as
+   **🧠 inferred (written, not executed)**, and flag the delivery for the **static-only DoD path**
+   (`docs/DEFINITION-OF-DONE.md`) - DoD PARTIAL, untested code as residual risk.
 3. **Assess coverage** - what is covered, and crucially **what is NOT** and why; residual
    risk; anything that can only be checked manually.
 4. **Evidence** - produce the QA handover (`docs/templates/qa-handover.md`): execution

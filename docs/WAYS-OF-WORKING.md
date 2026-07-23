@@ -150,11 +150,14 @@ single source; templates copy it verbatim.
 ```
 
 **Shared legends** (the single source - use consistently; don't rely on emoji alone, keep the word):
-- **Evidence basis:** 📊 first-hand evidence · 🧠 *inferred* (reasoned, not first-hand). 📊 takes one
-  of two register-specific words, and they are not interchangeable: **📊 *measured*** for a
-  computed or executed number (code/performance/QA review - an analyser, benchmark or test actually
-  ran) and **📊 *observed*** for something seen directly in the data (analysis/tuning - a metric,
-  sample or query result). Everything else is 🧠 *inferred*.
+- **Evidence basis:** 📊 first-hand evidence · 📄 *coded* (a fact read from the source text) · 🧠
+  *inferred* (reasoned, not first-hand). 📊 takes one of two register-specific words, and they are
+  not interchangeable: **📊 *measured*** for a computed or executed number (code/performance/QA
+  review - an analyser, benchmark or test actually **ran**) and **📊 *observed*** for something seen
+  directly in the data (analysis/tuning - a metric, sample or query result). **📄 *coded*** is the
+  third, distinct basis: an **explicit literal read from source without executing anything** (a
+  `sleep(5)`, a fixed batch size, a declared `LIMIT`/timeout) - a hard fact, but *not* a run, so it
+  must **not** be tagged 📊 *measured* (which asserts execution). Everything else is 🧠 *inferred*.
 - **Severity:** 🔴 Critical · 🟠 High/Warning · 🟡 Medium · 🔵 Low/Style · 🔇 Filtered.
 - **Disposition:** ✅ Fixed/Answered · 🔴 Open · ⏭️ Deferred/Needs-input · ⚖️ Accepted.
 - Every findings-bearing doc ends with a **disposition tally** (✅ _N_ · 🔴 _N_ · ⏭️ _N_ · ⚖️ _N_).

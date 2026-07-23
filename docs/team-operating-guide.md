@@ -28,6 +28,7 @@ Route by **deliverable type**, not habit:
 | ML / AI component (then independent `model-validator`) | `ml-engineer` |
 | Independent testing & QA evidence | `qa-engineer` |
 | Code review · performance review · audit/compliance review | `code-reviewer` · `performance-reviewer` · `compliance-reviewer` |
+| Security audit / threat model (OWASP ASVS / CWE) - `/security-audit` | `code-reviewer` (security lens; no separate SecOps agent by design - see `docs/agent-design.md` §4) |
 | Data-quality / feed-completeness / surveillance-coverage assurance | `data-quality-reviewer` (independent; no Write/Edit - Bash for analysers/diffs, execution-gated per CLAUDE.md §7) |
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
@@ -178,7 +179,11 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    tuning engagement whose later phase implements something runs that phase under
    `/build-solution`'s chain. (Live failure, 2026-07-21: a phase-2 model implementation
    shipped from inside `/analyse-data` with no QA pass - this rule plus the mechanical
-   CODE-NO-QA / CODE-NO-TESTS gate in `check_artifacts` closes that path.)
+   CODE-NO-QA / CODE-NO-TESTS gate in `check_artifacts` closes that path.) **If execution consent
+   is withheld** (§7 gate, human-only), QA cannot run - do not skip it or assert a pass: take the
+   **static-only DoD path** (`docs/DEFINITION-OF-DONE.md`) - QA verdict **🧠**, DoD marked
+   **PARTIAL**, untested code named as residual risk, and the close offers "grant consent → we run
+   the suite → verdict upgrades".
 5. **Show the journey - iteration history is evidence, not noise.** When work loops (QA fail →
    fix → re-test, review → fix → re-review, BA question → SME answer → spec change), the
    documentation must show **each pass explicitly**: the Delivery Report's **iteration log**
@@ -311,10 +316,15 @@ the user informed and in charge, check before anything irreversible.
   set (Delivery Report, RTM, specs); each step's output is the next step's input.
 - **Challenge the agents - the PM is a sceptic, not a relay.** Don't pass findings through verbatim:
   **spot-check, don't re-score** (the scorer already applied the rubric - challenge every Critical,
-  anything regulated, anything whose evidence basis looks thin, and a sample of the rest), downgrade
-  or drop what fails, and verify the evidence basis (📊 observed/measured vs 🧠 inferred - never let
+  anything regulated, anything whose evidence basis looks thin, a sample of the rest, **and a sample
+  of the _filtered_ set** - a real issue scored just under the threshold is a false negative, the
+  costliest miss in a regulated review and the one mechanical scoring can silently make, so don't
+  only audit what was reported), downgrade or drop what fails, **promote anything wrongly filtered**,
+  and verify the evidence basis (📊 observed/measured vs 🧠 inferred - never let
   an inference reach the user as fact; "observed" for something seen directly in data, "measured" for
-  a computed/executed number - see the legend in `docs/WAYS-OF-WORKING.md`). Prefer an adversarial second look over duplicated work.
+  a computed/executed number, **📄 "coded" for an explicit literal read from source with nothing run**
+  (never let a read constant masquerade as 📊 measured) - see the legend in
+  `docs/WAYS-OF-WORKING.md`). Prefer an adversarial second look over duplicated work.
 - **Agents self-verify before returning** - plan, then check output against the brief; state any
   gap rather than hiding it (a flagged gap is cheap, a silent one is a defect). (Anthropic guidance;
   see `docs/agent-design.md`.)

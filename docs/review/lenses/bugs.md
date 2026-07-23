@@ -34,5 +34,5 @@ Avoid nitpicks (those are 🔵 style/form or filtered).
 
 Use the shared format in `docs/review/output-format.md`: per finding a `diff`-style fix +
 "why this works", a confidence score (`docs/code-review-method.md`), and an **evidence basis**
-(📊 measured - e.g. a failing test / explicit value - vs 🧠 inferred from the code). Defer §4/§5
+(📊 measured - e.g. a failing test that ran - · 📄 coded - an explicit value read from source - vs 🧠 inferred from the code). Defer §4/§5
 regulated findings to `compliance-reviewer`. Don't duplicate the output format here.

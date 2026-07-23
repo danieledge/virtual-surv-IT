@@ -42,6 +42,12 @@ Start at 50 and adjust:
 | 70-79 | 🟡 Medium | filter | report |
 | < 70 | - | filter | filter |
 
+> **Audit the filter, not just the report.** A real issue scored *just under* the threshold is a
+> **false negative** - the costliest miss in a regulated review, and the one mechanical scoring can
+> make silently. So the PM (Morgan) samples the **filtered / below-threshold** set as well as the
+> reported findings (operating guide §Challenge): a wrongly-filtered finding is **promoted**, not
+> left in the counts. Regulated exceptions (below) are never filtered in the first place.
+
 ## Evidence basis - measured vs inferred (state it for every claim)
 
 A developer will (rightly) challenge a finding that *sounds* certain but was only reasoned.
@@ -49,7 +55,8 @@ So **every finding states how we know it** - never let an inference read as a me
 
 | Basis | Means | How to cite it |
 |---|---|---|
-| **Measured** 📊 | Observed directly - a profiler run, a benchmark, a test failure, or an **explicit** value in the code (e.g. a literal `sleep(5)`, a hard timeout, `LIMIT 100`). | Quote the number/line: *"`time.sleep(5)` at `worker.py:88` → 5s fixed delay per call"* or *"cProfile: 4.2s in `join()` @ 100k rows"*. |
+| **Measured** 📊 | Observed directly by **running** something - a profiler run, a benchmark, an analyser result, a test failure. | Quote the number: *"cProfile: 4.2s in `join()` @ 100k rows"* or *"bandit B608 at `q.py:30`"*. |
+| **Coded** 📄 | An **explicit literal read from the source** (a `sleep(5)`, a hard timeout, `LIMIT 100`) - a hard fact, but nothing ran, so it is **not** 📊 measured. | Quote the line: *"`time.sleep(5)` at `worker.py:88` → 5s fixed delay per call"*. |
 | **Inferred** 🧠 | Reasoned from the code without executing it - complexity from structure, "this won't scale", likely-null. | Say so and give the reasoning **and the measurement that would confirm it**: *"Inferred O(n²) from the nested scan at `match.py:40`; not benchmarked - confirm with the stack's benchmark harness at 100k rows."* |
 
 Rules:

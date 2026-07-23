@@ -6,7 +6,7 @@
 > |---|---|---|---|
 > | 0.1 | 2026-06-30 | Thabo (performance-reviewer) | Static scalability review of the as-delivered detector |
 
-**Review basis:** **Static only** (CLAUDE.md §7 - the detector was **not executed**, no profiler run). Every complexity/scaling finding is **🧠 inferred** from code structure; an explicitly coded value is **📊 measured**. Legend: severity 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low/Info; evidence 📊 measured · 🧠 inferred.
+**Review basis:** **Static only** (CLAUDE.md §7 - the detector was **not executed**, no profiler run). Every complexity/scaling finding is **🧠 inferred** from code structure; an explicitly coded value read from source is **📄 coded** (a fact, but not a run - never 📊 measured in static mode). Legend: severity 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low/Info; evidence 📄 coded · 📊 measured · 🧠 inferred.
 
 ---
 
