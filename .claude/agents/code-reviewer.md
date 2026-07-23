@@ -88,8 +88,10 @@ When invoked:
    exceptions.** 2-4 constructive points on the author's coding style and what to improve in
    future work (or what's done well, if it's strong), even on a clean pass. **The review is
    incomplete without this heading** - verify it's in the artifact before finishing.
-6. The orchestrator (**Morgan**) then independently challenges and may **downgrade** findings
-   before they reach the user - and confirms the Developer-guidance section is present.
+6. The orchestrator (**Morgan**) then independently challenges and may **downgrade** findings -
+   **and samples the filtered / below-threshold set to promote any false negative**
+   (`docs/code-review-method.md`; a wrongly-filtered real issue is the costliest miss) - before
+   they reach the user, and confirms the Developer-guidance section is present.
 
 **Model tiering:** this agent runs on `opus` because the judgement on findings - correctness,
 security and audit impact in a regulated codebase - is the deep-reasoning work that justifies

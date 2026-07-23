@@ -55,6 +55,15 @@ Run an **evaluator-optimizer loop**:
    the artifact before presenting). Use the standalone clean review artifact by default; fold
    into the consolidated `delivery-report.md` only when audit is part of a larger handover.
 
+6. **Independent read of the consolidated pack (Audit depth - the check on Morgan).** Before close,
+   hand the finished audit artifact / `delivery-report` **itself** to **compliance-reviewer**
+   (structurally independent of the PM - no Write/Edit) for a final read of the *synthesis*, not the
+   code: does the **verdict follow from the findings register**? is any claim in the summary
+   **unsupported by an artifact**? are dispositions, counts and evidence tags (📊/📄/🧠) internally
+   consistent? This is the one pass Morgan cannot reliably do on its **own** output (ungrounded
+   self-review is unreliable - `docs/research-virtual-team.md`); fix or escalate what it flags before
+   ✅. Right-sized: it reads the pack, it does not re-run the review.
+
 Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`<python> -m scripts.render_html`).
 (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
 installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,

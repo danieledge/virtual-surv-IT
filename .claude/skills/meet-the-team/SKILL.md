@@ -20,20 +20,23 @@ e.g. *"Compliance Surveillance team **vX.Y.Z**"* (read the current version from 
 manifest - never hardcode it), so the loaded build is
 visible. If unresolvable, say so rather than guess.)
 
-**🔧 The builders** (they write code, specs and analysis):
+**🔧 The builders** (they write *and edit* code and specs):
 - **Amara** (`business-analyst`) - turns a regulatory or business need into clear, testable requirements
   (elicitation, stakeholders, process maps, UAT, reg-change impact). The "what & why" before code.
 - **Mateo** (`rules-developer`) - writes the actual detection logic (spoofing, layering, AML scenarios…)
   with the tests to prove it.
+- **Mei** (`ml-engineer`) - builds the smarter AI/ML detection when plain rules aren't enough (anomaly
+  detection, NLP for comms).
+- **Kenji** (`platform-engineer`) - builds the plumbing: pipelines, ETL, transformation scripts and
+  infrastructure - cloud, on-prem or wherever it needs to run.
+
+**📈 The analysts & QA** (they quantify and evidence - they write their *own* analysis, scripts and
+tests, but never edit live detection code; findings hand back to a builder):
 - **Theo** (`tuning-analyst`) - calibrates thresholds (and trade scenario parameters, and comms
   lexicons/NLP scores) so alerts catch the abuse without drowning everyone in false positives
   (ATL/BTL testing, segmentation). The one who makes the numbers defensible to a regulator.
 - **Ana** (`data-analyst`) - exploratory analysis, false-positive hunting, data-quality, reconciliation
   and MI/reporting. Answers "what's actually going on in the data?"
-- **Mei** (`ml-engineer`) - builds the smarter AI/ML detection when plain rules aren't enough (anomaly
-  detection, NLP for comms).
-- **Kenji** (`platform-engineer`) - builds the plumbing: pipelines, ETL, transformation scripts and
-  infrastructure - cloud, on-prem or wherever it needs to run.
 - **Linh** (`qa-engineer`) - independently tests the work and evidences it. Doesn't mark its own homework.
 
 **🧠 The advisors** (read-only experts - they guide and sign off, they never quietly change code):

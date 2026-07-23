@@ -39,6 +39,15 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > and lists everything; close-only artifacts don't exist early; a summary `.txt` exists at
 > close). Treat the rest as evidenced claims to spot-check, not guarantees.
 >
+> That same mechanical check also ships as a **warn-first `Stop` hook** (`scripts/dod_stop_gate.py`),
+> wired into **both** tracked hook files - `.claude/settings.json` (repo-as-project) and
+> `hooks/hooks.json` (installed-plugin) - so it is active for every user with no per-user setup. It
+> runs the check **automatically** whenever a turn ends with an engagement still **open**
+> (START-HERE ⏳/⛔) - so "the close never ran, so the gate never ran" (the 2026-07-22 failure) can
+> no longer happen silently. It **nudges once** and does not hard-block (it is a backstop, not a
+> trap); this implements `docs/research-virtual-team.md` refinement #4 ("verification as hooks, not
+> prompts"). The three always-on **safety** guard hooks are separate and unchanged.
+>
 > **Changes to the team itself** (prompts, skills, agent definitions) gate on the eval harness:
 > full pytest (contract + docs-consistency tests) plus a live golden-slice spot check for prompt
 > changes. A change that drops a previously passing golden case does not land.
@@ -89,6 +98,12 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       `docs/review/output-format.md`). Governance extras (control mappings, validation
       opinions, ops/change artifacts) are **opt-in** via the artifact menu - and outputs are
       framed as consumable by audit/model-governance reviewers, never as compliance claims.
+- [ ] **Independent synthesis read (Audit depth)** - for an **Audit-depth** engagement, the
+      consolidated pack (`delivery-report` / audit artifact) was read by an **independent** reviewer
+      (`compliance-reviewer`, *not* the PM who authored the synthesis) for internal consistency,
+      unsupported claims, evidence-tag coherence and whether the verdict follows from the findings
+      register - the one check the author cannot reliably run on its own output (`/audit-review`
+      step 6). Fix or escalate before ✅.
 - [ ] **Performance-reviewed** - where it processes data at volume, `performance-reviewer`
       assessed it against expected volumes. **Static by default** (🧠 inferred from code structure);
       📊 measured profiling evidence only when execution was consented (§7) - the verdict must state
@@ -139,6 +154,27 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       Mechanical hygiene is part of the `python -m scripts.check_artifacts` gate.
 - [ ] **Signed off** - human approval recorded at the gate; nothing touching live systems
       proceeds without it.
+
+## When execution consent is withheld (static-only mode)
+
+The **Tested** and **Independently QA'd** items require *running* code, but execution is **off by
+default** (§7) and only a **human** can grant it (creating `.claude/.exec-consent` or setting
+`CST_ALLOW_EXEC=1` - the model is blocked from writing either, so the intake "yes" is *intent, not
+the grant*). If consent is not granted for an engagement that ships code, those two items **cannot
+be met** - and the gate must say so honestly rather than deadlock or overstate "done":
+
+- `qa-engineer` still **authors** the full test plan and test code, but the run is blocked - the QA
+  verdict is **🧠 inferred (tests written, not executed)**, never a pass.
+- The delivery is marked **DoD: PARTIAL - not independently verified by execution**, with
+  **untested code** named as the top item in **limitations & residual risk**.
+- The engagement may close (✅) as a *static* delivery **only if** this partial state is stated
+  plainly in the START-HERE verdict and the summary email - it may **not** claim "Tested" or
+  "independently QA'd". Close every such engagement by offering the one action that lifts it: the
+  user grants consent, the team runs the complete suite, and the verdict upgrades.
+
+This is the honest way out of the static-only default; it is **not** a licence to skip QA when
+consent **is** available (operating guide §4a - deliverable code ships with tests and an
+independent QA pass, no workflow exempt).
 
 ## Why this exists
 

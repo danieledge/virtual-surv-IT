@@ -131,8 +131,10 @@ an **engagement-summary email** (`.txt` in `artifacts/`, signed as Morgan), and 
   `python -m scripts.render_html` - or, from a plugin install in a foreign project, the bundled
   copy by path (resolution rule: `docs/team-operating-guide.md` §Run mode). Templates in
   `docs/templates/`.
-- **Model tiering (cost):** **opus** for the highest-stakes judgement - the final, unchecked word
-  (`model-validator`, `compliance-reviewer`, `code-reviewer`) and novel ML design where a subtle
+- **Model tiering (cost):** **opus** for the highest-stakes judgement - the last *specialist* word
+  before handover, with no independent domain re-check downstream (`model-validator`,
+  `compliance-reviewer`, `code-reviewer`; the PM challenges their *findings* but does not re-run the
+  review, so the tier buys depth the challenge can't reconstruct) and novel ML design where a subtle
   failure is costly to catch later (`ml-engineer`, itself re-checked by `model-validator`); **sonnet**
   for build + advisory + static review; **haiku** for `review-scorer`. Rationale + conformance
   matrix: `docs/agent-design.md` - keep `model:` and that doc in sync when you retier.

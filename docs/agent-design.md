@@ -30,9 +30,15 @@
    step's output is the next step's input.
 6. **Safety in hooks, not prose.** True guardrails (raw-data block, code-execution gate) are
    **PreToolUse hooks** - hard enforcement the model can't override. Prose rules (CLAUDE.md) carry
-   *quality* guidance only.
+   *quality* guidance only. **Verification joins them:** the mechanical DoD check also runs as a
+   warn-first **Stop** hook (`scripts/dod_stop_gate.py`) so "done" is machine-checked at close, not
+   just prompted (research refinement #4). The three always-on **safety** guards are unchanged - the
+   Stop hook is a separate, non-blocking *verification* backstop, not a fourth safety guard.
 7. **Independent verification.** `model-validator` is independent of `ml-engineer`; `qa-engineer`
-   doesn't mark its own homework; the PM (opus) re-challenges every agent's findings.
+   doesn't mark its own homework; the PM (opus) re-challenges every agent's findings - **and, for
+   Audit-depth deliverables, an independent reviewer (`compliance-reviewer`) reads the PM's own
+   consolidated synthesis**, since the author cannot reliably self-check its own output
+   (`/audit-review` step 6; ungrounded self-review is unreliable - `docs/research-virtual-team.md`).
 
 ## 2. Model-tiering rationale
 
@@ -49,7 +55,7 @@ evidenced and re-checkable → **sonnet**. Purely mechanical → **haiku**.
 | `code-reviewer` | **opus** | Subtle cross-language **security** judgement analysers miss; high blast radius. |
 | `ml-engineer` | **opus** | Novel ML/NLP **design**; subtle failure modes (leakage, overfitting) are cheaper to avoid than to catch and re-do. |
 | `business-analyst` | sonnet | Structured elicitation/spec work; re-checked by SMEs, reviewers and the PM. |
-| `rules-developer` | sonnet | Detection code + tests; independently reviewed (code + compliance) before merge. |
+| `rules-developer` | sonnet | Detection code + tests, built **from an SME-validated spec** and independently reviewed (code + compliance) before merge - two checks up front that `ml-engineer`'s *novel* design lacks (its validation is post-build). **A specific engagement may escalate to opus for genuinely novel/complex scenario logic** where a subtle miss is as costly as a model error; the tier is per-engagement, the default sonnet. |
 | `data-analyst` | sonnet | Evidenced exploratory analysis/MI; figures are checkable. |
 | `tuning-analyst` | sonnet | Threshold calibration backed by **evidence** (ATL/BTL, dry-run) and re-checked by `model-validator`/PM. |
 | `platform-engineer` | sonnet | Well-trodden pipeline/ETL/infra patterns. |

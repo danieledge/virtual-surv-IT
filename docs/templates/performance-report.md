@@ -1,8 +1,9 @@
 # Performance Review Report - <TITLE>
 
 > Produced by `performance-reviewer`. **STATIC-ONLY for now** (CLAUDE.md §7): the team does not
-> execute the reviewed code, so findings are **🧠 inferred** from structure/complexity (or 📊 only
-> for an explicit value *read* in the code) - **not** profiled/benchmarked. The measured columns
+> execute the reviewed code, so findings are **🧠 inferred** from structure/complexity (or **📄
+> *coded*** for an explicit value *read* in the code - a fact, but **not** 📊 measured, which asserts
+> a run) - **not** profiled/benchmarked. The measured columns
 > below apply only if/when execution is re-enabled via the consent flow. Authored in `.md`,
 > rendered to `.html`.
 
@@ -17,7 +18,7 @@
 |---|---|
 | **Scope** | <code / pipeline reviewed> |
 | **Date** | <YYYY-MM-DD> |
-| **Review basis** | Static-only (🧠 inferred) / Profiled (📊 measured) - **must state one** |
+| **Review basis** | Static-only (🧠 inferred / 📄 coded facts) / Profiled (📊 measured) - **must state one** |
 | **Environment / hardware** | <OS, CPU, RAM, runtime version - required if any 📊 measured results are cited; leave blank for static-only> |
 | **Verdict** | <`scales to target (📊 measured)` / `likely scales - pending benchmark (🧠 inferred)` / `will not scale (📊 measured)` / `will not scale (🧠 inferred)`> |
 
@@ -37,32 +38,34 @@ For a static-only review, state: "No profiler run; findings are 🧠 inferred fr
 
 ## 3. Findings (evidence-backed)
 
-**Basis** column is mandatory: **📊 measured** (profiler/benchmark number you ran, or an
-explicit value in the code - cite it) vs **🧠 inferred** (reasoned from structure, not executed
-- name the benchmark that would confirm it). Never present 🧠 as 📊.
+**Basis** column is mandatory: **📄 coded** (an explicit value read from the source - `sleep(5)`,
+a batch size, a `LIMIT` - cite it; a fact, but nothing ran) · **📊 measured** (a profiler/benchmark
+number you actually ran) · **🧠 inferred** (reasoned from structure, not executed - name the
+benchmark that would confirm it). Never present 🧠 as a fact, and never tag a read literal 📊.
 
 | # | Location | Issue | Basis | Evidence (timing / Big-O / profile) | Impact at target volume | Severity | Fix |
 |---|----------|-------|-------|--------------------------------------|-------------------------|----------|-----|
 | 1 | `path:fn` | O(n2) join in hot path | 📊 measured | `cProfile`: 4.2s @ 100k rows; quadratic | ~hours @ 5M | Critical | hash-join / index |
-| 2 | `worker.py:88` | fixed 5s sleep per call | 📊 measured | explicit `time.sleep(5)` in code | 5s x N calls | Warning | event/backoff |
+| 2 | `worker.py:88` | fixed 5s sleep per call | 📄 coded | explicit `time.sleep(5)` in code (read, not run) | 5s x N calls | Warning | event/backoff |
 | 3 | `match.py:40` | nested scan, not benchmarked | 🧠 inferred | O(n2) from structure - confirm with the stack's benchmark harness @ 100k | likely hours @ 5M | Medium | measure, then hash-join |
 
 ## 4. Potential gains summary (the headline a developer wants)
 
 For **each** issue: the current cost, the projected cost after the fix, the **gain**, and -
 crucially - **how that number was derived** (so it's defensible, not a guess). State the basis:
-📊 **measured** (a real before/after benchmark, or an explicit coded value like `sleep(5)`) vs
-🧠 **inferred** (a projection from complexity - give the model, e.g. "O(n2)->O(n): ~Nx at N rows").
+📄 **coded** (an explicit value read from source like `sleep(5)`) · 📊 **measured** (a real
+before/after benchmark you ran) vs 🧠 **inferred** (a projection from complexity - give the model,
+e.g. "O(n2)->O(n): ~Nx at N rows").
 
 | # | Issue | Current (basis) | Projected after fix | Gain | How derived |
 |---|-------|-----------------|---------------------|------|-------------|
 | 1 | O(n2) join | 📊 4.2s @ 100k (cProfile) | ~0.1s @ 100k | ~40x @ 100k; hours->minutes @ 5M | measured baseline + hash-join is O(n); 5M figure extrapolated from the quadratic curve (🧠) |
-| 2 | fixed 5s sleep | 📊 5s x N calls (explicit `sleep(5)`) | ~0s (event-driven) | 5s per call removed | the delay is literal in code - exact, not modelled (📊) |
+| 2 | fixed 5s sleep | 📄 5s x N calls (explicit `sleep(5)`) | ~0s (event-driven) | 5s per call removed | the delay is literal in code - exact, read not run (📄) |
 | 3 | nested scan | 🧠 not benchmarked | - | unknown until measured | inferred O(n2); **run the stack's benchmark harness @ 100k before claiming a number** |
 
 **Total execution time saved (the headline number):** sum the per-issue savings into an
-aggregate at the **target volume** and split it **📊 measured vs 🧠 projected** so the total is
-accurate (don't blend a benchmarked saving with an un-benchmarked guess as if both are measured).
+aggregate at the **target volume** and split it **📄 coded / 📊 measured (facts) vs 🧠 projected** so
+the total is accurate (don't blend a benchmarked or coded saving with an un-benchmarked guess as if all are measured).
 Note any not-yet-measured items excluded from the total.
 
 **Headline:** *"Fixes 1-2 (measured) remove ~Xs/run; fix 3 (projected, pending benchmark) a

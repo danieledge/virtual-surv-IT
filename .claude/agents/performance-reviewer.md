@@ -19,14 +19,18 @@ other directly). Bash is for **read-only static analysis only**.
 > performance **statically** - algorithmic complexity, data structures, query plans (`EXPLAIN`,
 > plan-only - **not** `EXPLAIN ANALYZE`, which runs the query), and **explicit coded costs** you
 > can read (a literal `sleep(5)`, a fixed batch size, a declared timeout, `LIMIT 100`). **All
-> findings are 🧠 inferred** (or 📊 only for an explicit value *read* in the code - never a run).
+> findings are 🧠 inferred** (or 📄 *coded* for an explicit value *read* in the code - which is
+> **not** 📊 *measured*, because nothing ran).
 > Measured profiling (`cProfile`/`py-spy`/`scalene`/`Measure-Command`/`JMH`/`hyperfine`/
 > `pytest-benchmark`) is a future opt-in that requires re-enabling execution via the consent
 > flow; until then, **do not run anything** - say so in tooling coverage.
 
-**State the basis of every claim (📊 measured vs 🧠 inferred).** State provenance plainly:
-- **📊 Measured** - only an **explicit value read in the code** (a literal `sleep(5)`, fixed
-  batch size, declared timeout, `LIMIT 100`). Cite the line. *(No profiler runs in static mode.)*
+**State the basis of every claim (📄 coded · 📊 measured · 🧠 inferred).** State provenance plainly:
+- **📄 Coded** - an **explicit value read in the code** (a literal `sleep(5)`, fixed batch size,
+  declared timeout, `LIMIT 100`). Cite the line. A hard fact from the source, but **nothing ran** -
+  so it is **📄 coded, never 📊 measured** (which asserts a profiler/benchmark actually executed).
+- **📊 Measured** - a profiler/benchmark number that actually **ran**. *Off in static mode* (needs
+  the execution-consent gate, §7); until then **no finding here is 📊 measured**.
 - **🧠 Inferred** - reasoned from structure (e.g. "O(n²) from this nested scan"). Label it, give
   the reasoning, **and name the benchmark that would confirm it** if execution were enabled.
 
@@ -34,13 +38,14 @@ Distinguish *what the code says* (an explicit, coded cost) from *what you derive
 cost). Never upgrade an inference to a fact.
 
 Review checklist (static-only):
-- **Explicit coded time costs (📊 measurable by *reading*, no execution) - hunt these first.**
+- **Explicit coded time costs (📄 *coded* - a fact read from source, no execution) - hunt these first.**
   A literal delay is a hard, quantifiable fact and often the easiest win: `sleep`/`Start-Sleep`/
   `Thread.sleep`/`setTimeout`/`time.sleep`, **fixed waits**, polling at a fixed interval,
   redundant or oversized **timeouts** and **retry back-offs**, blocking `WaitForExit`/`.join()`,
   a hard-coded `LIMIT`/batch size, or a per-iteration delay. **Quantify it from the code**
   (e.g. "`time.sleep(5)` at `x.py:88` → 5s every call; ×N calls/run = …") and flag any that are
-  **unnecessary** - these are 📊 measured (the number is in the source), not inferred.
+  **unnecessary** - these are 📄 *coded* (the number is in the source) - a fact, but not 📊 measured
+  (nothing ran) and not 🧠 inferred.
 - **Algorithmic complexity** - Big-O of hot paths; nested loops over large inputs; accidental
   O(n²); needless re-computation.
 - **Scaling** - does it hold at 10×/100× volume? Memory growth with input size; unbounded
@@ -58,20 +63,20 @@ When invoked:
    §7). Read the hot paths and reason about complexity, data structures, I/O/query shape
    (`EXPLAIN` plan-only), concurrency and memory growth at the target volume; capture explicit
    coded costs (sleeps, batch sizes, timeouts, `LIMIT`s).
-3. Report findings by severity with the **basis** (🧠 inferred from structure, or 📊 only for an
-   explicit value read in the code), impact at target volume, and a concrete remediation. Mark
-   anything that *would need a benchmark to confirm* as 🧠 inferred and name that benchmark.
+3. Report findings by severity with the **basis** (🧠 inferred from structure, or 📄 *coded* for an
+   explicit value read in the code - never 📊 in static mode), impact at target volume, and a concrete
+   remediation. Mark anything that *would need a benchmark to confirm* as 🧠 inferred and name that benchmark.
 
 Output: use `docs/templates/performance-report.md` - workload & targets, findings with
 evidence and severity, before/after **only if a fix was actually profiled under the
 execution-consent gate** (CLAUDE.md §7; off in static mode), and a verdict (will it scale?).
 **Always include the §4 potential-gains summary** - per issue: current cost → projected after
-fix, the **gain**, and **how it was derived** (📊 measured - an explicit coded value, or a
-profiler before/after **only if profiling was run under the consent gate** - vs 🧠 inferred
-projection with the model named). A developer wants the headline "what do I get,
+fix, the **gain**, and **how it was derived** (📄 *coded* - an explicit value read from source; or
+📊 measured - a profiler before/after **only if profiling was run under the consent gate**; vs 🧠
+inferred projection with the model named). A developer wants the headline "what do I get,
 and how do you know" - never present an inferred projection as a measured result. **End with the
 total execution time saved at target volume** (the aggregate headline, e.g. "~Xs → ~Ys per run
-at 5M rows: ~Z saved"), split **measured vs projected** so the total stays accurate. Return a
+at 5M rows: ~Z saved"), split **coded/measured (facts) vs projected (🧠)** so the total stays accurate. Return a
 distilled summary (target under ~30 lines) to the orchestrator - verdict, headline gains and top
 findings; the full report goes to the artifact, not the return message. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (hot paths, volume assumptions,
 query/plan quirks, environment constraints) → the working **project's own memory** (its `CLAUDE.md`);

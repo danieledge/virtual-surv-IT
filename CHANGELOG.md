@@ -3,6 +3,60 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.17.0] - 2026-07-23 - team-hardening (adversarial review of the virtual team)
+
+A planned adversarial review of the *team itself* (16 agents, 22 skills, the operating guide and
+the DoD) surfaced four internal contradictions and six enhancement opportunities. Fixes below. The
+one behavioural prompt-thinning (finding #7) is spec'd but **gated on a golden-slice eval**, not
+applied blind - the eval net can't run under the static-execution gate (itself finding #2 in action).
+
+### Added
+- **📄 *coded* evidence basis** - a third basis alongside 📊 *measured* / 🧠 *inferred*, for an
+  explicit literal read from source **without executing anything** (a `sleep(5)`, a fixed `LIMIT`).
+  Resolves the contradiction where `performance-reviewer` tagged a read constant "📊 measured" while
+  the canonical legend reserves *measured* for a computed/executed number. Threaded through
+  `docs/WAYS-OF-WORKING.md`, `team-operating-guide.md`, `code-review-method.md`,
+  `performance-reviewer.md`, the performance/delivery-report templates and the bugs lens. (finding #1)
+- **Warn-first DoD `Stop`-hook backstop** - `scripts/dod_stop_gate.py` (wired via
+  `scripts/apply-dod-stop-hook.sh`, human-applied per ADR-002 rec 5) runs the mechanical DoD check
+  automatically whenever a turn ends with an engagement still open (START-HERE ⏳/⛔). Nudges
+  **once** (loop-safe via `stop_hook_active`), never hard-blocks, stays silent on dormant/legacy
+  folders - closing the "the close never ran, so the gate never ran" failure class mechanically
+  instead of in prose (implements `docs/research-virtual-team.md` refinement #4). Pinned by
+  `tests/test_dod_stop_gate.py`. A separate *verification* hook, not a fourth safety guard. (finding #6)
+- **Static-only DoD path** - `docs/DEFINITION-OF-DONE.md` now defines "done" when execution consent
+  is withheld (§7, human-only): QA verdict 🧠 (tests written, not run), DoD **PARTIAL**, untested
+  code as top residual risk, close only if stated plainly - never a claimed pass. Cross-ref'd in
+  operating guide §4a and `qa-engineer`. (finding #2)
+- **Independent synthesis read (Audit depth)** - `/audit-review` step 6 plus a DoD gate item: at
+  close, `compliance-reviewer` (independent of the PM) reads the PM's *consolidated pack itself* for
+  internal consistency, unsupported claims and whether the verdict follows the findings register -
+  the one check the author can't run on its own output. Closes the "no check on Morgan" gap. (finding #8)
+
+### Changed
+- **Filtered findings are now audited, not just reported.** Morgan samples the filtered /
+  below-threshold set for **false negatives** (the costliest miss in a regulated review) and
+  promotes anything wrongly filtered - `team-operating-guide.md` §Challenge, `code-review-method.md`,
+  `code-reviewer`. (finding #4)
+- **Opus tiering rationale de-contradicted.** `CLAUDE.md §8` no longer calls the opus reviewers
+  "the final, unchecked word" (the PM explicitly challenges them); reworded to "the last specialist
+  word before handover, with no independent domain re-check", aligned with `agent-design.md §2`. (finding #3)
+- **`meet-the-team` taxonomy fixed.** Ana/Theo/Linh moved out of "builders" into a new
+  "📈 The analysts & QA" group - they write their own analysis/tests but hold no `Edit` and never
+  edit live detection code. (finding #5)
+- **rules-developer / ml-engineer tier asymmetry explained** - `agent-design.md §2` records why
+  detection code is sonnet (SME-validated spec + code/compliance review up front) while novel ML
+  design is opus, and notes a per-engagement escalate-to-opus affordance for novel scenario logic. (finding #9)
+- **Routing table** gains a `/security-audit` owner row (`code-reviewer` security lens; no separate
+  SecOps agent, by design). (finding #10)
+
+### Investigated (deliberately not applied blind)
+- **Subagents DO inherit the project `CLAUDE.md`** (probed empirically - a tool-less subagent quoted
+  a project-instruction rule it was never handed). This unblocks thinning the verbose per-agent
+  restatements of the 📊/🧠 rule (which lives in inherited `CLAUDE.md §6`) to a one-line cite -
+  **specified but gated on a golden-slice `/run-evals`**, since that regression net can't run under
+  the static-execution gate. (finding #7)
+
 ## [0.16.7] - 2026-07-23 - gate hardening (adversarial review)
 
 A comprehensive adversarial review of `check_artifacts.py` (the mechanical DoD gate) found

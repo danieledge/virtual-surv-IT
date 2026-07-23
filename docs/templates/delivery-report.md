@@ -94,8 +94,9 @@ the verdict). If it's strong, say what's done well.
 ## 5. Performance & scalability  *(N/A if it doesn't process data at volume)*
 Workload & target volume; method (profiler used); evidence-backed findings; **scale verdict**.
 
-All findings carry a basis qualifier: **📊 measured** (profiler/benchmark or explicit coded value)
-vs **🧠 inferred** (reasoned from structure - name the benchmark that would confirm it). The
+All findings carry a basis qualifier: **📊 measured** (profiler/benchmark that ran) · **📄 coded**
+(an explicit value read from source - not a run) vs **🧠 inferred** (reasoned from structure - name
+the benchmark that would confirm it). The
 verdict for a static-only review must read "inferred - not profiled" rather than asserting
 scale as measured.
 
