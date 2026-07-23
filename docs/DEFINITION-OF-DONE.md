@@ -4,6 +4,29 @@ A delivery is "done" only when it carries the evidence a real developer, QA revi
 auditor can rely on. The PM checks this gate before handover; `compliance-reviewer` verifies
 it. Apply the items relevant to the deliverable type - not every item fits every task.
 
+> **The gate is a FIX-LIST, not a report.** These checks are on the **team's own output**, so a
+> defect in that output that has a deterministic remedy is the team's to **fix**, not the user's
+> to be told about. Sort every gate/critique finding into two tiers:
+>
+> - **AUTO-FIX (correct it and re-run - never surface as a delivered failure):** a missing
+>   `.md`/`.html` sibling (render it) · an off-roster or wrong-role persona name (correct to the
+>   canonical roster - `ROSTER-UNKNOWN`/`ROSTER-ROLE-MISMATCH`) · a missing interim banner or a
+>   "final/v1.0" asserted while the engagement is still open (set the correct state) · a
+>   non-portable absolute path cited as a source (relativise or mark it external) · an incomplete
+>   or miscounted source index (recount) · a missing per-finding evidence tag where the legend is
+>   defined (add it). Fix, note the correction in one line, move on.
+> - **ESCALATE / ASK (the team cannot resolve it alone - pause and ask via the question tool):**
+>   a rationale contradicted by the evidence ("the email says X but the artifact says Y") · a
+>   closure or sign-off resting on authority the team cannot verify (verbal only, no written
+>   authority on file) · any scope or acceptance judgement. These need a human decision - surface
+>   them clearly; do **not** guess.
+>
+> Handing the user a self-correctable defect (a missing render, a wrong reviewer name) as a
+> "documentation-standards failure" is itself a process failure - it is exactly the kind of thing
+> the team is here to fix silently. (Live lesson 2026-07-23: a delivery report's self-audit listed
+> six auto-fixable defects - a missing `.md` sibling, fabricated reviewer names, a missing interim
+> banner - as failures for the user, instead of correcting them and re-checking.)
+
 > **How these gates are enforced (note).** Most items below are **prompt-enforced and
 > eval-sampled**, not CI-enforced: the PM and `compliance-reviewer` attest them, and the eval
 > harness (`/run-evals`) samples for drift - CI cannot see engagement deliverables because

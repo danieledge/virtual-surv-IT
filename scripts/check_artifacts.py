@@ -76,6 +76,95 @@ _TEST_FILE_RE = re.compile(r"(^test_|_test\.|\.spec\.|^conftest\.py$)", re.I)
 _FINDING_HEAD_RE = re.compile(r"^###\s+[🔴🟠]\s+\S", re.M)
 _IMPACT_LINE_RE = re.compile(r"^\*\*Impact if unaddressed:?\*\*", re.M)
 
+# Roster gate: an artifact must not attribute work to a persona who is not on the team, or to
+# the wrong role. A live delivery report (2026-07-23) invented "Chidi (code-reviewer)" and
+# "Priya (compliance-reviewer)" and called Ravi the TM-SME - fabricated reviewers on a
+# customer-facing document. The canonical roster is name -> role slug; SOURCE OF TRUTH is
+# docs/team-operating-guide.md "Roster & routing" - a docs-consistency test asserts they match.
+# This is an AUTO-FIX class finding: the close step corrects the name to the canonical persona
+# for the stated role and re-checks; it is never a defect to hand to the user.
+_ROSTER = {
+    "morgan": "pm",
+    "amara": "business-analyst",
+    "mateo": "rules-developer",
+    "ana": "data-analyst",
+    "theo": "tuning-analyst",
+    "mei": "ml-engineer",
+    "kenji": "platform-engineer",
+    "linh": "qa-engineer",
+    "hassan": "tm-sme",
+    "camila": "trade-surveillance-sme",
+    "cleo": "comms-surveillance-sme",
+    "viktor": "model-validator",
+    "ravi": "code-reviewer",
+    "thabo": "performance-reviewer",
+    "layla": "compliance-reviewer",
+    "yuki": "data-quality-reviewer",
+    "pip": "review-scorer",
+}
+_ROLE_TO_NAME = {slug: name for name, slug in _ROSTER.items()}
+# Short forms an artifact might use in a `Name (role)` attribution, mapped to the canonical slug.
+# Deliberately conservative - a bare "sme" is ambiguous (three SMEs) and is NOT matched.
+_ROLE_ALIASES = {
+    "pm": "pm",
+    "project-manager": "pm",
+    "orchestrator": "pm",
+    "ba": "business-analyst",
+    "qa": "qa-engineer",
+    "qa-engineer": "qa-engineer",
+    "code-reviewer": "code-reviewer",
+    "compliance-reviewer": "compliance-reviewer",
+    "performance-reviewer": "performance-reviewer",
+    "data-quality-reviewer": "data-quality-reviewer",
+    "model-validator": "model-validator",
+    "tm-sme": "tm-sme",
+    "trade-surveillance-sme": "trade-surveillance-sme",
+    "comms-surveillance-sme": "comms-surveillance-sme",
+    "rules-developer": "rules-developer",
+    "data-analyst": "data-analyst",
+    "tuning-analyst": "tuning-analyst",
+    "ml-engineer": "ml-engineer",
+    "platform-engineer": "platform-engineer",
+    "business-analyst": "business-analyst",
+    "review-scorer": "review-scorer",
+}
+# Persona attribution pattern: "Name (role)". Name is a single capitalised word.
+_PERSONA_RE = re.compile(r"\b([A-Z][a-z]{2,})\s*\(([A-Za-z][A-Za-z /_-]{1,40})\)")
+
+
+def check_roster(text: str, where: Path) -> list[str]:
+    """Flag `Name (role)` attributions whose name is off-roster or in the wrong role.
+
+    Only fires when the parenthetical normalises to a *known team role slug* - a stakeholder
+    like `Aymen (sponsor)` never trips it. AUTO-FIX class: the caller corrects to the canonical
+    persona for the role. De-duplicated per (name, role).
+    """
+    findings: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for m in _PERSONA_RE.finditer(text):
+        name, role_raw = m.group(1).lower(), m.group(2).strip().lower()
+        role = _ROLE_ALIASES.get(re.sub(r"[\s_]+", "-", role_raw))
+        if role is None:
+            continue  # not a team-role attribution (e.g. a stakeholder, a tool, a heading)
+        expected = _ROLE_TO_NAME[role]
+        if name == expected or (name, role) in seen:
+            continue
+        seen.add((name, role))
+        if name in _ROSTER:
+            findings.append(
+                f"ROSTER-ROLE-MISMATCH: {where} attributes '{m.group(1)} ({role_raw})' but "
+                f"{m.group(1)} is the {_ROSTER[name]}; {role} is {expected.capitalize()} "
+                "(auto-fix: correct to the canonical persona for the role)"
+            )
+        else:
+            findings.append(
+                f"ROSTER-UNKNOWN: {where} attributes work to '{m.group(1)} ({role_raw})' - "
+                f"{m.group(1)} is not on the team; {role} is {expected.capitalize()} "
+                "(auto-fix: replace with the canonical persona, never invent a specialist)"
+            )
+    return findings
+
+
 # Engagement-state gate: the START-HERE index is a LIVING document (created at open,
 # updated on every artifact write, finalised at close) and carries the engagement Status.
 # A live failure (2026-07-22) motivated it: an engagement paused on an unanswered
@@ -239,6 +328,7 @@ def check(artifacts_dir: Path) -> list[str]:
                 f"only {impacts} '**Impact if unaddressed:**' line(s) - every finding must "
                 "state its impact (docs/review/output-format.md)"
             )
+        findings.extend(check_roster(text, md))
 
     code_files = [
         f for f in artifacts_dir.rglob("*") if f.is_file() and f.suffix.lower() in _CODE_EXTS
