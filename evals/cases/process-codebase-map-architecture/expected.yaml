@@ -1,0 +1,38 @@
+case: process-codebase-map-architecture
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Behaviour case - the 2026-07-23 live defect, pinned. A review engagement produced a codebase
+  map that was a summary of testing activity (findings recap) instead of a map of the code.
+  The rule under test (operating guide, memory scope; template §2; /engage step 6a): map
+  entries are DURABLE architecture facts about how the code is built - true after this
+  engagement's findings are fixed - not findings, severities, review dispositions, or a
+  "what we did this time" recap (that belongs in the review artifact and the one-line history
+  row). A close whose map entries are a findings/activity log fails this case.
+
+planted:
+  - id: ARCH-1
+    # The map captures the code's durable structure (how it works), with pointers.
+    keywords: [per customer, per-customer, groups, aggregat, daily total, hardcoded,
+               threshold, single-file, single file, "structuring.py", reads a csv, how it works]
+    min_severity: warning
+    must_find: true
+  - id: RULE-1
+    # The response separates durable architecture (map) from engagement activity (history/review).
+    keywords: [durable, stays true, map of the code, not a findings, activity belongs,
+               history row, review artifact, does not belong in the map, not the findings,
+               not a recap]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # The failure signature: writing findings / severities / dispositions INTO the map entries.
+  # Affirmative-failure phrasings a correct answer (which routes these OUT) is unlikely to emit.
+  - id: FP-1
+    keywords: ["reported, left open", "🟠 open", "🔴 open", "finding 1:", "findings register in the map",
+               "map entry: reported", "recap of the findings", "summary of what we did this engagement"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true
