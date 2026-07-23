@@ -1094,6 +1094,23 @@ per-turn `UserPromptSubmit` hook that re-injects a tiny persona+roster anchor **
 team is engaged**, so it survives compaction yet stays free in ordinary sessions). Same root
 cause as the name-drift quirk below.
 
+**First `/engage` of a session can take ~2-3 minutes before the first Morgan message (under
+investigation).** Tester feedback: the **initial** engagement is slow to produce the opening banner;
+later turns are fast. The path is already optimised to a **single** step-0 probe (no probe-per-turn),
+and the tooling probe is cached after first use (`.claude/.tool-availability`, 7-day TTL) - so this
+is a **cold-start** cost that hits once per session: the prompt cache is cold (`docs/agent-design.md`
+§7), the tool probe isn't cached yet, and turn 0 loads a large payload (the ~400-line operating guide
++ codebase-map + CHANGELOG) into the opus orchestrator before it emits a word. **Not yet confirmed**
+is the split between (a) model inference over that cold, large turn-1 context - the likely dominant
+cost, since the probe script itself is only `command -v` checks - and (b) I/O, notably the
+plugin-mode `find` over `~/.claude/plugins/cache` / `marketplaces` (no `-maxdepth`) used to resolve
+the plugin root when the operating guide isn't in the working dir. **How to pin it:** run the step-0
+Bash block alone under `time` - under ~5s implicates model latency; slower implicates the `find`/I/O.
+**Candidate mitigations (not yet applied):** defer the codebase-map + CHANGELOG reads out of turn 0
+(load them lazily when the work needs them, shrinking the cold turn-1 payload), and bound the
+plugin-resolution `find` with `-maxdepth`. Tracked; needs the `time` measurement first so a fix
+targets the real bottleneck rather than guessing.
+
 <details>
 <summary>⚠️ <b>Two display-only quirks</b>: the PM sometimes narrates the wrong teammate name, and some emoji miss their glyph on older Windows + Edge; neither affects what the team does</summary>
 
