@@ -727,12 +727,6 @@ it spends tokens. (This is the regression net Anthropic's multi-agent guidance r
   (9 tests), runs free in CI** (no tokens).
 - **`/run-evals`** runs the live team per case, scores it, adds an **LLM-judge** for the qualitative
   dimensions, and prints a scoreboard, flagging any regression. *(Spends tokens; run at milestones.)*
-
-> From a real run: on the seeded-bug case the `code-reviewer` scored **recall 1.0**, catching both
-> planted criticals and correctly leaving the documented threshold (the false-positive trap) alone.
-> Across the wider baseline set it averaged **~0.89 recall with two cases still failing** (tracked in
-> [`docs/eval-baseline-2026-07-06.md`](docs/eval-baseline-2026-07-06.md)), not a clean sweep.
-
 </details>
 
 <sub>[↑ Back to top](#readme-top)</sub>
