@@ -14,7 +14,13 @@ from __future__ import annotations
 
 import subprocess
 
-from scripts.check_artifacts import check, check_map, find_codebase_map
+from scripts.check_artifacts import (
+    _index_status,
+    check,
+    check_map,
+    check_roster,
+    find_codebase_map,
+)
 
 STATUS_OPEN = "⏳ IN PROGRESS"
 STATUS_BLOCKED = "⛔ BLOCKED - awaiting input"
@@ -302,6 +308,144 @@ def test_test_files_alone_do_not_trigger_gate(tmp_path):
     _touch(art / "notes.html")
     _index(art, listed=["test_something.py", "engagement-summary-x.txt", "notes.md"])
     assert check(art) == []
+
+
+# --- gate-hardening regressions (2026-07-23 adversarial review) ---------------------------
+# Every reproduced-failing input from the review is pinned here so it can't silently return.
+
+
+def test_index_status_negated_closed_is_not_closed():
+    # C1: a negated/qualified 'closed' must not read as closed (fail-unsafe otherwise).
+    assert _index_status("Status: not closed") is None
+    assert _index_status("Status: blocked, cannot be closed until sign-off") == "blocked"
+    assert _index_status("Status: closed to new scope; work still in progress") == "open"
+
+
+def test_index_status_legend_line_is_not_closed():
+    # C2: a line listing all three status symbols is a legend, not a state.
+    assert _index_status("| Status | Legend: ⏳ in progress, ⛔ blocked, ✅ closed |") is None
+    assert _index_status("Status key: ⏳=open ⛔=blocked ✅=closed. Current: ⏳") is None
+
+
+def test_index_status_canonical_forms_still_work():
+    assert _index_status("| **Status** | ✅ CLOSED 2026-07-22 |") == "closed"
+    assert _index_status("| **Status** | ⛔ BLOCKED - awaiting input |") == "blocked"
+    assert _index_status("| **Status** | ⏳ IN PROGRESS |") == "open"
+    assert _index_status("Status: in progress") == "open"
+
+
+def test_stale_index_uses_whole_tokens_not_substrings(tmp_path):
+    # H1: report.md must not count as listed just because final-report.md contains it.
+    art = tmp_path / "artifacts"
+    for stem in ("report", "final-report"):
+        _touch(art / f"{stem}.md")
+        _touch(art / f"{stem}.html")
+    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "START-HERE.md",
+        "# S\n| Status | ✅ CLOSED |\n- final-report.md\n- engagement-summary-x.txt\n",
+    )
+    _touch(art / "START-HERE.html")
+    findings = [f for f in check(art) if "STALE-INDEX" in f and "report.md" in f]
+    assert any("report.md" in f and "final-report" not in f for f in findings)
+
+
+def test_stale_index_ignores_link_fragment_and_title(tmp_path):
+    # M1: [Spec](spec.md#requirements) and [Spec](spec.md "the spec") are valid links.
+    art = tmp_path / "artifacts"
+    _touch(art / "spec.md")
+    _touch(art / "spec.html")
+    _touch(
+        art / "START-HERE.md",
+        "# S\n| Status | ⏳ IN PROGRESS |\n- [Spec](spec.md#requirements)\n"
+        '- [Spec2](spec.md "the spec")\n',
+    )
+    _touch(art / "START-HERE.html")
+    assert not [f for f in check(art) if "STALE-INDEX" in f]
+
+
+def test_finding_impact_checked_per_block(tmp_path):
+    # M2: block B (no impact) is flagged even though block A carries two impact lines.
+    art = tmp_path / "artifacts"
+    body = (
+        "### 🔴 A\n**Impact if unaddressed:** x\n**Impact if unaddressed:** y\n"
+        "### 🟠 B\nno impact line here\n"
+    )
+    _touch(art / "review-pass-1.md", body)
+    _touch(art / "review-pass-1.html")
+    _touch(art / "START-HERE.md", "# S\n| Status | ⏳ IN PROGRESS |\n- review-pass-1.md\n")
+    _touch(art / "START-HERE.html")
+    assert any("FINDING-NO-IMPACT" in f for f in check(art))
+
+
+def test_unreadable_status_still_gates_close_only(tmp_path):
+    # M3: an unreadable status is treated as not-closed, so a delivery report still fails.
+    art = tmp_path / "artifacts"
+    _touch(art / "delivery-report.md")
+    _touch(art / "delivery-report.html")
+    _touch(art / "START-HERE.md", "# S\n| Status | (garbled) |\n- delivery-report.md\n")
+    _touch(art / "START-HERE.html")
+    codes = "".join(check(art))
+    assert "FINAL-BEFORE-CLOSE" in codes and "INDEX-NO-STATUS" in codes
+
+
+def test_roster_ignores_short_form_aliases(tmp_path):
+    # H2: short forms collide with real content - tools, adjectives, client stakeholders.
+    for t in (
+        "Airflow (orchestrator) schedules the ETL.",
+        "An Independent (QA) pass was performed by Linh.",
+        "Second (QA) cycle completed.",
+        "Aisha (BA) from the client confirmed the scope.",
+    ):
+        assert check_roster(t, tmp_path / "d.md") == [], t
+
+
+def test_roster_still_catches_full_slug_fabrication(tmp_path):
+    # H2: the real failure used full slugs - those must still be caught.
+    assert check_roster("Chidi (code-reviewer) reviewed it.", tmp_path / "d.md")
+    assert check_roster("Ravi (tm-sme) advised.", tmp_path / "d.md")
+
+
+# --- roster gate (2026-07-23: fabricated reviewers on a delivery report) ------------------
+# Synthetic names only - never the real reported content.
+
+
+def test_roster_unknown_name_flagged(tmp_path):
+    findings = check_roster("Quinn (code-reviewer) reviewed it.", tmp_path / "d.md")
+    assert len(findings) == 1
+    assert "ROSTER-UNKNOWN" in findings[0] and "Quinn" in findings[0] and "Ravi" in findings[0]
+
+
+def test_roster_role_mismatch_flagged(tmp_path):
+    # A real roster name in the wrong role: Ravi is the code-reviewer, not the TM-SME.
+    findings = check_roster("Ravi (tm-sme) advised on typology.", tmp_path / "d.md")
+    assert len(findings) == 1
+    assert "ROSTER-ROLE-MISMATCH" in findings[0] and "Hassan" in findings[0]
+
+
+def test_roster_correct_attributions_pass(tmp_path):
+    text = "Ravi (code-reviewer), Layla (compliance-reviewer), Hassan (tm-sme), Amara (BA), Morgan (PM)."
+    assert check_roster(text, tmp_path / "d.md") == []
+
+
+def test_roster_ignores_non_team_parentheticals(tmp_path):
+    # Stakeholders / tools / headings with a parenthetical that is not a team role never trip.
+    text = "Jordan (sponsor) confirmed. Sam (product owner) noted. Output (final) delivered."
+    assert check_roster(text, tmp_path / "d.md") == []
+
+
+def test_roster_deduplicates(tmp_path):
+    text = "Quinn (code-reviewer) did X. Later, Quinn (code-reviewer) did Y."
+    assert len(check_roster(text, tmp_path / "d.md")) == 1
+
+
+def test_roster_check_runs_inside_check(tmp_path):
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md", "Quinn (compliance-reviewer) signed off.")
+    _touch(art / "review-pass-1.html")
+    _index(art, status=STATUS_OPEN, listed=["review-pass-1.md"])
+    codes = "".join(check(art))
+    assert "ROSTER-UNKNOWN" in codes
 
 
 # --- codebase-map hygiene (ADR-003) ------------------------------------------------------

@@ -210,6 +210,30 @@ def test_agent_count_references_match_filesystem():
             )
 
 
+def test_roster_gate_matches_operating_guide():
+    """The roster hardcoded in check_artifacts (for ROSTER-UNKNOWN/ROSTER-ROLE-MISMATCH) must
+    match the canonical roster line in the operating guide, so the name->role map can't drift."""
+    from scripts.check_artifacts import _ROSTER
+
+    guide = _read("docs/team-operating-guide.md")
+    # Roster line form: "Amara (`business-analyst`), Mateo (`rules-developer`), ..."
+    pairs = dict(re.findall(r"([A-Z][a-z]+)\s*\(`([a-z0-9-]+)`\)", guide))
+    assert pairs, "operating guide: no `Name (`slug`)` roster pairs found"
+    for name, slug in pairs.items():
+        assert _ROSTER.get(name.lower()) == slug, (
+            f"roster drift: guide says {name} is `{slug}`, check_artifacts._ROSTER says "
+            f"`{_ROSTER.get(name.lower())}`"
+        )
+    # Every non-PM roster entry in the script must appear in the guide (Morgan is the PM, not a
+    # subagent slug, so it is exempt from the guide's `Name (`slug`)` list).
+    guide_names = {n.lower() for n in pairs}
+    script_names = {n for n in _ROSTER if n != "morgan"}
+    assert script_names == guide_names, (
+        f"roster membership drift: only-in-script={sorted(script_names - guide_names)}, "
+        f"only-in-guide={sorted(guide_names - script_names)}"
+    )
+
+
 def test_eval_case_count_references_match_filesystem():
     # The dated eval-baseline-*.md is a point-in-time record - excluded on purpose.
     n = _eval_case_count()
