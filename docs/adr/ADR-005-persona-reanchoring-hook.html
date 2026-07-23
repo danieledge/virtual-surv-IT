@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-005: Persona re-anchoring - a dormancy-aware per-turn hook (proposed)</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-23</span></header>
+<h1 id="adr-005-persona-re-anchoring-a-dormancy-aware-per-turn-hook-proposed">ADR-005: Persona re-anchoring - a dormancy-aware per-turn hook (proposed)</h1>
+<blockquote>
+<p>Architecture Decision Record (Nygard format). One file per significant decision, so the
+<em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
+<p><strong>Document control</strong> · ID <code>ADR-005</code> · Version <code>0.1</code> · Status <code>Proposed</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-23</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-07-23</td>
+<td>persona-decay discussion (user-reported)</td>
+<td>Initial proposal: dormancy-aware UserPromptSubmit re-anchor hook</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Proposed</strong> - design only; NOT wired into <code>hooks.json</code> until human sign-off</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-07-23</td>
+</tr>
+<tr>
+<td><strong>Deciders</strong></td>
+<td>Morgan (orchestrator), human approver</td>
+</tr>
+<tr>
+<td><strong>Traceability</strong></td>
+<td>ADR-004 (session-end capture hook); README "Known issues" (persona decay + name drift); <code>docs/team-operating-guide.md</code> §Voice/Roster; CLAUDE.md §6 (persona), §5/§7 (hook-enforced guards)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="context">Context</h2>
+<p>A user reported (2026-07-23, live) that on a long engagement the <code>/engage</code> persona faded:
+Morgan's voice dropped, responses reverted toward default Claude Code, and concurrent subagents
+showed generic "Agent A/B/C" labels. This is the general form of the existing <strong>name-drift</strong>
+known issue (the PM narrating "Isla"/"Jordan" for a real specialist).</p>
+<p><strong>Root cause.</strong> The persona and soft discipline - the 🎩 voice, the named specialists, the
+question-tool rule, the fix-list gate, the lifecycle discipline - are defined in the <code>/engage</code>
+SKILL.md and the operating guide, which load <strong>once</strong> when the user types <code>/engage</code>. They are
+<strong>never re-asserted</strong>: the plugin is dormant-by-default (<code>disable-model-invocation: true</code>), so
+those instructions live only in the <strong>conversation history</strong>. Distance in a long session, and
+especially Claude Code <strong>context compaction/summarisation</strong>, erode that history, and the model
+drifts back to its default behaviour. A prompt instruction to "stay in persona" cannot fix this -
+it decays for the very same reason.</p>
+<p><strong>What is NOT affected (important).</strong> The hard controls - the raw-data read block, the
+execution-consent gate, the consent-write gate - are enforced by <strong>hooks</strong> (<code>hooks.json</code>),
+independent of the model's persona, so they hold regardless of how faded Morgan is. Only
+<em>presentation</em> and <em>soft, prompt-enforced</em> discipline decay. The critical rails were deliberately
+put in hooks precisely so they survive this.</p>
+<h2 id="decision">Decision</h2>
+<p>Re-assert the persona from <strong>outside</strong> the conversation, every turn, but <strong>only while the team is
+engaged</strong> - via a <strong><code>UserPromptSubmit</code> hook</strong> (<code>reanchor-persona.py</code>):</p>
+<ul>
+<li><strong>Engaged signal (dormancy gate):</strong> reuse existing state - an open engagement is
+  <code>artifacts/START-HERE.md</code> present with status ⏳/⛔ (not ✅ closed). No new marker needed.
+  When there is no open engagement, the hook is a <strong>zero-token no-op</strong>.</li>
+<li><strong>The anchor (tiny):</strong> when engaged, inject ~10-15 lines - "🎩 You are Morgan; mark every turn
+  🎩; roster: Amara=<code>business-analyst</code>, Ravi=<code>code-reviewer</code>, Hassan=<code>tm-sme</code>, … (all 16 +
+  Morgan); standing rules: question-tool, the fix-list gate, lifecycle discipline, data-safety
+  §5; detail in <code>docs/team-operating-guide.md</code>." Re-injected each turn, so it <strong>survives
+  compaction</strong>.</li>
+<li><strong>Source of truth:</strong> the anchor derives from <code>docs/team-operating-guide.md</code> (the roster line +
+  standing rules), or a small dedicated <code>docs/persona-anchor.md</code>, pinned by a docs-consistency
+  test - so it can't drift like every other duplicated fact eventually has.</li>
+</ul>
+<p><strong>Two-for-one:</strong> injecting the full <strong>name↔role roster</strong> each turn also fixes the existing
+name-drift known issue - that low-salience name↔role lookup is exactly what fades today.</p>
+<h2 id="consequences">Consequences</h2>
+<p><strong>Positive:</strong> the persona and soft discipline survive long sessions and compaction; the name-drift
+quirk is fixed as a side effect; the mechanism is invisible (free) in ordinary non-team sessions;
+it reuses the existing hooks infrastructure and the same "hooks re-assert what prompts forget"
+philosophy as ADR-004.</p>
+<p><strong>Negative / risks:</strong>
+- <strong>Per-turn token cost while engaged</strong> (a few hundred tokens/turn). Cheap versus losing the
+  persona, but real - it slightly dents the dormancy-lean posture <em>during</em> an engagement (never
+  when idle). The anchor must stay minimal.
+- <strong>Cross-project blast radius:</strong> a <code>UserPromptSubmit</code> hook fires in <em>every</em> session in <em>every</em>
+  working project the plugin is installed in - the engaged-check must be fast and bulletproof, or
+  it becomes latency/noise everywhere.
+- <strong>Sync risk:</strong> the anchor duplicates roster/rules; without a docs-consistency test binding it to
+  the source, it will drift.</p>
+<p><strong>Rejected alternatives:</strong>
+- <strong>A minimal always-on line in <code>CLAUDE.md</code>.</strong> Cheaper (no hook), but <code>CLAUDE.md</code> is loaded in
+  <em>every</em> session including non-team ones, and is deliberately kept lean (0.8.x); an always-on
+  persona line pollutes ordinary sessions and fights the token budget. It also still rides the
+  conversation/compaction path, so it is less robust than a per-turn re-inject.
+- <strong>Periodic self-re-read</strong> (the model re-reads the operating guide every N turns). Won't fire
+  reliably - the instruction to re-read decays with everything else.</p>
+<h2 id="verification-before-it-lands">Verification (before it lands)</h2>
+<ul>
+<li><strong>Dormancy test:</strong> the hook is a strict no-op with no <code>artifacts/START-HERE.md</code> (or a ✅-closed
+  one) - zero output, negligible latency.</li>
+<li><strong>Compaction-survival check:</strong> a behavioural eval that simulates a long/compacted context and
+  asserts the persona markers and correct specialist names are still present after the re-anchor.</li>
+<li><strong>Sync test:</strong> a docs-consistency test that the anchor's roster/rules match the operating guide.</li>
+<li>Standard rigor for a team-behaviour change: full pytest + a live golden-slice spot check.</li>
+</ul>
+<h2 id="status-next-step">Status / next step</h2>
+<p><strong>Proposed.</strong> Not wired into <code>hooks.json</code>. Implementation (the hook script, the engaged-signal
+check, the anchor content + its source-of-truth file, the dormancy guard, the tests above) awaits
+human sign-off on this ADR.</p>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-005-persona-reanchoring-hook.md &middot; 2026-07-23</div>
+</body>
+</html>
