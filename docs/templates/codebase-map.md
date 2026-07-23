@@ -35,9 +35,30 @@ One short paragraph: purpose, tech stack, entry points, how it is built/run/test
 
 ## 2. Map entries
 
-| # | Area | Entry | Basis | As-of | Anchor |
+> **This is a map of the CODE, not a log of what the team did.** Each entry is a **durable
+> fact about how the codebase is built** - one that will still be true next month, after this
+> engagement's findings are fixed. Architecture, data flow, key decisions, quirks, sharp
+> edges. The test: *would this help a specialist who opens the project cold next time?*
+>
+> **What belongs here** (durable): "parsing is fail-closed - a bad row raises a row-numbered
+> error, no partial output (`parse.py:40`)"; "thresholds are hardcoded, not config-driven
+> (`rules.py:22`)"; "detection groups by (trader, qty, price) then pairs within a 5s window".
+>
+> **What does NOT belong here** (engagement activity - it goes to §3 history + the review
+> artifacts): ✅ *"thresholds are hardcoded in `rules.py:22`"* (a fact) — ❌ *"we reviewed the
+> thresholds and reported a 🟠 finding this engagement"* (activity). Do **not** carry finding
+> IDs, severities, review dispositions ("reported/open/fixed"), or "what we did this time"
+> into an entry. A finding that gets fixed leaves the map; the durable fact it revealed (e.g.
+> "thresholds are config-driven now, since 2026-07-22") stays.
+>
+> **Reviews & audits especially:** the engagement's output is *findings*, so it is tempting to
+> write the map as a findings summary - don't. Capture the **architecture you learned by
+> reading the code** (how it is built, its load-bearing decisions, its sharp edges); the
+> findings live in the review artifact and their one-line trace in §3.
+
+| # | Area | Entry (a durable code fact - NOT a finding or an activity note) | Basis | As-of | Anchor |
 |---|------|-------|-------|-------|--------|
-| 1 | <e.g. detection rules> | <fact, decision or quirk - one or two sentences, with `path/file.py:line` pointers> | 📊 <where seen> / 🧠 <assumption> | <YYYY-MM-DD> | `<sha>` |
+| 1 | <e.g. detection rules> | <how the code is built - fact, decision or quirk in one or two sentences, with `path/file.py:line` pointers; no finding IDs/severities/dispositions> | 📊 <where seen> / 🧠 <assumption> | <YYYY-MM-DD> | `<sha>` |
 
 ## 3. Engagement history
 

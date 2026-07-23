@@ -253,7 +253,13 @@ must be visible **between** gates.
 - **The codebase map is the working project's durable engagement memory** (ADR-003; template
   `docs/templates/codebase-map.md`; default location `docs/codebase-map.md` in the working
   project). Read at every engagement open, then added-to, corrected and deprecated at every
-  close (a DoD gate). **PM-written only** - subagents recommend entries in their reports; the
+  close (a DoD gate). **It maps the CODE, not the team's activity:** each entry is a durable
+  fact about how the codebase is built (architecture, data flow, decisions, quirks) that stays
+  true after this engagement's findings are fixed - not a findings recap, severity, review
+  disposition, or "what we did this time" (that goes to the §3 history row + the review
+  artifact). Reviews/audits especially tempt an activity-log map; capture the architecture
+  learned by reading the code instead. (Live failure 2026-07-23: a review produced a map that
+  summarised testing activity rather than the codebase - template §2 carries the ✅/❌ contrast.) **PM-written only** - subagents recommend entries in their reports; the
   PM persists its own synthesis, never verbatim reviewed-code text and never data values,
   secrets, PII or MNPI (§5). It is **advisory context, not enforcement** (the guard hooks stay
   the only enforcement layer), kept under ~200 lines, with SHA anchors, as-of dates and 📊/🧠

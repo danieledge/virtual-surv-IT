@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-004: A session-end capture backstop - proposed, not yet implemented</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-23</span></header>
+<h1 id="adr-004-a-session-end-capture-backstop-proposed-not-yet-implemented">ADR-004: A session-end capture backstop - proposed, not yet implemented</h1>
+<blockquote>
+<p>Architecture Decision Record (Nygard format). One file per significant decision, so the
+<em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
+<p><strong>Document control</strong> · ID <code>ADR-004</code> · Version <code>0.1</code> · Status <code>Proposed</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-23</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-07-23</td>
+<td>extensibility/memory discussion (user-raised)</td>
+<td>Initial proposal: SessionEnd capture backstop; overlap with the codebase-map content fix</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Proposed</strong> - design only; NOT wired into <code>hooks.json</code> until human sign-off</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-07-23</td>
+</tr>
+<tr>
+<td><strong>Deciders</strong></td>
+<td>Morgan (orchestrator), human approver</td>
+</tr>
+<tr>
+<td><strong>Traceability</strong></td>
+<td>ADR-003 (codebase map); lifecycle discipline (0.16.2); CLAUDE.md §5/§7; <code>docs/team-operating-guide.md</code> §Memory scope</td>
+</tr>
+</tbody>
+</table>
+<h2 id="context">Context</h2>
+<p>Two observations converged:</p>
+<ol>
+<li>
+<p><strong>A published pattern.</strong> "Make your setup self-improving: add a stop hook that runs when a
+   session ends and prompts the model to propose CLAUDE.md updates while context is fresh."
+   (Claude Code guidance for large codebases.)</p>
+</li>
+<li>
+<p><strong>A residual gap in our own lifecycle work.</strong> The codebase-map update and any recorded
+   lesson are <strong>close-time</strong> actions (ADR-003; DoD gate). The 0.16.2 lifecycle release made the
+   <em>engagement state</em> honest when a close does not run - but if a <strong>session simply ends</strong>
+   (terminal closed, context exhausted) mid-engagement, the close never fires, so the map is
+   never updated and whatever the team learned evaporates. This is the same "a gate that only
+   runs at close is no gate when the close never happens" failure the lifecycle release was
+   born from, one level up: at the <strong>session</strong> boundary rather than the engagement boundary.</p>
+</li>
+</ol>
+<p>The published pattern does <strong>not</strong> transfer verbatim here, for reasons that shape the decision:</p>
+<ul>
+<li><strong>Our <code>CLAUDE.md</code> is shipped, versioned and deliberately lean</strong> (dormancy/token cost; 0.8.x
+  moved detail to <code>team-operating-guide.md</code>). Auto-appending to it fights what it optimises for.</li>
+<li><strong>It is a plugin across many working projects.</strong> Project learnings belong in the <em>working</em>
+  project's memory / codebase map, never the plugin's handbook.</li>
+<li><strong>Changes to the team gate on the eval harness.</strong> Self-improvement that edits shipped prompts
+  without evals + a version bump is exactly the drift our rigor exists to prevent.</li>
+</ul>
+<h2 id="decision">Decision</h2>
+<p>Adopt a <strong>session-end capture backstop</strong>, not a self-editing handbook:</p>
+<ul>
+<li>A <strong><code>SessionEnd</code>/<code>Stop</code> hook</strong> that fires when a session ends. It <strong>detects</strong> an engagement
+  that did real work but did not cleanly close (START-HERE present and status ⏳/⛔; or artifacts
+  written with no ✅) and <strong>prompts to capture before the window closes</strong> - it does not write
+  anything itself.</li>
+<li>Capture is routed to the <strong>right target as a proposal, never an auto-apply</strong>:</li>
+<li>working-project learnings → the <strong>codebase map</strong> (a reviewed git diff; ADR-003 rules);</li>
+<li>a lesson about the <strong>team itself</strong> → a <strong>lessons-candidate</strong> file a human later triages into
+    a house-rule + a golden eval case + a version bump (the recorded-live-lesson pattern).</li>
+<li><strong>Dormancy-aware:</strong> the hook is a no-op in a session that never engaged the team (no
+  START-HERE, no team artifacts) - it must not nag ordinary Claude Code sessions in the many
+  projects the plugin is installed across.</li>
+<li><strong>Never edits <code>CLAUDE.md</code> or any shipped prompt.</strong> Those change only through the normal
+  eval-gated, version-bumped path.</li>
+</ul>
+<h2 id="overlap-with-the-codebase-map-content-fix-0165">Overlap with the codebase-map content fix (0.16.5)</h2>
+<p>These two are <strong>coupled and must ship in order</strong>:</p>
+<ul>
+<li>The <strong>content fix (0.16.5)</strong> defines <em>what a good capture is</em>: the map records <strong>durable
+  architecture</strong>, not a findings/activity log (template §2 ✅/❌ contrast; <code>/engage</code> 6a;
+  operating-guide memory rule; golden case <code>process-codebase-map-architecture</code>).</li>
+<li>This <strong>hook (ADR-004)</strong> defines <em>when capture is guaranteed to happen</em>: at session end, even
+  when a clean close never runs.</li>
+</ul>
+<p>The dependency is one-directional and strict: <strong>a hook without the content fix makes things
+worse</strong> - it would reliably prompt the capture of <em>more</em> activity-summaries, at the exact moment
+(session ending, context thinning) when the model is most likely to dump "what I did" rather
+than "what the code is". So the content fix lands first (0.16.5, done); the hook follows only
+once the map's content discipline is solid and eval-guarded. Together: the fix makes the memory
+<em>correct</em>, the hook makes it <em>reliable</em>.</p>
+<h2 id="consequences">Consequences</h2>
+<p><strong>Positive:</strong> closes the session-boundary capture gap that complements the engagement-boundary
+lifecycle work; reuses existing <code>hooks.json</code> infrastructure; keeps self-improvement inside the
+team's guardrails (proposals, human triage, eval-gated prompt changes).</p>
+<p><strong>Negative / risks:</strong> a <code>SessionEnd</code> hook fires in <em>every</em> working project every session - the
+dormancy no-op must be exact or it becomes noise; capture prompts add end-of-session tokens
+(bounded by firing only on an engaged, unclosed session); a lessons-candidate file needs a human
+triage habit or it rots.</p>
+<p><strong>Rejected alternative:</strong> the verbatim published pattern (stop hook auto-proposes/edits
+<code>CLAUDE.md</code>). Rejected because our handbook is shipped, lean and versioned, and team-prompt
+changes must be eval-gated - an auto-editor would bypass the exact rigor that is the project's
+value proposition.</p>
+<h2 id="status-next-step">Status / next step</h2>
+<p><strong>Proposed.</strong> Not wired into <code>hooks.json</code>. Implementation (the hook script, the detect logic,
+the lessons-candidate file format, the dormancy guard, tests) awaits human sign-off on this ADR.</p>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-004-capture-backstop-hook.md &middot; 2026-07-23</div>
+</body>
+</html>
