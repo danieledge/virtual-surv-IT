@@ -3,6 +3,26 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.21.0] - 2026-07-24 - relicensed to AGPL-3.0-only (was MIT)
+
+Relicensed from MIT to **GNU AGPL-3.0-only** (Copyright © 2026 Daniel Edge). Rationale: allow free
+use - including inside companies and for commercial work - while preventing the code being taken
+closed-source, repackaged and **resold or offered as a proprietary hosted service** (AGPL's network
+copyleft). Internal use and modification carry no obligation; distributing it, or providing it as a
+service, requires making the complete corresponding source available under AGPL.
+
+- `LICENSE` replaced with the verbatim FSF AGPL-3.0 text; `plugin.json` `license` → `AGPL-3.0-only`;
+  README badge + `## License` section rewritten in plain English (use ✓ / resell-or-host-closed ✗).
+- Bundled **permissive** third-party components (MIT/BSD-3/PSF: turingmind-code-review + the vendored
+  libs) are unaffected and may be included in an AGPL work; notices retained in
+  `THIRD-PARTY-LICENSES.md` (intro updated to state the project licence).
+- `CONTRIBUTING.md` gains contribution terms (inbound = outbound AGPL + a relicensing grant) so a
+  **commercial dual licence** stays possible; the author is the sole copyright holder.
+- A separate **commercial licence** (without the AGPL source-sharing obligation) can be arranged.
+
+Note: relicensing is **not retroactive** - versions already published under MIT remain forkable
+under MIT from those commits. Not legal advice.
+
 ## [0.20.0] - 2026-07-24 - clickable Contents (TOC) for large reports
 
 Large engagement reports now carry a clickable table of contents with internal section links.
