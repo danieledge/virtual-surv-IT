@@ -3,6 +3,36 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.23.0] - 2026-07-24 - structured findings + deterministic render (Phase 1: machinery)
+
+The Anthropic-strongest fix for report-format drift: findings become **schema-validated structured
+data**, and a script **owns the layout** - so the model supplies field *values* and can never drift
+a finding's *format* (5C / C-word / inline / inconsistent fields). Phase 1 ships the self-contained
+machinery; the review pipeline still authors reports the old way until Phase 2 wires it in.
+
+### Added
+- **`docs/review/findings-schema.json`** - JSON Schema for a findings pack: engagement meta +
+  narrative string fields + `findings[]` with the five required named fields
+  (Standard/Problem/Likely cause/Impact/Fix, + severity/basis/disposition enums).
+- **`scripts/validate_findings.py`** - dependency-free JSON-Schema-subset validator; a missing or
+  renamed field is a hard error (`FINDINGS-INVALID`), not a silent drop. UTF-8-safe.
+- **`scripts/render_findings.py`** - renders a *validated* pack to the canonical `REVIEW-<slug>.md`
+  (scoreboard, `[TOC]`, five named fields in fixed order per finding, tally); `--html` re-renders.
+  Refuses to render an invalid pack.
+- **`docs/review/gold-findings.json`** - canonical exemplar (synthetic) + tests in
+  `tests/test_findings.py`. pytest 449 passed.
+
+### Folder convention
+- Machine-readable packs live in a subfolder (**`artifacts/data/findings-<slug>.json`**); the
+  renderer writes the report **up** to the top-level `artifacts/`, which stays user-navigable
+  (`.md`/`.txt`/`.html`).
+
+### Follow-ups (tracked)
+- Phase 2: wire the review skills (`code-reviewer` emits the JSON; skills call validate→render).
+- Phase 3: `check_artifacts` validates packs + guards the generated report (planned separately, carefully).
+- The two new scripts need adding to the code-execution guard's allow-list (`_TEAM_ALLOW` /
+  `_TEAM_SCRIPT_NAMES`) so the team runs them consent-free (human-applied, config-gated).
+
 ## [0.22.1] - 2026-07-24 - findings-format clarity: name the fields, not the "C's"
 
 Clarity pass after confusion over "5 C's" vs the field names. `output-format.md` now **leads** with

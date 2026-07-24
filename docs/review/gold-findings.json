@@ -1,0 +1,50 @@
+{
+  "slug": "example-review",
+  "title": "Review report — example detection pipeline",
+  "scope": "src/detect/*.py at the working diff",
+  "commit": "abc1234",
+  "mode": "audit",
+  "reviewer_independence": "code-reviewer + compliance-reviewer, independent of the builder",
+  "tooling_coverage": "ruff, mypy, bandit run; semgrep not installed (skipped, affected findings 🧠 inferred)",
+  "verdict": "conditional",
+  "executive_summary": "One warning and one style item. The threshold inconsistency should be reconciled with compliance before release; the missing docstring is non-blocking.",
+  "developer_guidance": "Thresholds read cleanly but lack rationale comments (§4) - add the tuning date and the obligation each serves as you set them, so the next reviewer needn't re-derive intent.",
+  "limitations": "Static review only (no execution consent); dynamic behaviour and true alert volumes are 🧠 inferred, not measured. semgrep was unavailable, so injection findings rest on manual inspection.",
+  "findings": [
+    {
+      "id": "WF-01",
+      "title": "Re-alert window inconsistent across two scenarios",
+      "severity": "warning",
+      "location": "detect/config.py:62",
+      "confidence": 88,
+      "basis": "coded",
+      "standard": "CLAUDE.md §4 (documented, consistent thresholds)",
+      "problem": "Two scenarios read from the same config define different re-alert windows with no comment explaining why; a reader cannot tell if the difference is deliberate.",
+      "likely_cause": "Config drift - the second value was added later without reconciling the first.",
+      "impact": "A subject staying at elevated risk may not re-alert for the longer window, risking a missed status change.",
+      "impact_basis": "inferred",
+      "fix": {
+        "diff": "- REALERT_DAYS = 365\n+ REALERT_DAYS = 60  # aligned with the sibling scenario; tuning date 2026-07-24, obligation …",
+        "why": "Aligns the two windows (or documents the deliberate difference), so the control is explainable to an auditor."
+      },
+      "disposition": "open"
+    },
+    {
+      "id": "WF-02",
+      "title": "Public scoring function missing a docstring",
+      "severity": "style",
+      "location": "detect/score.py:18",
+      "basis": "coded",
+      "standard": "docs/coding-standards.md (lean docstrings on public functions)",
+      "problem": "The public `score()` entry point has no docstring stating its inputs, outputs and assumptions.",
+      "likely_cause": "Oversight during a refactor.",
+      "impact": "Minor - slows the next developer; no correctness or detection impact.",
+      "impact_basis": "inferred",
+      "fix": {
+        "diff": "+ def score(order):\n+     \"\"\"Return the behavioural score for an order (0-100). Assumes prices are venue-normalised.\"\"\"",
+        "why": "A one-line docstring makes the contract explicit without noise."
+      },
+      "disposition": "open"
+    }
+  ]
+}
