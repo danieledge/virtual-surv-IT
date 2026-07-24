@@ -19,6 +19,7 @@
     "mode": { "type": "string", "enum": ["change", "audit"] },
     "reviewer_independence": { "type": "string" },
     "tooling_coverage": { "type": "string", "description": "analysers run / skipped (🔬)" },
+    "methodology": { "type": "string", "description": "how the review was performed (lenses/passes, standards applied) - the audit skeleton's Method section" },
     "verdict": { "type": "string", "description": "free-text verdict; wording varies by kind (e.g. 'conditional', 'audit-ready', 'scales to target', 'won't scale')" },
     "executive_summary": { "type": "string" },
     "developer_guidance": { "type": "string", "description": "the mandatory 🔵 forward-looking section" },

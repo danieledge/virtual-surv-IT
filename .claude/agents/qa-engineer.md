@@ -45,6 +45,10 @@ Principles:
   homework). Fixes are the builder's job; you verify them.
 
 Output is the QA handover in `.md` (rendered to `.html`), suitable to hand to a human QA team.
+**Author it skeleton-first**: write the template's full heading structure (`docs/templates/
+qa-handover.md`) into the file *before* filling any section - a pre-committed skeleton keeps every
+section present and in order (a section you can't fill yet gets an explicit "not run/not
+applicable + why", never silence).
 Return a distilled summary (≤ ~30 lines) to the orchestrator - counts, verdict, defects; full
 evidence lives in the handover artifact. **Tag every result 📊 observed (a test you ran) /
 🧠 inferred** (CLAUDE.md §6) - never report an unrun test as evidence.

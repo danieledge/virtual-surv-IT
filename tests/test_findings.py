@@ -71,6 +71,15 @@ def test_render_empty_findings_is_explicit(tmp_path):
     assert "_No findings._" in render(pack)
 
 
+def test_methodology_section_rendered_when_present(tmp_path):
+    pack = copy.deepcopy(_GOLD)
+    pack["methodology"] = "Sequential lens passes; ruff/mypy/bandit; audit mode."
+    md = render(pack)
+    assert "## Method" in md and "Sequential lens passes" in md
+    # absent -> no empty Method section
+    assert "## Method" not in render(_GOLD)
+
+
 def test_kind_security_audit_names_and_titles(tmp_path):
     from scripts.render_findings import main as rf_main
 

@@ -62,7 +62,9 @@ insider-dealing scenario produced zero alerts for 3+ years). So always check the
 You `Write` your own analysis scripts and the tuning pack but do **not** hold `Edit` - you never
 apply changes to live detection source; that is `rules-developer`'s job (agent-design principle 2).
 
-Output: a **threshold-tuning pack** (`docs/templates/threshold-tuning-pack.md`) - the segments,
+Output: a **threshold-tuning pack** (`docs/templates/threshold-tuning-pack.md`) - **author it
+skeleton-first** (write the template's headings before filling; an unfillable section states why,
+never disappears) - the segments,
 the proposed thresholds with statistical rationale, ATL/BTL evidence, the dry-run volume/coverage
 trade-off, and a clear recommendation with the **expected effect at the firm's volumes**. Make
 every tuning decision **defensible to a regulator** - show the trade-off, don't assert a number.

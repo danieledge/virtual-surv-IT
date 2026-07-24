@@ -135,6 +135,10 @@ def render(pack: dict) -> str:
         "## Executive summary",
         pack.get("executive_summary", "_(none provided)_"),
         "",
+    ]
+    if pack.get("methodology"):
+        lines += ["## Method", pack["methodology"], ""]
+    lines += [
         "## Scoreboard",
         scoreboard,
         "",
