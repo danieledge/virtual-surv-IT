@@ -3,6 +3,40 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.18.0] - 2026-07-24 - context-engineering: leaner orchestrator, state that survives compaction
+
+Addresses the early-compaction-during-setup and slow-first-`/engage` known issues (README),
+grounded in Anthropic's *Effective context engineering for AI agents*. Investigation showed the
+code reading is already delegated (`deep-review` → `code-reviewer`/`review-scorer`); the real
+driver was instruction/doc **front-load** in the orchestrator's turn-0 context.
+
+### Changed
+- **A - Just-in-time codebase-map load (biggest single win).** The step-0 `/engage` probe no longer
+  dumps the full map (`head -250`); it loads only the header + §3 engagement-history (the Team-ver
+  row the what's-new banner needs) and reads §2 sections **on demand** when relied on - ~220 lines
+  off every engage's turn-0, cutting both cold-start latency and compaction pressure. `ADR-003` §4
+  and the DoD "codebase map" item reworded from "read at open" to "consulted at open (JIT §2)" to
+  match. *(Anthropic: just-in-time loading; minimal high-signal tokens.)*
+- **B - Atomic, index-first START-HERE.** The living index must **lead** reality: append an
+  artifact's START-HERE row in the **same turn** as the artifact, before ending the turn - never
+  leave the index trailing. START-HERE is the engagement's **external memory** that survives Claude
+  Code compaction, so it is what a resumed session reads back. Strengthened in the operating-guide
+  lifecycle rule + both review skills' standard-open. Closes the state-lag from the 2026-07-24
+  compaction failure; the 0.17.0 DoD Stop-hook backstops it once the index exists. *(Anthropic:
+  external memory / files outside the context window.)*
+- **C - Hard budget on sub-agent returns.** "Condensed returns" goes from "target ~30 lines" to a
+  **hard ≤~1,500-token (~30-line) budget** - a verbose return balloons the orchestrator and pushes
+  long engagements toward compaction; an over-budget return is a defect to trim, not pass through.
+  Operating guide §Orchestration + agent-design conformance updated (still prompt-level, not
+  hook-enforced). *(Anthropic: sub-agents hand back 1,000-2,000-token distilled summaries.)*
+
+### Notes
+- **Out of scope (tracked):** trimming the operating guide itself, the chained-skill-body
+  accumulation, and the per-agent boilerplate (#7) - the larger architectural levers.
+- **Verification:** these change the engage/review flow, so the latency/compaction improvement
+  should be confirmed by a tester-run golden-slice `/run-evals` + a first-`/engage` `time`
+  re-measure (the eval harness can't run under the static-execution gate).
+
 ## [0.17.0] - 2026-07-23 - team-hardening (adversarial review of the virtual team)
 
 A planned adversarial review of the *team itself* (16 agents, 22 skills, the operating guide and
