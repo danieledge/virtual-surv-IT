@@ -13,6 +13,14 @@ maintainer can continue to offer a **commercial dual licence** — you grant the
 the project. Don't contribute code you don't have the right to license this way. A formal CLA may
 be introduced later; until then, opening a PR constitutes that agreement.
 
+## Branches
+
+- **`main`** - the **stable** release line. Users installing the plugin track this.
+- **`dev`** - the **integration / cutting-edge** line. Bigger or in-progress changes land here
+  first, are shaken out, then promoted to `main` at a release (merge + version bump + tag).
+- **Target PRs and feature branches at `dev`**, not `main`. Small, safe fixes may go straight to
+  `main`; anything substantial goes via `dev`.
+
 ## Ground rules (non-negotiable)
 
 - **Never commit real data or secrets.** All examples and tests use **synthetic or masked** data

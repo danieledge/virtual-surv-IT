@@ -332,6 +332,14 @@ token-economy step, not an oversight (the "why" is right below).
 /plugin install compliance-surveillance-team@virtual-surv-it
 ```
 
+> **Release channels — `main` (stable) vs `dev` (cutting-edge).** The default line is **`main`**, the
+> **stable** release, and `/plugin marketplace add danieledge/virtual-surv-IT` tracks it - use it for
+> day-to-day work. Bigger, in-progress changes land first on the **`dev`** branch, where features are
+> integrated and shaken out before being promoted to `main` at a release. For the cutting edge, use a
+> **local clone checked out to `dev`**:
+> `git clone https://github.com/danieledge/virtual-surv-IT.git && cd virtual-surv-IT && git checkout dev`,
+> then `/plugin marketplace add /path/to/virtual-surv-IT`.
+
 **2. Scope the enablement to the projects that need it.** If the install enabled the plugin at
 **user** scope (check `/plugin`, or `~/.claude/settings.json` → `enabledPlugins`), disable it
 there, and instead enable it **in each project where you want the team**: from that project run
