@@ -3,6 +3,22 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.26.0] - 2026-07-24 - structured findings: security-audit + performance too (dev)
+
+Completes the structured-findings rollout to the remaining review kinds (the Phase 2 follow-up).
+- **`findings-schema.json`**: added **`kind`** (`review` / `security-audit` / `performance`) which
+  drives the rendered artifact's prefix + title; relaxed **`verdict`** to free text (wording varies
+  by kind - "conditional", "audit-ready", "scales to target", …); added optional performance fields
+  (`current_cost` / `projected_cost` / `gain`).
+- **`render_findings`**: names `REVIEW-` / `SECURITY-AUDIT-` / `PERF-<slug>.md` by kind, titles per
+  kind, and shows a per-finding **Performance** (current → projected = gain) line for perf packs.
+- **`security-audit`** + **`performance-review`** skills now write a findings pack (with `kind` set)
+  and let `check_artifacts --fix` validate + render - drift-proof like `deep-`/`audit-review`.
+  `check_artifacts` itself is unchanged (kind-agnostic: globs `findings-*.json`, renders each via
+  `render_findings`).
+Verified end-to-end (security + perf packs → correctly-named reports + the perf gain line); tests
+added; pytest 455 passed; ruff/bandit green. **First feature on the `dev` channel.**
+
 ## [0.25.0] - 2026-07-24 - structured findings Phase 2: reviews route through the pack
 
 The code/audit review path now **produces the structured findings pack** instead of hand-authoring

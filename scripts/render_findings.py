@@ -36,6 +36,13 @@ _SEV = {"critical": "🔴", "warning": "🟠", "medium": "🟡", "style": "🔵"
 _SEV_ORDER = ["critical", "warning", "medium", "style"]
 _BASIS = {"measured": "📊 measured", "coded": "📄 coded", "inferred": "🧠 inferred"}
 _DISP = {"open": "🔴 Open", "fixed": "✅ Fixed", "accepted": "⚖️ Accepted", "deferred": "⏭️ Deferred"}
+# kind -> (artifact filename prefix, default report title). Same five-field finding shape for all;
+# performance findings add the optional cost/gain fields (rendered when present).
+_KIND = {
+    "review": ("REVIEW", "Review report"),
+    "security-audit": ("SECURITY-AUDIT", "Security audit"),
+    "performance": ("PERF", "Performance review"),
+}
 
 
 def _force_utf8_output() -> None:
@@ -73,6 +80,18 @@ def _finding_block(f: dict) -> str:
             fix["diff"].rstrip("\n"),
             "```",
             f"*Why this works:* {fix['why']}",
+        ]
+        + (
+            # Performance findings: show the cost/gain line when present.
+            [
+                "",
+                f"**Performance:** {f.get('current_cost', '?')} → {f.get('projected_cost', '?')}"
+                + (f"  (gain: {f['gain']})" if f.get("gain") else ""),
+            ]
+            if any(f.get(k) for k in ("current_cost", "projected_cost", "gain"))
+            else []
+        )
+        + [
             "",
             f"**Disposition:** {_DISP.get(f['disposition'], f['disposition'])}",
         ]
@@ -94,7 +113,8 @@ def render(pack: dict) -> str:
     # Findings ordered by severity so the report reads worst-first.
     ordered = sorted(findings, key=lambda f: _SEV_ORDER.index(f.get("severity", "style")))
 
-    title = pack.get("title") or f"Review report — {pack['slug']}"
+    kind = pack.get("kind", "review")
+    title = pack.get("title") or f"{_KIND.get(kind, _KIND['review'])[1]} — {pack['slug']}"
     lines = [
         f"# {title}",
         "",
@@ -143,10 +163,11 @@ def render(pack: dict) -> str:
     return "\n".join(line for line in lines if line is not None) + "\n"
 
 
-def _default_out(pack_path: Path, slug: str) -> Path:
+def _default_out(pack_path: Path, slug: str, prefix: str = "REVIEW") -> Path:
     # Pack in artifacts/data/ -> report up in artifacts/; otherwise alongside the pack.
+    # The prefix is the kind's (REVIEW- / SECURITY-AUDIT- / PERF-).
     root = pack_path.parent.parent if pack_path.parent.name == "data" else pack_path.parent
-    return root / f"REVIEW-{slug}.md"
+    return root / f"{prefix}-{slug}.md"
 
 
 def main(argv: list[str]) -> int:
@@ -167,7 +188,8 @@ def main(argv: list[str]) -> int:
         )
         return 1
     pack = json.loads(pack_path.read_text(encoding="utf-8"))
-    out = Path(out_flag) if out_flag else _default_out(pack_path, pack["slug"])
+    prefix = _KIND.get(pack.get("kind", "review"), _KIND["review"])[0]
+    out = Path(out_flag) if out_flag else _default_out(pack_path, pack["slug"], prefix)
     out.write_text(render(pack), encoding="utf-8")
     print(f"Rendered findings pack -> {out}")
     if do_html:

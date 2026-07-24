@@ -65,8 +65,15 @@ Drive **performance-reviewer** (CLAUDE.md §6):
 Fixes route to `rules-developer` / `platform-engineer` / `ml-engineer`; any **before/after
 profiling** requires the **execution-consent gate** (CLAUDE.md §7) - the default posture stays
 static / 🧠 inferred, so don't promise measured before/after unless execution has been consented.
-Save `artifacts/PERF-<slug>.md` and render to `.html` (`<python> -m scripts.render_html`;
-`<python>`: resolve your interpreter - try python3, then python, then py - and in an
+**The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
+schema `docs/review/findings-schema.json`). Write the findings to
+`artifacts/data/findings-<slug>.json` with **`"kind": "performance"`**: each finding the five named
+fields (`basis` = 📊 measured / 📄 coded / 🧠 inferred as per the static-only rules above) **plus the
+optional `current_cost` / `projected_cost` / `gain`** fields; put the workload/targets and the total
+saved in `executive_summary`. Then run **`<python> -m scripts.check_artifacts --fix`** (allow-listed):
+it validates the pack and renders `artifacts/PERF-<slug>.md` + `.html` (the `kind` drives the `PERF-`
+prefix and the per-finding cost/gain line). Don't hand-author or hand-edit the report.
+(`<python>`: resolve your interpreter - try python3, then python, then py - and in an
 installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
 "Run mode & the bundled scripts").
 

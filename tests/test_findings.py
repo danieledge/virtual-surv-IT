@@ -69,3 +69,36 @@ def test_render_empty_findings_is_explicit(tmp_path):
     pack = copy.deepcopy(_GOLD)
     pack["findings"] = []
     assert "_No findings._" in render(pack)
+
+
+def test_kind_security_audit_names_and_titles(tmp_path):
+    from scripts.render_findings import main as rf_main
+
+    pack = copy.deepcopy(_GOLD)
+    pack["kind"] = "security-audit"
+    pack["slug"] = "sec-x"
+    pack.pop("title", None)  # so the kind's default title applies
+    (tmp_path / "data").mkdir()
+    p = tmp_path / "data" / "findings-sec-x.json"
+    p.write_text(json.dumps(pack), encoding="utf-8")
+    rf_main(["render_findings", str(p)])
+    out = tmp_path / "SECURITY-AUDIT-sec-x.md"  # kind drives the prefix, up into artifacts/
+    assert out.is_file()
+    assert "Security audit" in out.read_text(encoding="utf-8")
+
+
+def test_kind_performance_shows_gain_and_prefix(tmp_path):
+    from scripts.render_findings import main as rf_main
+
+    pack = copy.deepcopy(_GOLD)
+    pack["kind"] = "performance"
+    pack["slug"] = "perf-x"
+    pack["verdict"] = "scales to target"  # verdict is free-text now
+    f = pack["findings"][0]
+    f["current_cost"], f["projected_cost"], f["gain"] = "4.2s @ 100k", "0.1s", "~40x"
+    assert "**Performance:** 4.2s @ 100k → 0.1s  (gain: ~40x)" in render(pack)
+    (tmp_path / "data").mkdir()
+    p = tmp_path / "data" / "findings-perf-x.json"
+    p.write_text(json.dumps(pack), encoding="utf-8")
+    rf_main(["render_findings", str(p)])
+    assert (tmp_path / "PERF-perf-x.md").is_file()
