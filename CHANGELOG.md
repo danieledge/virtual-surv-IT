@@ -3,6 +3,16 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.22.0] - 2026-07-24 - mechanical findings-format check (FINDINGS-5C-COLLAPSE)
+
+Backs the 0.21.2 spec clarification with **enforcement**: `check_artifacts` now flags any findings
+artifact that collapses the 5 C's into a "5C summary" block (the drift where the per-finding count
+varied 3-to-5, run inline). Because `check_artifacts` is allow-listed (runs consent-free), the close
+- or just telling the team "run check_artifacts" - now **fails** on the drift, so it's caught
+mechanically instead of relying on the model to conform to `output-format.md`. Detection only (not
+`--fix`-able - the fix is restructuring content into the five named fields, which the model does when
+flagged). Pinned by tests in `tests/test_check_artifacts.py`; pytest 442 passed.
+
 ## [0.21.2] - 2026-07-24 - findings-format conformance (the 5 C's, consistently)
 
 Tester feedback on a live report: findings were labelled "5C Summary" but the count varied

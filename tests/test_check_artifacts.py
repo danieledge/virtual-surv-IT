@@ -648,3 +648,28 @@ def test_apply_fixes_is_idempotent(tmp_path):
     _touch(art / "review-pass-1.md", "# Review\n")
     apply_fixes(art)  # first pass renders the missing HTML
     assert apply_fixes(art) == []  # second pass: nothing left to fix
+
+
+def test_findings_5c_summary_label_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, listed=["REVIEW-x.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "REVIEW-x.md",
+        "# Review\n\n## WF-07\n\n**5C Summary:** - Condition: x - Consequence: y - Correction: z\n",
+    )
+    _touch(art / "REVIEW-x.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "FINDINGS-5C-COLLAPSE" in "\n".join(check(art))
+
+
+def test_canonical_named_fields_not_flagged_as_5c(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, listed=["REVIEW-y.md", "engagement-summary-y.txt"])
+    _touch(
+        art / "REVIEW-y.md",
+        "# Review\n\n### 🔴 WF-07\n\n**Standard:** CWE-1\n\n**Problem:** x\n\n"
+        "**Likely cause:** y\n\n**Impact if unaddressed:** z\n\n**Fix:**\n",
+    )
+    _touch(art / "REVIEW-y.html", "<html></html>")
+    _touch(art / "engagement-summary-y.txt", "Hi,\n\nMorgan\n")
+    assert "FINDINGS-5C-COLLAPSE" not in "\n".join(check(art))
