@@ -20,9 +20,6 @@ service, requires making the complete corresponding source available under AGPL.
   **commercial dual licence** stays possible; the author is the sole copyright holder.
 - A separate **commercial licence** (without the AGPL source-sharing obligation) can be arranged.
 
-Note: relicensing is **not retroactive** - versions already published under MIT remain forkable
-under MIT from those commits. Not legal advice.
-
 ## [0.20.0] - 2026-07-24 - clickable Contents (TOC) for large reports
 
 Large engagement reports now carry a clickable table of contents with internal section links.
