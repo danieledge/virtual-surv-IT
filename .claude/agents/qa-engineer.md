@@ -45,10 +45,8 @@ Principles:
   homework). Fixes are the builder's job; you verify them.
 
 Output is the QA handover in `.md` (rendered to `.html`), suitable to hand to a human QA team.
-Return a distilled summary (target under ~30 lines) to the orchestrator - counts, verdict,
-defects; full evidence lives in the handover artifact. **Tag every result 📊 observed (a test
-you ran) / 🧠 inferred** (CLAUDE.md §6) - never report an unrun test as evidence.
-
-Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
-drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
-**general, cross-project** patterns → `docs/house-rules.md`.
+Return a distilled summary (≤ ~30 lines) to the orchestrator - counts, verdict, defects; full
+evidence lives in the handover artifact. **Tag every result 📊 observed (a test you ran) /
+🧠 inferred** (CLAUDE.md §6) - never report an unrun test as evidence.
+Durable lessons per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`;
+general → `docs/house-rules.md`.

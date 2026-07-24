@@ -29,10 +29,8 @@ When invoked:
    `compliance-reviewer` review it (both mandatory for detection logic, CLAUDE.md §4).
 
 Output: the implementation, the tests, and a short note mapping the code to the acceptance
-criteria and the regulatory obligation - return a distilled summary (target under ~30 lines) to
-the orchestrator; the detail lives in the code/tests. **Tag behaviour claims 📊 observed (a test
-that ran) / 🧠 inferred** (CLAUDE.md §6). Never hard-code secrets or embed real data.
-
-Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
-drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
-**general, cross-project** patterns → `docs/house-rules.md`.
+criteria and the regulatory obligation - return a distilled summary (≤ ~30 lines) to the
+orchestrator; the detail lives in the code/tests. **Tag behaviour claims 📊 observed (a test that
+ran) / 🧠 inferred** (CLAUDE.md §6). Never hard-code secrets or embed real data.
+Durable lessons per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`;
+general → `docs/house-rules.md`.

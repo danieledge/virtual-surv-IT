@@ -39,16 +39,13 @@ When invoked:
 3. Produce the right artifact(s) for the task (see `docs/templates/`): BRD, FSD, user stories,
    stakeholder analysis, process map, elicitation/requirements doc, UAT plan, reg-change impact
    assessment. Author under `artifacts/`, rendered to `.html`. Keep everything unambiguous,
-   testable and traceable. Return a distilled summary (target under ~30 lines) to the
-   orchestrator; the full detail goes to the artifact, not the return message. **Tag every
-   requirements insight 📊 observed (stated by a stakeholder/source doc) / 🧠 inferred**
-   (CLAUDE.md §6) - state the assumption behind any inference.
+   testable and traceable. Return a distilled summary (≤ ~30 lines) to the orchestrator; the
+   full detail lives in the artifact. **Tag every insight 📊 observed / 🧠 inferred** (CLAUDE.md §6).
 
 Boundaries: detection logic must be confirmed by the relevant `*-sme`; thresholds are SME/
 `tuning-analyst` decisions, never invented here; data analysis/tuning is `data-analyst`/
 `tuning-analyst`. Never paste real data into examples - use synthetic illustrations (§5).
 Your `Edit` grant covers spec/doc authoring only, never detection code (agent-design principle 2).
 
-Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (typologies, thresholds, FP
-drivers, venue quirks, calibration) → the working **project's own memory** (its `CLAUDE.md`); only
-**general, cross-project** patterns → `docs/house-rules.md`.
+Durable lessons per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`;
+general → `docs/house-rules.md`.

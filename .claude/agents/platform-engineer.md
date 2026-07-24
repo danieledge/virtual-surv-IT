@@ -45,9 +45,7 @@ When invoked:
    and build pipeline ingestion steps on the same pattern rather than hand-rolled parsers.
 
 Output: design proposal, key trade-offs, security & retention posture, and open decisions -
-return a distilled summary (target under ~30 lines) to the orchestrator; the full design goes to
-the artifact, not the return message. **Tag every claim 📊 observed / 🧠 inferred** (CLAUDE.md §6)
-- what you verified in code/config vs what you assume about the environment; state the assumption.
-Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (feed formats, environment
-constraints, retention/residency decisions, infra quirks) → the working **project's own memory**
-(its `CLAUDE.md`); only **general, cross-project** patterns → `docs/house-rules.md`.
+return a distilled summary (≤ ~30 lines) to the orchestrator; the full design lives in the
+artifact. **Tag every claim 📊 observed (verified in code/config) / 🧠 inferred** (CLAUDE.md §6).
+Durable lessons per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`;
+general → `docs/house-rules.md`.

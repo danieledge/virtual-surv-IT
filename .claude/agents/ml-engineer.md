@@ -43,10 +43,7 @@ When invoked:
 5. Recommend to the orchestrator that `model-validator` picks this up for validation.
 
 Output: the model code, evaluation results, and the model documentation - the full detail lives
-there; return a distilled summary (target under ~30 lines) to the orchestrator. Be explicit
-about limitations and residual risk. **Tag every data/eval insight 📊 observed / 🧠 inferred** (CLAUDE.md §6)
-- measured metrics (cite the eval set) vs expected or extrapolated behaviour; state the assumption
-behind any inference, and never present an inference as a measured result. Recommend durable
-lessons (CLAUDE.md §6): **project-specific** ones (model/method choices, leakage traps, drift
-signals, feature quirks) → the working **project's own memory** (its `CLAUDE.md`); only
-**general, cross-project** patterns → `docs/house-rules.md`.
+there; return a distilled summary (≤ ~30 lines) to the orchestrator. Be explicit about
+limitations and residual risk. **Tag every data/eval insight 📊 observed (cite the eval set) /
+🧠 inferred** (CLAUDE.md §6). Durable lessons per CLAUDE.md §6: project-specific → the working
+project's own `CLAUDE.md`; general → `docs/house-rules.md`.

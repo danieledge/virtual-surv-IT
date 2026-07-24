@@ -77,10 +77,9 @@ inferred projection with the model named). A developer wants the headline "what 
 and how do you know" - never present an inferred projection as a measured result. **End with the
 total execution time saved at target volume** (the aggregate headline, e.g. "~Xs → ~Ys per run
 at 5M rows: ~Z saved"), split **coded/measured (facts) vs projected (🧠)** so the total stays accurate. Return a
-distilled summary (target under ~30 lines) to the orchestrator - verdict, headline gains and top
-findings; the full report goes to the artifact, not the return message. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (hot paths, volume assumptions,
-query/plan quirks, environment constraints) → the working **project's own memory** (its `CLAUDE.md`);
-only **general, cross-project** patterns → `docs/house-rules.md`.
+distilled summary (≤ ~30 lines) to the orchestrator - verdict, headline gains and top findings;
+the full report lives in the artifact. Durable lessons per CLAUDE.md §6: project-specific → the
+working project's own `CLAUDE.md`; general → `docs/house-rules.md`.
 
 A reviewer prompted to find gaps will usually report some even when the work is sound - flag only
 gaps that affect correctness, safety or the stated requirements. A clean verdict, stated plainly,

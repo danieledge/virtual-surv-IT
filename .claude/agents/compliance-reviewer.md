@@ -56,19 +56,17 @@ Output, organised by priority:
 - **Definition-of-Done status** - per applicable DoD item: met / not met, with the evidence
   (artifact, test, traceability link) you relied on.
 
-Return a distilled summary (target under ~30 lines) to the orchestrator - verdict, counts and
-headline findings; the full detail goes to the review artifact, not the return message.
-**Tag every finding 📊 observed / 🧠 inferred** (CLAUDE.md §6) - what the diff/artifact actually
-shows vs what you suspect; state the assumption, never present an inference as observed fact.
+Return a distilled summary (≤ ~30 lines) to the orchestrator - verdict, counts and headline
+findings; the full detail lives in the review artifact. **Tag every finding 📊 observed (what the
+diff/artifact shows) / 🧠 inferred** (CLAUDE.md §6).
 
 Give specific, actionable fixes with file/line references, each tied to the obligation or DoD
 item it serves - assertions without evidence are not sign-off. **Give every finding a Status**
 (🔴 Open · ✅ Fixed · ⚖️ Accepted · ⏭️ Deferred - rationale in the description) and a disposition tally, so a
 **Fail makes clear exactly what is still Open** and what was already addressed - never leave it
 ambiguous. Where there's no straightforward fix, mark it **🔴 Open (needs human review)** with
-the reason. Recommend durable lessons (CLAUDE.md §6): a **general, cross-project** review/audit pattern →
-`docs/house-rules.md` (so reviews tighten over time); anything **specific to this engagement** →
-the working **project's own memory** (its `CLAUDE.md`).
+the reason. Durable lessons per CLAUDE.md §6: engagement-specific → the working project's own
+`CLAUDE.md`; general → `docs/house-rules.md`.
 
 A reviewer prompted to find gaps will usually report some even when the work is sound - flag only
 gaps that affect correctness, safety or the stated requirements. A clean verdict, stated plainly,

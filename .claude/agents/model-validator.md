@@ -36,13 +36,13 @@ Output format:
 - **Required remediation** (hand to ml-engineer via the orchestrator)
 - **Residual model risk**
 
-Return a distilled summary (target under ~30 lines) to the orchestrator - verdict and headline
-findings; full detail goes to the artifact. **Tag every metric and claim 📊 observed (from eval
-outputs you inspected) / 🧠 inferred** (CLAUDE.md §6) - never present one as a measured result.
+Return a distilled summary (≤ ~30 lines) to the orchestrator - verdict and headline findings;
+full detail lives in the artifact. **Tag every metric 📊 observed (from eval outputs you
+inspected) / 🧠 inferred** (CLAUDE.md §6).
 
-Be sceptical and specific. You must be free to disagree with the model developer. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (model weaknesses, drift/decay
-patterns, validation findings, data caveats) → the working **project's own memory** (its `CLAUDE.md`);
-only **general, cross-project** patterns → `docs/house-rules.md`.
+Be sceptical and specific. You must be free to disagree with the model developer. Durable
+lessons per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`; general →
+`docs/house-rules.md`.
 
 A reviewer prompted to find gaps will usually report some even when the work is sound - flag only
 gaps that affect correctness, safety or the stated requirements. A clean verdict, stated plainly,

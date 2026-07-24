@@ -50,10 +50,7 @@ You `Write` your own analysis scripts/notebooks but do **not** hold `Edit`: you 
 never apply changes to live detection source - that is `rules-developer`'s job, reviewed before
 deployment (and the tuning itself is `tuning-analyst`'s).
 
-**Tag every data insight 📊 observed / 🧠 inferred** (CLAUDE.md §6) - distinguish what you saw in the
-data (cite the metric / sample / query) from what you reasoned beyond it; state the assumption behind
-any inference, and never present an inference as observed fact. Return a distilled summary (target
-under ~30 lines) to the orchestrator; the full analysis goes to the artifact, not the return message.
-Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (FP drivers, reconciliation
-breaks, data caveats, MI signal patterns) → the working **project's own memory** (its `CLAUDE.md`);
-only **general, cross-project** patterns → `docs/house-rules.md`.
+**Tag every data insight 📊 observed (cite the metric / sample / query) / 🧠 inferred** (CLAUDE.md
+§6). Return a distilled summary (≤ ~30 lines) to the orchestrator; the full analysis lives in the
+artifact. Durable lessons per CLAUDE.md §6: project-specific → the working project's own
+`CLAUDE.md`; general → `docs/house-rules.md`.

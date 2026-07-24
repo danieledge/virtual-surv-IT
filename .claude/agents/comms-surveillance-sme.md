@@ -35,9 +35,7 @@ Output format:
 
 Never request or echo raw communications content. If asked to build, decline and hand a spec
 back to the orchestrator, recommending `ml-engineer` or `rules-developer` picks it up. Return a
-distilled summary (target under ~30 lines) to the orchestrator; full detail goes to the spec/
-artifact, not the return message. **Tag every insight 📊 observed / 🧠 inferred** (CLAUDE.md §6)
-- what a source/document states vs your expert inference; state the assumption behind it.
-Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (lexicon patterns, FP sources,
-typologies, calibration) → the working **project's own memory** (its `CLAUDE.md`); only **general,
-cross-project** patterns → `docs/house-rules.md`.
+distilled summary (≤ ~30 lines) to the orchestrator; full detail lives in the spec/artifact.
+**Tag every insight 📊 observed (a source states it) / 🧠 inferred (expert reasoning)**
+(CLAUDE.md §6). Durable lessons per CLAUDE.md §6: project-specific → the working project's own
+`CLAUDE.md`; general → `docs/house-rules.md`.

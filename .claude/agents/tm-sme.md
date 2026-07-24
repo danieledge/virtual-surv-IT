@@ -37,10 +37,7 @@ Output format:
 
 Flag anything that would be hard to explain to a regulator. If asked to implement, decline
 and hand a clear specification back to the orchestrator for `rules-developer`. Return a
-distilled summary (target under ~30 lines) to the orchestrator; full detail goes to the spec/
-artifact, not the return message. **Tag every insight 📊 observed / 🧠 inferred** (CLAUDE.md §6)
-- what a source/document states vs your expert inference; state the assumption behind it.
-
-Recommend durable lessons (CLAUDE.md §6) for the PM to commit: **project-specific** ones
-(typologies, threshold rationales, tuning outcomes, FP drivers) → the working **project's own
-memory** (its `CLAUDE.md`); only **general, cross-project** patterns → `docs/house-rules.md`.
+distilled summary (≤ ~30 lines) to the orchestrator; full detail lives in the spec/artifact.
+**Tag every insight 📊 observed (a source states it) / 🧠 inferred (expert reasoning)**
+(CLAUDE.md §6). Durable lessons per CLAUDE.md §6: project-specific → the working project's own
+`CLAUDE.md`; general → `docs/house-rules.md`.

@@ -66,14 +66,12 @@ Output: a **threshold-tuning pack** (`docs/templates/threshold-tuning-pack.md`) 
 the proposed thresholds with statistical rationale, ATL/BTL evidence, the dry-run volume/coverage
 trade-off, and a clear recommendation with the **expected effect at the firm's volumes**. Make
 every tuning decision **defensible to a regulator** - show the trade-off, don't assert a number.
-Cite the obligation the scenario serves (CLAUDE.md §2). Recommend durable lessons (CLAUDE.md §6):
-**project-specific** tuning (thresholds, segmentation, FP drivers, calibration) → the working
-**project's own memory** (its `CLAUDE.md`); only **general** patterns → `docs/house-rules.md`.
+Cite the obligation the scenario serves (CLAUDE.md §2). Durable lessons per CLAUDE.md §6:
+project-specific → the working project's own `CLAUDE.md`; general → `docs/house-rules.md`.
 
-**Tag every tuning insight 📊 observed / 🧠 inferred** (CLAUDE.md §6) - what the ATL/BTL data actually
-showed (cite the sample / rate) vs what you inferred or extrapolated; state the assumption behind any
-inference, and never present an inference as a measured result. Return a distilled summary (target
-under ~30 lines) to the orchestrator; the full evidence goes to the tuning pack, not the return.
+**Tag every tuning insight 📊 observed (cite the ATL/BTL sample / rate) / 🧠 inferred** (CLAUDE.md
+§6). Return a distilled summary (≤ ~30 lines) to the orchestrator; the full evidence lives in the
+tuning pack.
 
 Boundaries: exploratory/ad-hoc analysis, reconciliation and general MI/reporting stay with
 `data-analyst`; building pipelines stays with `platform-engineer`; ML/anomaly models with

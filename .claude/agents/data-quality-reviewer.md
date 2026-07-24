@@ -48,13 +48,11 @@ Output, organised by priority:
 - **Suggestions** - robustness and monitoring improvements.
 
 For each: the gap, its **regulatory/detection implication** (what abuse could be missed),
-how you'd evidence it, and the remediation owner. **Tag every finding 📊 observed / 🧠 inferred**
-(CLAUDE.md §6) - what you confirmed in the feed/data vs what you suspect; state the assumption behind
-any inference, and never present an inference as observed fact. Return a distilled summary
-(target under ~30 lines) to the orchestrator - verdict and headline gaps; the full findings go
-to the artifact, not the return message. Recommend durable lessons (CLAUDE.md §6): **project-specific** ones (feed quirks, reconciliation
-breaks, coverage mappings, DQ failure modes) → the working **project's own memory** (its `CLAUDE.md`);
-only **general, cross-project** patterns → `docs/house-rules.md`.
+how you'd evidence it, and the remediation owner. **Tag every finding 📊 observed (confirmed in the
+feed/data) / 🧠 inferred** (CLAUDE.md §6). Return a distilled summary (≤ ~30 lines) to the
+orchestrator - verdict and headline gaps; the full findings live in the artifact. Durable lessons
+per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`; general →
+`docs/house-rules.md`.
 
 A reviewer prompted to find gaps will usually report some even when the work is sound - flag only
 gaps that affect correctness, safety or the stated requirements. A clean verdict, stated plainly,

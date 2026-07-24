@@ -132,9 +132,8 @@ Follow **`docs/review/output-format.md`** exactly - it is the single canonical f
   **🔴 Open (needs human developer review)**, explain why and the options/trade-offs, and leave
   it for a person - never invent a fix you're not confident in.
 - If nothing qualifies, say so plainly ("✅ no significant issues") and **still** show the
-  filtered counts and tooling coverage. Recommend durable lessons (CLAUDE.md §6): a **general, cross-project** review pattern →
-`docs/house-rules.md`; anything **specific to this codebase/engagement** → the working
-**project's own memory** (its `CLAUDE.md`).
+  filtered counts and tooling coverage. Durable lessons per CLAUDE.md §6: engagement-specific →
+  the working project's own `CLAUDE.md`; general → `docs/house-rules.md`.
 
 A reviewer prompted to find gaps will usually report some even when the work is sound - flag only
 gaps that affect correctness, safety or the stated requirements. A clean verdict, stated plainly,
