@@ -49,4 +49,8 @@ scripts/apply-dod-stop-hook.sh
 
 # Same convention: one-shot wiring for the persona re-anchor hook (ADR-005, 0.27.0)
 scripts/apply-persona-anchor.sh
+
+# One-shot installer for the precision-pass consent guard (0.27.0). The durable artifacts are
+# the staged guard (scripts/staged_hooks/, tracked + tested) and, once applied, the updated hook.
+scripts/apply-guard-precision.sh
 docs/executive-brief-draft.html
