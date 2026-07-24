@@ -78,21 +78,26 @@ and states what's applicable vs not.
      bound is genuinely silent/undocumented. Distinguish a *silent-truncation bug* (no rationale, no
      reconciliation, unbounded loss) from an *intended limit* (documented, expected).
 
-**4. Present - scoreboard + clean artifact** (`docs/review/output-format.md`; document skeleton:
-`docs/templates/review-report.md`): a glanceable
-traffic-light **scoreboard to the console**, with the **full findings written to the clean
-artifact** `artifacts/REVIEW-<slug>.md`, rendered to `.html` (`<python> -m scripts.render_html`;
-`<python>`: resolve your interpreter - try python3, then python, then py - and in an
-installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
-"Run mode & the bundled scripts").
-🔵 style & form is a non-blocking "consider in future" lane. (Fold into the consolidated
-`delivery-report.md` only if this review is part of a larger build/handover.)
+**4. Present - findings pack → rendered report → scoreboard** (`docs/review/output-format.md`):
+   1. Assemble the **final (post-challenge) findings** into a **structured pack**
+      `artifacts/data/findings-<slug>.json` (schema `docs/review/findings-schema.json`, exemplar
+      `docs/review/gold-findings.json`) - `code-reviewer` already returns the findings in this JSON
+      shape; you write the pack (each finding's five fields + the narrative string fields
+      `executive_summary`, `developer_guidance`, `limitations`, `tooling_coverage`).
+   2. Run **`<python> -m scripts.check_artifacts --fix`** (allow-listed - no consent needed): it
+      **validates** the pack (a missing field is `FINDINGS-INVALID` → fix the pack and re-run) and
+      **renders** the canonical `artifacts/REVIEW-<slug>.md` + `.html`. The renderer owns the layout,
+      so the report can't drift (no "5C"/C-word/inline). *(`<python>`: resolve your interpreter - try
+      python3, then python, then py; installed-plugin sessions invoke the bundled `scripts/` copy by
+      path - operating guide, "Run mode & the bundled scripts".)*
+   3. Present a glanceable traffic-light **scoreboard to the console** from the rendered report; 🔵
+      style & form is a non-blocking "consider in future" lane. (Fold into the consolidated
+      `delivery-report.md` only if this review is part of a larger build/handover.)
 
-   ⚠️ **MANDATORY - the artifact is NOT complete without a `## 🔵 Developer guidance - improving
-   future code` section.** Always write it (2-4 constructive points on the author's coding
-   style and what to improve next time; if the code is strong, say what's done well), **even on
-   a clean pass**. Before you present, check the artifact contains this heading - if it's
-   missing, you are not done; add it. This is a required deliverable, not an optional extra.
+   ⚠️ **MANDATORY - `developer_guidance` is not optional.** The pack's `developer_guidance` field
+   must always be populated (2-4 constructive points on the author's coding style and what to
+   improve next time; if the code is strong, say what's done well), **even on a clean pass** - the
+   renderer emits it as the `## 🔵 Developer guidance` section. An empty one means you are not done.
 
 **5. Close - don't dead-end.** Summarise from the scoreboard, then offer concrete next steps
 with a recommendation - *"3 🔴, 5 🟠. I can fix the criticals, run `/remediate`, or produce a
