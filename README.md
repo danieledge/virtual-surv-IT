@@ -1097,10 +1097,12 @@ consent gate and the consent-write gate - are enforced by Claude Code **hooks**,
 the model's persona, so they hold regardless of how faded Morgan is (the critical rails were put
 in hooks precisely for this). What decays is *presentation* and *soft* discipline. **Mitigation
 now:** re-invoke `/engage` (or `/meet-the-team`) to reload the persona, and don't let a single
-engagement run excessively long. **Backlogged fix:** a dormancy-aware re-anchoring mechanism (a
-per-turn `UserPromptSubmit` hook that re-injects a tiny persona+roster anchor **only while the
-team is engaged**, so it survives compaction yet stays free in ordinary sessions). Same root
-cause as the name-drift quirk below.
+engagement run excessively long. **Fix implemented (0.27.0, ADR-005):** a dormancy-aware
+re-anchoring hook - `scripts/persona_anchor.py`, a per-turn `UserPromptSubmit` hook that re-injects
+a tiny (≤8-line) persona+discipline anchor **only while an engagement is live** (open/blocked
+START-HERE), so it survives compaction yet stays silent in ordinary sessions. Wire it once with
+`bash scripts/apply-persona-anchor.sh` (hook wiring is human-only). Same root cause as the
+name-drift quirk below, which the anchor also mitigates.
 
 **First `/engage` of a session can take ~2-3 minutes before the first Morgan message (under
 investigation).** Tester feedback: the **initial** engagement is slow to produce the opening banner;

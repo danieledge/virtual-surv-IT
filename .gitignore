@@ -46,4 +46,7 @@ human-steps.sh
 # committed config edits (.claude/settings.json + hooks/hooks.json) and scripts/dod_stop_gate.py;
 # this apply-script has done its job once those are committed - same convention as apply-guard-*.sh.
 scripts/apply-dod-stop-hook.sh
+
+# Same convention: one-shot wiring for the persona re-anchor hook (ADR-005, 0.27.0)
+scripts/apply-persona-anchor.sh
 docs/executive-brief-draft.html

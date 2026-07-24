@@ -1,18 +1,19 @@
-# ADR-005: Persona re-anchoring - a dormancy-aware per-turn hook (proposed)
+# ADR-005: Persona re-anchoring - a dormancy-aware per-turn hook (accepted)
 
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-005` · Version `0.1` · Status `Proposed`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-23`
+> **Document control** · ID `ADR-005` · Version `0.2` · Status `Accepted`
+> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-24`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-23 | persona-decay discussion (user-reported) | Initial proposal: dormancy-aware UserPromptSubmit re-anchor hook |
+> | 0.2 | 2026-07-24 | best-practice review remediation | Accepted & implemented: `scripts/persona_anchor.py` (tested, ≤8-line anchor, live-engagement trigger); wiring via `scripts/apply-persona-anchor.sh` (human-run) |
 
 | | |
 |---|---|
-| **Status** | **Proposed** - design only; NOT wired into `hooks.json` until human sign-off |
+| **Status** | **Accepted / implemented** - `scripts/persona_anchor.py`; wiring into the two hook files is human-run (`scripts/apply-persona-anchor.sh`, ADR-002 rec 5) |
 | **Date** | 2026-07-23 |
 | **Deciders** | Morgan (orchestrator), human approver |
 | **Traceability** | ADR-004 (session-end capture hook); README "Known issues" (persona decay + name drift); `docs/team-operating-guide.md` §Voice/Roster; CLAUDE.md §6 (persona), §5/§7 (hook-enforced guards) |
