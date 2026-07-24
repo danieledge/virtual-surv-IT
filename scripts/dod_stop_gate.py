@@ -48,7 +48,7 @@ def _reason(findings: list[str]) -> str:
         "(render a missing .html sibling, create/refresh the START-HERE index, remove a premature "
         "final-/delivery-report/summary-email asserted before close) and re-close; ESCALATE only "
         "what needs a human. If the engagement is genuinely still blocked, end the turn saying so "
-        "plainly (\"NOT closed - outstanding: ...\") rather than stopping silently. "
+        'plainly ("NOT closed - outstanding: ...") rather than stopping silently. '
         "(One-time nudge - it will not fire again this stop cycle.)"
     )
 
