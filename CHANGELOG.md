@@ -3,6 +3,17 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.20.0] - 2026-07-24 - clickable Contents (TOC) for large reports
+
+Large engagement reports now carry a clickable table of contents with internal section links.
+- **`render_html`** sets the `toc` extension's `toc_depth` to `2-4`, so a `[TOC]` marker renders a
+  clean section index (sections/subsections, not the H1 title or deep h5/h6). Heading anchors were
+  already emitted and preserved through the sanitizer; this just shapes the auto-generated contents.
+- The **delivery-report** and **review-report** templates now include a `**Contents**` + `[TOC]`
+  block after the document-control header - kept for a large multi-section report, omitted on a
+  short one.
+Verified: `[TOC]` renders section-only internal-link anchors; ruff/bandit green; full pytest (440 passed).
+
 ## [0.19.1] - 2026-07-24 - UTF-8 guard on the remaining CLI scripts
 
 Completes the 0.19.0 follow-up: the same inline UTF-8 stdout/stderr guard now protects every team

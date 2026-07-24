@@ -34,6 +34,11 @@
 | **Reviewer / independence** | `code-reviewer` (AI, independent of builder); `compliance-reviewer` (AI, independent of builder) - no involvement in the code under review |
 | **Verdict** | audit-ready / conditional / not yet |
 
+**Contents** _(keep for a large multi-section review - `[TOC]` renders a clickable section index
+in the `.html`; omit on a short review)_
+
+[TOC]
+
 ## 1. Summary
 Plain-language verdict: would this stand up to audit and regulatory scrutiny, and what (if
 anything) must change first.

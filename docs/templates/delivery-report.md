@@ -25,6 +25,11 @@
 | **Overall verdict** | ready / ready with conditions / not yet |
 | **Findings disposition** | _N_ fixed · _N_ open · _N_ accepted · _N_ deferred |
 
+**Contents** _(keep for a large multi-section report - `[TOC]` renders a clickable, internal-link
+section index in the `.html` via `render_html`; omit on a short report)_
+
+[TOC]
+
 ## 1. Executive summary & next steps
 Plain-language outcome in a few lines. **Reconcile findings with what was then done** - this is
 mandatory: if the engagement found blocking issues **and** then fixed/reimplemented, state the

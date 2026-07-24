@@ -234,7 +234,13 @@ def render(md_text: str, title: str, source: str = "", generated: str = "") -> s
             "The 'Markdown' package is required: pip install -r requirements-dev.txt"
         )
 
-    raw_body = markdown.markdown(md_text, extensions=["tables", "fenced_code", "toc", "sane_lists"])
+    # toc_depth 2-4: a `[TOC]` contents block lists sections/subsections, not the H1 title or deep
+    # h5/h6 - so a large report's Contents stays a clean, clickable section index.
+    raw_body = markdown.markdown(
+        md_text,
+        extensions=["tables", "fenced_code", "toc", "sane_lists"],
+        extension_configs={"toc": {"toc_depth": "2-4"}},
+    )
     # Sanitise rendered HTML body to prevent XSS if artifact content is
     # untrusted (e.g. captured comms snippets, third-party output).
     safe_body = _sanitise(raw_body)
