@@ -34,10 +34,14 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > CI-tested (pytest, lint, secret-scan, no-raw-data), and the **Distributable**,
 > **Engagement-summary email**, **Indexed** and **Stateful** items have a one-command check
 > the PM runs at this gate - and can run at ANY point mid-engagement, since the living index
-> makes the gate meaningful before close: `python -m scripts.check_artifacts` (every
-> `artifacts/*.md` has a rendered `.html` sibling; the START-HERE index exists, has a status,
-> and lists everything; close-only artifacts don't exist early; a summary `.txt` exists at
-> close). Treat the rest as evidenced claims to spot-check, not guarantees.
+> makes the gate meaningful before close: `python -m scripts.check_artifacts --fix` (every
+> `artifacts/*.md` has a rendered `.html` sibling; the summary email is a `.txt`, not `.md`/`.html`;
+> the START-HERE index exists, has a status, and lists everything; close-only artifacts don't
+> exist early; a summary `.txt` exists at close; no stale interim status banner survives a close).
+> **`--fix`** mechanically resolves the auto-fixable ones (render missing HTML; rename a mis-typed
+> email and sync the index) so the close doesn't depend on the model remembering. Output is forced
+> to UTF-8 so it can't crash a Windows console. Treat the rest as evidenced claims to spot-check,
+> not guarantees.
 >
 > That same mechanical check also ships as a **warn-first `Stop` hook** (`scripts/dod_stop_gate.py`),
 > wired into **both** tracked hook files - `.claude/settings.json` (repo-as-project) and

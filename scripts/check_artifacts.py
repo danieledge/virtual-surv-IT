@@ -24,17 +24,25 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      commit-SHA anchor in the header, 📊/🧠 basis tags on map entries, no secret-shaped
      content, and (best effort, when `git` is available) an anchor that still resolves.
      A missing map is NOT a failure - first engagements create it at close.
+  6. the engagement-summary email is a `.txt` (the one artifact never rendered to HTML) - a
+     `.md`/`.html` email is `SUMMARY-WRONG-EXT`;
+  7. once the engagement is ✅ closed, no content artifact still carries a mutable interim/
+     in-progress status banner - the status lives only in START-HERE (`STALE-STATUS`).
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
-No third-party dependencies. Usage:
-`python -m scripts.check_artifacts [artifacts_dir] [codebase_map_path]`.
+No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
+Windows console. Usage:
+`python -m scripts.check_artifacts [artifacts_dir] [codebase_map_path] [--fix]`.
+`--fix` mechanically resolves the auto-fixable defects (render missing `.html` siblings; rename a
+mis-typed summary email to `.txt` and sync the index) before the gate verifies - so the close
+does not depend on the model remembering each step.
 """
 
 from __future__ import annotations
 
 import re
 
-# Used for one fixed-argv git query below - no shell, no untrusted argv.
+# Used for the git anchor query and for --fix's render_html call - both fixed-argv, no shell.
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
@@ -166,6 +174,29 @@ _CLOSE_ONLY_MD_RE = re.compile(r"(?i)^(delivery-report.*|final-.*)\.md$")
 # Filename-shaped tokens ("review-pass-1.md") - used for whole-token index-listing checks so a
 # short name is not treated as listed just because it is a substring of a longer listed name.
 _FILENAME_TOKEN_RE = re.compile(r"[\w.\-]+\.[A-Za-z0-9]+")
+# The engagement-summary email is a .txt by design (the one artifact never rendered to HTML). A
+# summary written as .md/.html is the wrong file type - SUMMARY-WRONG-EXT (auto-fixable).
+_SUMMARY_WRONG_EXT_RE = re.compile(r"(?i)^engagement-summary-.*\.(?:md|html)$")
+# A mutable engagement STATUS lives only in START-HERE (single source of truth). A stale
+# interim/in-progress banner left near the top of a content artifact after close is STALE-STATUS.
+_STALE_STATUS_RE = re.compile(
+    r"(?im)^>.*(?:⏳|\bINTERIM\b|engagement not closed|\bin progress\b|\bnot closed\b)"
+)
+
+
+def _force_utf8_output() -> None:
+    """Windows consoles default to cp1252 and raise UnicodeEncodeError on the emoji basis tags
+    (this gate prints ⏳/✅/📊/🧠), so the check crashed instead of running (live report,
+    2026-07-24). Force UTF-8 on stdout/stderr so it runs everywhere without a `-X utf8` flag.
+    Inlined (not a shared import) because this script is also invoked by direct path in an
+    installed-plugin session, where `from scripts...` would not resolve."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):  # pragma: no cover - stream without a real fd
+                pass
 
 
 def _closed_is_negated(lowered: str) -> bool:
@@ -317,6 +348,15 @@ def check(artifacts_dir: Path) -> list[str]:
 
     md_files = sorted(artifacts_dir.rglob("*.md"))
     for md in md_files:
+        # The summary email must be a .txt; a .md copy is the wrong type, not a missing render -
+        # flag it and do NOT demand an .html sibling for it (that would be the wrong fix).
+        if _SUMMARY_WRONG_EXT_RE.match(md.name):
+            findings.append(
+                f"SUMMARY-WRONG-EXT: {md.name} - the engagement-summary email must be a .txt "
+                "(the one artifact never rendered to HTML); rename it to "
+                f"{md.with_suffix('.txt').name} (DoD / CLAUDE.md §6a)"
+            )
+            continue
         html = md.with_suffix(".html")
         if not html.is_file():
             findings.append(
@@ -339,6 +379,13 @@ def check(artifacts_dir: Path) -> list[str]:
                 "state its impact (docs/review/output-format.md)"
             )
         findings.extend(check_roster(text, md))
+
+    # A wrongly-rendered email copy - the summary email is a .txt only, never an .html.
+    for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
+        findings.append(
+            f"SUMMARY-WRONG-EXT: {stray.name} - the engagement-summary email is a .txt, not "
+            ".html; remove this rendered copy (the .txt is the deliverable)"
+        )
 
     code_files = [
         f for f in artifacts_dir.rglob("*") if f.is_file() and f.suffix.lower() in _CODE_EXTS
@@ -450,13 +497,83 @@ def check(artifacts_dir: Path) -> list[str]:
                 "MISSING-SUMMARY-EMAIL: no artifacts/engagement-summary-*.txt found - the "
                 "closing email (DoD / CLAUDE.md §6a) is a required artifact"
             )
+        # Status is single-source: it lives ONLY in START-HERE. A content artifact still
+        # carrying a mutable interim/in-progress banner after close points readers at an
+        # out-of-date state (live report 2026-07-24: the brief said "in progress" at close).
+        if status == "closed":
+            for md in non_index_md:
+                head = "\n".join(md.read_text(encoding="utf-8", errors="replace").splitlines()[:8])
+                if _STALE_STATUS_RE.search(head):
+                    findings.append(
+                        f"STALE-STATUS: {md.name} still carries an interim/in-progress status "
+                        "banner but START-HERE is closed - engagement status lives ONLY in "
+                        "START-HERE; remove the stale banner"
+                    )
 
     return findings
 
 
+def apply_fixes(artifacts_dir: Path) -> list[str]:
+    """Mechanically resolve the auto-fixable DoD defects (docs/DEFINITION-OF-DONE.md 'AUTO-FIX'
+    class) so the close does not depend on the model remembering each step:
+      * normalise a mis-typed engagement-summary email (.md / .html) to the required .txt;
+      * render every remaining .md that lacks its .html sibling.
+    Returns a log of what changed; idempotent (a second run is a no-op)."""
+    fixed: list[str] = []
+    if not artifacts_dir.is_dir():
+        return fixed
+
+    # Normalise the email FIRST so the render pass never renders a mis-typed .md email.
+    for bad in sorted(artifacts_dir.rglob("engagement-summary-*.md")):
+        target = bad.with_suffix(".txt")
+        if target.exists():
+            continue  # a correct .txt already exists - leave the duplicate for a human
+        bad.rename(target)
+        fixed.append(f"FIXED SUMMARY-WRONG-EXT: renamed {bad.name} -> {target.name}")
+        # Keep the index in sync so the rename can't create a STALE-INDEX. Drop the index's
+        # stale .html sibling too, so the render pass below regenerates it from the new text.
+        for idx in artifacts_dir.rglob("START-HERE.md"):
+            itext = idx.read_text(encoding="utf-8", errors="replace")
+            if bad.name in itext:
+                idx.write_text(itext.replace(bad.name, target.name), encoding="utf-8")
+                idx.with_suffix(".html").unlink(missing_ok=True)
+                fixed.append(
+                    f"FIXED STALE-INDEX: updated START-HERE reference {bad.name} -> {target.name}"
+                )
+    for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
+        stray.unlink()
+        fixed.append(f"FIXED SUMMARY-WRONG-EXT: removed rendered email copy {stray.name}")
+
+    # Render every .md lacking its .html sibling. render_html is resolved by __file__-relative
+    # path so this works both as `-m scripts.check_artifacts` and by direct-path plugin invocation.
+    render_html = Path(__file__).with_name("render_html.py")
+    for md in sorted(artifacts_dir.rglob("*.md")):
+        if md.with_suffix(".html").is_file():
+            continue
+        result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path arg
+            [sys.executable, str(render_html), str(md)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            fixed.append(
+                f"FIXED MISSING-HTML: rendered {md.name} -> {md.with_suffix('.html').name}"
+            )
+        else:
+            fixed.append(f"COULD-NOT-RENDER {md.name}: {(result.stderr or '').strip()[:120]}")
+    return fixed
+
+
 def main(argv: list[str]) -> int:
-    artifacts_dir = Path(argv[1]) if len(argv) > 1 else Path("artifacts")
-    map_path = Path(argv[2]) if len(argv) > 2 else find_codebase_map(Path.cwd())
+    _force_utf8_output()
+    do_fix = "--fix" in argv[1:]
+    positional = [a for a in argv[1:] if not a.startswith("-")]
+    artifacts_dir = Path(positional[0]) if positional else Path("artifacts")
+    map_path = Path(positional[1]) if len(positional) > 1 else find_codebase_map(Path.cwd())
+
+    if do_fix:
+        for line in apply_fixes(artifacts_dir):
+            print(line)
 
     findings = check(artifacts_dir)
     map_note = "no codebase map found - skipped (created at first close, ADR-003)"

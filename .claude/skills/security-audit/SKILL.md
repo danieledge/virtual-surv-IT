@@ -113,5 +113,5 @@ the summary email below. With the brief, **open the START-HERE living index** (`
 **Standard close (Definition of Done - applies even when this skill is invoked directly):**
 write the **engagement-summary email** (`docs/templates/engagement-summary-email.md`) as a
 `.txt` in `artifacts/`, **signed off as Morgan**, then run the mechanical gate -
-`<python> -m scripts.check_artifacts` - and fix anything it flags (missing `.html` siblings or
+`<python> -m scripts.check_artifacts --fix` (the `--fix` mode auto-renders missing `.html` siblings and renames a mis-typed summary email to `.txt`), then act on anything it still flags (missing `.html` siblings or
 a missing email) before handing back. Detail: `docs/team-operating-guide.md`.

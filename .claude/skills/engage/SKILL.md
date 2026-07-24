@@ -420,7 +420,9 @@ is the user's act at their own pace; when they later say "mark X verified", upda
 overlay register with today's `verified_on` (the three checks are in the register header).
 Never record verified without that explicit user statement; never present to-verify as a
 failure - it is the honest state. Before closing, run
-the mechanical DoD gate - `<python> -m scripts.check_artifacts`.
+the mechanical DoD gate **with auto-fix** - `<python> -m scripts.check_artifacts --fix` (it
+auto-renders any missing `.html` siblings and normalises a mis-typed summary email to `.txt`
+before verifying, so a rendering/extension slip can't reach the user).
 
 **Treat the gate output as a FIX-LIST, not a report - these are checks on the team's OWN
 output.** Two tiers (DoD "the gate is a fix-list"):
