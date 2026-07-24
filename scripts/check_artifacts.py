@@ -27,12 +27,18 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
   6. the engagement-summary email is a `.txt` (the one artifact never rendered to HTML) - a
      `.md`/`.html` email is `SUMMARY-WRONG-EXT`;
   7. once the engagement is ✅ closed, no content artifact still carries a mutable interim/
-     in-progress status banner - the status lives only in START-HERE (`STALE-STATUS`).
+     in-progress status banner - the status lives only in START-HERE (`STALE-STATUS`);
+  8. any structured findings pack under `artifacts/data/findings-*.json` validates against
+     `docs/review/findings-schema.json` (`FINDINGS-INVALID`) - the pack is the source of truth a
+     report is rendered from. (`artifacts/data/` is machine-readable source; the top-level
+     `artifacts/` stays user-navigable .md/.txt/.html and is what the .html-sibling + index checks
+     cover - the data/ subtree is excluded from them.)
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
 No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
 Windows console. Usage:
 `python -m scripts.check_artifacts [artifacts_dir] [codebase_map_path] [--fix]`.
+`--fix` also renders each findings pack to its canonical REVIEW-<slug>.md before verifying.
 `--fix` mechanically resolves the auto-fixable defects (render missing `.html` siblings; rename a
 mis-typed summary email to `.txt` and sync the index) before the gate verifies - so the close
 does not depend on the model remembering each step.
@@ -344,6 +350,38 @@ def check_map(map_path: Path) -> list[str]:
     return findings
 
 
+def check_findings_packs(artifacts_dir: Path) -> list[str]:
+    """Validate any structured findings pack under artifacts/data/ against the schema. Shells out to
+    validate_findings (by path, NOT an import) so this stays path-independent - an installed plugin
+    invokes scripts by absolute path. A pack that fails is FINDINGS-INVALID: the model fixes the
+    DATA, not the rendered report. Inert until packs exist (fails open if the validator won't run)."""
+    findings: list[str] = []
+    data_dir = artifacts_dir / "data"
+    if not data_dir.is_dir():
+        return findings
+    validator = Path(__file__).with_name("validate_findings.py")
+    for pack in sorted(data_dir.glob("findings-*.json")):
+        try:
+            result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
+                [sys.executable, str(validator), str(pack)],
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, ValueError):
+            continue  # a validator that won't launch shouldn't brick the gate (fail open)
+        if result.returncode != 0:
+            detail = (
+                "; ".join(
+                    ln.split("FINDINGS-INVALID:", 1)[1].strip()
+                    for ln in result.stdout.splitlines()
+                    if ln.startswith("FINDINGS-INVALID:")
+                )
+                or "schema validation failed"
+            )
+            findings.append(f"FINDINGS-INVALID: {pack.name} - {detail}")
+    return findings
+
+
 def check(artifacts_dir: Path) -> list[str]:
     """Return a list of finding strings; empty means the gate is satisfied."""
     findings: list[str] = []
@@ -353,7 +391,11 @@ def check(artifacts_dir: Path) -> list[str]:
         # check is meaningful only once artifacts exist.)
         return findings
 
-    md_files = sorted(artifacts_dir.rglob("*.md"))
+    findings.extend(check_findings_packs(artifacts_dir))
+    # artifacts/data/ holds machine-readable source (findings packs); the top-level artifacts/ is the
+    # user-navigable set. Exclude the data/ subtree from the .md/.html-sibling and index scans.
+    data_dir = artifacts_dir / "data"
+    md_files = [m for m in sorted(artifacts_dir.rglob("*.md")) if data_dir not in m.parents]
     for md in md_files:
         # The summary email must be a .txt; a .md copy is the wrong type, not a missing render -
         # flag it and do NOT demand an .html sibling for it (that would be the wrong fix).
@@ -529,12 +571,31 @@ def check(artifacts_dir: Path) -> list[str]:
 def apply_fixes(artifacts_dir: Path) -> list[str]:
     """Mechanically resolve the auto-fixable DoD defects (docs/DEFINITION-OF-DONE.md 'AUTO-FIX'
     class) so the close does not depend on the model remembering each step:
+      * render each findings pack (artifacts/data/findings-*.json) to its canonical REVIEW-<slug>.md;
       * normalise a mis-typed engagement-summary email (.md / .html) to the required .txt;
       * render every remaining .md that lacks its .html sibling.
     Returns a log of what changed; idempotent (a second run is a no-op)."""
     fixed: list[str] = []
     if not artifacts_dir.is_dir():
         return fixed
+
+    # Render findings packs FIRST (data -> canonical REVIEW-<slug>.md), so the .html render pass
+    # below then produces their siblings. render_findings validates + owns the layout, and refuses
+    # an invalid pack (that surfaces as FINDINGS-INVALID from the check, not a silent bad report).
+    data_dir = artifacts_dir / "data"
+    if data_dir.is_dir():
+        renderer = Path(__file__).with_name("render_findings.py")
+        for pack in sorted(data_dir.glob("findings-*.json")):
+            result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
+                [sys.executable, str(renderer), str(pack)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                fixed.append(
+                    f"FIXED: rendered {result.stdout.split('-> ')[-1].strip()} from {pack.name}"
+                )
+            # non-zero = invalid pack; the FINDINGS-INVALID check reports it, don't double-flag here
 
     # Normalise the email FIRST so the render pass never renders a mis-typed .md email.
     for bad in sorted(artifacts_dir.rglob("engagement-summary-*.md")):

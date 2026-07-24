@@ -3,6 +3,21 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.24.0] - 2026-07-24 - structured findings Phase 3: check_artifacts integration
+
+`check_artifacts` now understands the structured-findings machinery (0.23.0):
+- **Validates packs** - any `artifacts/data/findings-*.json` is validated against the schema
+  (`FINDINGS-INVALID`), shelling out to `validate_findings` (path-independent), so a bad pack fails
+  the gate. Inert until packs exist (repo baseline unchanged).
+- **`--fix` renders reports from packs** - for each pack it renders the canonical `REVIEW-<slug>.md`
+  (+ `.html`), so the mechanical close produces the report from data, mirroring HTML rendering.
+- **`artifacts/data/` is machine-source, excluded** from the `.html`-sibling and START-HERE index
+  scans; the top-level `artifacts/` stays user-navigable. `FINDINGS-CWORD-LABELS` /
+  `FINDING-NO-IMPACT` kept as backstops for hand-authored / transition reports.
+- `render_findings` made import-robust (works by direct path, not only `-m`), matching `render_html`.
+Tests added; pytest 453 passed; ruff/bandit green. (Phase 2 - the review skills emitting packs -
+is the remaining piece.)
+
 ## [0.23.0] - 2026-07-24 - structured findings + deterministic render (Phase 1: machinery)
 
 The Anthropic-strongest fix for report-format drift: findings become **schema-validated structured
