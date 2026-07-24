@@ -8,13 +8,18 @@
   "additionalProperties": true,
   "properties": {
     "slug": { "type": "string", "description": "kebab-case id; drives the artifact filename" },
+    "kind": {
+      "type": "string",
+      "enum": ["review", "security-audit", "performance"],
+      "description": "which review kind - drives the rendered artifact's prefix (REVIEW- / SECURITY-AUDIT- / PERF-) and title. Defaults to 'review' if omitted."
+    },
     "title": { "type": "string" },
     "scope": { "type": "string", "description": "files / commit range reviewed" },
     "commit": { "type": "string", "description": "the reviewed commit SHA, if known" },
     "mode": { "type": "string", "enum": ["change", "audit"] },
     "reviewer_independence": { "type": "string" },
     "tooling_coverage": { "type": "string", "description": "analysers run / skipped (🔬)" },
-    "verdict": { "type": "string", "enum": ["ready", "conditional", "not-ready", "audit-ready"] },
+    "verdict": { "type": "string", "description": "free-text verdict; wording varies by kind (e.g. 'conditional', 'audit-ready', 'scales to target', 'won't scale')" },
     "executive_summary": { "type": "string" },
     "developer_guidance": { "type": "string", "description": "the mandatory 🔵 forward-looking section" },
     "limitations": { "type": "string", "description": "limitations & residual risk" },
@@ -39,6 +44,9 @@
           "likely_cause": { "type": "string", "description": "why the gap exists; never silent (audit 'cause')" },
           "impact": { "type": "string", "description": "consequence in domain terms (audit 'consequence')" },
           "impact_basis": { "type": "string", "enum": ["measured", "coded", "inferred"] },
+          "current_cost": { "type": "string", "description": "performance only: the current cost (e.g. '4.2s @ 100k rows')" },
+          "projected_cost": { "type": "string", "description": "performance only: cost after the fix" },
+          "gain": { "type": "string", "description": "performance only: the improvement (e.g. '~40x @ 100k')" },
           "fix": {
             "type": "object",
             "required": ["diff", "why"],

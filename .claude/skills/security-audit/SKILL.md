@@ -88,8 +88,14 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
    section** (2-4 security-hardening points, even on a clean pass; verify it is in the artifact
    before presenting).
 
-Save `artifacts/SECURITY-AUDIT-<slug>.md` and render to `.html` (`<python> -m scripts.render_html`;
-`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin
+**The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
+schema `docs/review/findings-schema.json`). Write the findings to
+`artifacts/data/findings-<slug>.json` with **`"kind": "security-audit"`** (each finding the five
+named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition), then run
+**`<python> -m scripts.check_artifacts --fix`** (allow-listed): it validates the pack
+(`FINDINGS-INVALID` → fix and re-run) and renders `artifacts/SECURITY-AUDIT-<slug>.md` + `.html`
+(the `kind` drives the `SECURITY-AUDIT-` prefix). Don't hand-author or hand-edit the report.
+(`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin
 session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the
 bundled scripts").
 
