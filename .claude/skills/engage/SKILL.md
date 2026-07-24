@@ -131,64 +131,13 @@ identically for manually copied / air-gapped installs with no git or network acc
 below.** Target: two turns from invocation to the user's first question - the probe call,
 then the ask.
 
-**Execution safety - show the disclaimer PROMINENTLY, then ask once (record it) - CLAUDE.md §7.**
-Before any review, display this as a **loud, can't-miss callout** (its own block, ⚠️ header,
-bold) - never buried in a paragraph:
-
-> ⚠️ **SAFETY - running your code.** I review code **statically by default** (reading it +
-> analysers that don't run it). To run its tests or profile it, the team has to **execute** it.
-> I'll keep strictly to static-only if you say so - but I **can't guarantee a mistake never
-> happens**, so please treat anything you hand over as if it **could** be run: **make sure it's
-> safe to execute and don't provide code that would be harmful if run. Ensuring handed-over code
-> is safe is your responsibility.**
-
-Ask this once (`multiSelect: false`), **batched in the opening screen below** when code is
-involved. **Word it exactly as an intent question, not a grant** - the menu answer does NOT open
-the gate (see below), and the options must say so or the user is misled into thinking they've
-consented when execution is still blocked:
-*"Should the team execute the code under review (run tests / profile)?"* →
-- **Yes - I'll grant consent** (trusted code, safe/dev or sandbox env, synthetic data only §5).
-  *Description must include:* "this answer alone doesn't unlock anything - I'll give you a
-  one-line command to type; execution stays hard-blocked until you do."
-- **No - static analysis only** (dynamic/perf findings stay 🧠 inferred; any existing consent
-  marker gets deleted).
-
-Record the answer; don't re-ask per command. Default to **No** if unsure; **never** run code of
-unknown provenance or touch production data/systems.
-
-**Enabling/disabling the hook gate - the menu answer is INTENT; the marker is the CONSENT:**
-execution is hard-blocked by `guard-code-execution.py` until authorised - and **the team cannot
-grant that authorisation to itself**: a second hook (`guard-consent-writes.py`, ADR-002 rec 5)
-blocks any model write of the consent marker or the settings files. On **"Yes"**, ask the user
-to perform the actual consent act **themselves** - and **always show the command with the
-absolute project path** (resolve the project root first, e.g. from `pwd`; never a bare relative
-path, which silently creates the marker in the wrong place if their terminal is elsewhere):
-type **`! touch /absolute/path/to/project/.claude/.exec-consent`** (`!` as the *first* character
-of the prompt line runs it as their own shell command - on Windows the `!` shell is Git Bash,
-so `touch` works there too). **Give the command matched to where the user will type it** - a
-Windows user pasting into their own terminal has no `touch`:
-- PowerShell: `ni "C:\absolute\path\.claude\.exec-consent" -Force`
-- cmd.exe: `type nul > "C:\absolute\path\.claude\.exec-consent"`
-- any bash/zsh terminal (macOS/Linux/Git Bash): `touch /absolute/path/.claude/.exec-consent`
-On Windows, show the PowerShell form alongside the `!` form by default. Alternatively
-`CST_ALLOW_EXEC=1` in the launch environment (the hard override - also human-only). **Never
-wrap consent-granting in a helper script** - the act stays a literal command the human types. **Verify the marker exists** (a
-read-only `ls .claude/.exec-consent` is allowed)
-before executing anything; if the user answered "Yes" but the marker never appears, execution
-is still blocked - say so plainly, keep dynamic findings 🧠 inferred, and never present the menu
-answer as consent. On **"No"**, **delete** `.claude/.exec-consent` if it exists (`rm` is allowed
-- closing the gate is always fail-safe), so the gate stays closed. Repeat the responsibility
-note in the final Delivery Report.
-
-**Data safety - show this disclaimer at startup too, right next to the execution one (both are
-punchy, can't-miss callouts at first contact - CLAUDE.md §5):**
-
-> 🛡️ **DATA SAFETY - what you share.** 📡 Everything you point me at goes to the model provider.
-> 🔴 Raw data in `data/raw/` is **hard-blocked** - I can't read it. 🟠 For **any other data you
-> share**, by giving me access you **confirm it carries no PII/MNPI or anything your data policy
-> prohibits - or that you've anonymised/masked it appropriately.** 🤖 I **can't verify that for
-> you** - keeping shared data safe and compliant is **your responsibility.** 🟢 Unsure? Go
-> synthetic or run **`/prepare-data`** first.
+**Safety gates - two verbatim disclaimers + the consent-intent question (CLAUDE.md §5 + §7).**
+When a target exists and code/data is involved, read `references/safety-gates.md` (this skill's
+folder) and follow it exactly: show the **execution-safety** and **data-safety** disclaimers as
+loud, can't-miss callouts (verbatim from the reference - never paraphrased or buried); ask the
+execution question as **intent, not grant** (the human creates the consent marker themselves - the
+reference has the per-OS commands; verify the marker exists before executing anything; a "No"
+deletes any existing marker, fail-safe).
 
 **Sequence the opening, then batch - one screen, not three round-trips.** Two hard rules first:
 - **Precedence on a bare `/engage`** (no concrete target/inputs in the request): step 1a wins -
@@ -210,15 +159,9 @@ With the target known: show both disclaimers (text) at startup, then ask in a **
   reading the request* (step 1). `/engage review this script` needs no "problem / review /
   build?" menu - classify it yourself, state the classification in one line, and let the user
   correct it. Don't manufacture the question when the answer is in the request.
-- **Execution consent** (header `Execution`) - *only include it when code is/looks involved*
-  (review / build / remediate). For a pure problem-scoping engagement with no code, skip it;
-  default **No** if unsure.
-- **Data attestation** (header `Data safety`, `multiSelect: false`) - *only include it when data
-  is plausibly involved* (analysis / tuning / pipeline work, or the user mentions data);
-  otherwise record "no data involved" silently and move on. When asked:
-  *"Any data you'll share - is it safe to use?"* →
-  **Yes - synthetic/masked/anonymised, no prohibited PII** · **No / unsure - help me prepare it**
-  (→ `/prepare-data`) · **No data involved** (always offered, so it's one tap).
+- **Execution consent** (header `Execution`) - only when code is/looks involved; default **No**.
+- **Data attestation** (header `Data safety`) - only when data is plausibly involved; otherwise
+  record "no data involved" silently. Exact menus + wording: `references/safety-gates.md`.
 
 Record the answers; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.**
 Repeat the execution- and data-responsibility notes in the final Delivery Report.
@@ -254,58 +197,12 @@ If the user just typed `/engage` (or `/engage test some code`) with no concrete 
 **first reply** is to ask what/where the code or inputs are - don't proceed without them.
 
 **1b. If it's a review, offer the review-type menu - don't make the user know the shortcuts.**
-When the user asks for "a review" in plain English (rather than naming `/deep-review` etc.),
-present the menu via the **AskUserQuestion tool**. Use **exactly the two questions below, with
-these exact options and descriptions - do not improvise, merge, or reword them**, because the
-last time this was left loose the model offered "Quick **and** Deep" as a multi-select (illogical
-- Deep already includes Quick) and gave the options inconsistent descriptions.
-
-> **Critical construction rules:**
-> - **Ask Q1, Q2 and Q3 below in ONE `AskUserQuestion` call** (the tool takes up to 4 questions
->   per call) - one screen, not three round-trips. They remain **three distinct questions**, each
->   `multiSelect: false`; batching the *call* is not the same as merging the *lists*.
-> - **Headers:** Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle` (the tool truncates long headers;
->   these are locked like the option wording).
-> - **Q1 (depth) is single-select** - the user picks **exactly one** depth. Quick ⊂ Deep ⊂ Audit,
->   so selecting more than one is nonsense; the tool must not allow it.
-> - **Q2 (performance) is a SEPARATE question** (yes/no). **Never merge** the depth options and the
->   performance option into one list.
-> - Every depth produces the **same clean findings artifact** (`artifacts/REVIEW-*.md` + `.html`)
->   - so **do not** mention "a report/artifact" on one option and not another. Keep the option
->   descriptions parallel: each states *what it checks* and *when you'd use it*, nothing more.
-
-**Q1 - "What depth of code review?"  (single-select / `multiSelect: false`):**
-
-| Label | Description (use ~verbatim) |
-|---|---|
-| **Quick** | Fast check on the **changed code only** - bugs, security, language. Reports 🔴 Critical / 🟠 Warning. *Best for "am I OK to commit?"* |
-| **Deep** | Everything in Quick **plus** architecture, 🟡 Medium findings, impact analysis and test/doc coverage - the whole change in context. *Best for "is this solid before a PR?"* |
-| **Audit** | A Deep review in **audit-readiness mode** - keeps pre-existing issues in scope and checks the §4/§5 regulatory audit trail, for an audit-ready verdict. *Best for "would it survive an auditor?"* (A convenience preset; the fix→re-review loop is a **separate** choice below.) |
-| **None** | Skip the code review (e.g. you only want the performance review). |
-
-**Q2 - "Also run a performance & scalability review?"  (single-select / `multiSelect: false`):**
-
-| Label | Description |
-|---|---|
-| **Yes** | Add a **static** scalability review vs target data volumes - findings 🧠 inferred (📊 only for an explicit coded cost), with a total-impact summary. Measured profiling is a future opt-in. Runs alongside the chosen depth. |
-| **No** | No performance review. |
-
-**Q3 - "After the review, what should happen to the findings?"  (single-select / `multiSelect: false`) - applies to ANY depth, *including Quick*:**
-
-| Label | Description |
-|---|---|
-| **Report only** | Surface the findings; change nothing. |
-| **Apply fixes** | Fix the findings, then stop. |
-| **Fix → re-review loop** | Fix, re-review, repeat until clean (no Criticals) or you call it. This is the loop "Audit" implies - now available to **Quick/Deep too**. |
-
-> Only **one** depth runs (Audit ⊃ Deep ⊃ Quick - no triple-passing). The fix-cycle (Q3) is
-> independent of depth, so e.g. *Quick + Fix→re-review loop* is valid. **If the user picks
-> Q1 = None AND Q2 = No** there is nothing to run - don't dead-end or invent work: say so and
-> return to the outcome question via the question tool ("no review selected - what would you
-> like instead?"). For taking on legacy code
-> end-to-end (assess → fix → re-review → handover) use the heavier **`/remediate`**, not this
-> in-review loop. After the choice, the review skill asks the finer **scope** (dimensions ·
-> breadth · change-vs-audit mode) - type *then* scope, never needing a slash command.
+When the user asks for "a review" in plain English, read `references/review-menu.md` and present
+its **LOCKED** three-question construction (Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle`)
+**exactly as specified, in ONE `AskUserQuestion` call** - do not improvise, merge or reword the
+options. Q1 = None + Q2 = No → nothing to run: say so and return to the outcome question via the
+question tool. **Q3 (fix-cycle) captured here is the single source of truth - the review skill
+must NOT re-ask it.**
 
 **2. Clarify only if genuinely needed - no ceremony.** Don't ask a standalone "any other
 clarifications?" round by default. **Fold** any remaining material unknown (jurisdiction, success
@@ -323,29 +220,12 @@ single-select: **Apply the fixes** · **Show me the diff first** · **Don't chan
 *unless Q3 already authorised it* ("Apply fixes" / the fix→re-review loop) - don't double-ask
 what the user has already answered.
 
-**3. Offer the artifact menu - two stages, because the tool caps a question at 4 options.**
-By **default, consolidate everything into a single Delivery Report**
-(`docs/templates/delivery-report.md`) - review, performance, compliance, QA evidence, handover
-and change/ops as sections of one file, not many. **Never spec one giant multi-select of every
-template** (the tool renders at most 4 options; an 11-option list forces improvisation). Use
-exactly this structure (locked, like the Q1-Q3 menu):
-
-**Stage 1** (header `Artifacts`, `multiSelect: false`):
-*"How should the deliverables be packaged?"* →
-**Consolidated Delivery Report** (the default - everything as sections of one document) ·
-**Separate artifacts** (standalone documents, e.g. a change request for a ticket) ·
-**Both** (the consolidated report plus selected standalones).
-
-**Stage 2 - only if "Separate" or "Both"** - ONE batched call of grouped multi-selects
-(each `multiSelect: true`, each ≤4 options; skip any group irrelevant to the engagement):
-- header `Spec docs`: Engagement Brief · BRD · FSD · RTM
-- header `Reviews`: Code & Compliance Review · Performance Review · Model Validation Report · ADRs
-- header `Handover`: Developer Handover · QA Handover · Ops Runbook + Release Notes · Change Request
-Anything rarer (`docs/templates/` has the full catalogue - SAR referral, lexicon spec, …) is
-reachable via each question's automatic "Other".
-
-The **handover pack is a deliverable and belongs here** (not in the findings/fix question).
-Each is delivered in **both `.md` and `.html`**.
+**3. Offer the artifact menu - locked two-stage construction.** Default = **one consolidated
+Delivery Report** (`docs/templates/delivery-report.md`) holding every section. For the exact
+two-stage menu (packaging single-select, then grouped ≤4-option multi-selects) read
+`references/artifact-menu.md` and use it verbatim - never improvise a giant template list. The
+**handover pack is a deliverable and belongs here** (not in the findings/fix question). Every
+artifact ships `.md` + `.html`.
 
 **4. Summarise - and open the living index.** Write an Engagement Brief
 (`docs/templates/engagement-brief.md`) capturing decisions taken, open questions,
@@ -395,73 +275,17 @@ verdict and footprint filled, the ⚠️-outstanding section replaced with "Noth
 verifies all of this (`MISSING-INDEX` / `INDEX-NO-STATUS` / `STALE-INDEX` /
 `FINAL-BEFORE-CLOSE` / `SUMMARY-BEFORE-CLOSE`).
 
-**Citations gate (default: ship flagged, teach the fix - never block the close).** Run
-`<python> -m scripts.check_citations` over the artifacts. Anything flagged TO-VERIFY is
-**assumed unverified and shipped that way**: mark each such citation in the artifact
-*(citation to-verify)*, and add this standard note to the report (in the limitations
-section) and a one-liner in the closing email:
-
-> **Citations marked to-verify** have not yet been human-checked against their linked
-> sources. If you are happy they are accurate - the linked page shows the provision, it
-> says what this document claims, and the typology fits - have them recorded as verified
-> for future engagements: tell the team *"mark <citation> as verified"* in any session
-> (it updates this project's `config/regulatory-register.yaml` overlay with today's date),
-> or edit that file directly per its header instructions.
-
-Include each flagged citation's source permalink next to it, resolved in this order:
-(1) the citation is already in the register (any status) → use its stored `source` URL;
-(2) new citation → construct from the **permalink schemes in the register header**
-(`config/regulatory-register.yaml` documents EUR-Lex, legislation.gov.uk, eCFR, FINRA, FCA
-Handbook, MAS and FATF/ESMA schemes - read them, don't guess); (3) neither fits → the
-official site's search, or ship "source link to be confirmed". **Never invent a
-plausible-looking URL** - a constructed link is only ever a proposal until the human
-verification confirms the page shows the cited provision. **Do not ask a verification question at the close** - verification
-is the user's act at their own pace; when they later say "mark X verified", update the
-overlay register with today's `verified_on` (the three checks are in the register header).
-Never record verified without that explicit user statement; never present to-verify as a
-failure - it is the honest state. Before closing, run
-the mechanical DoD gate **with auto-fix** - `<python> -m scripts.check_artifacts --fix` (it
-auto-renders any missing `.html` siblings and normalises a mis-typed summary email to `.txt`
-before verifying, so a rendering/extension slip can't reach the user).
-
-**Treat the gate output as a FIX-LIST, not a report - these are checks on the team's OWN
-output.** Two tiers (DoD "the gate is a fix-list"):
-- **AUTO-FIX and re-run, never hand to the user:** `MISSING-HTML` → render it · `ROSTER-UNKNOWN`
-  / `ROSTER-ROLE-MISMATCH` → correct the persona to the canonical roster (a specialist name is
-  never invented; the role is the anchor) · `MISSING-INDEX`/`STALE-INDEX`/`INDEX-NO-STATUS` →
-  fix the living index · a missing interim banner or a "final/v1.0" asserted while still open →
-  set the correct state · a non-portable absolute source path → relativise or mark external · an
-  incomplete/miscounted source index or a missing per-finding evidence tag → complete it.
-  Re-run `check_artifacts` until only judgement items remain; note auto-corrections in one line.
-- **ESCALATE via the question tool (do NOT self-fix):** a rationale contradicted by the evidence
-  ("the email says X but the artifact says Y"), a closure/sign-off on authority you cannot verify
-  (verbal only, no written authority), a scope/acceptance call. Pause and ask what to do - these
-  are real decisions, not defects. (A `🔴`/`FINAL-BEFORE-CLOSE`/`SUMMARY-BEFORE-CLOSE` is
-  auto-fix; an evidence contradiction is escalate.)
-
-Never deliver a self-correctable defect as a reported "documentation-standards failure" - fixing
-it silently is the job (it's the one DoD check that's a command, not a claim).
-
-**6a. Update the codebase map at close (ADR-003 - a DoD gate).** Before the engagement
-closes, **update the working project's codebase map** (`docs/codebase-map.md`; create it from
-`docs/templates/codebase-map.md` on a first engagement): **add** the **durable architecture**
-this engagement taught you about the code - how it is built, its load-bearing decisions, its
-quirks and sharp edges (with 📊/🧠 tags, as-of dates and fresh SHA anchors), **correct or
-deprecate** anything found wrong or stale (to the Deprecated section, dated, with a reason -
-never silently), and append the engagement-history row. **The map is a map of the CODE, not a
-log of what the team did** - a map entry is a fact that stays true after this engagement's
-findings are fixed. Do **not** write findings, severities, review dispositions
-("reported/open/fixed"), or a "what we did this time" summary into the entries - that is
-engagement activity: it belongs in the review artifact and the one-line §3 history row, never
-in the map entries. (Reviews/audits especially: the output is findings, so capture the
-*architecture you learned by reading the code*, not a findings recap. A live failure produced
-a map that was a summary of testing activity instead of a code map - the template §2 has the
-✅/❌ contrast.) **You write it -
-subagents only recommend entries in their reports**; persist your own synthesis, never
-verbatim text from reviewed code, and never data values, secrets, PII or MNPI (§5). Keep it
-under ~200 lines - link to artifacts for detail. `check_artifacts` (step 6) validates its
-hygiene mechanically. An append-only map is a defect: if nothing was corrected or deprecated
-across several engagements, say so and check harder.
+**Citations gate + fix-list + codebase map - follow the close checklist.** Read
+`references/close-checklist.md` (this skill's folder; `$PLUGIN_ROOT/.claude/skills/engage/references/`
+in plugin mode) and follow it: (a) run `<python> -m scripts.check_citations` - TO-VERIFY citations
+ship flagged with permalinks and the standard limitations note, never blocking the close and never
+asking a close-time verification question; (b) run the mechanical DoD gate **with auto-fix** -
+`<python> -m scripts.check_artifacts --fix` - and treat its output as a **FIX-LIST**: auto-fix the
+deterministic defects and re-run; **escalate via the question tool** only evidence contradictions,
+unverifiable sign-off authority, or scope/acceptance calls - never hand the user a self-correctable
+defect. (c) **update the working project's codebase map** (ADR-003, a DoD gate): add durable
+architecture facts (📊/🧠 tags, dates, SHA anchors), correct/deprecate stale entries - it maps the
+CODE, never the team's activity; PM-written, ≤~200 lines.
 
 **7. Close with next steps - never dead-end.** Finish with a short summary of what was done
 and **concrete next-step options with your recommendation**, then offer to carry them out
