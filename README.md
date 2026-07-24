@@ -2,8 +2,8 @@
 
 # Virtual Surv-IT
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Version 0.20.0](https://img.shields.io/badge/version-0.20.0-blue)
+![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
+![Version 0.21.0](https://img.shields.io/badge/version-0.21.0-blue)
 ![Tests 220+ passing](https://img.shields.io/badge/tests-220%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -1272,5 +1272,23 @@ validating all outputs before any production use.**
 
 ## 📄 License
 
-MIT, see [`LICENSE`](LICENSE). Third-party attributions are in
-[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md).
+**GNU AGPL-3.0-only** — Copyright © 2026 Daniel Edge. Full text in [`LICENSE`](LICENSE).
+
+In plain English (not legal advice; the [`LICENSE`](LICENSE) text governs):
+
+- ✅ **Use it freely, including inside a company and for commercial work** — running, modifying and
+  using it internally carries no obligation. Internal use is not "distribution".
+- 🔁 **If you distribute it, or offer it to others as a network/hosted service**, you must make your
+  **complete corresponding source** (including your modifications) available to those users under
+  the **same AGPL-3.0** terms. This is what stops it being taken closed-source, repackaged and
+  resold or hosted as a proprietary product.
+- 🚫 **No warranty** (provided "as is").
+- 💼 **Want it without the AGPL source-sharing obligation** (e.g. to embed it in a proprietary
+  product)? A separate **commercial licence** can be arranged — contact the author. (The author is
+  the sole copyright holder and can dual-license; external contributions would be taken under a
+  contributor agreement so that stays possible — see [`CONTRIBUTING.md`](CONTRIBUTING.md).)
+
+The project bundles and adapts permissively-licensed third-party components (MIT / BSD-3 / PSF) —
+those keep their own licences; their notices are in
+[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md). Permissive licences may be included in an
+AGPL-licensed work, so there is no conflict.

@@ -1,7 +1,10 @@
 # Third-Party Licences
 
-This project bundles and adapts third-party open-source work. Each component's licence and
-copyright notice is reproduced below, as required by its terms.
+**This project is licensed under GNU AGPL-3.0-only** (see [`LICENSE`](LICENSE)). It bundles and
+adapts third-party open-source work under **permissive** licences (MIT / BSD-3-Clause / PSF), which
+may be included in an AGPL-licensed work without conflict. Each component's licence and copyright
+notice is reproduced below, as required by its terms, and is unaffected by the project's AGPL
+licence.
 
 ---
 

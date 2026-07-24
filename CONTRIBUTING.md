@@ -4,6 +4,15 @@ Thanks for helping improve the Compliance Surveillance Engineering virtual team.
 Claude Code plugin (agents + skills + docs + a small Python tooling package). The notes below
 keep contributions consistent with the project's own standards.
 
+## Licence & contribution terms
+
+The project is licensed under **GNU AGPL-3.0-only** (see [`LICENSE`](LICENSE)). By submitting a
+contribution you agree it is provided under that same licence (inbound = outbound), and — so the
+maintainer can continue to offer a **commercial dual licence** — you grant the maintainer
+(the sole copyright holder) the right to license your contribution under other terms as part of
+the project. Don't contribute code you don't have the right to license this way. A formal CLA may
+be introduced later; until then, opening a PR constitutes that agreement.
+
 ## Ground rules (non-negotiable)
 
 - **Never commit real data or secrets.** All examples and tests use **synthetic or masked** data
