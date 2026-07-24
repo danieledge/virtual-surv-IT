@@ -85,26 +85,22 @@ the **standard/tool** cited, an **evidence basis** (📊 measured / 🧠 inferre
 a plain-language **Problem** explanation, a one-line **Impact if unaddressed**, and a concrete
 **`diff`-style fix + "why this works."**
 
-> **Problem and Impact are written for a reader who did not build the code and was not in the
-> session** - a finding that only *names* the defect forces the reader to re-derive why it
-> matters (a live engagement had to iterate the document for exactly this). **Problem** says
-> what is wrong and how we know, in plain language. **Impact** states the consequence in the
-> domain's terms - missed detections / false negatives, alert-volume or tuning effects,
-> audit/regulatory exposure, data-integrity or operational cost - and carries its own 📊/🧠
-> basis when the consequence is projected rather than observed. No finding ships without both.
-> Together with **Likely cause** and the fix, the shape covers the audit profession's **5 C's**
-> (criteria · condition · cause · consequence · corrective action): the standard-cited line is
-> the criteria, Problem the condition, Likely cause the cause, Impact the consequence, and the diff
-> the corrective action.
-> **Present them as the five named fields above, each on its own line - the same five, every
-> finding.** Do **not** collapse them into a dense inline "5-C summary" (less neat, harder to scan),
-> and **never label a block "5C" while showing fewer than five.** A live report labelled every
-> finding "5C Summary" yet the count **varied finding-to-finding** - some had all five, some four,
-> some only three (Condition / Consequence / Correction, dropping criteria (the Standard) and cause
-> (Likely cause)) - inconsistent, mislabelled, and run inline. Consistency is the point: the five
-> fields appear, in order, on their own lines, for **every** finding. If you write a one-line recap,
-> don't call it "5C" unless all five are present. Criteria = the **Standard** line; Cause =
-> **Likely cause** (mandatory, never silent).
+> **Every finding uses these five named fields - the same five, in this order, each on its own
+> line, every finding. Print the field _names_, not C-words:**
+> - **Standard** - the cited rule / CWE / § *(the audit "criteria")*
+> - **Problem** - what is wrong and how we know, in plain language *(the "condition")*
+> - **Likely cause** - why the gap exists; mandatory, never silent *(the "cause")*
+> - **Impact if unaddressed** - the consequence in domain terms (missed detections / false
+>   negatives, alert-volume or tuning effects, audit exposure, data-integrity or operational cost),
+>   carrying its own 📊/🧠 basis when projected rather than observed *(the "consequence")*
+> - **Fix** - the `diff` + "why this works" *(the "corrective action")*
+>
+> The italic parentheses are the audit profession's **5 C's** that these five fields satisfy - that
+> is the *rationale*, **not labels to print**. So **never** emit a "5C Summary" block, the C-words
+> as labels ("Condition / Consequence / Correction"), or a dense inline recap - that drift produced
+> an inconsistent three-to-five items per finding, run inline (2026-07-24 report). **Problem** and
+> **Impact** are written for a reader who did not build the code and was not in the session - naming
+> the defect isn't enough; no finding ships without both.
 > **Worked exemplars to anchor on: [`gold-findings.md`](gold-findings.md).**
 
 ### 🔴 Critical (95-100) - must fix
