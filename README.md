@@ -1112,7 +1112,7 @@ plugin-resolution `find` with `-maxdepth`. Tracked; needs the `time` measurement
 targets the real bottleneck rather than guessing.
 
 <details>
-<summary>⚠️ <b>Two display-only quirks</b>: the PM sometimes narrates the wrong teammate name, and some emoji miss their glyph on older Windows + Edge; neither affects what the team does</summary>
+<summary>⚠️ <b>Three display-only quirks</b>: the PM sometimes narrates the wrong teammate name, occasionally states the team-sizing line twice, and some emoji miss their glyph on older Windows + Edge; none affects what the team does</summary>
 
 Both quirks below are **display-only**: they don't affect what the team does (routing, tool grants,
 the actual deliverables). Flagged plainly, in the spirit of the proof-of-concept notice at the top.
@@ -1125,6 +1125,14 @@ the actual deliverables). Flagged plainly, in the spirit of the proof-of-concept
   ⚖️ / ⏭️ disposition markers). The files are clean UTF-8 and declare a UTF-8 charset, so this is a
   **font glyph-coverage gap** in that browser/OS, not corruption. The word is always kept beside the
   emoji, so no meaning is lost; an up-to-date system renders them.
+- **Morgan occasionally states the team-sizing line twice** on a chained engagement (e.g. a deep
+  audit review), the second copy correcting a role in the first (e.g. Layla's audit-depth job
+  restated as the *independent synthesis read at close*). It's the model **self-revising mid-turn**
+  and re-emitting the sentence rather than replacing its draft - the same soft-discipline root as the
+  name drift, made a little likelier by the chained `engage → audit-review` flow both touching team
+  composition. The roster and routing are correct (the second line is the accurate one); only the
+  running commentary duplicates. A light "state-sizing-once" guard in `engage`/`audit-review` is a
+  candidate fix, not yet applied.
 
 <details>
 <summary>Why the name drift happens (and why it's only cosmetic)</summary>
