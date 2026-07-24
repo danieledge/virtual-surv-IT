@@ -3,6 +3,16 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.22.1] - 2026-07-24 - findings-format clarity: name the fields, not the "C's"
+
+Clarity pass after confusion over "5 C's" vs the field names. `output-format.md` now **leads** with
+the five named fields to print - **Standard · Problem · Likely cause · Impact if unaddressed · Fix**,
+each on its own line, every finding - and demotes the audit "5 C's" to a parenthetical rationale
+("not labels to print"). The check is renamed `FINDINGS-5C-COLLAPSE` → `FINDINGS-CWORD-LABELS`, its
+message leads with the field names, and detection is **broadened** to catch the C-words used as bold
+labels (Condition / Consequence / Correction), not only a "5C summary" block. No repo-artifact false
+positives; pytest 443 passed.
+
 ## [0.22.0] - 2026-07-24 - mechanical findings-format check (FINDINGS-5C-COLLAPSE)
 
 Backs the 0.21.2 spec clarification with **enforcement**: `check_artifacts` now flags any findings

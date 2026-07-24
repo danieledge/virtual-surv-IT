@@ -83,10 +83,13 @@ _TEST_FILE_RE = re.compile(r"(^test_|_test\.|\.spec\.|^conftest\.py$)", re.I)
 # critic; this gate only asserts block-format findings carry the mandatory line.
 _FINDING_HEAD_RE = re.compile(r"^###\s+[🔴🟠]\s+\S", re.M)
 _IMPACT_LINE_RE = re.compile(r"^\*\*Impact if unaddressed:?\*\*", re.M)
-# A findings report must use the five NAMED fields (Standard/Problem/Likely cause/Impact/Fix), not a
-# collapsed "5C summary" block - which drifted to an inconsistent 3-to-5 C's per finding, run inline
-# (2026-07-24 report). Flag the label; the fields themselves are the 5 C's (output-format.md).
-_FINDINGS_5C_RE = re.compile(r"(?i)\b5[\s\-]?c\b[\s\-]*summary")
+# A findings report must use the five NAMED fields (Standard/Problem/Likely cause/Impact/Fix), NOT
+# the audit C-words as labels ("Condition/Consequence/Correction") or a collapsed "5C summary" block
+# - that drift ran inline with an inconsistent 3-to-5 items per finding (2026-07-24 report). Flag a
+# C-word bold label at line start, or any "5C summary" label. (output-format.md.)
+_FINDINGS_CWORD_RE = re.compile(
+    r"^\*\*(?:condition|consequence|correction)\b|\b5[\s\-]?c\b[\s\-]*summary", re.I | re.M
+)
 
 # Roster gate: an artifact must not attribute work to a persona who is not on the team, or to
 # the wrong role. A live delivery report (2026-07-23) invented "Chidi (code-reviewer)" and
@@ -382,11 +385,11 @@ def check(artifacts_dir: Path) -> list[str]:
                 "block(s) with no '**Impact if unaddressed:**' line - every finding must "
                 "state its impact (docs/review/output-format.md)"
             )
-        if _FINDINGS_5C_RE.search(text):
+        if _FINDINGS_CWORD_RE.search(text):
             findings.append(
-                f"FINDINGS-5C-COLLAPSE: {md} collapses findings into a '5C summary' - use the five "
-                "NAMED fields (Standard/Problem/Likely cause/Impact/Fix), each on its own line, the "
-                "same five for every finding; never a '5C' block (docs/review/output-format.md)"
+                f"FINDINGS-CWORD-LABELS: {md} labels findings with audit C-words / a '5C summary' - "
+                "print the five NAMED fields instead (Standard, Problem, Likely cause, Impact, Fix), "
+                "each on its own line, the same five for every finding (docs/review/output-format.md)"
             )
         findings.extend(check_roster(text, md))
 

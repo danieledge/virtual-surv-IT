@@ -659,10 +659,23 @@ def test_findings_5c_summary_label_flagged(tmp_path):
     )
     _touch(art / "REVIEW-x.html", "<html></html>")
     _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
-    assert "FINDINGS-5C-COLLAPSE" in "\n".join(check(art))
+    assert "FINDINGS-CWORD-LABELS" in "\n".join(check(art))
 
 
-def test_canonical_named_fields_not_flagged_as_5c(tmp_path):
+def test_findings_cword_bold_labels_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, listed=["REVIEW-z.md", "engagement-summary-z.txt"])
+    # C-words as bold field labels (no "5C summary" text) - still the drift.
+    _touch(
+        art / "REVIEW-z.md",
+        "# Review\n\n### 🔴 WF-08\n\n**Condition:** x\n\n**Consequence:** y\n\n**Correction:** z\n",
+    )
+    _touch(art / "REVIEW-z.html", "<html></html>")
+    _touch(art / "engagement-summary-z.txt", "Hi,\n\nMorgan\n")
+    assert "FINDINGS-CWORD-LABELS" in "\n".join(check(art))
+
+
+def test_canonical_named_fields_not_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _index(art, listed=["REVIEW-y.md", "engagement-summary-y.txt"])
     _touch(
@@ -672,4 +685,4 @@ def test_canonical_named_fields_not_flagged_as_5c(tmp_path):
     )
     _touch(art / "REVIEW-y.html", "<html></html>")
     _touch(art / "engagement-summary-y.txt", "Hi,\n\nMorgan\n")
-    assert "FINDINGS-5C-COLLAPSE" not in "\n".join(check(art))
+    assert "FINDINGS-CWORD-LABELS" not in "\n".join(check(art))
