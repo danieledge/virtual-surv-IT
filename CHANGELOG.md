@@ -3,6 +3,42 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.27.0] - 2026-07-24 - Anthropic best-practice remediation (all review gaps; dev)
+
+One batch closing every gap from the 2026-07-24 best-practice review, on the `dev` channel.
+
+### Added
+- **Release gate (gap 1)** - `scripts/release_gate.py`: `dev` → `main` promotion now mechanically
+  requires a committed `evals/eval-baseline-<version>.md` fresher than the last prompt commit
+  (+ version/badge/CHANGELOG consistency). Procedure in CONTRIBUTING "Promotion"; DoD updated.
+- **Persona re-anchor hook (gap 5, ADR-005 accepted)** - `scripts/persona_anchor.py`
+  (UserPromptSubmit): re-injects a ≤8-line persona/discipline anchor each turn **only while an
+  engagement is live**, so Morgan survives compaction; silent when dormant. Wire once:
+  `bash scripts/apply-persona-anchor.sh` (human-run).
+- **Staged consent-guard precision pass (gap 4)** - `scripts/staged_hooks/guard-consent-writes.py`:
+  quote-aware splitting, echo/printf as safe verbs, read-only loop headers - kills the four
+  observed false-block classes while every write path (incl. `$()` inside double quotes, and
+  mutating loop bodies via the loop variable) still blocks. 17 existing + 14 new tests pass against
+  the staged guard. Install = human act: `bash scripts/apply-guard-precision.sh`.
+
+### Changed
+- **Agent boilerplate thinned (gap 2 / #7)** - the tagging/distilled-summary/durable-lessons block
+  families compressed to standard one-liners across the 16 agents (role-specific content kept);
+  the full tagging rule rides in inherited CLAUDE.md §6 (proven by probe).
+- **`/engage` progressive disclosure (gap 3)** - 483 → 307 lines; safety-gate wording, the locked
+  review menu, the artifact menu and the close checklist moved verbatim to just-in-time
+  `references/` files loaded only when their step runs. Cuts cold-start and chained-skill
+  compaction pressure at the source.
+- **Minors (gap 6)** - qa-handover + tuning-pack authored skeleton-first (prefill technique);
+  findings packs gain an optional `methodology` field rendered as the `## Method` section.
+
+### Notes
+- Prompt-touching release: **the new release gate itself requires an eval baseline before this
+  promotes to `main`** - run the golden-slice `/run-evals` on dev and record
+  `evals/eval-baseline-0.27.0.md`.
+- Two human one-shots pending: `apply-persona-anchor.sh` (wire the anchor) and
+  `apply-guard-precision.sh` (install the staged guard).
+
 ## [0.26.0] - 2026-07-24 - structured findings: security-audit + performance too (dev)
 
 Completes the structured-findings rollout to the remaining review kinds (the Phase 2 follow-up).
