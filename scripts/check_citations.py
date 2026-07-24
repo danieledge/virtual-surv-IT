@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from pathlib import Path
 
 _REGISTER = Path(__file__).resolve().parent.parent / "config" / "regulatory-register.yaml"
@@ -147,6 +148,12 @@ def lookup(typology: str, register: dict | None = None) -> list[dict]:
 
 
 def _main(argv: list[str] | None = None) -> int:
+    # Force UTF-8 output so a cp1252 (Windows) console can't crash on non-ASCII (e.g. `§`) - 0.19.0.
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     ap = argparse.ArgumentParser(description="Ground regulatory citations against the register.")
     ap.add_argument("artifact", nargs="?", type=Path, help="path to a .md/.txt artifact to scan")
     ap.add_argument("--typology", help="retrieve obligations for a typology (e.g. spoofing)")

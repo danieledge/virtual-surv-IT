@@ -16,6 +16,7 @@ Reproduce:
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 
 from rules.spoofing import detect_spoofing
@@ -69,6 +70,12 @@ def _metrics(c: Counts) -> tuple[float, float, float]:
 
 
 def main() -> int:
+    # Force UTF-8 output so a cp1252 (Windows) console can't crash on non-ASCII (0.19.0).
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     per_segment, total = _evaluate()
     print("Spoofing rule - measured performance on a labelled SYNTHETIC corpus (method validation,")
     print(

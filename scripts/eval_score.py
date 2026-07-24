@@ -172,6 +172,12 @@ def score(expected: dict, findings: list[dict]) -> dict:
 
 
 def _main(argv: list[str] | None = None) -> int:
+    # Force UTF-8 output so a cp1252 (Windows) console can't crash on non-ASCII (0.19.0).
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     ap = argparse.ArgumentParser(description="Score team findings vs a golden manifest.")
     ap.add_argument("--expected", required=True, help="path to expected.yaml")
     ap.add_argument("--findings", required=True, help="path to findings JSON")

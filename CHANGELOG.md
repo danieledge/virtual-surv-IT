@@ -3,6 +3,14 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.19.1] - 2026-07-24 - UTF-8 guard on the remaining CLI scripts
+
+Completes the 0.19.0 follow-up: the same inline UTF-8 stdout/stderr guard now protects every team
+CLI script that can emit non-ASCII, so none crashes on a cp1252 (Windows) console - `check_citations`
+(prints `§` in matched citations), `validate_masking`, `eval_score`, `calibrate_spoofing`. Inlined
+(not a shared import) so it survives direct-path plugin invocation. Verified: ruff/bandit green,
+scripts run, full pytest (440 passed).
+
 ## [0.19.0] - 2026-07-24 - close-gate hardening: auto-fix, .txt email, single-source status, Windows-safe
 
 Hardens the mechanical DoD gate from tester feedback on a live corporate engagement, so the close
