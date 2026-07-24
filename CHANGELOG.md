@@ -3,6 +3,31 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.25.0] - 2026-07-24 - structured findings Phase 2: reviews route through the pack
+
+The code/audit review path now **produces the structured findings pack** instead of hand-authoring
+the report - so format drift is gone by construction on that path (the WF-07/08/09 class).
+- **`code-reviewer`** returns findings as the schema JSON (`docs/review/findings-schema.json`,
+  exemplar `gold-findings.json`) - it authors DATA, never layout.
+- **`deep-review`** "Present" step: the PM writes `artifacts/data/findings-<slug>.json`
+  (post-challenge), runs **`check_artifacts --fix`** (allow-listed) to validate + render
+  `REVIEW-<slug>.md` + `.html`, then presents the scoreboard. `developer_guidance` is a mandatory
+  pack field.
+- **`audit-review`** consolidates the `compliance-reviewer` findings into the same pack, then
+  `--fix` renders.
+- **`output-format.md`**: findings are structured-data-rendered, not hand-authored; its field
+  descriptions are the pack's fields and its layout is what `render_findings` emits.
+- **No guard change needed**: the team runs only `check_artifacts` (already allow-listed), which
+  validates + renders via internal subprocess (internal subprocesses aren't gated).
+
+### Follow-ups (tracked)
+- `security-audit` + `performance-review` use distinct artifact names/shapes (`SECURITY-AUDIT-` /
+  `PERF-`) and are **not yet pack-wired** - they keep the `render_html` flow + the
+  `FINDINGS-CWORD-LABELS` / `FINDING-NO-IMPACT` backstops until `render_findings` handles those
+  prefixes/shapes.
+
+pytest 453 passed; repo baseline unchanged.
+
 ## [0.24.0] - 2026-07-24 - structured findings Phase 3: check_artifacts integration
 
 `check_artifacts` now understands the structured-findings machinery (0.23.0):

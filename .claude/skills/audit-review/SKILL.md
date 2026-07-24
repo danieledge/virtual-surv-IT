@@ -64,7 +64,12 @@ Run an **evaluator-optimizer loop**:
    self-review is unreliable - `docs/research-virtual-team.md`); fix or escalate what it flags before
    ✅. Right-sized: it reads the pack, it does not re-run the review.
 
-Save `artifacts/REVIEW-<slug>.md` and render to `.html` (`<python> -m scripts.render_html`).
+**The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`).
+Step 1's `/deep-review` already wrote `artifacts/data/findings-<slug>.json`; **consolidate the
+compliance-reviewer findings from step 2 into the same pack** (append to `findings[]`; use the pack's
+narrative fields for the audit skeleton), then run **`<python> -m scripts.check_artifacts --fix`** -
+it validates the pack (`FINDINGS-INVALID` → fix and re-run) and renders `artifacts/REVIEW-<slug>.md`
++ `.html`. Don't hand-author or hand-edit the rendered report.
 (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
 installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
 "Run mode & the bundled scripts".)

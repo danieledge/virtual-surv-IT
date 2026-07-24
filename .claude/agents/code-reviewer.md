@@ -104,13 +104,19 @@ rather than this one.
 ## Output
 
 Follow **`docs/review/output-format.md`** exactly - it is the single canonical format:
+- **Return findings as the STRUCTURED findings-pack JSON** (schema `docs/review/findings-schema.json`,
+  exemplar `docs/review/gold-findings.json`) - each finding an object with the five required fields
+  (`standard`, `problem`, `likely_cause`, `impact`, `fix`{`diff`,`why`}) plus `id`/`title`/`severity`/
+  `location`/`basis`/`disposition`. **You author the DATA, never the report layout** - the PM writes
+  it to `artifacts/data/findings-<slug>.json` and `check_artifacts --fix` renders the canonical
+  `REVIEW-<slug>.md`, so a finding can never drift format. Do NOT hand-author markdown findings or a
+  "5C summary"; a missing field is a schema error, not a silent drop. (Deep review adds architecture
+  findings the same way; 📐/💥 notes go in the pack's narrative fields.)
 - **Console** gets the clean traffic-light **scoreboard** (`🔴/🟠/🟡/🔵/🔇` counts +
-  `Found/Reported/Filtered` + a pointer to the artifact). Never dump a wall of tables.
-- **Return a distilled summary to the orchestrator** - the scoreboard plus headline findings,
-  target under ~30 lines; the full findings live in the artifact, never the return message.
-- The **clean artifact** (`artifacts/REVIEW-<slug>.md`, rendered to `.html`) holds the full
-  findings: each with `file:line`, confidence, standard/tool, **evidence basis** (📊/🧠), and a
-  `diff`-style fix + "why this works". Deep adds 📐 Architectural notes + 💥 Impact analysis.
+  `Found/Reported/Filtered`). Never dump a wall of tables.
+- **Return a distilled summary to the orchestrator** - the scoreboard plus headline findings and the
+  findings JSON, target under ~30 lines of prose (the JSON is the payload); the rendered report holds
+  the full detail.
 - The **🔵 style & form** lane carries non-blocking "consider in future" suggestions -
   surfaced, never inflated into Warnings, never affecting the verdict.
 - **If the code was AI-assisted / "vibe-coded"** (the user said so at intake, or the findings make
