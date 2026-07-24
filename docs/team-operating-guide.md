@@ -249,11 +249,16 @@ must be visible **between** gates.
   question(s) AND every gate not yet run - "independent QA: not yet run"), and **end the turn
   stating plainly: "this engagement is NOT closed - outstanding: …"**. Never present interim
   work as a wrap-up; never let silence quietly become a close.
-- **Interim artifacts declare themselves.** Every content artifact written before close opens
-  with a one-line banner under its title: `> ⏳ INTERIM - engagement not closed; DoD checks
-  have not run.` - **including the engagement brief**. Remove it (or flip to the
-  document-control status) at close. **The one exception is `START-HERE.md` itself**: its
-  **Status** field already carries the state, so it takes no banner.
+- **Interim artifacts declare themselves; the mutable STATUS lives in ONE place.** Every content
+  artifact written before close opens with a one-line banner under its title: `> ⏳ INTERIM -
+  engagement not closed; DoD checks have not run.` - **including the engagement brief**. But the
+  mutable engagement **status** (⏳/⛔/✅) is owned by **exactly one document - START-HERE**: an
+  artifact's banner *declares it is interim*, it must not become a second place that restates a
+  status and then rots. **Remove the banner at close** - now **mechanically enforced**: a stale
+  interim/in-progress banner left on any artifact once START-HERE is ✅ closed is a `STALE-STATUS`
+  defect (auto-fixable), born of a live failure (2026-07-24: a brief's "in progress" banner
+  survived to close and read as current). **The one exception is `START-HERE.md` itself**: its
+  **Status** field carries the state, so it takes no banner.
 - **Filename register - names may not imply finality early.** `delivery-report.md` (and any
   `final-*`) is the consolidated **close** artifact and may not exist before ✅
   (`FINAL-BEFORE-CLOSE`); the summary email likewise (`SUMMARY-BEFORE-CLOSE`). Interim outputs

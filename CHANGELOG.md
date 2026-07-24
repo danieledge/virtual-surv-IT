@@ -3,6 +3,39 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.19.0] - 2026-07-24 - close-gate hardening: auto-fix, .txt email, single-source status, Windows-safe
+
+Hardens the mechanical DoD gate from tester feedback on a live corporate engagement, so the close
+does not depend on the model remembering each step.
+
+### Added
+- **`check_artifacts --fix`** - mechanically resolves the auto-fixable DoD defects: renders every
+  `.md` missing its `.html` sibling, and renames a mis-typed `engagement-summary-*.md`/`.html`
+  email to the required `.txt` (syncing the START-HERE index reference and regenerating its HTML).
+  Idempotent. The close steps (`engage` / `deep-review` / `audit-review` / `performance-review` /
+  `security-audit` / `handover`) now run `--fix`, so a rendering or extension slip can't reach the user.
+- **`SUMMARY-WRONG-EXT`** check - the engagement-summary email must be a `.txt` (the one artifact
+  never rendered to HTML); a `.md`/`.html` email is now a named, auto-fixable finding (and no longer
+  mis-reported as `MISSING-HTML`). Live report: an engagement produced the email as `.md`.
+- **`STALE-STATUS`** check - once START-HERE is ✅ closed, no content artifact may still carry a
+  mutable interim/in-progress status banner. The mutable status (⏳/⛔/✅) now lives in **one place -
+  START-HERE** - so a brief's "in progress" banner can't survive to close and read as current
+  (live failure 2026-07-24). Operating-guide lifecycle rule updated to match.
+
+### Fixed
+- **Windows console crash.** `check_artifacts` forces UTF-8 on stdout/stderr, so the emoji basis
+  tags (📊/🧠/⏳/✅) no longer raise `UnicodeEncodeError` on a cp1252 Windows console (the gate
+  crashed instead of running until re-run with a UTF-8 flag). Inlined (not a shared import) so it
+  works under direct-path plugin invocation too.
+
+### Notes
+- Verified functionally (built temp engagements, ran the gate + `--fix` to a clean pass) and against
+  ruff/bandit; regression tests added in `tests/test_check_artifacts.py`. Full `pytest` is
+  tester-run (exec-gated on this box).
+- Follow-up (tracked): replicate the one-line UTF-8 guard to the other emoji-printing team scripts
+  (`check_citations`, `validate_masking`, `eval_score`, `calibrate_spoofing`); Morgan should also
+  run `check_citations` at close on citation-bearing deliverables (a live close skipped it).
+
 ## [0.18.0] - 2026-07-24 - context-engineering: leaner orchestrator, state that survives compaction
 
 Addresses the early-compaction-during-setup and slow-first-`/engage` known issues (README),

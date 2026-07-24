@@ -16,6 +16,7 @@ import subprocess
 
 from scripts.check_artifacts import (
     _index_status,
+    apply_fixes,
     check,
     check_map,
     check_roster,
@@ -576,3 +577,74 @@ def test_map_too_long_flagged(tmp_path):
     _touch(m, _good_map(sha) + "filler\n" * 260)
     codes = "".join(check_map(m))
     assert "MAP-TOO-LONG" in codes
+
+
+# --- summary-email extension, single-source status, and the --fix auto-fixer ----------------
+
+
+def test_summary_email_as_md_is_wrong_ext_not_missing_html(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, listed=["engagement-summary-x.md"])
+    _touch(art / "engagement-summary-x.md", "Hi,\n\nSummary.\n\nMorgan\n")
+    codes = "\n".join(check(art))
+    assert "SUMMARY-WRONG-EXT" in codes
+    # The email is a .txt, never rendered - it must NOT be nagged for a missing .html sibling.
+    assert "MISSING-HTML" not in codes
+
+
+def test_summary_email_as_html_is_wrong_ext(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, listed=["engagement-summary-x.txt"])
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    _touch(art / "engagement-summary-x.html", "<html></html>")
+    assert "SUMMARY-WRONG-EXT" in "\n".join(check(art))
+
+
+def test_stale_status_banner_flagged_when_closed(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_CLOSED, listed=["engagement-brief.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "engagement-brief.md",
+        "# Brief\n\n> ⏳ INTERIM - engagement not closed; DoD checks have not run.\n",
+    )
+    _touch(art / "engagement-brief.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "STALE-STATUS" in "\n".join(check(art))
+
+
+def test_stale_status_not_flagged_while_open(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_OPEN, listed=["engagement-brief.md"])
+    _touch(
+        art / "engagement-brief.md",
+        "# Brief\n\n> ⏳ INTERIM - engagement not closed; DoD checks have not run.\n",
+    )
+    _touch(art / "engagement-brief.html", "<html></html>")
+    # An interim banner is CORRECT while open - only a closed engagement makes it stale.
+    assert "STALE-STATUS" not in "\n".join(check(art))
+
+
+def test_apply_fixes_renames_email_renders_html_and_syncs_index(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, listed=["review-pass-1.md", "engagement-summary-x.md"])
+    _touch(art / "review-pass-1.md", "# Review\n")  # no .html sibling
+    _touch(art / "engagement-summary-x.md", "Hi,\n\nMorgan\n")  # wrong extension
+
+    fixed = "\n".join(apply_fixes(art))
+
+    assert "engagement-summary-x.md -> engagement-summary-x.txt" in fixed
+    assert (art / "engagement-summary-x.txt").is_file()
+    assert not (art / "engagement-summary-x.md").exists()
+    assert (art / "review-pass-1.html").is_file()  # rendered by the fixer
+    # the index reference was synced, so the rename leaves no residual STALE-INDEX
+    index_text = (art / "START-HERE.md").read_text(encoding="utf-8")
+    assert "engagement-summary-x.txt" in index_text
+    assert "engagement-summary-x.md" not in index_text
+
+
+def test_apply_fixes_is_idempotent(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, listed=["review-pass-1.md"])
+    _touch(art / "review-pass-1.md", "# Review\n")
+    apply_fixes(art)  # first pass renders the missing HTML
+    assert apply_fixes(art) == []  # second pass: nothing left to fix
