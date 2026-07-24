@@ -1274,7 +1274,7 @@ validating all outputs before any production use.**
 
 **GNU AGPL-3.0-only** — Copyright © 2026 Daniel Edge. Full text in [`LICENSE`](LICENSE).
 
-In plain English (not legal advice; the [`LICENSE`](LICENSE) text governs):
+In plain English (the [`LICENSE`](LICENSE) text governs):
 
 - ✅ **Use it freely, including inside a company and for commercial work** — running, modifying and
   using it internally carries no obligation. Internal use is not "distribution".
