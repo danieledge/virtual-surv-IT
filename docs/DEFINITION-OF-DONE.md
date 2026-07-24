@@ -54,7 +54,11 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 >
 > **Changes to the team itself** (prompts, skills, agent definitions) gate on the eval harness:
 > full pytest (contract + docs-consistency tests) plus a live golden-slice spot check for prompt
-> changes. A change that drops a previously passing golden case does not land.
+> changes. A change that drops a previously passing golden case does not land. **This gate is now
+> mechanical at the release boundary**: `dev` → `main` promotion requires a committed
+> `evals/eval-baseline-<version>.md` record that is *fresher than the last prompt commit*, verified
+> by `python -m scripts.release_gate` (see CONTRIBUTING.md "Promotion") - a documented gate nobody
+> runs is decoration (2026-07-24 review: nine prompt-touching releases had shipped with no eval run).
 
 ## Every delivery
 

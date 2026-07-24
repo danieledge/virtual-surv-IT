@@ -21,6 +21,21 @@ be introduced later; until then, opening a PR constitutes that agreement.
 - **Target PRs and feature branches at `dev`**, not `main`. Small, safe fixes may go straight to
   `main`; anything substantial goes via `dev`.
 
+### Promotion (`dev` → `main`) - eval-gated, mechanically
+
+A promotion is a release: the DoD requires prompt-touching changes to be **eval-gated**, and the
+gate is now mechanical, not a documented intention:
+
+1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 33 cases) in a
+   Claude Code session on this repo.
+2. Record the result as **`evals/eval-baseline-<version>.md`** (date · cases run · pass/fail ·
+   notes; `Scope: full` — or `Scope: deterministic-only` for a patch release with no prompt
+   changes, which used pytest + the deterministic scorer only). Commit it.
+3. Run **`python -m scripts.release_gate`** (add `--allow-deterministic` for a patch release). It
+   verifies version/badge/CHANGELOG consistency, that the baseline exists for the version being
+   promoted, and that **no prompt file was committed after the baseline** (a stale baseline fails).
+4. Only on `release gate: OK` - merge `dev` → `main` and push.
+
 ## Ground rules (non-negotiable)
 
 - **Never commit real data or secrets.** All examples and tests use **synthetic or masked** data
