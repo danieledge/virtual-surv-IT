@@ -87,7 +87,7 @@ above, and it applies even when this skill is invoked directly):** unless you ar
 (`docs/templates/engagement-brief.md`) as `.md` + `.html` in `artifacts/` - the target, the scope
 and decisions taken, assumptions, and the plan; **right-size it** (a few lines for a small review,
 not a full programme). The brief is the opening artifact of **every** engagement and the bookend to
-the summary email below. With the brief, **open the START-HERE living index** (`docs/templates/start-here.md`, status ⏳), appending a row to it as each artifact lands - lifecycle discipline (operating guide): a pause on unanswered user input is ⛔ BLOCKED said out loud ("this engagement is NOT closed - outstanding: ..."), interim output takes pass-scoped names (`review-pass-N`, `interim-*`), and `delivery-report.md` + the summary email are written at ✅ close only.
+the summary email below. With the brief, **open the START-HERE living index** (`docs/templates/start-here.md`, status ⏳), appending a row to it as each artifact lands - **write the brief and its index row together in the same turn, before ending the turn; never leave the index trailing** (it is the external memory that survives compaction) - lifecycle discipline (operating guide): a pause on unanswered user input is ⛔ BLOCKED said out loud ("this engagement is NOT closed - outstanding: ..."), interim output takes pass-scoped names (`review-pass-N`, `interim-*`), and `delivery-report.md` + the summary email are written at ✅ close only.
 
 **Standard close (Definition of Done - applies even when this skill is invoked directly):**
 write the **engagement-summary email** (`docs/templates/engagement-summary-email.md`) as a

@@ -147,8 +147,10 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       otherwise open with "Hi,"; sign off as Morgan. (It's an email, so it stays `.txt` and is
       the one artifact not rendered to HTML.)
 - [ ] **Codebase map updated** - the working project's codebase map (`docs/codebase-map.md`,
-      template `docs/templates/codebase-map.md`, decision ADR-003) was **read at open and
-      updated at close**: entries added with 📊/🧠 tags, dates and SHA anchors; stale or wrong
+      template `docs/templates/codebase-map.md`, decision ADR-003) was **consulted at open**
+      (header + §3 history loaded at turn 0; full §2 sections read just-in-time when relied on -
+      not pre-loaded, per ADR-003) **and updated at close**: entries added with 📊/🧠 tags, dates
+      and SHA anchors; stale or wrong
       entries corrected or moved to Deprecated (never silently dropped); engagement-history
       row appended. PM-written only; advisory-only; no PII/MNPI/secrets/raw-data content (§5).
       Mechanical hygiene is part of the `python -m scripts.check_artifacts` gate.

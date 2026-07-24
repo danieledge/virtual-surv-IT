@@ -56,8 +56,12 @@ always-loaded.**
 3. **Anchored and tagged.** Every entry carries an as-of date, a commit-SHA anchor where it
    describes code, and a 📊 observed / 🧠 inferred basis tag. Deprecated entries move to a
    dated Deprecated section rather than silently disappearing, so corrections are auditable.
-4. **Lifecycle, not accumulation.** `/engage` reads the map at open and surfaces entries whose
-   anchors no longer resolve; the Definition of Done gains an update-at-close gate: add,
+4. **Lifecycle, not accumulation.** `/engage` **consults** the map at open - loading only a
+   lightweight slice (header + §3 engagement-history) into turn-0 context and reading full §2
+   sections **just-in-time** when an entry is actually relied on (Anthropic context-engineering:
+   avoid pre-loading the whole map into the orchestrator, which pushes long engagements toward
+   premature compaction) - and surfaces entries whose anchors no longer resolve; the Definition of
+   Done gains an update-at-close gate: add,
    correct and deprecate entries before the engagement closes. Both directions are mandatory;
    a map that is only ever appended to is a defect.
 5. **Write path = the PM, at gates.** Subagents never write the map. Advisors recommend map

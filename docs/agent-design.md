@@ -125,7 +125,7 @@ and this matrix are the guard against drift.*
 | **Scale effort to complexity**; state the number of agents | ✅ | PM states intended agent count + why at the gate (`engage` §5). |
 | Budget **~15× tokens**; reserve multi-agent for high value | ✅ | "~15× the tokens" cited verbatim (CLAUDE.md §6). |
 | **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 11 sonnet / 1 haiku. |
-| Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) reduces *re-reading* big outputs - but a subagent's final message still lands in the orchestrator's context; we don't *enforce* a condensed return. Aspirational. |
+| Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) + a **hard ≤~1,500-token / ~30-line return budget** stated in the delegation brief and each agent's return instruction (operating guide §Orchestration; an over-budget return is a stated defect to trim, aligned to Anthropic's 1-2k-token sub-agent return). Still 🟡: it is **prompt-level, not hook-enforced** - a subagent's final message still lands in the orchestrator's context if it ignores the budget. |
 | **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no Write/Edit (Bash, where granted, is execution-gated, §7). |
 | Guard the failure modes (over-spawn · duplicate · runaway · premature stop) | ✅ | Right-size + state-count (over-spawn); non-overlapping briefs (duplicate); fix-loop stop conditions (runaway); never-dead-end (premature stop). |
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
@@ -140,7 +140,8 @@ and this matrix are the guard against drift.*
 deliberate fits to our *interactive, human-gated* model (vs Anthropic's long-running autonomous
 research agent), and some are genuine gaps stated plainly: structured **self-assessment** is a
 one-line convention, not an enforced loop (we lean on independent review instead); **condensed
-sub-agent returns** are aspirational, not enforced. The **LLM-judge eval harness** is shipped
+sub-agent returns** now carry a stated **hard ≤~1,500-token budget** in the brief (0.18.0) but
+remain prompt-level, not hook-enforced. The **LLM-judge eval harness** is shipped
 (`evals/`, `/run-evals`); the **team-size / per-role marginal-value** question is
 acknowledged-unbenchmarked (see `docs/research-virtual-team.md`), not claimed as proven.
 

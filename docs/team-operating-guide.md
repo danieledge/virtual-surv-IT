@@ -234,6 +234,16 @@ must be visible **between** gates.
   `.html`), the ⚠️-outstanding list kept current, verdict + footprint filled at close. It is
   never "written last": a stalled engagement must still show its true state to whoever opens
   the folder. Mechanically checked (`MISSING-INDEX`, `INDEX-NO-STATUS`, `STALE-INDEX`).
+- **Atomicity - the index must LEAD reality, never trail it (survives compaction).** Writing an
+  artifact and appending its START-HERE row are **one unit of work**: append the row (and set the
+  status) in the **same turn** as the artifact, **before ending the turn** - never end a turn with
+  an artifact on disk but the index not yet listing it. START-HERE is the engagement's **external
+  memory** (Anthropic context-engineering): if Claude Code **compacts** the conversation, the
+  transcript is summarised but START-HERE persists on disk, so it is what a resumed session reads
+  back - it must reflect what has actually been done, not lag a turn behind. (Live failure
+  2026-07-24: a code review compacted right after the brief was written but before its row was
+  appended, leaving the index behind the true state.) The 0.17.0 DoD `Stop`-hook backstops this by
+  flagging a stale index at turn-end, but only once START-HERE exists - author it index-first.
 - **Pausing on a question = ⛔, said out loud.** Whenever a turn ends waiting on user input the
   team cannot proceed without: set START-HERE to ⛔ with the outstanding list (the unanswered
   question(s) AND every gate not yet run - "independent QA: not yet run"), and **end the turn
@@ -309,9 +319,16 @@ the user informed and in charge, check before anything irreversible.
   scope boundaries (what *another* agent owns), inputs/artifacts to read, expected output format.
   **A subagent inherits none of the conversation** - its brief is the only channel in, so put every
   needed input in it; an underspecified brief is what makes two agents duplicate work or leave a gap.
-- **Condensed returns (standing rule).** Every brief instructs the subagent to return a distilled
-  summary - target under ~30 lines; the artifact carries the detail. The orchestrator's context is
-  an attention budget (Anthropic's context-engineering guidance).
+- **Condensed returns (standing rule - a hard budget, not a nicety).** Every brief instructs the
+  subagent to return a distilled summary within a **hard budget of ≤ ~1,500 tokens (~30 lines)**;
+  the artifact carries the detail. Anthropic's sub-agent guidance puts a good distilled return at
+  **1,000-2,000 tokens** - a subagent may explore over tens of thousands of tokens internally but
+  must hand back only the distilled result. **A return over budget is a defect to trim, not
+  something to pass through:** the subagent's final message lands verbatim in the orchestrator's
+  context, so a verbose return balloons Morgan and pushes a long engagement toward premature
+  compaction. The orchestrator's context is an attention budget (Anthropic's context-engineering
+  guidance); state the budget in the brief, and if a return blows it, send it back to be distilled
+  (or distil it before acting) rather than carrying the bloat.
 - **Coordinate through artifacts, not chatter (the "blackboard")** - agents read/write the shared
   set (Delivery Report, RTM, specs); each step's output is the next step's input.
 - **Challenge the agents - the PM is a sceptic, not a relay.** Don't pass findings through verbatim:
