@@ -1112,30 +1112,34 @@ plugin-resolution `find` with `-maxdepth`. Tracked; needs the `time` measurement
 targets the real bottleneck rather than guessing.
 
 **A heavy engagement can hit context compaction during *setup* - before it's fully stood up - and
-leave state behind (under investigation).** Tester report: a code review **compacted ~9 minutes in,
-while the engagement brief was still being written**; the brief then finished but the **START-HERE
-index wasn't advanced before compaction**. Two things compound here:
-- **Compaction fires too early** because the orchestrator (Morgan) context fills fast: the step-0
-  turn-0 payload (~400-line operating guide + codebase-map + CHANGELOG + tool report), the
-  always-loaded agent/skill definitions, and - the likely dominant cost in a *code review* - the
-  code/diff plus the review docs (method + lenses + output-format). **Suspected root cause:** the
-  bulky reading is happening **in the main loop** instead of being delegated to the `code-reviewer`
-  subagent, so it lands in the orchestrator's context (orchestration discipline says delegate
-  verbose, self-contained reading precisely to avoid this). Needs confirmation - it's the biggest
-  lever.
+leave state behind (under investigation).** Tester report: a code review **compacted ~9 minutes in -
+right after the engagement brief was written, but before START-HERE was advanced to reflect it** (so
+the index was left behind the true state at the moment compaction erased the working context). Two
+things compound here:
+- **Compaction fires too early** because the *orchestrator's* context fills with **instruction/doc
+  front-load**, not the code. Investigated (2026-07-24): the code reading **is** correctly delegated
+  - `deep-review` drives `code-reviewer` for the analysis and `review-scorer` for context detection,
+  and Morgan only does a challenge pass on the *findings* - so "the main loop reads the code" is
+  **largely refuted** as the cause. The real driver is the setup corpus loaded into the single
+  orchestrator context **before the work starts**: the ~330-line operating guide + the working
+  project's codebase-map (~250) + CHANGELOG + tool report (all dumped by the one step-0 probe), plus
+  the **chained skill files** a code review stacks (`engage` → `audit-review` → `deep-review`), plus
+  `CLAUDE.md` and the 16 agent descriptions. Same root as the cold-start issue above; a code review
+  is the worst case because it chains three skills into one context.
 - **State can lag the work when compaction interrupts.** The lifecycle discipline expects START-HERE
   to gain a row *"the moment each artifact is written"*, but the brief-write and the index-update are
   separate steps, so a compaction in between leaves the index behind reality - which, combined with
   the persona/discipline decay above, is the exact "stalled engagement, gate never fires" failure the
   discipline exists to stop.
-- **Candidate mitigations (not yet applied):** (a) delegate code/diff reading to `code-reviewer` so
-  the bulk never enters the orchestrator's context; (b) trim the turn-0 payload (defer the
-  codebase-map/CHANGELOG, per the cold-start issue above); (c) make the brief-write and START-HERE
-  update **index-first / atomic** so the index reflects the brief even if compaction interrupts; (d)
-  note that the 0.17.0 DoD `Stop`-hook catches a stale/missing index at turn-end **once START-HERE
-  exists**, but by design stays silent if START-HERE was never created - a backstop, not full cover.
-  Tracked; investigation should start by confirming whether the main loop is reading code rather than
-  delegating.
+- **Candidate mitigations (not yet applied):** (a) **trim the turn-0 payload** - defer the
+  codebase-map and CHANGELOG out of the step-0 probe (load lazily; ~280 lines saved every engage),
+  the same lever as the cold-start issue above and the biggest single win; (b) make the brief-write
+  and START-HERE update **index-first / atomic** so the index reflects the brief even if compaction
+  interrupts; (c) **enforce condensed subagent returns** (`agent-design.md` §5 flags this as
+  aspirational, not enforced) so a verbose `code-reviewer` return can't balloon the orchestrator
+  later - a separate variant of the same failure class; (d) the 0.17.0 DoD `Stop`-hook catches a
+  stale/missing index at turn-end **once START-HERE exists**, but by design stays silent if
+  START-HERE was never created - a backstop, not full cover. Tracked.
 
 <details>
 <summary>⚠️ <b>Three display-only quirks</b>: the PM sometimes narrates the wrong teammate name, occasionally states the team-sizing line twice, and some emoji miss their glyph on older Windows + Edge; none affects what the team does</summary>
