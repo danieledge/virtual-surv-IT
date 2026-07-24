@@ -94,7 +94,17 @@ a plain-language **Problem** explanation, a one-line **Impact if unaddressed**, 
 > basis when the consequence is projected rather than observed. No finding ships without both.
 > Together with **Likely cause** and the fix, the shape covers the audit profession's **5 C's**
 > (criteria · condition · cause · consequence · corrective action): the standard-cited line is
-> the criteria, Problem the condition, and the diff the corrective action.
+> the criteria, Problem the condition, Likely cause the cause, Impact the consequence, and the diff
+> the corrective action.
+> **Present them as the five named fields above, each on its own line - the same five, every
+> finding.** Do **not** collapse them into a dense inline "5-C summary" (less neat, harder to scan),
+> and **never label a block "5C" while showing fewer than five.** A live report labelled every
+> finding "5C Summary" yet the count **varied finding-to-finding** - some had all five, some four,
+> some only three (Condition / Consequence / Correction, dropping criteria (the Standard) and cause
+> (Likely cause)) - inconsistent, mislabelled, and run inline. Consistency is the point: the five
+> fields appear, in order, on their own lines, for **every** finding. If you write a one-line recap,
+> don't call it "5C" unless all five are present. Criteria = the **Standard** line; Cause =
+> **Likely cause** (mandatory, never silent).
 > **Worked exemplars to anchor on: [`gold-findings.md`](gold-findings.md).**
 
 ### 🔴 Critical (95-100) - must fix

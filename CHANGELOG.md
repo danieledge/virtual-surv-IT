@@ -3,6 +3,16 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.21.2] - 2026-07-24 - findings-format conformance (the 5 C's, consistently)
+
+Tester feedback on a live report: findings were labelled "5C Summary" but the count varied
+finding-to-finding (some five, some four, some three) and ran together inline - drift from the
+canonical output format, and less neat. Tightened `docs/review/output-format.md`: the 5 C's **are**
+the five named fields (Standard = criteria · Problem = condition · Likely cause = cause · Impact =
+consequence · Fix = corrective action), each on its own line, the **same five for every finding**;
+never collapse into an inline "5-C summary" and never label a block "5C" with fewer than five.
+Doc-only spec clarification.
+
 ## [0.21.1] - 2026-07-24 - TOC lists major sections only
 
 The `[TOC]` contents block was too large. `render_html`'s `toc_depth` narrowed from `2-4` to
