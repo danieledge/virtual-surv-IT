@@ -1141,6 +1141,23 @@ things compound here:
   stale/missing index at turn-end **once START-HERE exists**, but by design stays silent if
   START-HERE was never created - a backstop, not full cover. Tracked.
 
+**Slow Claude Code startup on Windows for a local-scope install (~20-27s).** Reported on a Windows
+box where the plugin is installed from a local path (`scope: "local"`). Assessment: Claude Code
+treats a local-scope plugin as mutable and **re-validates it every startup** (git-SHA check +
+settings re-merge + re-scan) - that's the trigger. The ~20-27s amplifier is **Windows filesystem
+overhead** (git working-tree operations + real-time AV scanning) over the plugin's **large file
+tree**: 622 tracked files, of which **533 are the vendored pip-less Python libs in `vendor/`** - the
+16 agents / 22 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (16
+file-opens is milliseconds). Largely a Claude-Code-×-Windows-×-local-install interaction, not
+plugin logic. **Mitigations (not yet applied):** (a) a **Windows Defender exclusion** for the plugin
+cache dir - usually the biggest, free win, and a quick A/B test; (b) installing via a
+**marketplace/registry** (`scope: "registry"`) rather than a local path - a version-string check
+replaces the per-session live git diff, taking the cascade off the startup path; (c) the `vendor/`
+tree is the file mass to target *if* a walk/scan is confirmed - but it exists for pip-less corporate
+installs, so it's a tradeoff, not a free delete. Confirm *where* the time goes via the `--debug`
+timing log before acting. Merging agents would **not** help (≈1% of the file surface) and would cost
+the least-privilege role separation. Tracked.
+
 <details>
 <summary>⚠️ <b>Three display-only quirks</b>: the PM sometimes narrates the wrong teammate name, occasionally states the team-sizing line twice, and some emoji miss their glyph on older Windows + Edge; none affects what the team does</summary>
 
