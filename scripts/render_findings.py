@@ -24,7 +24,13 @@ import subprocess  # nosec B404 - fixed-argv call to our own bundled render_html
 import sys
 from pathlib import Path
 
-from scripts.validate_findings import load_and_validate
+# Robust in both invocation modes: `python -m scripts.render_findings` (package context) AND
+# `python <path>/scripts/render_findings.py` (direct path, e.g. from check_artifacts --fix or an
+# installed plugin) - the latter puts scripts/ on sys.path[0], so the sibling import resolves.
+try:
+    from scripts.validate_findings import load_and_validate
+except ImportError:  # pragma: no cover - direct-path invocation
+    from validate_findings import load_and_validate  # type: ignore[no-redef]
 
 _SEV = {"critical": "🔴", "warning": "🟠", "medium": "🟡", "style": "🔵"}
 _SEV_ORDER = ["critical", "warning", "medium", "style"]

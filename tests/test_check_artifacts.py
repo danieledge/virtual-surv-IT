@@ -12,6 +12,8 @@ hygiene (size, As-of/Anchor header, basis tags, no secret-shaped content, resolv
 
 from __future__ import annotations
 
+import copy
+import json
 import subprocess
 
 from scripts.check_artifacts import (
@@ -22,6 +24,35 @@ from scripts.check_artifacts import (
     check_roster,
     find_codebase_map,
 )
+
+_VALID_PACK = {
+    "slug": "t",
+    "scope": "s",
+    "mode": "audit",
+    "verdict": "conditional",
+    "findings": [
+        {
+            "id": "F1",
+            "title": "t",
+            "severity": "warning",
+            "location": "a.py:1",
+            "basis": "coded",
+            "standard": "CWE-1",
+            "problem": "p",
+            "likely_cause": "c",
+            "impact": "i",
+            "fix": {"diff": "-x\n+y", "why": "w"},
+            "disposition": "open",
+        }
+    ],
+}
+
+
+def _pack(art, obj, name="findings-t.json"):
+    d = art / "data"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / name).write_text(json.dumps(obj), encoding="utf-8")
+
 
 STATUS_OPEN = "⏳ IN PROGRESS"
 STATUS_BLOCKED = "⛔ BLOCKED - awaiting input"
@@ -686,3 +717,40 @@ def test_canonical_named_fields_not_flagged(tmp_path):
     _touch(art / "REVIEW-y.html", "<html></html>")
     _touch(art / "engagement-summary-y.txt", "Hi,\n\nMorgan\n")
     assert "FINDINGS-CWORD-LABELS" not in "\n".join(check(art))
+
+
+def test_valid_findings_pack_passes(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, listed=["engagement-summary-t.txt"])
+    _touch(art / "engagement-summary-t.txt", "Hi,\n\nMorgan\n")
+    _pack(art, _VALID_PACK)
+    assert "FINDINGS-INVALID" not in "\n".join(check(art))
+
+
+def test_invalid_findings_pack_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, listed=["engagement-summary-t.txt"])
+    _touch(art / "engagement-summary-t.txt", "Hi,\n\nMorgan\n")
+    bad = copy.deepcopy(_VALID_PACK)
+    del bad["findings"][0]["likely_cause"]  # drop a required field
+    _pack(art, bad)
+    assert "FINDINGS-INVALID" in "\n".join(check(art))
+
+
+def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
+    # A .json pack under data/ must not trip MISSING-HTML or STALE-INDEX (it's machine source).
+    art = tmp_path / "artifacts"
+    _index(art, listed=["engagement-summary-t.txt"])
+    _touch(art / "engagement-summary-t.txt", "Hi,\n\nMorgan\n")
+    _pack(art, _VALID_PACK)
+    joined = "\n".join(check(art))
+    assert "findings-t.json" not in joined  # never named by MISSING-HTML / STALE-INDEX
+
+
+def test_apply_fixes_renders_report_from_pack(tmp_path):
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK)  # slug "t" -> REVIEW-t.md rendered up into artifacts/
+    apply_fixes(art)
+    report = art / "REVIEW-t.md"
+    assert report.is_file()
+    assert "**Likely cause:**" in report.read_text(encoding="utf-8")
