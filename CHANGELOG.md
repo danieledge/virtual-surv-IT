@@ -3,6 +3,12 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.21.1] - 2026-07-24 - TOC lists major sections only
+
+The `[TOC]` contents block was too large. `render_html`'s `toc_depth` narrowed from `2-4` to
+`2-2`, so a large report's Contents now lists only the **major sections** (h2 / `## N.`) - not h3+
+subsections, and not the H1 title. Verified: only h2 anchors render; pytest 440 passed.
+
 ## [0.21.0] - 2026-07-24 - relicensed to AGPL-3.0-only (was MIT)
 
 Relicensed from MIT to **GNU AGPL-3.0-only** (Copyright © 2026 Daniel Edge). Rationale: allow free
