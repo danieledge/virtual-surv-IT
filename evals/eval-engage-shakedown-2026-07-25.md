@@ -60,6 +60,16 @@ Sweep also surfaced two one-shot helper flakes (empty normalizer once, judge max
 the runner now retries once and an errored judge fails closed instead of defaulting to pass.
 `--rescore` recovered both without re-running the sessions.
 
+A final lifecycle attempt at the new $35/75min calibration (run 150240Z) was cut by the WALL
+CLOCK mid-QA-cycle-4 ($25.57, 13 gates, truthful "Not closed yet") - each run of this
+open-ended scenario voluntarily goes deeper (this one ran four QA cycles and preserved the
+QA suite in-workspace per the new evidence-retention rule, visibly binding). Adjudication:
+truncation; process discipline held throughout. Decision: STOP re-running - the clean-close
+baseline (093815Z) stands as the banked proof of the full cycle. Recorded calibration lesson:
+the scenario needs a bounded evidence scope (e.g. "one review pass + one QA cycle is
+sufficient") before a close can be expected inside any fixed budget; unbounded depth is a
+property of the case, not a harness or team defect.
+
 ## Calibration follow-ups (recorded, not yet applied)
 
 - `process-full-lifecycle` needs `--max-budget` ≥ ~25 USD and `--timeout` ≥ 3600s (confirmed:
