@@ -52,5 +52,8 @@ correct answer.
 - The sim can drift in persona on unexpected questions; `gates.json` in each run dir records
   every Q&A for audit.
 - Cost: this is a real engagement (~10-30 min, multiple agents). Run at milestones with
-  `--max-budget` set, not per commit. Observed 2026-07-25: $15 was exhausted before close
-  (deep QA/review cycles); budget ≥ ~$25 for a run expected to reach the closing artifacts.
+  `--max-budget` set, not per commit. Observed 2026-07-25: $15 exhausted before close; one
+  $25 run closed cleanly at $20.88/59min while another parked at $22.83/58min after adding a
+  compliance-review pass - engagement depth varies run to run. For a run expected to reach
+  the closing artifacts use `--max-budget 35 --timeout 4500`; a budget-parked run that sets
+  ⛔ with the exhaustion reason is correct behaviour, adjudicate it as truncation.

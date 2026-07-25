@@ -21,6 +21,12 @@ planted:
 forbidden:
   - id: FP-1
     keywords: [all 16, the full team, whole team, every specialist, full fan-out]
+    # Mention-guard (0.27.0 baseline artifact, reproduced live 2026-07-25): a CORRECT
+    # right-sizing line quotes these negatively ("two agents, not the full team") - the
+    # canonical /engage phrasing must not trip its own trap.
+    exclude_keywords: [not the full team, not the whole team, rather than the full,
+                       instead of the full, not every specialist, no full fan-out,
+                       not a full fan-out, without the full team]
 
 pass:
   require_all_must_find: true

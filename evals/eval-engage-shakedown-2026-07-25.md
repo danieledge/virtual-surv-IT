@@ -46,6 +46,20 @@ under `evals/runs/` (git-ignored); this file is the durable record.
   the summary email being *outstanding* (mention-as-missing ≠ present). The judge caught it.
   Keep both layers; never read deterministic recall alone on process cases.
 
+## Validation sweep (2026-07-25, post-remediation, run 132240Z)
+
+Full unit suite (306) green, then all three live /engage cases:
+
+| Case | Deterministic | Judge | Adjudication |
+|---|---|---|---|
+| process-right-sizing | recall 1.0, 0 traps after completing the mention-guard on its manifest (a live run reproduced the 0.27.0 trap artifact: "two agents, not the full team" tripped FP-1; exclude_keywords added) | 0.97 PASS | **PASS** |
+| process-close-reconciliation | recall 0.8, 0 traps | 0.885 PASS (rescore - first judge call flaked) | **PASS** |
+| process-full-lifecycle | recall 0.875, 0 traps | 0.69 FAIL (never closed) | **Truncation again, not regression**: $22.83/$25 in 58 min after an added compliance-review pass; parked truthfully at ⛔ "budget exhausted" mid-QA-2. Depth varies run to run - budget guidance moved to $35/75min. |
+
+Sweep also surfaced two one-shot helper flakes (empty normalizer once, judge max-turns once);
+the runner now retries once and an errored judge fails closed instead of defaulting to pass.
+`--rescore` recovered both without re-running the sessions.
+
 ## Calibration follow-ups (recorded, not yet applied)
 
 - `process-full-lifecycle` needs `--max-budget` ≥ ~25 USD and `--timeout` ≥ 3600s (confirmed:

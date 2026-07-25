@@ -633,10 +633,20 @@ async def score_run(
     listing = _artifact_listing(sandbox)
     print(f"  [{case_id}] scoring (probe + normalizer + judge)...")
     findings = probe_artifacts(sandbox)
-    try:
-        findings += await normalize(transcript, listing, args.aux_model)
-    except Exception as exc:  # a dead normalizer degrades scoring, never kills the run
-        print(f"  [{case_id}] normalizer failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+    # One-shot helpers flake occasionally (observed: an empty findings list on a rich
+    # transcript; a spurious max-turns error) - retry once before degrading. A non-trivial
+    # transcript never legitimately normalizes to zero findings.
+    for attempt in (1, 2):
+        try:
+            normalized = await normalize(transcript, listing, args.aux_model)
+        except Exception as exc:
+            print(f"  [{case_id}] normalizer attempt {attempt} failed: {exc}", file=sys.stderr)
+            normalized = []
+        if normalized or len(transcript) < 2000:
+            findings += normalized
+            break
+        if attempt == 2:
+            print(f"  [{case_id}] normalizer empty twice - deterministic findings only", file=sys.stderr)
     (out_dir / "findings.json").write_text(json.dumps({"findings": findings}, indent=2), encoding="utf-8")
 
     expected = {k: v for k, v in manifest.items() if not k.startswith("_")}
@@ -644,10 +654,13 @@ async def score_run(
 
     judge_result: dict = {"skipped": True}
     if not args.skip_judge:
-        try:
-            judge_result = await judge(transcript, listing, rubric, args.aux_model)
-        except Exception as exc:
-            judge_result = {"error": f"{type(exc).__name__}: {exc}"}
+        for attempt in (1, 2):
+            try:
+                judge_result = await judge(transcript, listing, rubric, args.aux_model)
+                break
+            except Exception as exc:
+                judge_result = {"error": f"{type(exc).__name__}: {exc}", "pass": False}
+                print(f"  [{case_id}] judge attempt {attempt} failed: {exc}", file=sys.stderr)
 
     return {
         "case": case_id,
