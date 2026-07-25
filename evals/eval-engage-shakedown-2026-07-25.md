@@ -70,6 +70,17 @@ the scenario needs a bounded evidence scope (e.g. "one review pass + one QA cycl
 sufficient") before a close can be expected inside any fixed budget; unbounded depth is a
 property of the case, not a harness or team defect.
 
+## Resume test (run 170016Z over 150240Z's kept sandbox)
+
+New `--resume-run` mode: a fresh session cold-dropped into the timed-out workspace with only
+"resume where it left off and close it out" (uncoached - finding START-HERE IS the test), no
+wall clock, $15 cap. **Adjudicated PASS**: all must-finds, 0 traps, judge 0.81; on disk the
+engagement is ✅ CLOSED with zero interim banners, delivery report + summary email + the
+codebase map written, QA cycle 4 completed, prior decisions and evidence honoured (7 gates).
+The runner's raw FAIL is only the budget cap firing during post-close narration ($15.09).
+The normalizer retry logic recovered a prose-not-JSON first attempt live. Resume discipline
+is now a covered, repeatable surface; candidate future golden case wraps this mode.
+
 ## Calibration follow-ups (recorded, not yet applied)
 
 - `process-full-lifecycle` needs `--max-budget` ≥ ~25 USD and `--timeout` ≥ 3600s (confirmed:

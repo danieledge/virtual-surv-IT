@@ -541,29 +541,50 @@ async def judge(transcript: str, listing: str, rubric: str, model: str) -> dict:
 
 
 # --------------------------------------------------------------------------- per case
-async def run_case(case_id: str, args: argparse.Namespace, run_root: Path) -> dict:
+# The uncoached resume ask - deliberately says nothing about START-HERE or prior decisions:
+# whether a fresh session finds the state of record and honours it IS what a resume tests.
+_RESUME_PROMPT = (
+    "The previous session got cut off mid-engagement. Resume the engagement in this "
+    "workspace where it left off and close it out properly. Everything so far is under "
+    "artifacts/."
+)
+
+
+async def run_case(
+    case_id: str,
+    args: argparse.Namespace,
+    run_root: Path,
+    sandbox_override: Path | None = None,
+    scenario_override: str | None = None,
+) -> dict:
     manifest = _load_case(case_id)
     case_dir: Path = manifest["_dir"]
-    scenario = (case_dir / manifest["input"]).read_text(encoding="utf-8")
+    scenario = scenario_override or (case_dir / manifest["input"]).read_text(encoding="utf-8")
     persona_file = case_dir / "driver.md"
     persona = (persona_file if persona_file.is_file() else DEFAULT_PERSONA).read_text(encoding="utf-8")
     rubric = (RUBRICS_ROOT / f"{manifest['rubric']}.md").read_text(encoding="utf-8")
 
-    out_dir = run_root / case_id
+    out_dir = run_root / (f"{case_id}-resume" if sandbox_override else case_id)
     out_dir.mkdir(parents=True, exist_ok=True)
-    sandbox = out_dir / "sandbox"
-    print(f"  [{case_id}] building sandbox...")
-    build_sandbox(sandbox)
-    # Optional case fixtures: a `fixtures/` tree is overlaid sandbox-relative (e.g.
-    # fixtures/artifacts/x.md -> sandbox/artifacts/x.md), so a case can seed a REAL
-    # drifted/partial engagement state for the session to act on. A described-only state
-    # invites a plan instead of actions (first live run of process-close-reconciliation:
-    # Morgan correctly refused to "fix" files that did not exist).
-    fixtures = case_dir / "fixtures"
-    if fixtures.is_dir():
-        subprocess.run(
-            ["rsync", "-a", f"{fixtures}/", f"{sandbox}/"], check=True, capture_output=True
-        )
+    if sandbox_override is not None:
+        sandbox = sandbox_override  # shared, pre-existing state - never rebuilt, never deleted
+        print(f"  [{case_id}] resuming in kept sandbox {sandbox}")
+        args.keep_sandbox = True
+    else:
+        sandbox = out_dir / "sandbox"
+        print(f"  [{case_id}] building sandbox...")
+        build_sandbox(sandbox)
+        # Optional case fixtures: a `fixtures/` tree is overlaid sandbox-relative (e.g.
+        # fixtures/artifacts/x.md -> sandbox/artifacts/x.md), so a case can seed a REAL
+        # drifted/partial engagement state for the session to act on. A described-only state
+        # invites a plan instead of actions (first live run of process-close-reconciliation:
+        # Morgan correctly refused to "fix" files that did not exist). Never overlaid on a
+        # resume - the kept sandbox IS the state.
+        fixtures = case_dir / "fixtures"
+        if fixtures.is_dir():
+            subprocess.run(
+                ["rsync", "-a", f"{fixtures}/", f"{sandbox}/"], check=True, capture_output=True
+            )
     ensure_workspace_trust(sandbox)
 
     sim_log = SimTranscript()
@@ -576,7 +597,7 @@ async def run_case(case_id: str, args: argparse.Namespace, run_root: Path) -> di
             run_engage_session(
                 cap, scenario, sandbox, persona, args.sim_model, args.max_turns, args.max_budget, sim_log
             ),
-            timeout=args.timeout,
+            timeout=args.timeout if args.timeout > 0 else None,  # 0 = no wall clock; budget is the stop
         )
     except asyncio.TimeoutError:
         cap.timed_out = True
@@ -709,6 +730,12 @@ def main() -> int:
     ap.add_argument("--skip-judge", action="store_true", help="deterministic scoring only")
     ap.add_argument("--keep-sandbox", action="store_true", help="keep each case's sandbox for inspection")
     ap.add_argument(
+        "--resume-run",
+        help="path to a saved run's <case> dir with a KEPT sandbox: launch a fresh session in "
+        "that sandbox with an uncoached 'resume and close' ask (cold resume from the artifacts "
+        "state of record), then score the resulting combined state against the case manifest",
+    )
+    ap.add_argument(
         "--rescore",
         help="path to a saved run's <case> dir (transcript.md + sandbox/): re-run the scoring "
         "layers only - no live session, writes score-rescore.json alongside the original",
@@ -745,6 +772,26 @@ def main() -> int:
             f"{'PASS' if result['passed'] else 'FAIL'}  {case_id}  recall={det.get('recall')}  "
             f"traps={len(det.get('false_positive_traps_triggered', []))}  "
             f"judge={result.get('judge', {}).get('weighted_score', '-')}"
+        )
+        return 0 if result["passed"] else 1
+
+    if args.resume_run:
+        src = Path(args.resume_run).resolve()
+        sandbox = src / "sandbox"
+        if not sandbox.is_dir():
+            ap.error(f"{src} has no kept sandbox/ - resume needs the original run's workspace")
+        case_id = src.name.removesuffix("-resume")
+        run_root = RUNS_ROOT / _now_utc()
+        run_root.mkdir(parents=True, exist_ok=True)
+        print(f"run dir: {run_root}")
+        result = asyncio.run(
+            run_case(case_id, args, run_root, sandbox_override=sandbox, scenario_override=_RESUME_PROMPT)
+        )
+        det = result["deterministic"]
+        print(
+            f"{'PASS' if result['passed'] else 'FAIL'}  {case_id} (resumed)  recall={det.get('recall')}  "
+            f"traps={len(det.get('false_positive_traps_triggered', []))}  "
+            f"judge={result.get('judge', {}).get('weighted_score', '-')}  cost=${result.get('cost_usd') or '?'}"
         )
         return 0 if result["passed"] else 1
 
