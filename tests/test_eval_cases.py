@@ -82,11 +82,15 @@ def _perfect_findings(expected: dict) -> list[dict]:
     findings = []
     for spec in expected.get("planted", []) or []:
         location = spec.get("location", "") or ""
+        own_excludes = [_norm(k) for k in spec.get("exclude_keywords") or []]
         title = None
         for kw in spec.get("keywords", []) or []:
             # The scorer's haystack is title + kind + location; check the trap keywords
-            # against the same combined text this finding will present.
+            # against the same combined text this finding will present. The spec's own
+            # exclude_keywords must not veto its perfect finding either.
             hay = _norm(f"{kw} {location}")
+            if any(ex in hay for ex in own_excludes):
+                continue
             if not any(f_kw in hay for f_kw in forbidden_kws):
                 title = kw
                 break
@@ -140,6 +144,17 @@ def test_manifest_matches_scorer_schema(case_dir):
             assert spec["min_severity"] in CANONICAL_SEVERITIES, (
                 f"{case_dir.name}/{sid}: min_severity {spec['min_severity']!r} is outside "
                 f"the scorer's canonical vocabulary {sorted(CANONICAL_SEVERITIES)}"
+            )
+        excludes = spec.get("exclude_keywords") or []
+        assert isinstance(excludes, list) and all(
+            isinstance(k, str) and k.strip() for k in excludes
+        ), f"{case_dir.name}/{sid}: exclude_keywords must be non-empty strings"
+        # An exclude that is a substring of one of the spec's own keywords would veto every
+        # correct finding that quotes that keyword - the spec could never be satisfied.
+        for ex in excludes:
+            assert not any(_norm(ex) in _norm(kw) for kw in spec.get("keywords") or []), (
+                f"{case_dir.name}/{sid}: exclude keyword {ex!r} is a substring of a match "
+                "keyword - the spec would veto its own correct answers"
             )
         if "must_find" in spec:
             assert isinstance(spec["must_find"], bool), (

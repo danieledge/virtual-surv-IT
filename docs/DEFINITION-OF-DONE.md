@@ -87,7 +87,12 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       **with the full cycle history**: one test-cycles row per pass (append-only, failed
       verdicts preserved) and defect lifecycle (raised in pass → routed to → fix evidence →
       verified fixed in pass). A multi-pass engagement whose docs read first-pass-clean fails
-      this gate.
+      this gate. **QA evidence is preserved, not deleted**: independent test suites and run
+      evidence survive under `artifacts/` (file or content hash) - an independence claim whose
+      evidence was deleted is unfalsifiable and fails this gate. A **📊 measured** tag needs a
+      surviving artifact (output, log, tool cache); where nothing survives, the claim is
+      retagged **🧠 inferred** before close (2026-07-25 independent review: "600 randomised
+      runs" and three of five analysers were measured-tagged with no artifact on disk).
 - [ ] **Code-reviewed (deep)** - `code-reviewer` ran; **no Critical findings open**;
       filtered/ reported counts recorded; every finding has a **disposition** (fixed / open /
       accepted / deferred) and the review carries a **🔵 Developer guidance - improving future
@@ -147,6 +152,15 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       (`python -m scripts.render_html`). **By default one consolidated Delivery Report**
       (`docs/templates/delivery-report.md`) holds all sections; split into separate artifacts
       only if a control requires it.
+- [ ] **Reconciled at close** - before START-HERE flips to ✅, every document the engagement
+      produced or touched (including code-adjacent ones: deliverable README, module
+      docstrings) is re-opened and reconciled to the FINAL state: one authoritative set of
+      counts/ranges/finding enumerations, late-cycle changes propagated, struck citations
+      swept from every file, no prose referencing removed interim state, and document-control
+      Status fields closed out (or explicitly "pending human sign-off"). Procedure: the close
+      checklist's "Close-time reconciliation sweep"; Status fields under a CLOSED index are
+      mechanically checked (`STALE-DOCSTATUS`). (Lesson, 2026-07-25: a fix-cycle-1 handover
+      and README shipped "final" in a fix-cycle-2 pack, with a struck citation still live.)
 - [ ] **Engagement-summary email** - the PM (**Morgan**) has written a short email-format cover
       note summarising what was done and where it stands, saved as a **`.txt` in `artifacts/`**
       (`docs/templates/engagement-summary-email.md`). **Written at ✅ close only** - its existence

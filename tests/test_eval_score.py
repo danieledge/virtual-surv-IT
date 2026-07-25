@@ -158,3 +158,101 @@ def test_non_must_find_miss_still_passes():
     assert r["passed"] is True
     assert "PERF-1" in r["planted_missed"]
     assert r["recall"] == 0.5
+
+
+def test_exclude_keywords_veto_planted_match():
+    # Mention-guard (live 2026-07-25): "summary email never produced" must NOT satisfy a
+    # planted spec asserting the summary email exists - absence-talk is not presence.
+    exp = _expected(
+        planted=[
+            {
+                "id": "EMAIL-1",
+                "keywords": ["summary email"],
+                "exclude_keywords": ["never produced", "outstanding"],
+                "must_find": True,
+            }
+        ]
+    )
+    findings = [
+        {
+            "severity": "warning",
+            "title": "PM reports the summary email was never produced",
+            "kind": "behaviour",
+        }
+    ]
+    r = score(exp, findings)
+    assert "EMAIL-1" in r["must_find_missed"]
+    assert r["passed"] is False
+
+
+def test_exclude_keywords_do_not_block_clean_match():
+    exp = _expected(
+        planted=[
+            {
+                "id": "EMAIL-1",
+                "keywords": ["summary email"],
+                "exclude_keywords": ["never produced"],
+                "must_find": True,
+            }
+        ]
+    )
+    findings = [
+        {
+            "severity": "warning",
+            "title": "engagement summary email written as .txt, signed",
+            "kind": "artifact",
+        }
+    ]
+    r = score(exp, findings)
+    assert "EMAIL-1" in r["planted_found"]
+    assert r["passed"] is True
+
+
+def test_exclude_keywords_veto_forbidden_trap():
+    # The mirror case (0.27.0 baseline): a trap term cited as the recommended FIX must not
+    # trigger the trap when the manifest excludes fix-phrasing.
+    exp = _expected(
+        forbidden=[
+            {
+                "id": "FP-1",
+                "keywords": ["find_alerts_by_trader"],
+                "exclude_keywords": ["recommended fix", "use instead"],
+            }
+        ]
+    )
+    findings = [
+        {
+            "severity": "critical",
+            "location": "config.py:12",
+            "title": "hardcoded credential - recommended fix: use find_alerts_by_trader",
+            "kind": "security",
+        }
+    ]
+    r = score(exp, findings)
+    assert r["false_positive_traps_triggered"] == []
+    assert r["passed"] is True
+
+
+def test_exclude_keywords_also_veto_location_match():
+    # The veto applies before either match channel, location included.
+    exp = _expected(
+        planted=[
+            {
+                "id": "SEC-1",
+                "keywords": ["zzz-none"],
+                "location": "config.py:12",
+                "exclude_keywords": ["not present"],
+                "must_find": True,
+            }
+        ]
+    )
+    findings = [
+        {
+            "severity": "critical",
+            "location": "config.py:12",
+            "title": "secret not present after remediation",
+            "kind": "security",
+        }
+    ]
+    r = score(exp, findings)
+    assert "SEC-1" in r["must_find_missed"]

@@ -46,6 +46,34 @@ to-verify as a failure - it is the honest state.
 Never deliver a self-correctable defect as a reported "documentation-standards failure" - fixing
 it silently is the job (it's the one DoD check that's a command, not a claim).
 
+## Close-time reconciliation sweep (every artifact, every fix cycle - born of a live failure)
+
+A 2026-07-25 independently-reviewed close shipped a fix-cycle-1 developer handover and README
+inside a fix-cycle-2 pack: stale test counts, a stale requirement range, "unresolved" items that
+were resolved, and a citation struck by the compliance review still cited in the one document a
+maintainer actually reads. The banner strip and index flip are NOT the close - reconciliation is.
+Before flipping START-HERE to ✅, re-open **every document the engagement produced or touched**,
+explicitly including code-adjacent ones (deliverable README, module docstrings, inline doc
+comments), and verify each against the FINAL state:
+
+- **Counts and ranges** - test totals, requirement/AC ranges, findings tallies: one authoritative
+  number everywhere. If a findings list is enumerated in more than one document, the membership
+  must be identical, by ID, in all of them.
+- **Late-cycle changes propagated** - anything changed after a document's last revision (a later
+  fix cycle, a re-review, a struck or replaced citation, a superseded requirement) is reconciled
+  into that document, or the document's version history says why not.
+- **Struck citations** - any obligation/citation recorded as withdrawn or corrected anywhere in
+  the pack must be swept from EVERY other file, including source docstrings.
+- **Prose that references removed state** - text describing the interim banner, "pending"
+  cross-references, or pre-build "next actions" has no place in a closed document.
+- **Document-control Status close-out** - under a ✅ CLOSED index no document stays
+  `Draft`/`In review`. Set a closed status, or state explicitly "pending human sign-off" where
+  the human act is the only gap (never leave the machinery contradicting the index).
+- **QA evidence retention** - independent QA test suites and evidence are PRESERVED under
+  `artifacts/` (file or content hash), never deleted: an independence claim with no surviving
+  evidence is unfalsifiable. A 📊 measured tag needs a surviving artifact (output, log, cache) -
+  downgrade to 🧠 inferred if nothing survives.
+
 ## Update the codebase map at close (ADR-003 - a DoD gate)
 
 Before the engagement closes, **update the working project's codebase map**
