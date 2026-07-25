@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.28.0] - 2026-07-25 - Live orchestration evals + close-time reconciliation (dev)
 
 ### Added
 - **Close-time reconciliation discipline** (2026-07-25 independent-review remediation): the
