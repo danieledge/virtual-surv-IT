@@ -18,7 +18,19 @@ spontaneously. This guard closes the loop:
   paths would false-positive on legitimate static analysis and are advisory anyway, ADR-002.)
 
   ALLOW deleting the marker (closing the gate is always fail-safe: `rm .claude/.exec-consent`),
-  and read-only inspection (ls/stat/cat/test/grep without a redirect into a protected file).
+  and read-only inspection (ls/stat/cat/test/grep/echo without a redirect into a protected file).
+
+Precision pass (2026-07-24, best-practice review gap: observed false blocks on read-only
+commands whose ARGUMENT TEXT mentioned a protected filename):
+  * the segment splitter is now QUOTE-AWARE - a `|` inside a quoted grep pattern
+    (`grep -E 'a|b' .claude/settings.json`) no longer shatters the command into bogus segments
+    that dodge the safe-verb check. `$(...)` and backticks still split even inside double quotes
+    (they execute there), so command substitution cannot hide behind an outer safe verb;
+  * `echo`/`printf` join the safe verbs - they cannot write without a redirect, and a redirect
+    into a protected file is (still) checked FIRST on the whole segment;
+  * a bare loop/conditional header (`for f in <files>`) is not a write; control-keyword prefixes
+    (`do `, `then `, ...) are stripped before verb-matching so the BODY's verb is what's judged.
+  The default-deny for unknown verbs touching a protected file is unchanged.
 
 How consent is granted now (human-only paths):
   * the user runs `touch <project>/.claude/.exec-consent` in any terminal (or with the `!`
@@ -56,12 +68,24 @@ _PRECOMMIT_RE = re.compile(r"\.pre-commit-config\.ya?ml\b")
 # anyway (ADR-002). Maintenance goes through CST_ALLOW_CONFIG_EDIT.
 _HOOK_PATH_RE = re.compile(r"(\.claude[/\\]hooks[/\\]|(^|[/\\])hooks[/\\]hooks\.json$)")
 
-# Same crude-on-purpose splitter as guard-code-execution.py: err toward inspecting MORE.
-_SEGMENT_SPLIT = re.compile(r";|&&|\|\||\||\n|`|\$\(")
-
 # Verbs that only read or delete the protected files - safe directions. Deleting the marker
-# CLOSES the gate; reading config leaks nothing the model didn't already load.
-_SAFE_VERB = re.compile(r"^(rm|unlink|ls|stat|test|\[|file|wc|cat|head|tail|grep|find|diff|jq)\b")
+# CLOSES the gate; reading config leaks nothing the model didn't already load. echo/printf
+# cannot write without a redirect, and redirect-into-protected is checked BEFORE verbs.
+_SAFE_VERB = re.compile(
+    r"^(rm|unlink|ls|stat|test|\[|file|wc|cat|head|tail|grep|find|diff|jq|echo|printf)\b"
+)
+
+# A bare loop header only NAMES files; the loop BODY is judged as its own segment(s). BUT a
+# body writing via the loop VARIABLE (`for f in <protected>; do touch $f`) is invisible to the
+# per-segment protected-token check (variable indirection) - so a protected loop header is only
+# safe when the WHOLE command contains no mutation verb / redirect at all.
+_LOOP_HEADER = re.compile(r"^for\s+\S+\s+in\b[^;]*$")
+_MUTATOR_ANYWHERE = re.compile(
+    r"(?:^|[;&|`\s(])(?:touch|tee|cp|mv|dd|install|ln|chmod|chown|truncate)\b"
+    r"|>|(?:^|\s)sed\s+-i\b|git\s+(?:checkout|restore|stash|config)\b"
+)
+# Control-keyword prefixes stripped before verb-matching, so `do grep ...` is judged as `grep ...`.
+_CTRL_PREFIX = re.compile(r"^(?:do|then|else|elif|if|while|until)\s+")
 
 # Read-only git subcommands may legitimately touch a protected path (e.g. `git check-ignore
 # .claude/.exec-consent`, `git diff .claude/settings.json`) - they inspect, never mutate. Only
@@ -80,6 +104,60 @@ _REDIRECT_INTO_PROTECTED = re.compile(
 )
 
 _WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+
+
+def _segments(cmd: str) -> list[str]:
+    """Quote-aware split on shell separators (; | && || newline, backtick, $().
+
+    Unlike the crude regex splitter, a separator inside QUOTES does not split - so a quoted
+    grep pattern containing `|` stays part of its command and is judged with its real verb.
+    Deliberate asymmetry: backticks and `$(` split even inside DOUBLE quotes, because command
+    substitution executes there - an inner command must never hide behind an outer safe verb.
+    Inside single quotes nothing executes, so nothing splits. Err toward MORE segments (fail-safe).
+    """
+    segs: list[str] = []
+    buf: list[str] = []
+    in_sq = in_dq = False
+    i, n = 0, len(cmd)
+    while i < n:
+        ch = cmd[i]
+        nxt = cmd[i + 1] if i + 1 < n else ""
+        if ch == "\\" and not in_sq:
+            buf.append(cmd[i : i + 2])
+            i += 2
+            continue
+        if ch == "'" and not in_dq:
+            in_sq = not in_sq
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == '"' and not in_sq:
+            in_dq = not in_dq
+            buf.append(ch)
+            i += 1
+            continue
+        if not in_sq:
+            # command substitution executes even inside double quotes - always a boundary
+            if ch == "`" or (ch == "$" and nxt == "("):
+                segs.append("".join(buf))
+                buf = []
+                i += 2 if ch == "$" else 1
+                continue
+            if not in_dq:
+                if ch == "\n" or ch == ";":
+                    segs.append("".join(buf))
+                    buf = []
+                    i += 1
+                    continue
+                if ch in ("|", "&"):
+                    segs.append("".join(buf))
+                    buf = []
+                    i += 2 if nxt == ch else 1
+                    continue
+        buf.append(ch)
+        i += 1
+    segs.append("".join(buf))
+    return [s.strip() for s in segs if s.strip()]
 
 
 def _truthy(val: str | None) -> bool:
@@ -129,7 +207,7 @@ def main() -> None:
 
     if tool == "Bash":
         cmd = tool_input.get("command", "") or ""
-        for seg in (s.strip() for s in _SEGMENT_SPLIT.split(cmd) if s.strip()):
+        for seg in _segments(cmd):
             if not _protected(seg):
                 continue
             # A redirect can turn any verb into a write (`cat > marker`, `echo x >> settings`) -
@@ -138,9 +216,17 @@ def main() -> None:
                 _block("consent-marker/config files via a shell redirect")
             if _FIND_MUTATE.search(seg):
                 _block(f"consent-marker/config files via find -exec/-delete ({seg[:120]})")
-            if _SAFE_GIT.match(seg):
+            if _LOOP_HEADER.match(seg):
+                if _MUTATOR_ANYWHERE.search(cmd):
+                    _block(
+                        "consent-marker/config files via a loop whose body mutates "
+                        f"({seg[:80]} ...)"
+                    )
+                continue  # read-only loop over named files - the body is judged separately
+            verb_seg = _CTRL_PREFIX.sub("", seg)
+            if _SAFE_GIT.match(verb_seg):
                 continue  # read-only git inspection of a protected path (ADR-002 rec 11)
-            if _SAFE_VERB.match(seg):
+            if _SAFE_VERB.match(verb_seg):
                 continue  # read or delete - safe direction
             # Default-deny: unknown verb touching a protected file (touch/cp/mv/sed -i/git
             # checkout/...) - opening the gate or mutating config must come from the human.
