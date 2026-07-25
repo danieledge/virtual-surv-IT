@@ -8,6 +8,9 @@ bleach[css]>=6.0 # scripts/render_html.py - sanitises rendered HTML (XSS guard);
                  #   render path never silently falls back to emitting raw, unsanitised HTML.
                  #   The [css] extra (tinycss2) lets the sanitiser keep table text-align.
 
+claude-agent-sdk>=0.2   # scripts/eval_engage.py - headless live-/engage eval driver (dev-only;
+                        #   needs the Claude Code CLI on PATH and its auth; never vendored)
+
 # The Python analysers used by the code-reviewer agent live in requirements-review.txt
 # (kept separate so the core dev/test install stays lean).
 
