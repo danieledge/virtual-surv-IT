@@ -25,6 +25,7 @@ Wire via hooks -> "UserPromptSubmit" in .claude/settings.json + hooks/hooks.json
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -54,7 +55,10 @@ def main() -> int:
         data = json.load(sys.stdin)
     except Exception:
         return 0
-    cwd = Path(data.get("cwd") or Path.cwd())
+    # Project-root anchored, not cwd-anchored - same rationale as the staged DoD stop
+    # gate: a wandered shell cwd (e.g. a kept eval sandbox under evals/runs/) must not
+    # summon Morgan into a session that never engaged the team.
+    cwd = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
     start_here = cwd / "artifacts" / "START-HERE.md"
     if not start_here.is_file():
         return 0  # dormant / no engagement -> stay silent (team is opt-in)

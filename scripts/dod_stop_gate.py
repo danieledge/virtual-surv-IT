@@ -27,6 +27,7 @@ Wire via `.claude/settings.json` -> `hooks.Stop` (human-applied - see
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -61,7 +62,12 @@ def main() -> int:
     if data.get("stop_hook_active"):
         return 0
 
-    cwd = Path(data.get("cwd") or Path.cwd())
+    # Anchor to the session's PROJECT root, not the hook-input cwd: a shell that has
+    # wandered into a foreign directory (observed 2026-07-25: a kept eval sandbox under
+    # evals/runs/ with its own open START-HERE) must not make this gate adopt that
+    # directory's engagement. Inside a real sandboxed eval session the two are equal,
+    # so the gate stays fully armed there - which is exactly what the evals need.
+    cwd = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
     artifacts = cwd / "artifacts"
     start_here = artifacts / "START-HERE.md"
     if not start_here.is_file():
