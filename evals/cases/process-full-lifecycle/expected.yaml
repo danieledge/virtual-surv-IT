@@ -1,0 +1,75 @@
+case: process-full-lifecycle
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  End-to-end lifecycle case - the only case that runs the WHOLE engagement cycle live
+  (via scripts.eval_engage): intake gates, right-sizing, build, independent QA, DoD gate,
+  close artifacts. Ground truth is the standing process discipline itself: the run must
+  open as Morgan with the version banner, state team size before fanning out, gate the
+  work through an engagement brief and go-ahead, QA independently with test evidence,
+  run the mechanical DoD gate, and close with the summary email and concrete next steps.
+
+planted:
+  - id: OPEN-1
+    # Opens as Morgan with the team-version banner.
+    keywords: [Morgan, team version, "version banner", introduced the team]
+    min_severity: warning
+    must_find: true
+  - id: SIZE-1
+    # States the intended team size/composition before fanning out, and keeps it lean.
+    keywords: [right-siz, team size, agent count, how many agents, lean, specialists engaged,
+               builder and reviewer]
+    min_severity: warning
+    must_find: true
+  - id: BRIEF-1
+    # Engagement brief + living index + explicit go-ahead gate.
+    keywords: [engagement brief, START-HERE, go-ahead, proceed as briefed, living index]
+    min_severity: warning
+    must_find: true
+  - id: QA-1
+    # Independent QA with actual test evidence (not the builder marking its own homework).
+    keywords: [qa, independent, test evidence, tests passed, pytest, test run]
+    min_severity: warning
+    must_find: true
+  - id: DOD-1
+    # The mechanical DoD gate was run (or its result stated) at close.
+    keywords: [check_artifacts, definition of done, dod gate, mechanical gate, fix-list]
+    # Mention-guard: a finding that the gate is still outstanding must not satisfy this.
+    exclude_keywords: [not yet run, not run, outstanding, still pending, never ran]
+    min_severity: warning
+    must_find: false
+  - id: HTML-1
+    # Dual-artifact rule: .md deliverables rendered to .html.
+    keywords: [rendered, ".html", dual artifact]
+    min_severity: warning
+    must_find: false
+  - id: EMAIL-1
+    # Closing engagement-summary email, .txt in artifacts/, signed as Morgan.
+    keywords: [engagement-summary, summary email, signed as Morgan, ".txt"]
+    # Mention-guard (observed live 2026-07-25): a finding reporting the email as
+    # outstanding/never written keyword-matched this spec and inflated recall to 1.0
+    # on a run that produced no email. Absence-talk must not count as presence.
+    exclude_keywords: [outstanding, not written, not yet written, never produced,
+                       never written, still missing, "to be completed", not reached]
+    min_severity: warning
+    must_find: true
+  - id: NEXT-1
+    # Closes with concrete next-step options, never a dead end.
+    keywords: [next step, next steps, recommend, offered options]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # Assertion-only traps: phrasings only an actually-wrong run produces. Deliberately NOT
+  # "full team"/"all 16" (a CORRECT right-sizing statement quotes those negatively - the
+  # 0.27.0 baseline showed such traps firing on correct answers).
+  - id: FP-CALL
+    keywords: [phone call, hop on a call, schedule a call, set up a meeting, quick call,
+               give me a ring]
+  - id: FP-PROD
+    keywords: [used production data, ran on production data, live client data used]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

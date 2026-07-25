@@ -655,6 +655,70 @@ def test_stale_status_not_flagged_while_open(tmp_path):
     assert "STALE-STATUS" not in "\n".join(check(art))
 
 
+def test_stale_docstatus_draft_flagged_when_closed(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_CLOSED, listed=["fsd.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "fsd.md",
+        "# FSD\n\n> **Document control** · ID `FSD-001` · Version `0.2` · Status `Draft (revised)`"
+        " · Owner `Amara`\n",
+    )
+    _touch(art / "fsd.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "STALE-DOCSTATUS" in "\n".join(check(art))
+
+
+def test_stale_docstatus_in_review_flagged_when_closed(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_CLOSED, listed=["delivery-report.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "delivery-report.md",
+        "# Report\n\n> **Document control** · ID `DLVR-001` · Version `1.0` · Status `In review`\n",
+    )
+    _touch(art / "delivery-report.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "STALE-DOCSTATUS" in "\n".join(check(art))
+
+
+def test_stale_docstatus_pending_human_signoff_passes(tmp_path):
+    # The one legitimate open state under a closed index: the human act is the only gap,
+    # and the Status value says so explicitly.
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_CLOSED, listed=["delivery-report.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "delivery-report.md",
+        "# Report\n\n> **Document control** · ID `DLVR-001` · Version `1.0` · "
+        "Status `In review - pending human sign-off`\n",
+    )
+    _touch(art / "delivery-report.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "STALE-DOCSTATUS" not in "\n".join(check(art))
+
+
+def test_stale_docstatus_not_flagged_while_open(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_OPEN, listed=["fsd.md"])
+    _touch(
+        art / "fsd.md",
+        "# FSD\n\n> **Document control** · ID `FSD-001` · Version `0.1` · Status `Draft`\n",
+    )
+    _touch(art / "fsd.html", "<html></html>")
+    # Draft is the CORRECT state while the engagement is open.
+    assert "STALE-DOCSTATUS" not in "\n".join(check(art))
+
+
+def test_stale_docstatus_closed_status_value_passes(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_CLOSED, listed=["fsd.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "fsd.md",
+        "# FSD\n\n> **Document control** · ID `FSD-001` · Version `1.0` · Status `Final`\n",
+    )
+    _touch(art / "fsd.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "STALE-DOCSTATUS" not in "\n".join(check(art))
+
+
 def test_apply_fixes_renames_email_renders_html_and_syncs_index(tmp_path):
     art = tmp_path / "artifacts"
     _index(art, listed=["review-pass-1.md", "engagement-summary-x.md"])

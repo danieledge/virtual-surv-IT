@@ -121,10 +121,20 @@ def _location_matches(spec_loc: str | None, finding_loc: str | None) -> bool:
 
 
 def _matches(spec: dict, finding: dict) -> bool:
-    """A finding matches a planted/forbidden spec if location OR any keyword matches."""
+    """A finding matches a planted/forbidden spec if location OR any keyword matches.
+
+    Optional `exclude_keywords:` on a spec vetoes the match when any of them appears in the
+    finding's haystack. This is the mention-guard the 0.27.0 baseline asked for: keyword nets
+    cannot tell "the summary email was written" from "the summary email is still outstanding"
+    (observed live: a planted close-artifact spec matched a finding reporting its absence), nor
+    a trap term cited as the recommended FIX from the same term flagged as a defect. Manifests
+    stay assertion-only; the exclusions carry the negations that would invert the meaning.
+    """
     hay = _norm(
         f"{finding.get('title', '')} {finding.get('kind', '')} {finding.get('location', '')}"
     )
+    if any(_norm(kw) in hay for kw in spec.get("exclude_keywords", []) or []):
+        return False
     if _location_matches(spec.get("location"), finding.get("location")):
         return _severity_ok(finding.get("severity"), spec.get("min_severity"))
     for kw in spec.get("keywords", []) or []:

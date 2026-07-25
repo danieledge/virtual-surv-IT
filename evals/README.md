@@ -51,6 +51,36 @@ LLM-judge dimensions, and prints an aggregate scoreboard (cases passed, recall, 
 a release, not every commit. The deterministic scorer's own tests and the per-case contract tests
 (`tests/test_eval_cases.py`) run free in CI.
 
+## The orchestration slice - `scripts.eval_engage` (live /engage runs)
+
+`/run-evals` covers the *subagent* surface only: it cannot exercise Morgan's orchestration
+(banner, intake gates, right-sizing, lifecycle discipline, close artifacts) because a subagent
+has no user channel and cannot run slash commands - the gap the 0.27.0 baseline recorded. The
+driver closes it:
+
+    . .venv/bin/activate          # dev venv with claude-agent-sdk (requirements-dev.txt)
+    python -m scripts.eval_engage --list
+    python -m scripts.eval_engage --case process-full-lifecycle --max-budget 10
+    python -m scripts.eval_engage --all-engage
+
+Per case it: copies the repo to a throwaway sandbox (with `evals/` excluded, so ground truth
+is structurally unreachable; guard hooks stay live - they are under test too), launches a real
+headless `/engage` session via the Agent SDK, and has an **LLM user-sim** answer every
+AskUserQuestion gate in persona (the case's `driver.md`, falling back to
+`evals/driver-default.md`). When the sim grants execution-consent intent, the harness process -
+standing in for the human, per ADR-002 - creates the sandbox's `.claude/.exec-consent` marker;
+the session itself remains blocked from writing it. Scoring then combines a deterministic
+artifact probe of the sandbox, an uncontaminated normalizer pass over the transcript
+(`eval_score` against `expected.yaml`), and the rubric LLM-judge. Outputs land under
+`evals/runs/<timestamp>/<case>/` (git-ignored): `transcript.md`, `gates.json` (every simulated
+Q&A), `findings.json`, `score.json`, `report.md`.
+
+`process-full-lifecycle` is the flagship case: the only one that runs intake -> build ->
+independent QA -> DoD gate -> close end-to-end. **Each case is a real engagement** - cap spend
+with `--max-budget`, run at milestones. As with `/run-evals`, treat raw keyword scores as the
+starting point: adjudicate misses/traps against the transcript before calling a regression
+(baseline precedent: `evals/eval-baseline-0.27.0.md`).
+
 ## A case (`expected.yaml`)
 
 Abridged from the real `review-seeded-bugs-py` case (one planted issue of its four shown):
@@ -78,6 +108,13 @@ Trap keywords are substring-matched against each finding's title+kind+location, 
 **assertion-only**: a keyword like "no below-the-line" would also match a correct answer that
 says "do not cut the threshold with no below-the-line testing". Phrase traps so that only an
 actually-wrong answer contains them, and record the rationale in `notes.md`.
+
+Both planted and forbidden specs also accept **`exclude_keywords:`** - a mention-guard that
+vetoes a match when any of them appears in the finding's haystack. Use it where a keyword net
+cannot tell presence from absence-talk (a planted "summary email" spec matching "summary email
+never produced" - observed live 2026-07-25) or a defect-flag from a fix-recommendation (the
+0.27.0 baseline's mention-as-fix trap artifact). CI checks that an exclude is never a substring
+of the spec's own match keywords.
 
 ## Adding a case
 

@@ -195,6 +195,16 @@ _SUMMARY_WRONG_EXT_RE = re.compile(r"(?i)^engagement-summary-.*\.(?:md|html)$")
 _STALE_STATUS_RE = re.compile(
     r"(?im)^>.*(?:⏳|\bINTERIM\b|engagement not closed|\bin progress\b|\bnot closed\b)"
 )
+# Document-control Status fields must be closed out once START-HERE is ✅ CLOSED: a doc still
+# declaring `Status `Draft`` / `In review` under a closed index is the status machinery
+# contradicting the index (independent review 2026-07-25: 5 of 7 "final" docs read Draft).
+# Judgement item, never auto-fixed - only the PM knows closed vs "pending human sign-off"
+# (the latter, stated in the Status value itself, passes this check).
+_STALE_DOCSTATUS_RE = re.compile(
+    r"(?im)^>.*\bStatus\b[ `'·:]*(?:draft\b(?![^`\n]*pending human sign-off)"
+    r"|in review\b(?![^`\n]*pending human sign-off)"
+    r"|in progress\b(?![^`\n]*pending human sign-off))"
+)
 
 
 def _force_utf8_output() -> None:
@@ -563,6 +573,13 @@ def check(artifacts_dir: Path) -> list[str]:
                         f"STALE-STATUS: {md.name} still carries an interim/in-progress status "
                         "banner but START-HERE is closed - engagement status lives ONLY in "
                         "START-HERE; remove the stale banner"
+                    )
+                if _STALE_DOCSTATUS_RE.search(head):
+                    findings.append(
+                        f"STALE-DOCSTATUS: {md.name} document-control Status still reads "
+                        "Draft/In review/In progress under a ✅ CLOSED index - close it out, "
+                        "or state 'pending human sign-off' in the Status value where the human "
+                        "act is the only gap (close checklist: reconciliation sweep)"
                     )
 
     return findings

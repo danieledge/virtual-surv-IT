@@ -1,0 +1,39 @@
+case: review-main-guard-py
+workflow: /deep-review
+rubric: code-review
+input: input_test_alert_window.py
+description: >
+  Test-suite hygiene case, seeded from a defect the 2026-07-25 independent review found in a
+  real delivery: the __main__ guard sits mid-file, so direct invocation silently runs only the
+  tests defined above it, reports OK, and never executes the regression tests added after it.
+  Also seeds a tautological test that compares the function under test to itself. The trap is
+  the documented, rationale-carrying window constant and the inclusive-boundary tests - correct
+  per convention, must not be flagged.
+
+planted:
+  - id: MAIN-1
+    keywords: [__main__, unittest.main, mid-file, before the last, silently skip, never run,
+               not executed, after the guard, guard placement]
+    location: input_test_alert_window.py:52
+    min_severity: warning
+    must_find: true
+  - id: TAUT-1
+    # test_boundary_semantics_are_inclusive derives `expected` from the function under test,
+    # then asserts the function equals it - always true, tests nothing.
+    keywords: [tautolog, asserts itself, always pass, compares the function to itself, trivially
+               true, self-referential, tests nothing, vacuous]
+    location: input_test_alert_window.py:47
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # The documented threshold and its guard test are correct per the no-bare-thresholds
+  # convention (rationale + date present). Exclusions cover fix-phrasing per the scorer's
+  # mention-guard so a remediation suggestion quoting the constant does not trip the trap.
+  - id: FP-THRESHOLD
+    keywords: [magic number, undocumented threshold, hardcoded window, bare threshold]
+    exclude_keywords: [recommended fix, use instead]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

@@ -3,6 +3,39 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.28.0] - 2026-07-25 - Live orchestration evals + close-time reconciliation (dev)
+
+### Added
+- **Close-time reconciliation discipline** (2026-07-25 independent-review remediation): the
+  close checklist gained a "Close-time reconciliation sweep" (every produced/touched document,
+  incl. code-adjacent README/docstrings: counts, ranges, findings enumerations, struck
+  citations, dead banner prose, document-control Status close-out, QA evidence retention);
+  DoD gained a "Reconciled at close" gate and a QA-evidence-preservation + measured-tag rule;
+  `check_artifacts` gained **`STALE-DOCSTATUS`** (Draft/In-review doc Status under a ✅ CLOSED
+  index; "pending human sign-off" stated in the value passes). 5 new unit tests.
+- **Scorer mention-guard** - `eval_score` specs accept `exclude_keywords:` vetoing a match on
+  absence-talk / fix-phrasing (closes the 0.27.0 baseline follow-up; live artifact observed
+  2026-07-25: "summary email never produced" matched the email-present spec). CI checks
+  excludes can never veto a spec's own keywords. 4 new scorer tests.
+- **Two golden cases from the independent review**: `process-close-reconciliation` (live
+  /engage: close a drifted pack by reconciling, not closing-over or handing back) and
+  `review-main-guard-py` (static: mid-file `__main__` guard silently skipping trailing tests +
+  a tautological self-oracle test; documented-threshold trap). 36 cases total.
+- **Staged project-root anchoring for two hooks** (human-installed:
+  `bash scripts/apply-project-anchor.sh`): staged `dod_stop_gate.py` / `persona_anchor.py`
+  anchor on `CLAUDE_PROJECT_DIR` instead of the wandering hook cwd, so a kept eval sandbox
+  under `evals/runs/` can no longer nudge the gate or summon Morgan into a foreign session;
+  sandboxed eval sessions keep both hooks fully armed. 5 new tests drive the staged copies.
+- **Live-/engage orchestration evals** - `scripts/eval_engage.py`: headless driver that runs a
+  full engagement cycle end-to-end (Agent SDK session in a throwaway sandbox, LLM user-sim
+  answering every AskUserQuestion gate in persona) and scores it with the existing deterministic
+  scorer + rubric judge. Closes the 0.27.0 baseline's recorded gap ("orchestration cases need a
+  live /engage"). New flagship case `evals/cases/process-full-lifecycle/` (intake → build →
+  independent QA → DoD gate → close), per-case `driver.md` personas with
+  `evals/driver-default.md` fallback. Dev-only dependency: `claude-agent-sdk`
+  (requirements-dev.txt); run outputs under `evals/runs/` (git-ignored). Usage: evals/README.md
+  "The orchestration slice".
+
 ## [0.27.0] - 2026-07-24 - Anthropic best-practice remediation (all review gaps; dev)
 
 One batch closing every gap from the 2026-07-24 best-practice review, on the `dev` channel.

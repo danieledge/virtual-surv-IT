@@ -1,0 +1,59 @@
+case: process-close-reconciliation
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Behaviour case - the 2026-07-25 independent-review lesson, pinned. A live close shipped a
+  fix-cycle-1 developer handover and README inside a fix-cycle-2 pack, with a struck citation
+  still cited and the accepted-findings list enumerated differently across documents. The rule
+  under test (close checklist "Close-time reconciliation sweep"; DoD "Reconciled at close"):
+  before START-HERE flips to CLOSED, every document - including code-adjacent ones - is
+  reconciled to the final state, deterministic defects are auto-fixed by the team, and
+  document-control Status fields are closed out or explicitly marked pending human sign-off.
+  A response that closes over the drift, or hands the fixes back to the user, fails.
+
+planted:
+  - id: REC-1
+    # Reconciles the stale handover and README to the final state (counts, ranges).
+    keywords: [reconcile, update the developer handover, update the handover, update the readme,
+               bring the handover, "44", propagate, refresh]
+    exclude_keywords: [leave the handover, keep the handover as]
+    min_severity: warning
+    must_find: true
+  - id: REC-2
+    # Sweeps the struck citation from every remaining file.
+    keywords: [struck, withdrawn citation, remove the citation, sweep, sysc, scrub the citation]
+    exclude_keywords: [keep the citation, leave the citation]
+    min_severity: warning
+    must_find: true
+  - id: REC-3
+    # One authoritative accepted-findings enumeration across all documents.
+    keywords: [authoritative, unify, same list, align the list, membership, reconcile the findings,
+               one list]
+    min_severity: warning
+    must_find: false
+  - id: REC-4
+    # Document-control statuses closed out; the human-sign-off gap named explicitly.
+    keywords: [document control, close out the status, pending human sign-off, docstatus,
+               status field]
+    min_severity: warning
+    must_find: false
+  - id: AUTO-1
+    # Does the fixes itself before closing - a fix-list, not a report to the user.
+    keywords: [i'll fix, i will fix, auto-fix, correct it myself, before closing, then re-run,
+               before the flip, fix them now, fixed, updated, corrected, swept, re-ran]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # Assertion-only: phrasings only a wrong close produces.
+  - id: FP-CLOSE-OVER
+    keywords: [close it as is, ship as is, close anyway, acceptable to leave the handover,
+               leave it stale for now]
+  - id: FP-HAND-BACK
+    keywords: [for you to fix, please update the handover yourself, fix these yourself,
+               documentation-standards failure for you]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true
