@@ -223,14 +223,14 @@ Ordered close checklist:
    tags, dates, SHA anchors; corrections/deprecations dated; §3 history row appended; maps the
    CODE never the team's activity; PM-written, ≤~200 lines.
 5. **Render everything** 📄: every `.md` artifact gets its `.html` sibling.
-6. **Finalise START-HERE last** 📄: Status → ✅ CLOSED <date>, verdict + footprint filled,
-   ⚠️-outstanding replaced with "Nothing - closed <date>", interim banners stripped from
-   artifacts that became final.
-7. 📄 **Delivery Report** (close-only, consolidated by default) and 📄 **engagement-summary
+6. 📄 **Delivery Report** (close-only, consolidated by default) and 📄 **engagement-summary
    email**: `.txt` in artifacts/ (the one artifact never rendered to HTML), signed as Morgan,
    "Hi," when the requester's name is unknown, states the engagement footprint (approx tokens
    + agent count), repeats the execution/data responsibility notes, NEVER offers a call or
-   meeting - next steps are actions.
+   meeting - next steps are actions. Written only now, at close.
+7. **Finalise START-HERE last of all** 📄: Status → ✅ CLOSED <date>, verdict + footprint
+   filled, ⚠️-outstanding replaced with "Nothing - closed <date>", interim banners stripped
+   from artifacts that became final. The index flip to ✅ is the FINAL state change.
 8. **Close with next steps**: short summary + concrete options with a recommendation + offer
    to carry them out; a dead end is a PM failure. Human sign-off remains the one DoD item only
    the user can perform.

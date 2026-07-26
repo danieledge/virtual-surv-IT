@@ -18,7 +18,7 @@ flowchart TD
     TARGET -- "Yes" --> GATES["Show 2 VERBATIM disclaimers:<br/>execution safety + data safety"]
     GATES --> BATCH["ONE batched AskUserQuestion call<br/>(only applicable questions):<br/>work-type / execution consent INTENT /<br/>data attestation"]
     BATCH --> CONSENT{"Execution<br/>consent answer"}
-    CONSENT -- "Yes = intent only" --> MARKER["User personally types<br/>touch .claude/.exec-consent<br/>(human-only grant, model blocked<br/>from writing it)"]
+    CONSENT -- "Yes = intent only" --> MARKER["User personally types<br/>touch .claude/.exec-consent<br/>(human-only grant, model blocked<br/>from writing it; marker VERIFIED<br/>to exist before any execution)"]
     CONSENT -- "No" --> DELMARK["Any existing marker DELETED<br/>dynamic findings stay 🧠 inferred"]
     BATCH --> DATTEST{"Data<br/>attestation"}
     DATTEST -- "No / unsure" --> PREP["/prepare-data:<br/>mask or synthesise first"]
@@ -38,7 +38,7 @@ flowchart TD
     AMENU --> BRIEF["📄 Engagement Brief +<br/>📄 START-HERE living index (⏳)<br/>both rendered to .html"]
     BRIEF --> GOAHEAD{"Go-ahead gate"}
     GOAHEAD -- "Adjust" --> AMENU
-    GOAHEAD -- "Stop" --> HALT["Engagement ends unstarted"]
+    GOAHEAD -- "Stop" --> HALT["Delivery never starts<br/>(brief + index already on disk)"]
     GOAHEAD -- "Proceed" --> DELIV["Phase 4: delivery loop<br/>(diagram 3)"]
     DELIV --> BLOCKED{"Turn ends needing<br/>user input?"}
     BLOCKED -- "Yes" --> B1["START-HERE set ⛔ with outstanding list:<br/>open questions + every gate not yet run.<br/>Turn ends saying NOT closed.<br/>No email, no delivery report"]
@@ -64,7 +64,7 @@ flowchart TD
         G2C -- "Yes (human created it)" --> G2Y["Allow"]
         G2C -- "No" --> G2X["BLOCK: static by default;<br/>consent is a human act"]
         G2 -- "neither" --> G2P["Allow"]
-        G2Y --> G3{"guard-consent-writes.py<br/>Write Edit Bash"}
+        G2Y --> G3{"guard-consent-writes.py<br/>Write Edit MultiEdit<br/>NotebookEdit Bash"}
         G2P --> G3
         G2OK --> G3
         G3 -- "writes consent marker,<br/>settings, or hook files" --> G3X["BLOCK: the model can never<br/>grant itself consent or<br/>weaken a guard"]
@@ -123,8 +123,8 @@ flowchart TD
     C2Q -- "Clean" --> C3["3. Close-time reconciliation sweep:<br/>EVERY produced or touched doc incl.<br/>README + module docstrings - one<br/>authoritative set of counts/enumerations,<br/>late-cycle changes propagated, struck<br/>citations swept, dead interim prose removed,<br/>doc statuses closed out, QA evidence retained<br/>(measured tag needs a surviving artifact)"]
     C3 --> C4["4. 📄 Codebase map updated (ADR-003):<br/>durable architecture facts, 📊/🧠 tags,<br/>SHA anchors, history row - maps the CODE,<br/>never team activity"]
     C4 --> C5["5. Render: every .md gets its .html"]
-    C5 --> C6["6. 📄 START-HERE finalised LAST:<br/>Status ✅ CLOSED + date, verdict, footprint,<br/>outstanding list replaced, interim banners<br/>stripped everywhere"]
-    C6 --> C7["7. 📄 Delivery Report (close-only name)<br/>+ 📄 engagement-summary email:<br/>.txt, signed Morgan, Hi, if name unknown,<br/>states token + agent footprint, repeats<br/>responsibility notes, NEVER offers a call"]
+    C5 --> C6["6. 📄 Delivery Report (close-only name)<br/>+ 📄 engagement-summary email:<br/>.txt, signed Morgan, Hi, if name unknown,<br/>states token + agent footprint, repeats<br/>responsibility notes, NEVER offers a call"]
+    C6 --> C7["7. 📄 START-HERE finalised LAST of all:<br/>Status ✅ CLOSED + date, verdict, footprint,<br/>outstanding list replaced, interim banners<br/>stripped everywhere"]
     C7 --> C8["8. Next-step options with a<br/>recommendation - never a dead end.<br/>Human sign-off = the user's act"]
     C8 --> FIN["✅ Engagement closed"]
 ```
