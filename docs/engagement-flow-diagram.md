@@ -1,9 +1,36 @@
 # Engagement workflow - Mermaid diagrams (v0.28.0)
 
-Companion to `engagement-flow-spec.md`. Four diagrams: the end-to-end phase flow, the
-always-on hooks layer, the delivery loop with the mandatory code chain, and the close
-sequence. State emoji: ⏳ in progress · ⛔ blocked · ✅ closed. Evidence tags: 📊
-observed/measured · 🧠 inferred · 📄 coded.
+Companion to `engagement-flow-spec.md`. Diagram 0 is the simple view (core concepts only -
+simplified by omission, never by distortion); diagrams 1-4 are the complete detail: the
+end-to-end phase flow, the always-on hooks layer, the delivery loop with the mandatory code
+chain, and the close sequence. State emoji: ⏳ in progress · ⛔ blocked · ✅ closed. Evidence
+tags: 📊 observed/measured · 🧠 inferred · 📄 coded.
+
+## 0. Simple view - the core concepts
+
+```mermaid
+flowchart TD
+    REQ["User request"] --> INV{"Team invoked?<br/>(/engage or asking for it)"}
+    INV -- "No" --> STD["Standard Claude Code session<br/>(the safety guards stay active anyway)"]
+    INV -- "Yes" --> OPEN["Morgan the PM opens:<br/>intro, team version, safety questions"]
+    OPEN --> SAFE["Safety ground rules:<br/>raw data folder never readable ·<br/>running code needs consent that<br/>only the HUMAN can grant"]
+    SAFE --> TYPE{"What kind of work?"}
+    TYPE -- "Vague idea" --> REQS["Requirements written first"]
+    TYPE -- "Review" --> REV["Review menu: pick depth<br/>and what happens to findings"]
+    TYPE -- "Build" --> BLD["Build from the requirements"]
+    REQS --> PLAN["Plan agreed: engagement brief +<br/>a living index of everything produced (⏳)"]
+    REV --> PLAN
+    BLD --> PLAN
+    PLAN --> GO{"User go-ahead?"}
+    GO -- "Adjust" --> PLAN
+    GO -- "Stop" --> ENDE["Ends here - nothing delivered"]
+    GO -- "Proceed" --> WORK["A small NAMED team delivers<br/>(its size stated out loud first)"]
+    WORK --> CODE["Any code produced always gets:<br/>tests, then review, then<br/>INDEPENDENT QA ⟲ (loops until clean)"]
+    CODE --> BLK{"Stuck waiting<br/>on the user?"}
+    BLK -- "Yes" --> HOLD["Marked ⛔ blocked with an open list<br/>of what's outstanding - resumable<br/>any time, even by a new session"] --> WORK
+    BLK -- "No, done" --> CLOSE["Close: mechanical quality gate<br/>run as a fix-list, every document<br/>reconciled to the final state"]
+    CLOSE --> FIN["✅ Delivery report + summary email<br/>+ concrete next steps.<br/>Sign-off stays with the human"]
+```
 
 ## 1. End-to-end engagement flow
 
