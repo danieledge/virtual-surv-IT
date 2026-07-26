@@ -18,18 +18,30 @@ flowchart TD
     TYPE -- "Vague idea" --> REQS["Requirements written first"]
     TYPE -- "Review" --> REV["Review menu: pick depth<br/>and what happens to findings"]
     TYPE -- "Build" --> BLD["Build from the requirements"]
-    REQS --> PLAN["Plan agreed: engagement brief +<br/>a living index of everything produced (⏳)"]
+    REQS --> PLAN["Plan agreed: engagement brief +<br/>START-HERE, a living index of<br/>everything produced (⏳)"]
     REV --> PLAN
     BLD --> PLAN
     PLAN --> GO{"User go-ahead?"}
     GO -- "Adjust" --> PLAN
     GO -- "Stop" --> ENDE["Ends here - nothing delivered"]
-    GO -- "Proceed" --> WORK["A small NAMED team delivers<br/>(its size stated out loud first)"]
+    GO -- "Proceed" --> WORK["A small NAMED team delivers<br/>(its size stated out loud first).<br/>Every data claim tagged:<br/>📊 observed or 🧠 inferred"]
     WORK --> CODE["Any code produced always gets:<br/>tests, then review, then<br/>INDEPENDENT QA ⟲ (loops until clean)"]
     CODE --> BLK{"Stuck waiting<br/>on the user?"}
     BLK -- "Yes" --> HOLD["Marked ⛔ blocked with an open list<br/>of what's outstanding - resumable<br/>any time, even by a new session"] --> WORK
     BLK -- "No, done" --> CLOSE["Close: mechanical quality gate<br/>run as a fix-list, every document<br/>reconciled to the final state"]
     CLOSE --> FIN["✅ Delivery report + summary email<br/>+ concrete next steps.<br/>Sign-off stays with the human"]
+
+    subgraph SHARED["Shared memory and coordination"]
+        BB["The BLACKBOARD:<br/>specialists coordinate by reading and<br/>writing shared artifacts (spec, RTM,<br/>report) - not by chatting.<br/>Each step's output is the next one's input"]
+        SH["START-HERE = the engagement's<br/>EXTERNAL MEMORY: updated the moment<br/>anything is written; survives context<br/>compaction; what a resumed session<br/>reads to pick up exactly where it left off"]
+        MAP["The CODEBASE MAP = the project's<br/>durable memory of its own code:<br/>architecture facts with dates and tags -<br/>never a log of team activity"]
+    end
+    WORK <-. "reads and writes" .-> BB
+    PLAN -. "creates" .-> SH
+    WORK -. "row appended<br/>every write" .-> SH
+    HOLD -. "resume reads it" .-> SH
+    OPEN -. "read at every open" .-> MAP
+    CLOSE -. "updated at every close" .-> MAP
 ```
 
 ## 1. End-to-end engagement flow
