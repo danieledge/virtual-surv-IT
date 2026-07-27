@@ -526,7 +526,8 @@ def probe_artifacts(sandbox: Path) -> list[dict]:
                         "severity": "warning",
                         "location": "artifacts/engagement-state.json",
                         "title": "machine-readable engagement state present "
-                        f"(status {state.get('status')})",
+                        f"(status {state.get('status')}, profile "
+                        f"{state.get('profile') or 'standard'})",
                         "kind": "artifact",
                     }
                 )

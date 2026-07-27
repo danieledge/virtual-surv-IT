@@ -1,6 +1,6 @@
 case: process-light-engagement
 workflow: /engage-light
-rubric: process-discipline
+rubric: process-discipline-light
 input: scenario.md
 description: >
   Profile case - the user EXPLICITLY chose the light engagement. A correct run explains the
@@ -31,8 +31,10 @@ planted:
     min_severity: warning
     must_find: true
   - id: LIGHT-5
-    # Lean team stated out loud.
-    keywords: [right-siz, team size, two agents, three agents, one builder]
+    # Lean team stated out loud (numeral and word forms both - the normalizer phrases
+    # freely: "Team sizing: 2 agents" observed live).
+    keywords: [right-siz, team siz, "2 agents", "3 agents", two agents, three agents,
+               one builder, specialist agents]
     min_severity: warning
     must_find: true
 
