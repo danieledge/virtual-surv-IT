@@ -1,0 +1,41 @@
+{
+  "schema": 2,
+  "engagement": {
+    "title": "Legacy calibration review (pre-workspaces)",
+    "slug": "legacy-review",
+    "requested_by": null,
+    "opened": "2026-07-27",
+    "closed": "2026-07-27"
+  },
+  "status": "closed",
+  "profile": "standard",
+  "phase": "close",
+  "team": [
+    "Ravi (code review)",
+    "Linh (QA)"
+  ],
+  "verdict": "ready - review closed clean",
+  "footprint": {
+    "agents": null,
+    "approx_tokens": null
+  },
+  "outstanding": [],
+  "log": [],
+  "ratifications": [],
+  "artifacts": [
+    {
+      "path": "engagement-brief.md",
+      "title": "Brief",
+      "status": "final",
+      "added": "2026-07-27"
+    },
+    {
+      "path": "engagement-summary-legacy-review.txt",
+      "title": "Summary email",
+      "status": "final",
+      "added": "2026-07-27"
+    }
+  ],
+  "decisions": {},
+  "team_version": "v0.29.1"
+}

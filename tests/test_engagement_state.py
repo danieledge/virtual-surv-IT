@@ -367,3 +367,44 @@ def test_migrate_moves_flat_pack_into_workspace(tmp_path, monkeypatch):
     assert not (art / "engagement-state.json").exists()
     rows = json.loads((art / "engagements.json").read_text())["engagements"]
     assert rows[0]["slug"] == "legacy-job"
+
+
+def test_old_flat_engagement_then_new_workspace_and_migrate(tmp_path, monkeypatch):
+    """User scenario: an old (closed, pre-workspaces) flat engagement exists; a new session
+    starts a new engagement beside it, then tidies via migrate. Nothing of the old pack is
+    lost and both end up as registered workspaces."""
+    art = tmp_path / "artifacts"
+    _run(art, "init", "--title", "Old review", "--slug", "old-review")  # flat (pre-0.31)
+    _run(art, "set-team", "Ravi (review)")
+    _run(art, "set-status", "closed", "--verdict", "done")
+    old_state = state_path(art).read_text(encoding="utf-8")
+
+    assert _run_env(monkeypatch, tmp_path, "init", "--title", "New job", "--slug", "new-job") == 0
+    rows = {r["slug"]: r["status"] for r in json.loads(
+        (art / "engagements.json").read_text())["engagements"]}
+    assert rows == {"old-review": "closed", "new-job": "in_progress"}
+
+    assert _run_env(monkeypatch, tmp_path, "migrate") == 0
+    assert (art / "old-review" / "engagement-state.json").read_text(encoding="utf-8") == old_state
+    assert not (art / "engagement-state.json").exists()
+    rows = {r["slug"]: r["status"] for r in json.loads(
+        (art / "engagements.json").read_text())["engagements"]}
+    assert rows == {"old-review": "closed", "new-job": "in_progress"}
+
+
+def test_no_limit_on_engagement_count(tmp_path, monkeypatch):
+    """User ruling: no cap on engagements per project. Five at mixed states, all
+    registered, all individually addressable."""
+    statuses = {}
+    for i in range(5):
+        slug = f"eng-{i}"
+        _run_env(monkeypatch, tmp_path, "init", "--title", f"E{i}", "--slug", slug)
+        if i % 2:
+            _run_env(monkeypatch, tmp_path, "--slug", slug, "set-status", "blocked")
+            statuses[slug] = "blocked"
+        else:
+            statuses[slug] = "in_progress"
+    rows = {r["slug"]: r["status"] for r in json.loads(
+        (tmp_path / "artifacts" / "engagements.json").read_text())["engagements"]}
+    assert rows == statuses
+    assert _run_env(monkeypatch, tmp_path, "--slug", "eng-3", "set-status", "in_progress") == 0
