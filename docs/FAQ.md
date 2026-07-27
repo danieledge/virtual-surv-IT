@@ -119,3 +119,10 @@ hard-blocked from the model by an always-on hook, everything else runs on your a
 that it's masked or synthetic, and `/prepare-data` exists to get you there. Pseudonymised
 still counts as personal data, so prefer fully synthetic. See
 [Handling real data](../README.md#-handling-real-data) for the long version.
+
+⚠️ **One caveat on `/prepare-data` itself**: the masking pipeline behind it is a
+**placeholder implementation** (a proof-of-concept showing the shape of the workflow, with a
+[roadmap](prepare-data-roadmap.md) of what a real one needs). Do not rely on it as your
+control for de-identifying production data - if the stakes are real, use your organisation's
+approved masking tooling, or fully synthetic data, and treat `/prepare-data` as a demo of
+where that step slots into the flow.

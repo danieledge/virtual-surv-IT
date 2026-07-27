@@ -618,7 +618,7 @@ deliverable in both `.md` and `.html`** under `artifacts/`. Focused commands for
 | Command | Use it for | Pattern |
 |---|---|---|
 | `/engage` | anything, the front door | PM intake + dynamic routing |
-| `/prepare-data` | get safe data ready (synthetic or masked) before analysis | guided onboarding + validation |
+| `/prepare-data` | get safe data ready (synthetic or masked) before analysis | guided onboarding + validation (⚠️ the masking pipeline is a placeholder, see [FAQ](docs/FAQ.md)) |
 | `/write-brd` | idea → Business Requirements (BABOK + EARS) | prompt chaining |
 | `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
 | `/deep-review` | detailed code review (bugs, security, architecture, impact) | dimension fan-out + scoring |
