@@ -1224,6 +1224,32 @@ the right job; only the PM's commentary occasionally mislabels it. Hence: cosmet
 
 ## ❓ FAQ
 
+**What can it actually do?**
+Lots! The big verbs are **build**, **analyse**, **investigate**, **document** and **help
+solve a problem**:
+
+- **Build** - detection rules and scenario logic, data pipelines and ETL, transformation and
+  utility scripts, DQ/reconciliation jobs, reporting/MI, tooling - specced, tested,
+  independently QA'd and handed over with docs a stranger could run.
+- **Analyse** - review or audit existing code (including security-focused passes), tune
+  thresholds with ATL/BTL evidence, assess whether every in-scope instrument, venue and
+  channel is actually being monitored, validate a model independently of whoever built it.
+- **Investigate an issue** - an alert storm, a false-positive spike, a feed that went quiet,
+  a reconciliation break, "why did this trade not alert?" - worked as evidence-first
+  investigations that end in findings and a fix plan, not a shrug.
+- **Document** - business requirements (BRD), functional specs with testable acceptance
+  criteria, requirements-traceability matrices, ops runbooks, developer and QA handover
+  packs, architecture decision records, change requests, MI summaries - from scratch or by
+  reverse-engineering the code you already have.
+- **Help solve a problem** - turn a vague "we keep getting hammered by alerts on X" into
+  scoped requirements, a decision on options, or a worked plan; scope new business
+  requirements; assess a regulatory change's impact; or just answer hard questions with the
+  right specialist's hat on.
+
+Throw any of those at `/engage` and Morgan works out the shape. The common thread: whatever
+it produces arrives traceable, evidence-tagged and independently checked, not as a wall of
+confident text.
+
 **What's the difference between "measured" and "inferred"? I keep seeing 📊 and 🧠 tags.**
 It's the team's honesty system, and probably the single most useful thing to understand.
 📊 **observed/measured** means the team actually ran or counted something and the evidence
