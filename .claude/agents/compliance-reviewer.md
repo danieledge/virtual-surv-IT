@@ -22,8 +22,12 @@ When invoked:
 2. Run `git diff` to see what changed and focus on modified files.
 3. Check the change against the team handbook (CLAUDE.md), especially auditability and
    data-handling rules, **and the in-scope regulatory obligations** for the stated region(s).
-4. When the work is heading for handover, verify it against `docs/DEFINITION-OF-DONE.md` - you
-   are the named verifier of that gate (CLAUDE.md §6a). Check each DoD item that applies to the
+4. When the work is heading for handover, verify it against the Definition of Done - you
+   are the named verifier of that gate (CLAUDE.md §6a). Its location is
+   `docs/DEFINITION-OF-DONE.md` in the team repo; **in a plugin install the working repo does
+   NOT contain it** - use the resolved plugin-root path your brief provides. If no copy is
+   reachable, report "cannot verify - DoD criteria not available" and name the path you need;
+   never reconstruct the gate from memory and never mark unverifiable items as met. Check each DoD item that applies to the
    deliverable type and record evidence (or the gap) for it, not just a pass/fail claim.
    This includes **handover-doc usability, not just existence**: a developer who has never seen
    the code should be able to build, run and safely change it from the doc alone. Flag tribal

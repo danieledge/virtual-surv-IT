@@ -726,9 +726,12 @@ def check(artifacts_dir: Path) -> list[str]:
         # INDEX-NO-STATUS; piling the email demand on top would point at the wrong fix.)
         has_deliverables = bool(md_files)
         if has_deliverables and not summaries:
+            # Uniform across profiles (user ruling 2026-07-27): every close ends with the
+            # summary email - light keeps it SHORT, it does not drop it.
             findings.append(
                 "MISSING-SUMMARY-EMAIL: no artifacts/engagement-summary-*.txt found - the "
-                "closing email (DoD / CLAUDE.md §6a) is a required artifact"
+                "closing email (DoD / CLAUDE.md §6a) is a required artifact in EVERY "
+                "profile (light keeps it short, never absent)"
             )
         # Status is single-source: it lives ONLY in START-HERE. A content artifact still
         # carrying a mutable interim/in-progress banner after close points readers at an

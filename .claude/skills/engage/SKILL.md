@@ -248,8 +248,12 @@ before fanning out, state in one line **how many agents you intend to spawn and 
 team"*). Surfacing the team size at the gate keeps over-spawning visible to the user. Use the
 leanest set that fits - don't fan out the whole team for a narrow change. **Delegate with an
 explicit, non-overlapping brief** to each specialist (objective · scope boundaries / what
-another agent owns · inputs & artifacts to read · expected output format · **return a distilled
-summary, target under ~30 lines - full detail goes to the artifact**) - this prevents the
+another agent owns · inputs & artifacts to read · **the RESOLVED absolute paths of every
+handbook doc the specialist must verify against** (DoD, coding standards, review method,
+templates) - in a plugin install the repo has no `docs/DEFINITION-OF-DONE.md`, so pass the
+`$PLUGIN_ROOT` copies you resolved at step 0; a specialist without the path reports "cannot
+verify", which stalls the gate (observed live 2026-07-27) · expected output format · **return
+a distilled summary, target under ~30 lines - full detail goes to the artifact**) - this prevents the
 duplicate-work/gap failures and keeps agent returns from flooding the context window. Coordinate via the **shared artifacts** (Delivery Report, RTM),
 not conversation. Review each output against the brief, keep a short status log, and return to
 the user at each gate.
