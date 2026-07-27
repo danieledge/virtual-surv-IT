@@ -102,7 +102,30 @@ delete it, and add `artifacts/` to your `.gitignore` if you don't want it in ver
 
 **Do I need to learn all the commands?**
 No. `/engage` is the front door and routes everything; the rest are shortcuts the team
-itself knows how to reach.
+itself knows how to reach. The one other command worth knowing early is `/engage-light`
+(next question).
+
+**When should I use `/engage-light` instead of `/engage`?**
+For small, non-regulated jobs where the full framework would cost more than the work: a
+utility script, a quick review, an analysis, doc work. You choose it explicitly - Morgan
+never quietly downgrades an engagement. It uses a fraction of the tokens of a full
+engagement on the same job, because it removes documents and repetition - never checks or
+safety. Side by side:
+
+| | `/engage` (standard) | `/engage-light` |
+|---|---|---|
+| Safety gates (consent, data attestation) | Full | **Identical - never lightened** |
+| Requirements | BRD / functional spec / traceability matrix as needed | One-page brief with bullet requirements |
+| Team | Right-sized from the full roster, parallel work allowed | 2-3 agents, no parallel fan-outs |
+| Review + independent QA on any code | Chosen depth, cycles until clean | One review pass + one QA verification (a fail still loops - it never ships one) |
+| Detection rules / scenario logic | In scope, with compliance review | **Refused - auto-upgrades to a standard engagement** |
+| Close | Full close: reconciliation sweep, delivery report, summary email, next steps | Quick close: mechanical check, a **short** summary email from Morgan, one next step |
+| Evidence tags, truthful blocked states, your sign-off | Standing rules | **Identical** |
+| Token usage, same small job | The full framework's | A fraction of it |
+
+If the work grows past light mid-engagement (detection logic appears, a regulated obligation
+enters), Morgan says so and upgrades the same engagement to standard - it never restarts and
+never quietly stays light.
 
 **What if my session dies mid-engagement?**
 Nothing is lost. The engagement's state lives in a machine-readable file on disk (updated
