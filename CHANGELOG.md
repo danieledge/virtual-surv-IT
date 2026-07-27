@@ -3,6 +3,23 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.29.1] - 2026-07-27 - Exec-guard allow-list fix for team tooling (patch)
+
+### Fixed
+- **Consent prompts for the team's OWN tooling** (user-reported): plugin-mode path
+  invocations of `engagement_state.py` were consent-blocked (new in 0.29.0, missing from the
+  guard's bundled-copy basename list), and quoted install paths containing spaces
+  ("~/Library/Application Support/...") never matched the allow-list, blocking even
+  long-allow-listed scripts (`render_html`, `check_artifacts`). §7 is explicit that the gate
+  covers the code under review, never the team's tooling. Staged fix at
+  `scripts/staged_hooks/guard-code-execution.py`, installed by the HUMAN via
+  `scripts/apply-guard-exec-allow.sh` (ADR-002 rec 5).
+- **Tightened while there**: the old `[\"']?\S*` accepted a half-quoted path
+  (`"…/scripts/render_html.py evil.py"` matched without its closing quote); quoted forms now
+  match only strict fully-quoted branches ending at the allow-listed basename. Exec pattern
+  list byte-identical to before - verified by test. 6 new tests (both directions +
+  live/staged parity), `CLAUDE.md` §7 list updated.
+
 ## [0.29.0] - 2026-07-26 - Machine-readable engagement state (dev)
 
 ### Added
