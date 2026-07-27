@@ -1317,7 +1317,7 @@ still counts as personal data, so prefer fully synthetic. See
 | [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack, customise to yours |
 | [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
 | [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
-| [`docs/engagement-flow-poster-flowchart.html`](docs/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory); [render it in the browser](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/main/docs/engagement-flow-poster-flowchart.html), or see [`docs/engagement-flow-diagram.md`](docs/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline |
+| [`docs/engagement-flow-poster-flowchart.html`](docs/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory); [render it in the browser](https://raw.githack.com/danieledge/virtual-surv-IT/main/docs/engagement-flow-poster-flowchart.html), or see [`docs/engagement-flow-diagram.md`](docs/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline |
 | [`docs/adr/`](docs/adr/) | Architecture decision records: citation grounding, safety-hook threat model, engagement memory |
 | [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
 
