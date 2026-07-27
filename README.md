@@ -1031,6 +1031,22 @@ agents now self-verify against their brief and flag gaps before returning; stand
   runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and
   calibrate the judge against human scores over time.
 
+**🚧 TODO: Multi-engagement workspaces** (design agreed in-session 2026-07-27, targets 0.31)
+
+> Several engagements in one project at independent states: per-engagement `artifacts/<slug>/`
+> workspaces, a derived root registry, resume-or-new selection at the front door, and the
+> stop-gate arming only on ⏳ in-progress workspaces (⛔ parked ones stay silent). ADR-008 to
+> be written at build time.
+
+**🚧 TODO: Codebase map evolution** (full design: [`docs/adr/ADR-007-codebase-map-evolution.md`](docs/adr/ADR-007-codebase-map-evolution.md), Proposed - targets 0.31/0.32)
+
+> First-contact surveys of large codebases and an end to silent map rot: a deterministic
+> `repo_skeleton` (tree-sitter/ctags/stdlib tiers, ranked aider-style, zero LLM, regenerated so
+> never stale), the curated map re-scoped to what evidence says helps agents (invariants,
+> gotchas, commands - not architecture prose), opt-in per-area detail files, stdlib drift
+> stamps (`MAP-DRIFT`), and a `/map-codebase` survey command. Research-backed: the ADR records
+> why a comprehensive generated wiki is deliberately NOT the plan.
+
 **🚧 TODO: Automatic data-masking workflow** (detail in [`docs/prepare-data-roadmap.md`](docs/prepare-data-roadmap.md))
 
 > **The goal:** *"throw a dataset at it and it masks/anonymises it safely"*, so the team can take
