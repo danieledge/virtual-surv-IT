@@ -49,34 +49,48 @@ def _force_utf8_output() -> None:
             pass
 
 
-def _engagement_open(artifacts: Path) -> bool:
-    """True while an engagement is live (in progress or blocked).
+def _pack_status(pack: Path) -> str | None:
+    """'in_progress' | 'blocked' | 'closed' | 'open' (legacy sniff) | None (not a pack).
 
-    The machine-readable state file (`engagement-state.json`, ADR-006) is authoritative
-    when present and parseable - a `closed` status wins even over a stale ⏳ render, and
-    an open status arms the hook even before START-HERE has been rendered. The legacy
-    emoji sniff of START-HERE.md is the fallback so pre-state engagements keep working.
-    Returns False on any unreadable input (a presentation aid must never misfire)."""
-    state_file = artifacts / "engagement-state.json"
+    The machine-readable state file (ADR-006) is authoritative when parseable - `closed`
+    wins even over a stale ⏳ render, an open status arms before any render exists. The
+    emoji sniff of START-HERE.md is the fallback so pre-state packs keep working."""
+    state_file = pack / "engagement-state.json"
     if state_file.is_file():
         try:
             status = json.loads(state_file.read_text(encoding="utf-8")).get("status")
         except Exception:
             status = None
-        if status in ("in_progress", "blocked"):
-            return True
-        if status == "closed":
-            return False
-        # unreadable / invalid state -> fall through to the legacy sniff
-    start_here = artifacts / "START-HERE.md"
-    if not start_here.is_file():
-        return False  # dormant / no engagement (team is opt-in)
+        if status in ("in_progress", "blocked", "closed"):
+            return status
+    start_here = pack / "START-HERE.md"
     try:
         text = start_here.read_text(encoding="utf-8", errors="replace")
     except Exception:
-        return False
-    # OPEN (⏳) or BLOCKED (⛔) arms the anchor; a ✅ closed engagement is done.
-    return "⏳" in text or "⛔" in text
+        return None
+    return "open" if ("⏳" in text or "⛔" in text) else None
+
+
+def _open_engagements(artifacts: Path) -> list[tuple[str, str]]:
+    """(name, status) for every LIVE pack - workspaces `artifacts/<slug>/` (0.31) plus the
+    legacy flat pack. Fail-open per pack: unreadable input never misfires the anchor."""
+    out: list[tuple[str, str]] = []
+    packs: list[tuple[str, Path]] = []
+    try:
+        packs = sorted(
+            (p.name, p) for p in artifacts.iterdir()
+            if p.is_dir() and (
+                (p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file()
+            )
+        )
+    except OSError:
+        pass
+    packs.append(("(flat)", artifacts))
+    for name, pack in packs:
+        status = _pack_status(pack)
+        if status in ("in_progress", "blocked", "open"):
+            out.append((name, status))
+    return out
 
 
 def main() -> int:
@@ -89,9 +103,17 @@ def main() -> int:
     # gate: a wandered shell cwd (e.g. a kept eval sandbox under evals/runs/) must not
     # summon Morgan into a session that never engaged the team.
     cwd = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
-    if not _engagement_open(cwd / "artifacts"):
+    opens = _open_engagements(cwd / "artifacts")
+    if not opens:
         return 0
     print(_ANCHOR)
+    if len(opens) > 1 or (len(opens) == 1 and opens[0][0] != "(flat)"):
+        marks = {"in_progress": "⏳", "blocked": "⛔", "open": "⏳"}
+        listing = ", ".join(f"{n} {marks.get(s, s)}" for n, s in opens)
+        print(
+            f"<open-engagements>{listing} - each lives in artifacts/<slug>/; state which "
+            "is ACTIVE this session and target its workspace (--slug)</open-engagements>"
+        )
     return 0
 
 

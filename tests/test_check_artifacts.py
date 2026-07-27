@@ -994,3 +994,66 @@ def test_light_profile_close_requires_email_too(tmp_path):
 def test_standard_profile_close_still_requires_email(tmp_path):
     art = _closed_light_pack(tmp_path, [])
     assert any("MISSING-SUMMARY-EMAIL" in f for f in check(art))
+
+
+# ----------------------------------------------------- workspaces + registry (0.31)
+
+from scripts.check_artifacts import check_registry, main as ca_main, workspace_dirs
+
+
+def _ws(tmp_path, slug, close=False):
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    es_main(["--dir", str(art / slug), "init", "--title", slug, "--slug", slug])
+    if close:
+        es_main(["--dir", str(art / slug), "set-team", "Ana (analysis)"])
+        es_main(["--dir", str(art / slug), "finalise-artifacts"])
+        es_main(["--dir", str(art / slug), "set-status", "closed", "--verdict", "done"])
+    return art
+
+
+def test_workspaces_checked_independently_with_prefixes(tmp_path, capsys):
+    art = _ws(tmp_path, "audit")
+    _ws(tmp_path, "scoping")
+    (art / "audit" / "review-pass-1.md").write_text("# interim\n", encoding="utf-8")
+    from scripts.engagement_state import render_registry
+
+    render_registry(art)
+    rc = ca_main(["check_artifacts", str(art)])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "[audit] " in out and "MISSING-HTML" in out
+    assert "[scoping] MISSING-HTML" not in out  # sibling not polluted
+
+
+def test_registry_stale_flagged_and_fixed(tmp_path):
+    art = _ws(tmp_path, "audit")
+    from scripts.engagement_state import load_state, render_registry, state_path
+
+    render_registry(art)
+    state = load_state(art / "audit")
+    state["status"] = "blocked"
+    state_path(art / "audit").write_text(json.dumps(state), encoding="utf-8")
+    assert any("REGISTRY-STALE" in f for f in check_registry(art))
+    render_registry(art)
+    assert check_registry(art) == []
+
+
+def test_flat_pack_alongside_workspaces_demands_migration(tmp_path, capsys):
+    from scripts.engagement_state import main as es_main
+
+    art = _ws(tmp_path, "audit")
+    es_main(["--dir", str(art), "init", "--title", "Old", "--slug", "old"])  # flat
+    from scripts.engagement_state import render_registry
+
+    render_registry(art)
+    ca_main(["check_artifacts", str(art)])
+    out = capsys.readouterr().out
+    assert "FLAT-PACK-UNMIGRATED" in out
+
+
+def test_workspace_dirs_discovery(tmp_path):
+    art = _ws(tmp_path, "audit")
+    (art / "not-a-pack").mkdir()
+    assert [p.name for p in workspace_dirs(art)] == ["audit"]

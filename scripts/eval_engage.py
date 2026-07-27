@@ -478,7 +478,14 @@ def probe_artifacts(sandbox: Path) -> list[dict]:
     if not art.is_dir():
         return findings
 
-    for txt in sorted(art.glob("*.txt")):
+    # 0.31 workspaces: an engagement's pack may live at artifacts/<slug>/ instead of the
+    # flat root - probe every pack (flat root first for pre-0.31 runs).
+    packs = [art] + sorted(
+        p for p in art.iterdir()
+        if p.is_dir() and (p / "engagement-state.json").is_file()
+    )
+
+    for txt in sorted(art.rglob("*.txt")):
         body = txt.read_text(encoding="utf-8", errors="ignore")
         if "morgan" in body.lower():
             title = 'engagement-summary email written as .txt, signed as Morgan'
@@ -488,83 +495,90 @@ def probe_artifacts(sandbox: Path) -> list[dict]:
                 {"severity": "warning", "location": f"artifacts/{txt.name}", "title": title, "kind": "artifact"}
             )
 
-    start_here = art / "START-HERE.md"
-    if start_here.is_file():
-        text = start_here.read_text(encoding="utf-8", errors="ignore")
-        status = next((ln.strip() for ln in text.splitlines() if "status" in ln.lower()), "")
-        findings.append(
-            {
-                "severity": "warning",
-                "location": "artifacts/START-HERE.md",
-                "title": f"START-HERE living index present ({status[:80]})",
-                "kind": "artifact",
-            }
-        )
-
-    # Machine-readable engagement state (ADR-006): present + valid + fresh render is the
-    # 0.29.0 lifecycle surface; a stale render (state changed, index not re-rendered) is a
-    # real process defect the run left on disk.
-    state_file = art / "engagement-state.json"
-    if state_file.is_file():
-        try:
-            from scripts.engagement_state import embedded_hash, state_hash, validate_state
-
-            state = json.loads(state_file.read_text(encoding="utf-8"))
-            problems = validate_state(state)
-            if problems:
-                findings.append(
-                    {
-                        "severity": "critical",
-                        "location": "artifacts/engagement-state.json",
-                        "title": f"engagement-state invalid: {problems[0][:100]}",
-                        "kind": "artifact",
-                    }
-                )
-            else:
-                findings.append(
-                    {
-                        "severity": "warning",
-                        "location": "artifacts/engagement-state.json",
-                        "title": "machine-readable engagement state present "
-                        f"(status {state.get('status')}, profile "
-                        f"{state.get('profile') or 'standard'})",
-                        "kind": "artifact",
-                    }
-                )
-                if start_here.is_file():
-                    index_text = start_here.read_text(encoding="utf-8", errors="ignore")
-                    if embedded_hash(index_text) == state_hash(state):
-                        findings.append(
-                            {
-                                "severity": "warning",
-                                "location": "artifacts/START-HERE.md",
-                                "title": "state render fresh: START-HERE generated from "
-                                "engagement-state.json (hash match)",
-                                "kind": "artifact",
-                            }
-                        )
-                    else:
-                        findings.append(
-                            {
-                                "severity": "critical",
-                                "location": "artifacts/START-HERE.md",
-                                "title": "state render STALE: START-HERE does not match "
-                                "engagement-state.json",
-                                "kind": "artifact",
-                            }
-                        )
-        except Exception as exc:
+    for pack in packs:
+        where = f"artifacts/{pack.name}/" if pack != art else "artifacts/"
+        start_here = pack / "START-HERE.md"
+        if start_here.is_file():
+            text = start_here.read_text(encoding="utf-8", errors="ignore")
+            status = next(
+                (ln.strip() for ln in text.splitlines() if "status" in ln.lower()), ""
+            )
             findings.append(
                 {
-                    "severity": "critical",
-                    "location": "artifacts/engagement-state.json",
-                    "title": f"engagement-state unreadable: {str(exc)[:100]}",
+                    "severity": "warning",
+                    "location": f"{where}START-HERE.md",
+                    "title": f"START-HERE living index present ({status[:80]})",
                     "kind": "artifact",
                 }
             )
 
-    mds = [p for p in art.glob("*.md")]
-    if mds and all((art / f"{p.stem}.html").is_file() for p in mds):
+        # Machine-readable engagement state (ADR-006): present + valid + fresh render is
+        # the lifecycle surface; a stale render is a real process defect left on disk.
+        state_file = pack / "engagement-state.json"
+        if state_file.is_file():
+            try:
+                from scripts.engagement_state import (
+                    embedded_hash,
+                    state_hash,
+                    validate_state,
+                )
+
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                problems = validate_state(state)
+                if problems:
+                    findings.append(
+                        {
+                            "severity": "critical",
+                            "location": f"{where}engagement-state.json",
+                            "title": f"engagement-state invalid: {problems[0][:100]}",
+                            "kind": "artifact",
+                        }
+                    )
+                else:
+                    findings.append(
+                        {
+                            "severity": "warning",
+                            "location": f"{where}engagement-state.json",
+                            "title": "machine-readable engagement state present "
+                            f"(status {state.get('status')}, profile "
+                            f"{state.get('profile') or 'standard'})",
+                            "kind": "artifact",
+                        }
+                    )
+                    if start_here.is_file():
+                        index_text = start_here.read_text(encoding="utf-8", errors="ignore")
+                        if embedded_hash(index_text) == state_hash(state):
+                            findings.append(
+                                {
+                                    "severity": "warning",
+                                    "location": f"{where}START-HERE.md",
+                                    "title": "state render fresh: START-HERE generated "
+                                    "from engagement-state.json (hash match)",
+                                    "kind": "artifact",
+                                }
+                            )
+                        else:
+                            findings.append(
+                                {
+                                    "severity": "critical",
+                                    "location": f"{where}START-HERE.md",
+                                    "title": "state render STALE: START-HERE does not "
+                                    "match engagement-state.json",
+                                    "kind": "artifact",
+                                }
+                            )
+            except Exception as exc:
+                findings.append(
+                    {
+                        "severity": "critical",
+                        "location": f"{where}engagement-state.json",
+                        "title": f"engagement-state unreadable: {str(exc)[:100]}",
+                        "kind": "artifact",
+                    }
+                )
+
+    mds = [p for p in art.rglob("*.md") if p.name != "ENGAGEMENTS.md"]
+    if mds and all((p.parent / f"{p.stem}.html").is_file() for p in mds):
         findings.append(
             {
                 "severity": "warning",

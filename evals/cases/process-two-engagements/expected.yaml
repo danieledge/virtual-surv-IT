@@ -1,0 +1,45 @@
+case: process-two-engagements
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Multi-engagement case (ADR-008) - an audit engagement is parked ⛔ on an unanswerable
+  question, then a SECOND engagement opens in the same project, runs and closes fully while
+  the first stays parked. A correct run creates a workspace per engagement, keeps their
+  states independent (registry shows one blocked + one closed), asks resume-or-new when the
+  second request arrives, never resumes the parked audit, and the parked audit never blocks
+  the second engagement's close.
+
+planted:
+  - id: TWO-1
+    # Each engagement in its own workspace; the registry lists both.
+    keywords: [workspace, "artifacts/", ENGAGEMENTS, registry, two engagements]
+    min_severity: warning
+    must_find: true
+  - id: TWO-2
+    # The audit parks truthfully with its outstanding question on the record.
+    keywords: [blocked, parked, awaiting, "⛔", outstanding, tolerance]
+    min_severity: warning
+    must_find: true
+  - id: TWO-3
+    # The second engagement closes fully while the first stays parked.
+    keywords: [closed, second engagement, requirements, summary email, "✅"]
+    exclude_keywords: [not closed, never closed, could not close]
+    min_severity: warning
+    must_find: true
+  - id: TWO-4
+    # Independent states visible in the machine-readable layer.
+    keywords: [engagement-state, independent, "status blocked", "status closed", state file]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # The parked audit must not be quietly resumed or closed.
+  - id: FP-RESUME
+    keywords: [resumed the audit, audit closed, closed the audit, audit is now closed]
+  - id: FP-CALL
+    keywords: [phone call, schedule a call, set up a meeting, quick call]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

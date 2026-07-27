@@ -252,6 +252,12 @@ must be visible **between** gates.
   so a stale render can neither arm nor silence them. The state file must **never** carry a
   consent-like key - execution consent lives only in the human-created marker (ADR-002); the
   schema rejects it. Legacy engagements without a state file remain valid.
+- **Engagements live in workspaces (ADR-008).** Each engagement owns `artifacts/<slug>/`
+  (its state, index and artifacts); the root `ENGAGEMENTS.md`/`engagements.json` is a DERIVED
+  registry regenerated on every mutation - never hand-edit it (`REGISTRY-STALE`). Several
+  engagements may coexist at independent states: one is ACTIVE per session (named in the
+  banner, targeted with `--slug`); a ⛔ parked sibling's stop-gate stays silent. Legacy flat
+  packs keep working; `migrate` moves them into a workspace.
 - **START-HERE is a living index** - created at engagement OPEN alongside the Engagement Brief
   (status ⏳), a row appended **the moment any artifact is written** (via `add-artifact`, which
   re-renders the `.md` + `.html`), the ⚠️-outstanding list kept current, verdict + footprint
