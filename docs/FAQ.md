@@ -1,7 +1,4 @@
-# FAQ - the questions a newcomer actually asks
-
-> Friendly answers, grounded in what the system verifiably does. If your question isn't
-> here, `/engage` and ask Morgan - or open an issue.
+# Frequently asked questions
 
 **What can it actually do?**
 Lots! If it comes up in surveillance engineering, there's probably a specialist for it. The
