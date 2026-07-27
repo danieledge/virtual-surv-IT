@@ -70,3 +70,41 @@ def test_open_but_clean_does_not_nudge(tmp_path, monkeypatch, capsys):
     assert rc == 0
     # May legitimately be silent (clean) - assert we did not hard-error and produced no block.
     assert out == "" or json.loads(out).get("decision") != "block"
+
+
+# --------------------------------------------- machine-readable state first (ADR-006)
+
+
+def test_state_closed_wins_over_stale_open_render(tmp_path, monkeypatch, capsys):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "engagement-state.json").write_text(
+        json.dumps({"schema": 1, "status": "closed"}), encoding="utf-8"
+    )
+    (art / "START-HERE.md").write_text("Status: ⏳ in progress\n", encoding="utf-8")
+    rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert rc == 0 and out == ""  # the state is authoritative
+
+
+def test_state_open_arms_gate_even_without_render(tmp_path, monkeypatch, capsys):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "engagement-state.json").write_text(
+        json.dumps({"schema": 1, "status": "in_progress"}), encoding="utf-8"
+    )
+    # No START-HERE.md at all: legacy sniff finds nothing, the state still arms the gate,
+    # and the checker reports the state findings (invalid-minimal state here).
+    rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert rc == 0
+    decision = json.loads(out)
+    assert decision["decision"] == "block"
+    assert "STATE-" in decision["reason"]
+
+
+def test_invalid_state_falls_back_to_emoji_sniff(tmp_path, monkeypatch, capsys):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "engagement-state.json").write_text("{broken", encoding="utf-8")
+    (art / "START-HERE.md").write_text("Status: ✅ closed\n", encoding="utf-8")
+    rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert rc == 0 and out == ""  # unreadable state -> legacy sniff -> closed -> silent

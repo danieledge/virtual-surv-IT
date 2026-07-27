@@ -818,3 +818,147 @@ def test_apply_fixes_renders_report_from_pack(tmp_path):
     report = art / "REVIEW-t.md"
     assert report.is_file()
     assert "**Likely cause:**" in report.read_text(encoding="utf-8")
+
+
+# ----------------------------------------------------- machine-readable state (ADR-006)
+
+
+def _state_engagement(tmp_path):
+    """An artifacts dir with a state file and its fresh render, via the real CLI."""
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"]) == 0
+    return art
+
+
+def test_state_engagement_fresh_render_passes(tmp_path):
+    art = _state_engagement(tmp_path)
+    assert [f for f in check(art) if f.startswith("STATE-")] == []
+
+
+def test_state_stale_render_flagged_and_fixed(tmp_path):
+    from scripts.engagement_state import load_state, state_path
+
+    art = _state_engagement(tmp_path)
+    # Hand-edit the state without re-rendering - the exact crash/hand-edit window.
+    state = load_state(art)
+    state["status"] = "blocked"
+    state_path(art).write_text(json.dumps(state), encoding="utf-8")
+    findings = check(art)
+    assert any("STATE-STALE-RENDER" in f for f in findings)
+    fixed = apply_fixes(art)
+    assert any("STATE-STALE-RENDER" in f for f in fixed)
+    assert "⛔" in (art / "START-HERE.md").read_text(encoding="utf-8")
+    assert not any("STATE-STALE-RENDER" in f for f in check(art))
+
+
+def test_state_invalid_flagged_not_autofixed(tmp_path):
+    from scripts.engagement_state import state_path
+
+    art = _state_engagement(tmp_path)
+    state_path(art).write_text("{not json", encoding="utf-8")
+    assert any("STATE-INVALID" in f for f in check(art))
+    apply_fixes(art)  # must not crash, must not fabricate a render from bad state
+    assert any("STATE-INVALID" in f for f in check(art))
+
+
+def test_state_consent_key_is_invalid(tmp_path):
+    """The hard exclusion end-to-end: a consent-shaped key in the state file is a gate
+    finding, not something a render can launder."""
+    from scripts.engagement_state import load_state, state_path
+
+    art = _state_engagement(tmp_path)
+    state = load_state(art)
+    state["execution_consent"] = True
+    state_path(art).write_text(json.dumps(state), encoding="utf-8")
+    assert any("STATE-INVALID" in f and "consent" in f for f in check(art))
+
+
+def test_state_missing_after_generated_index_flagged(tmp_path):
+    from scripts.engagement_state import state_path
+
+    art = _state_engagement(tmp_path)
+    state_path(art).unlink()
+    assert any("STATE-MISSING" in f for f in check(art))
+
+
+def test_legacy_engagement_without_state_raises_no_state_findings(tmp_path):
+    """Migration safety: a hand-written START-HERE with no state file is still legal."""
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "START-HERE.md").write_text(
+        "# START HERE - legacy\n\n| **Status** | ⏳ IN PROGRESS |\n", encoding="utf-8"
+    )
+    (art / "START-HERE.html").write_text("<p>x</p>", encoding="utf-8")
+    assert [f for f in check(art) if f.startswith("STATE-")] == []
+
+
+# --------------------------------------- ratified-claims + review-fingerprint gates (v2)
+
+
+def test_ratified_claim_pending_flagged(tmp_path):
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"])
+    es_main(["--dir", str(art), "add-ratification", "reserved-column case-insensitivity ruling"])
+    (art / "fsd.md").write_text(
+        "# spec\n\nFR-023: reserved-column handling (ops-lead ratified 2026-07-26).\n",
+        encoding="utf-8",
+    )
+    (art / "fsd.html").write_text("<p>x</p>", encoding="utf-8")
+    findings = check(art)
+    assert any("RATIFIED-CLAIM-PENDING" in f and "fsd.md" in f for f in findings)
+
+
+def test_ratified_claim_negated_or_granted_not_flagged(tmp_path):
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"])
+    es_main(["--dir", str(art), "add-ratification", "reserved-column case-insensitivity ruling"])
+    (art / "fsd.md").write_text(
+        "# spec\n\nFR-023: reserved-column ruling flagged for ops-lead ratification at close.\n",
+        encoding="utf-8",
+    )
+    (art / "fsd.html").write_text("<p>x</p>", encoding="utf-8")
+    assert not any("RATIFIED-CLAIM-PENDING" in f for f in check(art))
+    # Once the human grant is recorded, the assertion is legitimate.
+    (art / "fsd.md").write_text(
+        "# spec\n\nFR-023: reserved-column handling (ops-lead ratified 2026-07-26).\n",
+        encoding="utf-8",
+    )
+    es_main(["--dir", str(art), "ratify", "reserved-column", "--by", "ops lead"])
+    assert not any("RATIFIED-CLAIM-PENDING" in f for f in check(art))
+
+
+def test_review_fingerprint_gap_flagged_and_match_passes(tmp_path):
+    import hashlib
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    code = art / "dedupe.py"
+    code.write_text("def run():\n    return 1\n", encoding="utf-8")
+    md5 = hashlib.md5(code.read_bytes()).hexdigest()
+    # Review recorded a DIFFERENT fingerprint -> the shipped build was never reviewed.
+    (art / "review-pass-1.md").write_text(
+        f"# review\n\nReviewed build md5 {'0' * 32}.\n", encoding="utf-8"
+    )
+    (art / "review-pass-1.html").write_text("<p>x</p>", encoding="utf-8")
+    findings = check(art)
+    assert any("REVIEW-FINGERPRINT-GAP" in f and "dedupe.py" in f for f in findings)
+    # Matching fingerprint -> silent.
+    (art / "review-pass-1.md").write_text(
+        f"# review\n\nReviewed build md5 {md5}.\n", encoding="utf-8"
+    )
+    assert not any("REVIEW-FINGERPRINT-GAP" in f for f in check(art))
+
+
+def test_review_without_fingerprints_raises_nothing(tmp_path):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "tool.py").write_text("x = 1\n", encoding="utf-8")
+    (art / "review-pass-1.md").write_text("# review\n\nNo hashes here.\n", encoding="utf-8")
+    (art / "review-pass-1.html").write_text("<p>x</p>", encoding="utf-8")
+    assert not any("REVIEW-FINGERPRINT-GAP" in f for f in check(art))

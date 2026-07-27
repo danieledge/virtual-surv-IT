@@ -230,12 +230,15 @@ artifact ships `.md` + `.html`.
 **4. Summarise - and open the living index.** Write an Engagement Brief
 (`docs/templates/engagement-brief.md`) capturing decisions taken, open questions,
 clarifications, assumptions, the selected artifacts and the routing plan. Render it to HTML.
-**At the same moment, create `artifacts/START-HERE.md`** (template
-`docs/templates/start-here.md`) with **Status ⏳ IN PROGRESS**, the brief as its first listed
-artifact, and the ⚠️-outstanding list seeded with the gates still ahead (independent QA, DoD
-check) - render it too. It is a **living index**: from here on, append a row and re-render
-**every time any artifact is written**, and keep its status truthful (lifecycle discipline,
-operating guide). **Get the go-ahead via the question tool** (header `Go-ahead`,
+**At the same moment, open the machine-readable state** (ADR-006):
+`<python> -m scripts.engagement_state init --title "<title>" --slug <slug> --team-version <ver>`
+creates `artifacts/engagement-state.json` (Status ⏳, the ⚠️-outstanding list pre-seeded with
+the gates ahead) **and renders `artifacts/START-HERE.md` + `.html` from it**; then
+`add-artifact engagement-brief.md --title "..."` lists the brief. From here on the state file
+is authoritative and START-HERE is its rendered view - **never hand-edit START-HERE**: record
+every artifact with `add-artifact`, every status change with `set-status`, every open question
+with `add-outstanding` - each mutator re-renders the index in the same command (lifecycle
+discipline, operating guide; render shape: `docs/templates/start-here.md`). **Get the go-ahead via the question tool** (header `Go-ahead`,
 `multiSelect: false`): **Proceed as briefed** · **Adjust something first** · **Stop here** -
 never a "shall I proceed?" buried in prose.
 
@@ -253,9 +256,9 @@ the user at each gate.
 
 **5a. Blocked on the user? Say so - never let silence become a close.** When a turn ends
 waiting on input the team cannot proceed without (a clarification, a go-ahead, missing
-inputs): set START-HERE's **Status to ⛔ BLOCKED - awaiting input**, list in its
-⚠️-outstanding section the unanswered question(s) **and every gate not yet run** ("independent
-QA (Linh): not yet run" · "DoD check: not yet run"), re-render it, and **end the turn stating
+inputs): `<python> -m scripts.engagement_state set-status blocked`, then `add-outstanding`
+for the unanswered question(s) **and every gate not yet run** ("independent
+QA (Linh): not yet run" · "DoD check: not yet run") - each command re-renders - and **end the turn stating
 plainly: "this engagement is NOT closed - outstanding: …"**. Do **not** write the summary
 email or `delivery-report.md` (close-only - the mechanical gate flags them as
 `SUMMARY-BEFORE-CLOSE` / `FINAL-BEFORE-CLOSE`); interim output takes pass-scoped names
@@ -267,12 +270,17 @@ report was read as the delivery and QA never ran.)
 
 **6. Deliver.** Produce the selected artifacts under `artifacts/` as Markdown, then render
 each with `<python> -m scripts.render_html <file>.md` so every deliverable exists in `.md` and
-`.html` - **appending a row to `artifacts/START-HERE.md` (and re-rendering it) as each one
-lands**; nothing in the folder goes unlisted. `delivery-report.md` and the summary email are
-written **only now, at close**. **Finalise START-HERE last**: Status → ✅ CLOSED <date>,
-verdict and footprint filled, the ⚠️-outstanding section replaced with "Nothing - closed
-<date>", interim banners removed from artifacts that became final. The mechanical gate below
-verifies all of this (`MISSING-INDEX` / `INDEX-NO-STATUS` / `STALE-INDEX` /
+`.html` - **recording each one with `<python> -m scripts.engagement_state add-artifact <file>
+--title "..."` as it lands** (the index re-renders itself); nothing in the folder goes
+unlisted. `delivery-report.md` and the summary email are written **only now, at close**.
+**Finalise the state last, in order**: `set-team "Name (role)" ...` (the roster that actually
+delivered), `finalise-artifacts` (every row interim → final), `set-footprint` with agents +
+tokens, THEN `set-status closed --verdict "..."` - the close refuses while the team is empty
+or any artifact row is still interim (2026-07-26 live-run lesson). Remove interim banners
+from artifacts that became final, and keep the 📊/🧠 evidence tags on every data claim IN THE
+DELIVERY REPORT AND SUMMARY EMAIL too - the tag duty covers the PM's summary layer, not just
+specialist artifacts (the one dimension the 0.29.0 eval judge failed). The mechanical gate below verifies
+all of this (`MISSING-INDEX` / `INDEX-NO-STATUS` / `STALE-INDEX` / `STATE-STALE-RENDER` /
 `FINAL-BEFORE-CLOSE` / `SUMMARY-BEFORE-CLOSE`).
 
 **Citations gate + fix-list + codebase map - follow the close checklist.** Read

@@ -229,11 +229,30 @@ must be visible **between** gates.
 - **Every engagement is in exactly one state**, recorded in the START-HERE living index
   (`docs/templates/start-here.md`): **⏳ in progress** · **⛔ blocked - awaiting input** ·
   **✅ closed**. Only the close flips to ✅, and the close is where the DoD runs.
+- **The state is machine-readable first (ADR-006).** `artifacts/engagement-state.json` is the
+  authoritative lifecycle record (status, phase, outstanding, artifact inventory, decisions,
+  footprint) and **START-HERE.md is rendered from it** - never hand-edited. Create it with
+  `<python> -m scripts.engagement_state init` at OPEN; update it only through the mutators
+  (`set-status` · `set-phase` · `add-artifact` · `add-outstanding` · `resolve-outstanding` ·
+  `set-decision` · `set-team` · `finalise-artifacts` · `set-footprint` · `log-note` ·
+  `add-ratification` · `ratify`), each of which re-validates and re-renders the index in the
+  same command. **Outstanding holds ONLY open work** - completion notes and events go to the
+  log (`log-note`), so convergence stays countable. **Approvals are structured**: a decision
+  awaiting the human is `add-ratification` (pending); only the human's grant justifies
+  `ratify --by`; an artifact asserting a ratification the state records as pending is a
+  `RATIFIED-CLAIM-PENDING` gate finding. Close ordering: `set-team` and
+  `finalise-artifacts` before `set-status closed` - a close with an empty team or interim
+  artifact rows fails validation. Mechanically checked (`STATE-INVALID`, `STATE-STALE-RENDER`,
+  `STATE-MISSING`); the lifecycle hooks read the state before falling back to the emoji sniff,
+  so a stale render can neither arm nor silence them. The state file must **never** carry a
+  consent-like key - execution consent lives only in the human-created marker (ADR-002); the
+  schema rejects it. Legacy engagements without a state file remain valid.
 - **START-HERE is a living index** - created at engagement OPEN alongside the Engagement Brief
-  (status ⏳), a row appended **the moment any artifact is written** (then re-rendered to
-  `.html`), the ⚠️-outstanding list kept current, verdict + footprint filled at close. It is
-  never "written last": a stalled engagement must still show its true state to whoever opens
-  the folder. Mechanically checked (`MISSING-INDEX`, `INDEX-NO-STATUS`, `STALE-INDEX`).
+  (status ⏳), a row appended **the moment any artifact is written** (via `add-artifact`, which
+  re-renders the `.md` + `.html`), the ⚠️-outstanding list kept current, verdict + footprint
+  filled at close. It is never "written last": a stalled engagement must still show its true
+  state to whoever opens the folder. Mechanically checked (`MISSING-INDEX`, `INDEX-NO-STATUS`,
+  `STALE-INDEX`).
 - **Atomicity - the index must LEAD reality, never trail it (survives compaction).** Writing an
   artifact and appending its START-HERE row are **one unit of work**: append the row (and set the
   status) in the **same turn** as the artifact, **before ending the turn** - never end a turn with

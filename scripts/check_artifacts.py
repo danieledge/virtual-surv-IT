@@ -46,6 +46,8 @@ does not depend on the model remembering each step.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 
 # Used for the git anchor query and for --fix's render_html call - both fixed-argv, no shell.
@@ -392,6 +394,170 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+def _load_engagement_state_module():
+    """Import scripts.engagement_state in BOTH run modes (package import when available,
+    __file__-relative load under direct-path plugin invocation). None = module unavailable;
+    the state checks then skip rather than brick the gate."""
+    try:
+        from scripts import engagement_state  # normal `-m` / package mode
+
+        return engagement_state
+    except Exception:
+        pass
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("engagement_state.py")
+        spec = importlib.util.spec_from_file_location("engagement_state", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
+def check_state(artifacts_dir: Path) -> list[str]:
+    """Machine-readable engagement state (ADR-006): `engagement-state.json` is the
+    authoritative lifecycle record and START-HERE.md is rendered from it. Advisory during
+    migration: a legacy engagement with no state file raises nothing - but an index that
+    CLAIMS state generation with the state file gone, an invalid state file, or a render
+    that no longer matches the state (by embedded state-hash) are real integrity findings."""
+    findings: list[str] = []
+    es = _load_engagement_state_module()
+    if es is None:
+        return findings
+    state_file = artifacts_dir / es.STATE_FILENAME
+    index = artifacts_dir / "START-HERE.md"
+    index_text = (
+        index.read_text(encoding="utf-8", errors="replace") if index.is_file() else ""
+    )
+    if not state_file.is_file():
+        if es.STATE_FILENAME in index_text:
+            findings.append(
+                f"STATE-MISSING: START-HERE.md is generated from {es.STATE_FILENAME} but "
+                "the state file is gone - restore it (or re-run "
+                "`python -m scripts.engagement_state init` and rebuild the state)"
+            )
+        return findings
+    try:
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+    except Exception as exc:
+        findings.append(f"STATE-INVALID: {es.STATE_FILENAME} is not valid JSON ({exc})")
+        return findings
+    problems = es.validate_state(state)
+    if problems:
+        more = f" (+{len(problems) - 1} more)" if len(problems) > 1 else ""
+        findings.append(
+            f"STATE-INVALID: {es.STATE_FILENAME} fails validation: {problems[0]}{more} - "
+            "fix the state, then `python -m scripts.engagement_state render`"
+        )
+        return findings
+    if not index.is_file():
+        findings.append(
+            f"STATE-STALE-RENDER: {es.STATE_FILENAME} exists but START-HERE.md was never "
+            "rendered - run `python -m scripts.engagement_state render`"
+        )
+    elif es.embedded_hash(index_text) != es.state_hash(state):
+        findings.append(
+            f"STATE-STALE-RENDER: START-HERE.md no longer matches {es.STATE_FILENAME} "
+            "(state-hash differs or is missing) - the state is authoritative; run "
+            "`python -m scripts.engagement_state render`"
+        )
+
+    findings.extend(_check_ratified_claims(artifacts_dir, state))
+    return findings
+
+
+# A line ASSERTS ratification only when it uses the word without pending/withheld phrasing -
+# deliberately narrow (2026-07-26 design note: false positives erode trust in the fix-list;
+# widen only on evidence).
+_RATIFIED_ASSERT_RE = re.compile(r"\bratified\b", re.I)
+_RATIFIED_NEGATE_RE = re.compile(
+    r"pending|await|flagged|require|to be ratified|not yet|un-?ratified|at close|"
+    r"outstanding|for ratification",
+    re.I,
+)
+_RATIFY_STOPWORDS = {"ratification", "ratified", "decision", "close", "human"}
+
+
+def _check_ratified_claims(artifacts_dir: Path, state: dict) -> list[str]:
+    """RATIFIED-CLAIM-PENDING (2026-07-26 live-run review, consolidated finding 2): the FSD
+    asserted "ops-lead ratified" while the decision log said pending. When the state records
+    a ratification as pending, no artifact may assert it as given. Escalate, never auto-fix."""
+    pending = [
+        r
+        for r in state.get("ratifications") or []
+        if isinstance(r, dict) and r.get("status") == "pending"
+    ]
+    if not pending:
+        return []
+    findings: list[str] = []
+    data_dir = artifacts_dir / "data"
+    for md in sorted(artifacts_dir.rglob("*.md")):
+        if md.name.upper() == "START-HERE.MD" or data_dir in md.parents:
+            continue  # the index renders the pending list itself
+        text = md.read_text(encoding="utf-8", errors="replace")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if not _RATIFIED_ASSERT_RE.search(line) or _RATIFIED_NEGATE_RE.search(line):
+                continue
+            low = line.lower()
+            for r in pending:
+                tokens = [
+                    w
+                    for w in re.findall(r"[a-z0-9_-]{5,}", str(r.get("text", "")).lower())
+                    if w not in _RATIFY_STOPWORDS
+                ]
+                if tokens and any(t in low for t in tokens):
+                    findings.append(
+                        f"RATIFIED-CLAIM-PENDING: {md.name}:{lineno} asserts a ratification "
+                        f"the state records as PENDING ({str(r.get('text'))[:60]!r}) - "
+                        "reconcile the claim, or record the human's grant via "
+                        "`engagement_state ratify` (escalate: never self-ratify)"
+                    )
+                    break
+    return findings
+
+
+_HEX32_RE = re.compile(r"\b[0-9a-f]{32}\b", re.I)
+
+
+def check_review_fingerprints(artifacts_dir: Path) -> list[str]:
+    """REVIEW-FINGERPRINT-GAP (2026-07-26 live-run review, consolidated finding 3): the DoD
+    claimed "code-reviewed" over a shipped build whose md5 no review pass had seen. Fires
+    only when the pack already uses fingerprints (a 32-hex hash appears in a review
+    artifact), so packs that never hash raise nothing; then every shipped non-test code
+    file's md5 must appear in at least one review artifact. Judgement item - the fix is a
+    delta review or an explicit disclosure, never silence."""
+    reviews = sorted(artifacts_dir.rglob("review-pass-*.md")) + sorted(
+        artifacts_dir.rglob("REVIEW-*.md")
+    )
+    if not reviews:
+        return []
+    mentioned: set[str] = set()
+    for review in reviews:
+        text = review.read_text(encoding="utf-8", errors="replace")
+        mentioned.update(h.lower() for h in _HEX32_RE.findall(text))
+    if not mentioned:
+        return []
+    findings: list[str] = []
+    for f in sorted(artifacts_dir.rglob("*")):
+        if not (
+            f.is_file()
+            and f.suffix.lower() in _CODE_EXTS
+            and not _TEST_FILE_RE.search(f.name)
+        ):
+            continue
+        md5 = hashlib.md5(f.read_bytes()).hexdigest()  # nosec B324 - fingerprint, not crypto
+        if md5 not in mentioned:
+            findings.append(
+                f"REVIEW-FINGERPRINT-GAP: {f.name} ships at md5 {md5} but no review "
+                "artifact records that fingerprint - the reviewed build is not the shipped "
+                "build. Run a delta review of the change, or disclose the un-reviewed "
+                "delta explicitly at the DoD code-review row (judgement item)"
+            )
+    return findings
+
+
 def check(artifacts_dir: Path) -> list[str]:
     """Return a list of finding strings; empty means the gate is satisfied."""
     findings: list[str] = []
@@ -402,6 +568,8 @@ def check(artifacts_dir: Path) -> list[str]:
         return findings
 
     findings.extend(check_findings_packs(artifacts_dir))
+    findings.extend(check_state(artifacts_dir))
+    findings.extend(check_review_fingerprints(artifacts_dir))
     # artifacts/data/ holds machine-readable source (findings packs); the top-level artifacts/ is the
     # user-navigable set. Exclude the data/ subtree from the .md/.html-sibling and index scans.
     data_dir = artifacts_dir / "data"
@@ -634,6 +802,29 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
         stray.unlink()
         fixed.append(f"FIXED SUMMARY-WRONG-EXT: removed rendered email copy {stray.name}")
+
+    # Re-render the living index from the machine-readable state when the render is stale
+    # (ADR-006: the state is authoritative). Before the generic .md render pass, so the fresh
+    # START-HERE gets a fresh .html too rather than keeping a stale sibling.
+    es = _load_engagement_state_module()
+    if es is not None:
+        state_file = artifacts_dir / es.STATE_FILENAME
+        if state_file.is_file():
+            try:
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                index = artifacts_dir / "START-HERE.md"
+                stale = not index.is_file() or es.embedded_hash(
+                    index.read_text(encoding="utf-8", errors="replace")
+                ) != es.state_hash(state)
+                if stale and not es.validate_state(state):
+                    index.with_suffix(".html").unlink(missing_ok=True)
+                    es.render_files(artifacts_dir)
+                    fixed.append(
+                        "FIXED STATE-STALE-RENDER: re-rendered START-HERE.md from "
+                        f"{es.STATE_FILENAME}"
+                    )
+            except Exception as exc:  # STATE-INVALID surfaces from the check; log, don't crash
+                fixed.append(f"COULD-NOT-RENDER START-HERE from state: {exc}")
 
     # Render every .md lacking its .html sibling. render_html is resolved by __file__-relative
     # path so this works both as `-m scripts.check_artifacts` and by direct-path plugin invocation.

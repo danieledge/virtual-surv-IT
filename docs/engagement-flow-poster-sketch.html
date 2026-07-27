@@ -1,0 +1,277 @@
+<title>Engagement Workflow — Sketch Poster v0.28.0</title>
+<style>
+  /* Deliberately single-theme: a warm paper poster world, matching the generated-infographic
+     style the user asked for. */
+  :root{
+    --paper:#f6f0e1; --card:#fdfaf1; --ink:#232f3a; --muted:#5d6672;
+    --navy:#1f3a5f; --green:#2f6b3a; --purple:#4a3d7c; --orange:#b45c1f;
+    --navy-soft:#e6ecf4; --green-soft:#e5efe2; --purple-soft:#eae7f4; --orange-soft:#f7e9dc;
+    --yellow:#f7e8b0; --red:#a83232; --codebg:#efe9d6;
+  }
+  body{background:var(--paper);color:var(--ink);margin:0;padding:1.2rem;
+    font-family:"Chalkboard SE","Marker Felt","Segoe Print","Comic Sans MS","Comic Neue",cursive;
+    font-size:14.5px;line-height:1.4;}
+  .poster{max-width:1500px;margin:0 auto;}
+  header.hd{text-align:center;margin-bottom:1.1rem;}
+  header.hd h1{font-size:2rem;margin:.1rem 0;letter-spacing:.03em;text-wrap:balance;
+    text-transform:uppercase;}
+  header.hd h1 .top{color:var(--navy);}
+  .ver{display:inline-block;background:var(--ink);color:var(--paper);border-radius:6px;
+    padding:.05rem .6rem;font-size:.95rem;transform:rotate(-1.2deg);}
+  .legend{display:inline-block;margin-top:.45rem;background:var(--card);border:2.5px solid var(--ink);
+    border-radius:10px;padding:.3rem .8rem;font-size:.8rem;transform:rotate(.3deg);
+    box-shadow:3px 3px 0 rgba(35,47,58,.18);}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem;}
+  @media (max-width:1000px){.grid{grid-template-columns:1fr;}}
+  .panel{background:var(--card);border:3px solid var(--ink);border-radius:14px;
+    padding:.9rem 1rem 1rem;box-shadow:5px 5px 0 rgba(35,47,58,.15);overflow-x:auto;}
+  .panel>h2{margin:-1.55rem auto .8rem;width:fit-content;max-width:95%;color:#fff;
+    font-size:1.05rem;text-transform:uppercase;letter-spacing:.05em;border:2.5px solid var(--ink);
+    border-radius:9px;padding:.25rem .9rem;text-align:center;transform:rotate(-.6deg);
+    box-shadow:3px 3px 0 rgba(35,47,58,.25);}
+  .p-lc>h2{background:var(--navy);} .p-gd>h2{background:var(--green);}
+  .p-dl>h2{background:var(--purple);} .p-cl>h2{background:var(--orange);}
+  h2 .sub{font-size:.78rem;text-transform:none;letter-spacing:0;display:block;opacity:.92;}
+  .flow{display:flex;flex-direction:column;}
+  .cols{display:grid;gap:.8rem;align-items:start;}
+  .c2{grid-template-columns:1fr 1fr;} .c3{grid-template-columns:1fr 1fr 1fr;}
+  @media (max-width:820px){.c2,.c3{grid-template-columns:1fr;}}
+  .node{border:2.5px solid var(--ink);border-radius:10px;padding:.45rem .65rem;
+    margin:.25rem 0;background:#fff;box-shadow:2.5px 2.5px 0 rgba(35,47,58,.14);}
+  .node:nth-of-type(odd){transform:rotate(-.35deg);} .node:nth-of-type(even){transform:rotate(.3deg);}
+  .node b{display:block;font-size:.88rem;}
+  .node b .ic{margin-right:.3rem;}
+  .node p{margin:.18rem 0 0;font-size:.76rem;color:var(--muted);
+    font-family:system-ui,"Segoe UI",sans-serif;}
+  .p-lc .node{background:var(--navy-soft);} .p-gd .node{background:var(--green-soft);}
+  .p-dl .node{background:var(--purple-soft);} .p-cl .node{background:var(--orange-soft);}
+  .dec{background:var(--yellow)!important;border-style:dashed;}
+  .dec b::before{content:"◇ ";}
+  .stopn{background:#f4dcd7!important;}
+  .goodn{background:#ddefd8!important;}
+  .arrow{text-align:center;font-size:1.15rem;line-height:1;padding:.1rem 0;color:var(--ink);}
+  .branch{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;}
+  @media (max-width:820px){.branch{grid-template-columns:1fr;}}
+  .tag{display:inline-block;background:var(--yellow);border:2px solid var(--ink);
+    border-radius:8px;font-size:.72rem;font-weight:700;padding:0 .5rem;margin:.15rem 0;
+    transform:rotate(-.8deg);box-shadow:1.5px 1.5px 0 rgba(35,47,58,.2);}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.82em;
+    background:var(--codebg);padding:.03em .3em;border-radius:4px;}
+  .steps{counter-reset:s;display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;}
+  @media (max-width:1000px){.steps{grid-template-columns:1fr 1fr;}}
+  @media (max-width:640px){.steps{grid-template-columns:1fr;}}
+  .step{counter-increment:s;border:2.5px solid var(--ink);border-radius:10px;background:#fff;
+    padding:.55rem .6rem .5rem;box-shadow:2.5px 2.5px 0 rgba(35,47,58,.14);position:relative;}
+  .step:nth-child(odd){transform:rotate(-.3deg);} .step:nth-child(even){transform:rotate(.3deg);}
+  .step h3{margin:.1rem 0 .3rem 1.6rem;font-size:.86rem;}
+  .step h3::before{content:counter(s);position:absolute;left:.5rem;top:.45rem;width:1.25rem;
+    height:1.25rem;border:2px solid var(--ink);border-radius:50%;background:var(--orange);
+    color:#fff;font-size:.8rem;text-align:center;line-height:1.25rem;}
+  .step p{margin:.15rem 0;font-size:.74rem;color:var(--muted);
+    font-family:system-ui,"Segoe UI",sans-serif;}
+  .shields{display:grid;grid-template-columns:repeat(2,1fr);gap:.7rem;}
+  @media (max-width:640px){.shields{grid-template-columns:1fr;}}
+  .strips{display:grid;grid-template-columns:repeat(4,1fr);gap:1.1rem;margin-top:1.2rem;}
+  @media (max-width:1100px){.strips{grid-template-columns:1fr 1fr;}}
+  @media (max-width:640px){.strips{grid-template-columns:1fr;}}
+  .strip{background:var(--card);border:3px solid var(--ink);border-radius:14px;
+    padding:.7rem .85rem;box-shadow:5px 5px 0 rgba(35,47,58,.15);}
+  .strip h3{margin:0 0 .4rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;
+    border-bottom:2.5px solid var(--ink);padding-bottom:.25rem;}
+  .strip ul{margin:.2rem 0;padding-left:1.1rem;font-size:.74rem;color:var(--muted);
+    font-family:system-ui,"Segoe UI",sans-serif;}
+  .strip li{margin:.2rem 0;} .strip li b{color:var(--ink);}
+  .cmds{columns:2;font-size:.72rem;margin:.2rem 0;color:var(--muted);
+    font-family:ui-monospace,Menlo,Consolas,monospace;}
+  .cmds div{break-inside:avoid;}
+  footer{margin-top:1.1rem;font-size:.76rem;text-align:center;color:var(--muted);}
+</style>
+
+<div class="poster">
+<header class="hd">
+  <h1><span class="top">Compliance-Surveillance Team</span><br/>Engagement Workflow <span class="ver">v0.28.0</span></h1>
+  <div class="legend">🗝️ <b>State:</b> ⏳ in progress · ⛔ blocked · ✅ closed &nbsp;|&nbsp;
+    <b>Evidence:</b> 📊 observed/measured · 🧠 inferred · 📄 coded &nbsp;|&nbsp; ◇ decision</div>
+</header>
+
+<div class="grid">
+
+<!-- PANEL 1 -->
+<section class="panel p-lc">
+<h2>1 · Engagement Lifecycle <span class="sub">end to end</span></h2>
+<div class="flow">
+  <div class="node dec"><b><span class="ic">🎩</span>Team invoked?</b><p><code>/engage</code>, another team command, or asking in words for "the team" / "Morgan" / "the PM"</p></div>
+  <div class="branch">
+    <div><span class="tag">NO</span>
+      <div class="node"><b><span class="ic">💤</span>Plain Claude Code session</b><p>Team stays dormant. Only Layer 0 hooks &amp; guards (panel 2) stay armed.</p></div>
+    </div>
+    <div><span class="tag">YES — Phase 1 · Open</span>
+      <div class="node"><b><span class="ic">🔎</span>Step 0: ONE compound probe call</b><p>Operating guide, plugin root, interpreter (<code>python3→python→py</code>), run mode, team version, analyser inventory, codebase-map header + §3 history, newest changelog block.</p></div>
+      <div class="arrow">⬇️</div>
+      <div class="node"><b><span class="ic">📣</span>Opening banner — always first</b><p>🎩 Morgan intro + team version + <code>/meet-the-team</code> offer. What's-new: one line if version changed; "current release" form if no record; nothing if unchanged; silently omitted if changelog unreadable.</p></div>
+    </div>
+  </div>
+  <div class="arrow">⬇️</div>
+  <div class="node dec"><b>Concrete target or inputs given?</b><p><b>No (bare /engage):</b> ask ONE question — "where is the code / input?" — and wait; loop until a target exists. Never invent one. <b>Yes:</b> continue.</p></div>
+  <div class="arrow">⬇️</div>
+  <div class="node"><b><span class="ic">⚠️</span>Two VERBATIM safety disclaimers</b><p>⚠️ Execution safety (static by default; user responsible for handed-over code being safe to run) · 🛡️ Data safety (everything shared reaches the model provider; <code>data/raw/</code> hard-blocked; pseudonymised ≠ anonymous).</p></div>
+  <div class="arrow">⬇️</div>
+  <div class="node"><b><span class="ic">🗳️</span>ONE batched AskUserQuestion call</b><p>Only the applicable questions (≤4 per call, ≤4 options each, short headers): work-type (only if ambiguous) · execution-consent INTENT · data attestation. Answers recorded once, never re-asked per file/command.</p></div>
+  <div class="branch">
+    <div><span class="tag">◇ Execution consent (default No)</span>
+      <div class="node"><b><span class="ic">✍️</span>"Yes" = intent only</b><p>The USER personally types <code>touch &lt;abs-path&gt;/.claude/.exec-consent</code> (PowerShell/cmd variants on Windows). Human-only grant — the model is blocked from writing it. Marker verified before any execution; no marker → still blocked.</p></div>
+      <div class="node"><b><span class="ic">🚫</span>"No — static only"</b><p>Any existing marker is DELETED (fail-safe close). Dynamic/perf findings stay 🧠 inferred.</p></div>
+    </div>
+    <div><span class="tag">◇ Data attestation (when data involved)</span>
+      <div class="node"><b><span class="ic">🟢</span>"Yes — synthetic/masked, no prohibited PII" or "no data involved"</b><p>Proceed. <code>data/raw/</code> stays hard-blocked regardless.</p></div>
+      <div class="node"><b><span class="ic">🧪</span>"No / unsure"</b><p>Route to <code>/prepare-data</code>: masking pipeline (ingest + masking-schema + validate_masking, key from <code>MASKING_KEY</code>) — prefer fully synthetic.</p></div>
+    </div>
+  </div>
+  <div class="arrow">⬇️ &nbsp;Phase 2 · Classify &amp; gather</div>
+  <div class="node dec"><b>Classify the work</b><p>Route by deliverable type — never assume a detection rule. Phased engagements re-classify per phase: the moment a phase produces deliverable code it runs under the build chain.</p></div>
+  <div class="cols c3">
+    <div><span class="tag">Problem / idea</span>
+      <div class="node"><b><span class="ic">💡</span>Discovery → requirements</b><p><code>/write-brd</code>, <code>/elicit-requirements</code>, <code>/brd-to-fsd</code> → then build (full SDLC).</p></div></div>
+    <div><span class="tag">Review</span>
+      <div class="node dec"><b>Security-sensitive surface?</b><p>Auth, parsing, DB, external I/O, crypto, secrets, PII → offer review + <code>/security-audit</code> (recommended; re-offered at the review's close).</p></div>
+      <div class="node"><b><span class="ic">📋</span>LOCKED review menu — one call</b><p>Q1 Depth: Quick ⊂ Deep ⊂ Audit · None · Q2 Performance review: yes/no (static, 🧠/📄) · Q3 Fix-cycle: report only / apply fixes / fix→re-review loop ⟲ (single source of truth, never re-asked).</p></div>
+      <div class="node dec"><b>Q1 = None and Q2 = No?</b><p>Nothing to run — say so and return to the outcome question. Never invent work.</p></div></div>
+    <div><span class="tag">Build from requirements</span>
+      <div class="node"><b><span class="ic">🏗️</span>→ <code>/build-solution</code></b><p>Orchestrator-workers. Inputs gathered FIRST (path / repo / branch / paste), existence verified.</p></div></div>
+  </div>
+  <div class="arrow">⬇️ &nbsp;Phase 3 · Plan &amp; gate</div>
+  <div class="node"><b><span class="ic">🗂️</span>LOCKED artifact menu — two stages</b><p>Stage 1: Consolidated Delivery Report (default) / separate artifacts / both. Stage 2 (if separate/both): grouped multi-selects — Spec docs · Reviews · Handover; rarer templates via "Other". Everything ships <code>.md</code> + <code>.html</code>.</p></div>
+  <div class="arrow">⬇️</div>
+  <div class="node"><b><span class="ic">📄</span>Engagement Brief + START-HERE living index created together (⏳)</b><p>Decisions, assumptions, routing plan; index seeded with the gates ahead. Every artifact write appends a START-HERE row IN THE SAME TURN — the index is the engagement's external memory and survives compaction.</p></div>
+  <div class="arrow">⬇️</div>
+  <div class="node dec"><b>Go-ahead gate</b><p><b>Proceed as briefed</b> → Phase 4 · <b>Adjust</b> → back to the menu · <b>Stop</b> → engagement ends unstarted.</p></div>
+  <div class="arrow">⬇️ &nbsp;Phase 4 · Delivery (panel 3) → then ◇ blocked?</div>
+  <div class="branch">
+    <div><span class="tag">Phase 4a · Blocked path</span>
+      <div class="node stopn"><b><span class="ic">🛑</span>Turn ends needing user input</b><p>START-HERE set ⛔ with the outstanding list (open questions + every gate not yet run). Turn ends saying plainly "NOT closed — outstanding: …". No summary email, no delivery report before close.</p></div>
+      <div class="node"><b><span class="ic">🔁</span>Resume — two routes</b><p><b>Same session:</b> user answers → ⛔ flips to ⏳, answer logged. <b>Cold resume (new session):</b> reads START-HERE + interim artifacts as the state of record, honours recorded decisions and evidence, works the outstanding list top to bottom.</p></div></div>
+    <div><span class="tag">Work complete</span>
+      <div class="node goodn"><b><span class="ic">✅</span>Phase 5 · Close sequence (panel 4)</b><p>The only path to ✅. Ends with the delivery report, summary email and concrete next-step options; human sign-off is the user's act.</p></div></div>
+  </div>
+</div>
+</section>
+
+<!-- PANEL 2 -->
+<section class="panel p-gd">
+<h2>2 · Layer 0 — Always-On Hooks &amp; Guards <span class="sub">every session, dormant or not</span></h2>
+<span class="tag">PreToolUse chain — every matching tool call, in order</span>
+<div class="flow">
+  <div class="node"><b><span class="ic">🛡️</span>Permission deny rules <code>.claude/settings.json</code></b><p>Hard-deny read AND write on <code>data/raw/**</code> (any depth). Read-only denies on <code>.env*</code>, <code>secrets/**</code>, <code>*.pem</code>, <code>*.key</code>.</p></div>
+  <div class="arrow">⬇️</div>
+  <div class="node"><b><span class="ic">🛡️</span>guard-raw-data.py</b> <span class="tag">Read · Grep · Glob · Bash</span><p>Any touch of <code>data/raw/</code> → 🛑 BLOCK. Raw transaction/comms data must never reach the model.</p></div>
+  <div class="arrow">⬇️</div>
+  <div class="node"><b><span class="ic">🛡️</span>guard-code-execution.py</b> <span class="tag">Bash only</span><p>Command split on <code>; && || | \n ` $(</code>; each segment: team-script allow-list (<code>python -m scripts.*</code>, bundled-copy paths, <code>bash scripts/*.sh</code>) → allow consent-free. Executes other code → ◇ <code>.claude/.exec-consent</code> exists or <code>CST_ALLOW_EXEC=1</code>? Yes (human created it) → allow · No → 🛑 BLOCK: static by default, consent is a human act. Lexical guard — consent-recording + safety net, not a sandbox (ADR-002).</p></div>
+  <div class="arrow">⬇️</div>
+  <div class="node"><b><span class="ic">🛡️</span>guard-consent-writes.py</b> <span class="tag">Write · Edit · MultiEdit · NotebookEdit · Bash</span><p>Any MODEL write to the consent marker, settings files or hook files → 🛑 BLOCK — the model can never grant itself consent or weaken a guard. Read-only mentions (echo/grep) allowed.</p></div>
+  <div class="arrow">⬇️</div>
+  <div class="node goodn"><b><span class="ic">✅</span>Tool runs</b></div>
+</div>
+<div class="shields">
+  <div>
+    <span class="tag">UserPromptSubmit — every user turn</span>
+    <div class="node"><b><span class="ic">🎩</span>persona_anchor.py</b><p>◇ Project-root <code>artifacts/START-HERE.md</code> open (⏳/⛔)? Yes → inject the ≤8-line Morgan persona + discipline anchor (survives compaction). No → silent; team stays dormant. Anchored to <code>CLAUDE_PROJECT_DIR</code>, never the shell's wandering cwd.</p></div>
+  </div>
+  <div>
+    <span class="tag">Stop hook — model tries to end its turn</span>
+    <div class="node"><b><span class="ic">🛑</span>dod_stop_gate.py — warn-first</b><p>◇ Project START-HERE open? → run the mechanical DoD checker over <code>artifacts/</code>. ◇ Findings? Yes → block the stop ONCE with a FIX-LIST: the MODEL then auto-fixes deterministic defects, escalates judgement calls, or ends plainly saying "NOT closed — outstanding: …". No re-fire in the same stop cycle. Otherwise silent.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- PANEL 3 -->
+<section class="panel p-dl">
+<h2>3 · Phase 4 — Delivery Machine <span class="sub">agile loop ⟲ + the mandatory code chain</span></h2>
+<div class="cols c2">
+  <div>
+    <div class="node"><b><span class="ic">📣</span>Right-size OUT LOUD</b><p>Agent count + why, stated before any fan-out. Multi-agent ≈ 15× tokens: leanest set that fits (1 agent fact-finding · 2-4 comparison · minimal sufficient chain for delivery).</p></div>
+    <div class="arrow">⬇️</div>
+    <div class="node"><b><span class="ic">🧭</span>Route by deliverable type (roster: Morgan + 16)</b><p>Spec — Amara · rules — Mateo · pipeline/utility/infra — Kenji · analysis/FP/MI — Ana · tuning — Theo · ML — Mei (validated by Viktor) · independent QA — Linh · code review — Ravi · performance — Thabo · compliance — Layla · coverage/DQ — Yuki · SMEs — Hassan/Camila/Cleo · mechanical scoring — Pip. Model tiers: opus for last-word judgement + the orchestrator; sonnet build/advisory; haiku scorer.</p></div>
+    <div class="arrow">⬇️</div>
+    <div class="node"><b><span class="ic">📨</span>Explicit, non-overlapping briefs</b><p>Objective · scope boundary · inputs · output format · hard return budget ≤ ~1,500 tokens (detail goes to the artifact). Coordination via shared artifacts — the "blackboard" — not chatter. A subagent inherits none of the conversation.</p></div>
+    <div class="arrow">⬇️</div>
+    <div class="node"><b><span class="ic">👥</span>Specialists work</b><p>Advisory agents (SMEs, validators, reviewers) hold NO Write/Edit — they recommend, Morgan routes. Build agents implement.</p></div>
+    <div class="arrow">⬇️</div>
+    <div class="node"><b><span class="ic">🕵️</span>PM challenge — sceptic, not relay</b><p>Spot-check don't re-score: every Critical, anything regulated, thin evidence, a sample of the rest AND of the filtered set (promote wrongly-filtered findings). Verify 📊 vs 🧠 vs 📄 — never let inference reach the user as fact.</p></div>
+  </div>
+  <div>
+    <span class="tag">◇ Deliverable code produced? → the chain attaches, no workflow exempts it</span>
+    <div class="node"><b><span class="ic">🧪</span>Tests</b><p>Project's own framework — never assumed; exact command recorded.</p></div>
+    <div class="arrow">⬇️</div>
+    <div class="node"><b><span class="ic">🔍</span>Code review (Ravi)</b><p>◇ Findings → fix &amp; re-review ⟲ per the Q3 fix-cycle answer, until no Criticals or the user stops.</p></div>
+    <div class="arrow">⬇️ ◇ execution-consent marker present?</div>
+    <div class="branch">
+      <div><span class="tag">YES</span>
+        <div class="node"><b><span class="ic">✅</span>Independent QA (Linh)</b><p>Append-only test cycles; failed verdicts preserved as-found; QA suites RETAINED under <code>artifacts/</code>. ◇ Fail → route fix, new cycle ⟲ · Pass → on.</p></div></div>
+      <div><span class="tag">NO</span>
+        <div class="node"><b><span class="ic">🧠</span>Static-only DoD path</b><p>QA verdict stays 🧠, DoD marked PARTIAL, untested code named as residual risk; the close offers "grant consent → suite runs → verdict upgrades".</p></div></div>
+    </div>
+    <div class="arrow">⬇️</div>
+    <div class="node"><b><span class="ic">📄</span>Index discipline — every write</b><p>Each artifact write appends a START-HERE row in the same turn. Interim names only: <code>review-pass-N</code>, <code>qa-cycle-N</code>, <code>interim-*</code> + the interim banner. <code>delivery-report</code> / <code>final-*</code> / the email are close-only names.</p></div>
+    <div class="arrow">⬇️</div>
+    <div class="node dec"><b>More iterations needed?</b><p>Yes → back to right-sizing ⟲. No hard cycle limit exists — the brake is the user at each gate (or budget/turn caps in the eval harness). No → Phase 5.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- PANEL 4 -->
+<section class="panel p-cl">
+<h2>4 · Phase 5 — Close Sequence <span class="sub">the only path to ✅</span></h2>
+<div class="steps">
+  <div class="step"><h3>🔗 Citations gate</h3><p><code>check_citations</code>: TO-VERIFY citations ship FLAGGED with source permalinks (register URL → register scheme → official search / "to be confirmed"; never invent a URL). Never blocks the close; never a close-time verification question. Limitations note in report + one line in the email. User later says "mark X verified" → register overlay updated.</p></div>
+  <div class="step"><h3>⚙️ Mechanical DoD gate</h3><p><code>check_artifacts --fix</code>, run as a FIX-LIST ⟲. <b>Auto-fix (team):</b> MISSING-HTML, index defects, roster names, premature final/summary, STALE-STATUS, paths, evidence tags, CODE-NO-TESTS / CODE-NO-QA (route the missing chain step). <b>Escalate (question tool):</b> evidence contradictions, unverifiable sign-off authority, scope calls, STALE-DOCSTATUS (a stated "pending human sign-off" passes).</p></div>
+  <div class="step"><h3>⚖️ Reconciliation sweep</h3><p>EVERY produced or touched document, including the deliverable README and module docstrings: one authoritative set of counts / ranges / findings enumerations; late-cycle changes propagated; struck citations swept from every file; dead interim prose removed; document-control statuses closed out; QA evidence retained — a 📊 measured tag with no surviving artifact downgrades to 🧠.</p></div>
+  <div class="step"><h3>🗺️ Codebase map</h3><p>ADR-003, a DoD gate: durable architecture facts with 📊/🧠 tags, dates, SHA anchors; corrections/deprecations dated; history row appended. Maps the CODE, never team activity. PM-written, ≤ ~200 lines.</p></div>
+  <div class="step"><h3>🖨️ Render</h3><p>Every <code>.md</code> artifact gets its <code>.html</code> sibling (<code>render_html</code>).</p></div>
+  <div class="step"><h3>✉️ Delivery Report + email</h3><p>Both close-only, written now. The engagement-summary email: <code>.txt</code> in <code>artifacts/</code> (the one artifact never rendered to HTML), signed as Morgan, "Hi," if the requester's name is unknown, states the token + agent footprint, repeats the responsibility notes, NEVER offers a call or meeting.</p></div>
+  <div class="step"><h3>🏁 Finalise START-HERE — last of all</h3><p>The FINAL state change: Status → ✅ CLOSED + date, verdict and footprint filled, ⚠️-outstanding replaced with "Nothing — closed", interim banners stripped from every artifact that became final.</p></div>
+  <div class="step"><h3>🖋️ Next steps &amp; sign-off</h3><p>Short summary + concrete next-step options with a recommendation — never a dead end. Human sign-off is the one DoD item only the user can perform.</p></div>
+</div>
+</section>
+</div>
+
+<!-- STRIPS -->
+<div class="strips">
+  <div class="strip"><h3>❓ Cross-cutting rules</h3><ul>
+    <li><b>Every choice via AskUserQuestion</b> — ≤4 questions/call, ≤4 options, headers; single-select for exclusive axes, multi-select for independent picks, one axis per question.</li>
+    <li><b>🎩 voice</b> first line of every Morgan turn; specialists by name; console clean — detail lives in artifacts, not the TUI.</li>
+    <li><b>Evidence basis on every data claim:</b> 📊 / 🧠 / 📄.</li>
+    <li><b>Memory:</b> general lessons → house rules; engagement-specific → the working project's CLAUDE.md / codebase map. The plugin accrues no project memory.</li>
+    <li><b>Compaction resilience:</b> START-HERE as external memory + the persona anchor each turn.</li>
+  </ul></div>
+  <div class="strip"><h3>🗃️ Artifact timeline (on disk)</h3><ul>
+    <li><b>Open (Phase 3):</b> engagement-brief.md/.html · START-HERE.md/.html (living, updated every write).</li>
+    <li><b>Delivery (Phase 4):</b> fsd · rtm · review-pass-N · qa-cycle-N / qa-handover · interim-* · deliverable code + tests + QA suites · analysis packs — each with .html.</li>
+    <li><b>Close (Phase 5):</b> delivery-report · developer-handover (if chosen) · engagement-summary-*.txt · docs/codebase-map.md · finalised START-HERE.</li>
+    <li>All <code>artifacts/</code> content is git-ignored by the team repo's own hygiene.</li>
+  </ul></div>
+  <div class="strip"><h3>🧰 Sub-workflows (22 commands)</h3>
+    <div class="cmds">
+      <div>/engage — front door</div><div>/meet-the-team</div><div>/prepare-data</div>
+      <div>/demo</div><div>/write-brd</div><div>/elicit-requirements</div><div>/brd-to-fsd</div>
+      <div>/new-scenario</div><div>/build-solution</div><div>/analyse-data</div>
+      <div>/tune-thresholds</div><div>/validate-tm-model</div><div>/assess-coverage</div>
+      <div>/reg-change-impact</div><div>/deep-review</div><div>/audit-review</div>
+      <div>/security-audit</div><div>/performance-review</div><div>/remediate</div>
+      <div>/handover</div><div>/beta-assess-quantexa</div><div>/run-evals</div>
+    </div>
+    <ul><li>Eval harness: <code>/run-evals</code> (subagent slice) + <code>scripts.eval_engage</code> (live orchestration slice, with <code>--rescore</code> and <code>--resume-run</code>).</li></ul>
+  </div>
+  <div class="strip"><h3>🏅 Definition of Done</h3><ul>
+    <li><b>Traceable</b> — RTM spine: BRD → FSD → code → test → regulatory obligation.</li>
+    <li><b>Tested</b> — known true/false-positive cases; exact command recorded.</li>
+    <li><b>Independently QA'd</b> — full cycle history, evidence preserved.</li>
+    <li><b>Code-reviewed</b> — no open Criticals; dispositions; developer guidance.</li>
+    <li><b>Performance- and compliance-reviewed</b> where routed.</li>
+    <li><b>Critiqued vs a named standard</b> — 5&nbsp;C's · BABOK · ISO/IEC&nbsp;29119 · SR&nbsp;11-7-style.</li>
+    <li><b>Reconciled at close</b> · <b>dual-format artifacts</b> · <b>summary email</b> · <b>truthful lifecycle state</b> · <b>human sign-off</b>.</li>
+    <li>Static-only variant → DoD PARTIAL with named residual risk.</li>
+  </ul></div>
+</div>
+
+<footer>✏️ Hand-authored, zero generated text — source of truth: <code>docs/engagement-flow-spec.md</code> · Mermaid companion: <code>docs/engagement-flow-diagram.md</code> · v0.28.0, 2026-07-25</footer>
+</div>
