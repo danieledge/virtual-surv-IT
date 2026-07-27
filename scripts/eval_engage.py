@@ -89,6 +89,11 @@ _NET_TOOLS = {"WebFetch", "WebSearch"}
 
 _TRANSCRIPT_CAP = 80_000  # chars of transcript handed to the normalizer / judge
 
+# A healthy headless session emits its first (System) message within seconds of spawn;
+# two minutes of total silence means it will never speak (see the watchdog in run_case).
+STARTUP_TIMEOUT_S = 120
+
+
 def _session_env() -> dict[str, str]:
     """Env overrides for every spawned CLI, fixing two observed fidelity breaks.
 
@@ -142,9 +147,20 @@ def engage_cases() -> list[str]:
             wf = yaml.safe_load((d / "expected.yaml").read_text(encoding="utf-8")).get("workflow")
         except FileNotFoundError:
             continue
-        if wf == "/engage":
+        if wf in ("/engage", "/engage-light"):
             out.append(d.name)
     return out
+
+
+def case_workflow(case_id: str) -> str:
+    """The live-orchestrator command a case declares (default /engage)."""
+    try:
+        wf = yaml.safe_load(
+            (CASES_ROOT / case_id / "expected.yaml").read_text(encoding="utf-8")
+        ).get("workflow")
+    except FileNotFoundError:
+        return "/engage"
+    return wf if wf in ("/engage", "/engage-light") else "/engage"
 
 
 def _claude_cfg_path() -> Path:
@@ -303,6 +319,7 @@ async def run_engage_session(
     max_turns: int,
     max_budget: float | None,
     sim_log: SimTranscript,
+    workflow_cmd: str = "/engage",
 ) -> SessionCapture:
     from claude_agent_sdk import (
         AssistantMessage,
@@ -362,7 +379,7 @@ async def run_engage_session(
     async def _prompt_stream():
         yield {
             "type": "user",
-            "message": {"role": "user", "content": f"/engage {scenario}"},
+            "message": {"role": "user", "content": f"{workflow_cmd} {scenario}"},
         }
         await session_done.wait()
 
@@ -385,11 +402,38 @@ async def run_engage_session(
         await asyncio.sleep(45)
         session_done.set()
 
-    async for message in query(prompt=_prompt_stream(), options=options):
+    # Dead-at-birth watchdog (2026-07-27, observed twice): a spawned CLI can sit SILENT -
+    # zero events - when the subscription usage window is saturated (or auth/handshake
+    # fails), and the old async-for waited the whole per-case --timeout (40+ min) before
+    # scoring an empty run. A healthy session emits its init SystemMessage within seconds,
+    # so cap ONLY the first message; after that the outer --timeout owns hangs (a subagent
+    # legitimately works quietly for minutes mid-run).
+    stream = query(prompt=_prompt_stream(), options=options).__aiter__()
+    first_message = True
+    while True:
+        try:
+            if first_message:
+                message = await asyncio.wait_for(stream.__anext__(), timeout=STARTUP_TIMEOUT_S)
+            else:
+                message = await stream.__anext__()
+        except StopAsyncIteration:
+            break
+        except asyncio.TimeoutError:
+            session_done.set()
+            raise RuntimeError(
+                f"session emitted NOTHING within {STARTUP_TIMEOUT_S}s - dead at birth. "
+                "Likely causes: subscription usage window saturated (heavy interactive use "
+                "shares the Max window), auth failure, or a CLI/SDK handshake break. "
+                "Aborting fast instead of burning the full --timeout."
+            )
+        first_message = False
         if grace is not None:
             grace.cancel()
             grace = None
         msg_type = type(message).__name__
+        if msg_type == "RateLimitEvent":
+            # Surface the shared-window status instead of discovering it via a hang.
+            print(f"  rate-limit status: {repr(message)[:200]}")
         if msg_type == "TaskStartedMessage":
             inflight.add((getattr(message, "data", None) or {}).get("task_id"))
         elif msg_type in ("TaskUpdatedMessage", "TaskNotificationMessage"):
@@ -621,6 +665,9 @@ async def run_case(
     manifest = _load_case(case_id)
     case_dir: Path = manifest["_dir"]
     scenario = scenario_override or (case_dir / manifest["input"]).read_text(encoding="utf-8")
+    # The case's declared front-door command (/engage or /engage-light); a resume never
+    # re-invokes the front door, its scenario_override is the uncoached continue ask.
+    workflow_cmd = "/engage" if scenario_override else case_workflow(case_id)
     persona_file = case_dir / "driver.md"
     persona = (persona_file if persona_file.is_file() else DEFAULT_PERSONA).read_text(encoding="utf-8")
     rubric = (RUBRICS_ROOT / f"{manifest['rubric']}.md").read_text(encoding="utf-8")
@@ -656,7 +703,8 @@ async def run_case(
     try:
         await asyncio.wait_for(
             run_engage_session(
-                cap, scenario, sandbox, persona, args.sim_model, args.max_turns, args.max_budget, sim_log
+                cap, scenario, sandbox, persona, args.sim_model, args.max_turns, args.max_budget, sim_log,
+                workflow_cmd=workflow_cmd,
             ),
             timeout=args.timeout if args.timeout > 0 else None,  # 0 = no wall clock; budget is the stop
         )
