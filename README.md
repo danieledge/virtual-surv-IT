@@ -1222,6 +1222,73 @@ the right job; only the PM's commentary occasionally mislabels it. Hence: cosmet
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
+## ❓ FAQ
+
+**What's the difference between "measured" and "inferred"? I keep seeing 📊 and 🧠 tags.**
+It's the team's honesty system, and probably the single most useful thing to understand.
+📊 **observed/measured** means the team actually ran or counted something and the evidence
+exists on disk: a test run, a line count, a diff. You can go look. 🧠 **inferred** means it's
+a reasoned conclusion, not a measurement: "this loop is probably slow at your volumes" from
+reading the code is inferred; running a profiler on it would be measured (and running
+anything needs your consent, see below). There's also 📄 **coded** for "it's literally
+written in the code, here's the file and line". The rule is that an educated guess must never
+dress up as a fact, and it's enforced: a "measured" claim whose evidence file got deleted is
+downgraded to inferred at close.
+
+**Does it hallucinate?**
+LLMs can, so the honest answer is: the system is built assuming it will try, and is designed
+to catch it. Every data claim needs an evidence tag (above). Citations run through a
+mechanical gate that flags anything unverified rather than letting the model invent a
+plausible-looking URL. A mechanical checker verifies claimed files actually exist on disk,
+independent QA re-runs claims rather than trusting them, the PM spot-checks findings
+including the discarded pile, and the machine-readable state file is hash-verified against
+its human rendering. When an independent three-reviewer audit went through a full live
+engagement pack, every load-bearing number (test counts, build hashes, finding tallies)
+verified against disk and nothing fabricated was found. That's not a guarantee, it's a
+design: nothing is trusted until it's tied to something checkable, and your sign-off stays
+the final gate.
+
+**What analysers does the review use, and what happens if I don't have them installed?**
+The standard ones per language when present (ruff, mypy, bandit, semgrep, gitleaks,
+shellcheck and friends). At engage-time the team inventories what's actually installed and
+works with that; nothing silently pretends a tool ran. Missing analyser? The review still
+happens, statically, and the report says exactly which tools ran and which findings are
+therefore 🧠 inferred rather than 📊 measured. Same philosophy for the environment: no
+`python3`? It falls back to `python`, then `py`. No `bash`? It skips the shell helpers and
+calls the analysers directly, and says so.
+
+**Why won't it run my code or tests?**
+By design: review is static by default, because running code under review is a real risk.
+Execution needs consent that only you can grant, by creating a marker file the model is
+physically blocked from writing (a hook enforces it, and the model can't edit the hook
+either). Until then, anything that would need a run stays honestly tagged 🧠 inferred.
+
+**Do I need to learn all 23 commands?**
+No. `/engage` is the front door and routes everything. `/engage-light` is the one other
+command worth knowing early: same safety, minimal ceremony, for small non-regulated jobs.
+The rest are shortcuts the team itself knows how to reach.
+
+**What if my session dies mid-engagement?**
+Nothing is lost. The engagement's state lives in a machine-readable file on disk (updated
+with every artifact write), with a human-readable START-HERE generated from it. A brand-new
+session reads those, picks up the outstanding list and carries on, this has been proven live,
+twice in one day, including once after the session hit its budget cap mid-delivery.
+
+**What does an engagement cost?**
+Measured on live runs: a scoped review or analysis lands around $2-5 of tokens; a
+full-ceremony lifecycle (spec, build, multi-cycle QA, reviews, audited close) ran to ~$100.
+That 40x spread is exactly why `/engage-light` exists, and why the PM states the team size
+out loud before spawning anything (multi-agent work costs ~15x a single session).
+
+**Can I trust it with real data?**
+Short version: don't paste raw data, and it will try hard to stop you. `data/raw/` is
+hard-blocked from the model by an always-on hook, everything else runs on your attestation
+that it's masked or synthetic, and `/prepare-data` exists to get you there. Pseudonymised
+still counts as personal data, so prefer fully synthetic. See
+[Handling real data](#-handling-real-data) for the long version.
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 📖 Documentation
 
 **Reading paths: the repo has 130+ doc files; start with the path that matches your goal:**
