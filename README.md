@@ -1257,28 +1257,57 @@ therefore 🧠 inferred rather than 📊 measured. Same philosophy for the envir
 `python3`? It falls back to `python`, then `py`. No `bash`? It skips the shell helpers and
 calls the analysers directly, and says so.
 
-**Why won't it run my code or tests?**
+**Why won't it run my code or tests? And how do I grant consent when I want it to?**
 By design: review is static by default, because running code under review is a real risk.
 Execution needs consent that only you can grant, by creating a marker file the model is
 physically blocked from writing (a hook enforces it, and the model can't edit the hook
 either). Until then, anything that would need a run stays honestly tagged 🧠 inferred.
+Granting it is one command, run by you:
 
-**Do I need to learn all 23 commands?**
-No. `/engage` is the front door and routes everything. `/engage-light` is the one other
-command worth knowing early: same safety, minimal ceremony, for small non-regulated jobs.
-The rest are shortcuts the team itself knows how to reach.
+```bash
+touch .claude/.exec-consent        # from any terminal at the project root
+```
+
+or type `! touch .claude/.exec-consent` as the first characters of your Claude Code prompt
+line (the `!` runs it as your shell command, not the model's). Alternatively set
+`CST_ALLOW_EXEC=1` in the environment you launch Claude Code from - handy for CI. To revoke,
+delete the file (`rm .claude/.exec-consent`); answering "static only" at intake deletes it
+for you. The asymmetry is the point: the model may *delete* the marker (fail-safe) but can
+never *create* it, so consent is always a human act with a file's worth of evidence.
+
+**Who is Morgan?**
+The project manager, and the only "person" you ever need to talk to. Morgan opens every
+engagement (the 🎩 at the start of a line means the PM is speaking), asks the intake
+questions, decides which specialists the job actually needs and says so out loud before
+spawning any, challenges their findings rather than relaying them, and comes back to you at
+every gate. Morgan is a persona with teeth: the discipline is re-injected every turn while an
+engagement is open, so it survives long sessions. The specialists (Amara, Mateo, Linh, Ravi
+and friends) are separate agents Morgan briefs and coordinates; you can meet them with
+`/meet-the-team`, but you never have to manage them yourself.
+
+**What's the `artifacts/` folder that appeared in my project?**
+That's the engagement's paper trail - everything the team produces lands there, each document
+in both `.md` (source) and `.html` (readable render). The key files: **`START-HERE.md`** is
+exactly what it sounds like, the index to read first - what this engagement is, whether it's
+finished (⏳ in progress / ⛔ blocked / ✅ closed) and what to read in what order.
+**`engagement-state.json`** is the machine-readable version of the same truth (status,
+outstanding work, decisions, the artifact inventory); START-HERE is generated from it, so
+don't hand-edit either. **`engagement-brief.md`** records what was agreed at the start.
+Mid-engagement you'll see pass-scoped names like `review-pass-1.md` and `qa-handover.md`
+(interim by design). **`delivery-report.md`** and the **`engagement-summary-*.txt`** email
+only appear at close - if they're absent, the engagement isn't done, on purpose. Treat the
+folder as the audit trail: it's the evidence behind every claim, so archive it rather than
+delete it, and add `artifacts/` to your `.gitignore` if you don't want it in version control.
+
+**Do I need to learn all the commands?**
+No. `/engage` is the front door and routes everything; the rest are shortcuts the team
+itself knows how to reach.
 
 **What if my session dies mid-engagement?**
 Nothing is lost. The engagement's state lives in a machine-readable file on disk (updated
 with every artifact write), with a human-readable START-HERE generated from it. A brand-new
 session reads those, picks up the outstanding list and carries on, this has been proven live,
 twice in one day, including once after the session hit its budget cap mid-delivery.
-
-**What does an engagement cost?**
-Measured on live runs: a scoped review or analysis lands around $2-5 of tokens; a
-full-ceremony lifecycle (spec, build, multi-cycle QA, reviews, audited close) ran to ~$100.
-That 40x spread is exactly why `/engage-light` exists, and why the PM states the team size
-out loud before spawning anything (multi-agent work costs ~15x a single session).
 
 **Can I trust it with real data?**
 Short version: don't paste raw data, and it will try hard to stop you. `data/raw/` is
