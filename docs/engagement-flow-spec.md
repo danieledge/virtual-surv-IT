@@ -271,9 +271,11 @@ Close: delivery-report.md/.html · developer-handover.md/.html (if chosen) ·
 engagement-summary-<slug>.txt · docs/codebase-map.md (working project) · finalised
 START-HERE. All artifacts/ content is git-ignored by the team repo's own hygiene.
 
-## Sub-workflow index (all 22 commands; each re-enters this flow at the matching phase)
+## Sub-workflow index (all 23 commands; each re-enters this flow at the matching phase)
 
-/engage (front door) · /meet-the-team · /prepare-data · /demo · /write-brd ·
+/engage (front door) · /engage-light (explicit low-ceremony profile: same safety gates and
+code chain, one-page brief, 2-3 agents, close note instead of report + email; refuses
+detection logic and upgrades to standard) · /meet-the-team · /prepare-data · /demo · /write-brd ·
 /elicit-requirements · /brd-to-fsd · /new-scenario · /build-solution · /analyse-data ·
 /tune-thresholds · /validate-tm-model · /assess-coverage · /reg-change-impact · /deep-review ·
 /audit-review · /security-audit · /performance-review · /remediate · /handover ·

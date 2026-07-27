@@ -469,7 +469,7 @@ Prefer to hand-pick the team into a repo you already have, without the marketpla
 
 1. `CLAUDE.md` to your repo root (merge if you already have one), the shared handbook.
 2. `.claude/agents/`: the 16 subagents.
-3. `.claude/skills/`: the 22 workflows (`/engage`, `/audit-review`, …); without these you
+3. `.claude/skills/`: the 23 workflows (`/engage`, `/audit-review`, …); without these you
    get agents but no front door.
 4. `.claude/hooks/` **and** `.claude/settings.json`: the always-on data-safety guard and its
    wiring. Don't skip these: they are the §5 control that keeps real data away from the model.
@@ -697,7 +697,7 @@ a convention), that's stated rather than dressed up.
 | Principle | What it means | What enforces it |
 |---|---|---|
 | **Engineering first** | Assists the engineering *behind* surveillance, not compliance, legal or regulatory advice. | Scope statement + proof-of-concept framing; obligations are cited from a verified register, never interpreted as advice. |
-| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage`, and costs ~nothing until then. | `disable-model-invocation` on all 22 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
+| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage`, and costs ~nothing until then. | `disable-model-invocation` on all 23 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
 | **Right-sized, not all-hands** | Only the agents a task needs (typically 2-5, never all 16), the simplest thing that works. | The PM states the intended agent count at the gate (you can veto it); a golden eval case samples the behaviour. Prompt-enforced. |
 | **Independent review** | Reviewers, SMEs and the model validator recommend; builders fix. Advisors hold no edit tools; QA and validation run as separate agents from the build. | Advisory agents carry **no `Write`/`Edit` tools**; build/QA/validation separation is by routing distinct agents with isolated context (see `docs/agent-design.md`). |
 | **Humans hold the keys** | Execution consent and config are human-only; nothing touches a live system without sign-off. | The consent-write gate blocks the model from **writing or editing** the consent marker, `settings*.json` and the hook files; the `CST_ALLOW_*` overrides live in the launch environment the model can't reach. Bash-channel writes are lexically guarded, not sandboxed (a documented PoC limit, ADR-002). |
@@ -706,7 +706,7 @@ a convention), that's stated rather than dressed up.
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
 | **Remembers, safely** | Each working project gets one codebase map: bounded, SHA-anchored, 📊/🧠-tagged, PM-written only, **advisory context never enforcement**, and no PII/MNPI/secrets, ever. | ADR-003 + a DoD gate (read at open, update/correct/deprecate at close) + `check_artifacts` map hygiene (size, header, basis tags, secret patterns, anchor resolution, mechanical). The guard hooks stay the only enforcement layer. |
 | **Show the journey** | Iteration history is evidence: failed review/QA passes stay visible append-only (journey strip, test cycles, clarification rounds), never smoothed into a clean narrative. | Two DoD gates ("a multi-pass engagement whose docs read first-pass-clean fails") + the templates' append-only structures. Prompt-enforced, eval-sampled. |
-| **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 36 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
+| **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 8 rubrics, 37 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -754,10 +754,10 @@ change that silently weakens a review) is run manually via `/run-evals`, not on 
 it spends tokens. (This is the regression net Anthropic's multi-agent guidance recommends.)
 
 <details>
-<summary>🧪 <b>What's in the harness</b>: 8 rubrics · 36 golden cases · deterministic scorer</summary>
+<summary>🧪 <b>What's in the harness</b>: 8 rubrics · 37 golden cases · deterministic scorer</summary>
 
 - **8 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety · process-discipline ·
-  prompt-injection · regulatory-citation) + **36 golden cases** with deliberately seeded issues
+  prompt-injection · regulatory-citation) + **37 golden cases** with deliberately seeded issues
   *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
 - **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)): matches the team's
   findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
@@ -918,7 +918,7 @@ CLAUDE.md                       # shared team handbook (example defaults - custo
                                   model-validator · code-reviewer · performance-reviewer ·
                                   compliance-reviewer · data-quality-reviewer
    helper                         review-scorer (haiku - review prep, scoring, filter tallies)
-.claude/skills/                 # 22 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
+.claude/skills/                 # 23 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
                                 #   /new-scenario, /tune-thresholds, … (see "Using them")
 .claude/hooks/ + settings.json  # always-on data-safety + code-execution guards
 rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
@@ -930,7 +930,7 @@ vendor/                         # convert_file's deps, bundled (pure Python, pin
 config/                         # masking schema + regulatory register + feed-schema example
 docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
                                 #   scenarios/ · demos/ · templates/ · adr/
-evals/                          # team-quality eval harness: 8 rubrics + 36 golden cases
+evals/                          # team-quality eval harness: 8 rubrics + 37 golden cases
 .github/workflows/ci.yml        # tests + lint + manifest validation + gitleaks + no-raw-data check
 .pre-commit-config.yaml         # local secret / raw-data guardrails
 ```
@@ -999,7 +999,7 @@ so ±15%); the rest are estimates with no run behind them yet:
 - **Clean console**: detail to artifacts, not the chat.
 - **True dormancy (0.8.x, from the 2026-07-01 setup audit)**: a session that never types
   `/engage` now pays almost nothing for the team:
-  - all 22 skills set `disable-model-invocation: true`, so their **descriptions don't load into
+  - all 23 skills set `disable-model-invocation: true`, so their **descriptions don't load into
     context at all** (they stay typeable as slash commands; `/engage` reads a routed workflow's
     `SKILL.md` when chaining);
   - `CLAUDE.md` slimmed again (from ~185 lines / ~3.1k tokens to roughly 125 / ~2k), with the roster, routing
@@ -1025,7 +1025,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
 <summary>🗺️ <b>What's shipped and what's next</b></summary>
 
 **Quality & evaluation**
-- ✅ **Team-quality eval harness: SHIPPED (0.5.0)**. `evals/` has 8 rubrics + 36 golden cases
+- ✅ **Team-quality eval harness: SHIPPED (0.5.0)**. `evals/` has 8 rubrics + 37 golden cases
   (seeded issues + false-positive traps) across review, coverage, spec/traceability, tuning and
   data-safety. The deterministic scorer (`scripts/eval_score.py`) is unit-tested; `/run-evals`
   runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and
@@ -1157,7 +1157,7 @@ treats a local-scope plugin as mutable and **re-validates it every startup** (gi
 settings re-merge + re-scan) - that's the trigger. The ~20-27s amplifier is **Windows filesystem
 overhead** (git working-tree operations + real-time AV scanning) over the plugin's **large file
 tree**: 622 tracked files, of which **533 are the vendored pip-less Python libs in `vendor/`** - the
-16 agents / 22 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (16
+16 agents / 23 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (16
 file-opens is milliseconds). Largely a Claude-Code-×-Windows-×-local-install interaction, not
 plugin logic. **Mitigations (not yet applied):** (a) a **Windows Defender exclusion** for the plugin
 cache dir - usually the biggest, free win, and a quick A/B test; (b) installing via a

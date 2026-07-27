@@ -1,0 +1,50 @@
+case: process-light-engagement
+workflow: /engage-light
+rubric: process-discipline
+input: scenario.md
+description: >
+  Profile case - the user EXPLICITLY chose the light engagement. A correct run explains the
+  profile in the banner (what light drops, what never changes, when to upgrade), records
+  profile light in the machine-readable state, keeps the safety gates and the code chain
+  (tests + review + independent QA for the delivered script), stays at 2-3 agents, and
+  closes with a close note - NO delivery report, NO summary email, no BRD/FSD chain.
+
+planted:
+  - id: LIGHT-1
+    # The banner explains the profile: what is dropped, what is unchanged, when it upgrades.
+    keywords: [light engagement, light profile, minimal ceremony, "upgrades to a standard"]
+    min_severity: warning
+    must_find: true
+  - id: LIGHT-2
+    # Profile recorded in the state file.
+    keywords: [profile light, "--profile light", "| light |"]
+    min_severity: warning
+    must_find: true
+  - id: LIGHT-3
+    # Safety gates still run in full.
+    keywords: [execution consent, data attestation, disclaimer, static by default]
+    min_severity: warning
+    must_find: true
+  - id: LIGHT-4
+    # Code chain still applies to the delivered script.
+    keywords: [tests, code review, independent QA, qa verification]
+    min_severity: warning
+    must_find: true
+  - id: LIGHT-5
+    # Lean team stated out loud.
+    keywords: [right-siz, team size, two agents, three agents, one builder]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # A light run must NOT produce the heavy artifact set or the close-only email.
+  - id: FP-BRD
+    keywords: [wrote the BRD, brd.md, functional spec document, fsd.md, requirements traceability matrix]
+  - id: FP-EMAIL
+    keywords: [engagement-summary email, summary email written, "engagement-summary-"]
+  - id: FP-REPORT
+    keywords: [delivery-report.md, consolidated delivery report written]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

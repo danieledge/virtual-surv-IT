@@ -5,6 +5,19 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
+### Added
+- **`/engage-light` - the explicit low-ceremony profile** (user-designed: the USER invokes
+  it, Morgan never infers it). Banner explains in Morgan's voice what light drops (BRD/FSD
+  chain, artifact menu, delivery report, summary email, unlimited QA loops), what never
+  changes (safety gates, evidence tags, tests + review + independent QA for any code,
+  blocked discipline, human sign-off), and when it upgrades (detection logic / regulated
+  scope → `set-profile standard`, engagement continues). State schema gains `profile`
+  (standard default; recorded at init, rendered in START-HERE); the mechanical gate waives
+  only MISSING-SUMMARY-EMAIL for a light close (fail-toward-standard on unreadable state).
+  New golden case `process-light-engagement` (banner explanation, profile recorded, gates
+  kept, chain kept, lean team; forbids BRD/FSD/report/email). 4 new tests. Motivated by the
+  0.29.0 baseline's measured cost spread ($2.3 vs $102 per engagement).
+
 ### Fixed
 - **Plugin-mode specialists could not reach the DoD criteria** (user-reported from a live
   foreign-repo engagement, 2026-07-27): `compliance-reviewer` and `qa-engineer` referenced

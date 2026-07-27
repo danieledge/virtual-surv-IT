@@ -962,3 +962,27 @@ def test_review_without_fingerprints_raises_nothing(tmp_path):
     (art / "review-pass-1.md").write_text("# review\n\nNo hashes here.\n", encoding="utf-8")
     (art / "review-pass-1.html").write_text("<p>x</p>", encoding="utf-8")
     assert not any("REVIEW-FINGERPRINT-GAP" in f for f in check(art))
+
+
+def _closed_light_pack(tmp_path, profile_args):
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t", *profile_args])
+    (art / "engagement-brief.md").write_text("# brief\n\nClose note: done.\n", encoding="utf-8")
+    (art / "engagement-brief.html").write_text("<p>x</p>", encoding="utf-8")
+    es_main(["--dir", str(art), "add-artifact", "engagement-brief.md", "--title", "Brief"])
+    es_main(["--dir", str(art), "set-team", "Ana (analysis)"])
+    es_main(["--dir", str(art), "finalise-artifacts"])
+    es_main(["--dir", str(art), "set-status", "closed", "--verdict", "done"])
+    return art
+
+
+def test_light_profile_close_needs_no_summary_email(tmp_path):
+    art = _closed_light_pack(tmp_path, ["--profile", "light"])
+    assert not any("MISSING-SUMMARY-EMAIL" in f for f in check(art))
+
+
+def test_standard_profile_close_still_requires_email(tmp_path):
+    art = _closed_light_pack(tmp_path, [])
+    assert any("MISSING-SUMMARY-EMAIL" in f for f in check(art))

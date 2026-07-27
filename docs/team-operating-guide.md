@@ -33,9 +33,11 @@ Route by **deliverable type**, not habit:
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
-## Command index (canonical - all 22 skills)
+## Command index (canonical - all 23 skills)
 
 - `/engage` - front door: intake + orchestration for any request (problem, review or build)
+- `/engage-light` - explicit low-ceremony profile: same safety gates + code chain, one-page
+  brief, 2-3 agents, close note (no report/email); refuses detection logic, upgrades to standard
 - `/meet-the-team` - Morgan introduces the roster (canonical intro)
 - `/prepare-data` - safe data onboarding (synthetic or masked) before any agent sees it
 - `/demo` - guided end-to-end demo on synthetic data, every decision narrated
@@ -233,10 +235,12 @@ must be visible **between** gates.
   authoritative lifecycle record (status, phase, outstanding, artifact inventory, decisions,
   footprint) and **START-HERE.md is rendered from it** - never hand-edited. Create it with
   `<python> -m scripts.engagement_state init` at OPEN; update it only through the mutators
-  (`set-status` · `set-phase` · `add-artifact` · `add-outstanding` · `resolve-outstanding` ·
-  `set-decision` · `set-team` · `finalise-artifacts` · `set-footprint` · `log-note` ·
-  `add-ratification` · `ratify`), each of which re-validates and re-renders the index in the
-  same command. **Outstanding holds ONLY open work** - completion notes and events go to the
+  (`set-status` · `set-phase` · `set-profile` · `add-artifact` · `add-outstanding` ·
+  `resolve-outstanding` · `set-decision` · `set-team` · `finalise-artifacts` ·
+  `set-footprint` · `log-note` · `add-ratification` · `ratify`), each of which re-validates
+  and re-renders the index in the same command. The `profile` field (standard/light) records
+  the USER's ceremony choice (`/engage-light`); light waives only the summary-email close
+  requirement in the mechanical gate and upgrades to standard the moment scope outgrows it. **Outstanding holds ONLY open work** - completion notes and events go to the
   log (`log-note`), so convergence stays countable. **Approvals are structured**: a decision
   awaiting the human is `add-ratification` (pending); only the human's grant justifies
   `ratify --by`; an artifact asserting a ratification the state records as pending is a

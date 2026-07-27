@@ -286,3 +286,24 @@ def test_ratification_lifecycle(tmp_path):
     assert state["ratifications"][0]["status"] == "ratified"
     assert state["ratifications"][0]["by"] == "ops lead"
     assert _run(tmp_path, "ratify", "window_seconds") == 2  # nothing pending any more
+
+
+# ------------------------------------------------------------------ profiles (0.30)
+
+
+def test_profile_defaults_standard_and_validates(tmp_path):
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    state = load_state(tmp_path)
+    assert state["profile"] == "standard"
+    state["profile"] = "heavy"
+    assert any("profile" in p for p in validate_state(state))
+
+
+def test_light_profile_init_and_upgrade(tmp_path):
+    _run(tmp_path, "init", "--title", "T", "--slug", "t", "--profile", "light")
+    assert load_state(tmp_path)["profile"] == "light"
+    assert "| **Profile** | light |" in (tmp_path / "START-HERE.md").read_text(
+        encoding="utf-8"
+    )
+    assert _run(tmp_path, "set-profile", "standard") == 0
+    assert load_state(tmp_path)["profile"] == "standard"

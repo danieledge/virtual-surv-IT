@@ -67,6 +67,7 @@ _RATIFICATION_STATUSES = ("pending", "ratified")
 
 _STATUSES = ("in_progress", "blocked", "closed")
 _PHASES = ("open", "classify", "plan", "delivery", "close")
+_PROFILES = ("standard", "light")
 _ARTIFACT_STATUSES = ("interim", "final")
 
 # The one hard exclusion (ADR-002 / ADR-006): consent must never gain a second home here.
@@ -163,6 +164,10 @@ def validate_state(state: dict) -> list[str]:
 
     if state.get("phase") not in _PHASES:
         problems.append(f"phase must be one of {_PHASES} (got {state.get('phase')!r})")
+
+    profile = state.get("profile")
+    if profile is not None and profile not in _PROFILES:
+        problems.append(f"profile must be one of {_PROFILES} (got {profile!r})")
 
     outstanding = state.get("outstanding")
     if not isinstance(outstanding, list) or not all(
@@ -315,6 +320,7 @@ def render_markdown(state: dict) -> str:
     lines.append(f"| **Status** | {status_line} |")
     lines.append(f"| **Opened** | {eng.get('opened', '')} |")
     lines.append(f"| **Requested by** | {eng.get('requested_by') or 'unknown'} |")
+    lines.append(f"| **Profile** | {state.get('profile') or 'standard'} |")
     lines.append(f"| **Phase** | {state.get('phase', '')} |")
     lines.append(f"| **Verdict** | {verdict} |")
     lines.append(f"| **Team** | {team_line} |")
@@ -490,6 +496,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
             "closed": None,
         },
         "status": "in_progress",
+        "profile": args.profile,
         "phase": args.phase,
         "team": [],
         "verdict": None,
@@ -564,6 +571,10 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
 
 def _cmd_set_phase(args: argparse.Namespace) -> int:
     return _mutate(args, lambda s: s.__setitem__("phase", args.phase))
+
+
+def _cmd_set_profile(args: argparse.Namespace) -> int:
+    return _mutate(args, lambda s: s.__setitem__("profile", args.profile))
 
 
 def _cmd_add_artifact(args: argparse.Namespace) -> int:
@@ -697,6 +708,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--requested-by", default=None)
     p.add_argument("--team-version", default=None)
     p.add_argument("--phase", choices=_PHASES, default="plan")
+    p.add_argument(
+        "--profile",
+        choices=_PROFILES,
+        default="standard",
+        help="engagement ceremony profile - 'light' only when the USER invoked /engage-light",
+    )
     p.set_defaults(fn=_cmd_init)
 
     p = sub.add_parser("validate", help="check the state file; exit 1 on findings")
@@ -713,6 +730,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("set-phase", help="change lifecycle phase (renders)")
     p.add_argument("phase", choices=_PHASES)
     p.set_defaults(fn=_cmd_set_phase)
+
+    p = sub.add_parser(
+        "set-profile", help="change ceremony profile (e.g. light -> standard upgrade)"
+    )
+    p.add_argument("profile", choices=_PROFILES)
+    p.set_defaults(fn=_cmd_set_profile)
 
     p = sub.add_parser("add-artifact", help="add/update an artifact row (renders)")
     p.add_argument("path")
