@@ -49,6 +49,36 @@ def _force_utf8_output() -> None:
             pass
 
 
+def _engagement_open(artifacts: Path) -> bool:
+    """True while an engagement is live (in progress or blocked).
+
+    The machine-readable state file (`engagement-state.json`, ADR-006) is authoritative
+    when present and parseable - a `closed` status wins even over a stale ⏳ render, and
+    an open status arms the hook even before START-HERE has been rendered. The legacy
+    emoji sniff of START-HERE.md is the fallback so pre-state engagements keep working.
+    Returns False on any unreadable input (a presentation aid must never misfire)."""
+    state_file = artifacts / "engagement-state.json"
+    if state_file.is_file():
+        try:
+            status = json.loads(state_file.read_text(encoding="utf-8")).get("status")
+        except Exception:
+            status = None
+        if status in ("in_progress", "blocked"):
+            return True
+        if status == "closed":
+            return False
+        # unreadable / invalid state -> fall through to the legacy sniff
+    start_here = artifacts / "START-HERE.md"
+    if not start_here.is_file():
+        return False  # dormant / no engagement (team is opt-in)
+    try:
+        text = start_here.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return False
+    # OPEN (⏳) or BLOCKED (⛔) arms the anchor; a ✅ closed engagement is done.
+    return "⏳" in text or "⛔" in text
+
+
 def main() -> int:
     _force_utf8_output()
     try:
@@ -59,15 +89,7 @@ def main() -> int:
     # gate: a wandered shell cwd (e.g. a kept eval sandbox under evals/runs/) must not
     # summon Morgan into a session that never engaged the team.
     cwd = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
-    start_here = cwd / "artifacts" / "START-HERE.md"
-    if not start_here.is_file():
-        return 0  # dormant / no engagement -> stay silent (team is opt-in)
-    try:
-        text = start_here.read_text(encoding="utf-8", errors="replace")
-    except Exception:
-        return 0
-    # Anchor only while the engagement is OPEN (⏳) or BLOCKED (⛔); a ✅ closed one is done.
-    if "⏳" not in text and "⛔" not in text:
+    if not _engagement_open(cwd / "artifacts"):
         return 0
     print(_ANCHOR)
     return 0

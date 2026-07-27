@@ -1,4 +1,4 @@
-# Engagement workflow - Mermaid diagrams (v0.28.0)
+# Engagement workflow - Mermaid diagrams (v0.29.0)
 
 Companion to `engagement-flow-spec.md`. Diagram 0 is the simple view (core concepts only -
 simplified by omission, never by distortion); diagrams 1-4 are the complete detail: the
@@ -74,7 +74,7 @@ flowchart TD
     RNONE -- "No" --> BUILD
     CLASS -- "Build from requirements" --> BUILD["Phase 3: plan and gate"]
     BUILD --> AMENU["LOCKED artifact menu, 2 stages:<br/>consolidated report (default) /<br/>separate / both, then grouped picks"]
-    AMENU --> BRIEF["📄 Engagement Brief +<br/>📄 START-HERE living index (⏳)<br/>both rendered to .html"]
+    AMENU --> BRIEF["📄 Engagement Brief +<br/>📄 engagement-state.json (⏳, ADR-006) -<br/>START-HERE .md+.html rendered from it"]
     BRIEF --> GOAHEAD{"Go-ahead gate"}
     GOAHEAD -- "Adjust" --> AMENU
     GOAHEAD -- "Stop" --> HALT["Delivery never starts<br/>(brief + index already on disk)"]
@@ -110,12 +110,12 @@ flowchart TD
         G3 -- "otherwise (read-only<br/>mentions allowed)" --> RUN["Tool runs"]
     end
     subgraph UPS["UserPromptSubmit - every user turn"]
-        UP["User prompt"] --> PA{"persona_anchor.py:<br/>project START-HERE open<br/>(⏳ or ⛔)?"}
+        UP["User prompt"] --> PA{"persona_anchor.py:<br/>engagement live? state file first<br/>(ADR-006), fallback<br/>START-HERE ⏳/⛔"}
         PA -- "Yes" --> PAI["Inject 8-line Morgan persona +<br/>discipline anchor<br/>(survives compaction)"]
         PA -- "No" --> PAS["Silent - team stays dormant"]
     end
     subgraph STOPH["Stop hook - when the model tries to end its turn"]
-        ST["Turn ending"] --> SG{"dod_stop_gate.py:<br/>project START-HERE open?"}
+        ST["Turn ending"] --> SG{"dod_stop_gate.py:<br/>engagement live?<br/>(state file first, ADR-006)"}
         SG -- "No" --> SGS["Silent"]
         SG -- "Yes" --> SGC{"Mechanical DoD check<br/>finds defects?"}
         SGC -- "No" --> SGS

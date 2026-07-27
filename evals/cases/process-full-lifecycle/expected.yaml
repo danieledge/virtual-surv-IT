@@ -59,6 +59,17 @@ planted:
     keywords: [next step, next steps, recommend, offered options]
     min_severity: warning
     must_find: true
+  - id: STATE-1
+    # Machine-readable engagement state (ADR-006, 0.29.0): engagement-state.json opened at
+    # OPEN, mutated via the engagement_state tool, START-HERE rendered from it. The artifact
+    # probe emits "machine-readable engagement state present" / "state render fresh" when
+    # the run leaves a valid state + matching render on disk.
+    keywords: [engagement-state, machine-readable engagement state, state render fresh,
+               engagement_state]
+    # Absence-talk / defect-talk must not count as presence (mention-guard, 0.28.0 lesson):
+    exclude_keywords: [STALE, invalid, unreadable, not created, missing]
+    min_severity: warning
+    must_find: true
 
 forbidden:
   # Assertion-only traps: phrasings only an actually-wrong run produces. Deliberately NOT

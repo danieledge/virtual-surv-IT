@@ -3,6 +3,51 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.29.0] - 2026-07-26 - Machine-readable engagement state (dev)
+
+### Added
+- **`engagement-state.json` - the authoritative lifecycle record (ADR-006)**: one JSON file
+  per engagement (schema v1: status, phase, outstanding, artifact inventory, decisions,
+  footprint) with **START-HERE.md rendered from it** - never hand-edited. New consent-free
+  team tool `scripts.engagement_state` (`init` / `validate` / `render` + mutators
+  `set-status` / `set-phase` / `add-artifact` / `add-outstanding` / `resolve-outstanding` /
+  `set-decision` / `set-footprint`); every mutator re-validates and re-renders in the same
+  command, and the render embeds a `state-hash` so staleness is mechanically detectable.
+  16 new unit tests.
+- **DoD gate learns the state**: `check_artifacts` gains `STATE-INVALID` (bad JSON / schema),
+  `STATE-STALE-RENDER` (hash mismatch or missing render; auto-fixed by re-render under
+  `--fix`) and `STATE-MISSING` (generated index whose state file is gone). Legacy engagements
+  with no state file raise no STATE findings - migration is per-engagement, no flag day.
+  6 new gate tests.
+- **State-first lifecycle hooks**: `persona_anchor.py` and `dod_stop_gate.py` read the state
+  file before the legacy emoji sniff - `closed` silences them even over a stale ⏳ render,
+  an open status arms them before any render exists, an unreadable state falls back to the
+  sniff. No wiring change (both hooks were already registered). 6 new hook tests.
+- **Close-completeness enforcement** (from the 0.29.0 live shakedown's independent artifact
+  review, which caught a pack closing with `team: []` and all rows interim): new mutators
+  `set-team` and `finalise-artifacts`; closed-state validation now refuses an empty team or
+  interim artifact rows; close ordering documented in the engage skill, operating guide and
+  flow spec; PM-summary-layer 📊/🧠 tag duty restated at close (the eval judge's one failing
+  dimension). 2 new tests.
+- **State schema v2** (from the same review): `log` (dated completion notes/events) split
+  from `outstanding` (open work only - the live run hid convergence by parking "COMPLETE"
+  notes there; blocked status now requires a non-empty outstanding list), and structured
+  `ratifications` (pending/ratified, human-granted via `ratify --by`). New mutators
+  `log-note` / `add-ratification` / `ratify`; v1 files stay valid and upgrade in place on
+  first mutation. 4 new tests.
+- **Two new judgement gates in `check_artifacts`** (both escalate-only, never auto-fix):
+  **`RATIFIED-CLAIM-PENDING`** - an artifact asserts a ratification the state still records
+  as pending (the review's finding 2: the FSD claimed "ops-lead ratified" against a pending
+  decision log); deliberately narrow phrasing triggers to protect fix-list trust.
+  **`REVIEW-FINGERPRINT-GAP`** - shipped non-test code whose md5 appears in no review
+  artifact, fired only when the pack already uses fingerprints (finding 3: the DoD's
+  code-reviewed tick spanned a build the reviewer never saw). 4 new tests.
+- **The consent exclusion**: the schema recursively forbids any `consent`/`exec`-shaped key -
+  execution consent stays solely in the human-created `.claude/.exec-consent` marker
+  (ADR-002); pinned end-to-end by tests. Docs updated across the operating guide, engagement
+  flow spec, engage + review skills, close checklist and the start-here template; decision
+  recorded in **ADR-006**.
+
 ## [0.28.0] - 2026-07-25 - Live orchestration evals + close-time reconciliation (dev)
 
 ### Added

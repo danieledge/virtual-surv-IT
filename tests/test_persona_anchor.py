@@ -55,3 +55,36 @@ def test_anchor_stays_tiny():
     # The design constraint: a per-turn injection must be pointers, not a rules reload.
     assert len(pa._ANCHOR.splitlines()) <= 12
     assert len(pa._ANCHOR) < 1200
+
+
+# --------------------------------------------- machine-readable state first (ADR-006)
+
+
+def _state(art, status):
+    art.mkdir(exist_ok=True)
+    (art / "engagement-state.json").write_text(
+        json.dumps({"schema": 1, "status": status}), encoding="utf-8"
+    )
+
+
+def test_state_open_anchors_even_without_render(tmp_path, monkeypatch, capsys):
+    _state(tmp_path / "artifacts", "in_progress")
+    _, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert "persona-anchor" in out
+
+
+def test_state_closed_wins_over_stale_open_render(tmp_path, monkeypatch, capsys):
+    art = tmp_path / "artifacts"
+    _state(art, "closed")
+    (art / "START-HERE.md").write_text("Status: ⏳ in progress\n", encoding="utf-8")
+    _, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert out == ""  # the state is authoritative
+
+
+def test_invalid_state_falls_back_to_emoji_sniff(tmp_path, monkeypatch, capsys):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "engagement-state.json").write_text("{broken", encoding="utf-8")
+    (art / "START-HERE.md").write_text("Status: ⛔ blocked\n", encoding="utf-8")
+    _, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert "persona-anchor" in out

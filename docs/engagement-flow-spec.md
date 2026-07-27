@@ -1,7 +1,7 @@
 # Engagement flow specification - complete diagram brief
 
 Purpose: a complete, diagram-ready description of every hook, guard, gate, step, branch,
-loop and artifact in the compliance-surveillance team's engagement workflow (v0.28.0). Written
+loop and artifact in the compliance-surveillance team's engagement workflow (v0.29.0). Written
 to be handed to a diagramming assistant. Nothing user-visible is omitted.
 
 **Suggested rendering:** swimlane flowchart with five lanes - **User (human)** · **Morgan
@@ -37,12 +37,15 @@ These run on EVERY session in the project, engagement or not. Draw each as: trig
    never grant itself execution consent or weaken a guard. Read-only mentions (echo/grep of
    the filename) are allowed; every write path (redirect, touch, cp, sed -i, command
    substitution) blocks.
-5. **persona_anchor.py** (UserPromptSubmit): ◇ does `$CLAUDE_PROJECT_DIR/artifacts/START-HERE.md`
-   exist with status ⏳ or ⛔? → yes: inject a ≤8-line Morgan persona/discipline anchor into the
-   turn (survives conversation compaction); no: silent. Anchored to the session's project root,
-   never the shell's wandering cwd.
+5. **persona_anchor.py** (UserPromptSubmit): ◇ is the engagement live? State-first (ADR-006):
+   a parseable `$CLAUDE_PROJECT_DIR/artifacts/engagement-state.json` is authoritative
+   (`in_progress`/`blocked` arms even before START-HERE is rendered; `closed` silences even
+   over a stale ⏳ render); fallback: START-HERE.md exists with status ⏳ or ⛔. → yes: inject
+   a ≤8-line Morgan persona/discipline anchor into the turn (survives conversation
+   compaction); no: silent. Anchored to the session's project root, never the shell's
+   wandering cwd.
 6. **dod_stop_gate.py** (Stop hook, warn-first): fires when the model tries to end its turn.
-   ◇ same START-HERE open check → run the mechanical DoD checker over `artifacts/` →
+   ◇ same state-first liveness check → run the mechanical DoD checker over `artifacts/` →
    ◇ findings? → yes: block the stop ONCE with the finding list framed as a FIX-LIST (auto-fix
    the deterministic ones, escalate judgement calls, or end plainly saying "NOT closed -
    outstanding: ..."); the nudge does not re-fire in the same stop cycle. No open engagement or
@@ -134,10 +137,13 @@ Claude Code (only Layer 0 stays armed). → YES: activate Morgan and enter Phase
    Runbook + Release Notes · Change Request); rarer templates via "Other". Every artifact
    ships `.md` + `.html`.
 2. 📄 **Engagement Brief** written (decisions, assumptions, open questions, routing plan) and
-   📄 **START-HERE.md living index** created in the same breath - status ⏳, brief as first
-   row, ⚠️-outstanding list seeded with the gates ahead (independent QA, DoD). Both rendered
-   to `.html`. From here on: every artifact write appends a START-HERE row IN THE SAME TURN
-   (index leads reality - it is the engagement's external memory and survives compaction).
+   📄 **the machine-readable state opened in the same breath** (ADR-006):
+   `engagement_state init` creates `artifacts/engagement-state.json` (status ⏳,
+   ⚠️-outstanding pre-seeded with the gates ahead: independent QA, DoD) and renders
+   📄 **START-HERE.md** + `.html` from it. The state file is authoritative; START-HERE is its
+   generated view and is never hand-edited. From here on: every artifact write is recorded
+   with `add-artifact` IN THE SAME TURN, which re-renders the index (state leads reality - it
+   is the engagement's external memory and survives compaction).
 3. ◇ **Go-ahead gate** (question tool): Proceed as briefed / Adjust / Stop.
 
 ## Phase 4 - delivery (agile loop) ⟲
@@ -184,14 +190,16 @@ Claude Code (only Layer 0 stays armed). → YES: activate Morgan and enter Phase
 
 ## Phase 4a - blocked path ◇
 
-Turn ends needing user input the team cannot proceed without → set START-HERE ⛔ with the
-outstanding list (unanswered questions AND every gate not yet run), re-render, end the turn
-stating plainly "this engagement is NOT closed - outstanding: ...". No summary email, no
-delivery report (SUMMARY-BEFORE-CLOSE / FINAL-BEFORE-CLOSE defects if written). **Resume**:
-user answers → flip ⛔ → ⏳, log the answer, continue ⟲. **Cold resume** (new session, even
-after interruption): the fresh session reads START-HERE + interim artifacts as the state of
-record, honours recorded decisions/evidence without re-litigating, completes the outstanding
-list top to bottom, and closes properly (proven live 2026-07-25).
+Turn ends needing user input the team cannot proceed without → `engagement_state set-status
+blocked` + `add-outstanding` per item (unanswered questions AND every gate not yet run; each
+command re-renders START-HERE to ⛔), end the turn stating plainly "this engagement is NOT
+closed - outstanding: ...". No summary email, no delivery report (SUMMARY-BEFORE-CLOSE /
+FINAL-BEFORE-CLOSE defects if written). **Resume**: user answers → `set-status in_progress` +
+`resolve-outstanding`, log the answer, continue ⟲. **Cold resume** (new session, even after
+interruption): the fresh session reads `engagement-state.json` (authoritative; structured
+status, outstanding, decisions) with START-HERE + interim artifacts as the human record,
+honours recorded decisions/evidence without re-litigating, completes the outstanding list top
+to bottom, and closes properly (proven live 2026-07-25, pre-state; state file since ADR-006).
 
 ## Phase 5 - close (only path to ✅)
 
@@ -204,13 +212,18 @@ Ordered close checklist:
 2. **Mechanical DoD gate**: `check_artifacts --fix`, treated as a FIX-LIST ⟲ (fix, re-run,
    until only judgement items remain):
    - AUTO-FIX (never handed to the user): MISSING-HTML (render), MISSING-INDEX / STALE-INDEX /
-     INDEX-NO-STATUS (fix the living index), ROSTER-UNKNOWN / ROSTER-ROLE-MISMATCH (correct
+     INDEX-NO-STATUS (fix the living index), STATE-STALE-RENDER (re-render START-HERE from
+     `engagement-state.json`, ADR-006; STATE-INVALID / STATE-MISSING are fix-the-state items,
+     never auto-fabricated), ROSTER-UNKNOWN / ROSTER-ROLE-MISMATCH (correct
      persona names to the canonical roster), missing interim banner or premature "final",
      FINAL-BEFORE-CLOSE / SUMMARY-BEFORE-CLOSE / SUMMARY-WRONG-EXT, STALE-STATUS (banner
      surviving close), non-portable absolute paths, incomplete source index, missing evidence
      tags, CODE-NO-TESTS / CODE-NO-QA (route to the missing chain step).
    - ESCALATE via the question tool (never self-fix): evidence contradictions ("the email says
-     X but the artifact says Y"), sign-off on unverifiable authority, scope/acceptance calls.
+     X but the artifact says Y"), sign-off on unverifiable authority, scope/acceptance calls,
+     RATIFIED-CLAIM-PENDING (an artifact asserts an approval the state records as pending -
+     never self-ratify) and REVIEW-FINGERPRINT-GAP (shipped code no review fingerprinted -
+     delta review or explicit DoD disclosure).
    - STALE-DOCSTATUS: document-control Status still Draft/In-review under a ✅ index - close
      it out or state "pending human sign-off" explicitly (judgement item).
 3. **Close-time reconciliation sweep** (every produced/touched document, INCLUDING
@@ -228,9 +241,12 @@ Ordered close checklist:
    "Hi," when the requester's name is unknown, states the engagement footprint (approx tokens
    + agent count), repeats the execution/data responsibility notes, NEVER offers a call or
    meeting - next steps are actions. Written only now, at close.
-7. **Finalise START-HERE last of all** 📄: Status → ✅ CLOSED <date>, verdict + footprint
-   filled, ⚠️-outstanding replaced with "Nothing - closed <date>", interim banners stripped
-   from artifacts that became final. The index flip to ✅ is the FINAL state change.
+7. **Finalise the state last of all** 📄: `engagement_state set-team ...` +
+   `finalise-artifacts` + `set-footprint`, then `set-status closed --verdict "..."` (the
+   close refuses on an empty team or any interim artifact row) - sets the close date, clears
+   ⚠️-outstanding to "Nothing - closed <date>", and re-renders START-HERE to ✅ CLOSED;
+   interim banners stripped from artifacts that became final. The state flip to closed is
+   the FINAL state change.
 8. **Close with next steps**: short summary + concrete options with a recommendation + offer
    to carry them out; a dead end is a PM failure. Human sign-off remains the one DoD item only
    the user can perform.
@@ -247,7 +263,8 @@ residual risk when execution consent was withheld.
 
 ## Artifact inventory (what exists on disk, by phase)
 
-Open: engagement-brief.md/.html · START-HERE.md/.html (living, updated every write).
+Open: engagement-brief.md/.html · engagement-state.json (authoritative lifecycle state,
+ADR-006) · START-HERE.md/.html (rendered from the state on every mutation).
 Delivery (as routed): fsd.md · rtm.md · review-pass-N.md · qa-cycle-N/qa-handover.md ·
 interim-*.md · the deliverable code + tests + QA suites · analysis packs - each with .html.
 Close: delivery-report.md/.html · developer-handover.md/.html (if chosen) ·

@@ -1,5 +1,11 @@
 # START HERE - <ENGAGEMENT TITLE>
 
+> **Since v0.29 this file is GENERATED (ADR-006)** - the authoritative record is
+> `artifacts/engagement-state.json`, and `python -m scripts.engagement_state` renders this
+> index from it on every mutation (`init` / `set-status` / `add-artifact` / ...). Do not
+> hand-edit a generated index (`STATE-STALE-RENDER`); this template documents the render's
+> shape and remains the authoring guide for legacy/hand-maintained engagements only.
+
 > **The living index - created at engagement OPEN, updated with every artifact, finalised
 > at close.** The PM creates this alongside the Engagement Brief (status ⏳), appends a row
 > the moment any artifact lands, sets ⛔ with the outstanding list whenever the engagement
