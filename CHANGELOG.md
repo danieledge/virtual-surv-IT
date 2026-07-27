@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.30.0] - 2026-07-27 - /engage-light + plugin-mode DoD resolution (dev)
 
 ### Added
 - **`/engage-light` - the explicit low-ceremony profile** (user-designed: the USER invokes
