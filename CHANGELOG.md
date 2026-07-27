@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.31.0] - 2026-07-27 - Multi-engagement workspaces
 
 ### Added
 - **Multi-engagement workspaces (ADR-008)**: several engagements per project at INDEPENDENT
