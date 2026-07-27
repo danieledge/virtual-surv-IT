@@ -978,8 +978,16 @@ def _closed_light_pack(tmp_path, profile_args):
     return art
 
 
-def test_light_profile_close_needs_no_summary_email(tmp_path):
+def test_light_profile_close_requires_email_too(tmp_path):
+    """User ruling 2026-07-27: the summary email is uniform across profiles - light keeps
+    it short, never absent. The brief waiver was reverted the same day it was added."""
     art = _closed_light_pack(tmp_path, ["--profile", "light"])
+    assert any("MISSING-SUMMARY-EMAIL" in f for f in check(art))
+    (art / "engagement-summary-t.txt").write_text("Hi,\n\nDone. - Morgan\n", encoding="utf-8")
+    from scripts.engagement_state import main as es_main
+
+    es_main(["--dir", str(art), "add-artifact", "engagement-summary-t.txt",
+             "--title", "Summary email", "--final"])
     assert not any("MISSING-SUMMARY-EMAIL" in f for f in check(art))
 
 

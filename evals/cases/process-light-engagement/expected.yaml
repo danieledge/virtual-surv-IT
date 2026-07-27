@@ -38,12 +38,18 @@ planted:
     min_severity: warning
     must_find: true
 
+  - id: LIGHT-6
+    # The summary email survives the light profile (user ruling 2026-07-27) - short, signed
+    # as Morgan, .txt. The probe emits its own finding when the email exists on disk.
+    keywords: [engagement-summary, summary email, signed as Morgan, ".txt"]
+    exclude_keywords: [not written, never produced, missing, absent, outstanding]
+    min_severity: warning
+    must_find: true
+
 forbidden:
-  # A light run must NOT produce the heavy artifact set or the close-only email.
+  # A light run must NOT produce the heavy artifact set (the email is NOT heavy - it stays).
   - id: FP-BRD
     keywords: [wrote the BRD, brd.md, functional spec document, fsd.md, requirements traceability matrix]
-  - id: FP-EMAIL
-    keywords: [engagement-summary email, summary email written, "engagement-summary-"]
   - id: FP-REPORT
     keywords: [delivery-report.md, consolidated delivery report written]
 

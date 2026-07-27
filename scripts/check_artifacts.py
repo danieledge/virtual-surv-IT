@@ -416,19 +416,6 @@ def _load_engagement_state_module():
         return None
 
 
-def _state_profile(artifacts_dir: Path) -> str:
-    """The engagement's ceremony profile from the state file; 'standard' when absent or
-    unreadable (fail toward the FULL requirement set, never toward waiving one)."""
-    try:
-        state = json.loads(
-            (artifacts_dir / "engagement-state.json").read_text(encoding="utf-8")
-        )
-        profile = state.get("profile")
-        return profile if profile in ("standard", "light") else "standard"
-    except Exception:
-        return "standard"
-
-
 def check_state(artifacts_dir: Path) -> list[str]:
     """Machine-readable engagement state (ADR-006): `engagement-state.json` is the
     authoritative lifecycle record and START-HERE.md is rendered from it. Advisory during
@@ -738,12 +725,13 @@ def check(artifacts_dir: Path) -> list[str]:
         # are deliverables to summarise. (An index with an unreadable status already got
         # INDEX-NO-STATUS; piling the email demand on top would point at the wrong fix.)
         has_deliverables = bool(md_files)
-        if has_deliverables and not summaries and _state_profile(artifacts_dir) != "light":
-            # A light-profile engagement (explicit /engage-light) closes with a close note in
-            # the brief, not a summary email - the one close requirement the profile waives.
+        if has_deliverables and not summaries:
+            # Uniform across profiles (user ruling 2026-07-27): every close ends with the
+            # summary email - light keeps it SHORT, it does not drop it.
             findings.append(
                 "MISSING-SUMMARY-EMAIL: no artifacts/engagement-summary-*.txt found - the "
-                "closing email (DoD / CLAUDE.md §6a) is a required artifact"
+                "closing email (DoD / CLAUDE.md §6a) is a required artifact in EVERY "
+                "profile (light keeps it short, never absent)"
             )
         # Status is single-source: it lives ONLY in START-HERE. A content artifact still
         # carrying a mutable interim/in-progress banner after close points readers at an

@@ -12,8 +12,9 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   changes (safety gates, evidence tags, tests + review + independent QA for any code,
   blocked discipline, human sign-off), and when it upgrades (detection logic / regulated
   scope → `set-profile standard`, engagement continues). State schema gains `profile`
-  (standard default; recorded at init, rendered in START-HERE); the mechanical gate waives
-  only MISSING-SUMMARY-EMAIL for a light close (fail-toward-standard on unreadable state).
+  (standard default; recorded at init, rendered in START-HERE); light drops the delivery
+  report but KEEPS the summary email, short (same-day user ruling reverted an initial email
+  waiver - one close rule in every profile).
   New golden case `process-light-engagement` (banner explanation, profile recorded, gates
   kept, chain kept, lean team; forbids BRD/FSD/report/email). 4 new tests. Motivated by the
   0.29.0 baseline's measured cost spread ($2.3 vs $102 per engagement).

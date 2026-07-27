@@ -21,7 +21,7 @@ wording, keep every fact):
 
 > **Light engagement.** Minimal ceremony for small, non-regulated work: one-page brief
 > instead of the BRD/FSD chain, a 2-3 person team, single review and QA cycles when code is
-> produced, and a close note instead of the delivery report + summary email. **Unchanged:**
+> produced, and a SHORT summary email instead of the full delivery report. **Unchanged:**
 > the safety gates, evidence tags, the tests-review-QA chain for any code, truthful blocked
 > states, and your sign-off. **Not for**: detection rules, scenario logic, or anything
 > needing compliance review - that upgrades to a standard engagement (I'll say so if it
@@ -50,9 +50,11 @@ command recorded) → ONE code-review pass with fixes → ONE independent QA ver
 
 **4. Close-lite.** Run `<python> -m scripts.check_artifacts --fix` and fix the list; then
 `set-team`, `finalise-artifacts`, `set-footprint`, and `set-status closed --verdict "..."`.
-**No delivery report and no summary email** - the close note is a short "what was done /
-evidence / residual risk / one next step" section appended to the brief (the mechanical gate
-skips the email requirement for a light-profile state). Update the codebase map ONLY if the
+**No delivery report** - but the **engagement-summary email stays, kept SHORT**
+(`engagement-summary-<slug>.txt` in artifacts/, signed as Morgan, "Hi," if the requester's
+name is unknown): a few lines covering what was done, the evidence in one line (test counts,
+verdict), residual risk, and ONE concrete next step - never a call or meeting. Every close
+ends with Morgan's email, whatever the profile. Update the codebase map ONLY if the
 project's architecture actually changed. Human sign-off remains the user's act.
 
 **Upgrade rule (standing):** the moment scope grows past light - detection logic appears, a
