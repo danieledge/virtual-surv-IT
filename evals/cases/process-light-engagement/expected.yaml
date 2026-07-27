@@ -21,8 +21,11 @@ planted:
     min_severity: warning
     must_find: true
   - id: LIGHT-3
-    # Safety gates still run in full.
-    keywords: [execution consent, data attestation, disclaimer, static by default]
+    # Safety gates still run in full (numeral/word/phrasing variants - the normalizer
+    # phrases freely: "static-only review by default", "safety warning", "consent marker"
+    # all observed live).
+    keywords: [execution consent, explicit consent, consent marker, data attestation,
+               disclaimer, safety warning, data safety, static by default, static-only]
     min_severity: warning
     must_find: true
   - id: LIGHT-4
