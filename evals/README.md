@@ -65,9 +65,17 @@ driver closes it:
 
 Per case it: copies the repo to a throwaway sandbox (with `evals/` excluded, so ground truth
 is structurally unreachable; guard hooks stay live - they are under test too), launches a real
-headless `/engage` session via the Agent SDK, and has an **LLM user-sim** answer every
-AskUserQuestion gate in persona (the case's `driver.md`, falling back to
-`evals/driver-default.md`). When the sim grants execution-consent intent, the harness process -
+headless session via the Agent SDK **using the case's declared `workflow:` as the front-door
+command** (`/engage` or `/engage-light`; anything else falls back to `/engage`), and has an
+**LLM user-sim** answer every AskUserQuestion gate in persona (the case's `driver.md`,
+falling back to `evals/driver-default.md`).
+
+Robustness (0.30): sessions authenticate like interactive Claude Code (the API key is blanked
+in the child env - runs bill to the subscription and share its usage window); a
+**dead-at-birth watchdog** aborts fast with the reason if a session emits nothing within 120s
+(instead of burning the whole `--timeout`); `RateLimitEvent` frames are printed as they
+arrive. `--rescore <run-dir>` re-runs probe + normalizer + judge over a KEPT run without a
+live session, persisting to `score-rescore.json` alongside the untouched original. When the sim grants execution-consent intent, the harness process -
 standing in for the human, per ADR-002 - creates the sandbox's `.claude/.exec-consent` marker;
 the session itself remains blocked from writing it. Scoring then combines a deterministic
 artifact probe of the sandbox, an uncontaminated normalizer pass over the transcript
