@@ -3,6 +3,19 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Fixed
+- **Plugin-mode specialists could not reach the DoD criteria** (user-reported from a live
+  foreign-repo engagement, 2026-07-27): `compliance-reviewer` and `qa-engineer` referenced
+  `docs/DEFINITION-OF-DONE.md` repo-relatively, which does not exist in a working project
+  under a plugin install - the named DoD verifier reported "cannot verify - criteria not
+  available to me". Delegation briefs must now carry the RESOLVED absolute handbook-doc paths
+  (engage step 5), and both agents state the plugin-root fallback plus the honest failure
+  mode (report "cannot verify", never reconstruct the gate from memory, never mark
+  unverifiable items met - exactly the degraded behaviour the live run showed, now codified).
+  Prompt-surface change: rides to main with the next eval-gated release.
+
 ## [0.29.1] - 2026-07-27 - Exec-guard allow-list fix for team tooling (patch)
 
 ### Fixed

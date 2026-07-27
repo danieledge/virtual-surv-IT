@@ -23,7 +23,8 @@ When invoked:
    the guard blocks, hand back and ask the user to grant consent (it is human-only). **If consent
    stays withheld, do not fake a pass:** author the full plan and test code, report the run as
    **🧠 inferred (written, not executed)**, and flag the delivery for the **static-only DoD path**
-   (`docs/DEFINITION-OF-DONE.md`) - DoD PARTIAL, untested code as residual risk.
+   (`docs/DEFINITION-OF-DONE.md` in the team repo; in a plugin install use the resolved
+   plugin-root copy from your brief) - DoD PARTIAL, untested code as residual risk.
 3. **Assess coverage** - what is covered, and crucially **what is NOT** and why; residual
    risk; anything that can only be checked manually.
 4. **Evidence** - produce the QA handover (`docs/templates/qa-handover.md`): execution
