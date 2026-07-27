@@ -1,0 +1,527 @@
+<title>Engagement Workflow v0.28.0</title>
+<style>
+  :root{
+    --paper:#fafbfd; --panel:#ffffff; --ink:#1c2540; --muted:#5b6478; --line:#d7dce6;
+    --chipbg:#eef1f7; --codebg:#eef1f6; --code:#31405c;
+    --p0:#563d7c; --p1:#1f4e8c; --p2:#2e6b3f; --p3:#b26a0e; --p4:#2f5fa5; --p5:#0f6b66;
+    --p0s:#efeaf6; --p1s:#e7eef7; --p2s:#e8f1ea; --p3s:#f8efe0; --p4s:#e8eef7; --p5s:#e3f0ef;
+    --dec:#8a6d1d; --decs:#f7f1dd; --usr:#c25e12; --usrs:#faeee2;
+    --blk:#a63434; --blks:#f8e8e6; --ok:#2e6b3f; --sys:#2b3355; --syss:#e9ebf4;
+  }
+  @media (prefers-color-scheme: dark){ :root{
+    --paper:#12161f; --panel:#1a2030; --ink:#e8eaf2; --muted:#98a1b5; --line:#333c50;
+    --chipbg:#232b3d; --codebg:#222a3c; --code:#c6d1e4;
+    --p0:#a78cd6; --p1:#7ba3dc; --p2:#7fbb8c; --p3:#dda44c; --p4:#7fa6dc; --p5:#5cb5ae;
+    --p0s:#251f33; --p1s:#1a2436; --p2s:#1a2b1f; --p3s:#302518; --p4s:#1a2436; --p5s:#15302e;
+    --dec:#cdaa4a; --decs:#2c2716; --usr:#e08b4e; --usrs:#33231a;
+    --blk:#e08578; --blks:#341d1c; --ok:#7fbb8c; --sys:#9aa5d6; --syss:#20263c;
+  }}
+  :root[data-theme="dark"]{
+    --paper:#12161f; --panel:#1a2030; --ink:#e8eaf2; --muted:#98a1b5; --line:#333c50;
+    --chipbg:#232b3d; --codebg:#222a3c; --code:#c6d1e4;
+    --p0:#a78cd6; --p1:#7ba3dc; --p2:#7fbb8c; --p3:#dda44c; --p4:#7fa6dc; --p5:#5cb5ae;
+    --p0s:#251f33; --p1s:#1a2436; --p2s:#1a2b1f; --p3s:#302518; --p4s:#1a2436; --p5s:#15302e;
+    --dec:#cdaa4a; --decs:#2c2716; --usr:#e08b4e; --usrs:#33231a;
+    --blk:#e08578; --blks:#341d1c; --ok:#7fbb8c; --sys:#9aa5d6; --syss:#20263c;
+  }
+  :root[data-theme="light"]{
+    --paper:#fafbfd; --panel:#ffffff; --ink:#1c2540; --muted:#5b6478; --line:#d7dce6;
+    --chipbg:#eef1f7; --codebg:#eef1f6; --code:#31405c;
+    --p0:#563d7c; --p1:#1f4e8c; --p2:#2e6b3f; --p3:#b26a0e; --p4:#2f5fa5; --p5:#0f6b66;
+    --p0s:#efeaf6; --p1s:#e7eef7; --p2s:#e8f1ea; --p3s:#f8efe0; --p4s:#e8eef7; --p5s:#e3f0ef;
+    --dec:#8a6d1d; --decs:#f7f1dd; --usr:#c25e12; --usrs:#faeee2;
+    --blk:#a63434; --blks:#f8e8e6; --ok:#2e6b3f; --sys:#2b3355; --syss:#e9ebf4;
+  }
+  @media (prefers-reduced-motion: no-preference){ :root{scroll-behavior:smooth;} }
+  body{background:var(--paper);color:var(--ink);margin:0;padding:1.3rem;
+       font:14px/1.5 system-ui,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;}
+  @media (max-width:640px){ body{font-size:15px;padding:.8rem;} }
+  code{font:.82em/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+       background:var(--codebg);color:var(--code);padding:.05em .3em;border-radius:3px;}
+  .poster{max-width:1480px;margin:0 auto;}
+
+  /* header */
+  header.hd{display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:flex-start;
+       border-bottom:4px solid var(--ink);padding-bottom:.9rem;}
+  .hd-title h1{margin:0;font-size:clamp(1.4rem,4vw,2.1rem);font-weight:800;
+       letter-spacing:.01em;text-wrap:balance;}
+  .hd-title h1 .ver{font-size:1.05rem;font-weight:700;color:var(--muted);
+       margin-left:.5rem;letter-spacing:0;}
+  .hd-title p{margin:.25rem 0 0;color:var(--muted);font-size:.95rem;}
+  .keys{display:flex;gap:.8rem;margin-left:auto;flex-wrap:wrap;}
+  .key{border:1.5px solid var(--line);border-radius:8px;background:var(--panel);
+       padding:.5rem .8rem;min-width:150px;}
+  .key h3{margin:0 0 .35rem;font-size:.68rem;text-transform:uppercase;
+       letter-spacing:.09em;color:var(--muted);}
+  .key ul{margin:0;padding:0;list-style:none;font-size:.8rem;display:grid;gap:.2rem;}
+
+  /* first-time orientation strip */
+  .intro{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem;
+       margin:1rem 0 .2rem;}
+  @media (max-width:820px){.intro{grid-template-columns:1fr;}}
+  .intro .card{background:var(--panel);border:1.5px solid var(--line);
+       border-radius:8px;padding:.6rem .8rem;font-size:.8rem;color:var(--muted);}
+  .intro .card b{display:block;color:var(--ink);font-size:.72rem;
+       text-transform:uppercase;letter-spacing:.08em;margin-bottom:.25rem;}
+
+  /* sticky jump bar */
+  nav.jump{position:sticky;top:0;z-index:10;background:var(--paper);
+       display:flex;gap:.45rem;overflow-x:auto;padding:.55rem .1rem;
+       border-bottom:1.5px solid var(--line);margin-bottom:1.1rem;
+       -webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  nav.jump::-webkit-scrollbar{display:none;}
+  nav.jump a{flex:0 0 auto;text-decoration:none;color:var(--ink);
+       font-size:.78rem;font-weight:700;padding:.35rem .7rem;border-radius:99px;
+       border:1.5px solid var(--line);background:var(--panel);line-height:1;}
+  nav.jump a .dot{display:inline-block;width:.55rem;height:.55rem;border-radius:50%;
+       background:var(--jc,var(--sys));margin-right:.35rem;vertical-align:0;}
+  nav.jump a.on{border-color:var(--jc,var(--sys));background:var(--js,var(--syss));}
+  nav.jump a:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+  section[id], aside div[id]{scroll-margin-top:3.4rem;}
+
+  /* layout */
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:1.1rem;
+       align-items:start;}
+  @media (max-width:1050px){.layout{grid-template-columns:1fr;}}
+
+  /* phase bands */
+  .phase{display:grid;grid-template-columns:96px minmax(0,1fr);gap:.9rem;
+       margin-bottom:1.2rem;}
+  @media (max-width:640px){.phase{grid-template-columns:1fr;}
+       .rail{flex-direction:row;align-items:center;text-align:left;gap:.7rem;
+             position:static;padding:.55rem .8rem;}
+       .rail .pname br{display:none;}}
+  .rail{background:var(--pc);color:#fff;border-radius:8px;padding:.7rem .5rem;
+       display:flex;flex-direction:column;align-items:center;text-align:center;
+       gap:.4rem;position:sticky;top:3.2rem;}
+  :root[data-theme="dark"] .rail{color:var(--paper);}
+  @media (prefers-color-scheme: dark){ .rail{color:var(--paper);} }
+  :root[data-theme="light"] .rail{color:#fff;}
+  .rail .num{font-size:1.9rem;font-weight:800;line-height:1;}
+  .rail .pname{font-size:.68rem;font-weight:700;text-transform:uppercase;
+       letter-spacing:.08em;line-height:1.35;}
+  .flow{min-width:0;}
+  .phase-sum{margin:0 0 .55rem;font-size:.85rem;color:var(--muted);
+       border-left:3px solid var(--pc);padding-left:.6rem;font-style:italic;}
+
+  /* nodes */
+  .node{background:var(--panel);border:1.3px solid var(--line);border-radius:6px;
+       border-left:4px solid var(--pc);padding:.55rem .75rem;}
+  .node b{display:block;font-size:.86rem;line-height:1.35;}
+  .node ul{margin:.3rem 0 0;padding-left:1rem;font-size:.79rem;color:var(--muted);
+       display:grid;gap:.18rem;}
+  .node ul li::marker{color:var(--pc);}
+  .node p{margin:.2rem 0 0;font-size:.79rem;color:var(--muted);}
+  .node.dec{border-left-color:var(--dec);background:var(--decs);}
+  .node.dec b::before{content:"\25C7  ";color:var(--dec);}
+  .node.dec ul li::marker{color:var(--dec);}
+  .node.usr{border-left-color:var(--usr);background:var(--usrs);}
+  .node.usr b::before{content:"\1F464  ";}
+  .node.usr ul li::marker{color:var(--usr);}
+  .node.art{border-style:dashed;border-left-style:solid;border-left-color:var(--pc);}
+  .node.blkd{border-left-color:var(--blk);background:var(--blks);}
+  .node.blkd ul li::marker{color:var(--blk);}
+  .node.term{border:1.5px dashed var(--sys);border-radius:20px;background:var(--syss);
+       border-left-width:1.5px;}
+  .node.hl{background:var(--ps);}
+
+  /* arrows + branches */
+  .arr{display:flex;justify-content:center;align-items:center;gap:.45rem;
+       color:var(--muted);padding:.22rem 0;font-size:.95rem;line-height:1;}
+  .arr i{font-style:normal;font-size:.7rem;font-weight:700;text-transform:uppercase;
+       letter-spacing:.06em;background:var(--chipbg);border:1px solid var(--line);
+       border-radius:99px;padding:.14rem .55rem;}
+  .branch{display:grid;gap:.7rem;align-items:start;}
+  .b2{grid-template-columns:1fr 1fr;} .b3{grid-template-columns:1fr 1fr 1fr;}
+  @media (max-width:820px){.b2,.b3{grid-template-columns:1fr;}}
+  .lane{min-width:0;}
+  .lane>.lab{display:block;text-align:center;font-size:.7rem;font-weight:700;
+       text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+       margin-bottom:.28rem;}
+  .note{font-size:.76rem;color:var(--muted);margin:.5rem 0 0;padding-left:.2rem;}
+
+  /* close sequence steps */
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;counter-reset:st;}
+  @media (max-width:900px){.steps{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:560px){.steps{grid-template-columns:1fr;}}
+  .step{background:var(--panel);border:1.3px solid var(--line);border-radius:6px;
+       border-top:4px solid var(--pc);padding:.55rem .7rem;counter-increment:st;}
+  .step b{display:block;font-size:.81rem;}
+  .step b::before{content:counter(st);display:inline-grid;place-items:center;
+       width:1.25rem;height:1.25rem;border-radius:50%;background:var(--pc);color:#fff;
+       font-size:.7rem;margin-right:.4rem;}
+  .step ul{margin:.25rem 0 0;padding-left:1rem;font-size:.75rem;color:var(--muted);
+       display:grid;gap:.15rem;}
+
+  /* sidebar */
+  aside{display:grid;gap:1rem;align-content:start;}
+  aside details{background:var(--panel);border:1.5px solid var(--line);
+       border-radius:8px;overflow:hidden;}
+  aside summary{cursor:pointer;list-style:none;padding:.55rem .85rem;
+       font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+       color:#fff;background:var(--sys);display:flex;justify-content:space-between;
+       align-items:center;gap:.5rem;}
+  :root[data-theme="dark"] aside summary{color:var(--paper);}
+  @media (prefers-color-scheme: dark){ aside summary{color:var(--paper);} }
+  :root[data-theme="light"] aside summary{color:#fff;}
+  aside summary::-webkit-details-marker{display:none;}
+  aside summary::after{content:"\25BE";font-size:.9rem;transition:transform .15s;}
+  aside details[open] summary::after{transform:rotate(180deg);}
+  aside summary:focus-visible{outline:2px solid var(--ink);outline-offset:-3px;}
+  aside summary .sub{display:block;font-weight:400;text-transform:none;
+       letter-spacing:0;font-size:.72rem;opacity:.85;}
+  .sbody{padding:.55rem .85rem .8rem;}
+  .g{border:1.2px solid var(--line);border-left:4px solid var(--sys);border-radius:5px;
+       padding:.45rem .6rem;margin:.4rem 0;background:var(--paper);}
+  .g b{display:block;font-size:.78rem;}
+  .g p{margin:.15rem 0 0;font-size:.74rem;color:var(--muted);}
+  .g.block{border-left-color:var(--blk);}
+  .g.allow{border-left-color:var(--ok);}
+  .chain-lab{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;
+       font-weight:700;color:var(--muted);}
+  .legend ul{margin:0;padding:0;list-style:none;display:grid;gap:.35rem;
+       font-size:.78rem;}
+  .sw{display:inline-block;width:1.6rem;height:.85rem;border-radius:3px;
+       border:1.2px solid var(--line);vertical-align:-.1rem;margin-right:.45rem;}
+  footer{margin-top:1rem;border-top:1.5px solid var(--line);padding-top:.6rem;
+       font-size:.74rem;color:var(--muted);}
+</style>
+
+<div class="poster">
+<header class="hd">
+  <div class="hd-title">
+    <h1>ENGAGEMENT WORKFLOW <span class="ver">v0.28.0</span></h1>
+    <p>End-to-end flow from request to closed engagement · compliance surveillance engineering team</p>
+  </div>
+  <div class="keys">
+    <div class="key"><h3>State</h3>
+      <ul><li>⏳ In progress</li><li>⛔ Blocked</li><li>✅ Closed</li></ul></div>
+    <div class="key"><h3>Evidence tags</h3>
+      <ul><li>📊 Observed / measured</li><li>🧠 Inferred</li><li>📄 Coded</li></ul></div>
+  </div>
+</header>
+
+<div class="intro">
+  <div class="card"><b>What this shows</b>
+    How an AI delivery team inside Claude Code takes a piece of work from first request to a closed, signed-off delivery. Six phases, read top to bottom.</div>
+  <div class="card"><b>Who's who</b>
+    Morgan is the AI project manager and your single point of contact. The specialists are AI agents with fixed roles and names. You are the human; every gate waits for your answer.</div>
+  <div class="card"><b>How to read it</b>
+    Follow the arrows downward. ◇ diamond boxes are decisions, 👤 orange boxes are actions only you can take, red boxes are hard stops. Pills on arrows are the branch taken.</div>
+</div>
+
+<nav class="jump" aria-label="Jump to section">
+  <a href="#ph0" style="--jc:var(--p0);--js:var(--p0s)"><span class="dot"></span>0 Open</a>
+  <a href="#ph1" style="--jc:var(--p1);--js:var(--p1s)"><span class="dot"></span>1 Safety</a>
+  <a href="#ph2" style="--jc:var(--p2);--js:var(--p2s)"><span class="dot"></span>2 Classify</a>
+  <a href="#ph3" style="--jc:var(--p3);--js:var(--p3s)"><span class="dot"></span>3 Plan</a>
+  <a href="#ph4" style="--jc:var(--p4);--js:var(--p4s)"><span class="dot"></span>4 Deliver</a>
+  <a href="#ph5" style="--jc:var(--p5);--js:var(--p5s)"><span class="dot"></span>5 Close</a>
+  <a href="#guards"><span class="dot"></span>Guards</a>
+  <a href="#memory"><span class="dot"></span>Memory</a>
+  <a href="#legend"><span class="dot"></span>Legend</a>
+</nav>
+
+<div class="layout">
+<main>
+
+  <!-- PHASE 0 -->
+  <section class="phase" id="ph0" style="--pc:var(--p0);--ps:var(--p0s)">
+    <div class="rail"><span class="num">0</span><span class="pname">Request<br>&amp; Open</span></div>
+    <div class="flow">
+      <p class="phase-sum">Wake the team only when asked, then find out what the work is about.</p>
+      <div class="node usr"><b>User request arrives</b></div>
+      <div class="arr">↓</div>
+      <div class="node dec"><b>Team invoked?</b>
+        <ul><li><code>/engage</code> or another team command</li>
+            <li>or asking in words for "the team" / "Morgan" / "the PM"</li></ul></div>
+      <div class="arr"><i>No</i></div>
+      <div class="node term"><b>Plain Claude Code session</b>
+        <p>Everything below stays inert. Only the Layer&nbsp;0 guards stay armed (see sidebar).</p></div>
+      <div class="arr"><i>Yes</i> ↓</div>
+      <div class="node"><b>Step 0: one compound probe</b>
+        <ul><li>Single Bash call, no narration turns</li>
+            <li>Loads: operating guide · Python · run mode · version</li>
+            <li>Plus: analyser inventory · codebase-map header + history · changelog</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node"><b>Opening banner</b>
+        <ul><li>🎩 Morgan intro + team version + <code>/meet-the-team</code> offer</li>
+            <li>What's-new line only if the version changed since last visit</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node dec"><b>Concrete target or inputs given?</b></div>
+      <div class="arr"><i>No (bare /engage)</i></div>
+      <div class="node usr"><b>Ask ONE question, then wait</b>
+        <ul><li>"Where is the code / input?"</li>
+            <li>Never invent a target; the safety questions below need one first</li></ul></div>
+      <div class="arr"><i>Yes</i> ↓ Phase 1</div>
+    </div>
+  </section>
+
+  <!-- PHASE 1 -->
+  <section class="phase" id="ph1" style="--pc:var(--p1);--ps:var(--p1s)">
+    <div class="rail"><span class="num">1</span><span class="pname">Safety &amp;<br>Consent Gates</span></div>
+    <div class="flow">
+      <p class="phase-sum">Two safety questions before any work starts. Asked once, never re-asked.</p>
+      <div class="node"><b>Two safety notices, shown word-for-word</b>
+        <ul><li><b>Execution safety:</b> nothing is run by default; the user owns the risk of any code they clear for running</li>
+            <li><b>Data safety:</b> everything shared goes to the model provider; <code>data/raw/</code> is hard-blocked; pseudonymised ≠ anonymous</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node"><b>One batched question call</b>
+        <ul><li>Only the questions that apply: work type · execution consent · data attestation</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node dec"><b>Execution consent?</b>
+        <p>Default No. A "yes" here is only intent; the grant is a human act, below.</p></div>
+      <div class="branch b2">
+        <div class="lane"><span class="lab">Yes, will grant</span>
+          <div class="node usr"><b>The human creates the marker</b>
+            <ul><li>User personally types <code>touch .claude/.exec-consent</code></li>
+                <li>The model is blocked from writing it</li>
+                <li>Marker verified to exist before anything runs; no marker = no execution</li></ul></div></div>
+        <div class="lane"><span class="lab">No, static only</span>
+          <div class="node blkd"><b>Any existing marker deleted</b>
+            <ul><li>Fail-safe close</li>
+                <li>Dynamic and performance findings stay 🧠 inferred</li></ul></div></div>
+      </div>
+      <div class="arr">↓</div>
+      <div class="node dec"><b>Data attestation: is the data safe to share?</b></div>
+      <div class="branch b2">
+        <div class="lane"><span class="lab">No / unsure</span>
+          <div class="node usr"><b><code>/prepare-data</code> first</b>
+            <ul><li>Mask it (schema + validation, key from <code>MASKING_KEY</code>)</li>
+                <li>Or better: generate fully synthetic data</li></ul></div></div>
+        <div class="lane"><span class="lab">Clean, or no data</span>
+          <div class="node"><b>Continue</b>
+            <p>Attestation recorded; the responsibility is the user's.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PHASE 2 -->
+  <section class="phase" id="ph2" style="--pc:var(--p2);--ps:var(--p2s)">
+    <div class="rail"><span class="num">2</span><span class="pname">Classify<br>the Work</span></div>
+    <div class="flow">
+      <p class="phase-sum">Decide what kind of work this is; each kind takes a different path to the same gate.</p>
+      <div class="node dec"><b>What kind of work?</b>
+        <p>A deliverable can be any surveillance-engineering output: rule, pipeline, script, reporting job, tooling, review. Route by type, never assume detection rule.</p></div>
+      <div class="branch b3">
+        <div class="lane"><span class="lab">Problem / idea</span>
+          <div class="node"><b>Requirements first</b>
+            <ul><li>Business requirements: <code>/write-brd</code> · <code>/elicit-requirements</code></li>
+                <li>Then a functional spec: <code>/brd-to-fsd</code></li>
+                <li>Then build, through the full delivery lifecycle</li></ul></div></div>
+        <div class="lane"><span class="lab">Review</span>
+          <div class="node dec"><b>Security-sensitive surface?</b>
+            <ul><li>Auth, parsing, DB, external I/O, crypto, secrets, PII</li>
+                <li>Yes → offer review + <code>/security-audit</code> (recommended); re-offered at review close</li></ul></div>
+          <div class="arr">↓</div>
+          <div class="node"><b>Review menu, locked wording, one call</b>
+            <ul><li><b>Depth:</b> Quick, Deep or Audit (each level includes the one before), or None</li>
+                <li><b>Performance review:</b> yes / no (static, no code run)</li>
+                <li><b>What happens to findings:</b> report only / apply fixes / fix-and-re-review loop ⟲</li></ul></div>
+          <div class="arr"><i>Depth None + performance No</i></div>
+          <div class="node term"><b>Nothing to run</b><p>Say so; ask what outcome is wanted instead.</p></div></div>
+        <div class="lane"><span class="lab">Build from requirements</span>
+          <div class="node"><b><code>/build-solution</code></b>
+            <p>Straight to plan &amp; gate.</p></div></div>
+      </div>
+      <p class="note">Phased engagements re-classify per phase: the moment any phase produces deliverable code, it runs under the full build chain (review + independent QA + the Definition of Done, the "done" checklist used at close), however the engagement started.</p>
+    </div>
+  </section>
+
+  <!-- PHASE 3 -->
+  <section class="phase" id="ph3" style="--pc:var(--p3);--ps:var(--p3s)">
+    <div class="rail"><span class="num">3</span><span class="pname">Plan<br>&amp; Gate</span></div>
+    <div class="flow">
+      <p class="phase-sum">Agree what will be produced. Nothing is delivered until the user says proceed.</p>
+      <div class="node"><b>Artifact menu, locked, two stages</b>
+        <ul><li><b>Stage 1 packaging:</b> Consolidated Delivery Report (default) / separate artifacts / both</li>
+            <li><b>Stage 2</b> (only if separate/both): grouped picks - spec docs · reviews · handover</li>
+            <li>Every artifact ships as <code>.md</code> + <code>.html</code></li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node art"><b>📄 Engagement Brief + 📄 START-HERE index (⏳)</b>
+        <ul><li>Brief: decisions, assumptions, open questions, routing plan</li>
+            <li>START-HERE: one file that lists everything produced and what's still outstanding, created in the same breath</li>
+            <li>From here on: every artifact write appends a START-HERE row in the same turn</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node dec"><b>Go-ahead gate</b></div>
+      <div class="branch b3">
+        <div class="lane"><span class="lab">Adjust</span>
+          <div class="node"><b>Back to the artifact menu</b></div></div>
+        <div class="lane"><span class="lab">Stop</span>
+          <div class="node term"><b>Delivery never starts</b><p>Brief + index stay on disk.</p></div></div>
+        <div class="lane"><span class="lab">Proceed</span>
+          <div class="node hl"><b>Phase 4: delivery loop</b></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PHASE 4 -->
+  <section class="phase" id="ph4" style="--pc:var(--p4);--ps:var(--p4s)">
+    <div class="rail"><span class="num">4</span><span class="pname">Delivery<br>Loop ⟲</span></div>
+    <div class="flow">
+      <p class="phase-sum">A small named team does the work; the PM challenges it; all code goes through the full chain.</p>
+      <div class="node"><b>Right-sizing, stated out loud first</b>
+        <ul><li>One line naming how many agents and why</li>
+            <li>Multi-agent ≈ 15× tokens, so: leanest set that fits</li>
+            <li>1 agent for fact-finding · 2-4 for comparisons · minimal chain for delivery</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node"><b>Route to named specialists by deliverable</b>
+        <ul><li>Morgan + 16: Amara requirements · Mateo rules · Kenji pipelines · Ana analysis · Theo tuning · Mei ML · Viktor validation · Linh QA · Ravi code review · Thabo performance · Layla compliance · Yuki data quality · Hassan, Camila and Cleo domain experts · Pip mechanical scoring</li>
+            <li>Advisory roles cannot edit code: they recommend, builders implement</li>
+            <li>Model tiers: the strongest model (opus) for last-word judgement · mid (sonnet) for build and advisory · cheapest (haiku) for mechanical scoring</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node"><b>Specialists work on the blackboard</b>
+        <ul><li>The blackboard = the shared files: agents coordinate by reading and writing artifacts, not by talking to each other</li>
+            <li>Explicit, non-overlapping briefs: objective · scope · inputs · output format</li>
+            <li>Replies back to the PM stay short; detail goes to the shared files</li>
+            <li>Every critique names an external standard; the critic is never the author</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node"><b>PM challenge: sceptic, not relay</b>
+        <ul><li>Challenge every Critical, anything regulated, and thin evidence</li>
+            <li>Sample the rest AND the filtered-out set; promote wrongly filtered findings</li>
+            <li>Verify evidence tags; inference never reaches the user dressed as fact</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node hl"><b>If code is produced: mandatory chain, no exemptions</b>
+        <ul><li>Tests (project's own framework, exact command recorded)</li>
+            <li>→ code review ⟲ (fix cycles follow the findings choice made at the review menu)</li>
+            <li>→ independent QA by Linh ⟲ (cycles append-only, evidence kept on disk)</li>
+            <li>→ Definition of Done</li>
+            <li>Consent withheld? Static-only path: QA verdict stays 🧠, DoD marked PARTIAL, untested code named as residual risk</li></ul></div>
+      <div class="arr">↓</div>
+      <div class="node dec"><b>Turn ends needing user input?</b></div>
+      <div class="branch b2">
+        <div class="lane"><span class="lab">Yes → blocked path</span>
+          <div class="node blkd"><b>⛔ Blocked, but resumable</b>
+            <ul><li>START-HERE set ⛔ with the outstanding list: open questions + every gate not yet run</li>
+                <li>Turn ends saying plainly "NOT closed"</li>
+                <li>No summary email, no delivery report</li></ul></div>
+          <div class="arr">↓ resume</div>
+          <div class="node"><b>Same session or cold resume</b>
+            <ul><li>User answers → ⛔ flips to ⏳, answer logged, continue ⟲</li>
+                <li>New session: reads START-HERE + interim artifacts as the state of record, honours past decisions, works the outstanding list top to bottom</li></ul></div></div>
+        <div class="lane"><span class="lab">No, work complete</span>
+          <div class="node hl"><b>Phase 5: close sequence</b>
+            <p>The only path to ✅.</p></div></div>
+      </div>
+      <p class="note">Naming discipline 📄: pre-close outputs use pass-scoped names (review-pass-N, qa-cycle-N, interim-*) and open with an interim banner. <code>delivery-report.md</code>, <code>final-*</code> and the summary email are close-only names. Iteration history is append-only evidence, never rewritten.</p>
+    </div>
+  </section>
+
+  <!-- PHASE 5 -->
+  <section class="phase" id="ph5" style="--pc:var(--p5);--ps:var(--p5s)">
+    <div class="rail"><span class="num">5</span><span class="pname">Close<br>Sequence</span></div>
+    <div class="flow">
+      <p class="phase-sum">Eight ordered steps. START-HERE flips to ✅ last of all; sign-off stays human.</p>
+      <div class="steps">
+        <div class="step"><b>Citations gate</b>
+          <ul><li><code>check_citations</code> runs</li>
+              <li>Unverified citations ship flagged, with resolved permalinks</li>
+              <li>Never blocks the close</li></ul></div>
+        <div class="step"><b>Definition-of-Done gate ⟲</b>
+          <ul><li>The mechanical checker <code>check_artifacts --fix</code> runs, treated as a fix-list</li>
+              <li>Deterministic findings auto-fixed; judgement calls escalated to the user</li>
+              <li>Re-run until clean</li></ul></div>
+        <div class="step"><b>Reconciliation sweep</b>
+          <ul><li>Every produced or touched doc, including README and docstrings</li>
+              <li>One authoritative set of counts everywhere; stale references removed</li>
+              <li>QA evidence retained on disk</li></ul></div>
+        <div class="step"><b>Codebase map update</b>
+          <ul><li>Durable architecture facts: 📊/🧠 tags, dates, SHA anchors</li>
+              <li>History row appended</li>
+              <li>Maps the code, never team activity</li></ul></div>
+        <div class="step"><b>Render everything</b>
+          <ul><li>Every <code>.md</code> artifact gets its <code>.html</code> sibling</li></ul></div>
+        <div class="step"><b>Delivery report + summary email</b>
+          <ul><li>Report: close-only, consolidated by default</li>
+              <li>Email: <code>.txt</code>, signed as Morgan, states the token/agent footprint</li>
+              <li>Next steps are actions, never a call or meeting</li></ul></div>
+        <div class="step"><b>START-HERE finalised last</b>
+          <ul><li>Status → ✅ CLOSED + date; verdict and footprint filled in</li>
+              <li>Interim banners stripped</li>
+              <li>The flip to ✅ is the final state change</li></ul></div>
+        <div class="step"><b>Close with next steps</b>
+          <ul><li>Short summary + concrete options with a recommendation</li>
+              <li>A dead end is a PM failure</li>
+              <li>Human sign-off is the one item only the user can perform</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<aside>
+  <details open id="guards">
+    <summary>Layer 0 · Always-on guards
+      <span class="sub">Every session, even when the team is dormant</span></summary>
+    <div class="sbody">
+    <span class="chain-lab">PreToolUse chain, in order</span>
+    <div class="g block"><b>Permission deny rules</b>
+      <p>Hard-deny read/write on <code>data/raw/**</code>; read deny on <code>.env*</code>, <code>secrets/**</code>, <code>*.pem</code>, <code>*.key</code>.</p></div>
+    <div class="g block"><b><code>guard-raw-data.py</code></b>
+      <p>Blocks any Read/Grep/Glob/Bash call touching <code>data/raw/</code>. Raw transaction and comms data never reaches the model.</p></div>
+    <div class="g"><b><code>guard-code-execution.py</code></b>
+      <p>Bash only. Team scripts run consent-free (<code>convert_file</code>, <code>render_html</code>, <code>check_artifacts</code>, <code>eval_score</code>, ...). Executing anything else needs the human-made <code>.claude/.exec-consent</code> marker or <code>CST_ALLOW_EXEC=1</code>, else it blocks. Static by default; consent is a human act.</p></div>
+    <div class="g block"><b><code>guard-consent-writes.py</code></b>
+      <p>Blocks every model write to the consent marker, settings or hook files. The model can never grant itself consent or weaken a guard.</p></div>
+    <div class="g allow"><b>→ Tool runs</b></div>
+    <div class="g"><b><code>persona_anchor.py</code> · every user turn</b>
+      <p>If a START-HERE is open (⏳/⛔): re-inject the 8-line Morgan persona + discipline anchor, so the team survives even when the chat history gets condensed. Otherwise silent.</p></div>
+    <div class="g"><b><code>dod_stop_gate.py</code> · when a turn tries to end</b>
+      <p>If a START-HERE is open: run the mechanical DoD check. Clean → silent. Defects → block the stop once with a fix-list: auto-fix the deterministic ones, escalate judgement calls, or end plainly saying NOT closed.</p></div>
+    </div>
+  </details>
+
+  <details open id="memory">
+    <summary>Shared memory &amp; coordination</summary>
+    <div class="sbody">
+      <div class="g"><b>The BLACKBOARD</b>
+        <p>Specialists coordinate by reading and writing shared artifacts (the spec, the traceability matrix, the report), not by chatting. Each step's output is the next one's input.</p></div>
+      <div class="g"><b>START-HERE</b>
+        <p>The engagement's external memory: updated the moment anything is written; survives even when the chat history gets condensed; what a resumed session reads to pick up exactly where it left off.</p></div>
+      <div class="g"><b>The CODEBASE MAP</b>
+        <p>The project's durable memory of its own code: architecture facts with dates and tags. Read at every open, updated at every close. Never a log of team activity.</p></div>
+    </div>
+  </details>
+
+  <details open id="legend" class="legend">
+    <summary>Legend</summary>
+    <div class="sbody legend">
+    <ul>
+      <li><span class="sw" style="border-left:4px solid var(--p1);background:var(--panel)"></span>Process step (colour = phase)</li>
+      <li><span class="sw" style="border-left:4px solid var(--dec);background:var(--decs)"></span>◇ Decision</li>
+      <li><span class="sw" style="border-left:4px solid var(--usr);background:var(--usrs)"></span>👤 User action / input</li>
+      <li><span class="sw" style="border:1.3px dashed var(--line);border-left:4px solid var(--p3)"></span>📄 Output / artifact</li>
+      <li><span class="sw" style="border-left:4px solid var(--blk);background:var(--blks)"></span>Blocked / halted</li>
+      <li><span class="sw" style="border:1.3px dashed var(--sys);border-radius:8px;background:var(--syss)"></span>Terminal / outside the flow</li>
+      <li>⟲ loop · pill labels on arrows are branch conditions</li>
+    </ul>
+    </div>
+  </details>
+</aside>
+</div>
+
+<footer>Source of truth: <code>docs/engagement-flow-spec.md</code> (v0.28.0) and <code>docs/engagement-flow-diagram.md</code>. Edit this file and re-render; content is reconciled to the spec, not to any generated image.</footer>
+</div>
+
+<script>
+  (function(){
+    var links = document.querySelectorAll('nav.jump a');
+    var map = {};
+    links.forEach(function(a){ map[a.getAttribute('href').slice(1)] = a; });
+    if(!('IntersectionObserver' in window)) return;
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        var a = map[e.target.id];
+        if(!a) return;
+        if(e.isIntersecting){
+          links.forEach(function(l){ l.classList.remove('on'); });
+          a.classList.add('on');
+        }
+      });
+    }, {rootMargin:'-20% 0px -60% 0px'});
+    Object.keys(map).forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) obs.observe(el);
+    });
+  })();
+</script>
