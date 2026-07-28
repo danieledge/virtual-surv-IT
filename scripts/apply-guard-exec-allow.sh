@@ -8,12 +8,10 @@
 #   Usage:  bash scripts/apply-guard-exec-allow.sh
 #   Undo:   git checkout .claude/hooks/guard-code-execution.py
 #
-# What changes (both directions tested in tests/test_guard_exec_team_allow.py):
-#   ALLOW now: the team's own engagement_state.py invoked by bundled-copy path (new in 0.29.0,
-#   missing from the basename list), and quoted plugin paths CONTAINING SPACES
-#   ("~/Library/Application Support/.../scripts/render_html.py") for the allow-listed basenames.
-#   STILL BLOCK: any non-team basename by path (quoted or not), inline python, pytest, and every
-#   other execution pattern - the exec pattern list is byte-identical to the live guard's.
+# GENERIC apply: copies whatever exec-guard change is currently STAGED. Read the staged
+# file's own comments + tests/test_guard_exec_team_allow.py for what the pending change is
+# (0.29.1: engagement_state + quoted space paths; 0.32/ADR-009: extensions + convert_sarif
+# basenames and the human-curated CST_COMPANY_ALLOW literal-prefix allowlist).
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"

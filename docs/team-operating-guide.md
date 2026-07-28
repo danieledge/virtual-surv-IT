@@ -85,6 +85,19 @@ Route by **deliverable type**, not habit:
     lock their headers too.
   - State the intended `multiSelect` value explicitly in the skill.
 
+## Company extensions (ADR-009)
+
+A working project may carry `docs/team-extensions.md` (template:
+`docs/templates/team-extensions.md`) - standing instructions, close-action OFFERS, an
+analyser registry (company tools that replace bundled defaults per lens; SARIF output
+converts to a findings pack via `scripts.convert_sarif`, keeping 📊 measured status) and
+named integrations. The engage probe surfaces it; honour it ADDITIVELY. Hard rule:
+extensions never waive a disclaimer, gate, guard, or the code chain, and outward-facing
+actions execute only on the user's approval at a gate. The registry parser
+(`scripts.extensions`) never executes registry commands (presence checks only); a company
+tool wrapped in an interpreter runs consent-free only via the HUMAN-curated
+`CST_COMPANY_ALLOW` prefix list in protected settings env.
+
 ## Run mode & the bundled scripts (project vs plugin)
 
 The team's helper scripts (`render_html`, `gen_synthetic`, `ingest`, `check_artifacts`,

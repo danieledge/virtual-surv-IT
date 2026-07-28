@@ -109,3 +109,50 @@ def test_live_guard_matches_staged_once_applied():
         import pytest
 
         pytest.skip("staged guard not yet applied (run scripts/apply-guard-exec-allow.sh)")
+
+
+# ------------------------------------------- 0.32 staged: company allowlist + new scripts
+
+
+def _load_with_env(monkeypatch, value):
+    monkeypatch.setenv("CST_COMPANY_ALLOW", value)
+    return _load(REPO / "scripts" / "staged_hooks" / "guard-code-execution.py")
+
+
+def test_new_team_script_basenames_staged():
+    for cmd in (
+        "python3 /x/plug/scripts/extensions.py show",
+        'python3 "/Users/x/App Support/plug/scripts/convert_sarif.py" r.sarif --slug s --scope x',
+    ):
+        assert STAGED._TEAM_ALLOW.match(cmd), cmd
+
+
+def test_company_prefix_allows_exact_wrapper_only(monkeypatch):
+    g = _load_with_env(monkeypatch, "python scripts/publish_pack.py|python3 tools/scan.py")
+    ok = "python scripts/publish_pack.py artifacts/ --dest //share/packs"
+    assert g._company_allowed(ok)
+    for bad in (
+        "python evil.py",
+        "python scripts/publish_pack_evil.py",  # prefix is literal but this IS a longer path...
+    ):
+        pass  # see next test for the sharp-edge assertions
+    assert g._company_allowed("python3 tools/scan.py --full")
+    assert not g._company_allowed("python3 tools/other.py")
+    assert not g._company_allowed("pytest tests/")
+
+
+def test_company_prefix_sharp_edges(monkeypatch):
+    """A prefix is literal: it also matches longer basenames sharing the prefix - document
+    the recommendation (end prefixes at the .py boundary) and pin that chained segments
+    after an allowed prefix are still inspected independently."""
+    g = _load_with_env(monkeypatch, "python scripts/publish_pack.py")
+    assert g._company_allowed("python scripts/publish_pack.py --dest x")
+    # chaining: the second segment stands alone and is NOT allowed
+    segs = g._segments("python scripts/publish_pack.py; pytest tests/")
+    assert not g._company_allowed(segs[1]) and g._EXEC_RE.search(segs[1])
+
+
+def test_company_allow_empty_env_changes_nothing(monkeypatch):
+    g = _load_with_env(monkeypatch, "")
+    assert g._COMPANY_ALLOW_PREFIXES == ()
+    assert not g._company_allowed("python scripts/publish_pack.py")

@@ -662,9 +662,12 @@ for genuinely parallel workstreams.
 
 Everything here works with the released plugin **today** - it composes Claude Code's native
 extension points (your project's `CLAUDE.md`, MCP servers, your own skills) with the team's
-standing rule that the working project's instructions are honoured. A deeper first-class
-layer (a structured extensions contract, an analyser registry with SARIF normalisation, a
-human-curated company tool allowlist) is on the roadmap.
+standing rule that the working project's instructions are honoured. The recipes below need no
+framework support; since 0.32 (dev) there is ALSO a first-class layer - a structured
+extensions contract (`docs/templates/team-extensions.md`) the engage probe reads, an
+analyser registry with `replaces:` semantics and SARIF-to-findings conversion
+(`scripts.convert_sarif`), and a human-curated tool allowlist (`CST_COMPANY_ALLOW`) - see
+[`docs/adr/ADR-009-company-extensions.md`](docs/adr/ADR-009-company-extensions.md).
 
 ### a) Use your own analysis tooling instead of the bundled defaults
 

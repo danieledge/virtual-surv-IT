@@ -3,6 +3,21 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [Unreleased]
+
+### Added
+- **Company extensions - first-class (ADR-009)**: `docs/team-extensions.md` contract in the
+  working project (template shipped) - standing instructions, close-action OFFERS (previewed
+  at the gate, executed only on approval after the standard close), analyser registry with
+  `replaces:` lens semantics, integrations. Surfaced by the engage probe via new
+  `scripts.extensions` (structurally inert: presence checks only, metachar commands refused,
+  AST-pinned no-execution). `scripts.convert_sarif` turns any SARIF tool report into a
+  schema-valid findings pack (company severity map, 📊 measured with the report as
+  evidence). STAGED guard change (human-applied): `extensions`/`convert_sarif` basenames +
+  the `CST_COMPANY_ALLOW` human-curated literal-prefix allowlist for interpreter-wrapped
+  company tools. Additive-only hard rule wired through skill, close checklist and operating
+  guide. 12 new tests. Live golden case + guard apply at 0.32 promotion.
+
 ## [0.31.0] - 2026-07-27 - Multi-engagement workspaces
 
 ### Added
