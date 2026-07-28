@@ -94,9 +94,12 @@ converts to a findings pack via `scripts.convert_sarif`, keeping 📊 measured s
 named integrations. The engage probe surfaces it; honour it ADDITIVELY. Hard rule:
 extensions never waive a disclaimer, gate, guard, or the code chain, and outward-facing
 actions execute only on the user's approval at a gate. The registry parser
-(`scripts.extensions`) never executes registry commands (presence checks only); a company
-tool wrapped in an interpreter runs consent-free only via the HUMAN-curated
-`CST_COMPANY_ALLOW` prefix list in protected settings env.
+(`scripts.extensions`) never executes registry commands (presence checks only). Registered
+tools run under the NORMAL execution rules: plain binaries consent-free; an
+interpreter-wrapped tool runs when EITHER execution consent is granted (a registered tool
+that will need running makes the intake consent question applicable - ask it, don't park)
+OR the human's `CST_COMPANY_ALLOW` prefix list covers it. Never park an engagement for a
+registered tool without first asking for consent.
 
 ## Run mode & the bundled scripts (project vs plugin)
 
