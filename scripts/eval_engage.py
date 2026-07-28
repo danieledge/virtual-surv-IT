@@ -846,6 +846,30 @@ def _write_report(run_root: Path, results: list[dict]) -> Path:
 
 
 # --------------------------------------------------------------------------- main
+def _acquire_driver_lock() -> Path | None:
+    """Single-driver lock (2026-07-28 incident: two concurrent drivers fight over the shared
+    workspace-trust config in ~/.claude.json, so the loser's session runs UNTRUSTED - no
+    project settings, no skills, no gates - while still spending tokens). Returns the lock
+    path when acquired; raises SystemExit when another live driver holds it."""
+    lock = RUNS_ROOT / ".driver.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    if lock.is_file():
+        try:
+            pid = int(lock.read_text().strip())
+            os.kill(pid, 0)  # signal 0: existence check only
+        except (ValueError, ProcessLookupError, PermissionError):
+            lock.unlink(missing_ok=True)  # stale lock from a dead driver
+        else:
+            print(
+                f"another eval driver is already running (pid {pid}) - concurrent drivers "
+                "corrupt each other's workspace trust; wait for it or stop it first",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+    lock.write_text(str(os.getpid()), encoding="utf-8")
+    return lock
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Run live /engage eval cases headlessly and score them.")
     ap.add_argument("--case", action="append", default=[], help="case id (repeatable)")
@@ -875,6 +899,11 @@ def main() -> int:
     if args.list:
         print("\n".join(available))
         return 0
+
+    lock = _acquire_driver_lock()
+    import atexit
+
+    atexit.register(lambda: lock.unlink(missing_ok=True))
 
     if args.rescore:
         out_dir = Path(args.rescore).resolve()
