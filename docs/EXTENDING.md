@@ -38,7 +38,18 @@ notice. From now on every `/engage` open surfaces this automatically.
 
 ## Step 2 - register your own analyser (replacing a bundled default)
 
-Add to `docs/team-extensions.md`:
+The easy path - one command (creates the contract file if you skipped step 1):
+
+```bash
+python3 -m scripts.extensions add-tool --name cx \
+  --command "cxcli scan --format sarif -o {workspace}/data/cx.sarif {target}" \
+  --lenses security --replaces bandit,semgrep --output sarif \
+  --severity-map error=critical,warning=warning
+```
+
+It upserts by name (rerun to update), refuses unsafe commands, and immediately tells you
+whether the binary resolves on PATH. Or hand-edit the same thing into
+`docs/team-extensions.md`:
 
 ````markdown
 ## Analyser registry

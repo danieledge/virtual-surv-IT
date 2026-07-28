@@ -177,3 +177,40 @@ def test_placeholder_braces_are_not_metacharacters(tmp_path):
         + "\n```\n", encoding="utf-8")
     data = ext.load(f)
     assert data["registry"] and not data["problems"]
+
+
+# ---------------------------------------------------------------- add-tool helper
+
+
+def test_add_tool_creates_contract_and_upserts(tmp_path):
+    f = tmp_path / "team-extensions.md"
+    assert ext.main(["--file", str(f), "add-tool", "--name", "cx",
+                     "--command", "cxcli scan .", "--lenses", "security",
+                     "--replaces", "bandit", "--output", "sarif"]) == 0
+    data = ext.load(f)
+    assert data["registry"][0]["name"] == "cx"
+    assert data["registry"][0]["replaces"] == ["bandit"]
+    # upsert replaces, never duplicates
+    assert ext.main(["--file", str(f), "add-tool", "--name", "cx",
+                     "--command", "cxcli scan --full ."]) == 0
+    data = ext.load(f)
+    assert len(data["registry"]) == 1
+    assert data["registry"][0]["command"] == "cxcli scan --full ."
+
+
+def test_add_tool_preserves_other_sections(tmp_path):
+    f = tmp_path / "team-extensions.md"
+    f.write_text(_CONTRACT, encoding="utf-8")
+    assert ext.main(["--file", str(f), "add-tool", "--name", "new",
+                     "--command", "newtool ."]) == 0
+    data = ext.load(f)
+    assert "CTRL-xxx" in data["sections"]["Standing instructions"]  # untouched
+    assert "Jira" in data["sections"]["Close actions"]
+    assert {e["name"] for e in data["registry"]} == {"acme-scan", "new"}
+
+
+def test_add_tool_refuses_metacharacters(tmp_path):
+    f = tmp_path / "team-extensions.md"
+    assert ext.main(["--file", str(f), "add-tool", "--name", "evil",
+                     "--command", "x; rm -rf /"]) == 2
+    assert not f.exists()  # refused before writing anything
