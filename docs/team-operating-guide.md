@@ -111,6 +111,16 @@ ship `python3`, but **Windows typically has `python` or the `py` launcher and no
 One probe at step 0 (`python3 --version`, falling back down the list) fixes `<python>` for the
 whole session; every command below uses that resolved form.
 
+**Bundled docs and templates resolve exactly like the scripts.** Every `docs/...` and
+`docs/templates/...` reference in a skill or agent means the TEAM's copy: the working repo's
+own file when present, else `$PLUGIN_ROOT/docs/...` (the root the step-0 probe printed).
+**A template or handbook doc absent from the WORKING repo is never a blocker and never a
+reason to refuse a deliverable** - resolve the plugin copy, and every delegation brief
+carries the resolved absolute paths (engage step 5). If a bundled doc is genuinely
+unreachable, produce the deliverable to the documented structure anyway and FLAG that the
+template was unavailable (live failure 2026-07-28: an FSD was refused "because there is no
+FSD document" in a plugin install - the template was in the plugin all along).
+
 **Invoke with ONE consistent spelling - always forward slashes, always double quotes.** Git
 Bash on Windows accepts forward-slash paths (`C:/Users/...`), so never emit backslash paths or
 switch quote styles between invocations: every distinct spelling of the same command becomes
