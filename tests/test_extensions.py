@@ -214,3 +214,47 @@ def test_add_tool_refuses_metacharacters(tmp_path):
     assert ext.main(["--file", str(f), "add-tool", "--name", "evil",
                      "--command", "x; rm -rf /"]) == 2
     assert not f.exists()  # refused before writing anything
+
+
+# ---------------------------------------------------------------- MCP entries + wizard
+
+
+def test_mcp_registry_entry_valid_and_shown(tmp_path, capsys):
+    f = tmp_path / "e.md"
+    assert ext.main(["--file", str(f), "add-tool", "--name", "sonar",
+                     "--mcp", "atlassian.security_scan", "--lenses", "security",
+                     "--replaces", "bandit"]) == 0
+    data = ext.load(f)
+    e = data["registry"][0]
+    assert e["mcp"] == "atlassian.security_scan" and "command" not in e
+    assert not data["problems"]
+    assert ext.main(["--file", str(f), "check"]) == 0  # mcp entries never count missing
+    out = capsys.readouterr().out
+    assert "mcp" in out and "presence not probed" in out
+
+
+def test_command_and_mcp_mutually_exclusive(tmp_path):
+    f = tmp_path / "e.md"
+    assert ext.main(["--file", str(f), "add-tool", "--name", "x",
+                     "--command", "x .", "--mcp", "s.t"]) == 2
+    assert not f.exists()
+
+
+def test_wizard_registers_via_prompts(tmp_path, monkeypatch):
+    answers = iter(["wiz", "cli", "wiztool scan .", "wiztool", "security", "bandit",
+                    "sarif", "error=critical"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    f = tmp_path / "e.md"
+    assert ext.main(["--file", str(f), "add-tool", "--interactive"]) == 0
+    e = ext.load(f)["registry"][0]
+    assert e["name"] == "wiz" and e["command"] == "wiztool scan ."
+    assert e["severity_map"] == {"error": "critical"}
+
+
+def test_wizard_rejects_metachar_command_and_reprompts(tmp_path, monkeypatch):
+    answers = iter(["wiz", "cli", "bad; rm -rf /", "goodtool scan .", "goodtool",
+                    "security", "", "text", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    f = tmp_path / "e.md"
+    assert ext.main(["--file", str(f), "add-tool", "--interactive"]) == 0
+    assert ext.load(f)["registry"][0]["command"] == "goodtool scan ."

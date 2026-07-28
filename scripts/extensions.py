@@ -90,16 +90,27 @@ def parse_registry(section: str) -> tuple[list[dict], list[str]]:
     valid: list[dict] = []
     problems: list[str] = []
     for i, e in enumerate(entries):
-        if not isinstance(e, dict) or not e.get("name") or not e.get("command"):
-            problems.append(f"analysers[{i}]: 'name' and 'command' are required")
-            continue
-        if _META_RE.search(str(e["command"])):
+        if not isinstance(e, dict) or not e.get("name") or not (
+            e.get("command") or e.get("mcp")
+        ):
             problems.append(
-                f"analysers[{i}] ({e['name']}): command contains shell metacharacters - "
-                "REFUSED (plain argv only, ADR-009)"
+                f"analysers[{i}]: 'name' and one of 'command' (CLI) or 'mcp' "
+                "(server.tool) are required"
             )
             continue
-        e.setdefault("probe", str(e["command"]).split()[0])
+        if e.get("command") and e.get("mcp"):
+            problems.append(f"analysers[{i}] ({e['name']}): give 'command' OR 'mcp', not both")
+            continue
+        if e.get("command"):
+            if _META_RE.search(str(e["command"])):
+                problems.append(
+                    f"analysers[{i}] ({e['name']}): command contains shell metacharacters - "
+                    "REFUSED (plain argv only, ADR-009)"
+                )
+                continue
+            e.setdefault("probe", str(e["command"]).split()[0])
+        # mcp entries need no probe: no binary, no shell - the harness permission-gates
+        # MCP calls and the exec guard never applies.
         e.setdefault("lenses", [])
         e.setdefault("replaces", [])
         e.setdefault("output", "text")
@@ -128,10 +139,14 @@ def _cmd_show(args: argparse.Namespace) -> int:
     if data["registry"]:
         print("--- Analyser registry ---")
         for e in data["registry"]:
-            found = shutil.which(e["probe"]) is not None
-            mark = "found" if found else "MISSING on PATH"
+            if e.get("mcp"):
+                mark, what = "mcp", f"mcp:{e['mcp']}"
+            else:
+                found = shutil.which(e["probe"]) is not None
+                mark = "found" if found else "MISSING on PATH"
+                what = e["command"]
             rep = f" replaces {','.join(e['replaces'])}" if e["replaces"] else ""
-            print(f"- {e['name']} [{mark}] lenses={','.join(e['lenses']) or '-'}{rep} :: {e['command']}")
+            print(f"- {e['name']} [{mark}] lenses={','.join(e['lenses']) or '-'}{rep} :: {what}")
     for p in data["problems"]:
         print(f"EXTENSIONS-INVALID: {p}")
     print(
@@ -169,9 +184,54 @@ def _write_registry(file: Path, entries: list[dict]) -> None:
     file.write_text(text, encoding="utf-8")
 
 
+def _ask(prompt: str, default: str = "") -> str:
+    suffix = f" [{default}]" if default else ""
+    val = input(f"{prompt}{suffix}: ").strip()
+    return val or default
+
+
+def _wizard(args: argparse.Namespace) -> None:
+    """Interactive registration - fills the args in place. Plain stdin prompts (works in
+    any terminal; no curses dependency)."""
+    print("Register an analyser (Enter accepts the [default]; Ctrl-C aborts)")
+    args.name = args.name or _ask("Tool name (e.g. cx)")
+    while not args.name:
+        args.name = _ask("Tool name is required")
+    kind = _ask("CLI command or MCP tool? (cli/mcp)", "cli").lower()
+    if kind.startswith("m"):
+        args.mcp = _ask("MCP tool (server.toolname, e.g. atlassian.security_scan)")
+    else:
+        while True:
+            args.command = _ask('Command (plain argv, e.g. "cxcli scan --format sarif -o {workspace}/data/cx.sarif {target}")')
+            if not _META_RE.search(args.command or ""):
+                break
+            print("  REFUSED: no shell metacharacters (; | & $ ` < >) - plain argv only")
+        args.probe = _ask("Probe binary on PATH", (args.command or "x").split()[0]) or None
+    args.lenses = _ask("Lenses it serves (comma-separated)", "security")
+    args.replaces = _ask("Bundled tools it replaces (comma-separated, blank for none)")
+    if not args.mcp:
+        args.output = _ask("Output format (sarif/json/text)", "sarif")
+        if args.output == "sarif":
+            args.severity_map = _ask("Severity map (k=v,.. blank for defaults)", "")
+
+
 def _cmd_add_tool(args: argparse.Namespace) -> int:
-    """Upsert a registry entry from flags - the easy path (EXTENDING.md step 2)."""
-    if _META_RE.search(args.command):
+    """Upsert a registry entry - flags, or an interactive wizard when flags are absent
+    and stdin is a terminal (EXTENDING.md step 2)."""
+    if args.interactive or (not args.name and sys.stdin.isatty()):
+        try:
+            _wizard(args)
+        except (KeyboardInterrupt, EOFError):
+            print("\naborted - nothing written")
+            return 130
+    if not args.name or not (args.command or args.mcp):
+        print("need --name and one of --command / --mcp (or run with --interactive)",
+              file=sys.stderr)
+        return 2
+    if args.command and args.mcp:
+        print("give --command OR --mcp, not both", file=sys.stderr)
+        return 2
+    if args.command and _META_RE.search(args.command):
         print(
             "REFUSED: command contains shell metacharacters (; | & $ ` < >) - plain argv "
             "only (ADR-009); chain nothing",
@@ -180,25 +240,30 @@ def _cmd_add_tool(args: argparse.Namespace) -> int:
         return 2
     file = args.file or default_file()
     entries = load(file)["registry"] if file.is_file() else []
-    entry = {
-        "name": args.name,
-        "command": args.command,
-        "probe": args.probe or args.command.split()[0],
-        "lenses": [s for s in (args.lenses or "").split(",") if s],
-        "replaces": [s for s in (args.replaces or "").split(",") if s],
-        "output": args.output,
-    }
+    entry: dict = {"name": args.name}
+    if args.mcp:
+        entry["mcp"] = args.mcp
+    else:
+        entry["command"] = args.command
+        entry["probe"] = args.probe or args.command.split()[0]
+        entry["output"] = args.output
+    entry["lenses"] = [s for s in (args.lenses or "").split(",") if s]
+    entry["replaces"] = [s for s in (args.replaces or "").split(",") if s]
     if args.severity_map:
         entry["severity_map"] = dict(
             pair.split("=", 1) for pair in args.severity_map.split(",") if "=" in pair
         )
     entries = [e for e in entries if e.get("name") != args.name] + [entry]
     _write_registry(file, entries)
-    found = shutil.which(entry["probe"]) is not None
     print(f"registered {args.name} in {file}")
-    print(f"probe {entry['probe']}: {'found on PATH' if found else 'MISSING on PATH - install it or fix --probe'}")
-    if entry["output"] == "sarif":
-        print("SARIF output converts via: python -m scripts.convert_sarif <report> --slug <slug> --scope <scope>")
+    if args.mcp:
+        print(f"mcp tool {args.mcp}: ensure the server is wired in your project's .mcp.json "
+              "and named under ## Integrations")
+    else:
+        found = shutil.which(entry["probe"]) is not None
+        print(f"probe {entry['probe']}: {'found on PATH' if found else 'MISSING on PATH - install it or fix --probe'}")
+        if entry.get("output") == "sarif":
+            print("SARIF output converts via: python -m scripts.convert_sarif <report> --slug <slug> --scope <scope>")
     return 0
 
 
@@ -210,6 +275,9 @@ def _cmd_check(args: argparse.Namespace) -> int:
     data = load(file)
     missing = 0
     for e in data["registry"]:
+        if e.get("mcp"):
+            print(f"{e['name']:24} mcp      ({e['mcp']}) - presence not probed; verify the server in .mcp.json")
+            continue
         found = shutil.which(e["probe"]) is not None
         print(f"{e['name']:24} {'found' if found else 'MISSING'}  ({e['probe']})")
         missing += 0 if found else 1
@@ -226,9 +294,11 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("show").set_defaults(fn=_cmd_show)
     sub.add_parser("check").set_defaults(fn=_cmd_check)
-    p = sub.add_parser("add-tool", help="register an analyser (creates the contract if absent)")
-    p.add_argument("--name", required=True)
-    p.add_argument("--command", required=True, help="plain argv - no shell metacharacters")
+    p = sub.add_parser("add-tool", help="register an analyser (creates the contract if absent); no flags = interactive wizard")
+    p.add_argument("--name", default=None)
+    p.add_argument("--command", default=None, help="plain argv - no shell metacharacters")
+    p.add_argument("--mcp", default=None, help="MCP tool as server.toolname (instead of --command)")
+    p.add_argument("--interactive", action="store_true", help="force the wizard")
     p.add_argument("--probe", default=None, help="binary checked on PATH (default: first word)")
     p.add_argument("--lenses", default=None, help="comma-separated, e.g. security")
     p.add_argument("--replaces", default=None, help="bundled tools it supersedes, comma-separated")

@@ -52,7 +52,8 @@ asserts YOU trust its binary.*
 }
 ```
 
-*Fields: `name` + `command` required. `probe` = binary checked on PATH (defaults to the
+*Fields: `name` plus ONE of `command` (CLI) or `mcp` (`server.toolname` - for analysers
+exposed as MCP tools; no probe, no execution gate, harness permission-prompted) required. `probe` = binary checked on PATH (defaults to the
 command's first word). `lenses` = which review lens it serves. `replaces` = bundled tools it
 supersedes (the inventory then reports the lens as covered instead of "default missing").
 `output: sarif` outputs convert to a findings pack via

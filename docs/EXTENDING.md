@@ -38,7 +38,13 @@ notice. From now on every `/engage` open surfaces this automatically.
 
 ## Step 2 - register your own analyser (replacing a bundled default)
 
-The easy path - one command (creates the contract file if you skipped step 1):
+The easiest path - the interactive wizard (creates the contract file if you skipped step 1):
+
+```bash
+python3 -m scripts.extensions add-tool          # prompts for everything, validates as you type
+```
+
+Or one non-interactive command:
 
 ```bash
 python3 -m scripts.extensions add-tool --name cx \
@@ -63,13 +69,20 @@ whether the binary resolves on PATH. Or hand-edit the same thing into
 ```
 ````
 
+**Is your analyser an MCP tool rather than a CLI?** Then no command is needed at all -
+register it as `--mcp server.toolname` (wizard: answer `mcp`), wire the server in
+`.mcp.json` (step 4) and name it under **Integrations**. MCP calls never touch the
+execution gate - the harness permission-prompts them - so steps about PATH probes and
+`CST_COMPANY_ALLOW` don't apply to them.
+
 **Verify:**
 
 ```bash
 python3 -m scripts.extensions check
 ```
 
-Expected: `cx  found  (cxcli)` - or `MISSING`, meaning install the binary or fix `probe`.
+Expected: `cx  found  (cxcli)` - or `MISSING`, meaning install the binary or fix `probe`;
+MCP entries print `mcp (presence not probed)`.
 Commands must be plain argv: any `; | & $ >` refuses the entry (you'll see
 `EXTENSIONS-INVALID` - that's the smuggling defence working).
 
