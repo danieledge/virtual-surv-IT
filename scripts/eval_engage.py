@@ -216,10 +216,7 @@ async def _one_shot(prompt: str, model: str) -> str:
         #               empty first turn (observed live) - give tool-less calls headroom
         model=model,
         cwd=str(RUNS_ROOT),
-        # Per-case env (expected.yaml `session_env:`) lets a golden case exercise
-        # human-side environment mechanisms (e.g. CST_COMPANY_ALLOW) - the harness is the
-        # human here, same standing as the consent-marker creation (ADR-002).
-        env={**_session_env(), **(extra_env or {})},
+        env=_session_env(),
     )
     chunks: list[str] = []
     try:
@@ -364,7 +361,10 @@ async def run_engage_session(
         can_use_tool=can_use_tool,
         max_turns=max_turns,
         max_budget_usd=max_budget,
-        env=_session_env(),
+        # Per-case env (expected.yaml `session_env:`) lets a golden case exercise
+        # human-side environment mechanisms (e.g. CST_COMPANY_ALLOW) - the harness is the
+        # human here, same standing as the consent-marker creation (ADR-002).
+        env={**_session_env(), **(extra_env or {})},
         # Headless runs otherwise bash-sandbox with no network and no user-site packages
         # (observed: `import markdown` failed inside the session while fine outside, so
         # render_html "could not" run). Interactive engagements are not sandboxed like
