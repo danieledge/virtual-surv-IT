@@ -658,6 +658,74 @@ for genuinely parallel workstreams.
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
+## 🧩 Extending the team for your organisation
+
+Everything here works with the released plugin **today** - it composes Claude Code's native
+extension points (your project's `CLAUDE.md`, MCP servers, your own skills) with the team's
+standing rule that the working project's instructions are honoured. A deeper first-class
+layer (a structured extensions contract, an analyser registry with SARIF normalisation, a
+human-curated company tool allowlist) is on the roadmap.
+
+### a) Use your own analysis tooling instead of the bundled defaults
+
+Plain-binary tools (SonarQube scanner, Snyk, an internal `acme-lint`) run without any
+consent friction - the execution guard blocks interpreters and test runners, not binaries.
+Steer the swap in your project's `CLAUDE.md`:
+
+```markdown
+## Review tooling (ours)
+- Security lens: use `cxcli scan --format sarif -o artifacts/<slug>/cx.sarif` INSTEAD of
+  bandit/semgrep. Map its HIGH -> 🔴 Critical, MEDIUM -> 🟠 Warning.
+- Keep the SARIF/JSON output under the engagement workspace so findings stay 📊 measured.
+- If the open-time inventory reports bandit/semgrep "missing", that is expected - our
+  replacement covers that lens; do not degrade those findings to 🧠.
+```
+
+Honest edges: the analyser inventory doesn't yet probe custom tools (it may report the
+default as missing - hence the last line above), and a tool invoked *through* an interpreter
+(`python our_scanner.py`) hits the consent gate until the roadmapped company allowlist ships.
+
+### b) Point agents at your own reference sources (a vendor KB, internal docs)
+
+- **Files in (or copied into) the project**: just name them - *"for platform behaviour,
+  consult `docs/vendor/xyz-kb/` before inferring; cite the doc + section in findings"*.
+  Agents read them like any other file, and the evidence-tag rules apply (a claim sourced
+  from the KB cites it; an assumption stays 🧠).
+- **Remote KBs**: expose them via an MCP server in your `.mcp.json`, or export snapshots
+  into the repo.
+- ⚠️ **Data safety extends to reference sources**: anything an agent reads is sent to the
+  model provider - the same masked/synthetic/no-secrets rules apply to KB content as to data.
+
+### c) Add a workflow step such as "raise a Jira"
+
+Add the Atlassian MCP server to your project's `.mcp.json`, then make the step a standing
+instruction in your `CLAUDE.md`:
+
+```markdown
+## Our close steps (additional)
+- At engagement close, OFFER to raise a Jira in project SURV: summary = the engagement
+  verdict, description = link/paste of the delivery report summary, label `virt-team`.
+  Never create it without my approval at the gate.
+```
+
+Creating the ticket is an outward-facing action, so Claude Code's permission prompt gates
+it - the offer lands as a close-time next step, never a silent side effect. For consistent
+field mapping across engagements, wrap it in a small skill of your own
+(`.claude/skills/raise-jira/SKILL.md`) and tell the team to offer `/raise-jira` at close.
+
+### d) Publish the artifact pack to a location (a path, a share, Confluence)
+
+- **Path or network share**: it's just files - *"at ✅ close, copy the engagement workspace
+  `artifacts/<slug>/` to `\\share\surveillance\packs\<slug>-<date>/`"* in your
+  `CLAUDE.md`. Plain copies aren't execution-gated.
+- **Confluence**: via the Atlassian MCP server (page create/update), permission-prompted
+  like the Jira step. The rendered `.html` artifacts paste well.
+- ⚠️ Publish only **after ✅ close**, never mid-engagement (interim artifacts are
+  deliberately named as interim), and remember an upload *is* distribution: no secrets, and
+  the masked/synthetic rule follows the artifacts wherever they go.
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 📓 Worked example
 
 A complete reference scenario ships with the repo so the conventions are concrete, the
