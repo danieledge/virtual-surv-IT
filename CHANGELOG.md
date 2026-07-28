@@ -3,6 +3,21 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.31.0] - 2026-07-27 - Multi-engagement workspaces
+
+### Added
+- **Multi-engagement workspaces (ADR-008)**: several engagements per project at INDEPENDENT
+  states - each in its own `artifacts/<slug>/` workspace (init default; `--dir` keeps flat
+  semantics), a DERIVED root registry (`engagements.json` + `ENGAGEMENTS.md`, regenerated on
+  every mutation, `REGISTRY-STALE` auto-fix), resolution rules (`--slug`, solo auto-resolve,
+  explicit ambiguity error), `list` + `migrate` commands. Hooks scan all packs: the persona
+  anchor lists open engagements and the ACTIVE-slug discipline; the stop gate gates only ⏳
+  in-progress workspaces (a ⛔ parked sibling stays silent; flat packs keep pre-0.31
+  semantics). Checker iterates workspaces with slug-prefixed findings +
+  `FLAT-PACK-UNMIGRATED`; dashboard + eval probe workspace-aware; front-door resume-or-new
+  question in `/engage` and `/engage-light`. New golden case `process-two-engagements`.
+  13 new tests.
+
 ## [0.30.0] - 2026-07-27 - /engage-light + plugin-mode DoD resolution (dev)
 
 ### Added

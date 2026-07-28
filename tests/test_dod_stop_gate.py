@@ -108,3 +108,30 @@ def test_invalid_state_falls_back_to_emoji_sniff(tmp_path, monkeypatch, capsys):
     (art / "START-HERE.md").write_text("Status: ✅ closed\n", encoding="utf-8")
     rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
     assert rc == 0 and out == ""  # unreadable state -> legacy sniff -> closed -> silent
+
+
+def test_blocked_workspace_not_gated_but_in_progress_is(tmp_path, monkeypatch, capsys):
+    """0.31 rule: a ⛔ parked workspace stays silent while a sibling ⏳ one is gated."""
+    art = tmp_path / "artifacts"
+    for slug, status in (("parked", "blocked"), ("active", "in_progress")):
+        (art / slug).mkdir(parents=True)
+        (art / slug / "engagement-state.json").write_text(
+            json.dumps({"schema": 2, "status": status}), encoding="utf-8"
+        )
+    # the active workspace has a defect (invalid-minimal state -> STATE-INVALID)
+    rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert rc == 0
+    decision = json.loads(out)
+    assert decision["decision"] == "block"
+    assert "[active]" in decision["reason"]
+    assert "[parked]" not in decision["reason"]
+
+
+def test_only_blocked_workspaces_stay_silent(tmp_path, monkeypatch, capsys):
+    art = tmp_path / "artifacts"
+    (art / "parked").mkdir(parents=True)
+    (art / "parked" / "engagement-state.json").write_text(
+        json.dumps({"schema": 2, "status": "blocked"}), encoding="utf-8"
+    )
+    rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert rc == 0 and out == ""

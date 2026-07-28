@@ -307,3 +307,104 @@ def test_light_profile_init_and_upgrade(tmp_path):
     )
     assert _run(tmp_path, "set-profile", "standard") == 0
     assert load_state(tmp_path)["profile"] == "standard"
+
+
+# ------------------------------------------------------- workspaces + registry (0.31)
+
+
+def _run_env(monkeypatch, root, *argv) -> int:
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    return main(list(argv))
+
+
+def test_init_default_creates_workspace_and_registry(tmp_path, monkeypatch):
+    assert _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit") == 0
+    ws = tmp_path / "artifacts" / "audit"
+    assert (ws / "engagement-state.json").is_file()
+    assert (ws / "START-HERE.md").is_file()
+    reg = tmp_path / "artifacts" / "engagements.json"
+    assert reg.is_file()
+    rows = json.loads(reg.read_text())["engagements"]
+    assert rows[0]["slug"] == "audit" and rows[0]["status"] == "in_progress"
+    assert "audit/START-HERE.md" in (tmp_path / "artifacts" / "ENGAGEMENTS.md").read_text()
+
+
+def test_single_workspace_auto_resolves_without_slug(tmp_path, monkeypatch):
+    _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit")
+    assert _run_env(monkeypatch, tmp_path, "set-status", "blocked") == 0
+    assert load_state(tmp_path / "artifacts" / "audit")["status"] == "blocked"
+
+
+def test_multiple_workspaces_require_slug(tmp_path, monkeypatch):
+    import pytest
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
+    _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
+    with pytest.raises(SystemExit):
+        _run_env(monkeypatch, tmp_path, "set-status", "blocked")  # ambiguous
+    assert _run_env(monkeypatch, tmp_path, "--slug", "audit", "set-status", "blocked") == 0
+    assert load_state(tmp_path / "artifacts" / "audit")["status"] == "blocked"
+    assert load_state(tmp_path / "artifacts" / "scoping")["status"] == "in_progress"
+
+
+def test_registry_tracks_independent_states(tmp_path, monkeypatch):
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
+    _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
+    _run_env(monkeypatch, tmp_path, "--slug", "audit", "set-status", "blocked")
+    rows = {r["slug"]: r["status"] for r in json.loads(
+        (tmp_path / "artifacts" / "engagements.json").read_text())["engagements"]}
+    assert rows == {"audit": "blocked", "scoping": "in_progress"}
+
+
+def test_migrate_moves_flat_pack_into_workspace(tmp_path, monkeypatch):
+    art = tmp_path / "artifacts"
+    _run(art, "init", "--title", "Legacy", "--slug", "legacy-job")  # flat via --dir
+    (art / "report.md").write_text("x", encoding="utf-8")
+    assert _run_env(monkeypatch, tmp_path, "migrate") == 0
+    ws = art / "legacy-job"
+    assert (ws / "engagement-state.json").is_file()
+    assert (ws / "report.md").is_file()
+    assert not (art / "engagement-state.json").exists()
+    rows = json.loads((art / "engagements.json").read_text())["engagements"]
+    assert rows[0]["slug"] == "legacy-job"
+
+
+def test_old_flat_engagement_then_new_workspace_and_migrate(tmp_path, monkeypatch):
+    """User scenario: an old (closed, pre-workspaces) flat engagement exists; a new session
+    starts a new engagement beside it, then tidies via migrate. Nothing of the old pack is
+    lost and both end up as registered workspaces."""
+    art = tmp_path / "artifacts"
+    _run(art, "init", "--title", "Old review", "--slug", "old-review")  # flat (pre-0.31)
+    _run(art, "set-team", "Ravi (review)")
+    _run(art, "set-status", "closed", "--verdict", "done")
+    old_state = state_path(art).read_text(encoding="utf-8")
+
+    assert _run_env(monkeypatch, tmp_path, "init", "--title", "New job", "--slug", "new-job") == 0
+    rows = {r["slug"]: r["status"] for r in json.loads(
+        (art / "engagements.json").read_text())["engagements"]}
+    assert rows == {"old-review": "closed", "new-job": "in_progress"}
+
+    assert _run_env(monkeypatch, tmp_path, "migrate") == 0
+    assert (art / "old-review" / "engagement-state.json").read_text(encoding="utf-8") == old_state
+    assert not (art / "engagement-state.json").exists()
+    rows = {r["slug"]: r["status"] for r in json.loads(
+        (art / "engagements.json").read_text())["engagements"]}
+    assert rows == {"old-review": "closed", "new-job": "in_progress"}
+
+
+def test_no_limit_on_engagement_count(tmp_path, monkeypatch):
+    """User ruling: no cap on engagements per project. Five at mixed states, all
+    registered, all individually addressable."""
+    statuses = {}
+    for i in range(5):
+        slug = f"eng-{i}"
+        _run_env(monkeypatch, tmp_path, "init", "--title", f"E{i}", "--slug", slug)
+        if i % 2:
+            _run_env(monkeypatch, tmp_path, "--slug", slug, "set-status", "blocked")
+            statuses[slug] = "blocked"
+        else:
+            statuses[slug] = "in_progress"
+    rows = {r["slug"]: r["status"] for r in json.loads(
+        (tmp_path / "artifacts" / "engagements.json").read_text())["engagements"]}
+    assert rows == statuses
+    assert _run_env(monkeypatch, tmp_path, "--slug", "eng-3", "set-status", "in_progress") == 0

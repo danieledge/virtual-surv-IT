@@ -849,6 +849,43 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
     return fixed
 
 
+def workspace_dirs(artifacts_dir: Path) -> list[Path]:
+    """Engagement workspaces `artifacts/<slug>/` (0.31 multi-engagement layout)."""
+    if not artifacts_dir.is_dir():
+        return []
+    return sorted(
+        p
+        for p in artifacts_dir.iterdir()
+        if p.is_dir() and (p / "engagement-state.json").is_file()
+    )
+
+
+def check_registry(artifacts_dir: Path) -> list[str]:
+    """REGISTRY-STALE: the derived root registry (engagements.json) no longer matches a
+    fresh scan of the packs on disk. Auto-fixed by regeneration under --fix."""
+    es = _load_engagement_state_module()
+    if es is None or not workspace_dirs(artifacts_dir):
+        return []
+    try:
+        fresh = es.scan_engagements(artifacts_dir)
+        reg_path = artifacts_dir / es.REGISTRY_JSON
+        if not reg_path.is_file():
+            return [
+                "REGISTRY-STALE: workspaces exist but the root registry "
+                f"({es.REGISTRY_JSON}) is missing - regenerate via "
+                "`python -m scripts.engagement_state render` (any mutator regenerates it)"
+            ]
+        stored = json.loads(reg_path.read_text(encoding="utf-8")).get("engagements")
+        if stored != fresh:
+            return [
+                "REGISTRY-STALE: the root registry no longer matches the workspaces on "
+                "disk - it is DERIVED; regenerate it (auto-fixed by --fix)"
+            ]
+    except Exception as exc:
+        return [f"REGISTRY-STALE: registry unreadable ({exc}) - regenerate it"]
+    return []
+
+
 def main(argv: list[str]) -> int:
     _force_utf8_output()
     do_fix = "--fix" in argv[1:]
@@ -856,11 +893,37 @@ def main(argv: list[str]) -> int:
     artifacts_dir = Path(positional[0]) if positional else Path("artifacts")
     map_path = Path(positional[1]) if len(positional) > 1 else find_codebase_map(Path.cwd())
 
-    if do_fix:
-        for line in apply_fixes(artifacts_dir):
-            print(line)
+    # 0.31 layout: with per-engagement workspaces, each pack is checked in its own scope
+    # (findings slug-prefixed) plus the derived-registry consistency; a legacy flat pack
+    # alongside (or alone) is checked exactly as before.
+    workspaces = workspace_dirs(artifacts_dir)
 
-    findings = check(artifacts_dir)
+    if do_fix:
+        for pack in workspaces or [artifacts_dir]:
+            prefix = f"[{pack.name}] " if pack != artifacts_dir else ""
+            for line in apply_fixes(pack):
+                print(f"{prefix}{line}")
+        if workspaces:
+            es = _load_engagement_state_module()
+            if es is not None and check_registry(artifacts_dir):
+                es.render_registry(artifacts_dir)
+                print("FIXED REGISTRY-STALE: regenerated the root registry")
+
+    if workspaces:
+        findings = []
+        for pack in workspaces:
+            findings.extend(f"[{pack.name}] {f}" for f in check(pack))
+        if (artifacts_dir / "engagement-state.json").is_file():
+            # A flat pack's rglob checks would cross into sibling workspaces and produce
+            # noise; during the transitional coexistence the one finding is "migrate it".
+            findings.append(
+                "FLAT-PACK-UNMIGRATED: a legacy flat pack coexists with workspaces - run "
+                "`python -m scripts.engagement_state migrate` (flat pack not deep-checked "
+                "to avoid cross-workspace noise)"
+            )
+        findings.extend(check_registry(artifacts_dir))
+    else:
+        findings = check(artifacts_dir)
     map_note = "no codebase map found - skipped (created at first close, ADR-003)"
     if map_path is not None:
         if map_path.is_file():

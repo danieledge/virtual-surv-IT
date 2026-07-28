@@ -36,7 +36,9 @@ touches §5/§7.
 
 **2. Scope in one exchange.** No BRD/FSD/RTM: requirements are a short bullet list captured
 directly in a ONE-PAGE brief (decisions, assumptions, the bullet requirements, routing).
-Open the state with the profile recorded:
+Open the state with the profile recorded (this creates the engagement's own workspace
+`artifacts/<slug>/`; if other engagements already exist, first offer resume-or-new exactly as
+`/engage` step 0b, and target yours with `--slug` thereafter):
 `<python> -m scripts.engagement_state init --title "..." --slug <slug> --profile light`
 then `add-artifact engagement-brief.md --title "..."`. **Go-ahead gate stays** - one
 single-select question (Proceed / Adjust / Stop).

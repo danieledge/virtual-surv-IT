@@ -70,40 +70,64 @@ def main() -> int:
     cwd = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
     artifacts = cwd / "artifacts"
 
-    # Only fire while the engagement is OPEN (in progress / blocked). The machine-readable
-    # state file (engagement-state.json, ADR-006) is authoritative when present and
-    # parseable - `closed` wins over a stale ⏳ render, and an open status arms the gate
-    # even before START-HERE has been rendered (check() then flags STATE-STALE-RENDER).
-    # Legacy fallback: the emoji sniff of START-HERE.md, so pre-state engagements keep
-    # their gate. Nothing readable -> stay silent (dormant / not ours).
-    armed = False
-    state_file = artifacts / "engagement-state.json"
-    if state_file.is_file():
+    # Which packs does this turn-end gate? (0.31 workspaces: artifacts/<slug>/ each with
+    # independent state, plus the legacy flat pack.) The state file (ADR-006) is
+    # authoritative when parseable; the emoji sniff of START-HERE.md is the legacy
+    # fallback. Workspace rule: gate ONLY ⏳ in_progress workspaces - a ⛔ BLOCKED
+    # workspace is already truthfully parked and must not nag a session working a sibling
+    # engagement. The flat pack keeps its pre-0.31 semantics (⏳ or ⛔ arms) so solo
+    # engagements behave exactly as before. Nothing gated -> stay silent.
+    def pack_status(pack: Path) -> str | None:
+        state_file = pack / "engagement-state.json"
+        if state_file.is_file():
+            try:
+                status = json.loads(state_file.read_text(encoding="utf-8")).get("status")
+            except Exception:
+                status = None
+            if status in ("in_progress", "blocked", "closed"):
+                return status
         try:
-            status = json.loads(state_file.read_text(encoding="utf-8")).get("status")
+            text = (pack / "START-HERE.md").read_text(encoding="utf-8", errors="replace")
         except Exception:
-            status = None
-        if status in ("in_progress", "blocked"):
-            armed = True
-        elif status == "closed":
-            return 0
-    if not armed:
-        start_here = artifacts / "START-HERE.md"
-        if not start_here.is_file():
-            return 0  # no state, no index -> not an engagement we own: stay silent
-        try:
-            status_text = start_here.read_text(encoding="utf-8", errors="replace")
-        except Exception:
-            return 0
-        if "⏳" not in status_text and "⛔" not in status_text:
-            return 0
+            return None
+        return "open" if ("⏳" in text or "⛔" in text) else None
+
+    gated: list[tuple[str, Path]] = []
+    try:
+        workspaces = sorted(
+            p for p in artifacts.iterdir()
+            if p.is_dir() and (
+                (p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file()
+            )
+        )
+    except OSError:
+        workspaces = []
+    for ws in workspaces:
+        if pack_status(ws) in ("in_progress", "open"):
+            gated.append((ws.name, ws))
+    flat_status = pack_status(artifacts)
+    if flat_status in ("in_progress", "blocked", "open"):
+        gated.append(("", artifacts))
+    if not gated:
+        return 0
 
     # Reuse the exact mechanical checker by import (no subprocess, so no execution-consent gate).
     try:
         sys.path.insert(0, str(cwd))
         from scripts.check_artifacts import check, check_map, find_codebase_map
 
-        findings = list(check(artifacts))
+        findings = []
+        for name, pack in gated:
+            if not name and workspaces:
+                # Flat pack alongside workspaces: deep rglob checks would cross into the
+                # sibling workspaces - mirror check_artifacts and demand migration instead.
+                findings.append(
+                    "FLAT-PACK-UNMIGRATED: legacy flat pack coexists with workspaces - "
+                    "run `python -m scripts.engagement_state migrate`"
+                )
+                continue
+            prefix = f"[{name}] " if name else ""
+            findings.extend(f"{prefix}{f}" for f in check(pack))
         map_path = find_codebase_map(cwd)
         if map_path is not None and map_path.is_file():
             findings.extend(check_map(map_path))

@@ -96,6 +96,147 @@ def _default_artifacts_dir() -> Path:
     return (Path(root) if root else Path.cwd()) / "artifacts"
 
 
+# ------------------------------------------------------------------ workspaces (0.31)
+# Several engagements can coexist in one project at independent states: each lives in its
+# own workspace `artifacts/<slug>/` with its own state + rendered index. The root carries a
+# DERIVED registry (engagements.json + ENGAGEMENTS.md) regenerated from a scan on every
+# mutation - it can never become a second source of truth. A legacy FLAT pack (state
+# directly in artifacts/) keeps working everywhere; `migrate` moves it into a workspace.
+
+REGISTRY_JSON = "engagements.json"
+REGISTRY_MD = "ENGAGEMENTS.md"
+
+
+def workspace_states(root: Path) -> list[Path]:
+    """Workspace state files directly under the artifacts root (one level, sorted)."""
+    if not root.is_dir():
+        return []
+    return sorted(
+        p / STATE_FILENAME
+        for p in root.iterdir()
+        if p.is_dir() and (p / STATE_FILENAME).is_file()
+    )
+
+
+def scan_engagements(root: Path) -> list[dict]:
+    """Registry rows derived from the packs on disk (flat pack first, then workspaces)."""
+    rows: list[dict] = []
+    candidates: list[tuple[str, Path]] = []
+    if state_path(root).is_file():
+        candidates.append(("(flat)", root))
+    candidates.extend((sp.parent.name, sp.parent) for sp in workspace_states(root))
+    for slug, pack in candidates:
+        try:
+            state = load_state(pack)
+        except Exception:
+            rows.append({"slug": slug, "title": "(unreadable state)", "status": "invalid",
+                         "profile": None, "opened": None, "closed": None})
+            continue
+        eng = state.get("engagement") or {}
+        rows.append(
+            {
+                "slug": slug if slug != "(flat)" else (eng.get("slug") or "(flat)"),
+                "dir": slug,
+                "title": eng.get("title"),
+                "status": state.get("status"),
+                "profile": state.get("profile") or "standard",
+                "opened": eng.get("opened"),
+                "closed": eng.get("closed"),
+            }
+        )
+    return rows
+
+
+def render_registry(root: Path) -> list[Path]:
+    """(Re)generate the derived root registry. Removes it when no packs remain."""
+    rows = scan_engagements(root)
+    json_path = root / REGISTRY_JSON
+    md_path = root / REGISTRY_MD
+    if not rows:
+        for p in (json_path, md_path, md_path.with_suffix(".html")):
+            p.unlink(missing_ok=True)
+        return []
+    root.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(
+        json.dumps({"derived": True, "engagements": rows}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    emoji = {"in_progress": "⏳", "blocked": "⛔", "closed": "✅", "invalid": "❗"}
+    lines = [
+        "# Engagements in this project",
+        "",
+        "> DERIVED registry - regenerated from each workspace's `engagement-state.json` on",
+        "> every mutation; never hand-edit (`REGISTRY-STALE` if it drifts). Open the",
+        "> engagement's own `START-HERE.md` for detail.",
+        "",
+        "| Engagement | Status | Profile | Title | Opened | Closed |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        mark = emoji.get(r.get("status"), r.get("status") or "?")
+        where = r.get("dir") or r.get("slug")
+        link = f"[`{where}/`]({where}/START-HERE.md)" if where != "(flat)" else "`(flat pack)`"
+        lines.append(
+            f"| {link} | {mark} {r.get('status')} | {r.get('profile') or ''} "
+            f"| {r.get('title') or ''} | {r.get('opened') or ''} | {r.get('closed') or ''} |"
+        )
+    lines.append("")
+    md_path.write_text("\n".join(lines), encoding="utf-8")
+    written = [json_path, md_path]
+    try:
+        from scripts.render_html import _title_from, render
+
+        md_text = md_path.read_text(encoding="utf-8")
+        html_path = md_path.with_suffix(".html")
+        html_path.write_text(
+            render(md_text, _title_from(md_text, md_path.stem), source=md_path.name,
+                   generated=_dt.date.today().isoformat()),
+            encoding="utf-8",
+        )
+        written.append(html_path)
+    except Exception:
+        pass
+    return written
+
+
+def _registry_root_for(pack_dir: Path) -> Path | None:
+    """The artifacts root whose registry covers this pack, or None for a standalone flat
+    pack (e.g. a test tmp dir with no sibling workspaces and no registry)."""
+    parent = pack_dir.parent
+    if workspace_states(parent) or (parent / REGISTRY_JSON).is_file():
+        return parent
+    if state_path(pack_dir).is_file() and workspace_states(pack_dir):
+        return pack_dir  # flat pack that ALSO has sibling workspaces under it
+    return None
+
+
+def resolve_pack_dir(args: argparse.Namespace) -> Path:
+    """Which pack a command targets: --dir wins; then --slug under the root; then the only
+    pack in the project (flat or single workspace); ambiguity is an explicit error."""
+    if args.dir is not None:
+        return args.dir
+    root = _default_artifacts_dir()
+    slug = getattr(args, "target_slug", None)
+    if slug:
+        return root / slug
+    candidates: list[Path] = []
+    if state_path(root).is_file():
+        candidates.append(root)
+    candidates.extend(sp.parent for sp in workspace_states(root))
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        return root  # nothing yet - flat semantics (init resolves its own target)
+    names = ", ".join(c.name if c != root else "(flat)" for c in candidates)
+    print(
+        f"multiple engagements in {root} ({names}) - say which with --slug <name> "
+        f"(or --dir)",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+
+
 def state_path(artifacts_dir: Path) -> Path:
     return artifacts_dir / STATE_FILENAME
 
@@ -476,12 +617,19 @@ def _write_state(artifacts_dir: Path, state: dict) -> None:
     os.replace(tmp, target)
     for path in render_files(artifacts_dir):
         print(f"wrote {path}")
+    registry_root = _registry_root_for(artifacts_dir)
+    if registry_root is not None:
+        render_registry(registry_root)
 
 
 # ---------------------------------------------------------------------------- commands
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
+    # New engagements are WORKSPACED by default (artifacts/<slug>/); an explicit --dir
+    # keeps flat semantics (tests, custom layouts, pre-0.31 behaviour).
+    if args.dir is None:
+        args.dir = _default_artifacts_dir() / args.slug
     target = state_path(args.dir)
     if target.exists():
         print(f"refusing to overwrite existing {target}", file=sys.stderr)
@@ -688,6 +836,49 @@ def _cmd_set_footprint(args: argparse.Namespace) -> int:
     return _mutate(args, fn)
 
 
+def _cmd_list(args: argparse.Namespace) -> int:
+    root = args.dir or _default_artifacts_dir()
+    rows = scan_engagements(root)
+    if not rows:
+        print(f"no engagements in {root}")
+        return 0
+    for r in rows:
+        print(
+            f"{r.get('dir') or r.get('slug'):24} {r.get('status'):12} "
+            f"{r.get('profile') or '':9} {r.get('title') or ''}"
+        )
+    return 0
+
+
+def _cmd_migrate(args: argparse.Namespace) -> int:
+    """Move a legacy FLAT pack into its own workspace artifacts/<slug>/ (everything in the
+    root except existing workspace dirs and the registry), then regenerate the registry."""
+    root = args.dir or _default_artifacts_dir()
+    if not state_path(root).is_file():
+        print(f"no flat pack at {root} - nothing to migrate", file=sys.stderr)
+        return 2
+    state = load_state(root)
+    slug = (state.get("engagement") or {}).get("slug") or "engagement"
+    target = root / slug
+    if target.exists():
+        print(f"refusing: {target} already exists", file=sys.stderr)
+        return 2
+    target.mkdir(parents=True)
+    keep = {REGISTRY_JSON, REGISTRY_MD, Path(REGISTRY_MD).stem + ".html", slug}
+    workspace_dirs = {sp.parent.name for sp in workspace_states(root)}
+    import shutil
+
+    moved = 0
+    for item in sorted(root.iterdir()):
+        if item.name in keep or item.name in workspace_dirs or item == target:
+            continue
+        shutil.move(str(item), str(target / item.name))
+        moved += 1
+    print(f"migrated flat pack -> {target} ({moved} item(s))")
+    render_registry(root)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     _force_utf8_output()
     parser = argparse.ArgumentParser(
@@ -698,7 +889,14 @@ def main(argv: list[str] | None = None) -> int:
         "--dir",
         type=Path,
         default=None,
-        help="artifacts directory (default: $CLAUDE_PROJECT_DIR/artifacts or ./artifacts)",
+        help="pack directory (overrides workspace resolution; default: resolve via --slug "
+        "or the project's only engagement)",
+    )
+    parser.add_argument(
+        "--slug",
+        dest="target_slug",
+        default=None,
+        help="target workspace under artifacts/ (required when several engagements exist)",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -791,9 +989,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--tokens", default=None)
     p.set_defaults(fn=_cmd_set_footprint)
 
+    p = sub.add_parser("list", help="list this project's engagements (registry scan)")
+    p.set_defaults(fn=_cmd_list)
+
+    p = sub.add_parser(
+        "migrate", help="move a legacy flat pack into its own artifacts/<slug>/ workspace"
+    )
+    p.set_defaults(fn=_cmd_migrate)
+
     args = parser.parse_args(argv)
-    if args.dir is None:
-        args.dir = _default_artifacts_dir()
+    if args.dir is None and args.fn not in (_cmd_init, _cmd_list, _cmd_migrate):
+        args.dir = resolve_pack_dir(args)
     try:
         return args.fn(args)
     except FileNotFoundError:

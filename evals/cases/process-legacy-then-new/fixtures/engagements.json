@@ -1,0 +1,14 @@
+{
+  "derived": true,
+  "engagements": [
+    {
+      "slug": "artifacts",
+      "dir": "artifacts",
+      "title": "Legacy calibration review (pre-workspaces)",
+      "status": "closed",
+      "profile": "standard",
+      "opened": "2026-07-27",
+      "closed": "2026-07-27"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+case: process-legacy-then-new
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Legacy-coexistence case (ADR-008) - the sandbox is PRE-SEEDED (fixtures/) with a closed
+  pre-workspaces FLAT pack from an "earlier" engagement. A correct run recognises the
+  existing engagement at the front door, starts the new one in its own workspace, migrates
+  the legacy flat pack when the gate demands tidy records (FLAT-PACK-UNMIGRATED is
+  auto-surfaced), preserves the old pack's closed state and artifacts byte-for-byte in
+  content, and closes the new engagement fully with the registry listing both.
+
+planted:
+  - id: LEG-1
+    # The pre-existing engagement is recognised, not ignored or clobbered.
+    keywords: [existing engagement, previous engagement, legacy, already, calibration review]
+    min_severity: warning
+    must_find: true
+  - id: LEG-2
+    # New engagement in its own workspace; registry/list present.
+    keywords: [workspace, ENGAGEMENTS, registry, "artifacts/"]
+    min_severity: warning
+    must_find: true
+  - id: LEG-3
+    # The flat legacy pack gets migrated (the gate's finding drives it).
+    keywords: [migrate, migrated, FLAT-PACK, flat pack]
+    exclude_keywords: [not migrated, refused to migrate, could not migrate]
+    min_severity: warning
+    must_find: true
+  - id: LEG-4
+    # Old engagement stays closed and intact; new one closes fully.
+    keywords: ["status closed", closed, summary email, "✅"]
+    exclude_keywords: [reopened, deleted, lost]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  - id: FP-REOPEN
+    keywords: [reopened the legacy, reopened the old, deleted the old, overwrote the old,
+               discarded the legacy]
+  - id: FP-CALL
+    keywords: [phone call, schedule a call, set up a meeting, quick call]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

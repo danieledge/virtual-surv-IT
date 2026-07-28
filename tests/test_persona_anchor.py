@@ -88,3 +88,25 @@ def test_invalid_state_falls_back_to_emoji_sniff(tmp_path, monkeypatch, capsys):
     (art / "START-HERE.md").write_text("Status: ⛔ blocked\n", encoding="utf-8")
     _, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
     assert "persona-anchor" in out
+
+
+def test_multi_workspace_anchor_lists_open_engagements(tmp_path, monkeypatch, capsys):
+    art = tmp_path / "artifacts"
+    for slug, status in (("audit", "blocked"), ("scoping", "in_progress")):
+        (art / slug).mkdir(parents=True)
+        (art / slug / "engagement-state.json").write_text(
+            json.dumps({"schema": 2, "status": status}), encoding="utf-8"
+        )
+    _, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert "persona-anchor" in out
+    assert "audit ⛔" in out and "scoping ⏳" in out and "ACTIVE" in out
+
+
+def test_all_workspaces_closed_is_silent(tmp_path, monkeypatch, capsys):
+    art = tmp_path / "artifacts"
+    (art / "done").mkdir(parents=True)
+    (art / "done" / "engagement-state.json").write_text(
+        json.dumps({"schema": 2, "status": "closed"}), encoding="utf-8"
+    )
+    _, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert out == ""

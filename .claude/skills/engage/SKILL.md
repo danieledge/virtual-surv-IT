@@ -166,6 +166,15 @@ With the target known: show both disclaimers (text) at startup, then ask in a **
 Record the answers; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.**
 Repeat the execution- and data-responsibility notes in the final Delivery Report.
 
+**0b. Existing engagements?** If `artifacts/` already holds engagement workspaces
+(`<python> -m scripts.engagement_state list` - also rendered at `artifacts/ENGAGEMENTS.md`),
+ask ONE question via the question tool before classifying: **resume** one of the open
+engagements (options list each slug with its ⏳/⛔ status and title) or **start new**. One
+engagement is ACTIVE per session; name the active slug in your banner line and target its
+workspace in every state command (`--slug <slug>`). A resumed ⛔ workspace follows the
+cold-resume rules (read ITS START-HERE + state as the record). A ⛔ sibling never blocks the
+active engagement - its stop-gate stays silent while parked (ADR-008).
+
 **1. Classify the work.** Decide the entry point:
 - a *problem / idea* → discovery → requirements → build (full SDLC);
 - a *review* → the audit-review loop (`/audit-review`). **When the work is a code review, offer a
@@ -230,10 +239,13 @@ artifact ships `.md` + `.html`.
 **4. Summarise - and open the living index.** Write an Engagement Brief
 (`docs/templates/engagement-brief.md`) capturing decisions taken, open questions,
 clarifications, assumptions, the selected artifacts and the routing plan. Render it to HTML.
-**At the same moment, open the machine-readable state** (ADR-006):
+**At the same moment, open the machine-readable state** (ADR-006/ADR-008):
 `<python> -m scripts.engagement_state init --title "<title>" --slug <slug> --team-version <ver>`
-creates `artifacts/engagement-state.json` (Status ⏳, the ⚠️-outstanding list pre-seeded with
-the gates ahead) **and renders `artifacts/START-HERE.md` + `.html` from it**; then
+creates the engagement's own WORKSPACE `artifacts/<slug>/` with its `engagement-state.json`
+(Status ⏳, the ⚠️-outstanding list pre-seeded with the gates ahead) **and renders that
+workspace's `START-HERE.md` + `.html` from it** (a derived root registry
+`artifacts/ENGAGEMENTS.md` lists every engagement); every artifact path from here on is
+WORKSPACE-relative, and when several engagements exist target yours with `--slug <slug>`; then
 `add-artifact engagement-brief.md --title "..."` lists the brief. From here on the state file
 is authoritative and START-HERE is its rendered view - **never hand-edit START-HERE**: record
 every artifact with `add-artifact`, every status change with `set-status`, every open question

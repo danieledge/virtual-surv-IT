@@ -1,0 +1,6 @@
+Hi,
+
+The calibration review closed: thresholds documented, no criticals.
+Next step: revisit tolerance at the quarterly review.
+
+Morgan

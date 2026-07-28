@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-008: Multi-engagement workspaces - several engagements, one project, independent states (accepted)</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-27</span></header>
+<h1 id="adr-008-multi-engagement-workspaces-several-engagements-one-project-independent-states-accepted">ADR-008: Multi-engagement workspaces - several engagements, one project, independent states (accepted)</h1>
+<blockquote>
+<p>Architecture Decision Record (Nygard format). One file per significant decision, so the
+<em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
+<p><strong>Document control</strong> · ID <code>ADR-008</code> · Version <code>0.1</code> · Status <code>Accepted</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-27</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-07-27</td>
+<td>user-driven design (audit-then-scope scenario)</td>
+<td>Accepted &amp; implemented: workspaces, derived registry, resolution rules, hook scans, checker iteration</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted / implemented</strong> (0.31)</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-07-27</td>
+</tr>
+<tr>
+<td><strong>Deciders</strong></td>
+<td>Morgan (orchestrator), human approver</td>
+</tr>
+<tr>
+<td><strong>Traceability</strong></td>
+<td>ADR-006 (state file - per-workspace unchanged), user requirement: "two engagements in the same project might be at separate states"; live scenario: a full codebase audit parked ⛔ awaiting sign-off while a requirements-scoping engagement runs beside it</td>
+</tr>
+</tbody>
+</table>
+<h2 id="context">Context</h2>
+<p>Pre-0.31 the project had one implicit engagement: state, index and artifacts sat flat in
+<code>artifacts/</code>, with fixed filenames. A second engagement would collide with the first, and
+the hooks/checker knew only the one flat pack. Real usage needs several engagements per
+project at INDEPENDENT lifecycle states.</p>
+<h2 id="decision">Decision</h2>
+<ol>
+<li><strong>One workspace per engagement</strong>: <code>artifacts/&lt;slug&gt;/</code> holds that engagement's
+   <code>engagement-state.json</code>, rendered START-HERE and every artifact. <code>init</code> creates the
+   workspace by default (an explicit <code>--dir</code> keeps flat semantics for tests/custom layouts).</li>
+<li><strong>A DERIVED root registry</strong>: <code>artifacts/engagements.json</code> + rendered <code>ENGAGEMENTS.md</code>,
+   regenerated from a scan of the packs on every state mutation - it can never become a
+   second source of truth. <code>REGISTRY-STALE</code> (mechanical, auto-fixed by regeneration) covers
+   the crash window.</li>
+<li><strong>Resolution rules</strong> for every state command: <code>--dir</code> wins; else <code>--slug</code> under the
+   root; else the project's only pack (flat or single workspace) auto-resolves so the solo
+   UX is unchanged; ambiguity is an explicit error listing the options. <code>list</code> prints the
+   registry; <code>migrate</code> moves a legacy flat pack into its own workspace.</li>
+<li><strong>Hooks scan all packs.</strong> The persona anchor arms when ANY pack is open (⏳ or ⛔) and
+   appends an open-engagements line so a session always knows the landscape and states its
+   ACTIVE slug. The stop gate gates ONLY ⏳ in-progress workspaces - a ⛔ workspace is
+   already truthfully parked and must not nag a session working a sibling engagement. The
+   legacy flat pack keeps its pre-0.31 gate semantics (⏳ or ⛔) so solo engagements behave
+   exactly as before.</li>
+<li><strong>The checker iterates workspaces</strong> with slug-prefixed findings, each pack checked in
+   its own scope (close-only rules, interim naming and email requirements per engagement -
+   one engagement's interim state can never block a sibling's close), plus the registry
+   check. A flat pack coexisting with workspaces gets one finding - <code>FLAT-PACK-UNMIGRATED</code> -
+   instead of deep checks whose rglob would cross workspace boundaries.</li>
+<li><strong>Front door selection</strong>: when workspaces exist, <code>/engage</code> (and <code>/engage-light</code>) ask
+   resume-or-new via the question tool; one engagement ACTIVE per session, named in the
+   banner. Cross-engagement reads are allowed read-only and recorded as brief inputs; the
+   codebase map remains the one shared cross-engagement memory (ADR-003).</li>
+</ol>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>The audit-then-scope scenario works: the audit parks ⛔ with its outstanding list intact
+  and silent, scoping opens, runs and closes beside it, either resumable any time.</li>
+<li>Registry, being derived, is rebuildable at will; deleting it costs nothing but a
+  regeneration.</li>
+<li>Consumers updated: dashboard aggregates per-workspace gate findings; the eval driver's
+  artifact probe finds packs in either layout. Legacy flat packs work unchanged everywhere.</li>
+<li>Residual: two sessions concurrently mutating the SAME workspace remains out of scope
+  (unchanged from pre-0.31: one active session per engagement is the working assumption).</li>
+</ul>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-008-multi-engagement-workspaces.md &middot; 2026-07-27</div>
+</body>
+</html>

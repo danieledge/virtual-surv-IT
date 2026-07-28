@@ -263,8 +263,10 @@ residual risk when execution consent was withheld.
 
 ## Artifact inventory (what exists on disk, by phase)
 
-Open: engagement-brief.md/.html · engagement-state.json (authoritative lifecycle state,
-ADR-006) · START-HERE.md/.html (rendered from the state on every mutation).
+Open: the engagement's WORKSPACE `artifacts/<slug>/` (ADR-008; several engagements may
+coexist at independent states - root `engagements.json`/`ENGAGEMENTS.md` is the derived
+registry) containing engagement-brief.md/.html · engagement-state.json (authoritative
+lifecycle state, ADR-006) · START-HERE.md/.html (rendered from the state on every mutation).
 Delivery (as routed): fsd.md · rtm.md · review-pass-N.md · qa-cycle-N/qa-handover.md ·
 interim-*.md · the deliverable code + tests + QA suites · analysis packs - each with .html.
 Close: delivery-report.md/.html · developer-handover.md/.html (if chosen) ·

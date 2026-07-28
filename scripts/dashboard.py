@@ -74,7 +74,15 @@ def project_summary(project: Path) -> dict:
     artifacts = project / "artifacts"
     md_files = sorted(artifacts.rglob("*.md")) if artifacts.is_dir() else []
     emails = sorted(artifacts.rglob("engagement-summary-*.txt")) if artifacts.is_dir() else []
-    gate = list(check(artifacts))
+    # 0.31 workspaces: check each engagement pack in its own scope (slug-prefixed), same
+    # as check_artifacts.main; a flat pack keeps the pre-0.31 single check.
+    from scripts.check_artifacts import workspace_dirs
+
+    packs = workspace_dirs(artifacts)
+    if packs:
+        gate = [f"[{p.name}] {f}" for p in packs for f in check(p)]
+    else:
+        gate = list(check(artifacts))
     map_path = find_codebase_map(project)
     map_findings = check_map(map_path) if map_path else None
 
