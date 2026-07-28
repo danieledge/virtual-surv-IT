@@ -216,7 +216,10 @@ async def _one_shot(prompt: str, model: str) -> str:
         #               empty first turn (observed live) - give tool-less calls headroom
         model=model,
         cwd=str(RUNS_ROOT),
-        env=_session_env(),
+        # Per-case env (expected.yaml `session_env:`) lets a golden case exercise
+        # human-side environment mechanisms (e.g. CST_COMPANY_ALLOW) - the harness is the
+        # human here, same standing as the consent-marker creation (ADR-002).
+        env={**_session_env(), **(extra_env or {})},
     )
     chunks: list[str] = []
     try:
@@ -320,6 +323,7 @@ async def run_engage_session(
     max_budget: float | None,
     sim_log: SimTranscript,
     workflow_cmd: str = "/engage",
+    extra_env: dict[str, str] | None = None,
 ) -> SessionCapture:
     from claude_agent_sdk import (
         AssistantMessage,
@@ -720,6 +724,7 @@ async def run_case(
             run_engage_session(
                 cap, scenario, sandbox, persona, args.sim_model, args.max_turns, args.max_budget, sim_log,
                 workflow_cmd=workflow_cmd,
+                extra_env={str(k): str(v) for k, v in (manifest.get("session_env") or {}).items()},
             ),
             timeout=args.timeout if args.timeout > 0 else None,  # 0 = no wall clock; budget is the stop
         )

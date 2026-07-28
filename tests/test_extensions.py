@@ -156,3 +156,24 @@ def test_sarif_empty_run_is_ready():
     pack = convert({"runs": [{"tool": {"driver": {"name": "T"}}, "results": []}]},
                    "s", "x", None, None, "audit", "r")
     assert pack["findings"] == [] and pack["verdict"] == "ready"
+
+
+def test_multiple_tools_same_lens_all_listed(tmp_path):
+    f = tmp_path / "e.md"
+    f.write_text(
+        "## Analyser registry\n\n```json\n" + json.dumps({"analysers": [
+            {"name": "a", "command": "a --scan", "lenses": ["security"]},
+            {"name": "b", "command": "b --scan", "lenses": ["security"]},
+        ]}) + "\n```\n", encoding="utf-8")
+    data = ext.load(f)
+    assert [e["name"] for e in data["registry"]] == ["a", "b"] and not data["problems"]
+
+
+def test_placeholder_braces_are_not_metacharacters(tmp_path):
+    f = tmp_path / "e.md"
+    f.write_text(
+        "## Analyser registry\n\n```json\n" + json.dumps({"analysers": [
+            {"name": "t", "command": "tool {target} -o {workspace}/out.sarif"}]})
+        + "\n```\n", encoding="utf-8")
+    data = ext.load(f)
+    assert data["registry"] and not data["problems"]
