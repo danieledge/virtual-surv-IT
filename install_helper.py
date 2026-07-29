@@ -344,7 +344,7 @@ class Installer:
             else:
                 self.step_fail(
                     "Locate clone",
-                    "no known clone - run: python scripts/install_helper.py install",
+                    "no known clone - run: python install_helper.py install",
                 )
                 return
         else:
