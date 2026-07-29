@@ -44,6 +44,8 @@ section as the decision moves from accepted to implemented.
 | Linked tickets / PRs | <ref> |
 
 ## Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Author / owner | | | |

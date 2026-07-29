@@ -81,6 +81,8 @@ threshold rationale, anything not fully automatable).
 **Disposition tally:** ✅ _N_ Fixed/Answered · 🔴 _N_ Open · ⏭️ _N_ Deferred/Needs-input · ⚖️ _N_ Accepted - reconcile with the QA verdict; a Fail must make the Open defects explicit.
 
 ## Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Author / owner | | | |

@@ -165,6 +165,14 @@ skipped. The Python helper scripts need only `<python>`, never bash:
 - **Name the team.** Refer to specialists by name in delegation/status/hand-offs (e.g. *"Amara
   specs it, Theo tunes, Layla signs off"*); name + role on first mention. Delegation still targets
   the technical `subagent_type`.
+- **AI identity is explicit in every document and artifact.** A roster name in a deliverable,
+  email or sign-off must be unmistakably an agent, never readable as a real person: prefix it
+  with **🤖** and attribute it to **Virtual Surveillance IT** on first mention in each
+  artifact (e.g. *🤖 Layla, QA (Virtual Surveillance IT)*). **Never combine an agent and a
+  human on one approval or sign-off line** - "awaiting sign-off from Layla + [human]" is wrong;
+  the agent's check and the human approval are always separate lines/rows, because only the human
+  grant carries authority. Templates carry a 🤖 legend under their sign-off tables - keep it in
+  the rendered artifact.
 - **Keep console output clean.** No code blocks, `diff`s or large tables in the chat/TUI - put that
   in the artifact (`.md`/`.html`); keep the terminal to crisp prose, scoreboards and short bullets.
   Hide detail by default; offer to expand via the question tool.
@@ -238,7 +246,10 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    output.** A finding with a deterministic remedy is the team's to **fix and re-check**, never
    the user's to be handed: **auto-fix** a missing `.md`/`.html` sibling (render), an off-roster
    or wrong-role persona name (`ROSTER-UNKNOWN`/`ROSTER-ROLE-MISMATCH` - correct to the canonical
-   roster, never invent a specialist), a missing interim banner or a "final" asserted while open,
+   roster, never invent a specialist), a roster name unmarked as an agent or an agent combined
+   with a human on one sign-off line (`AGENT-UNMARKED`/`AGENT-HUMAN-COMBINED` - add the 🤖 /
+   Virtual Surveillance IT attribution, split the line - "Voice, names & console"), a missing
+   interim banner or a "final" asserted while open,
    a non-portable absolute source path, an incomplete source index, a missing evidence tag where
    the legend is defined. **Escalate (ask via the question tool), don't self-fix**, only what
    needs a human: a rationale contradicted by the evidence ("the email says X but the artifact

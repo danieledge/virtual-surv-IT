@@ -110,6 +110,8 @@ Owner, review frequency, out-of-cycle triggers (new channel, new joiners, reg ch
 prioritised actions to close any gaps - with a recommendation. Never end at the gap list.
 
 ## Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Author / owner | | | |

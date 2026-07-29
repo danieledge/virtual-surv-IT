@@ -66,6 +66,8 @@ formally dispositioned before sign-off - don't close the FSD with a blocker open
 | Q1 | <…> | <owner> | <open / answered: …> |
 
 ## 10. Approvals
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Business-analyst (author) | | | |
@@ -73,6 +75,8 @@ formally dispositioned before sign-off - don't close the FSD with a blocker open
 | Head of Surveillance / sponsor | | | |
 
 ## Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Author / owner | | | |

@@ -81,6 +81,8 @@ Hand segments to the **Threshold Tuning Pack** for ATL/BTL per segment; independ
 `model-validator`. Re-segmentation cadence and triggers are recorded in the header above.
 
 ## Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Author / owner | | | |

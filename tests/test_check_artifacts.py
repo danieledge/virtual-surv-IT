@@ -20,9 +20,13 @@ from scripts.check_artifacts import (
     _index_status,
     apply_fixes,
     check,
+    check_agent_identity,
     check_map,
+    check_registry,
     check_roster,
     find_codebase_map,
+    main as ca_main,
+    workspace_dirs,
 )
 
 _VALID_PACK = {
@@ -458,6 +462,47 @@ def test_roster_role_mismatch_flagged(tmp_path):
 def test_roster_correct_attributions_pass(tmp_path):
     text = "Ravi (code-reviewer), Layla (compliance-reviewer), Hassan (tm-sme), Amara (BA), Morgan (PM)."
     assert check_roster(text, tmp_path / "d.md") == []
+
+
+# --- AI-identity gate (2026-07-29 user rule: agents never readable as real people) --------
+
+
+def test_agent_unmarked_when_persona_and_no_marker(tmp_path):
+    findings = check_agent_identity("Ravi (code-reviewer) reviewed it.", tmp_path / "d.md")
+    assert len(findings) == 1 and "AGENT-UNMARKED" in findings[0]
+
+
+def test_agent_marked_passes(tmp_path):
+    text = "🤖 Ravi (code-reviewer), Virtual Surveillance IT, reviewed it."
+    assert check_agent_identity(text, tmp_path / "d.md") == []
+
+
+def test_agent_no_persona_no_finding(tmp_path):
+    # Prose with no team-persona attribution never needs a marker.
+    assert check_agent_identity("The ETL runs nightly.", tmp_path / "d.md") == []
+
+
+def test_agent_human_combined_flagged(tmp_path):
+    findings = check_agent_identity(
+        "🤖 legend present\nAwaiting sign-off from Layla + Daniel.", tmp_path / "d.md"
+    )
+    assert len(findings) == 1
+    assert "AGENT-HUMAN-COMBINED" in findings[0] and "Layla" in findings[0]
+
+
+def test_agent_human_combined_reversed_order(tmp_path):
+    findings = check_agent_identity("🤖\nApproved by Daniel & Layla.", tmp_path / "d.md")
+    assert len(findings) == 1 and "AGENT-HUMAN-COMBINED" in findings[0]
+
+
+def test_two_agents_joined_pass(tmp_path):
+    # Two roster names on one line is delegation, not an agent+human approval line.
+    assert check_agent_identity("🤖\nTheo + Ana pair on tuning.", tmp_path / "d.md") == []
+
+
+def test_agent_joined_to_acronym_passes(tmp_path):
+    # The other token must be name-shaped; an acronym like RTM never trips it.
+    assert check_agent_identity("🤖\nLayla + RTM check.", tmp_path / "d.md") == []
 
 
 def test_roster_ignores_non_team_parentheticals(tmp_path):
@@ -986,8 +1031,17 @@ def test_light_profile_close_requires_email_too(tmp_path):
     (art / "engagement-summary-t.txt").write_text("Hi,\n\nDone. - Morgan\n", encoding="utf-8")
     from scripts.engagement_state import main as es_main
 
-    es_main(["--dir", str(art), "add-artifact", "engagement-summary-t.txt",
-             "--title", "Summary email", "--final"])
+    es_main(
+        [
+            "--dir",
+            str(art),
+            "add-artifact",
+            "engagement-summary-t.txt",
+            "--title",
+            "Summary email",
+            "--final",
+        ]
+    )
     assert not any("MISSING-SUMMARY-EMAIL" in f for f in check(art))
 
 
@@ -997,8 +1051,6 @@ def test_standard_profile_close_still_requires_email(tmp_path):
 
 
 # ----------------------------------------------------- workspaces + registry (0.31)
-
-from scripts.check_artifacts import check_registry, main as ca_main, workspace_dirs
 
 
 def _ws(tmp_path, slug, close=False):

@@ -33,6 +33,11 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      report is rendered from. (`artifacts/data/` is machine-readable source; the top-level
      `artifacts/` stays user-navigable .md/.txt/.html and is what the .html-sibling + index checks
      cover - the data/ subtree is excluded from them.)
+  9. AI identity is explicit: an artifact attributing work to a team persona carries a 🤖
+     marker (`AGENT-UNMARKED`), and no line joins an agent and a human with `+`/`&`
+     (`AGENT-HUMAN-COMBINED`) - roster names must never read as real people, and an agent
+     never shares a sign-off line with the human approver (operating guide, "Voice, names
+     & console").
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
 No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
@@ -137,6 +142,58 @@ _ROLE_ALIASES = {slug: slug for slug in _ROSTER.values() if slug != "pm"}
 _ROLE_ALIASES["project-manager"] = "pm"
 # Persona attribution pattern: "Name (role)". Name is a single capitalised word.
 _PERSONA_RE = re.compile(r"\b([A-Z][a-z]{2,})\s*\(([A-Za-z][A-Za-z /_-]{1,40})\)")
+
+# AI-identity gate (operating guide "Voice, names & console", user rule 2026-07-29): a roster
+# name in an artifact must be unmistakably an AI agent (🤖 + Virtual Surveillance IT), and an
+# agent must never share one sign-off/approval line with a human - only the human grant carries
+# authority. Two mechanical checks:
+#   AGENT-UNMARKED (auto-fix) - the artifact makes a persona attribution but carries no 🤖
+#     marker anywhere (add the marker / the sign-off legend);
+#   AGENT-HUMAN-COMBINED (auto-fix: split the line) - a roster name is joined by `+`/`&` to a
+#     capitalised non-roster name on one line ("sign-off from Layla + Daniel"). Two roster
+#     names joined ("Theo + Ana") is fine; the other token must be name-shaped
+#     ([A-Z][a-z]{2,}), so "Layla + RTM" never trips it.
+_ROSTER_NAMES_RE = "|".join(sorted(n.capitalize() for n in _ROSTER))
+_AGENT_JOIN_RE = re.compile(
+    rf"\b({_ROSTER_NAMES_RE})\b\s*[+&]\s*([A-Z][a-z]{{2,}})\b"
+    rf"|\b([A-Z][a-z]{{2,}})\s*[+&]\s*\b({_ROSTER_NAMES_RE})\b"
+)
+_AI_MARKER = "🤖"
+
+
+def check_agent_identity(text: str, where: Path) -> list[str]:
+    """Flag artifacts where an agent persona could be read as a real person.
+
+    Fires AGENT-UNMARKED when a definite team-persona attribution (`Name (full-role-slug)`)
+    exists but the file has no 🤖 marker at all; AGENT-HUMAN-COMBINED when a roster name and a
+    non-roster name share one line joined by `+`/`&`. Both are AUTO-FIX class: add the marker /
+    split the line - never a defect handed to the user.
+    """
+    findings: list[str] = []
+    has_persona = any(
+        m.group(1).lower() in _ROSTER
+        and _ROLE_ALIASES.get(re.sub(r"[\s_]+", "-", m.group(2).strip().lower())) is not None
+        for m in _PERSONA_RE.finditer(text)
+    )
+    if has_persona and _AI_MARKER not in text:
+        findings.append(
+            f"AGENT-UNMARKED: {where} attributes work to a team persona but carries no 🤖 "
+            "marker - roster names must read as AI agents (🤖 + Virtual Surveillance IT on "
+            "first mention; auto-fix: add the marker / the sign-off legend)"
+        )
+    seen: set[str] = set()
+    for m in _AGENT_JOIN_RE.finditer(text):
+        agent = m.group(1) or m.group(4)
+        other = m.group(2) or m.group(3)
+        if other.lower() in _ROSTER or m.group(0) in seen:
+            continue  # two agents on one line is not an agent+human combination
+        seen.add(m.group(0))
+        findings.append(
+            f"AGENT-HUMAN-COMBINED: {where} joins agent '{agent}' and '{other}' on one line "
+            f"('{m.group(0)}') - an agent and a human never share a sign-off/approval line; "
+            "auto-fix: split into separate lines (only the human grant carries authority)"
+        )
+    return findings
 
 
 def check_roster(text: str, where: Path) -> list[str]:
@@ -402,7 +459,8 @@ def _load_engagement_state_module():
         from scripts import engagement_state  # normal `-m` / package mode
 
         return engagement_state
-    except Exception:
+    # Probe only; fall through to the file-relative loader.
+    except Exception:  # nosec B110
         pass
     try:
         import importlib.util
@@ -428,9 +486,7 @@ def check_state(artifacts_dir: Path) -> list[str]:
         return findings
     state_file = artifacts_dir / es.STATE_FILENAME
     index = artifacts_dir / "START-HERE.md"
-    index_text = (
-        index.read_text(encoding="utf-8", errors="replace") if index.is_file() else ""
-    )
+    index_text = index.read_text(encoding="utf-8", errors="replace") if index.is_file() else ""
     if not state_file.is_file():
         if es.STATE_FILENAME in index_text:
             findings.append(
@@ -542,9 +598,7 @@ def check_review_fingerprints(artifacts_dir: Path) -> list[str]:
     findings: list[str] = []
     for f in sorted(artifacts_dir.rglob("*")):
         if not (
-            f.is_file()
-            and f.suffix.lower() in _CODE_EXTS
-            and not _TEST_FILE_RE.search(f.name)
+            f.is_file() and f.suffix.lower() in _CODE_EXTS and not _TEST_FILE_RE.search(f.name)
         ):
             continue
         md5 = hashlib.md5(f.read_bytes()).hexdigest()  # nosec B324 - fingerprint, not crypto
@@ -612,6 +666,7 @@ def check(artifacts_dir: Path) -> list[str]:
                 "each on its own line, the same five for every finding (docs/review/output-format.md)"
             )
         findings.extend(check_roster(text, md))
+        findings.extend(check_agent_identity(text, md))
 
     # A wrongly-rendered email copy - the summary email is a .txt only, never an .html.
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
@@ -854,9 +909,7 @@ def workspace_dirs(artifacts_dir: Path) -> list[Path]:
     if not artifacts_dir.is_dir():
         return []
     return sorted(
-        p
-        for p in artifacts_dir.iterdir()
-        if p.is_dir() and (p / "engagement-state.json").is_file()
+        p for p in artifacts_dir.iterdir() if p.is_dir() and (p / "engagement-state.json").is_file()
     )
 
 
