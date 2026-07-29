@@ -3,9 +3,17 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [Unreleased]
+## [0.32.0] - 2026-07-29 - Company extensions + explicit AI identity
 
 ### Added
+- **AI identity explicit in every artifact**: any roster name in a document, artifact, email
+  or sign-off is marked 🤖 and attributed to **Virtual Surveillance IT** on first mention, so
+  it can never read as a real person; an agent and a human approver never share one
+  sign-off/approval line (only the human grant carries authority). Standing rule in the
+  operating guide ("Voice, names & console"), 🤖 legend under every template
+  Sign-off/Approvals table (41 tables), the summary-email From/signature marked, and two
+  auto-fix-class mechanical gates in `check_artifacts`: `AGENT-UNMARKED` and
+  `AGENT-HUMAN-COMBINED`. 7 new tests.
 - **Company extensions - first-class (ADR-009)**: `docs/team-extensions.md` contract in the
   working project (template shipped) - standing instructions, close-action OFFERS (previewed
   at the gate, executed only on approval after the standard close), analyser registry with
@@ -16,7 +24,17 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   evidence). STAGED guard change (human-applied): `extensions`/`convert_sarif` basenames +
   the `CST_COMPANY_ALLOW` human-curated literal-prefix allowlist for interpreter-wrapped
   company tools. Additive-only hard rule wired through skill, close checklist and operating
-  guide. 12 new tests. Live golden case + guard apply at 0.32 promotion.
+  guide. 12 new tests. Guard apply remains a human action
+  (`scripts/apply-guard-exec-allow.sh`); the extensions live golden case is deferred to the
+  next full-scope baseline (this promotion is deterministic-only by user decision - see
+  `evals/eval-baseline-0.32.0.md`).
+
+### Fixed
+- **CI green end to end**: repo-wide `ruff format` (13 drifted files, staged/live hook copies
+  kept byte-identical), E402/F401 lint fixes, bandit `# nosec` annotations for fixed-argv
+  subprocess calls and best-effort excepts (0 findings), and Windows runner fixes - explicit
+  UTF-8 on test `read_text()` calls, a backslash-aware transcript-slug assertion, and the
+  invalid-`<`-filename XSS fixture skipped on win32.
 
 ## [0.31.0] - 2026-07-27 - Multi-engagement workspaces
 
