@@ -145,6 +145,8 @@ _COMPANY_ALLOW_PREFIXES = tuple(
 
 def _company_allowed(segment: str) -> bool:
     return any(segment.startswith(prefix) for prefix in _COMPANY_ALLOW_PREFIXES)
+
+
 # 0.29.1: two plugin-mode fixes, both observed live (a consent prompt for the team's OWN
 # tooling forces exec consent for internal validations - the exact thing §7 says the gate
 # must not cover):

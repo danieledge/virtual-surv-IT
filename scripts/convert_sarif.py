@@ -53,13 +53,20 @@ def _location(result: dict) -> str:
     for loc in result.get("locations") or []:
         phys = loc.get("physicalLocation") or {}
         uri = ((phys.get("artifactLocation") or {}).get("uri")) or "unknown"
-        line = ((phys.get("region") or {}).get("startLine"))
+        line = (phys.get("region") or {}).get("startLine")
         return f"{uri}:{line}" if line else uri
     return "unknown"
 
 
-def convert(sarif: dict, slug: str, scope: str, tool: str | None, sev_spec: str | None,
-            mode: str, source_name: str) -> dict:
+def convert(
+    sarif: dict,
+    slug: str,
+    scope: str,
+    tool: str | None,
+    sev_spec: str | None,
+    mode: str,
+    source_name: str,
+) -> dict:
     mapping = _sev_map(sev_spec)
     findings: list[dict] = []
     tool_names: list[str] = []
@@ -102,7 +109,8 @@ def convert(sarif: dict, slug: str, scope: str, tool: str | None, sev_spec: str 
     for f in findings:
         counts[f["severity"]] += 1
     verdict = (
-        "not yet - open criticals" if counts["critical"]
+        "not yet - open criticals"
+        if counts["critical"]
         else ("conditional" if findings else "ready")
     )
     return {
@@ -135,8 +143,9 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, json.JSONDecodeError) as exc:
         print(f"cannot read SARIF: {exc}", file=sys.stderr)
         return 2
-    pack = convert(sarif, args.slug, args.scope, args.tool, args.severity_map, args.mode,
-                   args.sarif.name)
+    pack = convert(
+        sarif, args.slug, args.scope, args.tool, args.severity_map, args.mode, args.sarif.name
+    )
     out = args.out or args.sarif.parent / f"findings-{args.slug}.json"
     out.write_text(json.dumps(pack, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {out} ({len(pack['findings'])} finding(s); verdict {pack['verdict']})")

@@ -107,8 +107,9 @@ def test_check_exit_codes(tmp_path):
     clean = tmp_path / "clean.md"
     clean.write_text(
         "## Analyser registry\n\n```json\n"
-        + json.dumps({"analysers": [{"name": "python-tool", "command": "python3 -V",
-                                     "probe": "python3"}]})
+        + json.dumps(
+            {"analysers": [{"name": "python-tool", "command": "python3 -V", "probe": "python3"}]}
+        )
         + "\n```\n",
         encoding="utf-8",
     )
@@ -119,18 +120,32 @@ def test_check_exit_codes(tmp_path):
 
 _SARIF = {
     "version": "2.1.0",
-    "runs": [{
-        "tool": {"driver": {"name": "AcmeScan", "rules": [
-            {"id": "SQLI-1", "shortDescription": {"text": "SQL injection risk"}}]}},
-        "results": [
-            {"ruleId": "SQLI-1", "level": "error",
-             "message": {"text": "Unsanitised query concat"},
-             "locations": [{"physicalLocation": {
-                 "artifactLocation": {"uri": "src/db.py"},
-                 "region": {"startLine": 42}}}]},
-            {"ruleId": "STYLE-9", "level": "note", "message": {"text": "Long line"}},
-        ],
-    }],
+    "runs": [
+        {
+            "tool": {
+                "driver": {
+                    "name": "AcmeScan",
+                    "rules": [{"id": "SQLI-1", "shortDescription": {"text": "SQL injection risk"}}],
+                }
+            },
+            "results": [
+                {
+                    "ruleId": "SQLI-1",
+                    "level": "error",
+                    "message": {"text": "Unsanitised query concat"},
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": "src/db.py"},
+                                "region": {"startLine": 42},
+                            }
+                        }
+                    ],
+                },
+                {"ruleId": "STYLE-9", "level": "note", "message": {"text": "Long line"}},
+            ],
+        }
+    ],
 }
 
 
@@ -153,18 +168,33 @@ def test_sarif_severity_map_override():
 
 
 def test_sarif_empty_run_is_ready():
-    pack = convert({"runs": [{"tool": {"driver": {"name": "T"}}, "results": []}]},
-                   "s", "x", None, None, "audit", "r")
+    pack = convert(
+        {"runs": [{"tool": {"driver": {"name": "T"}}, "results": []}]},
+        "s",
+        "x",
+        None,
+        None,
+        "audit",
+        "r",
+    )
     assert pack["findings"] == [] and pack["verdict"] == "ready"
 
 
 def test_multiple_tools_same_lens_all_listed(tmp_path):
     f = tmp_path / "e.md"
     f.write_text(
-        "## Analyser registry\n\n```json\n" + json.dumps({"analysers": [
-            {"name": "a", "command": "a --scan", "lenses": ["security"]},
-            {"name": "b", "command": "b --scan", "lenses": ["security"]},
-        ]}) + "\n```\n", encoding="utf-8")
+        "## Analyser registry\n\n```json\n"
+        + json.dumps(
+            {
+                "analysers": [
+                    {"name": "a", "command": "a --scan", "lenses": ["security"]},
+                    {"name": "b", "command": "b --scan", "lenses": ["security"]},
+                ]
+            }
+        )
+        + "\n```\n",
+        encoding="utf-8",
+    )
     data = ext.load(f)
     assert [e["name"] for e in data["registry"]] == ["a", "b"] and not data["problems"]
 
@@ -172,9 +202,13 @@ def test_multiple_tools_same_lens_all_listed(tmp_path):
 def test_placeholder_braces_are_not_metacharacters(tmp_path):
     f = tmp_path / "e.md"
     f.write_text(
-        "## Analyser registry\n\n```json\n" + json.dumps({"analysers": [
-            {"name": "t", "command": "tool {target} -o {workspace}/out.sarif"}]})
-        + "\n```\n", encoding="utf-8")
+        "## Analyser registry\n\n```json\n"
+        + json.dumps(
+            {"analysers": [{"name": "t", "command": "tool {target} -o {workspace}/out.sarif"}]}
+        )
+        + "\n```\n",
+        encoding="utf-8",
+    )
     data = ext.load(f)
     assert data["registry"] and not data["problems"]
 
@@ -184,15 +218,34 @@ def test_placeholder_braces_are_not_metacharacters(tmp_path):
 
 def test_add_tool_creates_contract_and_upserts(tmp_path):
     f = tmp_path / "team-extensions.md"
-    assert ext.main(["--file", str(f), "add-tool", "--name", "cx",
-                     "--command", "cxcli scan .", "--lenses", "security",
-                     "--replaces", "bandit", "--output", "sarif"]) == 0
+    assert (
+        ext.main(
+            [
+                "--file",
+                str(f),
+                "add-tool",
+                "--name",
+                "cx",
+                "--command",
+                "cxcli scan .",
+                "--lenses",
+                "security",
+                "--replaces",
+                "bandit",
+                "--output",
+                "sarif",
+            ]
+        )
+        == 0
+    )
     data = ext.load(f)
     assert data["registry"][0]["name"] == "cx"
     assert data["registry"][0]["replaces"] == ["bandit"]
     # upsert replaces, never duplicates
-    assert ext.main(["--file", str(f), "add-tool", "--name", "cx",
-                     "--command", "cxcli scan --full ."]) == 0
+    assert (
+        ext.main(["--file", str(f), "add-tool", "--name", "cx", "--command", "cxcli scan --full ."])
+        == 0
+    )
     data = ext.load(f)
     assert len(data["registry"]) == 1
     assert data["registry"][0]["command"] == "cxcli scan --full ."
@@ -201,8 +254,7 @@ def test_add_tool_creates_contract_and_upserts(tmp_path):
 def test_add_tool_preserves_other_sections(tmp_path):
     f = tmp_path / "team-extensions.md"
     f.write_text(_CONTRACT, encoding="utf-8")
-    assert ext.main(["--file", str(f), "add-tool", "--name", "new",
-                     "--command", "newtool ."]) == 0
+    assert ext.main(["--file", str(f), "add-tool", "--name", "new", "--command", "newtool ."]) == 0
     data = ext.load(f)
     assert "CTRL-xxx" in data["sections"]["Standing instructions"]  # untouched
     assert "Jira" in data["sections"]["Close actions"]
@@ -211,8 +263,9 @@ def test_add_tool_preserves_other_sections(tmp_path):
 
 def test_add_tool_refuses_metacharacters(tmp_path):
     f = tmp_path / "team-extensions.md"
-    assert ext.main(["--file", str(f), "add-tool", "--name", "evil",
-                     "--command", "x; rm -rf /"]) == 2
+    assert (
+        ext.main(["--file", str(f), "add-tool", "--name", "evil", "--command", "x; rm -rf /"]) == 2
+    )
     assert not f.exists()  # refused before writing anything
 
 
@@ -221,9 +274,24 @@ def test_add_tool_refuses_metacharacters(tmp_path):
 
 def test_mcp_registry_entry_valid_and_shown(tmp_path, capsys):
     f = tmp_path / "e.md"
-    assert ext.main(["--file", str(f), "add-tool", "--name", "sonar",
-                     "--mcp", "atlassian.security_scan", "--lenses", "security",
-                     "--replaces", "bandit"]) == 0
+    assert (
+        ext.main(
+            [
+                "--file",
+                str(f),
+                "add-tool",
+                "--name",
+                "sonar",
+                "--mcp",
+                "atlassian.security_scan",
+                "--lenses",
+                "security",
+                "--replaces",
+                "bandit",
+            ]
+        )
+        == 0
+    )
     data = ext.load(f)
     e = data["registry"][0]
     assert e["mcp"] == "atlassian.security_scan" and "command" not in e
@@ -235,14 +303,17 @@ def test_mcp_registry_entry_valid_and_shown(tmp_path, capsys):
 
 def test_command_and_mcp_mutually_exclusive(tmp_path):
     f = tmp_path / "e.md"
-    assert ext.main(["--file", str(f), "add-tool", "--name", "x",
-                     "--command", "x .", "--mcp", "s.t"]) == 2
+    assert (
+        ext.main(["--file", str(f), "add-tool", "--name", "x", "--command", "x .", "--mcp", "s.t"])
+        == 2
+    )
     assert not f.exists()
 
 
 def test_wizard_registers_via_prompts(tmp_path, monkeypatch):
-    answers = iter(["wiz", "cli", "wiztool scan .", "wiztool", "security", "bandit",
-                    "sarif", "error=critical"])
+    answers = iter(
+        ["wiz", "cli", "wiztool scan .", "wiztool", "security", "bandit", "sarif", "error=critical"]
+    )
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     f = tmp_path / "e.md"
     assert ext.main(["--file", str(f), "add-tool", "--interactive"]) == 0
@@ -252,8 +323,9 @@ def test_wizard_registers_via_prompts(tmp_path, monkeypatch):
 
 
 def test_wizard_rejects_metachar_command_and_reprompts(tmp_path, monkeypatch):
-    answers = iter(["wiz", "cli", "bad; rm -rf /", "goodtool scan .", "goodtool",
-                    "security", "", "text", ""])
+    answers = iter(
+        ["wiz", "cli", "bad; rm -rf /", "goodtool scan .", "goodtool", "security", "", "text", ""]
+    )
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     f = tmp_path / "e.md"
     assert ext.main(["--file", str(f), "add-tool", "--interactive"]) == 0

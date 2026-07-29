@@ -24,6 +24,7 @@ def _load(path: Path):
     spec.loader.exec_module(module)
     return module
 
+
 STAGED = _load(REPO / "scripts" / "staged_hooks" / "guard-code-execution.py")
 LIVE = _load(REPO / ".claude" / "hooks" / "guard-code-execution.py")
 
@@ -83,9 +84,7 @@ def test_non_team_basenames_still_blocked_quoted_or_not():
 def test_quote_smuggling_does_not_wave_through():
     # A chained execution after an allowed segment still blocks.
     segs = STAGED._segments('python3 "/x/scripts/render_html.py" ; pytest')
-    assert any(
-        not STAGED._TEAM_ALLOW.match(s) and STAGED._EXEC_RE.search(s) for s in segs
-    )
+    assert any(not STAGED._TEAM_ALLOW.match(s) and STAGED._EXEC_RE.search(s) for s in segs)
     # Half-quoted smuggle: basename not at the closing quote -> NOT allowed (0.29.1
     # tightening: the pre-fix `[\"']?\S*` accepted this), and still exec-flagged.
     cmd = 'python3 "/x/scripts/render_html.py evil.py"'
@@ -103,8 +102,10 @@ def test_exec_patterns_identical_to_live_guard():
 def test_live_guard_matches_staged_once_applied():
     """After the human runs apply-guard-exec-allow.sh, live == staged; until then this
     documents the pending state rather than failing CI."""
-    live_text = (REPO / ".claude" / "hooks" / "guard-code-execution.py").read_text()
-    staged_text = (REPO / "scripts" / "staged_hooks" / "guard-code-execution.py").read_text()
+    live_text = (REPO / ".claude" / "hooks" / "guard-code-execution.py").read_text(encoding="utf-8")
+    staged_text = (REPO / "scripts" / "staged_hooks" / "guard-code-execution.py").read_text(
+        encoding="utf-8"
+    )
     if live_text != staged_text:
         import pytest
 

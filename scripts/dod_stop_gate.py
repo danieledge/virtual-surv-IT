@@ -95,10 +95,10 @@ def main() -> int:
     gated: list[tuple[str, Path]] = []
     try:
         workspaces = sorted(
-            p for p in artifacts.iterdir()
-            if p.is_dir() and (
-                (p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file()
-            )
+            p
+            for p in artifacts.iterdir()
+            if p.is_dir()
+            and ((p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file())
         )
     except OSError:
         workspaces = []
