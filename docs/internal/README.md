@@ -25,3 +25,4 @@ Contents:
 | `prepare-data-design.md` / `prepare-data-roadmap.md` | Design spec + roadmap for the assisted-masking evolution (not yet built) |
 | `engagement-flow-spec.md` | The normative spec of the engagement machine (hooks, gates, close order) |
 | `engagement-flow-diagram.md` / `engagement-flow-poster-flowchart.html` | Flow visuals / marketing poster |
+| `resolved-issues.md` | Archive of previously reported known issues that are resolved or fully mitigated (the README keeps only open ones) |

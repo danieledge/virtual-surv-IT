@@ -12,10 +12,14 @@ apply-*.sh hook scripts, a session restart).
 Design constraints:
 - stdlib only, Python 3.9+ - the helper must run before any pip install has happened.
 - Human-run from a terminal. It shells out to the `claude` CLI (`claude plugin ...`),
-  which is the scriptable twin of the interactive `/plugin` commands; nothing here ever
-  edits any project's .claude/settings.json, writes secrets, or runs the repo's
-  apply-*.sh scripts (those are deliberate separate human actions - the summary lists
-  them as reminders instead).
+  which is the scriptable twin of the interactive `/plugin` commands; it never writes
+  secrets and never runs the repo's apply-*.sh scripts (those are deliberate separate
+  human actions - the summary lists them as reminders instead). The ONE settings write it
+  can do is explicit opt-in: `--permissions <project-dir>` merges the README's recommended
+  permissions.allow entries into that project's .claude/settings.json - add-only (nothing
+  is removed or overwritten, deny/hooks untouched), the existing file is backed up first,
+  and an unparseable settings file makes it refuse. Because you run this helper yourself,
+  that write is a human act (ADR-002 rec 5 governs the model, which stays blocked).
 - Never destructive: a dirty working tree is detected before any reset and the run
   refuses (or stashes, only on an explicit interactive choice). Local commits ahead of
   origin block a non-interactive reset.
@@ -51,6 +55,40 @@ PLUGIN_ID = "compliance-surveillance-team@virtual-surv-it"
 BRANCHES = ("main", "dev")
 DEFAULT_CLONE_DIR = Path.home() / "virtual-surv-IT"
 CLAUDE_DOCS_URL = "https://claude.com/claude-code"
+
+# The README's recommended per-project allow-list: fewer permission prompts on the team's
+# own consent-free tooling. Merged ADD-ONLY by --permissions; the safety model is
+# unaffected (allow entries cannot override deny rules or the guard hooks).
+RECOMMENDED_ALLOW = (
+    "Bash(ruff *)",
+    "Bash(mypy *)",
+    "Bash(bandit *)",
+    "Bash(semgrep *)",
+    "Bash(shellcheck *)",
+    "Bash(python -m scripts.*)",
+    "Bash(python3 -m scripts.*)",
+    "Bash(py -m scripts.*)",
+    "Bash(*scripts/check-review-tools.sh*)",
+    "Bash(*scripts/render_html.py*)",
+    "Bash(*scripts/check_artifacts.py*)",
+    "Bash(*scripts/gen_synthetic.py*)",
+)
+
+
+def merge_allow(settings: dict, entries=RECOMMENDED_ALLOW):
+    """Add-only merge of allow entries into a settings dict. Returns (settings, added).
+
+    Everything already present is preserved untouched - deny rules, hooks, other keys,
+    existing allow entries and their order; new entries append in the given order."""
+    permissions = settings.setdefault("permissions", {})
+    allow = permissions.setdefault("allow", [])
+    if not isinstance(allow, list):
+        raise InstallAbort(
+            "permissions.allow in the target settings is not a list - not touching it"
+        )
+    added = [e for e in entries if e not in allow]
+    allow.extend(added)
+    return settings, added
 
 
 # ------------------------------------------------------------------ config persistence
@@ -573,6 +611,54 @@ class Installer:
         return 1 if aborted else 0
 
 
+# ------------------------------------------------------------------ permissions merge
+
+
+def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
+    """Standalone opt-in step: merge RECOMMENDED_ALLOW into <project>/.claude/settings.json.
+
+    Add-only with a dated backup of any existing file; refuses on unparseable JSON rather
+    than clobbering. Human-run by definition (this script is a terminal tool)."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    project = project_dir.expanduser().resolve()
+    if not project.is_dir():
+        print(f"{fail} not a directory: {project}")
+        return 1
+    target = project / ".claude" / "settings.json"
+    settings: dict = {}
+    if target.is_file():
+        try:
+            settings = json.loads(target.read_text(encoding="utf-8"))
+            if not isinstance(settings, dict):
+                raise ValueError("settings root is not an object")
+        except (OSError, ValueError) as exc:
+            print(f"{fail} {target} is not readable JSON ({exc}) - refusing to touch it")
+            return 1
+    try:
+        settings, added = merge_allow(settings)
+    except InstallAbort as exc:
+        print(f"{fail} {exc}")
+        return 1
+    if not added:
+        print(f"{ok} {target}: all {len(RECOMMENDED_ALLOW)} recommended entries already present")
+        return 0
+    if target.is_file():
+        backup = target.with_name("settings.json.bak-2026-07-30")
+        n = 1
+        while backup.exists():
+            n += 1
+            backup = target.with_name(f"settings.json.bak-2026-07-30.{n}")
+        backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"{ok} backed up existing settings to {backup.name}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    print(
+        f"{ok} {target}: added {len(added)} allow entr{'y' if len(added) == 1 else 'ies'} (add-only; deny rules and hooks untouched)"
+    )
+    print(style.dim("    Inspect any time with /permissions inside Claude Code."))
+    return 0
+
+
 # ------------------------------------------------------------------ CLI
 
 
@@ -597,12 +683,20 @@ def parse_args(argv=None) -> argparse.Namespace:
         action="store_true",
         help="with --yes: also pip-install requirements-dev.txt (default: skip)",
     )
+    parser.add_argument(
+        "--permissions",
+        metavar="PROJECT_DIR",
+        help="standalone: merge the README's recommended permissions.allow entries into "
+        "PROJECT_DIR/.claude/settings.json (add-only, backs the file up first) and exit",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> int:
     args = parse_args(argv)
     style = Style(supports_color())
+    if args.permissions:
+        return run_permissions(Path(args.permissions), style, marks())
     return Installer(args, style, marks()).run()
 
 

@@ -139,7 +139,7 @@ detect_spoofing(spoofing_session(seed=1), SpoofingThresholds(large_qty_multiple=
 > `pytest` executes code, so inside the team it needs execution consent - granted by the human
 > only, via the `.claude/.exec-consent` marker or `CST_ALLOW_EXEC=1` (the `/engage` intake answer
 > records intent, it grants nothing) - see
-> [the safety hooks](../../README.md#-the-safety-hooks-plain-english).
+> [the safety hooks](../../README.md#-the-safety-hooks).
 > The `scripts.*` helpers (`gen_synthetic`, `validate_masking`) are always allowed.
 
 ## 7. Limitations & open items

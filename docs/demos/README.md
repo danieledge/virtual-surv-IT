@@ -29,3 +29,7 @@ generated at the moment, not scripted by the repo author.
 
 **To run a demo live:** open the repo in Claude Code and type **`/demo`**. To put the team to work
 on your own code, type **`/engage`**.
+
+---
+
+Next: [Overview](../OVERVIEW.md) · [FAQ](../FAQ.md) · [Glossary](../glossary.md) · [README](../../README.md)

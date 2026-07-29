@@ -40,10 +40,17 @@ flowchart LR
     Reqs([requirements pack]) --> Build
 ```
 
+> The canonical index of **all 23 skills** lives in
+> [`docs/team-operating-guide.md`](team-operating-guide.md) §Command index; the table below is
+> a summary by entry point.
+
 | You bring… | Command | What runs |
 |---|---|---|
 | Data to get ready (real or none) | `/prepare-data` | guided synthetic-or-mask → validate, before any agent sees it |
 | An idea / problem | `/engage` → `/write-brd` | discovery → BRD → FSD → build → review |
+| A small, non-regulated job | `/engage-light` | same safety gates, one-page brief, 2-3 agents; refuses detection logic (upgrades to standard) |
+| A single detection scenario | `/new-scenario` | spec → SME review → build → compliance review |
+| A security-focused audit | `/security-audit` | OWASP ASVS / CWE + threat model, security-focused evaluator-optimizer loop |
 | A BRD | `/brd-to-fsd` | functional spec + traceability |
 | A need to elicit (BA) | `/elicit-requirements` | stakeholder analysis → requirements → RTM (BABOK) |
 | A regulatory change | `/reg-change-impact` | obligation Δ → affected scenarios/controls/data → plan |

@@ -9,11 +9,11 @@
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-23 | persona-decay discussion (user-reported) | Initial proposal: dormancy-aware UserPromptSubmit re-anchor hook |
-> | 0.2 | 2026-07-24 | best-practice review remediation | Accepted & implemented: `scripts/persona_anchor.py` (tested, ≤8-line anchor, live-engagement trigger); wiring via `scripts/apply-persona-anchor.sh` (human-run) |
+> | 0.2 | 2026-07-24 | best-practice review remediation | Accepted & implemented: `scripts/persona_anchor.py` (tested, ≤8-line anchor, live-engagement trigger); wiring by a one-shot human-run script, retired 2026-07-30 after its wiring was committed (re-wiring today: `bash scripts/apply-project-anchor.sh`) |
 
 | | |
 |---|---|
-| **Status** | **Accepted / implemented** - `scripts/persona_anchor.py`; wiring into the two hook files was human-run (`scripts/apply-persona-anchor.sh`, ADR-002 rec 5; applied 2026-07-24 - the hook ships wired) |
+| **Status** | **Accepted / implemented** - `scripts/persona_anchor.py`; wiring into the two hook files was human-run (ADR-002 rec 5; applied 2026-07-24 - the hook ships wired). The original one-shot wiring script was retired 2026-07-30 once its wiring was committed; the live re-wiring path today is `bash scripts/apply-project-anchor.sh` (syncs the staged copies to the live hooks) |
 | **Date** | 2026-07-23 |
 | **Deciders** | Morgan (orchestrator), human approver |
 | **Traceability** | ADR-004 (session-end capture hook); README "Known issues" (persona decay + name drift); `docs/team-operating-guide.md` §Voice/Roster; CLAUDE.md §6 (persona), §5/§7 (hook-enforced guards) |
@@ -96,6 +96,7 @@ philosophy as ADR-004.
 
 ## Status / next step
 
-**Proposed.** Not wired into `hooks.json`. Implementation (the hook script, the engaged-signal
-check, the anchor content + its source-of-truth file, the dormancy guard, the tests above) awaits
-human sign-off on this ADR.
+**Accepted and implemented** (0.27.0; wiring human-applied 2026-07-24 - the hook ships wired in
+both hook files). The hook script (`scripts/persona_anchor.py`), the engaged-signal check, the
+anchor content, the dormancy guard and the tests above all landed; re-wiring today is
+`bash scripts/apply-project-anchor.sh`.

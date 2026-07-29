@@ -44,9 +44,17 @@ The team builds the tooling; a person signs off every step.
 (artifacts in [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/)) ·
 [review](docs/demos/review-demo.md) · [data-safety](docs/demos/data-safety-demo.md) transcripts.
 
+> ⏱️ **Try it in 60 seconds.** Type **`/demo`** - from the repo opened as a project, or
+> `/compliance-surveillance-team:demo` from a plugin install - and Morgan runs a real engagement
+> end-to-end on safe synthetic data, narrating every decision. The Review flavour is light on
+> tokens; a full guided Build delivery is a real 9-agent run and costs roughly **$4-8 in API
+> tokens** (the measured number in [Token usage](#-token-usage--optimisation)). No tokens to
+> spare? The same runs are captured as pre-recorded transcripts in
+> [`docs/demos/README.md`](docs/demos/README.md) - reading those is free.
+
 ---
 
-**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-safety-hooks-plain-english) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [⚠️ Known issues](#known-issues) · [📖 Docs](#-documentation) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on--acknowledgements) · [📄 License](#-license)
+**📑 Jump to** - [🤔 Why](#-why-virtual-surv-it) · [✨ Features](#-features) · [🚀 Quick start](#-quick-start) · [👥 Meet the team](#-meet-the-team) · [🤖 Using them](#-using-them) · [📓 Worked example](#-worked-example) · [🧭 Core principles](#-core-principles) · [🔍 Tooling](#-code-review-tooling) · [🧪 Self-test](#-self-test-eval-harness) · [🪝 Safety hooks](#-the-safety-hooks) · [🔒 Real-data handling](#-handling-real-data) · [📁 Layout](#-layout) · [🗂️ Scripts](#-scripts-reference) · [🔧 Config](#-notes-on-the-config) · [💰 Token usage](#-token-usage--optimisation) · [🗺️ Roadmap](#-roadmap) · [📖 Docs](#-documentation) · [⚠️ Known issues](#known-issues) · [🤝 Contributing](#-contributing) · [📚 Built on](#-built-on--acknowledgements) · [📄 License](#-license)
 
 ---
 
@@ -160,24 +168,8 @@ maintainable** output than one generalist assistant, because the work is special
 the proof-of-concept framing above: a demonstration of the architecture, for real engineers
 and reviewers to build on, not accredited regulatory tooling.)*
 
-### "I already have ChatGPT / Claude / Copilot, so why would I need this?"
-
-You already have the engine; this is the vehicle. Virtual Surv-IT *runs on* Claude. It is not a
-rival model, but a demonstration of what the same model does when you stop driving it from a
-blank chat box. A chat window cannot give you:
-
-| With a chat window | With this |
-|---|---|
-| The quality of the output depends on *today's* prompt: your best prompting on a good day, someone else's on a bad one. | The prompting **is the repo**: intake questions, review method, templates and standing rules, version-controlled, peer-reviewable, identical on every engagement, and regression-tested by an eval harness. |
-| The domain knowledge has to be typed in every session: typologies, MW79, SR 11-7, ATL/BTL method, EARS syntax… | Encoded once, cited to sources, and loaded only when relevant, with a register that grows instead of a prompt that gets retyped. |
-| One context does everything: it writes the code, reviews its own code, and declares itself done. | **Separation of duties**: reviewers hold no `Write`/`Edit` tools, QA and validation run as separate agents from the build, and a fresh context reviews without the author's bias. |
-| Whatever you paste **leaves**: into someone's context window, on their retention terms. | Raw data under `data/raw/` is **kept from the model's file-read tools** (hook + OS deny-list + a CI check); the model works downstream of masking, and code execution needs a human-created consent file. (PoC-grade controls with limits documented in ADR-002, not a sandbox.) |
-| The output is a transcript. Six months later an auditor asks "why this threshold?" and the answer is scrolling. | The output is an **evidence pack**: RTM, tuning rationale with dates, finding dispositions, review reports, and a Definition of Done, in `.md` + `.html`, gated by a mechanical check. |
-| The discipline lives in your head and leaves with you. | The discipline lives in the harness and survives staff turnover, deadline pressure, and whoever types next. |
-
-None of that requires a better model. It requires the model to arrive inside **controls**, which
-is also why the pattern transfers: swap the surveillance domain knowledge for another regulated
-domain and the harness (dormancy, gates, segregation, evidence, evals) carries over.
+**Already have ChatGPT or Copilot?** The chat-window-vs-this comparison moved to the FAQ:
+[`docs/FAQ.md`](docs/FAQ.md).
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
@@ -185,175 +177,52 @@ domain and the harness (dormancy, gates, segregation, evidence, evals) carries o
 > 0.33.0 workflow-robustness release. What they mean for you:
 > [`docs/releases/0.33.1.md`](docs/releases/0.33.1.md) · [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) · full detail: [`CHANGELOG.md`](CHANGELOG.md).
 
-<details>
-<summary>✨ <b>Release history highlights (0.16 and earlier)</b>: the engagement-lifecycle release (every engagement has a visible state (in progress / blocked / closed), carried by a living START-HERE index; interim work can never masquerade as a delivery) · the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA, each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
-
-**0.16.7** - **gate hardening.** A comprehensive adversarial review of the mechanical DoD gate
-(`check_artifacts.py`) found checks that gave wrong verdicts on realistic input - two fail-unsafe.
-Fixed, each with a regression test: a non-closed engagement could read as "closed" (`"not
-closed"`, a status legend line); STALE-INDEX substring false-negatives and `#fragment`/`"title"`
-false-positives; the 0.16.6 roster check false-alarming on `"Airflow (orchestrator)"` /
-`"Independent (QA)"`; a global (not per-block) impact count; and an unreadable status leaving
-close-only artifacts ungated.
-
-**0.16.6** - **the gate is a fix-list, not a report.** User-reported: a delivery report's
-self-audit handed the user eight "documentation-standards failures" - six of them auto-fixable
-defects in the team's own output (a missing `.md` sibling, fabricated reviewer names, a missing
-interim banner). The DoD gate / critique now **auto-fixes** the mechanical defects and re-runs
-(new `ROSTER-UNKNOWN`/`ROSTER-ROLE-MISMATCH` checks catch invented specialists), and **escalates
-via the question tool** only what needs a human decision (a rationale contradicted by the evidence,
-a sign-off on unverifiable authority). 33rd golden case pins it.
-
-**0.16.5** - **the codebase map is a map, not a diary.** User-reported: a review's codebase map
-came out as a summary of testing activity instead of a map of the code. Map entries are now
-explicitly **durable architecture facts** (how the code is built), not findings/dispositions -
-template ✅/❌ contrast, `/engage` + operating-guide rules, and a 32nd golden case. Plus **ADR-004
-(proposed):** a session-end hook to capture learnings when a session ends without a clean close,
-as proposals - never auto-editing the shipped handbook.
-
-**0.16.4** - **`/engage` opening fixes.** Two user-reported bugs opening `/engage` in a fresh
-empty project: the what's-new line said "changelog not readable" (the probe's `awk` aborted on
-the missing local `CHANGELOG.md` before reaching the plugin's copy - now reads the plugin
-changelog robustly, Windows-safe), and the opening banner was sometimes skipped on a bare
-`/engage` (now explicit that the banner always leads, only the disclaimers/questions defer).
-
-**0.16.3** - **the lifecycle-validation release.** Three real end-to-end test engagements
-(review→close, a build that blocks on an unanswered question, a full build with executed QA)
-were run against 0.16.2 with actual artifact writes and audited against the new gates; all
-conformed, and a negative test confirmed the close-only guards fire on a real folder. Two gaps
-found and fixed: git-less working projects can now close clean (`Anchor no-vcs` accepted), and
-two lifecycle ambiguities (interim-banner scope, `REVIEW-<slug>` vs `review-pass-N` naming) are
-resolved.
-
-**0.16.2** - **the engagement-lifecycle release.** Born of a recorded live lesson: an
-engagement stalled on an unanswered question, the close never ran, no DoD gate ever fired,
-and an interim report was read as the delivery, with QA never run. Now every engagement is in
-exactly one visible state (⏳ in progress · ⛔ blocked, awaiting input · ✅ closed), carried
-by a **living START-HERE index** created at open and updated with every artifact; pausing on
-a question is a ⛔ said out loud ("this engagement is NOT closed, outstanding: …");
-`delivery-report.md` and the summary email are close-only, interim output takes pass-scoped
-names (`review-pass-N`, `qa-cycle-N`), all mechanically checked, at any point mid-engagement,
-by `check_artifacts` (`INDEX-NO-STATUS` / `STALE-INDEX` / `FINAL-BEFORE-CLOSE` /
-`SUMMARY-BEFORE-CLOSE`), and pinned by a new golden case (`process-blocked-not-done`).
-
-**0.16.0** - **the front-door release.** `/engage` opens in two turns (one compound probe
-instead of a 7-10-call crawl), resolves the installed plugin from the install registry on every
-install source, gives Windows users native consent commands, closes multi-artifact deliveries
-with a START-HERE index, and (new) tells you **what changed since your last engagement** in
-one banner line after an update.
-
-**0.15.0** - **the quality-loop release.** The team's output-writing discipline is now a control
-surface: every finding carries the 5 C's (criteria, condition, **cause**, consequence, corrective
-action) written for a reader who was not in the session; every pre-delivery critique names the
-professional standard it checks against (BABOK, ISO/IEC 29119, the 5 C's) with ungrounded
-second-look passes banned; gold exemplar documents anchor the writers; and the mechanical gate
-now fails a close where findings lack impact lines or **code ships without a QA handover and
-tests**, that last one closing a path a live engagement actually hit. Plus a poppler fallback so
-PDFs with stubborn encodings still extract.
-
-**0.14.0** - **the memory & transparency release.** The team now remembers and shows its working.
-A PM-curated **codebase map** per working project (ADR-003: bounded, SHA-anchored, 📊/🧠-tagged,
-advisory-only; read at every engagement open, updated/corrected/deprecated at every close, hygiene
-mechanically checked by `check_artifacts`). Reviews ship the **audit-compatible skeleton at every
-depth** (scope at a commit, methodology, findings dispositions, and an always-include Limitations &
-residual risk section), with governance extras opt-in. And the documentation **shows the journey**:
-an iteration log with a journey strip in the Delivery Report, append-only QA test cycles where a
-failed pass 1 stays visible forever, and a clarification-rounds register tracing every spec version
-to the SME/user answer that produced it (worked examples in `docs/demos/iteration-examples/`).
-
-**0.13.0** - **the security-audit release.** A dedicated `/security-audit` workflow (21st skill):
-a deep, defensible security review that follows the `/audit-review` conventions but focuses entirely
-on security: a threat model, the security lenses driven hard with the security analysers and a
-dependency scan, and the §5 data-safety trail. Morgan offers it when you ask for a code review (up
-front and at the close), and it routes to Anthropic's `/security-review` pipeline when there's a diff.
-
-**0.12.0** - **the Fable send-off.** With Claude Fable 5 leaving subscription plans, the remaining
-window went into strengthening the project: grounding the foundational domain claims in
-**human-verified citations** where a primary source exists (and flagging the rest rather than
-inventing one), as a proof-of-concept example of the verified-citation approach the project is
-built to extend, with nothing fabricated; a build-ready design for the automatic data-masking
-pipeline; a security review of the safety guards (six new findings, logged rather than silently
-patched); and a Fable-judged quality baseline across the test cases. Full
-detail: [`CHANGELOG.md`](CHANGELOG.md).
-
-**0.11.0** - **the Fable audit release.** Claude Fable 5 audited the setup and its documentation
-(setup review + truth audit + best-practice conformance against Anthropic's multi-agent guidance);
-this release fixes everything it found: docs corrected to match the code, four guard defects fixed
-by a human-applied run, genuinely blind evals (a 30-case golden set), mechanical docs-consistency and
-tier-drift tests. Full suite 347 passing; a live golden-case spot check confirmed no regression.
-
-**0.10.0** - **`scripts/convert_file.py`, the file-conversion front door.** Excel/CSV/TSV/PDF/docx
-in, CSV/JSONL/Markdown out, a JSON evidence report on every run, lossless by default, optional
-per-feed schema gate. Dependencies vendored (pure Python, pinned) so `git clone` works with no
-pip access. House rule: all file conversion goes through it.
-
-Earlier: **0.9.x** (plugin mode runs everything from any project; Windows fixes;
-extraction-truncation defences; breaking changes for pre-0.8.0 installs), **0.8.0** (true
-dormancy; guards fail closed; human-only consent gate), **0.7.x** (demos, regulatory register,
-ADR-001/002). 📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
-
-</details>
-
-<sub>[↑ Back to top](#readme-top)</sub>
-
 ## ✨ Features
 
-| Capability | What it gives you |
-|---|---|
-| A real engineering team | A PM (Morgan) + 16 specialist subagents, not one generalist. |
-| Right-sized per task | The PM engages only the agents a job needs (typically 2-5, never all 16), cost-controlled and faithful to Anthropic's "simplest thing that works". |
-| Built-in independent review | Reviewers are read-only by tool grant (segregation of duties): they recommend, builders fix. |
-| More than detection rules | Pipelines/ETL, transformation scripts, ML, reviews and docs, not just rules. |
-| Data-safety by design | Raw data hard-blocked from the model; masking + synthetic on-ramp. |
-| Evidence-based & auditable | Alert → logic → obligation traceability behind a Definition of Done, and every review ships the audit skeleton (scope at a commit, dispositions, limitations & residual risk) at every depth. |
-| Engagement memory | A per-project **codebase map** (PM-curated, SHA-anchored, advisory-only) read at engagement open and updated at close; repeat engagements start warm instead of re-exploring. |
-| Stateful, crash-safe engagements | Each engagement lives in its own `artifacts/<slug>/` workspace with a machine-readable state file (⏳ in progress · ⛔ blocked · 🔒 closing · ✅ closed); the close runs the mechanical DoD gate and refuses on findings, and a resumed session recovers its state, intake answers and consent outcome from disk instead of re-asking. |
-| Shows its working | An **iteration log** in every delivery: the journey strip plus append-only review/QA cycles, so a caught-fixed-re-verified failure stays visible as evidence the control loop ran. |
-| Self-tested | An eval harness (rubrics + golden cases) catches quality regressions. |
-| Claude Code native | Install as a plugin; dormant by default until you invoke it. |
-| Extensible & modular | Add or re-tier specialists independently. |
-| Documentation generation | Every deliverable in `.md` + `.html`, plus a summary email. |
+What the team gives you at 0.33.1, each row tied to where the claim is enforced or demonstrated:
+
+| Capability | What you concretely get | Where to see it |
+|---|---|---|
+| A real engineering team, right-sized | Morgan (PM) + 16 specialist subagents; a typical task fires only 2-5 of them, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
+| Independent review by construction | Advisors and reviewers hold no `Write`/`Edit` tools; QA and validation run as separate agents from the build. More than rules: pipelines/ETL, scripts, ML, reviews and docs all route to their own specialist. | Tool grants in [`.claude/agents/`](.claude/agents/), pinned by [`tests/test_docs_consistency.py`](tests/test_docs_consistency.py) · routing table in [`docs/team-operating-guide.md`](docs/team-operating-guide.md) |
+| Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | [ADR-008](docs/adr/ADR-008-multi-engagement-workspaces.md) · [ADR-006](docs/adr/ADR-006-machine-readable-engagement-state.md) · [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) |
+| Three always-on safety guards, human-only consent | Raw data under `data/raw/` blocked from the model, execution gated on a human-created marker, and the model blocked from writing the marker, settings or the hooks themselves. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
+| Document conversion front door | Excel/CSV/PDF/DOCX read via the vendored converter - no pip needed - with a JSON evidence report every run; a PreToolUse hook redirects binary-document reads to it. | [`docs/house-rules.md`](docs/house-rules.md) · [`scripts/convert_file.py`](scripts/convert_file.py) · [`scripts/document_input_redirect.py`](scripts/document_input_redirect.py) |
+| A real review subsystem | Context-routed lenses, the standard analysers per language, schema-validated findings packs rendered to one canonical layout, and a build fingerprint tying the reviewed code to the shipped artifact. | [`docs/code-review-method.md`](docs/code-review-method.md) · [`docs/review/`](docs/review/) · the [review demo](docs/demos/review-demo.md) |
+| Independent QA + a mechanical DoD gate | A close only counts when `check_artifacts` passes - finding codes like `STALE-INDEX`, `FINAL-BEFORE-CLOSE`, `ROSTER-UNKNOWN` catch the failure modes that actually happened live. Iteration history stays visible append-only (journey strip, QA cycles). | [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) · [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
+| Engagement memory | A per-project **codebase map**: bounded, PM-curated, SHA-anchored, hygiene-checked mechanically, advisory-only - repeat engagements start warm. | [ADR-003](docs/adr/ADR-003-engagement-memory.md) · [ADR-007](docs/adr/ADR-007-codebase-map-evolution.md) |
+| Company extensions | Additive per-project standing instructions, close actions, an analyser registry and named integrations - never a safety waiver, and eval-tested. | [ADR-009](docs/adr/ADR-009-company-extensions.md) · [`docs/EXTENDING.md`](docs/EXTENDING.md) |
+| Self-tested quality | 9 rubrics + 43 golden cases with a deterministic scorer in CI, and a mechanical dev→main release gate that fails a promotion with no eval baseline. | [`evals/README.md`](evals/README.md) · [`scripts/release_gate.py`](scripts/release_gate.py) · [Self-test](#-self-test-eval-harness) |
+| Cost visibility | Measured per-run token numbers, and a local observability page: engagement inventory, DoD gate result, map hygiene, consent highlight, measured token cost (`python -m scripts.dashboard`). | [Token usage](#-token-usage--optimisation) · [`scripts/dashboard.py`](scripts/dashboard.py) |
+| Console & UX discipline | Progress in the native task list (TodoWrite), every clarification via the question tool, a statusline showing dormant-vs-engaged, and a clean console with detail in artifacts. | [`docs/team-operating-guide.md`](docs/team-operating-guide.md) · [`scripts/statusline.sh`](scripts/statusline.sh) |
+| Explicit AI identity | Every roster name in an artifact is marked 🤖 + "Virtual Surveillance IT"; an agent never shares a sign-off line with a human - mechanically checked. | [FAQ](docs/FAQ.md) · `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` in [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
+| Claude Code native, dormant by default | A plugin with per-project enablement; skills cost ~nothing until `/engage`; a guided installer walks the whole flow (`python install_helper.py`). | [Claude Code features](#-claude-code-features-this-team-is-built-on) · [Quick start](#-quick-start) |
+| Documentation generation | Every deliverable in `.md` + `.html`, plus a close-only summary email signed by Morgan. | [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) · real output in [`docs/demos/build-artifacts/`](docs/demos/build-artifacts/) |
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
 ## 🚀 Quick start
 
-### 🔌 Install as a plugin (recommended), then enable it **per project**
+### 🔌 Install: run the helper, then enable it **per project**
 
-Install once, then **enable the team only in the projects that use it**, a deliberate
-token-economy step, not an oversight (the "why" is right below).
+Install once with the helper, then **enable the team only in the projects that use it**, a
+deliberate token-economy step, not an oversight (the "why" is right below).
 
-> 🛑 **You must type the `/plugin` commands yourself.** `/plugin …` is an interactive command. If
-> you *ask the assistant* to "install the plugin" it may claim success without anything happening.
-> (First remove any earlier hand-copy like `~/.claude/skills/…`; it conflicts.)
-
-**1. Add the marketplace and install** (type these in Claude Code yourself):
-```
-# From GitHub (works anywhere, nothing to clone):
-/plugin marketplace add danieledge/virtual-surv-IT
-/plugin install compliance-surveillance-team@virtual-surv-it
-
-# …or from a local copy instead of GitHub:
-/plugin marketplace add /path/to/virtual-surv-IT
-/plugin install compliance-surveillance-team@virtual-surv-it
+**1. Get the repo and run the install helper** (from a terminal, not inside Claude Code):
+```bash
+git clone https://github.com/danieledge/virtual-surv-IT.git
+cd virtual-surv-IT
+python install_helper.py
 ```
 
-> **Release channels — `main` (stable) vs `dev` (cutting-edge).** The default line is **`main`**, the
-> **stable** release, and `/plugin marketplace add danieledge/virtual-surv-IT` tracks it - use it for
-> day-to-day work. Bigger, in-progress changes land first on the **`dev`** branch, where features are
-> integrated and shaken out before being promoted to `main` at a release. For the cutting edge, use a
-> **local clone checked out to `dev`**:
-> `git clone https://github.com/danieledge/virtual-surv-IT.git && cd virtual-surv-IT && git checkout dev`,
-> then `/plugin marketplace add /path/to/virtual-surv-IT`.
-
-> **Install helper (optional).** From a clone, `python install_helper.py` (repo root) walks the whole
-> flow from a terminal: preflight (git/claude CLI/network), a persisted main-vs-dev channel pick,
-> clone or safe update (it refuses to reset a dirty tree), optional
-> `pip install -r requirements-dev.txt`, then the real `claude plugin marketplace add` /
-> `claude plugin install compliance-surveillance-team@virtual-surv-it` commands - and it closes by
-> listing what stays manual (per-project enablement, the human-run `apply-*.sh` hook scripts, a
-> restart). Re-runnable; `install`/`update` auto-detect from `~/.config/virt-surv-it/installer.json`;
-> `--yes` for non-interactive defaults.
+The helper walks the whole flow: preflight (git / claude CLI / network), a persisted
+release-channel pick (**`main`** is the **stable** line; bigger, in-progress changes land first
+on **`dev`** and are promoted to `main` at a release), clone or safe update (it refuses to
+reset a dirty tree), optional `pip install -r requirements-dev.txt`, then the real
+`claude plugin marketplace add` / `claude plugin install compliance-surveillance-team@virtual-surv-it`
+commands - and it closes by listing what stays manual (per-project enablement below, the
+human-run `apply-*.sh` hook scripts, a restart). Re-runnable; `install`/`update` auto-detect
+from `~/.config/virt-surv-it/installer.json`; `--yes` for non-interactive defaults.
 
 **2. Scope the enablement to the projects that need it.** If the install enabled the plugin at
 **user** scope (check `/plugin`, or `~/.claude/settings.json` → `enabledPlugins`), disable it
@@ -373,41 +242,14 @@ there, and instead enable it **in each project where you want the team**: from t
 > projects that actually use it. (The 2026-07-01 setup audit measured the old always-on posture
 > at ~2.7k tokens per session per project, hence this step.)
 
-<details>
-<summary>⚙️ <b>Optional: pre-approve the team's tooling</b>: avoids repeated permission prompts and brittle auto-saved rules</summary>
-
-Without pre-approval, every analyser run and helper-script call prompts you, and each "don't
-ask again" saves the *literal command string* as a rule; on Windows that accumulates
-mixed-path, mixed-quote rules the validator then flags as invalid ("ignoring N
-permissions.allow entries"). Add clean wildcard rules to the enabled project's
-`.claude/settings.json` instead:
-
-```json
-{
-  "permissions": {
-    "allow": [
-      "Bash(ruff *)",
-      "Bash(mypy *)",
-      "Bash(bandit *)",
-      "Bash(semgrep *)",
-      "Bash(shellcheck *)",
-      "Bash(python -m scripts.*)",
-      "Bash(python3 -m scripts.*)",
-      "Bash(py -m scripts.*)",
-      "Bash(*scripts/check-review-tools.sh*)",
-      "Bash(*scripts/render_html.py*)",
-      "Bash(*scripts/check_artifacts.py*)",
-      "Bash(*scripts/gen_synthetic.py*)"
-    ]
-  }
-}
-```
-
-(If you already have flagged entries: `/permissions` shows every rule and which file it came
-from; delete the flagged ones and paste the block above. Permission rules are Claude Code's
-prompting layer; the team's execution *gate* is separate and stays human-consent-only.)
-
-</details>
+**Fewer permission prompts (optional).** Without pre-approval, every analyser run and
+helper-script call prompts you, and each "don't ask again" saves the *literal command string*
+as a rule (on Windows that accumulates mixed-path, mixed-quote rules the validator then flags
+as invalid). The helper can add the recommended clean wildcard allow-list to a chosen project
+for you: `python install_helper.py --permissions <project-dir>` - opt-in, add-only, and it
+backs up the settings file first. (`/permissions` shows every rule and which file it came
+from. Permission rules are Claude Code's prompting layer; the team's execution *gate* is
+separate and stays human-consent-only.)
 
 **3. Restart Claude Code. From an enabled project, summon the team** (commands are namespaced):
 ```
@@ -454,7 +296,22 @@ project. Then just **talk to the PM**. Describe whatever you've got:
 > Don't have Claude Code yet? Install it from <https://claude.com/claude-code>.
 
 <details>
-<summary>📂 <b>Or: open the repo as a project</b> (no install): best for <code>/demo</code>, the worked example and the scripts</summary>
+<summary>⌨️ <b>Manual commands</b> (if you cannot run the helper)</summary>
+
+The helper only wraps these; type them **in Claude Code yourself** - `/plugin …` is an
+interactive command, and if you *ask the assistant* to "install the plugin" it may claim
+success without anything happening. (First remove any earlier hand-copy like
+`~/.claude/skills/…`; it conflicts.)
+
+```
+/plugin marketplace add danieledge/virtual-surv-IT      # or a local clone path (for dev: git checkout dev first)
+/plugin install compliance-surveillance-team@virtual-surv-it
+```
+
+</details>
+
+<details>
+<summary>📂 <b>Developer / maintainer mode: open the repo as the project</b> - a run mode, not an install path; needed for <code>/demo</code>'s Build flavour, <code>/run-evals</code> and the worked example</summary>
 
 Project-scoped skills and agents **auto-load**, nothing to install, and the bundled scripts
 (`/demo`, the worked example, the masking pipeline, the `.md→.html` render) all work out of the box:
@@ -473,29 +330,10 @@ Here the commands are **not** namespaced, just `/engage`, `/demo`, etc.
 
 > ⚠️ **Don't copy the repo into `~/.claude/skills/`.** The repo's skills live at
 > `.claude/skills/<name>/SKILL.md`, so copying the whole folder mis-nests them and they won't
-> load. Use a real plugin install (above) or project mode (here).
+> load. Use the plugin install (above) or this repo-as-project mode.
 
-</details>
-
-<details>
-<summary>🧩 <b>Manual / partial install</b>: hand-pick the team into an existing repo</summary>
-
-Prefer to hand-pick the team into a repo you already have, without the marketplace? Copy these:
-
-1. `CLAUDE.md` to your repo root (merge if you already have one), the shared handbook.
-2. `.claude/agents/`: the 16 subagents.
-3. `.claude/skills/`: the 23 workflows (`/engage`, `/audit-review`, …); without these you
-   get agents but no front door.
-4. `.claude/hooks/` **and** `.claude/settings.json`: the always-on data-safety guard and its
-   wiring. Don't skip these: they are the §5 control that keeps real data away from the model.
-5. `docs/templates/`: the artifact templates the workflows render.
-6. Restart Claude Code (subagents and skills load at session start), then run `/agents` and
-   `/help` to confirm the team and its commands appear.
-7. (Optional) `CLAUDE.md` §2/§3 ship with example defaults so the team works immediately.
-   Replace the example jurisdictions and stack with your own when you have them.
-
-(If you install this repo as a Claude Code **plugin** via `.claude-plugin/`, all of the above
-ships together; see the manifest.)
+This mode is for working **on** the team (or running its repo-bound demos), not the everyday
+install path for users - that's the helper above.
 
 </details>
 
@@ -632,9 +470,16 @@ deliverable in both `.md` and `.html`** in the engagement's own `artifacts/<slug
 (one folder per engagement, with a generated `START-HERE.md` index and a machine-readable state
 file). Focused commands for each entry point:
 
+> The canonical index of **all 23 skills** lives in
+> [`docs/team-operating-guide.md`](docs/team-operating-guide.md) §Command index; the table below
+> is a summary.
+
 | Command | Use it for | Pattern |
 |---|---|---|
 | `/engage` | anything, the front door | PM intake + dynamic routing |
+| `/engage-light` | small, non-regulated jobs: same safety gates, a fraction of the ceremony (refuses detection logic, upgrades to standard) | light profile of `/engage` |
+| `/demo` | watch a full engagement end-to-end on synthetic data | guided, narrated demo |
+| `/meet-the-team` | Morgan introduces the roster | canonical introductions |
 | `/prepare-data` | get safe data ready (synthetic or masked) before analysis | guided onboarding + validation (⚠️ the masking pipeline is a placeholder, see [FAQ](docs/FAQ.md)) |
 | `/write-brd` | idea → Business Requirements (BABOK + EARS) | prompt chaining |
 | `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
@@ -652,6 +497,8 @@ file). Focused commands for each entry point:
 | `/assess-coverage` | are we monitoring everything? typology→scenario→feed map | coverage + feed-health gaps |
 | `/validate-tm-model` | periodic TM model validation (coverage/threshold/data/MI) | data work + independent verdict |
 | `/reg-change-impact` | a regulatory change → impacted scenarios/controls | change-impact assessment |
+| `/beta-assess-quantexa` | (beta, vendor-specific) a Quantexa TM estate vs BRD/TSD traceability assessment | platform KB + traceability |
+| `/run-evals` | score the live team against the golden cases | regression net (spends tokens) |
 
 **Example requests** (the PM routes each to the right specialists, and only those):
 
@@ -782,7 +629,7 @@ it spends tokens. (This is the regression net Anthropic's multi-agent guidance r
 <summary>🧪 <b>What's in the harness</b>: 9 rubrics · 43 golden cases · deterministic scorer</summary>
 
 - **9 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety · process-discipline ·
-  prompt-injection · regulatory-citation) + **43 golden cases** with deliberately seeded issues
+  process-discipline-light · prompt-injection · regulatory-citation) + **43 golden cases** with deliberately seeded issues
   *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
 - **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)): matches the team's
   findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
@@ -793,12 +640,16 @@ it spends tokens. (This is the regression net Anthropic's multi-agent guidance r
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
-## 🪝 The safety hooks (plain English)
+## 🪝 The safety hooks
 
 A *hook* is a small script Claude Code runs automatically **right before** it uses a tool, and it
 can **allow** or **block** that action. This plugin ships three safety guards, **always on**, plus four engagement-scoped lifecycle hooks (see the Claude Code features table; they no-op in dormant sessions and fail open). The guards run even when the
 team is dormant). The newcomer-friendly version of the whole safety story is in
-[`docs/OVERVIEW.md` §5](docs/OVERVIEW.md); the operational detail is below.
+[`docs/OVERVIEW.md` §5](docs/OVERVIEW.md); the per-channel confidence statement (exactly what
+each control does and does not guarantee) is [`docs/safety-model.md`](docs/safety-model.md);
+the operational detail is below.
+
+In one line: `guard-raw-data.py` blocks Read/Grep/Glob/Bash on `data/raw/`; `guard-code-execution.py` gates test runners, scripts and profilers behind the `.claude/.exec-consent` marker / `CST_ALLOW_EXEC`; `guard-consent-writes.py` blocks model writes of the consent marker, `settings.json` and the hook files.
 
 <details>
 <summary>🪝 <b>The raw-data guard, the code-execution gate + the consent-write gate</b>: what they do and how strong they are</summary>
@@ -885,6 +736,8 @@ An **automatic masking workflow** (so you don't have to self-attest) is on the [
 > (agent-blocked), prefer synthetic, and only ever feed it data your own controls have already
 > masked or anonymised.
 
+In one line: `python -m scripts.ingest` masks `data/raw/` → `data/masked/` (keyed HMAC tokens, time shift, regex redact via `config/masking-schema.yaml` + `MASKING_KEY`); `scripts.validate_masking` checks it; `scripts.synthesise` emits fully synthetic sessions. Per-channel guarantees: [`docs/safety-model.md`](docs/safety-model.md).
+
 <details>
 <summary>🔒 <b>The masking pipeline</b>: ingest · validate · synthesise (scripts + commands)</summary>
 
@@ -914,7 +767,7 @@ real ─▶ data/raw/ ──[ python -m scripts.ingest ]──▶ data/masked/ �
   to put in front of an agent or to share outside the environment.
 - **`.claude/hooks/guard-raw-data.py`**: PreToolUse hook (wired in both `.claude/settings.json`
   and `hooks/hooks.json`) that blocks any agent `Read`/`Grep`/`Glob`/`Bash` touching `data/raw/`.
-  See [the safety-hooks section](#-the-safety-hooks-plain-english) for what "blocks" means for
+  See [the safety-hooks section](#-the-safety-hooks) for what "blocks" means for
   shell commands vs the file tools.
 
 ```bash
@@ -929,6 +782,8 @@ python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked
 <sub>[↑ Back to top](#readme-top)</sub>
 
 ## 📁 Layout
+
+In one line: `.claude/agents/` (16 subagents) · `.claude/skills/` (23 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
 
 <details>
 <summary>📁 <b>One consolidated map of the repo</b></summary>
@@ -961,6 +816,53 @@ evals/                          # team-quality eval harness: 9 rubrics + 43 gold
 ```
 
 </details>
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
+## 🗂️ Scripts reference
+
+Every shipped script, grouped by who runs it. **model, consent-free** = the team's own tooling,
+allow-listed in the execution guard and run as `python -m scripts.<name>`; **run by Claude Code**
+= hooks fired automatically around tool use; **human-only** = wiring/consent actions the model is
+blocked from performing (ADR-002); **maintainer** = supports releases of this repo, not
+engagements. Descriptions are taken from each script's own docstring.
+
+| Script | What it does | Who runs it |
+|---|---|---|
+| `scripts/convert_file.py` | The single front door for reading/converting source files: Excel/CSV/TSV/PDF/DOCX in, CSV/JSONL/Markdown out, lossless by default, JSON evidence report every run (deps vendored, no pip) | model, consent-free |
+| `scripts/render_html.py` | Renders a Markdown artifact to a styled, standalone HTML file (inline CSS, shareable as one file) | model, consent-free |
+| `scripts/render_findings.py` | Renders a validated findings pack to the canonical `REVIEW-<slug>.md`; owns the report layout so finding format cannot drift | model, consent-free |
+| `scripts/validate_findings.py` | Validates a review findings pack against `docs/review/findings-schema.json`; a missing field is a hard error | model, consent-free |
+| `scripts/ingest.py` | The sanctioned path for real data: schema-driven keyed masking, `data/raw/` → `data/masked/` | model, consent-free |
+| `scripts/gen_synthetic.py` | Synthetic order-flow generator for the spoofing example; deterministic per seed, no real records | model, consent-free |
+| `scripts/synthesise.py` | Learns the shape of masked order flow and emits fully synthetic sessions sharing no real rows, entities or timestamps | model, consent-free |
+| `scripts/validate_masking.py` | Proves a masking config is safe and useful (residual-PII, detection fidelity, k-anonymity); `--in` scans an actual masked file | model, consent-free |
+| `scripts/validate_manifest.py` | Asserts every agent/skill/hook declared in the plugin manifest exists on disk | model, consent-free |
+| `scripts/check_citations.py` | Grounds regulatory citations against the register (ADR-001): retrieve via `lookup()`, mechanically flag unregistered pinpoints | model, consent-free |
+| `scripts/check_artifacts.py` | The mechanical Definition-of-Done check over an engagement's artifacts - the gate CI can never see because `artifacts/` is git-ignored | model, consent-free |
+| `scripts/engagement_state.py` | Reads/writes the machine-readable engagement state (`engagement-state.json`, ADR-006); `START-HERE.md` is a rendered view of it | model, consent-free |
+| `scripts/eval_score.py` | Deterministic scorer for the eval harness: matches team findings against each golden case's ground truth | model, consent-free |
+| `scripts/calibrate_spoofing.py` | Measured FP/FN evidence for the spoofing rule on a labelled synthetic corpus (precision/recall per segment) | model, consent-free |
+| `scripts/extensions.py` | Parses and surfaces the company-extensions contract from a working project's `docs/team-extensions.md` (ADR-009) | model, consent-free |
+| `scripts/convert_sarif.py` | Converts SARIF analyser output to the team's findings-pack JSON so company-tool findings keep 📊 measured status | model, consent-free |
+| `scripts/check-review-tools.sh` | Probes which analysers are installed (cached), so missing tools are skipped rather than re-invoked | model, consent-free |
+| `.claude/hooks/guard-raw-data.py` | Blocks Read/Grep/Glob/Bash tool calls that target `data/raw/` | run by Claude Code (always on) |
+| `.claude/hooks/guard-code-execution.py` | Blocks execution of the code under review unless a human has opened the consent gate | run by Claude Code (always on) |
+| `.claude/hooks/guard-consent-writes.py` | Blocks model writes of the consent marker, `settings*.json` and the hook files themselves | run by Claude Code (always on) |
+| `.claude/hooks/run-guard.sh` | The guard launcher: probes `python3` → `python` → `py` and fails closed on a crash | run by Claude Code (always on) |
+| `scripts/persona_anchor.py` | Per-turn persona + discipline re-anchor while an engagement is live; a no-op when dormant (ADR-005; staged copy in `scripts/staged_hooks/`) | run by Claude Code (engagement-scoped) |
+| `scripts/dod_stop_gate.py` | Warn-first Stop-hook DoD backstop: runs the mechanical check when a turn ends with an engagement still open (staged copy in `scripts/staged_hooks/`) | run by Claude Code (engagement-scoped) |
+| `scripts/document_input_redirect.py` | PreToolUse redirect: binary document reads route to the vendored converter instead of hand-parsing (staged copy in `scripts/staged_hooks/`) | run by Claude Code (engagement-scoped) |
+| `scripts/session_resume_brief.py` | SessionStart re-brief after compaction or `--resume`: state and decisions recovered from disk (ADR-011; staged copy in `scripts/staged_hooks/`) | run by Claude Code (engagement-scoped) |
+| `scripts/post_edit_lint.py` | PostToolUse lint on Python files written during a live engagement, so defects surface one edit later, not at the gate (staged copy in `scripts/staged_hooks/`) | run by Claude Code (engagement-scoped) |
+| `scripts/statusline.sh` | Statusline render: dormant-vs-engaged, active slug/status/phase, at zero context cost | run by Claude Code (statusline) |
+| `scripts/apply-project-anchor.sh` | Syncs the staged `dod_stop_gate` / `persona_anchor` copies into the live hooks | human-only |
+| `scripts/apply-document-redirect.sh` · `apply-post-edit-lint.sh` · `apply-session-brief.sh` · `apply-guard-exec-allow.sh` · `apply-statusline.sh` | Wire the corresponding staged hook (or the statusline) into both tracked hook files; the consent-write gate blocks the model from doing this | human-only |
+| `scripts/install-git-hooks.sh` | Installs the opt-in AI-review git hooks (pre-commit / pre-push) | human-only |
+| `install_helper.py` (repo root) | Guided install/update of the plugin from a terminal: channel pick, clone/safe update, marketplace add, plugin install | human-only |
+| `scripts/eval_engage.py` | Headless live-`/engage` eval driver: runs a full engagement in a sandboxed repo copy and scores it | maintainer |
+| `scripts/release_gate.py` | The mechanical dev → main promotion gate: version/badge/CHANGELOG consistency + a current eval baseline | maintainer |
+| `scripts/dashboard.py` | Local observability page: engagement inventory, DoD gate, map hygiene, consent highlight, measured token cost - run `python -m scripts.dashboard` | maintainer |
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
@@ -1014,6 +916,8 @@ hooks entirely).
 
 Multi-agent setups cost tokens, so the team is built to be cost-conscious, the biggest lever being
 **right-sizing** (engaging only the agents a task needs, never all 16).
+
+In one line: one code review ~51k tokens (~$2, measured) · a lean engagement ~35-50k (estimate) · a full build-review-tuning delivery ~500k (~$4-8, measured); levers: right-sizing, model tiering (4 opus / 11 sonnet / 1 haiku), artifacts-as-blackboard, dormancy.
 
 <details>
 <summary>💰 <b>Measured per-run numbers + the optimisations in place</b></summary>
@@ -1134,6 +1038,53 @@ agents now self-verify against their brief and flag gaps before returning; stand
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
+## ❓ FAQ
+
+Measured vs inferred, the hallucination question, what the `artifacts/` folder is, who
+Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FAQ.md)**.
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
+## 📖 Documentation
+
+**Reading paths: the repo has 130+ doc files; start with the path that matches your goal:**
+
+- 🆕 **New here** → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
+  this README → [`docs/demos/README.md`](docs/demos/README.md) (real transcripts, nothing to
+  run) → type **`/demo`**.
+- 🔧 **Extending the team** (agents/skills/menus) → [`docs/agent-design.md`](docs/agent-design.md)
+  (design rationale + conformance matrix) → [`docs/team-operating-guide.md`](docs/team-operating-guide.md)
+  (standing rules, roster, routing, question-tool limits) → [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md)
+  (frameworks + the canonical template catalogue).
+- 🕵️ **Auditing / assessing it** → [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) →
+  [`docs/code-review-method.md`](docs/code-review-method.md) → [`docs/adr/`](docs/adr/) (citation
+  grounding ADR-001; safety-hook threat model ADR-002; engagement memory ADR-003) →
+  [`evals/README.md`](evals/README.md).
+- 📊 **Data & tuning** → [Handling real data](#-handling-real-data) (above) →
+  [`docs/internal/prepare-data-roadmap.md`](docs/internal/prepare-data-roadmap.md) →
+  [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md) (the worked example, incl. calibration).
+
+| Guide | What it covers |
+|---|---|
+| [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Plain-English tour, start here if you're new to agents/LLMs |
+| [`docs/FAQ.md`](docs/FAQ.md) | The questions a newcomer actually asks: evidence tags, hallucination, consent, the artifacts folder, Morgan |
+| [`docs/demos/README.md`](docs/demos/README.md) | Real captured demo transcripts (build, review, data-safety) - see the team work without running anything |
+| [`docs/EXTENDING.md`](docs/EXTENDING.md) | Extending the team for your organisation: recipes + the extensions contract, analyser registry, tool allowlist |
+| [`docs/team-operating-guide.md`](docs/team-operating-guide.md) | Standing rules, roster + routing table, question construction (read on-engage) |
+| [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) | Frameworks, the canonical template catalogue, the traceability spine |
+| [`docs/agent-design.md`](docs/agent-design.md) | Per-agent rationale + the Anthropic best-practice conformance matrix |
+| [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) | The evidenced gate every delivery must pass before handover |
+| [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack, customise to yours |
+| [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
+| [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
+| [`docs/internal/engagement-flow-poster-flowchart.html`](docs/internal/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory; point-in-time render at v0.28.0 - predates workspaces and the closing window); [render it in the browser](https://raw.githack.com/danieledge/virtual-surv-IT/main/docs/internal/engagement-flow-poster-flowchart.html), or see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline; the normative lifecycle spec (maintainer doc) is [`docs/internal/engagement-flow-spec.md`](docs/internal/engagement-flow-spec.md) |
+| [`docs/adr/`](docs/adr/) | Architecture decision records ADR-001 to ADR-011: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule, the session-resume brief - indexed with statuses in [`docs/adr/README.md`](docs/adr/README.md) |
+| [`docs/releases/0.33.1.md`](docs/releases/0.33.1.md) | The 0.33.1 release overview - platform capability adoption (links back to 0.33.0's workflow-robustness overview) |
+| [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) | The 0.33.0 release overview - what the workflow-robustness release means in practice |
+| [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 <a id="known-issues"></a>
 
 ## ⚠️ Known issues
@@ -1147,24 +1098,6 @@ self-grant execution consent. This is documented as accepted residual in
 and `Bash(...)` entries to `permissions.deny` and to segment-split the Bash guard. Until then the
 guards are a real control for a cooperative agent, not a boundary against an adversarial one; the
 standing mitigation is to keep real data off the machine (the §5 posture). Tracked, not a surprise.
-
-**The persona and soft discipline can fade on a long session (mitigated since 0.27.0 by the re-anchor hook).** The
-`/engage` persona - Morgan's voice, the 🎩 marker, the named specialists, the prompt-enforced
-discipline (question-tool, the fix-list gate) - loads **once** when you type `/engage` and is
-**never re-asserted**; it lives only in the conversation history. On a long engagement, or after
-Claude Code **compacts/summarises** the context, that history erodes and the model drifts back
-toward default Claude Code: plain voice, generic "Agent A/B/C" subagent labels, the wrong-name
-drift below. **What is NOT affected:** the hard controls - the raw-data block, the execution-
-consent gate and the consent-write gate - are enforced by Claude Code **hooks**, independent of
-the model's persona, so they hold regardless of how faded Morgan is (the critical rails were put
-in hooks precisely for this). What decays is *presentation* and *soft* discipline. **Mitigation
-now:** re-invoke `/engage` (or `/meet-the-team`) to reload the persona, and don't let a single
-engagement run excessively long. **Fix implemented (0.27.0, ADR-005):** a dormancy-aware
-re-anchoring hook - `scripts/persona_anchor.py`, a per-turn `UserPromptSubmit` hook that re-injects
-a tiny (≤8-line) persona+discipline anchor **only while an engagement is live** (open/blocked
-START-HERE), so it survives compaction yet stays silent in ordinary sessions. It ships wired
-in both hook files - no setup needed. Same root cause as the
-name-drift quirk below, which the anchor also mitigates.
 
 **First `/engage` of a session can take ~2-3 minutes before the first Morgan message (under
 investigation).** Tester feedback: the **initial** engagement is slow to produce the opening banner;
@@ -1286,50 +1219,8 @@ the right job; only the PM's commentary occasionally mislabels it. Hence: cosmet
 
 </details>
 
-<sub>[↑ Back to top](#readme-top)</sub>
-
-## ❓ FAQ
-
-Measured vs inferred, the hallucination question, what the `artifacts/` folder is, who
-Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FAQ.md)**.
-
-<sub>[↑ Back to top](#readme-top)</sub>
-
-## 📖 Documentation
-
-**Reading paths: the repo has 130+ doc files; start with the path that matches your goal:**
-
-- 🆕 **New here** → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
-  this README → [`CLAUDE.md`](CLAUDE.md) (the always-on handbook) → type **`/demo`**.
-- 🔧 **Extending the team** (agents/skills/menus) → [`docs/agent-design.md`](docs/agent-design.md)
-  (design rationale + conformance matrix) → [`docs/team-operating-guide.md`](docs/team-operating-guide.md)
-  (standing rules, roster, routing, question-tool limits) → [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md)
-  (frameworks + the canonical template catalogue).
-- 🕵️ **Auditing / assessing it** → [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) →
-  [`docs/code-review-method.md`](docs/code-review-method.md) → [`docs/adr/`](docs/adr/) (citation
-  grounding ADR-001; safety-hook threat model ADR-002; engagement memory ADR-003) →
-  [`evals/README.md`](evals/README.md).
-- 📊 **Data & tuning** → [Handling real data](#-handling-real-data) (above) →
-  [`docs/internal/prepare-data-roadmap.md`](docs/internal/prepare-data-roadmap.md) →
-  [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md) (the worked example, incl. calibration).
-
-| Guide | What it covers |
-|---|---|
-| [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Plain-English tour, start here if you're new to agents/LLMs |
-| [`docs/FAQ.md`](docs/FAQ.md) | The questions a newcomer actually asks: evidence tags, hallucination, consent, the artifacts folder, Morgan |
-| [`docs/EXTENDING.md`](docs/EXTENDING.md) | Extending the team for your organisation: recipes + the extensions contract, analyser registry, tool allowlist |
-| [`docs/team-operating-guide.md`](docs/team-operating-guide.md) | Standing rules, roster + routing table, question construction (read on-engage) |
-| [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) | Frameworks, the canonical template catalogue, the traceability spine |
-| [`docs/agent-design.md`](docs/agent-design.md) | Per-agent rationale + the Anthropic best-practice conformance matrix |
-| [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) | The evidenced gate every delivery must pass before handover |
-| [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack, customise to yours |
-| [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
-| [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
-| [`docs/internal/engagement-flow-poster-flowchart.html`](docs/internal/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory; point-in-time render at v0.28.0 - predates workspaces and the closing window); [render it in the browser](https://raw.githack.com/danieledge/virtual-surv-IT/main/docs/internal/engagement-flow-poster-flowchart.html), or see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline |
-| [`docs/adr/`](docs/adr/) | Architecture decision records ADR-001 to ADR-011: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule, the session-resume brief |
-| [`docs/releases/0.33.1.md`](docs/releases/0.33.1.md) | The 0.33.1 release overview - platform capability adoption (links back to 0.33.0's workflow-robustness overview) |
-| [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) | The 0.33.0 release overview - what the workflow-robustness release means in practice |
-| [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
+Previously reported issues and their resolutions:
+[`docs/internal/resolved-issues.md`](docs/internal/resolved-issues.md).
 
 <sub>[↑ Back to top](#readme-top)</sub>
 

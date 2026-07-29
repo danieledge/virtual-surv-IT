@@ -223,3 +223,79 @@ def test_style_disabled_returns_plain_text():
 def test_style_enabled_wraps_with_ansi():
     style = Style(enabled=True)
     assert style.green("done") == "\033[32mdone\033[0m"
+
+
+# --- --permissions: opt-in, add-only allow-list merge (2026-07-30) ------------------------
+
+
+def test_merge_allow_into_empty_settings():
+    from install_helper import RECOMMENDED_ALLOW, merge_allow
+
+    settings, added = merge_allow({})
+    assert settings["permissions"]["allow"] == list(RECOMMENDED_ALLOW)
+    assert added == list(RECOMMENDED_ALLOW)
+
+
+def test_merge_allow_preserves_everything_and_dedupes():
+    from install_helper import merge_allow
+
+    existing = {
+        "permissions": {
+            "deny": ["Read(./secrets/**)"],
+            "allow": ["Bash(ruff *)", "Bash(custom-tool *)"],
+        },
+        "hooks": {"Stop": [{"hooks": []}]},
+    }
+    settings, added = merge_allow(existing)
+    assert settings["permissions"]["deny"] == ["Read(./secrets/**)"]  # untouched
+    assert settings["hooks"] == {"Stop": [{"hooks": []}]}  # untouched
+    allow = settings["permissions"]["allow"]
+    assert allow[0] == "Bash(ruff *)" and allow[1] == "Bash(custom-tool *)"  # order kept
+    assert "Bash(ruff *)" not in added  # already present -> not re-added
+    assert len(allow) == 2 + len(added)
+
+
+def test_run_permissions_creates_settings_when_absent(tmp_path, capsys):
+    import json as _json
+
+    from install_helper import Style, marks, run_permissions
+
+    rc = run_permissions(tmp_path, Style(False), marks())
+    assert rc == 0
+    written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert "Bash(ruff *)" in written["permissions"]["allow"]
+    assert "backed up" not in capsys.readouterr().out  # nothing existed to back up
+
+
+def test_run_permissions_backs_up_and_is_idempotent(tmp_path, capsys):
+    import json as _json
+
+    from install_helper import Style, marks, run_permissions
+
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "settings.json").write_text(
+        '{"permissions": {"deny": ["Read(x)"]}}', encoding="utf-8"
+    )
+    assert run_permissions(tmp_path, Style(False), marks()) == 0
+    out = capsys.readouterr().out
+    assert "backed up" in out
+    backups = list(claude.glob("settings.json.bak-*"))
+    assert len(backups) == 1
+    written = _json.loads((claude / "settings.json").read_text(encoding="utf-8"))
+    assert written["permissions"]["deny"] == ["Read(x)"]  # preserved
+    # Second run: nothing to add, no new backup.
+    assert run_permissions(tmp_path, Style(False), marks()) == 0
+    assert "already present" in capsys.readouterr().out
+    assert len(list(claude.glob("settings.json.bak-*"))) == 1
+
+
+def test_run_permissions_refuses_unparseable_settings(tmp_path, capsys):
+    from install_helper import Style, marks, run_permissions
+
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "settings.json").write_text("{broken", encoding="utf-8")
+    assert run_permissions(tmp_path, Style(False), marks()) == 1
+    assert "refusing" in capsys.readouterr().out
+    assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched

@@ -55,8 +55,8 @@ a { color: #0969da; }
 <blockquote>
 <p>Architecture Decision Record (Nygard format). One file per significant decision, so the
 <em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
-<p><strong>Document control</strong> · ID <code>ADR-001</code> · Version <code>0.1</code> · Status <code>Draft</code>
-· Classification <code>Internal</code> · Owner <code>Morgan (PM) / compliance-reviewer</code> · As-of <code>2026-06-29</code></p>
+<p><strong>Document control</strong> · ID <code>ADR-001</code> · Version <code>0.2</code> · Status <code>Accepted</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM) / compliance-reviewer</code> · As-of <code>2026-07-30</code></p>
 <table>
 <thead>
 <tr>
@@ -73,6 +73,12 @@ a { color: #0969da; }
 <td>project review</td>
 <td>Initial draft</td>
 </tr>
+<tr>
+<td>0.2</td>
+<td>2026-07-30</td>
+<td>documentation review</td>
+<td>Status reconciled to Accepted / implemented - the retrieval + flagging mechanism has been live since 2026-06-29 (<code>config/regulatory-register.yaml</code>, <code>scripts/check_citations.py</code>, wired into the authoring skills and the close checklist); the deferred items below stand unchanged</td>
+</tr>
 </tbody>
 </table>
 </blockquote>
@@ -81,7 +87,7 @@ a { color: #0969da; }
 <tbody>
 <tr>
 <td><strong>Status</strong></td>
-<td>proposed</td>
+<td><strong>Accepted / implemented</strong> - the retrieval + flagging mechanism (register + <code>scripts/check_citations.py</code> + skill wiring) is live; the register is small and grows entry by entry, and the CI gate and <code>/brd-to-fsd</code> wiring remain deferred (see Implementation status below)</td>
 </tr>
 <tr>
 <td><strong>Date</strong></td>

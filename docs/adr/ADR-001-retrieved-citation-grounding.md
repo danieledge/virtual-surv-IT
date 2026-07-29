@@ -3,16 +3,17 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-001` · Version `0.1` · Status `Draft`
-> · Classification `Internal` · Owner `Morgan (PM) / compliance-reviewer` · As-of `2026-06-29`
+> **Document control** · ID `ADR-001` · Version `0.2` · Status `Accepted`
+> · Classification `Internal` · Owner `Morgan (PM) / compliance-reviewer` · As-of `2026-07-30`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-06-29 | project review | Initial draft |
+> | 0.2 | 2026-07-30 | documentation review | Status reconciled to Accepted / implemented - the retrieval + flagging mechanism has been live since 2026-06-29 (`config/regulatory-register.yaml`, `scripts/check_citations.py`, wired into the authoring skills and the close checklist); the deferred items below stand unchanged |
 
 | | |
 |---|---|
-| **Status** | proposed |
+| **Status** | **Accepted / implemented** - the retrieval + flagging mechanism (register + `scripts/check_citations.py` + skill wiring) is live; the register is small and grows entry by entry, and the CI gate and `/brd-to-fsd` wiring remain deferred (see Implementation status below) |
 | **Date** | 2026-06-29 |
 | **Deciders** | Morgan (orchestrator), `compliance-reviewer`, human approver |
 | **Traceability** | Obligation: traceability spine integrity (CLAUDE.md §4, §8); RTM `obligation → BRD/FSD → code → test` |

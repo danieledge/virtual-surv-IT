@@ -77,7 +77,7 @@ a { color: #0969da; }
 <td>0.2</td>
 <td>2026-07-24</td>
 <td>best-practice review remediation</td>
-<td>Accepted &amp; implemented: <code>scripts/persona_anchor.py</code> (tested, ≤8-line anchor, live-engagement trigger); wiring via <code>scripts/apply-persona-anchor.sh</code> (human-run)</td>
+<td>Accepted &amp; implemented: <code>scripts/persona_anchor.py</code> (tested, ≤8-line anchor, live-engagement trigger); wiring by a one-shot human-run script, retired 2026-07-30 after its wiring was committed (re-wiring today: <code>bash scripts/apply-project-anchor.sh</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -87,7 +87,7 @@ a { color: #0969da; }
 <tbody>
 <tr>
 <td><strong>Status</strong></td>
-<td><strong>Accepted / implemented</strong> - <code>scripts/persona_anchor.py</code>; wiring into the two hook files was human-run (<code>scripts/apply-persona-anchor.sh</code>, ADR-002 rec 5; applied 2026-07-24 - the hook ships wired)</td>
+<td><strong>Accepted / implemented</strong> - <code>scripts/persona_anchor.py</code>; wiring into the two hook files was human-run (ADR-002 rec 5; applied 2026-07-24 - the hook ships wired). The original one-shot wiring script was retired 2026-07-30 once its wiring was committed; the live re-wiring path today is <code>bash scripts/apply-project-anchor.sh</code> (syncs the staged copies to the live hooks)</td>
 </tr>
 <tr>
 <td><strong>Date</strong></td>
@@ -170,9 +170,10 @@ philosophy as ADR-004.</p>
 <li>Standard rigor for a team-behaviour change: full pytest + a live golden-slice spot check.</li>
 </ul>
 <h2 id="status-next-step">Status / next step</h2>
-<p><strong>Proposed.</strong> Not wired into <code>hooks.json</code>. Implementation (the hook script, the engaged-signal
-check, the anchor content + its source-of-truth file, the dormancy guard, the tests above) awaits
-human sign-off on this ADR.</p>
+<p><strong>Accepted and implemented</strong> (0.27.0; wiring human-applied 2026-07-24 - the hook ships wired in
+both hook files). The hook script (<code>scripts/persona_anchor.py</code>), the engaged-signal check, the
+anchor content, the dormancy guard and the tests above all landed; re-wiring today is
+<code>bash scripts/apply-project-anchor.sh</code>.</p>
 <div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-005-persona-reanchoring-hook.md &middot; 2026-07-30</div>
 </body>
 </html>

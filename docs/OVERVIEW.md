@@ -128,7 +128,9 @@ processed. For an ordinary app that's fine. For **bank records** - real customer
 trades, confidential information - it absolutely is not.
 
 **The solution:** the most sensitive data - anything in the `data/raw/` folder - is
-**hard-blocked**: a guard physically stops any agent from reading it. For anything else you have
+**hard-blocked**: the hooks block any agent read of `data/raw/` (see
+[`docs/safety-model.md`](safety-model.md) for exactly what that does and does not
+guarantee). For anything else you have
 two options. Clean it first (mask or synthesise, below). Or, if it is already safe, say so at
 startup by confirming it is masked, synthetic or anonymised with no prohibited personal data. The
 team cannot check that claim for you, so that confirmation is **your responsibility**. And whatever
@@ -162,10 +164,13 @@ Three layers, from most to least sensitive:
    the cleaned data, then generates **completely made-up** records that behave the same way
    but correspond to nobody real. This is what's safe to put in front of the AI.
 
-> Important limit: the masking engine is **basic** (good for structured identifier fields plus
-> regex PII; **not** a full anonymiser), and even well-masked data is **not** anonymous - scrambled
-> bank data is still sensitive and stays locked down. "Synthetic" (made-up) data is the safe one to
-> share.
+> Important limit: the masking engine is a **placeholder implementation** - it shows where the
+> cleaning step fits in the workflow, and it is good for structured identifier fields plus
+> pattern-based personal details, but it is **not** a full anonymiser and you should **not rely
+> on it as your control** for real data (the same warning `/prepare-data` gives you - if the
+> stakes are real, use your organisation's approved masking tooling or fully synthetic data).
+> And even well-masked data is **not** anonymous - scrambled bank data is still sensitive and
+> stays locked down. "Synthetic" (made-up) data is the safe one to share.
 
 ---
 
@@ -248,3 +253,7 @@ it organises and does the work - you stay in the loop at the decision points.
 - **Synthetic data** - completely made-up data that behaves realistically.
 - **Hook** - a small script that runs automatically at a set moment (here: to block real data).
 - **Spoofing** - placing fake orders to manipulate a market; our worked example.
+
+---
+
+Next: [Demos](demos/README.md) · [FAQ](FAQ.md) · [Glossary](glossary.md) · [README](../README.md)

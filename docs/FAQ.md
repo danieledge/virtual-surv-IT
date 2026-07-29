@@ -25,6 +25,24 @@ You don't have to pick a category. Tell `/engage` what's going on and Morgan wor
 shape. Whatever comes back is traceable, evidence-tagged, and checked by someone other than
 whoever made it.
 
+**I already have ChatGPT / Claude / Copilot, so why would I need this?**
+You already have the engine; this is the vehicle. Virtual Surv-IT *runs on* Claude. It is not a
+rival model, but a demonstration of what the same model does when you stop driving it from a
+blank chat box. A chat window cannot give you:
+
+| With a chat window | With this |
+|---|---|
+| The quality of the output depends on *today's* prompt: your best prompting on a good day, someone else's on a bad one. | The prompting **is the repo**: intake questions, review method, templates and standing rules, version-controlled, peer-reviewable, identical on every engagement, and regression-tested by an eval harness. |
+| The domain knowledge has to be typed in every session: typologies, MW79, SR 11-7, ATL/BTL method, EARS syntax… | Encoded once, cited to sources, and loaded only when relevant, with a register that grows instead of a prompt that gets retyped. |
+| One context does everything: it writes the code, reviews its own code, and declares itself done. | **Separation of duties**: reviewers hold no `Write`/`Edit` tools, QA and validation run as separate agents from the build, and a fresh context reviews without the author's bias. |
+| Whatever you paste **leaves**: into someone's context window, on their retention terms. | Raw data under `data/raw/` is **kept from the model's file-read tools** (hook + OS deny-list + a CI check); the model works downstream of masking, and code execution needs a human-created consent file. (PoC-grade controls with limits documented in ADR-002, not a sandbox.) |
+| The output is a transcript. Six months later an auditor asks "why this threshold?" and the answer is scrolling. | The output is an **evidence pack**: RTM, tuning rationale with dates, finding dispositions, review reports, and a Definition of Done, in `.md` + `.html`, gated by a mechanical check. |
+| The discipline lives in your head and leaves with you. | The discipline lives in the harness and survives staff turnover, deadline pressure, and whoever types next. |
+
+None of that requires a better model. It requires the model to arrive inside **controls**, which
+is also why the pattern transfers: swap the surveillance domain knowledge for another regulated
+domain and the harness (dormancy, gates, segregation, evidence, evals) carries over.
+
 **What's the difference between "measured" and "inferred"? I keep seeing 📊 and 🧠 tags.**
 It's the team's honesty system, and probably the single most useful thing to understand.
 📊 **observed/measured** means the team actually ran or counted something and the evidence
@@ -63,17 +81,21 @@ By design: review is static by default, because running code under review is a r
 Execution needs consent that only you can grant, by creating a marker file the model is
 physically blocked from writing (a hook enforces it, and the model can't edit the hook
 either). Until then, anything that would need a run stays honestly tagged 🧠 inferred.
-Granting it is one command, run by you:
+Granting it is one command, run by you - always with the **absolute project path**, so a
+terminal sitting in another directory can't create the marker in the wrong place:
 
 ```bash
-touch .claude/.exec-consent        # from any terminal at the project root
+touch /path/to/your-project/.claude/.exec-consent
 ```
 
-or type `! touch .claude/.exec-consent` as the first characters of your Claude Code prompt
-line (the `!` runs it as your shell command, not the model's). Alternatively set
+or type `! touch /path/to/your-project/.claude/.exec-consent` as the first characters of your
+Claude Code prompt line (the `!` runs it as your shell command, not the model's - and that
+shell is Git Bash on Windows too, so it works everywhere). From a **native Windows terminal**
+use PowerShell `ni "C:\path\to\your-project\.claude\.exec-consent" -Force` or cmd
+`type nul > "C:\path\to\your-project\.claude\.exec-consent"` instead. Alternatively set
 `CST_ALLOW_EXEC=1` in the environment you launch Claude Code from - handy for CI. To revoke,
-delete the file (`rm .claude/.exec-consent`); answering "static only" at intake deletes it
-for you. The asymmetry is the point: the model may *delete* the marker (fail-safe) but can
+delete the file (`rm /path/to/your-project/.claude/.exec-consent`); answering "static only"
+at intake deletes it for you. The asymmetry is the point: the model may *delete* the marker (fail-safe) but can
 never *create* it, so consent is always a human act with a file's worth of evidence. And a
 "no" sticks: a declined or not-yet-answered consent is recorded in the engagement's state
 file (only the non-granting outcomes are representable there - anything grant-shaped fails
@@ -179,3 +201,7 @@ still counts as personal data, so prefer fully synthetic. See
 control for de-identifying production data - if the stakes are real, use your organisation's
 approved masking tooling, or fully synthetic data, and treat `/prepare-data` as a demo of
 where that step slots into the flow.
+
+---
+
+Next: [Overview](OVERVIEW.md) · [Demos](demos/README.md) · [Glossary](glossary.md) · [README](../README.md)
