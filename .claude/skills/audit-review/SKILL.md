@@ -68,8 +68,9 @@ Run an **evaluator-optimizer loop**:
 Step 1's `/deep-review` already wrote `artifacts/data/findings-<slug>.json`; **consolidate the
 compliance-reviewer findings from step 2 into the same pack** (append to `findings[]`; use the pack's
 narrative fields for the audit skeleton), then run **`<python> -m scripts.check_artifacts --fix`** -
-it validates the pack (`FINDINGS-INVALID` → fix and re-run) and renders `artifacts/REVIEW-<slug>.md`
-+ `.html`. Don't hand-author or hand-edit the rendered report.
+it validates the pack (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's
+`artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status
+closing` first). Don't hand-author or hand-edit the rendered report.
 (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
 installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
 "Run mode & the bundled scripts".)

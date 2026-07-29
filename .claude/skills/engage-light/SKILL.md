@@ -50,8 +50,11 @@ mandatory chain applies in full kind, light in count**: tests (project's own fra
 command recorded) → ONE code-review pass with fixes → ONE independent QA verification cycle
 (evidence preserved). A QA fail still loops - light never ships a failing verdict.
 
-**4. Close-lite.** Run `<python> -m scripts.check_artifacts --fix` and fix the list; then
-`set-team`, `finalise-artifacts`, `set-footprint`, and `set-status closed --verdict "..."`.
+**4. Close-lite.** `set-status closing` first (marks the close window on disk - the summary
+email written next is legitimate close work, register R5); run
+`<python> -m scripts.check_artifacts --fix` and fix the list; then
+`set-team`, `finalise-artifacts`, `set-footprint`, and `set-status closed --verdict "..."` -
+the close runs the DoD gate itself and refuses on findings (register R6).
 **No delivery report** - but the **engagement-summary email stays, kept SHORT**
 (`engagement-summary-<slug>.txt` in artifacts/, signed as Morgan, "Hi," if the requester's
 name is unknown): a few lines covering what was done, the evidence in one line (test counts,

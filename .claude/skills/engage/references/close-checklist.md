@@ -52,8 +52,12 @@ A 2026-07-25 independently-reviewed close shipped a fix-cycle-1 developer handov
 inside a fix-cycle-2 pack: stale test counts, a stale requirement range, "unresolved" items that
 were resolved, and a citation struck by the compliance review still cited in the one document a
 maintainer actually reads. The banner strip and index flip are NOT the close - reconciliation is.
-Before setting the state to closed (`engagement_state set-status closed`, which re-renders
-START-HERE to ✅ - ADR-006), re-open **every document the engagement produced or touched**,
+Enter the close explicitly first - `engagement_state set-status closing` (2026-07-29 register
+R5: the close window is recorded on disk, so the close artifacts you write during this
+checklist are never read as premature by the gate or a resumed session). Then, before setting
+the state to closed (`engagement_state set-status closed`, which re-renders
+START-HERE to ✅ - ADR-006, **runs the full DoD gate itself and refuses on findings**,
+register R6), re-open **every document the engagement produced or touched**,
 explicitly including code-adjacent ones (deliverable README, module docstrings, inline doc
 comments), and verify each against the FINAL state:
 

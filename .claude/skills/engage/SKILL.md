@@ -180,14 +180,27 @@ With the target known: show both disclaimers (text) at startup, then ask in a **
 
 Record the answers; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.**
 Repeat the execution- and data-responsibility notes in the final Delivery Report.
+**Persist them the moment the workspace exists (step 4) - the transcript is not the record**
+(a compacted/resumed session must re-read them from disk, never re-ask): `set-decision
+data-attestation "<answer / no data involved>"`, `set-decision fix-cycle "<Q3 answer>"`, and
+the consent **outcome** via `record-consent-outcome asked|declined` - a "No"/"unsure" records
+`declined`. The outcome is never a grant: the grant stays the human-created marker only, and
+the state file cannot represent one (ADR-002).
 
 **0b. Existing engagements?** If `artifacts/` already holds engagement workspaces
 (`<python> -m scripts.engagement_state list` - also rendered at `artifacts/ENGAGEMENTS.md`),
 ask ONE question via the question tool before classifying: **resume** one of the open
 engagements (options list each slug with its ⏳/⛔ status and title) or **start new**. One
-engagement is ACTIVE per session; name the active slug in your banner line and target its
-workspace in every state command (`--slug <slug>`). A resumed ⛔ workspace follows the
-cold-resume rules (read ITS START-HERE + state as the record). A ⛔ sibling never blocks the
+engagement is ACTIVE per session, and the slug is recorded ON DISK
+(`artifacts/.active-engagement.json`, written by `init`, switched with `set-active`, cleared
+at close) - the `list` output marks it, so offer it as the default resume target rather than
+guessing; on switching engagements run `set-active <slug>`. Name the active slug in your
+banner line and target its workspace in every state command (`--slug <slug>`). **A resumed
+workspace's state file is the record**: re-read its `phase`, `decisions` (go-ahead,
+fix-cycle, data-attestation), `execution_consent_outcome` and `runtime` from
+`engagement-state.json` - answers recorded there are NOT re-asked (a recorded consent
+`declined` stands until the HUMAN says otherwise), and the persisted `runtime` replaces a
+fresh run-mode guess after compaction. A ⛔ sibling never blocks the
 active engagement - its stop-gate stays silent while parked (ADR-008).
 
 **1. Classify the work.** Decide the entry point:
@@ -265,9 +278,15 @@ WORKSPACE-relative, and when several engagements exist target yours with `--slug
 is authoritative and START-HERE is its rendered view - **never hand-edit START-HERE**: record
 every artifact with `add-artifact`, every status change with `set-status`, every open question
 with `add-outstanding` - each mutator re-renders the index in the same command (lifecycle
-discipline, operating guide; render shape: `docs/templates/start-here.md`). **Get the go-ahead via the question tool** (header `Go-ahead`,
+discipline, operating guide; render shape: `docs/templates/start-here.md`). **The moment the
+workspace exists, persist the session facts** (register R2/R7 - the transcript is not the
+record): the intake gate answers from step 0a (`set-decision` + `record-consent-outcome`,
+wording there) and the step-0 probe result - `set-runtime --mode repo|plugin
+[--plugin-root <path>] --interpreter <python>`. **Get the go-ahead via the question tool** (header `Go-ahead`,
 `multiSelect: false`): **Proceed as briefed** · **Adjust something first** · **Stop here** -
-never a "shall I proceed?" buried in prose.
+never a "shall I proceed?" buried in prose. **Record the answer**: `set-decision go-ahead
+"<answer> (user, <date>)"`, then `set-phase delivery` as delivery begins - a cold resume
+reads the phase from the state, so it must be true (register R4).
 
 **5. Oversee delivery (agile).** Work in small iterations. **Right-size, and say so out loud:**
 before fanning out, state in one line **how many agents you intend to spawn and why** (e.g.
@@ -303,11 +322,16 @@ report was read as the delivery and QA never ran.)
 each with `<python> -m scripts.render_html <file>.md` so every deliverable exists in `.md` and
 `.html` - **recording each one with `<python> -m scripts.engagement_state add-artifact <file>
 --title "..."` as it lands** (the index re-renders itself); nothing in the folder goes
-unlisted. `delivery-report.md` and the summary email are written **only now, at close**.
+unlisted. **Entering the close? `set-status closing` FIRST** - it marks the close window on
+disk, so the delivery report and summary email written next are legitimate close work in
+progress, never "premature" to the gate or to a resumed session (register R5).
+`delivery-report.md` and the summary email are written **only now, at close**.
 **Finalise the state last, in order**: `set-team "Name (role)" ...` (the roster that actually
 delivered), `finalise-artifacts` (every row interim → final), `set-footprint` with agents +
 tokens, THEN `set-status closed --verdict "..."` - the close refuses while the team is empty
-or any artifact row is still interim (2026-07-26 live-run lesson). Remove interim banners
+or any artifact row is still interim (2026-07-26 live-run lesson), **and it runs the full
+mechanical DoD gate itself, refusing and rolling back on findings** (register R6) - fix what
+it lists (or run `check_artifacts --fix`) and re-run; never work around a refused close. Remove interim banners
 from artifacts that became final, and keep the 📊/🧠 evidence tags on every data claim IN THE
 DELIVERY REPORT AND SUMMARY EMAIL too - the tag duty covers the PM's summary layer, not just
 specialist artifacts (the one dimension the 0.29.0 eval judge failed). The mechanical gate below verifies
@@ -333,7 +357,7 @@ produce a handover pack?"*). Always leave the user with a clear, actionable choi
 
 **Also write the engagement-summary email** (required closing artifact - Definition of Done): a
 short email-format cover note (`docs/templates/engagement-summary-email.md`) saved as
-`artifacts/engagement-summary-<slug>.txt`, **signed off as Morgan**. Address the requester only if
+the workspace's `artifacts/<slug>/engagement-summary-<slug>.txt`, **signed off as Morgan**. Address the requester only if
 you know their name - otherwise open with "Hi,". It's an email, so keep it `.txt` (the one artifact
 not rendered to `.html`).
 

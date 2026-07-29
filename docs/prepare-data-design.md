@@ -101,7 +101,7 @@ only types, counts, pattern-hit tallies, and proposed roles.
 
 ```
 python -m scripts.profile_schema --in data/raw/<file> [--adapter auto] \
-    --out config/<file>.schema.yaml --report artifacts/profile-<file>.json
+    --out config/<file>.schema.yaml --report artifacts/data-prep/profile-<file>.json
 ```
 
 **Inference rules (field → proposed role):**

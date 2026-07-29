@@ -13,7 +13,7 @@ The single canonical format for every team review (`code-reviewer`, the dimensio
 
 - **Console** → a clean, glanceable **scoreboard** (below). Never a wall of tables.
 - **Artifact** → the full findings, diffs and evidence, written to
-  `artifacts/REVIEW-<slug>.md` and rendered to `.html`. **Artifact-first**: detail goes to the
+  `artifacts/<slug>/REVIEW-<slug>.md` (the engagement workspace, ADR-010) and rendered to `.html`. **Artifact-first**: detail goes to the
   file, the terminal gets the scoreboard + a pointer.
 
 ## Console scoreboard (the ONLY thing shown by default)
@@ -32,7 +32,7 @@ Review - <target>            (deep · audit mode)
 Found 21 · Reported 14 · Filtered 7
 Disposition: ✅ 4 fixed · 🔴 2 open · ⚖️ 1 accepted    ← only after a fix/re-review loop
 Verdict: ❌ not yet - 2 criticals still OPEN (see artifact)
-→ Full findings + fixes: artifacts/REVIEW-<slug>.md  (.html rendered)
+→ Full findings + fixes: artifacts/<slug>/REVIEW-<slug>.md  (.html rendered)
 ```
 
 Then **offer to expand, don't dump** - via the question tool: *"Show full findings inline, the

@@ -93,7 +93,7 @@ schema `docs/review/findings-schema.json`). Write the findings to
 `artifacts/data/findings-<slug>.json` with **`"kind": "security-audit"`** (each finding the five
 named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition), then run
 **`<python> -m scripts.check_artifacts --fix`** (allow-listed): it validates the pack
-(`FINDINGS-INVALID` → fix and re-run) and renders `artifacts/SECURITY-AUDIT-<slug>.md` + `.html`
+(`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `artifacts/<slug>/SECURITY-AUDIT-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first)
 (the `kind` drives the `SECURITY-AUDIT-` prefix). Don't hand-author or hand-edit the report.
 (`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin
 session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the

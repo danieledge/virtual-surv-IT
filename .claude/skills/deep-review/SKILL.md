@@ -86,7 +86,7 @@ and states what's applicable vs not.
       `executive_summary`, `developer_guidance`, `limitations`, `tooling_coverage`).
    2. Run **`<python> -m scripts.check_artifacts --fix`** (allow-listed - no consent needed): it
       **validates** the pack (a missing field is `FINDINGS-INVALID` → fix the pack and re-run) and
-      **renders** the canonical `artifacts/REVIEW-<slug>.md` + `.html`. The renderer owns the layout,
+      **renders** the canonical `artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first). The renderer owns the layout,
       so the report can't drift (no "5C"/C-word/inline). *(`<python>`: resolve your interpreter - try
       python3, then python, then py; installed-plugin sessions invoke the bundled `scripts/` copy by
       path - operating guide, "Run mode & the bundled scripts".)*

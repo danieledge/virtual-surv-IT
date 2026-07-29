@@ -135,7 +135,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       the code could build, run and safely change it from the doc **alone** (no tribal knowledge,
       no unexplained jargon, commands copy-pastable). `compliance-reviewer` checks usability at
       this gate, not merely existence.
-- [ ] **Indexed - a LIVING START-HERE entry point** - `artifacts/START-HERE.md` (template
+- [ ] **Indexed - a LIVING START-HERE entry point** - the workspace's `artifacts/<slug>/START-HERE.md` (template
       `docs/templates/start-here.md`) is **created at engagement open** alongside the brief,
       gains a row **the moment each artifact is written**, and is finalised at close: verdict,
       reading order, every artifact listed with one line of purpose, and the open items a

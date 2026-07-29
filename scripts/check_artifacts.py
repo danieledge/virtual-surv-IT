@@ -10,15 +10,18 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
   1. every `artifacts/**/*.md` has a rendered `.html` sibling (same stem, same directory) -
      the `.md` + `.html` dual-artifact rule (CLAUDE.md §8);
   2. the START-HERE living index exists from the FIRST artifact onward, carries an
-     engagement Status (⏳ in progress / ⛔ blocked / ✅ closed), and stays current: every
-     artifact file is listed in it, every local link in it resolves. Born of a live
-     failure (2026-07-22): an engagement stalled on an unanswered clarification, the user
-     read an interim report as the delivery, and QA never ran - state must be visible;
+     engagement Status (⏳ in progress / ⛔ blocked / 🔒 closing / ✅ closed), and stays
+     current: every artifact file is listed in it, every local link in it resolves. Born of
+     a live failure (2026-07-22): an engagement stalled on an unanswered clarification, the
+     user read an interim report as the delivery, and QA never ran - state must be visible;
   3. close-only artifacts stay close-only: `delivery-report*.md` / `final-*` and the
-     `engagement-summary-*.txt` email may exist only when the index Status is ✅ closed
-     (before that they mislabel work-in-progress as a delivery);
-  4. at least one `engagement-summary-*.txt` exists once the engagement is ✅ closed (or in
-     a legacy folder with no status to read) - the required closing email, §6a;
+     `engagement-summary-*.txt` email may exist only when the Status is 🔒 closing or
+     ✅ closed (before that they mislabel work-in-progress as a delivery). A pack with NO
+     readable status - including no index at all - is treated as NOT closed (fail-safe,
+     2026-07-29 register G1: the pack whose team forgot the index is exactly the pack this
+     guard exists for);
+  4. at least one `engagement-summary-*.txt` exists once the engagement is ✅ closed - the
+     required closing email, §6a;
   5. if the working project has a codebase map (ADR-003: `docs/codebase-map.md` or root
      `CODEBASE-MAP.md`), it passes mechanical hygiene: bounded size, an As-of date and a
      commit-SHA anchor in the header, 📊/🧠 basis tags on map entries, no secret-shaped
@@ -37,7 +40,12 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      marker (`AGENT-UNMARKED`), and no line joins an agent and a human with `+`/`&`
      (`AGENT-HUMAN-COMBINED`) - roster names must never read as real people, and an agent
      never shares a sign-off line with the human approver (operating guide, "Voice, names
-     & console").
+     & console");
+ 10. in workspace mode, no file sits unchecked in the artifacts ROOT: a root file outside
+     every `artifacts/<slug>/` workspace is `ORPHAN-ARTIFACT` unless grandfathered in the
+     snapshot allowlist `.dod-root-allowlist.json`, taken on the rule's first run (D2
+     ruling 2026-07-29: pre-existing flat files are exempt, the layout applies to new
+     work only).
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
 No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
@@ -238,11 +246,15 @@ def check_roster(text: str, where: Path) -> list[str]:
 # final-sounding name was read as the delivery - with QA never run. The status makes
 # "not done" visible; the close-only rules below stop interim work masquerading as final.
 _STATUS_LINE_RE = re.compile(r"(?im)^.*\bstatus\b.*$")
-_STATUS_EMOJI = {"✅": "closed", "⛔": "blocked", "⏳": "open"}
+_STATUS_EMOJI = {"✅": "closed", "⛔": "blocked", "⏳": "open", "🔒": "closing"}
 # Local link targets in the index ([text](file.md)) - no scheme, no pure-anchor links.
 _LOCAL_LINK_RE = re.compile(r"\]\(([^)#][^)]*)\)")
-# Files that may only exist once the engagement is closed.
+# Files that may only exist once the engagement is closing/closed.
 _CLOSE_ONLY_MD_RE = re.compile(r"(?i)^(delivery-report.*|final-.*)\.md$")
+# The canonical rendered review report is close-only too (operating guide "REVIEW-*";
+# D4 ruling 2026-07-29, register P3). CASE-SENSITIVE by design: the interim, pass-scoped
+# `review-pass-N.md` names stay legal mid-engagement.
+_CLOSE_ONLY_REVIEW_RE = re.compile(r"^REVIEW-.*\.md$")
 # Filename-shaped tokens ("review-pass-1.md") - used for whole-token index-listing checks so a
 # short name is not treated as listed just because it is a substring of a longer listed name.
 _FILENAME_TOKEN_RE = re.compile(r"[\w.\-]+\.[A-Za-z0-9]+")
@@ -291,32 +303,92 @@ def _closed_is_negated(lowered: str) -> bool:
 
 
 def _index_status(text: str) -> str | None:
-    """Read the engagement status from START-HERE: 'open' | 'blocked' | 'closed', or None.
+    """Read the engagement status from START-HERE: 'open' | 'blocked' | 'closing' |
+    'closed', or None.
 
     Fail-SAFE by construction (a wrong 'closed' silently disables the close-only guards, which
     is the exact failure the gate exists to stop):
     - A status line carrying MORE THAN ONE distinct status emoji is a legend/key, not a state -
       it is skipped, not read as closed.
     - Exactly one emoji -> that state (the template's canonical form).
-    - Word fallback (no emoji): blocked/open are resolved BEFORE closed (not-done wins on
-      ambiguity), and a negated/qualified 'closed' ('not closed', 'cannot be closed') does not
-      count. Only lines that mention 'status' are considered, so prose elsewhere can't pose as
-      state.
+    - Word fallback (no emoji): blocked/closing/open are resolved BEFORE closed (not-done wins
+      on ambiguity), and a negated/qualified 'closed' ('not closed', 'cannot be closed') does
+      not count. Only lines that mention 'status' are considered, so prose elsewhere can't pose
+      as state.
     """
     for line in _STATUS_LINE_RE.findall(text):
         emojis = {e for e in _STATUS_EMOJI if e in line}
         if len(emojis) > 1:
-            continue  # a legend line lists all three symbols - not the engagement's state
+            continue  # a legend line lists the status symbols - not the engagement's state
         if len(emojis) == 1:
             return _STATUS_EMOJI[next(iter(emojis))]
         lowered = line.lower()
         if re.search(r"\bblocked\b", lowered):
             return "blocked"
+        if re.search(r"\bclosing\b", lowered):
+            return "closing"
         if re.search(r"\bin progress\b|\bopen\b", lowered):
             return "open"
         if re.search(r"\bclosed\b", lowered) and not _closed_is_negated(lowered):
             return "closed"
     return None
+
+
+# The state file's vocabulary mapped onto the index parser's (ADR-006 statuses on the
+# left). An unknown/unparseable state status falls through to the index parse.
+_STATE_STATUS_MAP = {
+    "in_progress": "open",
+    "blocked": "blocked",
+    "closing": "closing",
+    "closed": "closed",
+}
+
+
+def pack_status(pack: Path) -> str | None:
+    """The one shared "what state is this pack in" answer for the checker and both hooks.
+
+    2026-07-29 register G5: three non-equivalent parsers (this module's legend-aware one,
+    the hooks' raw emoji-substring sniff, the eval harness's first-status-line grab) meant
+    a words-only status line armed the checker but not the stop gate, and a stray ⏳
+    anywhere in a closed index re-armed the hooks. This helper is now the single rule:
+    the machine-readable state file (ADR-006) is authoritative when its status parses;
+    the fallback is the legend-aware `_index_status` - never a substring sniff.
+
+    Returns 'open' | 'blocked' | 'closing' | 'closed', or None (not an engagement pack).
+    """
+    state_file = pack / "engagement-state.json"
+    if state_file.is_file():
+        try:
+            raw = json.loads(state_file.read_text(encoding="utf-8")).get("status")
+        except Exception:
+            raw = None
+        mapped = _STATE_STATUS_MAP.get(raw)
+        if mapped is not None:
+            return mapped
+    try:
+        text = (pack / "START-HERE.md").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return _index_status(text)
+
+
+def engagement_packs(artifacts_dir: Path) -> list[Path]:
+    """Subdirectories that LOOK like engagement packs: a state file OR a START-HERE index.
+
+    2026-07-29 register G7: the checker required a state file where the persona anchor
+    accepted an index alone, so a hand-made `artifacts/<slug>/` pack was anchored but
+    never gated. This is now the single detection rule for gating and anchoring, in the
+    fail-safe direction: the gate sees everything the anchor sees. Registry consistency
+    stays keyed on the narrower `workspace_dirs` (state file present) because only
+    stateful packs are registrable."""
+    if not artifacts_dir.is_dir():
+        return []
+    return sorted(
+        p
+        for p in artifacts_dir.iterdir()
+        if p.is_dir()
+        and ((p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file())
+    )
 
 
 def find_codebase_map(project_dir: Path) -> Path | None:
@@ -423,13 +495,14 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
     """Validate any structured findings pack under artifacts/data/ against the schema. Shells out to
     validate_findings (by path, NOT an import) so this stays path-independent - an installed plugin
     invokes scripts by absolute path. A pack that fails is FINDINGS-INVALID: the model fixes the
-    DATA, not the rendered report. Inert until packs exist (fails open if the validator won't run)."""
+    DATA, not the rendered report. Inert until packs exist (fails open if the validator won't run).
+    Recursive over the data/ lane (2026-07-29 register P5: nested packs went unvalidated)."""
     findings: list[str] = []
     data_dir = artifacts_dir / "data"
     if not data_dir.is_dir():
         return findings
     validator = Path(__file__).with_name("validate_findings.py")
-    for pack in sorted(data_dir.glob("findings-*.json")):
+    for pack in sorted(data_dir.rglob("findings-*.json")):
         try:
             result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
                 [sys.executable, str(validator), str(pack)],
@@ -519,6 +592,22 @@ def check_state(artifacts_dir: Path) -> list[str]:
             "(state-hash differs or is missing) - the state is authoritative; run "
             "`python -m scripts.engagement_state render`"
         )
+    else:
+        # P7 (2026-07-29 register): the state-hash is copied verbatim into the render, so
+        # a hand-edit of the INDEX passed the staleness check. The render also embeds a
+        # content-hash; a mismatch means someone edited the generated view directly.
+        # Pre-P7 renders (no content-hash in the marker) are tolerated.
+        emb_content = getattr(es, "embedded_content_hash", None)
+        chash = getattr(es, "content_hash", None)
+        if emb_content is not None and chash is not None:
+            expected = emb_content(index_text)
+            if expected is not None and chash(index_text) != expected:
+                findings.append(
+                    "INDEX-HAND-EDITED: START-HERE.md content differs from what the state "
+                    "rendered - the index is a GENERATED view (ADR-006), never hand-edited; "
+                    "put the change into the state via `scripts.engagement_state` mutators "
+                    "(--fix re-renders and backs the hand-edited file up)"
+                )
 
     findings.extend(_check_ratified_claims(artifacts_dir, state))
     return findings
@@ -680,22 +769,38 @@ def check(artifacts_dir: Path) -> list[str]:
     ]
     non_test_code = [f for f in code_files if not _TEST_FILE_RE.search(f.name)]
     if non_test_code:
-        qa_handovers = sorted(artifacts_dir.rglob("qa-handover*.md")) + sorted(
-            artifacts_dir.rglob("*qa-handover*.md")
+        # 2026-07-29 register G9 [reproduced]: coverage is scoped to the code file's
+        # top-level container within this pack. Previously ANY qa-handover*.md in the tree
+        # satisfied the gate, so code in one engagement's subfolder passed on a SIBLING
+        # engagement's paperwork sitting at the root (the live vendorx case).
+        def _container(f: Path) -> str:
+            rel = f.relative_to(artifacts_dir)
+            return rel.parts[0] if len(rel.parts) > 1 else ""
+
+        qa_handovers = sorted(
+            set(artifacts_dir.rglob("qa-handover*.md"))
+            | set(artifacts_dir.rglob("*qa-handover*.md"))
         )
-        if not qa_handovers:
-            findings.append(
-                f"CODE-NO-QA: {len(non_test_code)} code file(s) in {artifacts_dir} but no "
-                "qa-handover*.md - delivered code requires an independent QA pass "
-                "(DoD; no workflow exempts it)"
-            )
-        test_files = [f for f in code_files if _TEST_FILE_RE.search(f.name)]
-        if not test_files:
-            findings.append(
-                f"CODE-NO-TESTS: {len(non_test_code)} code file(s) in {artifacts_dir} but no "
-                "test files (test_*/-_test.*/*.spec.*) - delivered code ships with its tests "
-                "(DoD 'Tested')"
-            )
+        qa_containers = {_container(qa) for qa in qa_handovers}
+        test_containers = {_container(f) for f in code_files if _TEST_FILE_RE.search(f.name)}
+        by_container: dict[str, list[Path]] = {}
+        for f in non_test_code:
+            by_container.setdefault(_container(f), []).append(f)
+        for container, files in sorted(by_container.items()):
+            scope = str(artifacts_dir / container) if container else str(artifacts_dir)
+            if container not in qa_containers:
+                findings.append(
+                    f"CODE-NO-QA: {len(files)} code file(s) in {scope} but no "
+                    "qa-handover*.md in the same scope - delivered code requires an "
+                    "independent QA pass (DoD; no workflow exempts it, and a sibling "
+                    "engagement's handover does not count)"
+                )
+            if container not in test_containers:
+                findings.append(
+                    f"CODE-NO-TESTS: {len(files)} code file(s) in {scope} but no "
+                    "test files (test_*/-_test.*/*.spec.*) in the same scope - delivered "
+                    "code ships with its tests (DoD 'Tested')"
+                )
 
     # The START-HERE living index: created at OPEN (with the first artifact), updated on
     # every artifact write, finalised at close (docs/templates/start-here.md). It is also
@@ -754,31 +859,34 @@ def check(artifacts_dir: Path) -> list[str]:
                 )
 
     # Close-only artifacts: the delivery report and the summary email SIGNAL a close, so
-    # while the engagement is not yet closed they must not exist. An index with an UNREADABLE
-    # status (None) is treated as NOT closed here too - fail-safe, so a delivery report can't
-    # slip through on a status the gate couldn't parse (2026-07-23 review).
+    # while the engagement is not yet closed they must not exist. Fail-safe (2026-07-29
+    # register G1 [reproduced]): NO readable status - an unparseable line OR no index at
+    # all - is NOT closed. The old code routed a missing index down the closed/legacy
+    # branch, disarming every close-only guard exactly when the team forgot the index
+    # (the 2026-07-22 failure class). A 🔒 closing pack is the sanctioned close window:
+    # close artifacts are legitimate there, and nothing demands them yet (register R5).
     summaries = sorted(artifacts_dir.rglob("engagement-summary-*.txt"))
-    not_closed = status in ("open", "blocked") or (start_here is not None and status is None)
+    not_closed = status in ("open", "blocked") or status is None
     if not_closed:
-        state = status or "not readable"
+        state = status or ("no index" if start_here is None else "not readable")
         for md in non_index_md:
-            if _CLOSE_ONLY_MD_RE.match(md.name):
+            if _CLOSE_ONLY_MD_RE.match(md.name) or _CLOSE_ONLY_REVIEW_RE.match(md.name):
                 findings.append(
-                    f"FINAL-BEFORE-CLOSE: {md.name} exists but START-HERE.md status is "
+                    f"FINAL-BEFORE-CLOSE: {md.name} exists but the engagement status is "
                     f"'{state}', not closed - the delivery report is written at close only; "
                     "interim output takes a pass-scoped name (review-pass-N / qa-cycle-N / "
-                    "interim-*)"
+                    "interim-*). If this IS the close underway, enter it explicitly "
+                    "(`set-status closing`) and finish - never delete completed deliverables"
                 )
         if summaries:
             findings.append(
                 f"SUMMARY-BEFORE-CLOSE: {len(summaries)} engagement-summary-*.txt present "
-                f"but START-HERE.md status is '{state}', not closed - the summary email is the "
-                "closing artifact; a not-yet-closed engagement states what is outstanding instead"
+                f"but the engagement status is '{state}', not closed - the summary email is "
+                "the closing artifact. If this IS the close underway, enter it explicitly "
+                "(`set-status closing`) and finish - never delete completed deliverables"
             )
-    elif status == "closed" or start_here is None:
-        # Closed - or legacy (no index at all): the closing email is required once there
-        # are deliverables to summarise. (An index with an unreadable status already got
-        # INDEX-NO-STATUS; piling the email demand on top would point at the wrong fix.)
+    elif status == "closed":
+        # Closed: the closing email is required once there are deliverables to summarise.
         has_deliverables = bool(md_files)
         if has_deliverables and not summaries:
             # Uniform across profiles (user ruling 2026-07-27): every close ends with the
@@ -791,22 +899,21 @@ def check(artifacts_dir: Path) -> list[str]:
         # Status is single-source: it lives ONLY in START-HERE. A content artifact still
         # carrying a mutable interim/in-progress banner after close points readers at an
         # out-of-date state (live report 2026-07-24: the brief said "in progress" at close).
-        if status == "closed":
-            for md in non_index_md:
-                head = "\n".join(md.read_text(encoding="utf-8", errors="replace").splitlines()[:8])
-                if _STALE_STATUS_RE.search(head):
-                    findings.append(
-                        f"STALE-STATUS: {md.name} still carries an interim/in-progress status "
-                        "banner but START-HERE is closed - engagement status lives ONLY in "
-                        "START-HERE; remove the stale banner"
-                    )
-                if _STALE_DOCSTATUS_RE.search(head):
-                    findings.append(
-                        f"STALE-DOCSTATUS: {md.name} document-control Status still reads "
-                        "Draft/In review/In progress under a ✅ CLOSED index - close it out, "
-                        "or state 'pending human sign-off' in the Status value where the human "
-                        "act is the only gap (close checklist: reconciliation sweep)"
-                    )
+        for md in non_index_md:
+            head = "\n".join(md.read_text(encoding="utf-8", errors="replace").splitlines()[:8])
+            if _STALE_STATUS_RE.search(head):
+                findings.append(
+                    f"STALE-STATUS: {md.name} still carries an interim/in-progress status "
+                    "banner but START-HERE is closed - engagement status lives ONLY in "
+                    "START-HERE; remove the stale banner"
+                )
+            if _STALE_DOCSTATUS_RE.search(head):
+                findings.append(
+                    f"STALE-DOCSTATUS: {md.name} document-control Status still reads "
+                    "Draft/In review/In progress under a ✅ CLOSED index - close it out, "
+                    "or state 'pending human sign-off' in the Status value where the human "
+                    "act is the only gap (close checklist: reconciliation sweep)"
+                )
 
     return findings
 
@@ -814,7 +921,10 @@ def check(artifacts_dir: Path) -> list[str]:
 def apply_fixes(artifacts_dir: Path) -> list[str]:
     """Mechanically resolve the auto-fixable DoD defects (docs/DEFINITION-OF-DONE.md 'AUTO-FIX'
     class) so the close does not depend on the model remembering each step:
-      * render each findings pack (artifacts/data/findings-*.json) to its canonical REVIEW-<slug>.md;
+      * render each findings pack (artifacts/data/findings-*.json) to its canonical
+        REVIEW-<slug>.md - AT CLOSE ONLY (🔒 closing / ✅ closed; D4 ruling 2026-07-29,
+        register P3: the tool used to manufacture mid-engagement the very artifact the
+        prose declares close-only);
       * normalise a mis-typed engagement-summary email (.md / .html) to the required .txt;
       * render every remaining .md that lacks its .html sibling.
     Returns a log of what changed; idempotent (a second run is a no-op)."""
@@ -826,7 +936,7 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
     # below then produces their siblings. render_findings validates + owns the layout, and refuses
     # an invalid pack (that surfaces as FINDINGS-INVALID from the check, not a silent bad report).
     data_dir = artifacts_dir / "data"
-    if data_dir.is_dir():
+    if data_dir.is_dir() and pack_status(artifacts_dir) in ("closing", "closed"):
         renderer = Path(__file__).with_name("render_findings.py")
         for pack in sorted(data_dir.glob("findings-*.json")):
             result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
@@ -847,16 +957,39 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
             continue  # a correct .txt already exists - leave the duplicate for a human
         bad.rename(target)
         fixed.append(f"FIXED SUMMARY-WRONG-EXT: renamed {bad.name} -> {target.name}")
-        # Keep the index in sync so the rename can't create a STALE-INDEX. Drop the index's
-        # stale .html sibling too, so the render pass below regenerates it from the new text.
-        for idx in artifacts_dir.rglob("START-HERE.md"):
-            itext = idx.read_text(encoding="utf-8", errors="replace")
-            if bad.name in itext:
-                idx.write_text(itext.replace(bad.name, target.name), encoding="utf-8")
-                idx.with_suffix(".html").unlink(missing_ok=True)
-                fixed.append(
-                    f"FIXED STALE-INDEX: updated START-HERE reference {bad.name} -> {target.name}"
-                )
+        # Keep the record in sync so the rename can't create a STALE-INDEX. With a state
+        # file, the STATE is the record (P7: hand-editing the render is exactly the defect
+        # this tool polices) - update the artifact row and let the stale-render branch
+        # below re-render. Only a legacy hand-written index is text-patched directly.
+        es_sync = _load_engagement_state_module()
+        state_file = artifacts_dir / es_sync.STATE_FILENAME if es_sync is not None else None
+        if state_file is not None and state_file.is_file():
+            try:
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                for row in state.get("artifacts") or []:
+                    if isinstance(row, dict) and row.get("path") == bad.name:
+                        row["path"] = target.name
+                        state_file.write_text(
+                            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+                            encoding="utf-8",
+                        )
+                        fixed.append(
+                            f"FIXED STALE-INDEX: updated state artifact row {bad.name} -> "
+                            f"{target.name} (index re-renders below)"
+                        )
+                        break
+            except Exception as exc:
+                fixed.append(f"COULD-NOT-SYNC state after email rename: {exc}")
+        else:
+            for idx in artifacts_dir.rglob("START-HERE.md"):
+                itext = idx.read_text(encoding="utf-8", errors="replace")
+                if bad.name in itext:
+                    idx.write_text(itext.replace(bad.name, target.name), encoding="utf-8")
+                    idx.with_suffix(".html").unlink(missing_ok=True)
+                    fixed.append(
+                        f"FIXED STALE-INDEX: updated START-HERE reference {bad.name} -> "
+                        f"{target.name}"
+                    )
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
         stray.unlink()
         fixed.append(f"FIXED SUMMARY-WRONG-EXT: removed rendered email copy {stray.name}")
@@ -871,10 +1004,27 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
             try:
                 state = json.loads(state_file.read_text(encoding="utf-8"))
                 index = artifacts_dir / "START-HERE.md"
-                stale = not index.is_file() or es.embedded_hash(
-                    index.read_text(encoding="utf-8", errors="replace")
-                ) != es.state_hash(state)
-                if stale and not es.validate_state(state):
+                index_text = (
+                    index.read_text(encoding="utf-8", errors="replace") if index.is_file() else ""
+                )
+                stale = not index.is_file() or es.embedded_hash(index_text) != es.state_hash(state)
+                # P7: a hand-edited index (content-hash mismatch) is re-rendered too, but
+                # the hand-edited text is preserved in a backup first - never destroyed.
+                hand_edited = False
+                emb_content = getattr(es, "embedded_content_hash", None)
+                chash = getattr(es, "content_hash", None)
+                if index.is_file() and not stale and emb_content is not None and chash is not None:
+                    expected = emb_content(index_text)
+                    hand_edited = expected is not None and chash(index_text) != expected
+                if (stale or hand_edited) and not es.validate_state(state):
+                    if hand_edited:
+                        backup = index.with_name("START-HERE.md.hand-edited.bak")
+                        backup.write_text(index_text, encoding="utf-8")
+                        fixed.append(
+                            "FIXED INDEX-HAND-EDITED: backed up the hand-edited index to "
+                            f"{backup.name}, then re-rendered (the index is a generated "
+                            "view - ADR-006; put the change into the state instead)"
+                        )
                     index.with_suffix(".html").unlink(missing_ok=True)
                     es.render_files(artifacts_dir)
                     fixed.append(
@@ -905,12 +1055,71 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
 
 
 def workspace_dirs(artifacts_dir: Path) -> list[Path]:
-    """Engagement workspaces `artifacts/<slug>/` (0.31 multi-engagement layout)."""
+    """STATEFUL engagement workspaces `artifacts/<slug>/` (0.31 layout) - the registrable
+    subset. Gating iterates the broader `engagement_packs` (G7)."""
     if not artifacts_dir.is_dir():
         return []
     return sorted(
         p for p in artifacts_dir.iterdir() if p.is_dir() and (p / "engagement-state.json").is_file()
     )
+
+
+_ROOT_ALLOWLIST = ".dod-root-allowlist.json"
+_REGISTRY_NAMES = {"engagements.json", "ENGAGEMENTS.md", "ENGAGEMENTS.html"}
+
+
+def check_root_orphans(artifacts_dir: Path, create_snapshot: bool = False) -> list[str]:
+    """2026-07-29 register G2 [reproduced]: in workspace mode, a file written to the
+    artifacts ROOT belonged to no engagement and was checked by NOTHING - a real workspace
+    plus `artifacts/orphan-report.md` returned `DoD artifact gate: OK`. Every visible root
+    file must now be grandfathered in the snapshot allowlist or it is ORPHAN-ARTIFACT.
+
+    The allowlist (`.dod-root-allowlist.json`) is a one-time snapshot taken by the CLI
+    checker on its first workspace-mode run after this rule landed (D2 ruling 2026-07-29:
+    pre-existing flat files are exempt; the workspace layout applies to new work only).
+    The stop-gate consumer calls this read-only (create_snapshot=False): it never writes
+    the snapshot and stays silent until the CLI has taken one - a turn-end hook must not
+    mutate the pack it is judging."""
+    root_files = sorted(
+        p
+        for p in artifacts_dir.iterdir()
+        if p.is_file() and not p.name.startswith(".") and p.name not in _REGISTRY_NAMES
+    )
+    allowlist_path = artifacts_dir / _ROOT_ALLOWLIST
+    if not allowlist_path.is_file():
+        if create_snapshot:
+            allowlist_path.write_text(
+                json.dumps(
+                    {
+                        "grandfathered": [p.name for p in root_files],
+                        "note": "pre-existing artifacts-root files exempt from "
+                        "ORPHAN-ARTIFACT (D2 ruling 2026-07-29); new work goes in "
+                        "artifacts/<slug>/",
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            if root_files:
+                print(
+                    f"note: grandfathered {len(root_files)} pre-existing root file(s) "
+                    f"into {allowlist_path.name}"
+                )
+        return []
+    try:
+        allowed = set(
+            json.loads(allowlist_path.read_text(encoding="utf-8")).get("grandfathered") or []
+        )
+    except Exception:
+        allowed = set()
+    return [
+        f"ORPHAN-ARTIFACT: {p.name} sits in the artifacts ROOT, outside every engagement "
+        "workspace - no per-pack gate covers root files; move it into its engagement's "
+        f"artifacts/<slug>/ (pre-existing files are grandfathered in {_ROOT_ALLOWLIST})"
+        for p in root_files
+        if p.name not in allowed
+    ]
 
 
 def check_registry(artifacts_dir: Path) -> list[str]:
@@ -947,16 +1156,18 @@ def main(argv: list[str]) -> int:
     map_path = Path(positional[1]) if len(positional) > 1 else find_codebase_map(Path.cwd())
 
     # 0.31 layout: with per-engagement workspaces, each pack is checked in its own scope
-    # (findings slug-prefixed) plus the derived-registry consistency; a legacy flat pack
-    # alongside (or alone) is checked exactly as before.
-    workspaces = workspace_dirs(artifacts_dir)
+    # (findings slug-prefixed) plus the derived-registry consistency and the root orphan
+    # scan (G2); a legacy flat pack alongside (or alone) is checked exactly as before.
+    # Gating iterates engagement_packs (state file OR index - G7); registry consistency
+    # stays keyed on the stateful workspace_dirs subset.
+    workspaces = engagement_packs(artifacts_dir)
 
     if do_fix:
         for pack in workspaces or [artifacts_dir]:
             prefix = f"[{pack.name}] " if pack != artifacts_dir else ""
             for line in apply_fixes(pack):
                 print(f"{prefix}{line}")
-        if workspaces:
+        if workspace_dirs(artifacts_dir):
             es = _load_engagement_state_module()
             if es is not None and check_registry(artifacts_dir):
                 es.render_registry(artifacts_dir)
@@ -974,6 +1185,10 @@ def main(argv: list[str]) -> int:
                 "`python -m scripts.engagement_state migrate` (flat pack not deep-checked "
                 "to avoid cross-workspace noise)"
             )
+        else:
+            findings.extend(check_root_orphans(artifacts_dir, create_snapshot=True))
+            # P5: the ROOT data/ lane in workspace mode was validated by nothing.
+            findings.extend(check_findings_packs(artifacts_dir))
         findings.extend(check_registry(artifacts_dir))
     else:
         findings = check(artifacts_dir)

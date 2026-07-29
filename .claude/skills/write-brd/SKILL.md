@@ -19,7 +19,7 @@ Under the PM (CLAUDE.md §6), turn this idea into a BRD: **$ARGUMENTS**
    installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
    "Run mode & the bundled scripts".)
 4. List open questions for the PM to raise with the user.
-5. Save `artifacts/BRD-<slug>.md` and render: `<python> -m scripts.render_html artifacts/BRD-<slug>.md`.
+5. Save `artifacts/<slug>/BRD-<slug>.md` (the engagement workspace, ADR-010) and render: `<python> -m scripts.render_html artifacts/<slug>/BRD-<slug>.md`.
 
 **Close - don't dead-end (CLAUDE.md §6).** Summarise the BRD (what it covers, the key
 requirements, any open questions for the user), then offer the next step with a

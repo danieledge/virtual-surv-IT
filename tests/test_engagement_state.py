@@ -192,6 +192,9 @@ def test_every_mutator_rerenders_the_view(tmp_path):
 def test_set_status_closed_sets_date_clears_outstanding(tmp_path):
     _run(tmp_path, "init", "--title", "T", "--slug", "t")
     _run(tmp_path, "set-team", "Amara (BA)", "Linh (QA)")
+    # The close now runs the full DoD checker (R6 gate) - give it the closing email.
+    (tmp_path / "engagement-summary-t.txt").write_text("Done. - Morgan\n", encoding="utf-8")
+    _run(tmp_path, "add-artifact", "engagement-summary-t.txt", "--title", "Email", "--final")
     assert _run(tmp_path, "set-status", "closed", "--verdict", "ready") == 0
     state = load_state(tmp_path)
     assert state["engagement"]["closed"] and state["outstanding"] == []
@@ -205,6 +208,8 @@ def test_close_requires_team_and_finalised_artifacts(tmp_path):
     import pytest
 
     _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    (tmp_path / "review-pass-1.md").write_text("# review\n", encoding="utf-8")
+    (tmp_path / "review-pass-1.html").write_text("<p>x</p>", encoding="utf-8")
     _run(tmp_path, "add-artifact", "review-pass-1.md", "--title", "First review")
     with pytest.raises(SystemExit):
         _run(tmp_path, "set-status", "closed")  # no team yet
@@ -212,6 +217,8 @@ def test_close_requires_team_and_finalised_artifacts(tmp_path):
     with pytest.raises(SystemExit):
         _run(tmp_path, "set-status", "closed")  # artifact still interim
     _run(tmp_path, "finalise-artifacts")
+    (tmp_path / "engagement-summary-t.txt").write_text("Done. - Morgan\n", encoding="utf-8")
+    _run(tmp_path, "add-artifact", "engagement-summary-t.txt", "--title", "Email", "--final")
     assert _run(tmp_path, "set-status", "closed", "--verdict", "ready") == 0
     state = load_state(tmp_path)
     assert all(a["status"] == "final" for a in state["artifacts"])
@@ -340,13 +347,16 @@ def test_single_workspace_auto_resolves_without_slug(tmp_path, monkeypatch):
     assert load_state(tmp_path / "artifacts" / "audit")["status"] == "blocked"
 
 
-def test_multiple_workspaces_require_slug(tmp_path, monkeypatch):
+def test_multiple_workspaces_require_slug_without_active_marker(tmp_path, monkeypatch):
+    """R1 update (2026-07-29): ambiguity is resolved by the on-disk ACTIVE marker when one
+    exists; with the marker cleared it stays the hard error it always was."""
     import pytest
 
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
     _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
+    _run_env(monkeypatch, tmp_path, "clear-active")
     with pytest.raises(SystemExit):
-        _run_env(monkeypatch, tmp_path, "set-status", "blocked")  # ambiguous
+        _run_env(monkeypatch, tmp_path, "set-status", "blocked")  # ambiguous, no marker
     assert _run_env(monkeypatch, tmp_path, "--slug", "audit", "set-status", "blocked") == 0
     assert load_state(tmp_path / "artifacts" / "audit")["status"] == "blocked"
     assert load_state(tmp_path / "artifacts" / "scoping")["status"] == "in_progress"
@@ -385,7 +395,15 @@ def test_old_flat_engagement_then_new_workspace_and_migrate(tmp_path, monkeypatc
     art = tmp_path / "artifacts"
     _run(art, "init", "--title", "Old review", "--slug", "old-review")  # flat (pre-0.31)
     _run(art, "set-team", "Ravi (review)")
-    _run(art, "set-status", "closed", "--verdict", "done")
+    # A pre-workspaces legacy close: hand-mint the closed state (the R6 close gate would
+    # demand the full pack; this test is about migration, not the close).
+    state = load_state(art)
+    state["status"] = "closed"
+    state["engagement"]["closed"] = "2026-07-01"
+    state["outstanding"] = []
+    state["verdict"] = "done"
+    state_path(art).write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    _run(art, "render")
     old_state = state_path(art).read_text(encoding="utf-8")
 
     assert _run_env(monkeypatch, tmp_path, "init", "--title", "New job", "--slug", "new-job") == 0

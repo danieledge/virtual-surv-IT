@@ -292,15 +292,19 @@ def test_open_engagement_needs_no_summary_email(tmp_path):
     assert check(art) == []
 
 
-def test_legacy_folder_without_index_keeps_email_gate(tmp_path):
-    # Pre-lifecycle folders have no index: they get MISSING-INDEX plus the legacy
-    # email requirement, never a crash on the missing status.
+def test_folder_without_index_is_not_closed(tmp_path):
+    # 2026-07-29 register G1 [reproduced]: a pack with NO index used to route down the
+    # closed/legacy branch, disarming the close-only guards exactly when the team forgot
+    # the index. No readable status is now fail-safe NOT closed: the delivery report is
+    # premature and the email is not demanded (creating the index is the fix, not the
+    # email).
     art = tmp_path / "artifacts"
     _touch(art / "delivery-report.md")
     _touch(art / "delivery-report.html")
     findings = check(art)
     codes = "".join(findings)
-    assert "MISSING-INDEX" in codes and "MISSING-SUMMARY-EMAIL" in codes
+    assert "MISSING-INDEX" in codes and "FINAL-BEFORE-CLOSE" in codes
+    assert "MISSING-SUMMARY-EMAIL" not in codes
 
 
 # --- code-without-QA gate (the 2026-07-21 live failure) ----------------------------------
@@ -856,8 +860,12 @@ def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
     assert "findings-t.json" not in joined  # never named by MISSING-HTML / STALE-INDEX
 
 
-def test_apply_fixes_renders_report_from_pack(tmp_path):
+def test_apply_fixes_renders_report_from_pack_at_close(tmp_path):
+    # D4 ruling 2026-07-29 (register P3): REVIEW-<slug>.md is close-only, so --fix renders
+    # it during the 🔒 closing window (tests/test_placement_fixes.py pins the mid-engagement
+    # refusal side).
     art = tmp_path / "artifacts"
+    _index(art, status="🔒 CLOSING - finishing close artifacts")
     _pack(art, _VALID_PACK)  # slug "t" -> REVIEW-t.md rendered up into artifacts/
     apply_fixes(art)
     report = art / "REVIEW-t.md"
@@ -1010,7 +1018,10 @@ def test_review_without_fingerprints_raises_nothing(tmp_path):
 
 
 def _closed_light_pack(tmp_path, profile_args):
-    from scripts.engagement_state import main as es_main
+    # A DEFECTIVE closed pack (no summary email). `set-status closed` now refuses such a
+    # close (R6 gate, tests/test_closing_status.py), so this fixture hand-mints the closed
+    # state on disk - exactly the resumed-session mint the checker must still judge.
+    from scripts.engagement_state import load_state, main as es_main, state_path
 
     art = tmp_path / "artifacts"
     es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t", *profile_args])
@@ -1019,7 +1030,13 @@ def _closed_light_pack(tmp_path, profile_args):
     es_main(["--dir", str(art), "add-artifact", "engagement-brief.md", "--title", "Brief"])
     es_main(["--dir", str(art), "set-team", "Ana (analysis)"])
     es_main(["--dir", str(art), "finalise-artifacts"])
-    es_main(["--dir", str(art), "set-status", "closed", "--verdict", "done"])
+    state = load_state(art)
+    state["status"] = "closed"
+    state["engagement"]["closed"] = "2026-07-29"
+    state["outstanding"] = []
+    state["verdict"] = "done"
+    state_path(art).write_text(json.dumps(state), encoding="utf-8")
+    es_main(["--dir", str(art), "render"])
     return art
 
 

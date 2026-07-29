@@ -5,8 +5,8 @@ the requester has a plain-language record of what was done and where it stands. 
 closing artifact** (Definition of Done).
 
 **Rules**
-- **Always saved as a `.txt` file in `artifacts/`** alongside the other deliverables - e.g.
-  `artifacts/engagement-summary-<slug>.txt`. It is an email, so it is the **one artifact NOT
+- **Always saved as a `.txt` file in the engagement workspace** alongside the other
+  deliverables - `artifacts/<slug>/engagement-summary-<slug>.txt` (ADR-010). It is an email, so it is the **one artifact NOT
   rendered to HTML**.
 - **Signed off as Morgan** (PM & Orchestrator), in Morgan's warm, plain-speaking voice.
 - **Morgan is unmistakably an AI agent.** The From line and signature carry the 🤖 marker and the

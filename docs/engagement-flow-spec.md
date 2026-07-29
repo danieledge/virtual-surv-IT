@@ -37,10 +37,13 @@ These run on EVERY session in the project, engagement or not. Draw each as: trig
    never grant itself execution consent or weaken a guard. Read-only mentions (echo/grep of
    the filename) are allowed; every write path (redirect, touch, cp, sed -i, command
    substitution) blocks.
-5. **persona_anchor.py** (UserPromptSubmit): ◇ is the engagement live? State-first (ADR-006):
-   a parseable `$CLAUDE_PROJECT_DIR/artifacts/engagement-state.json` is authoritative
-   (`in_progress`/`blocked` arms even before START-HERE is rendered; `closed` silences even
-   over a stale ⏳ render); fallback: START-HERE.md exists with status ⏳ or ⛔. → yes: inject
+5. **persona_anchor.py** (UserPromptSubmit): ◇ is the engagement live? State-first (ADR-006),
+   per pack - each workspace `artifacts/<slug>/engagement-state.json` plus the legacy flat
+   pack: a parseable state file is authoritative
+   (`in_progress`/`blocked`/`closing` arms even before START-HERE is rendered; `closed`
+   silences even
+   over a stale ⏳ render); fallback: the legend-aware parse of that pack's START-HERE.md
+   (⏳/⛔/🔒 arms). → yes: inject
    a ≤8-line Morgan persona/discipline anchor into the turn (survives conversation
    compaction); no: silent. Anchored to the session's project root, never the shell's
    wandering cwd.
@@ -138,7 +141,8 @@ Claude Code (only Layer 0 stays armed). → YES: activate Morgan and enter Phase
    ships `.md` + `.html`.
 2. 📄 **Engagement Brief** written (decisions, assumptions, open questions, routing plan) and
    📄 **the machine-readable state opened in the same breath** (ADR-006):
-   `engagement_state init` creates `artifacts/engagement-state.json` (status ⏳,
+   `engagement_state init` creates the workspace `artifacts/<slug>/engagement-state.json`
+   (status ⏳, ACTIVE marker written at the root,
    ⚠️-outstanding pre-seeded with the gates ahead: independent QA, DoD) and renders
    📄 **START-HERE.md** + `.html` from it. The state file is authoritative; START-HERE is its
    generated view and is never hand-edited. From here on: every artifact write is recorded
@@ -236,15 +240,22 @@ Ordered close checklist:
    tags, dates, SHA anchors; corrections/deprecations dated; §3 history row appended; maps the
    CODE never the team's activity; PM-written, ≤~200 lines.
 5. **Render everything** 📄: every `.md` artifact gets its `.html` sibling.
-6. 📄 **Delivery Report** (close-only, consolidated by default) and 📄 **engagement-summary
-   email**: `.txt` in artifacts/ (the one artifact never rendered to HTML), signed as Morgan,
+6. **Enter the close window** 📄: `engagement_state set-status closing` (🔒 - register R5:
+   the close is recorded on disk, so the close artifacts written next are legitimate work in
+   progress, never "premature" to the gate or a resumed session). Then 📄 **Delivery
+   Report** (close-only, consolidated by default) and 📄 **engagement-summary
+   email**: `.txt` in the workspace `artifacts/<slug>/` (the one artifact never rendered to
+   HTML), signed as Morgan,
    "Hi," when the requester's name is unknown, states the engagement footprint (approx tokens
    + agent count), repeats the execution/data responsibility notes, NEVER offers a call or
    meeting - next steps are actions. Written only now, at close.
 7. **Finalise the state last of all** 📄: `engagement_state set-team ...` +
    `finalise-artifacts` + `set-footprint`, then `set-status closed --verdict "..."` (the
-   close refuses on an empty team or any interim artifact row) - sets the close date, clears
-   ⚠️-outstanding to "Nothing - closed <date>", and re-renders START-HERE to ✅ CLOSED;
+   close refuses on an empty team, any interim artifact row, or ANY mechanical DoD gate
+   finding - it runs the full checker itself and rolls back on failure, register R6) - sets
+   the close date, clears
+   ⚠️-outstanding to "Nothing - closed <date>" (snapshotting the cleared items into the
+   log), and re-renders START-HERE to ✅ CLOSED;
    interim banners stripped from artifacts that became final. The state flip to closed is
    the FINAL state change.
 8. **Close with next steps**: short summary + concrete options with a recommendation + offer

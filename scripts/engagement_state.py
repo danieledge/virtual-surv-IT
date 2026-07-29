@@ -23,7 +23,7 @@ Usage (all consent-free team tooling, `python -m scripts.engagement_state <cmd>`
   init --title T --slug S [--requested-by R] [--team-version V] [--phase plan]
   validate                     # exit 1 with findings if the state is invalid
   render                       # regenerate START-HERE.md + .html from the state
-  set-status {in_progress,blocked,closed} [--verdict TEXT]
+  set-status {in_progress,blocked,closing,closed} [--verdict TEXT]
   set-phase {open,classify,plan,delivery,close}
   add-artifact PATH --title TEXT [--final]
   add-outstanding TEXT
@@ -35,6 +35,10 @@ Usage (all consent-free team tooling, `python -m scripts.engagement_state <cmd>`
   log-note TEXT                # dated event/completion note - NOT the outstanding list
   add-ratification TEXT        # a decision awaiting human ratification (status pending)
   ratify SUBSTRING [--by WHO]  # human-confirmed: pending -> ratified, dated
+  set-active SLUG              # ACTIVE-engagement marker (R1); cleared by clear-active/close
+  clear-active
+  record-consent-outcome {asked,declined} [--note TEXT]   # NON-granting outcomes only (R3)
+  set-runtime [--mode {repo,plugin}] [--plugin-root P] [--interpreter CMD]   # probe cache (R7)
 
 Schema v2 (2026-07-26): `log` holds completion notes and events; `outstanding` holds ONLY
 open work (the live run parked "COMPLETE" notes in outstanding, hiding convergence).
@@ -45,6 +49,17 @@ valid and upgrade in place on their first mutation.
 Close ordering: `set-team` and `finalise-artifacts` must precede `set-status closed` -
 closed-state validation requires a non-empty team and no interim artifact rows (born of the
 2026-07-26 live run, which closed with both left at defaults for want of a mutator).
+
+The close window (2026-07-29 register R5/G4/R6):
+  * `set-status closing` marks the close as UNDERWAY on disk - close artifacts (delivery
+    report, summary email) are legitimate during it, so a crash/compaction mid-close can
+    never lead a resumed session to read them as premature (or worse, delete them);
+  * `set-status closed` runs the full mechanical DoD checker (check_artifacts) over the
+    pack and REFUSES on findings, rolling the state back - a resumed session can no longer
+    mint a valid-looking ✅ pack that passed no gate;
+  * the pre-close `outstanding` list is snapshotted into the log before it is wiped, so a
+    mistaken close is reversible from disk.
+
 All commands accept --dir ARTIFACTS_DIR (default: $CLAUDE_PROJECT_DIR/artifacts, else
 ./artifacts). Every mutator ends with validate + render.
 """
@@ -65,7 +80,7 @@ SCHEMA_VERSION = 2
 _ACCEPTED_SCHEMAS = (1, 2)  # v1 files stay valid; first mutation upgrades them in place
 _RATIFICATION_STATUSES = ("pending", "ratified")
 
-_STATUSES = ("in_progress", "blocked", "closed")
+_STATUSES = ("in_progress", "blocked", "closing", "closed")
 _PHASES = ("open", "classify", "plan", "delivery", "close")
 _PROFILES = ("standard", "light")
 _ARTIFACT_STATUSES = ("interim", "final")
@@ -73,9 +88,22 @@ _ARTIFACT_STATUSES = ("interim", "final")
 # The one hard exclusion (ADR-002 / ADR-006): consent must never gain a second home here.
 _FORBIDDEN_KEY_FRAGMENTS = ("consent", "exec")
 
+# The single sanctioned exception (2026-07-29 register R3): a root-level record of the
+# NON-granting consent outcomes only, so a "No" is distinguishable from never-asked after
+# compaction (re-asking is the path back to an accidental yes). The value is hard-limited
+# to "asked"/"declined" by validation - anything grant-shaped fails - and the grant itself
+# remains ONLY the human-created `.claude/.exec-consent` marker (ADR-002). Every other
+# consent/exec-shaped key, at any depth, stays forbidden.
+_CONSENT_OUTCOME_KEY = "execution_consent_outcome"
+_CONSENT_OUTCOMES = ("asked", "declined")
+_CONSENT_OUTCOME_FIELDS = {"outcome", "date", "note"}
+
 _STATUS_RENDER = {
     "in_progress": "⏳ IN PROGRESS",
     "blocked": "⛔ BLOCKED - awaiting input",
+    # No "in progress"/"closed" wording here: the words-only fallback parser must never
+    # misread the closing line, and 🔒 is its single status emoji.
+    "closing": "🔒 CLOSING - finishing close artifacts",
     "closed": "✅ CLOSED",
 }
 
@@ -105,6 +133,37 @@ def _default_artifacts_dir() -> Path:
 
 REGISTRY_JSON = "engagements.json"
 REGISTRY_MD = "ENGAGEMENTS.md"
+
+# The ACTIVE-engagement marker (2026-07-29 register R1): ADR-008 says one engagement is
+# ACTIVE per session, but the slug lived only in conversation - a resumed session with two
+# open packs that guessed wrong silently mutated the wrong workspace. The marker lives at
+# the artifacts root, is written by the workspaced init (newest engagement becomes ACTIVE)
+# or `set-active`, resolves an ambiguous pack target, and is cleared at close.
+ACTIVE_MARKER = ".active-engagement.json"
+
+
+def read_active(root: Path) -> str | None:
+    """The ACTIVE slug recorded on disk, or None. Fail-open: unreadable marker = no marker."""
+    try:
+        slug = json.loads((root / ACTIVE_MARKER).read_text(encoding="utf-8")).get("slug")
+    except Exception:
+        return None
+    return slug if isinstance(slug, str) and slug else None
+
+
+def write_active(root: Path, slug: str) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / ACTIVE_MARKER).write_text(
+        json.dumps({"slug": slug, "set": _dt.date.today().isoformat()}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def clear_active(root: Path, slug: str | None = None) -> None:
+    """Remove the marker; with a slug given, only if it is the one recorded."""
+    if slug is not None and read_active(root) != slug:
+        return
+    (root / ACTIVE_MARKER).unlink(missing_ok=True)
 
 
 def workspace_states(root: Path) -> list[Path]:
@@ -167,7 +226,7 @@ def render_registry(root: Path) -> list[Path]:
         json.dumps({"derived": True, "engagements": rows}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    emoji = {"in_progress": "⏳", "blocked": "⛔", "closed": "✅", "invalid": "❗"}
+    emoji = {"in_progress": "⏳", "blocked": "⛔", "closing": "🔒", "closed": "✅", "invalid": "❗"}
     lines = [
         "# Engagements in this project",
         "",
@@ -238,9 +297,15 @@ def resolve_pack_dir(args: argparse.Namespace) -> Path:
         return candidates[0]
     if not candidates:
         return root  # nothing yet - flat semantics (init resolves its own target)
+    # R1: the on-disk ACTIVE marker resolves the ambiguity a resumed session used to guess.
+    active = read_active(root)
+    if active and (root / active) in candidates:
+        print(f"note: targeting ACTIVE engagement '{active}' ({ACTIVE_MARKER})", file=sys.stderr)
+        return root / active
     names = ", ".join(c.name if c != root else "(flat)" for c in candidates)
     print(
-        f"multiple engagements in {root} ({names}) - say which with --slug <name> (or --dir)",
+        f"multiple engagements in {root} ({names}) - say which with --slug <name> (or "
+        "--dir), or record the session's engagement with `set-active <slug>`",
         file=sys.stderr,
     )
     raise SystemExit(2)
@@ -260,6 +325,17 @@ def state_hash(state: dict) -> str:
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
 
 
+def content_hash(md_text: str) -> str:
+    """Short hash of a rendered index's CONTENT (marker lines excluded, newlines
+    normalised). 2026-07-29 register P7: the state-hash alone only caught JSON-to-index
+    divergence - a hand-edit of the index copied the marker verbatim and went undetected.
+    The render embeds this too; a mismatch is INDEX-HAND-EDITED."""
+    lines = [ln for ln in md_text.splitlines() if not ln.strip().startswith(_HASH_MARKER_PREFIX)]
+    while lines and lines[-1] == "":
+        lines.pop()  # normalise trailing blanks - splitlines drops them asymmetrically
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()[:16]
+
+
 def load_state(artifacts_dir: Path) -> dict:
     return json.loads(state_path(artifacts_dir).read_text(encoding="utf-8"))
 
@@ -269,6 +345,11 @@ def _forbidden_keys(obj, trail="") -> list[str]:
     if isinstance(obj, dict):
         for key, value in obj.items():
             where = f"{trail}.{key}" if trail else str(key)
+            if where == _CONSENT_OUTCOME_KEY:
+                # The one sanctioned, root-level exception (R3) - its VALUE is
+                # hard-constrained to non-granting outcomes by validate_state below.
+                found.extend(_forbidden_keys(value, where))
+                continue
             if any(frag in str(key).lower() for frag in _FORBIDDEN_KEY_FRAGMENTS):
                 found.append(where)
             found.extend(_forbidden_keys(value, where))
@@ -409,6 +490,38 @@ def validate_state(state: dict) -> list[str]:
     if footprint is not None and not isinstance(footprint, dict):
         problems.append("'footprint' must be an object")
 
+    # R3: the sanctioned consent-outcome record may hold NON-granting outcomes only.
+    outcome_rec = state.get(_CONSENT_OUTCOME_KEY)
+    if outcome_rec is not None:
+        valid_shape = (
+            isinstance(outcome_rec, dict)
+            and outcome_rec.get("outcome") in _CONSENT_OUTCOMES
+            and set(outcome_rec) <= _CONSENT_OUTCOME_FIELDS
+            and all(isinstance(v, str) for v in outcome_rec.values())
+        )
+        if not valid_shape:
+            problems.append(
+                f"{_CONSENT_OUTCOME_KEY} may record only "
+                f"{{'outcome': 'asked'|'declined', 'date', 'note'}} - a GRANT is never "
+                "representable here; the only execution-consent grant is the human-created "
+                ".claude/.exec-consent marker (ADR-002)"
+            )
+
+    # R7: the cached run-mode probe.
+    runtime = state.get("runtime")
+    if runtime is not None:
+        valid_runtime = (
+            isinstance(runtime, dict)
+            and set(runtime) <= {"mode", "plugin_root", "interpreter"}
+            and runtime.get("mode") in (None, "repo", "plugin")
+            and all(v is None or isinstance(v, str) for v in runtime.values())
+        )
+        if not valid_runtime:
+            problems.append(
+                "'runtime' must be {mode: repo|plugin, plugin_root, interpreter} "
+                "(the persisted step-0 probe result)"
+            )
+
     return problems
 
 
@@ -466,6 +579,13 @@ def render_markdown(state: dict) -> str:
     lines.append(f"| **Verdict** | {verdict} |")
     lines.append(f"| **Team** | {team_line} |")
     lines.append(f"| **Footprint** | {footprint_line} |")
+    outcome_rec = state.get(_CONSENT_OUTCOME_KEY) or {}
+    if outcome_rec.get("outcome"):
+        date_bit = f" {outcome_rec['date']}" if outcome_rec.get("date") else ""
+        lines.append(
+            f"| **Exec consent** | {outcome_rec['outcome']}{date_bit} - a grant is only "
+            "ever the human-created marker (ADR-002) |"
+        )
     lines.append("")
     lines.append("## ⚠️ Outstanding before this is done")
     lines.append("")
@@ -495,6 +615,13 @@ def render_markdown(state: dict) -> str:
             )
             order += 1
         lines.append(f"{order}. *Then by interest:* the artifacts below.")
+    elif status == "closing":
+        lines.append(
+            "*(Close in progress - the close artifacts are being finalised; the status "
+            "flips to ✅ once the DoD gate passes.)*"
+        )
+        lines.append("")
+        lines.append("1. The artifacts below, newest last.")
     else:
         lines.append(
             "*(Interim pack - the summary email and Delivery Report exist only at ✅ close.)*"
@@ -557,18 +684,36 @@ def render_markdown(state: dict) -> str:
         f"{version_bit}. Evidence basis tags: 📊 measured · 🧠 inferred."
     )
     lines.append("")
-    lines.append(f"{_HASH_MARKER_PREFIX} {state_hash(state)} {_HASH_MARKER_SUFFIX}")
+    lines.append(
+        f"{_HASH_MARKER_PREFIX} {state_hash(state)} "
+        f"content-hash: {content_hash(chr(10).join(lines))} {_HASH_MARKER_SUFFIX}"
+    )
     lines.append("")
     return "\n".join(lines)
 
 
-def embedded_hash(index_text: str) -> str | None:
-    """The state-hash recorded in a rendered START-HERE, or None if absent."""
+def _marker_tokens(index_text: str) -> list[str]:
     for line in index_text.splitlines():
         stripped = line.strip()
         if stripped.startswith(_HASH_MARKER_PREFIX):
             inner = stripped[len(_HASH_MARKER_PREFIX) :].removesuffix(_HASH_MARKER_SUFFIX)
-            return inner.strip() or None
+            return inner.split()
+    return []
+
+
+def embedded_hash(index_text: str) -> str | None:
+    """The state-hash recorded in a rendered START-HERE, or None if absent."""
+    tokens = _marker_tokens(index_text)
+    return tokens[0] if tokens else None
+
+
+def embedded_content_hash(index_text: str) -> str | None:
+    """The content-hash recorded in the render marker (P7), or None on a pre-P7 render -
+    legacy renders without it are tolerated, never flagged."""
+    tokens = _marker_tokens(index_text)
+    for i, tok in enumerate(tokens):
+        if tok == "content-hash:" and i + 1 < len(tokens):
+            return tokens[i + 1]
     return None
 
 
@@ -626,6 +771,7 @@ def _write_state(artifacts_dir: Path, state: dict) -> None:
 def _cmd_init(args: argparse.Namespace) -> int:
     # New engagements are WORKSPACED by default (artifacts/<slug>/); an explicit --dir
     # keeps flat semantics (tests, custom layouts, pre-0.31 behaviour).
+    workspaced = args.dir is None
     if args.dir is None:
         args.dir = _default_artifacts_dir() / args.slug
     target = state_path(args.dir)
@@ -658,6 +804,10 @@ def _cmd_init(args: argparse.Namespace) -> int:
         "team_version": args.team_version,
     }
     _write_state(args.dir, state)
+    if workspaced:
+        # R1: the newest engagement becomes this session's ACTIVE one, on disk.
+        write_active(args.dir.parent, args.slug)
+        print(f"ACTIVE engagement: {args.slug} ({ACTIVE_MARKER})")
     return 0
 
 
@@ -700,19 +850,94 @@ def _mutate(args: argparse.Namespace, fn) -> int:
     return 0
 
 
-def _cmd_set_status(args: argparse.Namespace) -> int:
-    def fn(state: dict) -> None:
-        state["status"] = args.status
-        if args.verdict:
-            state["verdict"] = args.verdict
-        if args.status == "closed":
-            state["engagement"]["closed"] = _dt.date.today().isoformat()
-            state["outstanding"] = []
-            state["phase"] = "close"
-        else:
-            state["engagement"]["closed"] = None
+def _load_checker():
+    """scripts.check_artifacts in BOTH run modes (package import, then __file__-relative -
+    the same dual-mode pattern check_artifacts uses for THIS module). None = unavailable;
+    the close gate then degrades to closed-state validation only (noted on stderr)."""
+    try:
+        from scripts import check_artifacts  # normal `-m` / package mode
 
-    return _mutate(args, fn)
+        return check_artifacts
+    # Probe only; fall through to the file-relative loader.
+    except Exception:  # nosec B110
+        pass
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("check_artifacts.py")
+        spec = importlib.util.spec_from_file_location("check_artifacts", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
+def _cmd_set_status(args: argparse.Namespace) -> int:
+    state = load_state(args.dir)
+    _upgrade(state)
+    before = json.loads(json.dumps(state))  # rollback snapshot (register R6)
+    state["status"] = args.status
+    if args.verdict:
+        state["verdict"] = args.verdict
+    if args.status == "closed":
+        # G4 audit trail: the wiped outstanding list survives in the log, so a mistaken
+        # close stays reversible from disk.
+        outstanding = state.get("outstanding") or []
+        if outstanding:
+            entry = (
+                f"{_dt.date.today().isoformat()}: close: cleared {len(outstanding)} "
+                "outstanding item(s): " + "; ".join(outstanding)
+            )
+            log = state.setdefault("log", [])
+            if entry not in log:
+                log.append(entry)
+        state["engagement"]["closed"] = _dt.date.today().isoformat()
+        state["outstanding"] = []
+        state["phase"] = "close"
+    else:
+        state["engagement"]["closed"] = None
+    _write_state(args.dir, state)
+
+    if args.status != "closed":
+        return 0
+
+    # R6 close gate: a close is an EVIDENCED state, not a claim - run the full mechanical
+    # DoD checker over the pack and refuse (rolling back) on findings. The sanctioned
+    # sequence is: `set-status closing` -> write/finish the close artifacts ->
+    # `python -m scripts.check_artifacts --fix` -> `set-status closed`.
+    ca = _load_checker()
+    if ca is None:
+        print(
+            "note: check_artifacts unavailable - close gate skipped (closed-state validation only)",
+            file=sys.stderr,
+        )
+        clear_active(args.dir.parent, args.dir.name)
+        return 0
+    try:
+        gate_findings = ca.check(args.dir)
+    except Exception as exc:  # a broken checker must not strand the state half-written
+        print(
+            f"note: close gate errored ({exc}) - close kept, run the checker by hand",
+            file=sys.stderr,
+        )
+        clear_active(args.dir.parent, args.dir.name)
+        return 0
+    if not gate_findings:
+        # R1: a closed engagement is no longer this session's ACTIVE one.
+        clear_active(args.dir.parent, args.dir.name)
+        return 0
+    for finding in gate_findings:
+        print(f"CLOSE-REFUSED: {finding}", file=sys.stderr)
+    _write_state(args.dir, before)  # roll back to the pre-close state
+    print(
+        f"CLOSE-REFUSED: {len(gate_findings)} DoD finding(s) - the close was rolled back "
+        f"to '{before.get('status')}'. Fix the findings (or run `python -m "
+        "scripts.check_artifacts --fix`) and re-run `set-status closed`; use "
+        "`set-status closing` to mark the close as underway meanwhile.",
+        file=sys.stderr,
+    )
+    return 1
 
 
 def _cmd_set_phase(args: argparse.Namespace) -> int:
@@ -731,6 +956,16 @@ def _cmd_add_artifact(args: argparse.Namespace) -> int:
             "status": "final" if args.final else "interim",
             "added": _dt.date.today().isoformat(),
         }
+        # R8: after a crash, "remove the row or restore the artifact" must be decidable
+        # from disk - a row recorded before its file existed says so explicitly.
+        if not (args.dir / args.path).exists():
+            entry["added_before_file_existed"] = True
+            print(
+                f"warning: {args.path} does not exist in {args.dir} yet - row recorded "
+                "with added_before_file_existed (write the file, then re-run add-artifact "
+                "to clear the flag)",
+                file=sys.stderr,
+            )
         arts = state.setdefault("artifacts", [])
         for i, existing in enumerate(arts):
             if existing.get("path") == args.path:
@@ -812,6 +1047,53 @@ def _cmd_set_team(args: argparse.Namespace) -> int:
     return _mutate(args, lambda s: s.__setitem__("team", list(args.members)))
 
 
+def _cmd_set_active(args: argparse.Namespace) -> int:
+    root = args.dir or _default_artifacts_dir()
+    target = root / args.slug
+    if not ((target / STATE_FILENAME).is_file() or (target / INDEX_FILENAME).is_file()):
+        print(f"no engagement workspace at {target} - nothing to mark ACTIVE", file=sys.stderr)
+        return 2
+    write_active(root, args.slug)
+    print(f"ACTIVE engagement: {args.slug} ({ACTIVE_MARKER})")
+    return 0
+
+
+def _cmd_clear_active(args: argparse.Namespace) -> int:
+    clear_active(args.dir or _default_artifacts_dir())
+    print("ACTIVE marker cleared")
+    return 0
+
+
+def _cmd_record_consent_outcome(args: argparse.Namespace) -> int:
+    """R3: record a NON-granting execution-consent outcome ('asked'/'declined') so a "No"
+    survives compaction and is never re-asked back into an accidental yes. The grant is not
+    representable here - it remains ONLY the human-created marker (ADR-002)."""
+
+    def fn(state: dict) -> None:
+        rec = {"outcome": args.outcome, "date": _dt.date.today().isoformat()}
+        if args.note:
+            rec["note"] = args.note
+        state[_CONSENT_OUTCOME_KEY] = rec
+
+    return _mutate(args, fn)
+
+
+def _cmd_set_runtime(args: argparse.Namespace) -> int:
+    """R7: persist the step-0 run-mode probe (mode / plugin root / interpreter) so a
+    resumed or compacted session re-reads it from the state instead of remembering."""
+
+    def fn(state: dict) -> None:
+        runtime = state.setdefault("runtime", {})
+        if args.mode is not None:
+            runtime["mode"] = args.mode
+        if args.plugin_root is not None:
+            runtime["plugin_root"] = args.plugin_root
+        if args.interpreter is not None:
+            runtime["interpreter"] = args.interpreter
+
+    return _mutate(args, fn)
+
+
 def _cmd_finalise_artifacts(args: argparse.Namespace) -> int:
     def fn(state: dict) -> None:
         for art in state.get("artifacts") or []:
@@ -838,10 +1120,13 @@ def _cmd_list(args: argparse.Namespace) -> int:
     if not rows:
         print(f"no engagements in {root}")
         return 0
+    active = read_active(root)
     for r in rows:
+        where = r.get("dir") or r.get("slug")
+        mark = " *ACTIVE*" if active and where == active else ""
         print(
-            f"{r.get('dir') or r.get('slug'):24} {r.get('status'):12} "
-            f"{r.get('profile') or '':9} {r.get('title') or ''}"
+            f"{where:24} {r.get('status'):12} "
+            f"{r.get('profile') or '':9} {r.get('title') or ''}{mark}"
         )
     return 0
 
@@ -972,6 +1257,32 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_set_team)
 
     p = sub.add_parser(
+        "set-active", help="record the session's ACTIVE engagement on disk (R1 marker)"
+    )
+    p.add_argument("slug")
+    p.set_defaults(fn=_cmd_set_active)
+
+    p = sub.add_parser("clear-active", help="remove the ACTIVE-engagement marker")
+    p.set_defaults(fn=_cmd_clear_active)
+
+    p = sub.add_parser(
+        "record-consent-outcome",
+        help="record a NON-granting execution-consent outcome (asked/declined; renders). "
+        "A grant is never representable - it is only the human-created marker (ADR-002)",
+    )
+    p.add_argument("outcome", choices=list(_CONSENT_OUTCOMES))
+    p.add_argument("--note", default=None)
+    p.set_defaults(fn=_cmd_record_consent_outcome)
+
+    p = sub.add_parser(
+        "set-runtime", help="persist the step-0 run-mode probe (mode/plugin-root/interpreter)"
+    )
+    p.add_argument("--mode", choices=("repo", "plugin"), default=None)
+    p.add_argument("--plugin-root", dest="plugin_root", default=None)
+    p.add_argument("--interpreter", default=None)
+    p.set_defaults(fn=_cmd_set_runtime)
+
+    p = sub.add_parser(
         "finalise-artifacts", help="mark every artifact row final (close step; renders)"
     )
     p.set_defaults(fn=_cmd_finalise_artifacts)
@@ -990,7 +1301,13 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_migrate)
 
     args = parser.parse_args(argv)
-    if args.dir is None and args.fn not in (_cmd_init, _cmd_list, _cmd_migrate):
+    if args.dir is None and args.fn not in (
+        _cmd_init,
+        _cmd_list,
+        _cmd_migrate,
+        _cmd_set_active,
+        _cmd_clear_active,
+    ):
         args.dir = resolve_pack_dir(args)
     try:
         return args.fn(args)
