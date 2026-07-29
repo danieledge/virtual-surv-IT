@@ -34,7 +34,14 @@ gate is now mechanical, not a documented intention:
 3. Run **`python -m scripts.release_gate`** (add `--allow-deterministic` for a patch release). It
    verifies version/badge/CHANGELOG consistency, that the baseline exists for the version being
    promoted, and that **no prompt file was committed after the baseline** (a stale baseline fails).
-4. Only on `release gate: OK` - merge `dev` → `main` and push.
+4. **Dormancy footprint check**: run `claude plugin details compliance-surveillance-team`
+   and note the projected token cost in the baseline record - the dormant-by-default
+   promise is a number, not a vibe; investigate any jump against the previous release.
+5. **Cold-resume check (full baselines)**: re-run one kept sandbox through
+   `scripts.eval_engage --resume-run <run>/<case>` - a fresh session must pick up the
+   engagement from disk (ACTIVE marker, decisions, consent outcome) without re-asking;
+   with the SessionStart resume brief applied, this also exercises ADR-011 live.
+6. Only on `release gate: OK` - merge `dev` → `main` and push.
 
 ## Ground rules (non-negotiable)
 

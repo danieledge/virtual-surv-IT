@@ -3,6 +3,50 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.1] - 2026-07-29 - Platform capability adoption + document-input routing
+
+> Plain-language overview: `docs/releases/0.33.1.md` (and 0.33.0's, which this builds on).
+
+### Added
+- **Document-input routing (live pain fix)**: handed a PDF mid-engagement, the team was
+  observed PowerShell-hand-parsing binary bytes, unaware of the bundled converter. Now:
+  `convert_file` gains `--layout` (pypdf layout mode - columns/tables stay readable);
+  standing "Document inputs" rule in the operating guide + engage step 1a + CLAUDE.md §7
+  (never Read/hand-parse binaries, converter is vendored/no-pip/corp-safe, scanned pages
+  escalate to the user); and a STAGED PreToolUse redirect hook
+  (`document_input_redirect.py`, engagement-scoped, fails open) that blocks binary-document
+  reads/hand-parsing with the exact converter command. 11 tests.
+- **SessionStart resume brief (ADR-011)**: on `compact`/`resume`, a staged hook re-briefs a
+  mid-engagement session - ACTIVE pack, status/phase, re-read `engagement-state.json`
+  first, recorded answers are never re-asked, a consent `declined` stands. Dormancy-exact
+  (zero output when no pack is live); 7 tests.
+- **PostToolUse lint feedback**: a staged hook checks Python the moment a builder writes it
+  (`py_compile` always; `ruff` when on PATH) and feeds findings back over the PostToolUse
+  channel - the write-path half of the "verification as hooks" pattern whose Stop-gate
+  half shipped in 0.17.0. Engagement-scoped, advisory, fails open; 5 tests.
+- **Native task-list progress (TodoWrite)**: engage step 5 + the operating guide's console
+  rules now seed one todo per planned gate and tick them as evidence lands - presentation
+  only, the state file stays the record.
+- **Status line**: `scripts/statusline.sh` renders dormant-vs-engaged (ACTIVE slug, status,
+  phase) + model + session cost at zero token cost; wired by the human via
+  `scripts/apply-statusline.sh` (repo-scoped setting).
+- **Skill tool scopes**: `/run-evals` pre-approves its own harness commands
+  (`allowed-tools`); `/meet-the-team` declares `disallowed-tools: Write, Edit`.
+- **Release checklist**: dormancy footprint step (`claude plugin details` - the
+  dormant-by-default promise as a number) and a cold-resume check (`--resume-run` against a
+  kept sandbox) added to CONTRIBUTING's promotion gate.
+
+### Deferred (recorded, not silently dropped)
+- Notification pings: excluded by user decision for this batch.
+- `context: fork` for `/run-evals` and any Dynamic Workflows pilot: both need a
+  guard-binding verification spike first (do the project's PreToolUse guards bind to
+  forked/workflow-spawned agents exactly as to Task subagents?); not adopted on trust.
+
+### Notes
+- All four apply scripts are HUMAN-run (ADR-002 rec 5); every new hook is
+  engagement-scoped, advisory-or-redirect (never a new consent surface), and fails open.
+  The three safety guards are untouched.
+
 ## [0.33.0] - 2026-07-29 - Workflow-robustness remediation: fail-safe gates, disk-first resume, one placement rule, real map provenance
 
 > User-facing overview of what this release means in practice: [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md).

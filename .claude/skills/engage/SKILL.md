@@ -230,6 +230,11 @@ something you haven't been given, **ask for it before anything else** and wait:
   repo/branch, a commit range, or paste it. Confirm the files exist (e.g. `git status`, list
   the path) before reviewing. **Do not invent or assume a target.**
 - A **spec/BRD/FSD**, **data location**, or other artifact → ask for the path or paste.
+- **Any input that is a document file (PDF / DOCX / XLSX / XLS / CSV)** → convert it FIRST:
+  `<python> -m scripts.convert_file <file>` (bundled, vendored deps, consent-free -
+  operating guide "Document inputs"). Never read the binary bytes, never hand-parse or
+  PowerShell it. Use `--layout` for table/column-shaped PDFs. If the report says pages are
+  scanned/MISSING, ask the user (question tool) for a text-bearing original - do not guess.
 If the user just typed `/engage` (or `/engage test some code`) with no concrete target, your
 **first reply** is to ask what/where the code or inputs are - don't proceed without them.
 
@@ -288,7 +293,12 @@ never a "shall I proceed?" buried in prose. **Record the answer**: `set-decision
 "<answer> (user, <date>)"`, then `set-phase delivery` as delivery begins - a cold resume
 reads the phase from the state, so it must be true (register R4).
 
-**5. Oversee delivery (agile).** Work in small iterations. **Right-size, and say so out loud:**
+**5. Oversee delivery (agile).** Work in small iterations. **Track the gates in the native
+task list (TodoWrite)**: the moment the plan is agreed, seed one todo per planned gate
+(brief → build → tests → review → QA → DoD gate → close) and keep exactly one in_progress,
+ticking each as its evidence lands - the panel is the user's glanceable progress view and
+costs no console space (clean-console rule; the STATE still lives in engagement-state.json,
+the todo list is presentation only). **Right-size, and say so out loud:**
 before fanning out, state in one line **how many agents you intend to spawn and why** (e.g.
 *"this is a one-file change - I'll use just rules-developer + code-reviewer, not the full
 team"*). Surfacing the team size at the gate keeps over-spawning visible to the user. Use the

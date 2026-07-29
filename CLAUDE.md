@@ -115,8 +115,11 @@ signed as Morgan), and human sign-off.
   PDF / DOCX → data, deps vendored so no pip), `render_html`, `ingest`, `gen_synthetic`,
   `synthesise`, `validate_masking`, `validate_manifest`, `check_citations`, `eval_score`,
   `calibrate_spoofing`, `check_artifacts`, `engagement_state`, `extensions`,
-  `convert_sarif`. So read a spreadsheet with
-  `python -m scripts.convert_file <file>` and just run it - do **not** hand-parse it, and do **not**
+  `convert_sarif`. So read ANY document input - a spreadsheet, a **PDF**, a DOCX, a CSV -
+  with `python -m scripts.convert_file <file>` and just run it (deps are vendored in the
+  plugin: no pip, no installs, corp-safe; `--layout` preserves PDF columns/tables). Do
+  **not** hand-parse documents, do **not** read their binary bytes via shell/PowerShell
+  one-liners, and do **not**
   tell the user to create `.claude/.exec-consent` to convert or render a file. Consent is only for
   executing the deliverable being built or reviewed.
 - An advisory agent that wants to edit code hands back to the orchestrator instead.

@@ -153,6 +153,17 @@ skipped. The Python helper scripts need only `<python>`, never bash:
     reading goes through it - `docs/house-rules.md`). One **optional system package**
     sharpens it: `poppler-utils` (`pdftotext`) recovers PDF pages the vendored pypdf can't
     extract - without it those pages are reported MISSING (see `requirements-dev.txt`).
+  - **Document inputs are NEVER hand-parsed (standing rule, 2026-07-29).** The moment an
+    input arrives as a PDF, DOCX, XLSX/XLS or CSV: `<python> -m scripts.convert_file
+    <file>` (plugin mode: the `$PLUGIN_ROOT/scripts/` copy by path) - it is consent-free
+    and allow-listed. Never `Read` the binary bytes, never shell/PowerShell one-liners
+    (`Get-Content`, `ReadAllBytes`, `strings`), never retype content by eye. `--layout`
+    keeps PDF columns/tables readable; `--list` inventories sheets/tables/pages. The
+    conversion REPORT is evidence - its warnings (scanned pages = MISSING content, table
+    caveats) carry into the engagement's artifacts, and a scanned/image-only PDF is
+    **escalated to the user via the question tool** (ask for the text-bearing original or
+    the upstream data) - never guessed, never transcribed by eye. Assume the corporate
+    environment allows NO new installs: the vendored converter is the toolchain.
 - **Never silently skip a deliverable step** because a script seems unreachable: resolve the
   path per the above, and if something genuinely can't run in this mode, say so in the close and
   in the summary email.
@@ -175,6 +186,12 @@ skipped. The Python helper scripts need only `<python>`, never bash:
   the rendered artifact.
 - **Keep console output clean.** No code blocks, `diff`s or large tables in the chat/TUI - put that
   in the artifact (`.md`/`.html`); keep the terminal to crisp prose, scoreboards and short bullets.
+- **Show progress in the native task list (TodoWrite), not in prose.** Seed one todo per
+  planned gate when the plan is agreed (brief → build → tests → review → QA → DoD gate →
+  close), keep exactly one in_progress, and tick each as its evidence lands. The panel is
+  Claude Code's own UI, so it costs no console space and no tokens beyond the update
+  itself. Presentation only: the engagement's STATE stays in `engagement-state.json` - the
+  todo list never becomes a second source of truth.
   Hide detail by default; offer to expand via the question tool.
 
 ## Outcome discipline (every engagement)
