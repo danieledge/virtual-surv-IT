@@ -85,8 +85,10 @@ def test_transcript_slug_mirrors_claude_layout(tmp_path):
     p = tmp_path / "www" / "proj"
     p.mkdir(parents=True)
     d = transcripts_dir_for(p, tmp_path / ".claude")
-    # Windows resolves to a backslashed drive path; the slug flattens both separator kinds.
-    assert d.name == str(p.resolve()).replace("/", "-").replace("\\", "-")
+    # Windows resolves to a backslashed drive path; the slug flattens separators AND the
+    # drive colon (a "C:"-prefixed segment would reset the join as drive-relative).
+    assert d.name == str(p.resolve()).replace("/", "-").replace("\\", "-").replace(":", "-")
+    assert d.parent == tmp_path / ".claude" / "projects"
 
 
 def test_plugin_cache_version_fallback(tmp_path):

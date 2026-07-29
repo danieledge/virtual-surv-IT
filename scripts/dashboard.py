@@ -175,8 +175,12 @@ def parse_transcripts(transcript_dir: Path) -> dict:
 
 
 def transcripts_dir_for(project: Path, claude_home: Path) -> Path:
-    """Claude Code names the per-project transcript dir after the absolute path."""
-    slug = str(project.resolve()).replace("/", "-").replace("\\", "-")
+    """Claude Code names the per-project transcript dir after the absolute path.
+
+    The drive colon is flattened too: a leading `C:` in a joined segment makes pathlib
+    treat it as a drive-relative path and silently discard the base directory.
+    """
+    slug = str(project.resolve()).replace("/", "-").replace("\\", "-").replace(":", "-")
     return claude_home / "projects" / slug
 
 
