@@ -8,11 +8,11 @@
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
-> | 0.1 | 2026-07-29 | 0.33.1 capability adoption (user-approved batch) | Accepted & staged: SessionStart(compact,resume) brief, dormancy-exact |
+> | 0.1 | 2026-07-29 | 0.33.1 capability adoption (user-approved batch) | Accepted, staged and human-applied same day: SessionStart(compact,resume) brief, dormancy-exact |
 
 | | |
 |---|---|
-| **Status** | **Accepted / staged** (0.33.1; human applies via `scripts/apply-session-brief.sh`) |
+| **Status** | **Accepted / implemented** (0.33.1; human-applied 2026-07-29 via `scripts/apply-session-brief.sh` - wired in both hook files) |
 | **Date** | 2026-07-29 |
 | **Deciders** | Human approver (the 0.33.1 batch), Morgan (design) |
 | **Traceability** | 0.33.0 register R1-R7 (disk-first resume), ADR-004 (capture at session end - this is the reload mirror), ADR-005 (persona anchor), the 2026-07-29 Claude Code capability audit |

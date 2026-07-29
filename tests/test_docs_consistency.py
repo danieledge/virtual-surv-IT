@@ -204,7 +204,7 @@ def test_skill_count_references_match_filesystem():
 def test_agent_count_references_match_filesystem():
     n = _agent_count()
     for rel in ("README.md", ".claude-plugin/plugin.json"):
-        for found in re.findall(r"(\d+)\s+(?:specialist|subagent)", _read(rel)):
+        for found in re.findall(r"(\d+)\s+(?:specialist|subagent|agent definitions)", _read(rel)):
             assert int(found) == n, (
                 f"{rel}: says {found} specialists/subagents but {n} agent files exist on disk"
             )
@@ -236,8 +236,9 @@ def test_roster_gate_matches_operating_guide():
 
 def test_eval_case_count_references_match_filesystem():
     # The dated eval-baseline-*.md is a point-in-time record - excluded on purpose.
+    # CONTRIBUTING added 2026-07-30: its promotion-gate case count slipped this net once.
     n = _eval_case_count()
-    for rel in ("README.md", "docs/agent-design.md"):
+    for rel in ("README.md", "docs/agent-design.md", "CONTRIBUTING.md"):
         for found in re.findall(r"(\d+)\s+golden cases", _read(rel)):
             assert int(found) == n, (
                 f"{rel}: says {found} golden cases but {n} eval-case dirs exist on disk"

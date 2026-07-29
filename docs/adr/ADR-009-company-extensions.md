@@ -74,7 +74,9 @@ undiscoverable and untestable.
   Residual: a user who pastes a malicious extensions file from elsewhere is trusting it -
   same trust boundary as their own CLAUDE.md.
 - The live golden case for extensions (registered fake tool + close-action offer) is
-  deferred to the 0.32 promotion prep, alongside applying the staged guard.
+  deferred to the 0.32 promotion prep, alongside applying the staged guard. (Delivered:
+  `evals/cases/process-extensions/` and `evals/cases/injection-extensions/` shipped in the
+  0.32 batch; the staged guard was human-applied.)
 
 ## Alternatives considered
 

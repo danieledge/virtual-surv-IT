@@ -1,7 +1,7 @@
 # Engagement flow specification - complete diagram brief
 
 Purpose: a complete, diagram-ready description of every hook, guard, gate, step, branch,
-loop and artifact in the compliance-surveillance team's engagement workflow (v0.29.0). Written
+loop and artifact in the compliance-surveillance team's engagement workflow (v0.33.1). Written
 to be handed to a diagramming assistant. Nothing user-visible is omitted.
 
 **Suggested rendering:** swimlane flowchart with five lanes - **User (human)** · **Morgan

@@ -50,7 +50,7 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-02</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
 <h1 id="delivery-report-ts-001-wash-trade-self-match-detection-demo">Delivery Report - TS-001 Wash Trade / Self-Match Detection (DEMO)</h1>
 <blockquote>
 <p><strong>Document control</strong> · ID <code>DLVR-001</code> · Version <code>0.1</code> · Status <code>In review</code> · Classification <code>Internal</code> · Owner <code>PM (Morgan)</code> · As-of <code>2026-06-30</code></p>
@@ -127,7 +127,7 @@ record - preserved, not retro-edited). Synthetic only (§5); a <strong>demo arti
 <tr>
 <td>DR-002 off-market price = NECESSARY condition (spread-normalised, mid-referenced, early-continue)</td>
 <td><code>_price_deviation_bps</code> ÷ <code>time_weighted_spread_bps</code> vs <code>off_market_spread_multiple</code></td>
-<td>QA spread-multiple boundary tests (at / just-over); <code>test_fp_at_market_not_alerted</code></td>
+<td>QA spread-multiple boundary tests (at / just-over); <code>test_fp_affiliated_funds_at_market</code>, <code>test_normalised_below_threshold_no_alert</code></td>
 <td>MAR 12(1)(a)</td>
 </tr>
 <tr>
@@ -145,19 +145,19 @@ record - preserved, not retro-edited). Synthetic only (§5); a <strong>demo arti
 <tr>
 <td>DR-005 stale-UBO-graph → per-account exclude + DQ warning (not abort)</td>
 <td>freshest-edge-per-account index</td>
-<td><code>test_multiple_ubo_edges_freshest_wins...</code>, QA partial-stale/one-over</td>
+<td><code>test_multiple_ubo_edges_freshest_wins_no_spurious_staleness</code>, QA partial-stale/one-over</td>
 <td>coverage control</td>
 </tr>
 <tr>
 <td>DR-006 implied-match tier OFF at launch</td>
 <td><code>enable_implied_match_tier=False</code> guard</td>
-<td><code>test_implied_match_tier_disabled</code></td>
+<td><code>test_implied_match_tier_disabled_raises</code></td>
 <td>SME Q5</td>
 </tr>
 <tr>
 <td>Alert carries obligation + keystone as <strong>fields</strong></td>
 <td><code>WashTradeAlert.obligation_reference</code>, <code>.obligation_status</code>, <code>.ubo_group_id</code>, <code>.spread_normalised_deviation</code></td>
-<td><code>test_tp_..._obligation_fields</code></td>
+<td><code>test_alert_carries_all_mandatory_obligation_fields</code></td>
 <td>MAR 12(1)(a) traceability</td>
 </tr>
 <tr>
@@ -279,7 +279,7 @@ record - preserved, not retro-edited). Synthetic only (§5); a <strong>demo arti
 <h2 id="5-developer-handover">5. Developer handover</h2>
 <ul>
 <li><strong>Build/run:</strong> <code>pip install -r requirements-dev.txt</code>; <code>python -m pytest docs/demos/build-artifacts/test_ts001_wash_trade.py docs/demos/build-artifacts/test_ts001_qa.py -q</code> → <strong>43 passed</strong>.</li>
-<li><strong>Entry point:</strong> <code>detect_wash_trades(trades, ubo_links, market_snapshots, as_of_date, params=None) -&gt; DetectionResult</code>. Inputs: <code>Trade</code>, <code>UBOLink(account_id, ubo_group_id, graph_as_of_date)</code>, <code>MarketSnapshot(instrument, snapshot_date, mid_price, time_weighted_spread_bps)</code>. All <code>DetectionParams</code> have documented defaults with a rationale + <code>tuning_date</code> placeholder.</li>
+<li><strong>Entry point:</strong> <code>detect_wash_trades(trades, ubo_links, market_snapshots, as_of_date, params=None) -&gt; DetectionResult</code>. Inputs: <code>Trade</code>, <code>UBOLink(account_id, ubo_group_id, graph_as_of_date)</code>, <code>MarketSnapshot(instrument, snapshot_date, mid_price, time_weighted_spread_bps)</code>. Five of the seven <code>DetectionParams</code> fields default to named constants with a documented rationale + <code>tuning_date</code> placeholder; the two safe-harbour registers (<code>exempt_account_ids</code>, <code>exempt_strategy_tags</code>) default inline without one - document them before production.</li>
 <li><strong>Known limitations / tech debt (must close before production):</strong> (1) <strong>PERF-F1/F2</strong> - bucket the pairing + dedupe DQ warnings, then benchmark at 100K/1M (<code>pytest-benchmark</code>). (2) <strong>Obligation mapping PROVISIONAL</strong> - resolve SME Q1/Q3/Q4 (Legal), verify the <code>[TO-VERIFY]</code> citations against primary sources and add to the register. (3) <strong>Threshold</strong> - re-confirm 0.75 on real data. (4) <strong>M1</strong> - finalise the MM exemption taxonomy (SME Q2). (5) <strong>At-market wash</strong> is a known, accepted detection gap (DR-002) - candidate future scenario TS-003.</li>
 <li><strong>Change/ops artifacts</strong> (change request, ops runbook, release notes) are not produced for a demo; templates exist for a real engagement.</li>
 </ul>
@@ -400,6 +400,11 @@ record - preserved, not retro-edited). Synthetic only (§5); a <strong>demo arti
 <td>§5 (matches the delivered API)</td>
 </tr>
 <tr>
+<td>Handover docs clear &amp; usable</td>
+<td>✅ Met</td>
+<td>§5 stands alone: copy-pastable build/test command, full entry-point signature + input types, limitations enumerated; usability checked at the compliance gate (C2 regenerated this report against the delivered API)</td>
+</tr>
+<tr>
 <td>Engagement-summary email</td>
 <td>✅ Met</td>
 <td><code>engagement-summary-email.txt</code> (this run)</td>
@@ -447,6 +452,6 @@ record - preserved, not retro-edited). Synthetic only (§5); a <strong>demo arti
 </tr>
 </tbody>
 </table>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report.md &middot; 2026-07-02</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: delivery-report.md &middot; 2026-07-30</div>
 </body>
 </html>

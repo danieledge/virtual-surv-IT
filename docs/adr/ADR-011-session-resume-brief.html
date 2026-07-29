@@ -50,7 +50,7 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-29</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
 <h1 id="adr-011-sessionstart-resume-brief-re-read-the-disk-after-compaction-accepted">ADR-011: SessionStart resume brief - re-read the disk after compaction (accepted)</h1>
 <blockquote>
 <p>Architecture Decision Record (Nygard format). One file per significant decision, so the
@@ -71,7 +71,7 @@ a { color: #0969da; }
 <td>0.1</td>
 <td>2026-07-29</td>
 <td>0.33.1 capability adoption (user-approved batch)</td>
-<td>Accepted &amp; staged: SessionStart(compact,resume) brief, dormancy-exact</td>
+<td>Accepted, staged and human-applied same day: SessionStart(compact,resume) brief, dormancy-exact</td>
 </tr>
 </tbody>
 </table>
@@ -81,7 +81,7 @@ a { color: #0969da; }
 <tbody>
 <tr>
 <td><strong>Status</strong></td>
-<td><strong>Accepted / staged</strong> (0.33.1; human applies via <code>scripts/apply-session-brief.sh</code>)</td>
+<td><strong>Accepted / implemented</strong> (0.33.1; human-applied 2026-07-29 via <code>scripts/apply-session-brief.sh</code> - wired in both hook files)</td>
 </tr>
 <tr>
 <td><strong>Date</strong></td>
@@ -126,6 +126,6 @@ sources are excluded twice (the matcher AND an in-hook check).</p>
 <li>Residual: a compaction that loses the transcript AND has an unreadable state file gets no
   brief - the stop-gate and persona-anchor layers remain the backstop there.</li>
 </ul>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-011-session-resume-brief.md &middot; 2026-07-29</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-011-session-resume-brief.md &middot; 2026-07-30</div>
 </body>
 </html>

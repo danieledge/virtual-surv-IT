@@ -13,7 +13,7 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted / implemented** - `scripts/persona_anchor.py`; wiring into the two hook files is human-run (`scripts/apply-persona-anchor.sh`, ADR-002 rec 5) |
+| **Status** | **Accepted / implemented** - `scripts/persona_anchor.py`; wiring into the two hook files was human-run (`scripts/apply-persona-anchor.sh`, ADR-002 rec 5; applied 2026-07-24 - the hook ships wired) |
 | **Date** | 2026-07-23 |
 | **Deciders** | Morgan (orchestrator), human approver |
 | **Traceability** | ADR-004 (session-end capture hook); README "Known issues" (persona decay + name drift); `docs/team-operating-guide.md` §Voice/Roster; CLAUDE.md §6 (persona), §5/§7 (hook-enforced guards) |

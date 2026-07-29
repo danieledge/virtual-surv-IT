@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-001: Ground regulatory citations in a retrieved source, not model memory</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
+<h1 id="adr-001-ground-regulatory-citations-in-a-retrieved-source-not-model-memory">ADR-001: Ground regulatory citations in a retrieved source, not model memory</h1>
+<blockquote>
+<p>Architecture Decision Record (Nygard format). One file per significant decision, so the
+<em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
+<p><strong>Document control</strong> · ID <code>ADR-001</code> · Version <code>0.1</code> · Status <code>Draft</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM) / compliance-reviewer</code> · As-of <code>2026-06-29</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-06-29</td>
+<td>project review</td>
+<td>Initial draft</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Status</strong></td>
+<td>proposed</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-06-29</td>
+</tr>
+<tr>
+<td><strong>Deciders</strong></td>
+<td>Morgan (orchestrator), <code>compliance-reviewer</code>, human approver</td>
+</tr>
+<tr>
+<td><strong>Traceability</strong></td>
+<td>Obligation: traceability spine integrity (CLAUDE.md §4, §8); RTM <code>obligation → BRD/FSD → code → test</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="context">Context</h2>
+<p>The team's central promise is <strong>auditability</strong>: a traceable link from <code>alert → logic →
+regulatory obligation</code>, recorded in the RTM (requirements traceability matrix) and checked by <code>compliance-reviewer</code>. That spine is
+only as trustworthy as the regulatory references in it.</p>
+<p>How the model works makes this a first-order risk. An LLM emits citations like "MAR Article 12",
+"FFIEC BSA/AML §X" or "Rule 10b-5" from <strong>parametric memory</strong> - precisely the regime in which it
+confabulates <em>confidently and fluently</em>. A fabricated or subtly wrong pinpoint citation
+(article, paragraph, effective date) is not a typo in this domain: it is a control failure that
+survives into a signed-off audit pack, because every downstream reviewer is the <em>same</em> model
+sharing the <em>same</em> blind spot. Self-verification cannot fix this - the model cannot reliably
+introspect which of its own citations are grounded.</p>
+<p>Today the project's defences are partial: <code>docs/scope-and-stack.md</code> carries <strong>example</strong> regimes,
+and the <code>📊 measured vs 🧠 inferred</code> convention is honour-based (the model self-tags). There is
+no mechanism that <em>prevents</em> an invented pinpoint citation from being asserted as fact. Two new
+eval cases (<code>citation-no-fabricated-reg</code>, <code>citation-flag-unverified</code>) now demonstrate the failure
+mode but do not remove it.</p>
+<h2 id="decision">Decision</h2>
+<p>Treat a regulatory citation like a threshold: <strong>it must be grounded or flagged, never invented.</strong></p>
+<ol>
+<li><strong>Source of truth.</strong> Maintain a project-local, version-controlled <strong>regulatory register</strong> (the
+   firm's in-scope obligations - regime, instrument/typology, pinpoint reference, effective date,
+   source URL/document id). <code>docs/scope-and-stack.md</code> becomes the example seed for it.</li>
+<li><strong>Use knowledge, but flag the unverified (ledger, not allowlist).</strong> The agent uses its <strong>full
+   regulatory knowledge</strong> to identify the applicable obligation - the register does <strong>not</strong> limit
+   what may be cited. A pinpoint that resolves to a register entry is cited as <strong>verified</strong>; one
+   that does not is still <strong>surfaced</strong> but marked <strong>to-verify</strong> (confirm against the primary source,
+   then add it to the register) - it is "not yet verified", not "wrong" or "forbidden". The register
+   is a growing <strong>verification ledger</strong>, so its size never caps the team's regulatory coverage. The
+   one hard rule: never assert an unverified pinpoint as <strong>decided fact</strong> without the to-verify flag.</li>
+<li><strong>Mechanical check at the gate.</strong> <code>compliance-reviewer</code> verifies every emitted pinpoint citation
+   <strong>against the register</strong> rather than reading it for plausibility. An unmatched pinpoint is an
+   audit finding, not prose to be trusted.</li>
+<li><strong>Earn the tag.</strong> <code>📊</code> on a citation is permitted only when it resolves to a register entry; an
+   unresolved citation is <code>🧠 inferred / unverified</code> by default.</li>
+</ol>
+<h2 id="consequences">Consequences</h2>
+<p><strong>Positive</strong>
+- Removes the highest-severity silent failure (confident wrong citation) from the audit trail.
+- Makes the traceability spine <em>verifiable</em> instead of <em>asserted</em>; <code>compliance-reviewer</code>'s pass
+  becomes a check with ground truth, not a second opinion from the same weights.
+- The register is reusable across engagements and is itself auditable / diff-able.</p>
+<p><strong>Negative / costs</strong>
+- Requires building and maintaining the register (curation effort; must be kept current as
+  obligations change - ties into <code>/reg-change-impact</code>).
+- Retrieval adds a step and some latency to citation-bearing work.
+- The register's <em>accuracy</em> becomes a new dependency - garbage in, garbage cited - so its
+  provenance and update process need ownership.</p>
+<h2 id="alternatives-considered">Alternatives considered</h2>
+<ul>
+<li><strong>Status quo (honour-based tagging).</strong> Rejected: relies on model introspection it does not have;
+  the new eval cases show the failure mode persists.</li>
+<li><strong>LLM self-check ("are you sure this citation is real?").</strong> Rejected as <em>sole</em> control: same model,
+  same blind spot; improves confidence calibration marginally but cannot supply a missing fact.</li>
+<li><strong>Forbid all specific citations (cite only at regime level).</strong> Rejected: throws away genuine
+  traceability value where a pinpoint <em>is</em> known and correct; the register preserves it safely.</li>
+<li><strong>Live web retrieval of regulations.</strong> Deferred: provenance/version-pinning and access are harder
+  to make audit-stable than a curated, version-controlled register; revisit later.</li>
+</ul>
+<h2 id="implementation-status-follow-up">Implementation status &amp; follow-up</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Implementation status</td>
+<td><strong>core implemented (2026-06-29).</strong> <code>config/regulatory-register.yaml</code> (seeded, example status), <code>scripts/check_citations.py</code> (retrieve via <code>lookup()</code>, mechanical gate via <code>check_text()</code> / CLI), 5 unit tests, and <code>compliance-reviewer</code> now runs the gate (a register-lookup step). Authoring skills wired (<code>/write-brd</code>, <code>/new-scenario</code>, <code>/reg-change-impact</code>); the 7 seed entries <strong>verified against primary sources on 2026-06-29</strong> (EUR-Lex, Cornell LII, FINRA) and flipped to <code>status: verified</code>. <strong>Deferred:</strong> <code>/brd-to-fsd</code> wiring (it inherits citations from the BRD); a CI gate (held off so it doesn't flag existing docs that cite obligations not yet in the register).</td>
+</tr>
+<tr>
+<td>Implementing agent / team</td>
+<td><code>platform-engineer</code> (register + retrieval), <code>compliance-reviewer</code> (gate check)</td>
+</tr>
+<tr>
+<td>Target completion</td>
+<td>seed verification + skill wiring next</td>
+</tr>
+<tr>
+<td>Follow-up actions</td>
+<td>verify the seed obligations against primary sources (flip <code>status</code>); wire <code>lookup()</code> into citation-bearing skills; consider a CI gate once the register covers the repo's docs; <code>citation-*</code> eval cases remain the regression net</td>
+</tr>
+<tr>
+<td>Linked tickets / PRs</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sign-off">Sign-off</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Human approver (or <code>[IT team]</code>)</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-001-retrieved-citation-grounding.md &middot; 2026-07-30</div>
+</body>
+</html>

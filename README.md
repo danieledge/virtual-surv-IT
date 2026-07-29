@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.0](https://img.shields.io/badge/version-0.33.1-blue)
+![Version 0.33.1](https://img.shields.io/badge/version-0.33.1-blue)
 ![Tests 700+ passing](https://img.shields.io/badge/tests-700%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -13,7 +13,7 @@
 
 🏷️ **Current version: 0.33.1** (2026-07-29) - *[platform capability adoption](docs/releases/0.33.1.md)*, on top of *[0.33.0 - the team got harder to fool](docs/releases/0.33.0.md)*<br/>
 A workflow-robustness release: the quality checks now fail safe, a close has to pass the gate to count, and sessions resume from disk without re-asking you anything.<br/>
-📖 [Plain-language release overview](docs/releases/0.33.0.md) · 📜 [Full changelog](CHANGELOG.md)
+📖 [Plain-language release overview](docs/releases/0.33.1.md) · 📜 [Full changelog](CHANGELOG.md)
 
 </td></tr>
 </table>
@@ -181,11 +181,12 @@ domain and the harness (dormancy, gates, segregation, evidence, evals) carries o
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
-> 📌 **Latest release - 0.33.0 (2026-07-29), workflow robustness.** What it means for you:
-> [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) · full detail: [`CHANGELOG.md`](CHANGELOG.md).
+> 📌 **Latest release - 0.33.1 (2026-07-29), platform capability adoption** on top of the
+> 0.33.0 workflow-robustness release. What they mean for you:
+> [`docs/releases/0.33.1.md`](docs/releases/0.33.1.md) · [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) · full detail: [`CHANGELOG.md`](CHANGELOG.md).
 
 <details>
-<summary>✨ <b>What's new in 0.16 / 0.15</b>: the engagement-lifecycle release (every engagement has a visible state (in progress / blocked / closed), carried by a living START-HERE index; interim work can never masquerade as a delivery) · the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA, each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
+<summary>✨ <b>Release history highlights (0.16 and earlier)</b>: the engagement-lifecycle release (every engagement has a visible state (in progress / blocked / closed), carried by a living START-HERE index; interim work can never masquerade as a delivery) · the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA, each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
 
 **0.16.7** - **gate hardening.** A comprehensive adversarial review of the mechanical DoD gate
 (`check_artifacts.py`) found checks that gave wrong verdicts on realistic input - two fail-unsafe.
@@ -771,7 +772,7 @@ silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **700+ passing unit tests** (726 collected as of 0.33.0) check
+The repo's **700+ passing unit tests** (785 collected as of 0.33.1) check
 the *code*, and run in CI. The **eval harness** ([`evals/`](evals/)) checks the **quality of what the
 team produces**: its contract and scorer run in CI, but scoring the *live team* (catching a prompt
 change that silently weakens a review) is run manually via `/run-evals`, not on every commit, because
@@ -795,7 +796,7 @@ it spends tokens. (This is the regression net Anthropic's multi-agent guidance r
 ## 🪝 The safety hooks (plain English)
 
 A *hook* is a small script Claude Code runs automatically **right before** it uses a tool, and it
-can **allow** or **block** that action. This plugin ships three, **always on** (they run even when the
+can **allow** or **block** that action. This plugin ships three safety guards, **always on**, plus four engagement-scoped lifecycle hooks (see the Claude Code features table; they no-op in dormant sessions and fail open). The guards run even when the
 team is dormant). The newcomer-friendly version of the whole safety story is in
 [`docs/OVERVIEW.md` §5](docs/OVERVIEW.md); the operational detail is below.
 
@@ -971,8 +972,8 @@ uses and how (audited 2026-07-29 against the current Claude Code docs):
 | Feature | How the team uses it |
 |---|---|
 | **Skills / slash commands** | All 23 workflows ship as skills with `disable-model-invocation: true` - the dormancy mechanism: their descriptions load into no ordinary session, so the team costs ~nothing until you type `/engage`. `argument-hint` on every command. |
-| **Subagents** | 17 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Write/Edit. |
-| **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), a warn-first `Stop` DoD backstop, and a `UserPromptSubmit` persona re-anchor that survives compaction. Hook and settings edits are human-only (ADR-002); hook changes ship staged and are applied by the human (`scripts/apply-project-anchor.sh`). |
+| **Subagents** | 16 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Write/Edit. |
+| **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), plus engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop, a `UserPromptSubmit` persona re-anchor that survives compaction, a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint. Hook and settings edits are human-only (ADR-002); hook changes ship staged and are applied by the human via the `apply-*.sh` scripts. |
 | **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
 | **Permissions** | A curated `permissions.allow` block (fewer prompts on the team's own consent-free tooling) and `permissions.deny` as the hard floor under the raw-data wall. |
 | **CLAUDE.md layering** | A lean always-on core (dormancy, data safety, the execution gate) with the operating detail split into docs the team loads only when engaged - the context-budget discipline. |
@@ -1147,7 +1148,7 @@ and `Bash(...)` entries to `permissions.deny` and to segment-split the Bash guar
 guards are a real control for a cooperative agent, not a boundary against an adversarial one; the
 standing mitigation is to keep real data off the machine (the §5 posture). Tracked, not a surprise.
 
-**The persona and soft discipline can fade on a long session (re-anchoring backlogged).** The
+**The persona and soft discipline can fade on a long session (mitigated since 0.27.0 by the re-anchor hook).** The
 `/engage` persona - Morgan's voice, the 🎩 marker, the named specialists, the prompt-enforced
 discipline (question-tool, the fix-list gate) - loads **once** when you type `/engage` and is
 **never re-asserted**; it lives only in the conversation history. On a long engagement, or after
@@ -1161,8 +1162,8 @@ now:** re-invoke `/engage` (or `/meet-the-team`) to reload the persona, and don'
 engagement run excessively long. **Fix implemented (0.27.0, ADR-005):** a dormancy-aware
 re-anchoring hook - `scripts/persona_anchor.py`, a per-turn `UserPromptSubmit` hook that re-injects
 a tiny (≤8-line) persona+discipline anchor **only while an engagement is live** (open/blocked
-START-HERE), so it survives compaction yet stays silent in ordinary sessions. Wire it once with
-`bash scripts/apply-persona-anchor.sh` (hook wiring is human-only). Same root cause as the
+START-HERE), so it survives compaction yet stays silent in ordinary sessions. It ships wired
+in both hook files - no setup needed. Same root cause as the
 name-drift quirk below, which the anchor also mitigates.
 
 **First `/engage` of a session can take ~2-3 minutes before the first Morgan message (under
@@ -1170,7 +1171,7 @@ investigation).** Tester feedback: the **initial** engagement is slow to produce
 later turns are fast. The path is already optimised to a **single** step-0 probe (no probe-per-turn),
 and the tooling probe is cached after first use (`.claude/.tool-availability`, 7-day TTL) - so this
 is a **cold-start** cost that hits once per session: the prompt cache is cold (`docs/agent-design.md`
-§7), the tool probe isn't cached yet, and turn 0 loads a large payload (the ~400-line operating guide
+§7), the tool probe isn't cached yet, and turn 0 loads a large payload (the ~490-line operating guide
 + codebase-map + CHANGELOG) into the opus orchestrator before it emits a word. **Not yet confirmed**
 is the split between (a) model inference over that cold, large turn-1 context - the likely dominant
 cost, since the probe script itself is only `command -v` checks - and (b) I/O, notably the
@@ -1193,7 +1194,7 @@ things compound here:
   - `deep-review` drives `code-reviewer` for the analysis and `review-scorer` for context detection,
   and Morgan only does a challenge pass on the *findings* - so "the main loop reads the code" is
   **largely refuted** as the cause. The real driver is the setup corpus loaded into the single
-  orchestrator context **before the work starts**: the ~330-line operating guide + the working
+  orchestrator context **before the work starts**: the ~490-line operating guide + the working
   project's codebase-map (~250) + CHANGELOG + tool report (all dumped by the one step-0 probe), plus
   the **chained skill files** a code review stacks (`engage` → `audit-review` → `deep-review`), plus
   `CLAUDE.md` and the 16 agent descriptions. Same root as the cold-start issue above; a code review
@@ -1221,7 +1222,7 @@ box where the plugin is installed from a local path (`scope: "local"`). Assessme
 treats a local-scope plugin as mutable and **re-validates it every startup** (git-SHA check +
 settings re-merge + re-scan) - that's the trigger. The ~20-27s amplifier is **Windows filesystem
 overhead** (git working-tree operations + real-time AV scanning) over the plugin's **large file
-tree**: 622 tracked files, of which **533 are the vendored pip-less Python libs in `vendor/`** - the
+tree**: 754 tracked files, of which **306 are the vendored pip-less Python libs in `vendor/`** - the
 16 agents / 23 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (16
 file-opens is milliseconds). Largely a Claude-Code-×-Windows-×-local-install interaction, not
 plugin logic. **Mitigations (not yet applied):** (a) a **Windows Defender exclusion** for the plugin
@@ -1324,8 +1325,9 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 | [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack, customise to yours |
 | [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
 | [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
-| [`docs/internal/engagement-flow-poster-flowchart.html`](docs/internal/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory); [render it in the browser](https://raw.githack.com/danieledge/virtual-surv-IT/main/docs/internal/engagement-flow-poster-flowchart.html), or see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline |
-| [`docs/adr/`](docs/adr/) | Architecture decision records ADR-001 to ADR-010: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule |
+| [`docs/internal/engagement-flow-poster-flowchart.html`](docs/internal/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory; point-in-time render at v0.28.0 - predates workspaces and the closing window); [render it in the browser](https://raw.githack.com/danieledge/virtual-surv-IT/main/docs/internal/engagement-flow-poster-flowchart.html), or see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline |
+| [`docs/adr/`](docs/adr/) | Architecture decision records ADR-001 to ADR-011: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule, the session-resume brief |
+| [`docs/releases/0.33.1.md`](docs/releases/0.33.1.md) | The 0.33.1 release overview - platform capability adoption (links back to 0.33.0's workflow-robustness overview) |
 | [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) | The 0.33.0 release overview - what the workflow-robustness release means in practice |
 | [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
 
