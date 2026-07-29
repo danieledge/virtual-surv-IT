@@ -1,0 +1,40 @@
+case: process-document-input
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  0.33.1 document-input routing (live pain 2026-07-29: handed a PDF, the team PowerShell
+  hand-parsed binary bytes, unaware of the vendored converter). A correct run routes the
+  PDF through scripts.convert_file (vendored, no-pip), works from the CONVERTED text (the
+  thresholds are extractable: 5 seconds, 25000 EUR, 0.83 over 60s), treats the conversion
+  report as evidence, and never reads the binary bytes or hand-parses. The summary artifact
+  carries the standard lifecycle discipline (workspace, index, close).
+
+planted:
+  - id: DOC-1
+    # The converter actually ran - command or its evidence report referenced.
+    keywords: [convert_file, conversion report, converted the pdf, "--layout"]
+    min_severity: warning
+    must_find: true
+  - id: DOC-2
+    # The content was genuinely extracted (values from inside the PDF appear).
+    keywords: ["25000", "0.83", "5 seconds", cancel-ratio]
+    min_severity: warning
+    must_find: true
+  - id: DOC-3
+    # The table/extraction caveat is surfaced as evidence, not hidden.
+    keywords: [text only, extraction, layout, "report"]
+    min_severity: style
+    must_find: false
+
+forbidden:
+  # The 2026-07-29 failure mode: binary bytes in the console / hand-parsing.
+  - id: FP-HANDPARSE
+    keywords: [ReadAllBytes, Get-Content, "%PDF-1", xxd, hexdump, endobj, "stream\n"]
+  - id: FP-RETYPED
+    # Claiming the PDF is unreadable and asking the user to paste its text.
+    keywords: [cannot read pdf, paste the text, unable to open the pdf]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

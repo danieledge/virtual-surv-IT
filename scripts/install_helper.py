@@ -1,0 +1,610 @@
+#!/usr/bin/env python3
+"""
+scripts/install_helper.py - guided install/update for the Claude Code plugin.
+
+Walks a human through the real install path from README "Quick start": clone or update a
+local copy of the repo, pick a release channel (main = stable, dev = cutting edge), point
+the Claude Code marketplace at the clone, and install or update the
+compliance-surveillance-team plugin - with a step-by-step console trail and a closing
+summary of the actions that stay manual (per-project enablement, the human-run
+apply-*.sh hook scripts, a session restart).
+
+Design constraints:
+- stdlib only, Python 3.9+ - the helper must run before any pip install has happened.
+- Human-run from a terminal. It shells out to the `claude` CLI (`claude plugin ...`),
+  which is the scriptable twin of the interactive `/plugin` commands; nothing here ever
+  edits any project's .claude/settings.json, writes secrets, or runs the repo's
+  apply-*.sh scripts (those are deliberate separate human actions - the summary lists
+  them as reminders instead).
+- Never destructive: a dirty working tree is detected before any reset and the run
+  refuses (or stashes, only on an explicit interactive choice). Local commits ahead of
+  origin block a non-interactive reset.
+- Re-runnable: every step is idempotent or best-effort with a clear FAIL/SKIP mark.
+- Settings persist in ~/.config/virt-surv-it/installer.json (XDG_CONFIG_HOME honoured),
+  never by rewriting this script.
+- Windows-friendly: pathlib throughout, no ANSI when the stream is not a tty or NO_COLOR
+  is set, ASCII fallbacks for the check marks when the console encoding cannot carry them.
+
+Usage:
+  python scripts/install_helper.py                 # auto: update if configured, else install
+  python scripts/install_helper.py install         # fresh clone + marketplace + plugin install
+  python scripts/install_helper.py update          # fetch/reset + marketplace + plugin update
+  python scripts/install_helper.py --branch dev    # pick the channel up front
+  python scripts/install_helper.py --yes           # non-interactive, safe defaults
+  python scripts/install_helper.py --yes --pip     # also install requirements-dev.txt
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess  # fixed-argv calls to git/claude/pip, no shell  # nosec B404
+import sys
+from pathlib import Path
+from typing import Optional
+
+REPO_URL = "https://github.com/danieledge/virtual-surv-IT.git"
+MARKETPLACE = "virtual-surv-it"
+PLUGIN_ID = "compliance-surveillance-team@virtual-surv-it"
+BRANCHES = ("main", "dev")
+DEFAULT_CLONE_DIR = Path.home() / "virtual-surv-IT"
+CLAUDE_DOCS_URL = "https://claude.com/claude-code"
+
+
+# ------------------------------------------------------------------ config persistence
+
+
+def config_path() -> Path:
+    """~/.config/virt-surv-it/installer.json, honouring XDG_CONFIG_HOME."""
+    base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base) if base else Path.home() / ".config"
+    return root / "virt-surv-it" / "installer.json"
+
+
+def load_config(path: Path) -> dict:
+    """Missing or corrupt config is not an error - the run just starts fresh."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_config(path: Path, cfg: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+
+
+# ------------------------------------------------------------------ console styling
+
+
+def supports_color(stream=None, env: Optional[dict] = None) -> bool:
+    """ANSI only on a real tty with NO_COLOR unset (https://no-color.org)."""
+    stream = stream if stream is not None else sys.stdout
+    env = env if env is not None else os.environ
+    if "NO_COLOR" in env:
+        return False
+    if env.get("TERM") == "dumb":
+        return False
+    return bool(getattr(stream, "isatty", lambda: False)())
+
+
+class Style:
+    """Tiny ANSI painter; a disabled instance returns text unchanged."""
+
+    def __init__(self, enabled: bool):
+        self.enabled = enabled
+
+    def _paint(self, text: str, code: str) -> str:
+        return f"\033[{code}m{text}\033[0m" if self.enabled else text
+
+    def bold(self, text: str) -> str:
+        return self._paint(text, "1")
+
+    def green(self, text: str) -> str:
+        return self._paint(text, "32")
+
+    def red(self, text: str) -> str:
+        return self._paint(text, "31")
+
+    def yellow(self, text: str) -> str:
+        return self._paint(text, "33")
+
+    def cyan(self, text: str) -> str:
+        return self._paint(text, "36")
+
+    def dim(self, text: str) -> str:
+        return self._paint(text, "2")
+
+
+def marks(stream=None) -> dict:
+    """Unicode check marks, with ASCII fallbacks for consoles that cannot encode them."""
+    stream = stream if stream is not None else sys.stdout
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    try:
+        "✓✗".encode(encoding)
+        return {"ok": "✓", "fail": "✗", "skip": "~"}
+    except (UnicodeEncodeError, LookupError):
+        return {"ok": "OK", "fail": "X", "skip": "~"}
+
+
+# ------------------------------------------------------------------ step tracking
+
+
+class StepTracker:
+    """Collects (name, status, detail) rows; status is one of ok / fail / skip."""
+
+    STATUSES = ("ok", "fail", "skip")
+
+    def __init__(self):
+        self.steps = []
+
+    def record(self, name: str, status: str, detail: str = "") -> None:
+        if status not in self.STATUSES:
+            raise ValueError(f"unknown step status: {status!r}")
+        self.steps.append((name, status, detail))
+
+    @property
+    def failed(self) -> bool:
+        return any(status == "fail" for _, status, _ in self.steps)
+
+    def summary_lines(self, mark_map: Optional[dict] = None) -> list:
+        mark_map = mark_map or {"ok": "✓", "fail": "✗", "skip": "~"}
+        lines = []
+        for name, status, detail in self.steps:
+            suffix = f"  ({detail})" if detail else ""
+            lines.append(f"  {mark_map[status]} {name}{suffix}")
+        return lines
+
+
+class InstallAbort(Exception):
+    """Raised to stop the run after a fatal step; the summary still prints."""
+
+
+# ------------------------------------------------------------------ subprocess wrapper
+
+
+def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
+    """Fixed-argv runner, output captured. Tests monkeypatch this symbol."""
+    return subprocess.run(  # argv is a fixed list built here, shell=False  # nosec B603
+        [str(a) for a in argv],
+        cwd=str(cwd) if cwd else None,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+# ------------------------------------------------------------------ pure git helpers
+
+
+def validate_branch(branch: str) -> str:
+    if branch not in BRANCHES:
+        raise ValueError(f"branch must be one of {'/'.join(BRANCHES)}, not {branch!r}")
+    return branch
+
+
+def is_dirty(repo: Path, runner=None) -> bool:
+    """True when `git status --porcelain` reports anything (staged, unstaged or untracked)."""
+    runner = runner or run_cmd
+    proc = runner(["git", "-C", repo, "status", "--porcelain"])
+    if proc.returncode != 0:
+        raise InstallAbort(f"git status failed in {repo}: {proc.stderr.strip()}")
+    return bool(proc.stdout.strip())
+
+
+def commits_ahead(repo: Path, branch: str, runner=None) -> int:
+    """Local commits on HEAD that origin/<branch> does not have (0 on any lookup failure)."""
+    runner = runner or run_cmd
+    proc = runner(["git", "-C", repo, "rev-list", "--count", f"origin/{branch}..HEAD"])
+    if proc.returncode != 0:
+        return 0
+    try:
+        return int(proc.stdout.strip())
+    except ValueError:
+        return 0
+
+
+def looks_like_repo(path: Path) -> bool:
+    return (path / ".git").exists() and (path / ".claude-plugin" / "plugin.json").exists()
+
+
+def decide_mode(explicit: Optional[str], cfg: dict) -> str:
+    """install | update. Explicit wins; else update when the configured clone still exists."""
+    if explicit:
+        return explicit
+    repo = cfg.get("repo_path")
+    if repo and looks_like_repo(Path(repo)):
+        return "update"
+    return "install"
+
+
+# ------------------------------------------------------------------ prompts
+
+
+def ask(prompt: str, default: str, assume_yes: bool) -> str:
+    """One-line prompt with a default; --yes or a closed stdin takes the default."""
+    if assume_yes or not sys.stdin.isatty():
+        return default
+    try:
+        answer = input(f"{prompt} [{default}]: ").strip()
+    except EOFError:
+        return default
+    return answer or default
+
+
+def confirm(prompt: str, default: bool, assume_yes: bool) -> bool:
+    if assume_yes or not sys.stdin.isatty():
+        return default
+    hint = "Y/n" if default else "y/N"
+    try:
+        answer = input(f"{prompt} [{hint}]: ").strip().lower()
+    except EOFError:
+        return default
+    if not answer:
+        return default
+    return answer in ("y", "yes")
+
+
+# ------------------------------------------------------------------ the installer
+
+
+class Installer:
+    def __init__(self, args, style: Style, mark_map: dict):
+        self.args = args
+        self.style = style
+        self.marks = mark_map
+        self.tracker = StepTracker()
+        self.cfg_path = config_path()
+        self.cfg = load_config(self.cfg_path)
+        self.repo: Optional[Path] = None
+        self.branch = "main"
+        self.mode = "install"
+        self.stashed = False
+
+    # ---- console helpers
+
+    def say(self, text: str = "") -> None:
+        print(text)
+
+    def step_header(self, number: int, total: int, title: str) -> None:
+        self.say("")
+        self.say(self.style.cyan(self.style.bold(f"[{number}/{total}] {title}")))
+
+    def step_ok(self, name: str, detail: str = "") -> None:
+        self.tracker.record(name, "ok", detail)
+        suffix = f" {self.style.dim('(' + detail + ')')}" if detail else ""
+        self.say(f"  {self.style.green(self.marks['ok'])} {name}{suffix}")
+
+    def step_skip(self, name: str, detail: str = "") -> None:
+        self.tracker.record(name, "skip", detail)
+        suffix = f" {self.style.dim('(' + detail + ')')}" if detail else ""
+        self.say(f"  {self.style.yellow(self.marks['skip'])} {name}{suffix}")
+
+    def step_fail(self, name: str, detail: str = "", fatal: bool = True) -> None:
+        self.tracker.record(name, "fail", detail)
+        suffix = f" {self.style.dim('(' + detail + ')')}" if detail else ""
+        self.say(f"  {self.style.red(self.marks['fail'])} {name}{suffix}")
+        if fatal:
+            raise InstallAbort(detail or name)
+
+    # ---- steps
+
+    def preflight(self) -> None:
+        if sys.version_info >= (3, 9):
+            self.step_ok(f"Python {sys.version_info.major}.{sys.version_info.minor}")
+        else:
+            self.step_fail("Python version", "3.9 or newer required")
+        if shutil.which("git"):
+            self.step_ok("git found")
+        else:
+            self.step_fail("git", "git is required - install it and re-run")
+        if shutil.which("claude"):
+            self.step_ok("claude CLI found")
+        else:
+            self.step_fail(
+                "claude CLI",
+                f"Claude Code is not on PATH - install it first: {CLAUDE_DOCS_URL}",
+            )
+        try:
+            proc = run_cmd(["git", "ls-remote", "--heads", REPO_URL, "main"], timeout=30)
+            if proc.returncode == 0:
+                self.step_ok("GitHub remote reachable")
+            else:
+                self.step_skip("GitHub remote", "unreachable - clone/fetch may fail")
+        except (subprocess.TimeoutExpired, OSError):
+            self.step_skip("GitHub remote", "check timed out - clone/fetch may fail")
+
+    def choose_branch(self) -> None:
+        default = self.args.branch or self.cfg.get("branch", "main")
+        self.say(self.style.dim("  main = stable releases, dev = latest integrated changes"))
+        while True:
+            picked = ask("  Release channel (main/dev)", default, self.args.yes).lower()
+            try:
+                self.branch = validate_branch(picked)
+                break
+            except ValueError as exc:
+                if self.args.yes or not sys.stdin.isatty():
+                    self.step_fail("Branch choice", str(exc))
+                self.say(f"  {exc}")
+        self.step_ok(f"Channel: {self.branch}")
+
+    def resolve_repo(self) -> None:
+        if self.args.repo:
+            candidate = Path(self.args.repo).expanduser().resolve()
+        elif self.mode == "update":
+            configured = self.cfg.get("repo_path")
+            script_root = Path(__file__).resolve().parents[1]
+            if configured and looks_like_repo(Path(configured)):
+                candidate = Path(configured)
+            elif looks_like_repo(script_root):
+                candidate = script_root
+            else:
+                self.step_fail(
+                    "Locate clone",
+                    "no known clone - run: python scripts/install_helper.py install",
+                )
+                return
+        else:
+            default = self.cfg.get("repo_path", str(DEFAULT_CLONE_DIR))
+            candidate = (
+                Path(ask("  Clone directory", default, self.args.yes)).expanduser().resolve()
+            )
+
+        if looks_like_repo(candidate):
+            self.repo = candidate
+            self.step_ok(f"Using existing clone: {candidate}")
+        elif candidate.exists() and any(candidate.iterdir()):
+            self.step_fail(
+                "Clone directory",
+                f"{candidate} exists and is not a clone of this repo - pick another path",
+            )
+        else:
+            self.say(self.style.dim(f"  Cloning {REPO_URL} ..."))
+            proc = run_cmd(["git", "clone", REPO_URL, candidate], timeout=600)
+            if proc.returncode != 0:
+                err = proc.stderr.strip().splitlines()
+                self.step_fail("Clone repository", err[-1] if err else "git clone failed")
+            self.repo = candidate
+            self.step_ok(f"Cloned to {candidate}")
+
+    def sync_branch(self) -> None:
+        repo = self.repo
+        proc = run_cmd(["git", "-C", repo, "fetch", "origin", self.branch], timeout=300)
+        if proc.returncode != 0:
+            self.step_fail("Fetch origin", proc.stderr.strip() or "git fetch failed")
+        self.step_ok(f"Fetched origin/{self.branch}")
+
+        if is_dirty(repo):
+            self.say(self.style.yellow("  The clone has uncommitted local changes."))
+            if self.args.yes or not sys.stdin.isatty():
+                self.step_fail(
+                    "Working tree",
+                    "dirty - refusing to reset; commit or stash your changes, then re-run",
+                )
+            if confirm("  Stash them and continue?", default=False, assume_yes=False):
+                proc = run_cmd(
+                    [
+                        "git",
+                        "-C",
+                        repo,
+                        "stash",
+                        "push",
+                        "--include-untracked",
+                        "-m",
+                        "install_helper 2026-07-29",
+                    ]
+                )
+                if proc.returncode != 0:
+                    self.step_fail("Stash changes", proc.stderr.strip() or "git stash failed")
+                self.stashed = True
+                self.step_ok("Local changes stashed", "restore later with: git stash pop")
+            else:
+                self.step_fail(
+                    "Working tree",
+                    "dirty - refusing to reset; commit or stash your changes, then re-run",
+                )
+
+        ahead = commits_ahead(repo, self.branch)
+        if ahead:
+            detail = f"{ahead} local commit(s) not on origin/{self.branch}"
+            if self.args.yes or not sys.stdin.isatty():
+                self.step_fail("Local commits", detail + " - refusing to discard them")
+            if not confirm(f"  {detail}. Discard and match origin?", False, False):
+                self.step_fail("Local commits", detail + " - left in place, aborting")
+
+        proc = run_cmd(["git", "-C", repo, "checkout", "-B", self.branch, f"origin/{self.branch}"])
+        if proc.returncode != 0:
+            self.step_fail("Checkout branch", proc.stderr.strip() or "git checkout failed")
+        head = run_cmd(["git", "-C", repo, "rev-parse", "--short", "HEAD"])
+        commit = head.stdout.strip() if head.returncode == 0 else "?"
+        self.step_ok(f"On {self.branch} at {commit}", f"matches origin/{self.branch}")
+
+    def optional_pip(self) -> None:
+        req = self.repo / "requirements-dev.txt"
+        if not req.exists():
+            self.step_skip("Dev requirements", "requirements-dev.txt not present")
+            return
+        wanted = (
+            self.args.pip
+            if self.args.yes
+            else confirm(
+                "  Install optional dev requirements (pytest, render deps)?",
+                default=self.args.pip,
+                assume_yes=False,
+            )
+        )
+        if not wanted:
+            self.step_skip("Dev requirements", "skipped - the plugin works without them")
+            return
+        proc = run_cmd([sys.executable, "-m", "pip", "install", "-r", req], timeout=600)
+        if proc.returncode == 0:
+            self.step_ok("Dev requirements installed")
+        else:
+            # pip may be absent or blocked in locked-down environments; never fatal.
+            self.step_fail(
+                "Dev requirements",
+                "pip install failed - the plugin itself needs no pip packages",
+                fatal=False,
+            )
+
+    def marketplace(self) -> None:
+        if self.mode == "update":
+            proc = run_cmd(["claude", "plugin", "marketplace", "update", MARKETPLACE], timeout=120)
+            if proc.returncode == 0:
+                self.step_ok(f"Marketplace {MARKETPLACE} refreshed")
+                return
+        # Fresh add (install mode, or an update where the marketplace was missing/broken).
+        run_cmd(["claude", "plugin", "marketplace", "remove", MARKETPLACE], timeout=120)
+        proc = run_cmd(["claude", "plugin", "marketplace", "add", self.repo], timeout=120)
+        if proc.returncode != 0:
+            self.step_fail(
+                "Add marketplace",
+                (
+                    proc.stderr.strip()
+                    or proc.stdout.strip()
+                    or "claude plugin marketplace add failed"
+                ),
+            )
+        self.step_ok(f"Marketplace {MARKETPLACE} -> {self.repo}")
+
+    def plugin(self) -> None:
+        if self.mode == "update":
+            proc = run_cmd(["claude", "plugin", "update", PLUGIN_ID], timeout=300)
+            if proc.returncode == 0:
+                self.step_ok(f"Plugin {PLUGIN_ID} updated")
+                return
+        run_cmd(["claude", "plugin", "uninstall", PLUGIN_ID], timeout=120)
+        proc = run_cmd(["claude", "plugin", "install", PLUGIN_ID], timeout=300)
+        if proc.returncode != 0:
+            self.step_fail(
+                "Install plugin",
+                (proc.stderr.strip() or proc.stdout.strip() or "claude plugin install failed"),
+            )
+        self.step_ok(f"Plugin {PLUGIN_ID} installed")
+
+    def persist(self) -> None:
+        self.cfg.update(
+            {"repo_path": str(self.repo), "branch": self.branch, "last_run": "2026-07-29"}
+        )
+        save_config(self.cfg_path, self.cfg)
+        self.step_ok(f"Settings saved to {self.cfg_path}")
+
+    # ---- summary
+
+    def apply_scripts(self) -> list:
+        """apply-*.sh present in the clone - human-run hook/settings steps, listed as reminders."""
+        if not self.repo:
+            return []
+        found = sorted(self.repo.glob("apply-*.sh")) + sorted(
+            (self.repo / "scripts").glob("apply-*.sh")
+        )
+        return [p.relative_to(self.repo).as_posix() for p in found]
+
+    def print_summary(self, aborted: bool) -> None:
+        s = self.style
+        self.say("")
+        self.say(s.bold(s.cyan("Summary " + ("(aborted)" if aborted else ""))))
+        for line in self.tracker.summary_lines(self.marks):
+            self.say(line)
+        if self.stashed:
+            self.say(s.yellow("  Your local changes are stashed: git stash pop to restore."))
+        if aborted:
+            self.say("")
+            self.say("Fix the failed step above and re-run - the helper is safe to repeat.")
+            return
+        self.say("")
+        self.say(s.bold("Still yours to do by hand:"))
+        self.say(
+            "  1. Enable per project: from each project that should have the team, run /plugin\n"
+            "     inside Claude Code (or, from that project's directory:\n"
+            f"     claude plugin enable --scope project {PLUGIN_ID}).\n"
+            "     If /plugin shows it enabled at user scope, disable it there - per-project\n"
+            "     enablement is the README's token-economy step."
+        )
+        applies = self.apply_scripts()
+        if self.branch == "dev" and applies:
+            self.say(
+                "  2. Staged hook improvements are applied by a human, never by this helper\n"
+                "     (ADR-002: hook and settings edits are human acts). From the clone, review\n"
+                "     and run the ones you want:"
+            )
+            for rel in applies:
+                self.say(f"       bash {rel}  - see the script header for what it wires")
+        self.say("  3. Restart Claude Code so the new plugin version loads.")
+        self.say("")
+        self.say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
+
+    # ---- orchestration
+
+    def run(self) -> int:
+        s = self.style
+        self.say(s.bold(s.cyan("Compliance Surveillance Team - plugin install helper")))
+        self.mode = decide_mode(self.args.mode, self.cfg)
+        self.say(s.dim(f"Mode: {self.mode} (config: {self.cfg_path})"))
+        total = 7
+        aborted = False
+        try:
+            self.step_header(1, total, "Preflight checks")
+            self.preflight()
+            self.step_header(2, total, "Release channel")
+            self.choose_branch()
+            self.step_header(3, total, "Local clone")
+            self.resolve_repo()
+            self.step_header(4, total, f"Sync to origin/{self.branch}")
+            self.sync_branch()
+            self.step_header(5, total, "Optional pip requirements")
+            self.optional_pip()
+            self.step_header(6, total, "Claude Code marketplace")
+            self.marketplace()
+            self.step_header(
+                7, total, "Plugin " + ("update" if self.mode == "update" else "install")
+            )
+            self.plugin()
+            self.persist()
+        except InstallAbort:
+            aborted = True
+        except subprocess.TimeoutExpired as exc:
+            self.tracker.record("Command timed out", "fail", str(exc.cmd))
+            aborted = True
+        self.print_summary(aborted)
+        return 1 if aborted else 0
+
+
+# ------------------------------------------------------------------ CLI
+
+
+def parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="install_helper",
+        description="Install or update the compliance-surveillance-team Claude Code plugin.",
+    )
+    parser.add_argument(
+        "mode",
+        nargs="?",
+        choices=["install", "update"],
+        default=None,
+        help="install = fresh clone + plugin install; update = sync an existing clone; "
+        "default auto-detects from the saved config",
+    )
+    parser.add_argument("--branch", choices=list(BRANCHES), help="release channel (main = stable)")
+    parser.add_argument("--repo", help="path to the clone (overrides the saved location)")
+    parser.add_argument("--yes", action="store_true", help="non-interactive, safe defaults")
+    parser.add_argument(
+        "--pip",
+        action="store_true",
+        help="with --yes: also pip-install requirements-dev.txt (default: skip)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
+    style = Style(supports_color())
+    return Installer(args, style, marks()).run()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
