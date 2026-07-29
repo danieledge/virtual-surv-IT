@@ -92,6 +92,8 @@ mapping recur that should be standardised? Record it here before the engagement 
 **Disposition tally:** ✅ _N_ Fixed/Answered · 🔴 _N_ Open · ⏭️ _N_ Deferred/Needs-input · ⚖️ _N_ Accepted - across the impacted scenarios/controls in §7. *(Severity / disposition / evidence-basis legends: see `docs/WAYS-OF-WORKING.md`.)*
 
 ## 10. Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | SME | | | |

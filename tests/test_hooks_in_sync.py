@@ -15,7 +15,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 def _pretooluse(path: Path):
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     hooks = data.get("hooks", data)  # settings.json nests under "hooks"; hooks.json also does
     return hooks["PreToolUse"]
 

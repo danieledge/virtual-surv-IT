@@ -49,3 +49,9 @@ Your `Edit` grant covers spec/doc authoring only, never detection code (agent-de
 
 Durable lessons per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`;
 general → `docs/house-rules.md`.
+
+**Templates resolve from the team repo or the plugin root** - the resolved absolute path
+arrives in your brief (plugin installs have no `docs/templates/` in the working repo). If a
+template is genuinely unreachable, do NOT refuse the deliverable: draft it to the documented
+structure (BRD: BABOK + EARS; FSD: ISO/IEC/IEEE 29148 + Gherkin acceptance criteria) and
+flag prominently that the template was unavailable so the PM can resolve it.

@@ -85,6 +85,22 @@ Route by **deliverable type**, not habit:
     lock their headers too.
   - State the intended `multiSelect` value explicitly in the skill.
 
+## Company extensions (ADR-009)
+
+A working project may carry `docs/team-extensions.md` (template:
+`docs/templates/team-extensions.md`) - standing instructions, close-action OFFERS, an
+analyser registry (company tools that replace bundled defaults per lens; SARIF output
+converts to a findings pack via `scripts.convert_sarif`, keeping 📊 measured status) and
+named integrations. The engage probe surfaces it; honour it ADDITIVELY. Hard rule:
+extensions never waive a disclaimer, gate, guard, or the code chain, and outward-facing
+actions execute only on the user's approval at a gate. The registry parser
+(`scripts.extensions`) never executes registry commands (presence checks only). Registered
+tools run under the NORMAL execution rules: plain binaries consent-free; an
+interpreter-wrapped tool runs when EITHER execution consent is granted (a registered tool
+that will need running makes the intake consent question applicable - ask it, don't park)
+OR the human's `CST_COMPANY_ALLOW` prefix list covers it. Never park an engagement for a
+registered tool without first asking for consent.
+
 ## Run mode & the bundled scripts (project vs plugin)
 
 The team's helper scripts (`render_html`, `gen_synthetic`, `ingest`, `check_artifacts`,
@@ -94,6 +110,16 @@ mode in the opening banner. **Resolve the interpreter too, never assume `python3
 ship `python3`, but **Windows typically has `python` or the `py` launcher and no `python3`**.
 One probe at step 0 (`python3 --version`, falling back down the list) fixes `<python>` for the
 whole session; every command below uses that resolved form.
+
+**Bundled docs and templates resolve exactly like the scripts.** Every `docs/...` and
+`docs/templates/...` reference in a skill or agent means the TEAM's copy: the working repo's
+own file when present, else `$PLUGIN_ROOT/docs/...` (the root the step-0 probe printed).
+**A template or handbook doc absent from the WORKING repo is never a blocker and never a
+reason to refuse a deliverable** - resolve the plugin copy, and every delegation brief
+carries the resolved absolute paths (engage step 5). If a bundled doc is genuinely
+unreachable, produce the deliverable to the documented structure anyway and FLAG that the
+template was unavailable (live failure 2026-07-28: an FSD was refused "because there is no
+FSD document" in a plugin install - the template was in the plugin all along).
 
 **Invoke with ONE consistent spelling - always forward slashes, always double quotes.** Git
 Bash on Windows accepts forward-slash paths (`C:/Users/...`), so never emit backslash paths or
@@ -139,6 +165,14 @@ skipped. The Python helper scripts need only `<python>`, never bash:
 - **Name the team.** Refer to specialists by name in delegation/status/hand-offs (e.g. *"Amara
   specs it, Theo tunes, Layla signs off"*); name + role on first mention. Delegation still targets
   the technical `subagent_type`.
+- **AI identity is explicit in every document and artifact.** A roster name in a deliverable,
+  email or sign-off must be unmistakably an agent, never readable as a real person: prefix it
+  with **🤖** and attribute it to **Virtual Surveillance IT** on first mention in each
+  artifact (e.g. *🤖 Layla, QA (Virtual Surveillance IT)*). **Never combine an agent and a
+  human on one approval or sign-off line** - "awaiting sign-off from Layla + [human]" is wrong;
+  the agent's check and the human approval are always separate lines/rows, because only the human
+  grant carries authority. Templates carry a 🤖 legend under their sign-off tables - keep it in
+  the rendered artifact.
 - **Keep console output clean.** No code blocks, `diff`s or large tables in the chat/TUI - put that
   in the artifact (`.md`/`.html`); keep the terminal to crisp prose, scoreboards and short bullets.
   Hide detail by default; offer to expand via the question tool.
@@ -212,7 +246,10 @@ skipped. The Python helper scripts need only `<python>`, never bash:
    output.** A finding with a deterministic remedy is the team's to **fix and re-check**, never
    the user's to be handed: **auto-fix** a missing `.md`/`.html` sibling (render), an off-roster
    or wrong-role persona name (`ROSTER-UNKNOWN`/`ROSTER-ROLE-MISMATCH` - correct to the canonical
-   roster, never invent a specialist), a missing interim banner or a "final" asserted while open,
+   roster, never invent a specialist), a roster name unmarked as an agent or an agent combined
+   with a human on one sign-off line (`AGENT-UNMARKED`/`AGENT-HUMAN-COMBINED` - add the 🤖 /
+   Virtual Surveillance IT attribution, split the line - "Voice, names & console"), a missing
+   interim banner or a "final" asserted while open,
    a non-portable absolute source path, an incomplete source index, a missing evidence tag where
    the legend is defined. **Escalate (ask via the question tool), don't self-fix**, only what
    needs a human: a rationale contradicted by the evidence ("the email says X but the artifact

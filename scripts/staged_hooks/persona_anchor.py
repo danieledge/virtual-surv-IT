@@ -78,10 +78,10 @@ def _open_engagements(artifacts: Path) -> list[tuple[str, str]]:
     packs: list[tuple[str, Path]] = []
     try:
         packs = sorted(
-            (p.name, p) for p in artifacts.iterdir()
-            if p.is_dir() and (
-                (p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file()
-            )
+            (p.name, p)
+            for p in artifacts.iterdir()
+            if p.is_dir()
+            and ((p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file())
         )
     except OSError:
         pass

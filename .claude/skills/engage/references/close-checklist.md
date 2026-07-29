@@ -93,3 +93,12 @@ never verbatim reviewed-code text, and never data values, secrets, PII or MNPI (
 ~200 lines - link to artifacts for detail. `check_artifacts` validates its hygiene mechanically.
 An append-only map is a defect: if nothing was corrected or deprecated across several engagements,
 say so and check harder.
+
+## Company extension close actions (ADR-009)
+
+If the working project carries `docs/team-extensions.md` with a **Close actions** section,
+offer each action via the question tool AFTER the summary email is written (they were
+previewed at the go-ahead gate). Outward-facing actions (raise a Jira, upload/publish the
+pack) run only on approval and only against the ✅ closed pack - never interim artifacts,
+never secrets. Log each executed action with `engagement_state log-note`. An extension can
+never replace a close step - these are additions after the standard close completes.

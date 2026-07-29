@@ -50,7 +50,9 @@ import json
 import os
 import re
 import shutil
-import subprocess
+
+# Sandbox setup (rsync, git init) - every call is fixed argv, no shell, local eval harness.
+import subprocess  # nosec B404
 import sys
 import time
 from dataclasses import dataclass, field
@@ -195,13 +197,24 @@ def build_sandbox(dest: Path) -> None:
     for ex in SANDBOX_EXCLUDES:
         args += ["--exclude", ex]
     args += [f"{REPO_ROOT}/", f"{dest}/"]
-    subprocess.run(args, check=True, capture_output=True)
+    # Fixed argv, no shell.
+    subprocess.run(args, check=True, capture_output=True)  # nosec B603
     (dest / "data" / "raw").mkdir(parents=True, exist_ok=True)
     (dest / "artifacts").mkdir(exist_ok=True)
-    env_git = ["git", "-C", str(dest), "-c", "user.email=eval@local", "-c", "user.name=eval-harness"]
-    subprocess.run([*env_git[:3], "init", "-q"], check=True, capture_output=True)
-    subprocess.run([*env_git, "add", "-A"], check=True, capture_output=True)
-    subprocess.run([*env_git, "commit", "-qm", "eval sandbox baseline"], check=True, capture_output=True)
+    env_git = [
+        "git",
+        "-C",
+        str(dest),
+        "-c",
+        "user.email=eval@local",
+        "-c",
+        "user.name=eval-harness",
+    ]
+    subprocess.run([*env_git[:3], "init", "-q"], check=True, capture_output=True)  # nosec B603
+    subprocess.run([*env_git, "add", "-A"], check=True, capture_output=True)  # nosec B603
+    subprocess.run(  # nosec B603
+        [*env_git, "commit", "-qm", "eval sandbox baseline"], check=True, capture_output=True
+    )
 
 
 # --------------------------------------------------------------------------- LLM calls
@@ -268,7 +281,9 @@ async def answer_questions(
         if q_text not in answers or not answers[q_text]:
             opts = q.get("options") or []
             answers[q_text] = opts[0]["label"] if opts else "Proceed"
-        sim_log.exchanges.append({"question": q_text, "header": q.get("header"), "answer": answers[q_text]})
+        sim_log.exchanges.append(
+            {"question": q_text, "header": q.get("header"), "answer": answers[q_text]}
+        )
         _maybe_grant_consent(q, answers[q_text], sandbox, sim_log)
     return answers
 
@@ -279,7 +294,9 @@ def _flatten_answer(value: Any) -> str:
     return str(value)
 
 
-def _maybe_grant_consent(question: dict, answer: str, sandbox: Path, sim_log: SimTranscript) -> None:
+def _maybe_grant_consent(
+    question: dict, answer: str, sandbox: Path, sim_log: SimTranscript
+) -> None:
     """The human-side act the sim's 'yes' stands for: the HARNESS creates the marker.
 
     The session-under-test remains blocked from writing it (guard-consent-writes.py);
@@ -320,6 +337,7 @@ async def run_engage_session(
     max_budget: float | None,
     sim_log: SimTranscript,
     workflow_cmd: str = "/engage",
+    extra_env: dict[str, str] | None = None,
 ) -> SessionCapture:
     from claude_agent_sdk import (
         AssistantMessage,
@@ -345,9 +363,7 @@ async def run_engage_session(
                     f"\n[gate] {q.get('header', '?')}: {q.get('question', '')}\n"
                     f"[user] {answers.get(q.get('question', ''), '')}\n"
                 )
-            return PermissionResultAllow(
-                updated_input={"questions": questions, "answers": answers}
-            )
+            return PermissionResultAllow(updated_input={"questions": questions, "answers": answers})
         return PermissionResultAllow(updated_input=input_data)
 
     options = ClaudeAgentOptions(
@@ -360,7 +376,10 @@ async def run_engage_session(
         can_use_tool=can_use_tool,
         max_turns=max_turns,
         max_budget_usd=max_budget,
-        env=_session_env(),
+        # Per-case env (expected.yaml `session_env:`) lets a golden case exercise
+        # human-side environment mechanisms (e.g. CST_COMPANY_ALLOW) - the harness is the
+        # human here, same standing as the consent-marker creation (ADR-002).
+        env={**_session_env(), **(extra_env or {})},
         # Headless runs otherwise bash-sandbox with no network and no user-site packages
         # (observed: `import markdown` failed inside the session while fine outside, so
         # render_html "could not" run). Interactive engagements are not sandboxed like
@@ -449,7 +468,9 @@ async def run_engage_session(
                 if isinstance(block, TextBlock):
                     cap.transcript.append(block.text)
                 elif isinstance(block, ToolUseBlock) and block.name != "AskUserQuestion":
-                    hint = str(block.input.get("description") or block.input.get("subagent_type") or "")[:120]
+                    hint = str(
+                        block.input.get("description") or block.input.get("subagent_type") or ""
+                    )[:120]
                     cap.transcript.append(f"\n[tool] {block.name} {hint}\n")
         elif isinstance(message, ResultMessage):
             # A result can arrive MID-RUN with subagent tasks still in flight (the CLI
@@ -481,18 +502,26 @@ def probe_artifacts(sandbox: Path) -> list[dict]:
     # 0.31 workspaces: an engagement's pack may live at artifacts/<slug>/ instead of the
     # flat root - probe every pack (flat root first for pre-0.31 runs).
     packs = [art] + sorted(
-        p for p in art.iterdir()
-        if p.is_dir() and (p / "engagement-state.json").is_file()
+        p for p in art.iterdir() if p.is_dir() and (p / "engagement-state.json").is_file()
     )
 
     for txt in sorted(art.rglob("*.txt")):
         body = txt.read_text(encoding="utf-8", errors="ignore")
         if "morgan" in body.lower():
-            title = 'engagement-summary email written as .txt, signed as Morgan'
-            if '"hi,"' in body.lower() or body.lstrip().lower().startswith("hi,") or "\nhi," in body.lower():
+            title = "engagement-summary email written as .txt, signed as Morgan"
+            if (
+                '"hi,"' in body.lower()
+                or body.lstrip().lower().startswith("hi,")
+                or "\nhi," in body.lower()
+            ):
                 title += ", opens 'Hi,'"
             findings.append(
-                {"severity": "warning", "location": f"artifacts/{txt.name}", "title": title, "kind": "artifact"}
+                {
+                    "severity": "warning",
+                    "location": f"artifacts/{txt.name}",
+                    "title": title,
+                    "kind": "artifact",
+                }
             )
 
     for pack in packs:
@@ -500,9 +529,7 @@ def probe_artifacts(sandbox: Path) -> list[dict]:
         start_here = pack / "START-HERE.md"
         if start_here.is_file():
             text = start_here.read_text(encoding="utf-8", errors="ignore")
-            status = next(
-                (ln.strip() for ln in text.splitlines() if "status" in ln.lower()), ""
-            )
+            status = next((ln.strip() for ln in text.splitlines() if "status" in ln.lower()), "")
             findings.append(
                 {
                     "severity": "warning",
@@ -629,7 +656,10 @@ def _artifact_listing(sandbox: Path) -> str:
     art = sandbox / "artifacts"
     if not art.is_dir():
         return "(no artifacts/ directory)"
-    return "\n".join(str(p.relative_to(sandbox)) for p in sorted(art.rglob("*")) if p.is_file()) or "(empty)"
+    return (
+        "\n".join(str(p.relative_to(sandbox)) for p in sorted(art.rglob("*")) if p.is_file())
+        or "(empty)"
+    )
 
 
 async def normalize(transcript: str, listing: str, model: str) -> list[dict]:
@@ -638,7 +668,9 @@ async def normalize(transcript: str, listing: str, model: str) -> list[dict]:
         model,
     )
     findings = [
-        f for f in _extract_json(reply).get("findings", []) if isinstance(f, dict) and f.get("title")
+        f
+        for f in _extract_json(reply).get("findings", [])
+        if isinstance(f, dict) and f.get("title")
     ]
     # Behaviour observations are facts, not graded defects - but the process manifests
     # set a min_severity: warning floor, and a normalizer that files them as
@@ -684,7 +716,9 @@ async def run_case(
     # re-invokes the front door, its scenario_override is the uncoached continue ask.
     workflow_cmd = "/engage" if scenario_override else case_workflow(case_id)
     persona_file = case_dir / "driver.md"
-    persona = (persona_file if persona_file.is_file() else DEFAULT_PERSONA).read_text(encoding="utf-8")
+    persona = (persona_file if persona_file.is_file() else DEFAULT_PERSONA).read_text(
+        encoding="utf-8"
+    )
     rubric = (RUBRICS_ROOT / f"{manifest['rubric']}.md").read_text(encoding="utf-8")
 
     out_dir = run_root / (f"{case_id}-resume" if sandbox_override else case_id)
@@ -705,7 +739,8 @@ async def run_case(
         # resume - the kept sandbox IS the state.
         fixtures = case_dir / "fixtures"
         if fixtures.is_dir():
-            subprocess.run(
+            # Fixed argv; rsync deliberately resolved from PATH.
+            subprocess.run(  # nosec B603 B607
                 ["rsync", "-a", f"{fixtures}/", f"{sandbox}/"], check=True, capture_output=True
             )
     ensure_workspace_trust(sandbox)
@@ -713,19 +748,33 @@ async def run_case(
     sim_log = SimTranscript()
     cap = SessionCapture()
     started = time.monotonic()
-    print(f"  [{case_id}] running live /engage session (cap {args.max_turns} turns"
-          f"{f', ${args.max_budget}' if args.max_budget else ''})...")
+    print(
+        f"  [{case_id}] running live /engage session (cap {args.max_turns} turns"
+        f"{f', ${args.max_budget}' if args.max_budget else ''})..."
+    )
     try:
         await asyncio.wait_for(
             run_engage_session(
-                cap, scenario, sandbox, persona, args.sim_model, args.max_turns, args.max_budget, sim_log,
+                cap,
+                scenario,
+                sandbox,
+                persona,
+                args.sim_model,
+                args.max_turns,
+                args.max_budget,
+                sim_log,
                 workflow_cmd=workflow_cmd,
+                extra_env={str(k): str(v) for k, v in (manifest.get("session_env") or {}).items()},
             ),
-            timeout=args.timeout if args.timeout > 0 else None,  # 0 = no wall clock; budget is the stop
+            timeout=args.timeout
+            if args.timeout > 0
+            else None,  # 0 = no wall clock; budget is the stop
         )
     except asyncio.TimeoutError:
         cap.timed_out = True
-        print(f"  [{case_id}] TIMED OUT after {args.timeout}s - scoring what exists", file=sys.stderr)
+        print(
+            f"  [{case_id}] TIMED OUT after {args.timeout}s - scoring what exists", file=sys.stderr
+        )
     except Exception as exc:  # session died - score whatever it left behind, report the error
         cap.is_error = True
         cap.error = f"{type(exc).__name__}: {exc}"
@@ -740,7 +789,9 @@ async def run_case(
         "\n".join(json.dumps(e) for e in cap.events), encoding="utf-8"
     )
     (out_dir / "gates.json").write_text(
-        json.dumps({"consent_granted": sim_log.consent_granted, "exchanges": sim_log.exchanges}, indent=2),
+        json.dumps(
+            {"consent_granted": sim_log.consent_granted, "exchanges": sim_log.exchanges}, indent=2
+        ),
         encoding="utf-8",
     )
 
@@ -791,8 +842,13 @@ async def score_run(
             findings += normalized
             break
         if attempt == 2:
-            print(f"  [{case_id}] normalizer empty twice - deterministic findings only", file=sys.stderr)
-    (out_dir / "findings.json").write_text(json.dumps({"findings": findings}, indent=2), encoding="utf-8")
+            print(
+                f"  [{case_id}] normalizer empty twice - deterministic findings only",
+                file=sys.stderr,
+            )
+    (out_dir / "findings.json").write_text(
+        json.dumps({"findings": findings}, indent=2), encoding="utf-8"
+    )
 
     expected = {k: v for k, v in manifest.items() if not k.startswith("_")}
     det = score(expected, findings)
@@ -804,7 +860,8 @@ async def score_run(
                 judge_result = await judge(transcript, listing, rubric, args.aux_model)
                 break
             except Exception as exc:
-                judge_result = {"error": f"{type(exc).__name__}: {exc}", "pass": False}
+                # "pass" below is the rubric verdict key, not a password (B105 false positive)
+                judge_result = {"error": f"{type(exc).__name__}: {exc}", "pass": False}  # nosec
                 print(f"  [{case_id}] judge attempt {attempt} failed: {exc}", file=sys.stderr)
 
     return {
@@ -833,26 +890,63 @@ def _write_report(run_root: Path, results: list[dict]) -> Path:
             f"| {jscore} | {r['gates_answered']} | {r.get('cost_usd') or '?'} | {r.get('num_turns') or '?'} |"
         )
     n_pass = sum(r["passed"] for r in results)
-    lines += ["", f"**{n_pass}/{len(results)} passed.** Per-case detail: `<case>/transcript.md`, "
-              "`findings.json`, `score.json`, `gates.json`."]
+    lines += [
+        "",
+        f"**{n_pass}/{len(results)} passed.** Per-case detail: `<case>/transcript.md`, "
+        "`findings.json`, `score.json`, `gates.json`.",
+    ]
     report = run_root / "report.md"
     report.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return report
 
 
 # --------------------------------------------------------------------------- main
+def _acquire_driver_lock() -> Path | None:
+    """Single-driver lock (2026-07-28 incident: two concurrent drivers fight over the shared
+    workspace-trust config in ~/.claude.json, so the loser's session runs UNTRUSTED - no
+    project settings, no skills, no gates - while still spending tokens). Returns the lock
+    path when acquired; raises SystemExit when another live driver holds it."""
+    lock = RUNS_ROOT / ".driver.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    if lock.is_file():
+        try:
+            pid = int(lock.read_text().strip())
+            os.kill(pid, 0)  # signal 0: existence check only
+        except (ValueError, ProcessLookupError, PermissionError):
+            lock.unlink(missing_ok=True)  # stale lock from a dead driver
+        else:
+            print(
+                f"another eval driver is already running (pid {pid}) - concurrent drivers "
+                "corrupt each other's workspace trust; wait for it or stop it first",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+    lock.write_text(str(os.getpid()), encoding="utf-8")
+    return lock
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Run live /engage eval cases headlessly and score them.")
+    ap = argparse.ArgumentParser(
+        description="Run live /engage eval cases headlessly and score them."
+    )
     ap.add_argument("--case", action="append", default=[], help="case id (repeatable)")
     ap.add_argument("--all-engage", action="store_true", help="every case with workflow: /engage")
     ap.add_argument("--list", action="store_true", help="list runnable cases and exit")
     ap.add_argument("--max-turns", type=int, default=100, help="session turn cap (default 100)")
-    ap.add_argument("--timeout", type=int, default=2400, help="per-case wall clock seconds (default 2400)")
-    ap.add_argument("--max-budget", type=float, default=None, help="per-case USD cap (SDK max_budget_usd)")
-    ap.add_argument("--sim-model", default="sonnet", help="model playing the stakeholder (default sonnet)")
+    ap.add_argument(
+        "--timeout", type=int, default=2400, help="per-case wall clock seconds (default 2400)"
+    )
+    ap.add_argument(
+        "--max-budget", type=float, default=None, help="per-case USD cap (SDK max_budget_usd)"
+    )
+    ap.add_argument(
+        "--sim-model", default="sonnet", help="model playing the stakeholder (default sonnet)"
+    )
     ap.add_argument("--aux-model", default="sonnet", help="normalizer/judge model (default sonnet)")
     ap.add_argument("--skip-judge", action="store_true", help="deterministic scoring only")
-    ap.add_argument("--keep-sandbox", action="store_true", help="keep each case's sandbox for inspection")
+    ap.add_argument(
+        "--keep-sandbox", action="store_true", help="keep each case's sandbox for inspection"
+    )
     ap.add_argument(
         "--resume-run",
         help="path to a saved run's <case> dir with a KEPT sandbox: launch a fresh session in "
@@ -870,6 +964,11 @@ def main() -> int:
     if args.list:
         print("\n".join(available))
         return 0
+
+    lock = _acquire_driver_lock()
+    import atexit
+
+    atexit.register(lambda: lock.unlink(missing_ok=True))
 
     if args.rescore:
         out_dir = Path(args.rescore).resolve()
@@ -909,7 +1008,9 @@ def main() -> int:
         run_root.mkdir(parents=True, exist_ok=True)
         print(f"run dir: {run_root}")
         result = asyncio.run(
-            run_case(case_id, args, run_root, sandbox_override=sandbox, scenario_override=_RESUME_PROMPT)
+            run_case(
+                case_id, args, run_root, sandbox_override=sandbox, scenario_override=_RESUME_PROMPT
+            )
         )
         det = result["deterministic"]
         print(
@@ -929,7 +1030,10 @@ def main() -> int:
     try:
         import claude_agent_sdk  # noqa: F401
     except ImportError:
-        print("claude-agent-sdk not importable - activate the repo venv: . .venv/bin/activate", file=sys.stderr)
+        print(
+            "claude-agent-sdk not importable - activate the repo venv: . .venv/bin/activate",
+            file=sys.stderr,
+        )
         return 2
 
     run_root = RUNS_ROOT / _now_utc()

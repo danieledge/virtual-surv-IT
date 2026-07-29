@@ -86,6 +86,8 @@ Scenario: <false-positive control - benign activity is not flagged>
 Items the PM is clarifying with the user.
 
 ## 12. Approvals
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 
@@ -93,6 +95,8 @@ Items the PM is clarifying with the user.
 > and the regulatory obligation in the RTM.
 
 ## Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Author / owner | | | |

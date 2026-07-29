@@ -10,7 +10,9 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 >
 > - **AUTO-FIX (correct it and re-run - never surface as a delivered failure):** a missing
 >   `.md`/`.html` sibling (render it) · an off-roster or wrong-role persona name (correct to the
->   canonical roster - `ROSTER-UNKNOWN`/`ROSTER-ROLE-MISMATCH`) · a missing interim banner or a
+>   canonical roster - `ROSTER-UNKNOWN`/`ROSTER-ROLE-MISMATCH`) · a roster name readable as a real
+>   person or an agent sharing a sign-off line with a human (add the 🤖 / Virtual Surveillance IT
+>   attribution, split the line - `AGENT-UNMARKED`/`AGENT-HUMAN-COMBINED`) · a missing interim banner or a
 >   "final/v1.0" asserted while the engagement is still open (set the correct state) · a
 >   non-portable absolute path cited as a source (relativise or mark it external) · an incomplete
 >   or miscounted source index (recount) · a missing per-finding evidence tag where the legend is

@@ -61,6 +61,8 @@ Logging, monitoring, retention, failure modes, and how to recover.
 RTM, review report, performance report, QA handover, scenario/spec docs.
 
 ## Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Author / owner | | | |

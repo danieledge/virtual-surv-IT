@@ -112,9 +112,7 @@ def workspace_states(root: Path) -> list[Path]:
     if not root.is_dir():
         return []
     return sorted(
-        p / STATE_FILENAME
-        for p in root.iterdir()
-        if p.is_dir() and (p / STATE_FILENAME).is_file()
+        p / STATE_FILENAME for p in root.iterdir() if p.is_dir() and (p / STATE_FILENAME).is_file()
     )
 
 
@@ -129,8 +127,16 @@ def scan_engagements(root: Path) -> list[dict]:
         try:
             state = load_state(pack)
         except Exception:
-            rows.append({"slug": slug, "title": "(unreadable state)", "status": "invalid",
-                         "profile": None, "opened": None, "closed": None})
+            rows.append(
+                {
+                    "slug": slug,
+                    "title": "(unreadable state)",
+                    "status": "invalid",
+                    "profile": None,
+                    "opened": None,
+                    "closed": None,
+                }
+            )
             continue
         eng = state.get("engagement") or {}
         rows.append(
@@ -158,8 +164,7 @@ def render_registry(root: Path) -> list[Path]:
         return []
     root.mkdir(parents=True, exist_ok=True)
     json_path.write_text(
-        json.dumps({"derived": True, "engagements": rows}, ensure_ascii=False, indent=2)
-        + "\n",
+        json.dumps({"derived": True, "engagements": rows}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     emoji = {"in_progress": "⏳", "blocked": "⛔", "closed": "✅", "invalid": "❗"}
@@ -190,12 +195,17 @@ def render_registry(root: Path) -> list[Path]:
         md_text = md_path.read_text(encoding="utf-8")
         html_path = md_path.with_suffix(".html")
         html_path.write_text(
-            render(md_text, _title_from(md_text, md_path.stem), source=md_path.name,
-                   generated=_dt.date.today().isoformat()),
+            render(
+                md_text,
+                _title_from(md_text, md_path.stem),
+                source=md_path.name,
+                generated=_dt.date.today().isoformat(),
+            ),
             encoding="utf-8",
         )
         written.append(html_path)
-    except Exception:
+    # The HTML mirror is best-effort; the .md/.json are already written.
+    except Exception:  # nosec B110
         pass
     return written
 
@@ -230,8 +240,7 @@ def resolve_pack_dir(args: argparse.Namespace) -> Path:
         return root  # nothing yet - flat semantics (init resolves its own target)
     names = ", ".join(c.name if c != root else "(flat)" for c in candidates)
     print(
-        f"multiple engagements in {root} ({names}) - say which with --slug <name> "
-        f"(or --dir)",
+        f"multiple engagements in {root} ({names}) - say which with --slug <name> (or --dir)",
         file=sys.stderr,
     )
     raise SystemExit(2)
@@ -283,9 +292,7 @@ def validate_state(state: dict) -> list[str]:
         )
 
     if state.get("schema") not in _ACCEPTED_SCHEMAS:
-        problems.append(
-            f"schema must be one of {_ACCEPTED_SCHEMAS} (got {state.get('schema')!r})"
-        )
+        problems.append(f"schema must be one of {_ACCEPTED_SCHEMAS} (got {state.get('schema')!r})")
 
     eng = state.get("engagement")
     if not isinstance(eng, dict):
@@ -311,16 +318,12 @@ def validate_state(state: dict) -> list[str]:
         problems.append(f"profile must be one of {_PROFILES} (got {profile!r})")
 
     outstanding = state.get("outstanding")
-    if not isinstance(outstanding, list) or not all(
-        isinstance(i, str) and i for i in outstanding
-    ):
+    if not isinstance(outstanding, list) or not all(isinstance(i, str) and i for i in outstanding):
         problems.append("'outstanding' must be a list of non-empty strings")
     elif status == "closed" and outstanding:
         problems.append("status is 'closed' but 'outstanding' is not empty")
     elif status == "blocked" and outstanding == []:
-        problems.append(
-            "status is 'blocked' but 'outstanding' is empty - record what it waits on"
-        )
+        problems.append("status is 'blocked' but 'outstanding' is empty - record what it waits on")
 
     # Schema v2: the log is for completion notes and events; outstanding is ONLY open work
     # (2026-07-26 live run parked "Fix cycle 3 COMPLETE" notes in outstanding, inflating it
@@ -398,8 +401,7 @@ def validate_state(state: dict) -> list[str]:
 
     decisions = state.get("decisions")
     if decisions is not None and not (
-        isinstance(decisions, dict)
-        and all(isinstance(v, str) for v in decisions.values())
+        isinstance(decisions, dict) and all(isinstance(v, str) for v in decisions.values())
     ):
         problems.append("'decisions' must be an object of string values")
 
@@ -444,9 +446,7 @@ def render_markdown(state: dict) -> str:
     lines: list[str] = []
     lines.append(f"# START HERE - {eng.get('title', '')}")
     lines.append("")
-    lines.append(
-        "> **Generated view - do not hand-edit.** The machine-readable source of truth is"
-    )
+    lines.append("> **Generated view - do not hand-edit.** The machine-readable source of truth is")
     lines.append(
         "> [`engagement-state.json`](engagement-state.json) (schema v1, ADR-006). Update the"
     )
@@ -611,9 +611,7 @@ def _write_state(artifacts_dir: Path, state: dict) -> None:
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     target = state_path(artifacts_dir)
     tmp = target.with_suffix(".json.tmp")
-    tmp.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, target)
     for path in render_files(artifacts_dir):
         print(f"wrote {path}")
@@ -766,9 +764,7 @@ def _cmd_resolve_outstanding(args: argparse.Namespace) -> int:
 
 
 def _cmd_set_decision(args: argparse.Namespace) -> int:
-    return _mutate(
-        args, lambda s: s.setdefault("decisions", {}).__setitem__(args.key, args.value)
-    )
+    return _mutate(args, lambda s: s.setdefault("decisions", {}).__setitem__(args.key, args.value))
 
 
 def _cmd_log_note(args: argparse.Namespace) -> int:
@@ -945,9 +941,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("text")
     p.set_defaults(fn=_cmd_add_outstanding)
 
-    p = sub.add_parser(
-        "resolve-outstanding", help="remove outstanding items matching a substring"
-    )
+    p = sub.add_parser("resolve-outstanding", help="remove outstanding items matching a substring")
     p.add_argument("substring")
     p.set_defaults(fn=_cmd_resolve_outstanding)
 
@@ -956,9 +950,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("value")
     p.set_defaults(fn=_cmd_set_decision)
 
-    p = sub.add_parser(
-        "log-note", help="append a dated event/completion note to the log (renders)"
-    )
+    p = sub.add_parser("log-note", help="append a dated event/completion note to the log (renders)")
     p.add_argument("text")
     p.set_defaults(fn=_cmd_log_note)
 

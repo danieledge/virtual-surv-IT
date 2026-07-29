@@ -102,6 +102,8 @@ visibly open; they never dissolve.
 > BRD → FSD → code → test → obligation. Keep the RTM updated as these firm up.
 
 ## Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Author / owner | | | |

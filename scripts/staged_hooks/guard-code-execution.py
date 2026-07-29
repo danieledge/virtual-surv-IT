@@ -126,8 +126,27 @@ _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 #     would pass - accepted residual, consistent with ADR-002's threat model.)
 _TEAM_SCRIPT_NAMES = (
     r"(?:render_html|convert_file|ingest|gen_synthetic|synthesise|validate_masking|validate_manifest"
-    r"|check_citations|eval_score|calibrate_spoofing|check_artifacts|engagement_state)\.py"
+    r"|check_citations|eval_score|calibrate_spoofing|check_artifacts|engagement_state"
+    r"|extensions|convert_sarif)\.py"
 )
+
+# 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in
+# CST_COMPANY_ALLOW ('|'-separated), set in the launch environment or the settings `env`
+# block. Both are HUMAN-only surfaces: the model cannot set env for this hook subprocess,
+# and settings edits are blocked by guard-consent-writes (CST_ALLOW_CONFIG_EDIT is likewise
+# launch-env-only). Literal prefix match (no regex, no expansion) so a registered wrapper
+# like `python scripts/publish_pack.py` runs consent-free while `python evil.py` does not;
+# segments are still split first, so a chained command after an allowed prefix is inspected
+# on its own. Empty/unset -> no change from stock behaviour.
+_COMPANY_ALLOW_PREFIXES = tuple(
+    p.strip() for p in os.environ.get("CST_COMPANY_ALLOW", "").split("|") if p.strip()
+)
+
+
+def _company_allowed(segment: str) -> bool:
+    return any(segment.startswith(prefix) for prefix in _COMPANY_ALLOW_PREFIXES)
+
+
 # 0.29.1: two plugin-mode fixes, both observed live (a consent prompt for the team's OWN
 # tooling forces exec consent for internal validations - the exact thing §7 says the gate
 # must not cover):
@@ -202,7 +221,7 @@ def main() -> None:
     # Evaluate each segment independently: allow the team's own tooling, block anything that
     # executes code. A blocked segment anywhere in the command blocks the whole command.
     for seg in _segments(cmd):
-        if _TEAM_ALLOW.match(seg):
+        if _TEAM_ALLOW.match(seg) or _company_allowed(seg):
             continue
         if _EXEC_RE.search(seg):
             _block(cmd, seg)

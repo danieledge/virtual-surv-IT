@@ -8,6 +8,9 @@ to the cache manifest for their version, and all user-controlled strings are HTM
 from __future__ import annotations
 
 import json
+import sys
+
+import pytest
 
 from scripts.dashboard import (
     main,
@@ -82,7 +85,8 @@ def test_transcript_slug_mirrors_claude_layout(tmp_path):
     p = tmp_path / "www" / "proj"
     p.mkdir(parents=True)
     d = transcripts_dir_for(p, tmp_path / ".claude")
-    assert d.name == str(p.resolve()).replace("/", "-")
+    # Windows resolves to a backslashed drive path; the slug flattens both separator kinds.
+    assert d.name == str(p.resolve()).replace("/", "-").replace("\\", "-")
 
 
 def test_plugin_cache_version_fallback(tmp_path):
@@ -96,6 +100,7 @@ def test_plugin_cache_version_fallback(tmp_path):
     assert plugin_cache_version(tmp_path / "nowhere") is None
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="'<' is not a legal Windows filename character")
 def test_render_escapes_and_reports(tmp_path):
     # no "/" in the name (it would create a subdirectory) - "<script>" is the payload
     p = _mk_project(tmp_path, name="evil<script>alert(1)")

@@ -133,8 +133,12 @@ def test_render_embeds_matching_state_hash():
 def test_render_lists_every_artifact():
     state = _valid()
     state["artifacts"].append(
-        {"path": "review-pass-1.md", "title": "First review", "status": "interim",
-         "added": "2026-07-26"}
+        {
+            "path": "review-pass-1.md",
+            "title": "First review",
+            "status": "interim",
+            "added": "2026-07-26",
+        }
     )
     md = render_markdown(state)
     assert "review-pass-1.md" in md and "engagement-brief.md" in md
@@ -182,9 +186,7 @@ def test_every_mutator_rerenders_the_view(tmp_path):
     assert "review_depth" in index.read_text(encoding="utf-8")
 
     # After every mutation the embedded hash matches the state - never stale.
-    assert embedded_hash(index.read_text(encoding="utf-8")) == state_hash(
-        load_state(tmp_path)
-    )
+    assert embedded_hash(index.read_text(encoding="utf-8")) == state_hash(load_state(tmp_path))
 
 
 def test_set_status_closed_sets_date_clears_outstanding(tmp_path):
@@ -247,7 +249,9 @@ def test_v1_state_upgrades_in_place_on_first_mutation(tmp_path):
     state.pop("log", None)
     state.pop("ratifications", None)
     state_path(tmp_path).write_text(json.dumps(state), encoding="utf-8")
-    assert validate_state(json.loads(state_path(tmp_path).read_text())) == []  # v1 valid
+    assert (
+        validate_state(json.loads(state_path(tmp_path).read_text(encoding="utf-8"))) == []
+    )  # v1 valid
     _run(tmp_path, "log-note", "fix cycle 3 complete")
     upgraded = load_state(tmp_path)
     assert upgraded["schema"] == 2
@@ -258,8 +262,9 @@ def test_log_note_is_dated_and_not_in_outstanding(tmp_path):
     _run(tmp_path, "init", "--title", "T", "--slug", "t")
     _run(tmp_path, "log-note", "QA cycle 2 verified the fixes")
     state = load_state(tmp_path)
-    assert any(e.endswith("QA cycle 2 verified the fixes") and e[:4].isdigit()
-               for e in state["log"])
+    assert any(
+        e.endswith("QA cycle 2 verified the fixes") and e[:4].isdigit() for e in state["log"]
+    )
     assert not any("QA cycle 2" in o for o in state["outstanding"])
     assert "Engagement log" in (tmp_path / "START-HERE.md").read_text(encoding="utf-8")
 
@@ -302,9 +307,7 @@ def test_profile_defaults_standard_and_validates(tmp_path):
 def test_light_profile_init_and_upgrade(tmp_path):
     _run(tmp_path, "init", "--title", "T", "--slug", "t", "--profile", "light")
     assert load_state(tmp_path)["profile"] == "light"
-    assert "| **Profile** | light |" in (tmp_path / "START-HERE.md").read_text(
-        encoding="utf-8"
-    )
+    assert "| **Profile** | light |" in (tmp_path / "START-HERE.md").read_text(encoding="utf-8")
     assert _run(tmp_path, "set-profile", "standard") == 0
     assert load_state(tmp_path)["profile"] == "standard"
 
@@ -324,9 +327,11 @@ def test_init_default_creates_workspace_and_registry(tmp_path, monkeypatch):
     assert (ws / "START-HERE.md").is_file()
     reg = tmp_path / "artifacts" / "engagements.json"
     assert reg.is_file()
-    rows = json.loads(reg.read_text())["engagements"]
+    rows = json.loads(reg.read_text(encoding="utf-8"))["engagements"]
     assert rows[0]["slug"] == "audit" and rows[0]["status"] == "in_progress"
-    assert "audit/START-HERE.md" in (tmp_path / "artifacts" / "ENGAGEMENTS.md").read_text()
+    assert "audit/START-HERE.md" in (tmp_path / "artifacts" / "ENGAGEMENTS.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_single_workspace_auto_resolves_without_slug(tmp_path, monkeypatch):
@@ -351,8 +356,12 @@ def test_registry_tracks_independent_states(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
     _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
     _run_env(monkeypatch, tmp_path, "--slug", "audit", "set-status", "blocked")
-    rows = {r["slug"]: r["status"] for r in json.loads(
-        (tmp_path / "artifacts" / "engagements.json").read_text())["engagements"]}
+    rows = {
+        r["slug"]: r["status"]
+        for r in json.loads(
+            (tmp_path / "artifacts" / "engagements.json").read_text(encoding="utf-8")
+        )["engagements"]
+    }
     assert rows == {"audit": "blocked", "scoping": "in_progress"}
 
 
@@ -365,7 +374,7 @@ def test_migrate_moves_flat_pack_into_workspace(tmp_path, monkeypatch):
     assert (ws / "engagement-state.json").is_file()
     assert (ws / "report.md").is_file()
     assert not (art / "engagement-state.json").exists()
-    rows = json.loads((art / "engagements.json").read_text())["engagements"]
+    rows = json.loads((art / "engagements.json").read_text(encoding="utf-8"))["engagements"]
     assert rows[0]["slug"] == "legacy-job"
 
 
@@ -380,15 +389,19 @@ def test_old_flat_engagement_then_new_workspace_and_migrate(tmp_path, monkeypatc
     old_state = state_path(art).read_text(encoding="utf-8")
 
     assert _run_env(monkeypatch, tmp_path, "init", "--title", "New job", "--slug", "new-job") == 0
-    rows = {r["slug"]: r["status"] for r in json.loads(
-        (art / "engagements.json").read_text())["engagements"]}
+    rows = {
+        r["slug"]: r["status"]
+        for r in json.loads((art / "engagements.json").read_text(encoding="utf-8"))["engagements"]
+    }
     assert rows == {"old-review": "closed", "new-job": "in_progress"}
 
     assert _run_env(monkeypatch, tmp_path, "migrate") == 0
     assert (art / "old-review" / "engagement-state.json").read_text(encoding="utf-8") == old_state
     assert not (art / "engagement-state.json").exists()
-    rows = {r["slug"]: r["status"] for r in json.loads(
-        (art / "engagements.json").read_text())["engagements"]}
+    rows = {
+        r["slug"]: r["status"]
+        for r in json.loads((art / "engagements.json").read_text(encoding="utf-8"))["engagements"]
+    }
     assert rows == {"old-review": "closed", "new-job": "in_progress"}
 
 
@@ -404,7 +417,11 @@ def test_no_limit_on_engagement_count(tmp_path, monkeypatch):
             statuses[slug] = "blocked"
         else:
             statuses[slug] = "in_progress"
-    rows = {r["slug"]: r["status"] for r in json.loads(
-        (tmp_path / "artifacts" / "engagements.json").read_text())["engagements"]}
+    rows = {
+        r["slug"]: r["status"]
+        for r in json.loads(
+            (tmp_path / "artifacts" / "engagements.json").read_text(encoding="utf-8")
+        )["engagements"]
+    }
     assert rows == statuses
     assert _run_env(monkeypatch, tmp_path, "--slug", "eng-3", "set-status", "in_progress") == 0

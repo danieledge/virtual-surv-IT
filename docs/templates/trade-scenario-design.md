@@ -114,6 +114,8 @@ SME review: `trade-surveillance-sme`. Implementer: `rules-developer`. Tuning: `t
 Coverage feeds into the Surveillance Coverage Assessment.
 
 ## Sign-off
+> 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
+
 | Role | Name | Decision | Date |
 |------|------|----------|------|
 | Author / owner | | | |
