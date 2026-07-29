@@ -1,5 +1,5 @@
 """
-Tests for the plugin install/update helper (scripts/install_helper.py).
+Tests for the plugin install/update helper (install_helper.py, repo root).
 
 Pure parts only: config round-trip, branch validation, mode auto-detection, dirty-tree
 and ahead-commit detection with a mocked runner, step tracking and summary text, and
@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.install_helper import (
+from install_helper import (
     InstallAbort,
     StepTracker,
     Style,

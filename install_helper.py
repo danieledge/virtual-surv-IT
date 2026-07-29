@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-scripts/install_helper.py - guided install/update for the Claude Code plugin.
+install_helper.py (repo root) - guided install/update for the Claude Code plugin.
 
 Walks a human through the real install path from README "Quick start": clone or update a
 local copy of the repo, pick a release channel (main = stable, dev = cutting edge), point
@@ -26,12 +26,12 @@ Design constraints:
   is set, ASCII fallbacks for the check marks when the console encoding cannot carry them.
 
 Usage:
-  python scripts/install_helper.py                 # auto: update if configured, else install
-  python scripts/install_helper.py install         # fresh clone + marketplace + plugin install
-  python scripts/install_helper.py update          # fetch/reset + marketplace + plugin update
-  python scripts/install_helper.py --branch dev    # pick the channel up front
-  python scripts/install_helper.py --yes           # non-interactive, safe defaults
-  python scripts/install_helper.py --yes --pip     # also install requirements-dev.txt
+  python install_helper.py                         # auto: update if configured, else install
+  python install_helper.py install                 # fresh clone + marketplace + plugin install
+  python install_helper.py update          # fetch/reset + marketplace + plugin update
+  python install_helper.py --branch dev    # pick the channel up front
+  python install_helper.py --yes           # non-interactive, safe defaults
+  python install_helper.py --yes --pip     # also install requirements-dev.txt
 """
 
 from __future__ import annotations

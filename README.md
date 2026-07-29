@@ -345,7 +345,7 @@ token-economy step, not an oversight (the "why" is right below).
 > `git clone https://github.com/danieledge/virtual-surv-IT.git && cd virtual-surv-IT && git checkout dev`,
 > then `/plugin marketplace add /path/to/virtual-surv-IT`.
 
-> **Install helper (optional).** From a clone, `python scripts/install_helper.py` walks the whole
+> **Install helper (optional).** From a clone, `python install_helper.py` (repo root) walks the whole
 > flow from a terminal: preflight (git/claude CLI/network), a persisted main-vs-dev channel pick,
 > clone or safe update (it refuses to reset a dirty tree), optional
 > `pip install -r requirements-dev.txt`, then the real `claude plugin marketplace add` /
