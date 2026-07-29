@@ -54,7 +54,7 @@ Target **precision** and **recall**, the basis for the estimate, and the evaluat
 Known benign sources of hits (idioms, product names, trader jargon) and the exclusion rules /
 allow-lists that suppress them. An exclusion trades recall for precision, so each one must record
 its coverage impact (what it could now miss) and be reviewed - "suppress FPs" is not "suppress FPs
-for free" (evidence note: `docs/evidence-base.md` C7).
+for free" (evidence note: `docs/internal/evidence-base.md` C7).
 
 ## 7. Review & governance cadence
 Who owns the lexicon, how often it is reviewed, the change-control process, and the trigger

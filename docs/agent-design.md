@@ -38,7 +38,7 @@
    doesn't mark its own homework; the PM (opus) re-challenges every agent's findings - **and, for
    Audit-depth deliverables, an independent reviewer (`compliance-reviewer`) reads the PM's own
    consolidated synthesis**, since the author cannot reliably self-check its own output
-   (`/audit-review` step 6; ungrounded self-review is unreliable - `docs/research-virtual-team.md`).
+   (`/audit-review` step 6; ungrounded self-review is unreliable - `docs/internal/research-virtual-team.md`).
 
 ## 2. Model-tiering rationale
 
@@ -117,7 +117,7 @@ and this matrix are the guard against drift.*
 
 | Anthropic multi-agent standard | Status | How we meet it (or why it differs) |
 |---|---|---|
-| Simplest thing that works; multi-agent only when it improves outcomes | ✅ | The roster is a **library, not a pipeline**: the PM engages the minimal sufficient subset per task (a narrow change uses 1 builder + 1 reviewer) and the team is dormant by default - complexity is opt-in *by selection*, not asserted by size. *(Caveat: whether each engaged role is optimal is a human-gated judgement, not benchmarked - see `docs/research-virtual-team.md`.)* |
+| Simplest thing that works; multi-agent only when it improves outcomes | ✅ | The roster is a **library, not a pipeline**: the PM engages the minimal sufficient subset per task (a narrow change uses 1 builder + 1 reviewer) and the team is dormant by default - complexity is opt-in *by selection*, not asserted by size. *(Caveat: whether each engaged role is optimal is a human-gated judgement, not benchmarked - see `docs/internal/research-virtual-team.md`.)* |
 | **Orchestrator-worker** (lead plans, workers act as filters) | ✅ | `/engage` - the PM decomposes, delegates, and synthesises. |
 | Delegate with **objective · output format · tools/sources · boundaries** | ✅ | CLAUDE.md §6 + `engage` §5 require exactly those four. |
 | Subagents **inherit no parent history** - put every input in the brief | ✅ | Stated in CLAUDE.md §6 delegation. |
@@ -143,7 +143,7 @@ one-line convention, not an enforced loop (we lean on independent review instead
 sub-agent returns** now carry a stated **hard ≤~1,500-token budget** in the brief (0.18.0) but
 remain prompt-level, not hook-enforced. The **LLM-judge eval harness** is shipped
 (`evals/`, `/run-evals`); the **team-size / per-role marginal-value** question is
-acknowledged-unbenchmarked (see `docs/research-virtual-team.md`), not claimed as proven.
+acknowledged-unbenchmarked (see `docs/internal/research-virtual-team.md`), not claimed as proven.
 
 ## 7. Prompt caching & cost-friendly design
 

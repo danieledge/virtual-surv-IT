@@ -68,6 +68,10 @@ to a ticket); the templates below are the building blocks. Everything is produce
 and `.html`** (via `scripts/render_html.py`) - the **one exception** is the engagement-summary
 email, which is an email and stays a `.txt` (see the last row).
 
+> **Where each artifact lives:** everything an engagement produces goes in its own workspace
+> `artifacts/<slug>/` (one placement rule, ADR-010); the full document-type address table is in
+> `docs/team-operating-guide.md` ("Where every document lives").
+
 > **This catalogue is the canonical template index.** The skills reference their common domain
 > templates inline (e.g. `/tune-thresholds` → the tuning decision register), but a template
 > **not** named in any skill is still a first-class deliverable - it is reached from here, or
@@ -112,7 +116,7 @@ email, which is an email and stays a `.txt` (see the last row).
 | Tuning decision register | `tuning-decision-register.md` | **SR 11-7**/FFIEC model-change-management (running log) |
 | Control mapping | `control-mapping.md` | scenario -> obligation -> internal control -> effectiveness |
 | Data lineage | `data-lineage.md` | feed -> field -> transform -> scenario (+ RTS 25, reconciliation) |
-| **Engagement summary email** (always, at close) | `engagement-summary-email.md` | PM cover note - **`.txt` in `artifacts/`**, signed as Morgan ("Hi," if recipient unknown) |
+| **Engagement summary email** (always, at close) | `engagement-summary-email.md` | PM cover note - **`.txt` in the workspace `artifacts/<slug>/`**, signed as Morgan ("Hi," if recipient unknown) |
 
 > **Generic vs domain-specific templates.** Some artifacts have a **generic** and a **domain**
 > variant - use the domain one when it applies, the generic one otherwise (they are *not*

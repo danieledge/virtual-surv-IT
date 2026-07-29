@@ -3,6 +3,87 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.0] - 2026-07-29 - Workflow-robustness remediation: fail-safe gates, disk-first resume, one placement rule, real map provenance
+
+> User-facing overview of what this release means in practice: [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md).
+
+Closes the 34-finding robustness register (`docs/internal/` carries the method; the register
+and per-finding close-out live in the maintainer's git-ignored `artifacts/`). Four phases,
+each test-first; 58 new tests (suite 714 passed / 12 skipped); hooks staged and human-applied.
+
+### Fixed - the gates fail safe (register G1-G9)
+- A pack with NO readable status (including no START-HERE at all) is NOT closed - the
+  close-only guards stay armed exactly when the index was forgotten (the 2026-07-22 failure
+  class; previously fail-open).
+- ONE shared status parser (`pack_status`: state-file-first, legend-aware index fallback) and
+  ONE workspace-detection rule (`engagement_packs`: state file OR index) across the checker
+  and both lifecycle hooks - a words-only status arms everything, a stray ⏳ in a closed
+  index re-arms nothing, and a hand-made index-only workspace is gated, not just anchored.
+- The DoD Stop gate loads the checker file-relative, so it is no longer a silent no-op in
+  plugin mode (pinned by a subprocess test that imports it the way plugin mode does); it now
+  also checks the derived registry and the artifacts root at turn end.
+- `CODE-NO-QA` / `CODE-NO-TESTS` are scoped per folder - code can no longer pass on a
+  sibling engagement's QA paperwork (reproduced live leak).
+- Workspace mode scans the artifacts ROOT: new files there are `ORPHAN-ARTIFACT`;
+  pre-existing flat files are grandfathered once into `.dod-root-allowlist.json`.
+
+### Added - the close window + gate-verified close (register R5/G4/R6)
+- New 🔒 `closing` status marks the close as underway ON DISK: close artifacts (delivery
+  report, summary email, `REVIEW-<slug>.md`) are legitimate during it, and the stop-gate
+  nudge tells an interrupted close to FINISH - never to delete deliverables.
+- `set-status closed` runs the full mechanical DoD gate itself and REFUSES (rolling back) on
+  any finding; the cleared outstanding list is snapshotted into the log first, so a mistaken
+  close is reversible from disk.
+
+### Added - resume reads disk, never re-asks (register R1-R8)
+- `.active-engagement.json` records the session's ACTIVE engagement (written at init,
+  honoured by ambiguous commands, cleared at close); the persona anchor names it.
+- The intake gate answers (go-ahead / fix-cycle / data-attestation) persist as decisions;
+  `set-runtime` caches the run-mode probe; `set-phase` is wired into the flow - a cold
+  resume recovers slug, phase, runtime and every gate answer from disk alone (tested).
+- `record-consent-outcome` records the NON-granting outcomes only (`asked`/`declined`) so a
+  "No" survives compaction and is never re-asked into an accidental yes; anything
+  grant-shaped fails validation - the grant remains exclusively the human-created marker
+  (ADR-002 untouched).
+- `add-artifact` flags rows recorded before their file exists (post-crash forensics).
+
+### Changed - one placement rule (ADR-010, register P1-P9)
+- Canonical layout decided and documented: everything in the engagement's
+  `artifacts/<slug>/` workspace root, `data/` for machine-readable packs, `adr/` for client
+  ADRs; a grouping subfolder carries its own tests + QA. "Where every document lives" table
+  in the operating guide; the five previously homeless deliverable types have addresses;
+  flat-path instructions swept from CLAUDE.md, the DoD, flow-spec, output-format, templates
+  and eight skills.
+- `REVIEW-<slug>.md` is close-only in the TOOL too: `--fix` renders findings packs at 🔒/✅
+  only, and an uppercase `REVIEW-*.md` existing earlier is flagged (case-sensitive;
+  `review-pass-N.md` stays interim-legal).
+- START-HERE hand-edits are detectable (`INDEX-HAND-EDITED`, content-hash in the render
+  marker) and `--fix` backs the hand-edited text up before re-rendering; the email-rename
+  fix updates the STATE row instead of text-patching the generated index.
+- Findings packs validate recursively, including the root `data/` lane in workspace mode.
+
+### Changed - codebase-map provenance is real (register M1-M8, ADR-007 re-scoped)
+- The template placeholder can no longer pass as a `no-vcs` anchor (strict value-only
+  escape; unfilled placeholders called out; pinned by a raw-template test).
+- Per-entry As-of/Anchor validation, entry-SHA resolution, and a `MAP-STALE` staleness
+  budget against HEAD (default 50 commits, per-map override with rationale). Entries
+  detection is column-driven (section renames tolerated); the line cap excludes Deprecated.
+- engage-light's close-time map opt-out removed (ADR-003 both-directions rule stands in
+  every profile). ADR-007 re-scoped in place (staleness subset implemented, generative
+  layer parked); ADR-003 revision note; README corrections; map pointers in CLAUDE.md,
+  glossary and FAQ.
+
+### Changed - docs truth pass
+- `docs/DEFINITION-OF-DONE.md` rewritten for the ADR-006/008/010 world: the state file as
+  the record, the generated index, the 🔒 closing window, the gate-verified close, persisted
+  session decisions, and the full mechanical finding-code register.
+- `docs/` split: 8 maintainer-only documents (research, evidence base, design specs,
+  roadmaps, flow diagrams, old eval baselines) moved to `docs/internal/` with references
+  fixed - `docs/` now holds what the team loads at runtime plus the user-facing set.
+- `/prepare-data` warns loudly at every touchpoint that it is NOT a production-grade
+  anonymisation pipeline: capabilities are limited; pre-mask/sanitise by external approved
+  means rather than relying on it (user ruling).
+
 ## [0.32.0] - 2026-07-29 - Company extensions + explicit AI identity
 
 ### Added

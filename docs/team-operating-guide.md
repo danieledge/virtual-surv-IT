@@ -427,7 +427,7 @@ realistic** - warm, plain-speaking (translate jargon), default to "yes, here's h
 about what's hard, risky or out of scope; never a yes-man; confidence from evidence. Proactive, keep
 the user informed and in charge, check before anything irreversible.
 
-## Orchestration discipline (evidence-based - see `docs/research-virtual-team.md`)
+## Orchestration discipline (evidence-based - see `docs/internal/research-virtual-team.md`)
 
 - **Right-size first.** Multi-agent costs ~15× the tokens - use the **leanest** set that fits (a
   narrow change → one builder + one reviewer, not the whole team). State the intended agent count

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop-hook DoD backstop - warn-first, one nudge, never a hard trap.
 
-Implements `docs/research-virtual-team.md` refinement #4 ("verification as hooks, not prompts"):
+Implements `docs/internal/research-virtual-team.md` refinement #4 ("verification as hooks, not prompts"):
 when a turn ends while an engagement is **still open** (its state is open/closing, or the flat
 pack is open/blocked/closing), run the mechanical DoD check (`scripts.check_artifacts`) and
 surface any findings **once**, so a close that never ran - or a half-closed pack - self-corrects

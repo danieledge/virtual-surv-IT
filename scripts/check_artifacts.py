@@ -1009,7 +1009,7 @@ def check(artifacts_dir: Path) -> list[str]:
             # Uniform across profiles (user ruling 2026-07-27): every close ends with the
             # summary email - light keeps it SHORT, it does not drop it.
             findings.append(
-                "MISSING-SUMMARY-EMAIL: no artifacts/engagement-summary-*.txt found - the "
+                "MISSING-SUMMARY-EMAIL: no engagement-summary-*.txt in this pack - the "
                 "closing email (DoD / CLAUDE.md §6a) is a required artifact in EVERY "
                 "profile (light keeps it short, never absent)"
             )

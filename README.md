@@ -3,12 +3,20 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.32.0](https://img.shields.io/badge/version-0.32.0-blue)
-![Tests 220+ passing](https://img.shields.io/badge/tests-220%2B%20passing-brightgreen)
+![Version 0.33.0](https://img.shields.io/badge/version-0.33.0-blue)
+![Tests 700+ passing](https://img.shields.io/badge/tests-700%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
-<img src="docs/assets/fable5-audited.svg" alt="Audited with Claude Fable 5" height="20">
+<table>
+<tr><td>
+
+🏷️ **Current version: 0.33.0** (2026-07-29) - *[the team got harder to fool](docs/releases/0.33.0.md)*<br/>
+A workflow-robustness release: the quality checks now fail safe, a close has to pass the gate to count, and sessions resume from disk without re-asking you anything.<br/>
+📖 [Plain-language release overview](docs/releases/0.33.0.md) · 📜 [Full changelog](CHANGELOG.md)
+
+</td></tr>
+</table>
 
 **Virtual Surv-IT is a virtual engineering team for the software that catches financial crime and
 market abuse.** A project manager (Morgan) and **16 specialist AI agents** run it inside
@@ -30,13 +38,6 @@ The team builds the tooling; a person signs off every step.
 > tooling. It is pre-1.0 and changes often; behaviour and interfaces may break between updates, and
 > it can get things wrong. **Review everything it produces; never rely on it as a control or as
 > regulatory advice.**
-
-> 🔍 **Audited and hardened with Claude Fable.** We pointed
-> [Claude Fable 5](https://www.anthropic.com/news/claude-fable-5-mythos-5), Anthropic's most
-> capable widely released model and a step above Claude Opus, at this repo to find weaknesses in
-> the approach and the documentation. **Releases 0.11.0 and 0.12.0 fix what it found**, and every
-> fix has to pass the automated test suite plus a live quality check before it lands. Full story:
-> [`CHANGELOG.md`](CHANGELOG.md).
 
 **New to AI agents?** Start with [`docs/OVERVIEW.md`](docs/OVERVIEW.md), a plain-English tour.
 **See it work:** the end-to-end [build demo](docs/demos/build-demo.md) on synthetic data
@@ -180,6 +181,9 @@ domain and the harness (dormancy, gates, segregation, evidence, evals) carries o
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
+> 📌 **Latest release - 0.33.0 (2026-07-29), workflow robustness.** What it means for you:
+> [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) · full detail: [`CHANGELOG.md`](CHANGELOG.md).
+
 <details>
 <summary>✨ <b>What's new in 0.16 / 0.15</b>: the engagement-lifecycle release (every engagement has a visible state (in progress / blocked / closed), carried by a living START-HERE index; interim work can never masquerade as a delivery) · the quality-loop release (findings written to the audit profession's 5 C's with mandatory cause and impact, standards-grounded critique gates, gold exemplars, and mechanical gates that stop code shipping without QA, each change driven by a recorded live lesson) · the memory & transparency release before it (a per-project codebase map, audit-skeleton reviews by default, iteration logs that show every failed-and-fixed pass) · ⚠️ breaking changes if you installed a version before 0.8.0 (full history → <a href="CHANGELOG.md"><code>CHANGELOG.md</code></a>)</summary>
 
@@ -302,6 +306,7 @@ ADR-001/002). 📜 Full release history: [`CHANGELOG.md`](CHANGELOG.md).
 | Data-safety by design | Raw data hard-blocked from the model; masking + synthetic on-ramp. |
 | Evidence-based & auditable | Alert → logic → obligation traceability behind a Definition of Done, and every review ships the audit skeleton (scope at a commit, dispositions, limitations & residual risk) at every depth. |
 | Engagement memory | A per-project **codebase map** (PM-curated, SHA-anchored, advisory-only) read at engagement open and updated at close; repeat engagements start warm instead of re-exploring. |
+| Stateful, crash-safe engagements | Each engagement lives in its own `artifacts/<slug>/` workspace with a machine-readable state file (⏳ in progress · ⛔ blocked · 🔒 closing · ✅ closed); the close runs the mechanical DoD gate and refuses on findings, and a resumed session recovers its state, intake answers and consent outcome from disk instead of re-asking. |
 | Shows its working | An **iteration log** in every delivery: the journey strip plus append-only review/QA cycles, so a caught-fixed-re-verified failure stays visible as evidence the control loop ran. |
 | Self-tested | An eval harness (rubrics + golden cases) catches quality regressions. |
 | Claude Code native | Install as a plugin; dormant by default until you invoke it. |
@@ -613,7 +618,9 @@ The PM **asks clarifying questions** (and waits for your answers, it won't guess
 jurisdiction, data or success criteria), offers a **menu of documentary artifacts** to choose from
 (BRD, FSD, ADRs, RTM, review report, audit pack…), summarises everything in an Engagement Brief,
 **states how many agents it intends to use and why**, then oversees delivery and **hands back each
-deliverable in both `.md` and `.html`** under `artifacts/`. Focused commands for each entry point:
+deliverable in both `.md` and `.html`** in the engagement's own `artifacts/<slug>/` workspace
+(one folder per engagement, with a generated `START-HERE.md` index and a machine-readable state
+file). Focused commands for each entry point:
 
 | Command | Use it for | Pattern |
 |---|---|---|
@@ -714,7 +721,7 @@ a convention), that's stated rather than dressed up.
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
 | **Remembers, safely** | Each working project gets one codebase map: bounded, SHA-anchored, 📊/🧠-tagged, PM-written only, **advisory context never enforcement**, and no PII/MNPI/secrets, ever. | ADR-003/ADR-007 + `check_artifacts` map hygiene - mechanical: size (excl. Deprecated), header fields, per-entry As-of/Anchor validation, anchor resolution + a staleness budget against HEAD, basis tags, secret patterns. The read-at-open / update-at-close discipline itself is prompt-enforced and eval-sampled, not mechanical. The guard hooks stay the only enforcement layer. |
 | **Show the journey** | Iteration history is evidence: failed review/QA passes stay visible append-only (journey strip, test cycles, clarification rounds), never smoothed into a clean narrative. | Two DoD gates ("a multi-pass engagement whose docs read first-pass-clean fails") + the templates' append-only structures. Prompt-enforced, eval-sampled. |
-| **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 9 rubrics, 42 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
+| **Self-tested** | The team's own quality is regression-tested like code. | 700+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 9 rubrics, 42 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -755,7 +762,7 @@ silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **220+ passing unit tests** (≈232 test functions; ~400 collected once parametrised) check
+The repo's **700+ passing unit tests** (726 collected as of 0.33.0) check
 the *code*, and run in CI. The **eval harness** ([`evals/`](evals/)) checks the **quality of what the
 team produces**: its contract and scorer run in CI, but scoring the *live team* (catching a prompt
 change that silently weakens a review) is run manually via `/run-evals`, not on every commit, because
@@ -947,6 +954,30 @@ evals/                          # team-quality eval harness: 9 rubrics + 42 gold
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
+## 🧰 Claude Code features this team is built on
+
+The team is a native Claude Code plugin, not a wrapper - these are the platform features it
+uses and how (audited 2026-07-29 against the current Claude Code docs):
+
+| Feature | How the team uses it |
+|---|---|
+| **Skills / slash commands** | All 23 workflows ship as skills with `disable-model-invocation: true` - the dormancy mechanism: their descriptions load into no ordinary session, so the team costs ~nothing until you type `/engage`. `argument-hint` on every command. |
+| **Subagents** | 17 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Write/Edit. |
+| **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), a warn-first `Stop` DoD backstop, and a `UserPromptSubmit` persona re-anchor that survives compaction. Hook and settings edits are human-only (ADR-002); hook changes ship staged and are applied by the human (`scripts/apply-project-anchor.sh`). |
+| **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
+| **Permissions** | A curated `permissions.allow` block (fewer prompts on the team's own consent-free tooling) and `permissions.deny` as the hard floor under the raw-data wall. |
+| **CLAUDE.md layering** | A lean always-on core (dormancy, data safety, the execution gate) with the operating detail split into docs the team loads only when engaged - the context-budget discipline. |
+| **Agent SDK (headless)** | The eval harness (`scripts/eval_engage.py`) drives real headless `/engage` sessions in sandboxed repo copies - `can_use_tool` plays the consent gate, `setting_sources` loads the real project hooks - so the shipped safety net itself is what gets regression-tested. |
+
+Deliberately **not** used, with reasons: output styles (session-start-scoped, would break
+dormancy by construction - the per-turn anchor hook is the conditional equivalent); agent
+teams (experimental; the team coordinates through artifacts, not peer chatter, by design);
+checkpoints / rewind as a safety net (subagent edits are not restored - git is the backstop);
+exposing the scripts as an MCP server (a non-Claude-Code client would bypass the guard
+hooks entirely).
+
+<sub>[↑ Back to top](#readme-top)</sub>
+
 ## 🔧 Notes on the config
 
 <details>
@@ -1039,23 +1070,20 @@ agents now self-verify against their brief and flag gaps before returning; stand
   runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and
   calibrate the judge against human scores over time.
 
-**🚧 TODO: Multi-engagement workspaces** (design agreed in-session 2026-07-27, targets 0.31)
+- ✅ **Multi-engagement workspaces: SHIPPED (0.31.0, ADR-008)**. Several engagements per project
+  at independent states: per-engagement `artifacts/<slug>/` workspaces, a derived root registry,
+  resume-or-new selection at the front door, and the stop-gate arming only on gated workspaces
+  (a ⛔ parked sibling stays silent). Hardened in 0.33.0 (fail-safe gates, the 🔒 closing window,
+  disk-first resume, the ADR-010 placement rule - see
+  [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md)).
+- ✅ / 🅿️ **Codebase map evolution: RE-SCOPED (0.33.0, ADR-007)**. The staleness-detection goal
+  shipped in reduced, git-based form: strict anchor validation, per-entry As-of/SHA checks, and
+  a `MAP-STALE` staleness budget against HEAD. The generative layer (a deterministic
+  `repo_skeleton`, per-area detail files, `/map-codebase`, content-fingerprint drift stamps) is
+  **parked**, to be revisited if a first-contact-on-large-codebase need materialises - the ADR
+  records the decision and the evidence behind it.
 
-> Several engagements in one project at independent states: per-engagement `artifacts/<slug>/`
-> workspaces, a derived root registry, resume-or-new selection at the front door, and the
-> stop-gate arming only on ⏳ in-progress workspaces (⛔ parked ones stay silent). ADR-008 to
-> be written at build time.
-
-**🚧 TODO: Codebase map evolution** (full design: [`docs/adr/ADR-007-codebase-map-evolution.md`](docs/adr/ADR-007-codebase-map-evolution.md), Proposed - targets 0.31/0.32)
-
-> First-contact surveys of large codebases and an end to silent map rot: a deterministic
-> `repo_skeleton` (tree-sitter/ctags/stdlib tiers, ranked aider-style, zero LLM, regenerated so
-> never stale), the curated map re-scoped to what evidence says helps agents (invariants,
-> gotchas, commands - not architecture prose), opt-in per-area detail files, stdlib drift
-> stamps (`MAP-DRIFT`), and a `/map-codebase` survey command. Research-backed: the ADR records
-> why a comprehensive generated wiki is deliberately NOT the plan.
-
-**🚧 TODO: Automatic data-masking workflow** (detail in [`docs/prepare-data-roadmap.md`](docs/prepare-data-roadmap.md))
+**🚧 TODO: Automatic data-masking workflow** (detail in [`docs/internal/prepare-data-roadmap.md`](docs/internal/prepare-data-roadmap.md))
 
 > **The goal:** *"throw a dataset at it and it masks/anonymises it safely"*, so the team can take
 > real data **without the user having to self-attest** it's clean. **Until that ships, the interim
@@ -1173,9 +1201,11 @@ things compound here:
   and START-HERE update **index-first / atomic** so the index reflects the brief even if compaction
   interrupts; (c) **enforce condensed subagent returns** (`agent-design.md` §5 flags this as
   aspirational, not enforced) so a verbose `code-reviewer` return can't balloon the orchestrator
-  later - a separate variant of the same failure class; (d) the 0.17.0 DoD `Stop`-hook catches a
-  stale/missing index at turn-end **once START-HERE exists**, but by design stays silent if
-  START-HERE was never created - a backstop, not full cover. Tracked.
+  later - a separate variant of the same failure class; (d) the DoD `Stop`-hook catches a
+  stale/missing index at turn-end, and since 0.33.0 fails safe: an engagement with **no readable
+  status** (a missing or unreadable START-HERE) is treated as still open rather than silently
+  passing, the hook reads the machine-readable state file first, and it also scans the derived
+  registry and the artifacts root - a backstop, not full cover. Tracked.
 
 **Slow Claude Code startup on Windows for a local-scope install (~20-27s).** Reported on a Windows
 box where the plugin is installed from a local path (`scope: "local"`). Assessment: Claude Code
@@ -1270,7 +1300,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
   grounding ADR-001; safety-hook threat model ADR-002; engagement memory ADR-003) →
   [`evals/README.md`](evals/README.md).
 - 📊 **Data & tuning** → [Handling real data](#-handling-real-data) (above) →
-  [`docs/prepare-data-roadmap.md`](docs/prepare-data-roadmap.md) →
+  [`docs/internal/prepare-data-roadmap.md`](docs/internal/prepare-data-roadmap.md) →
   [`docs/scenarios/spoofing.md`](docs/scenarios/spoofing.md) (the worked example, incl. calibration).
 
 | Guide | What it covers |
@@ -1285,8 +1315,9 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 | [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack, customise to yours |
 | [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
 | [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
-| [`docs/engagement-flow-poster-flowchart.html`](docs/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory); [render it in the browser](https://raw.githack.com/danieledge/virtual-surv-IT/main/docs/engagement-flow-poster-flowchart.html), or see [`docs/engagement-flow-diagram.md`](docs/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline |
-| [`docs/adr/`](docs/adr/) | Architecture decision records: citation grounding, safety-hook threat model, engagement memory |
+| [`docs/internal/engagement-flow-poster-flowchart.html`](docs/internal/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory); [render it in the browser](https://raw.githack.com/danieledge/virtual-surv-IT/main/docs/internal/engagement-flow-poster-flowchart.html), or see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline |
+| [`docs/adr/`](docs/adr/) | Architecture decision records ADR-001 to ADR-010: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule |
+| [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) | The 0.33.0 release overview - what the workflow-robustness release means in practice |
 | [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
 
 <sub>[↑ Back to top](#readme-top)</sub>

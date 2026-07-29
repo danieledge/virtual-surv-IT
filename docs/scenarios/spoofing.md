@@ -72,7 +72,7 @@ All thresholds live in `SpoofingThresholds`; none are hard-coded inline (§4).
 Thresholds are injectable so `data-analyst` can recalibrate and evidence the
 volume/coverage trade-off without touching detection logic.
 
-> **Enforcement-statistics context (evidence pass 2026-07-06, `docs/evidence-base.md` C41).** These
+> **Enforcement-statistics context (evidence pass 2026-07-06, `docs/internal/evidence-base.md` C41).** These
 > defaults are deliberately **conservative catch-alls, not case-derived constants**. The spoofing
 > mechanics and signature are verified against the Coscia and Sarao records (MAR Art 12), but the
 > published case statistics are *tighter* than these thresholds: in *US v Coscia* the large

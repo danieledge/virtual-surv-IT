@@ -1,6 +1,6 @@
 # `/prepare-data` - design specification for assisted-universal masking
 
-> **Status:** design (not yet built). Companion to [`docs/prepare-data-roadmap.md`](prepare-data-roadmap.md),
+> **Status:** design (not yet built). Companion to [`docs/internal/prepare-data-roadmap.md`](prepare-data-roadmap.md),
 > which sets the *why* and the option table; this doc is the *how* - the architecture, component
 > contracts, threat model and acceptance gates a builder implements against. Authored by Claude
 > Fable 5 (2026-07-06) as a design pass; implementation is a later build.

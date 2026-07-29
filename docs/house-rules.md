@@ -117,7 +117,7 @@ surveillance engagement), so it lives here; per-engagement findings do not.
   coverage-assurance methodology; detection-tuning practice; the DA/BA/role boundary) and checked
   each against primary/authoritative sources. Result: **33 verified · 8 partial · 15
   industry-standard-uncited · 0 unsupported; no claim false or fabricated.** The full verdict
-  register with citations is `docs/evidence-base.md`. What that pass establishes:
+  register with citations is `docs/internal/evidence-base.md`. What that pass establishes:
   - **Verified with a primary source:** the tuning methodology cluster (ATL/BTL, risk-based
     segmentation, statistical thresholds, post-deployment MI, change-management logging) grounds in
     SR 11-7, FFIEC RBA, RTS 25 and vendor methodology; the spoofing/layering typology and signature
@@ -135,5 +135,5 @@ surveillance engagement), so it lives here; per-engagement findings do not.
     (`spoofing.md`), which are looser catch-alls than the cases (Coscia ~0.08% fill, <500ms).
   - **Caveat carried forward:** FCA Market Watch 79 is a data/model-governance authority, **not** an
     e-comms-lexicon authority - cite it only for testing/coverage/governance, never for lexicon
-    design. Per-file inline-citation threading is a mechanical follow-up (`docs/evidence-base.md`
+    design. Per-file inline-citation threading is a mechanical follow-up (`docs/internal/evidence-base.md`
     §Deferred).

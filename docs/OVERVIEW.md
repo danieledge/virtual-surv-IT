@@ -223,9 +223,12 @@ It's the template every other detection in this team would follow.
    start - after that, simply chat back and forth; Morgan stays with you for the whole
    session.
 3. You get back proper deliverables - each as both a **Markdown** file and a ready-to-share
-   **HTML** file.
+   **HTML** file. Each piece of work gets its own folder under `artifacts/`, with a
+   `START-HERE.md` index that always shows what it is, whether it's finished, and what to
+   read in what order - so anyone opening the folder later can pick it up cold.
 4. Everything is checked automatically: tests must pass, no secrets or real data can sneak
-   into the project, and the masking must prove it's safe.
+   into the project, and the masking must prove it's safe. An engagement only counts as
+   closed once a mechanical checklist passes - the close refuses until it does.
 
 Think of it as a small, flexible delivery team: hand it a problem, a review, or a build, and
 it organises and does the work - you stay in the loop at the decision points.

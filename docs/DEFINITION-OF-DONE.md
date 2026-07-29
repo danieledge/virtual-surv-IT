@@ -36,22 +36,48 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > CI-tested (pytest, lint, secret-scan, no-raw-data), and the **Distributable**,
 > **Engagement-summary email**, **Indexed** and **Stateful** items have a one-command check
 > the PM runs at this gate - and can run at ANY point mid-engagement, since the living index
-> makes the gate meaningful before close: `python -m scripts.check_artifacts --fix` (every
-> `artifacts/*.md` has a rendered `.html` sibling; the summary email is a `.txt`, not `.md`/`.html`;
-> the START-HERE index exists, has a status, and lists everything; close-only artifacts don't
-> exist early; a summary `.txt` exists at close; no stale interim status banner survives a close).
-> **`--fix`** mechanically resolves the auto-fixable ones (render missing HTML; rename a mis-typed
-> email and sync the index) so the close doesn't depend on the model remembering. Output is forced
-> to UTF-8 so it can't crash a Windows console. Treat the rest as evidenced claims to spot-check,
-> not guarantees.
+> makes the gate meaningful before close: `python -m scripts.check_artifacts --fix`, run per
+> engagement workspace `artifacts/<slug>/` (ADR-008/ADR-010; a legacy flat pack is checked the
+> same way). **`--fix`** mechanically resolves the auto-fixable defects (render missing HTML;
+> rename a mis-typed email and sync the state; re-render a stale or hand-edited index from the
+> state, backing the hand-edited text up; render the close-only `REVIEW-<slug>.md` from its
+> findings pack during 🔒/✅) so the close doesn't depend on the model remembering. Output is
+> forced to UTF-8 so it can't crash a Windows console. Treat the rest as evidenced claims to
+> spot-check, not guarantees.
+>
+> **The machine-readable state is the record (ADR-006).** Each workspace's
+> `engagement-state.json` is authoritative - status (⏳ in_progress · ⛔ blocked · 🔒 closing ·
+> ✅ closed), phase, outstanding, artifact inventory, decisions and gate answers, the
+> non-granting consent outcome, the runtime probe, footprint - and `START-HERE.md` is its
+> GENERATED view (never hand-edit; the render embeds state- and content-hashes). The root
+> registry (`ENGAGEMENTS.md`/`engagements.json`) is derived; the session's ACTIVE engagement is
+> recorded on disk (`.active-engagement.json`). **The close is an evidenced state, not a
+> claim**: `set-status closing` marks the close window (close artifacts become legitimate work
+> in progress), and `set-status closed` runs this full mechanical gate itself and REFUSES,
+> rolling back, on any finding - the cleared outstanding list is snapshotted into the log first.
+>
+> **Finding codes (the full mechanical register):** `MISSING-HTML` · `MISSING-INDEX` ·
+> `INDEX-NO-STATUS` · `STALE-INDEX` · `INDEX-HAND-EDITED` · `FINAL-BEFORE-CLOSE` (incl. the
+> close-only `REVIEW-*.md`) · `SUMMARY-BEFORE-CLOSE` · `MISSING-SUMMARY-EMAIL` ·
+> `SUMMARY-WRONG-EXT` · `STALE-STATUS` · `STALE-DOCSTATUS` · `CODE-NO-QA` / `CODE-NO-TESTS`
+> (scoped per folder - a sibling engagement's QA never vouches) · `FINDING-NO-IMPACT` ·
+> `FINDINGS-CWORD-LABELS` · `FINDINGS-INVALID` · `ROSTER-UNKNOWN` / `ROSTER-ROLE-MISMATCH` ·
+> `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` · `RATIFIED-CLAIM-PENDING` ·
+> `REVIEW-FINGERPRINT-GAP` · `STATE-MISSING` / `STATE-INVALID` / `STATE-STALE-RENDER` ·
+> `REGISTRY-STALE` · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;
+> pre-existing ones grandfathered per the D2 ruling) · map hygiene: `MAP-TOO-LONG` ·
+> `MAP-NO-ASOF` / `MAP-NO-ANCHOR` · `MAP-STALE-ANCHOR` / `MAP-STALE` (staleness budget) ·
+> `MAP-ENTRY-NO-ASOF` / `MAP-ENTRY-NO-ANCHOR` / `MAP-STALE-ENTRY-ANCHOR` · `MAP-NO-BASIS` ·
+> `MAP-SECRET`.
 >
 > That same mechanical check also ships as a **warn-first `Stop` hook** (`scripts/dod_stop_gate.py`),
 > wired into **both** tracked hook files - `.claude/settings.json` (repo-as-project) and
 > `hooks/hooks.json` (installed-plugin) - so it is active for every user with no per-user setup. It
-> runs the check **automatically** whenever a turn ends with an engagement still **open**
-> (START-HERE ⏳/⛔) - so "the close never ran, so the gate never ran" (the 2026-07-22 failure) can
+> runs the check **automatically** whenever a turn ends with an engagement still gated (a
+> workspace ⏳/🔒; the flat pack also on ⛔), plus the registry and root-orphan scans - so "the
+> close never ran, so the gate never ran" (the 2026-07-22 failure) can
 > no longer happen silently. It **nudges once** and does not hard-block (it is a backstop, not a
-> trap); this implements `docs/research-virtual-team.md` refinement #4 ("verification as hooks, not
+> trap); this implements `docs/internal/research-virtual-team.md` refinement #4 ("verification as hooks, not
 > prompts"). The three always-on **safety** guard hooks are separate and unchanged.
 >
 > **Changes to the team itself** (prompts, skills, agent definitions) gate on the eval harness:
@@ -135,20 +161,30 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       the code could build, run and safely change it from the doc **alone** (no tribal knowledge,
       no unexplained jargon, commands copy-pastable). `compliance-reviewer` checks usability at
       this gate, not merely existence.
-- [ ] **Indexed - a LIVING START-HERE entry point** - the workspace's `artifacts/<slug>/START-HERE.md` (template
-      `docs/templates/start-here.md`) is **created at engagement open** alongside the brief,
-      gains a row **the moment each artifact is written**, and is finalised at close: verdict,
+- [ ] **Indexed - a LIVING, GENERATED START-HERE entry point** - the workspace's
+      `artifacts/<slug>/START-HERE.md` (render shape: `docs/templates/start-here.md`) is
+      **rendered from `engagement-state.json` at engagement open** (`engagement_state init`)
+      alongside the brief, gains a row **the moment each artifact is written**
+      (`add-artifact`, in the same turn), and is finalised at close: verdict,
       reading order, every artifact listed with one line of purpose, and the open items a
       reader should know about. Never "written last" - a stalled engagement must still show
-      its state. Mechanically checked (`MISSING-INDEX`, `STALE-INDEX`).
+      its state - and **never hand-edited** (ADR-006: mutate the state; the render is
+      hash-verified). Mechanically checked (`MISSING-INDEX`, `STALE-INDEX`,
+      `STATE-STALE-RENDER`, `INDEX-HAND-EDITED`, `REGISTRY-STALE`).
 - [ ] **Stateful - never silently dangling** - the engagement's state (⏳ in progress ·
-      ⛔ blocked - awaiting input · ✅ closed) is recorded in START-HERE and kept truthful. A
+      ⛔ blocked - awaiting input · 🔒 closing · ✅ closed) lives in `engagement-state.json`
+      and is kept truthful. A
       pause on unanswered input sets ⛔ with the outstanding list (questions + gates not yet
       run) and the turn says plainly "NOT closed - outstanding: …". Interim artifacts carry
       the interim banner and **pass-scoped names** (`review-pass-N`, `qa-cycle-N`,
-      `interim-*`); `delivery-report.md` / `final-*` and the summary email exist **only at ✅
-      close**. Mechanically checked (`INDEX-NO-STATUS`, `FINAL-BEFORE-CLOSE`,
-      `SUMMARY-BEFORE-CLOSE`). (Lesson, 2026-07-22: a blocked engagement's interim report was
+      `interim-*`); `delivery-report.md` / `final-*` / `REVIEW-<slug>.md` and the summary
+      email exist **only from 🔒 closing on** - and the flip to ✅ is gate-verified:
+      `set-status closed` runs the full mechanical check and refuses on findings. Session
+      decisions persist on disk (the gate answers as `decisions`, the NON-granting consent
+      outcome, the `runtime` probe, the ACTIVE marker), so a resumed session re-reads rather
+      than re-asks. Mechanically checked (`INDEX-NO-STATUS`, `FINAL-BEFORE-CLOSE`,
+      `SUMMARY-BEFORE-CLOSE`, `STATE-INVALID`). (Lesson, 2026-07-22: a blocked engagement's
+      interim report was
       read as the delivery and QA never ran - the close-time gates never fired.)
 - [ ] **Distributable** - evidence produced in `.md` **and** `.html`
       (`python -m scripts.render_html`). **By default one consolidated Delivery Report**
@@ -164,9 +200,12 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       mechanically checked (`STALE-DOCSTATUS`). (Lesson, 2026-07-25: a fix-cycle-1 handover
       and README shipped "final" in a fix-cycle-2 pack, with a struck citation still live.)
 - [ ] **Engagement-summary email** - the PM (**Morgan**) has written a short email-format cover
-      note summarising what was done and where it stands, saved as a **`.txt` in `artifacts/`**
-      (`docs/templates/engagement-summary-email.md`). **Written at ✅ close only** - its existence
-      is the signal the engagement closed, so a blocked/in-progress engagement must not have one
+      note summarising what was done and where it stands, saved as a **`.txt` in the
+      workspace `artifacts/<slug>/`**
+      (`docs/templates/engagement-summary-email.md`). **Written in the close window only**
+      (🔒 closing → ✅) - its existence
+      is the signal the engagement is closing/closed, so a blocked/in-progress engagement must
+      not have one
       (`SUMMARY-BEFORE-CLOSE`). Address it to the requester **only if the name is known** -
       otherwise open with "Hi,"; sign off as Morgan. (It's an email, so it stays `.txt` and is
       the one artifact not rendered to HTML.)
@@ -176,8 +215,11 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       not pre-loaded, per ADR-003) **and updated at close**: entries added with 📊/🧠 tags, dates
       and SHA anchors; stale or wrong
       entries corrected or moved to Deprecated (never silently dropped); engagement-history
-      row appended. PM-written only; advisory-only; no PII/MNPI/secrets/raw-data content (§5).
-      Mechanical hygiene is part of the `python -m scripts.check_artifacts` gate.
+      row appended - in EVERY profile (light keeps new entries minimal, never skips the row
+      or corrections). PM-written only; advisory-only; no PII/MNPI/secrets/raw-data content
+      (§5). Mechanical hygiene (size, header + per-entry provenance, anchor resolution and
+      the staleness budget, basis tags, secrets) is part of the
+      `python -m scripts.check_artifacts` gate.
 - [ ] **Signed off** - human approval recorded at the gate; nothing touching live systems
       proceeds without it.
 

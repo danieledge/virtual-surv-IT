@@ -61,7 +61,7 @@ Run an **evaluator-optimizer loop**:
    code: does the **verdict follow from the findings register**? is any claim in the summary
    **unsupported by an artifact**? are dispositions, counts and evidence tags (📊/📄/🧠) internally
    consistent? This is the one pass Morgan cannot reliably do on its **own** output (ungrounded
-   self-review is unreliable - `docs/research-virtual-team.md`); fix or escalate what it flags before
+   self-review is unreliable - `docs/internal/research-virtual-team.md`); fix or escalate what it flags before
    ✅. Right-sized: it reads the pack, it does not re-run the review.
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`).
