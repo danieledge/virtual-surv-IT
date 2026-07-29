@@ -64,9 +64,11 @@ cloud-agnostic default - customise to your environment.
 - Any other data proceeds **only on the user's attestation** (asked in `engage`'s batched
   opening gate) that it is
   anonymised/masked or carries no prohibited PII/MNPI - that responsibility is the **user's**.
-  Prefer synthetic; **recommend `/prepare-data`** (masking via `scripts.ingest` +
+  Prefer synthetic, and prefer data **pre-masked/sanitised by external, approved means**;
+  `/prepare-data` (masking via `scripts.ingest` +
   `config/masking-schema.yaml`, validated by `scripts.validate_masking`, key from `MASKING_KEY`)
-  and route there on a "no/unsure" answer.
+  is a **best-effort aid with limited capabilities - not a production-grade anonymisation
+  pipeline** - route there on a "no/unsure" answer, with that warning stated.
 - **Pseudonymised ≠ anonymous.** Masked output is still personal data (GDPR) - keep it governed;
   prefer fully **synthetic** for anything leaving the environment.
 
@@ -135,6 +137,8 @@ signed as Morgan), and human sign-off.
   `python -m scripts.render_html` - or, from a plugin install in a foreign project, the bundled
   copy by path (resolution rule: `docs/team-operating-guide.md` §Run mode). Templates in
   `docs/templates/`.
+- **Project memory:** one codebase map per working project (`docs/codebase-map.md`,
+  ADR-003/ADR-007) - PM-curated, advisory-only, hygiene-gated; read at open, updated at close.
 - **Model tiering (cost):** **opus** for the highest-stakes judgement - the last *specialist* word
   before handover, with no independent domain re-check downstream (`model-validator`,
   `compliance-reviewer`, `code-reviewer`; the PM challenges their *findings* but does not re-run the

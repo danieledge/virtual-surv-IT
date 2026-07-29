@@ -86,7 +86,18 @@ _SECRET_PATTERNS = [
 _SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 # Honest no-VCS anchor: a working project with no git repo has no SHA to anchor to.
-_NOVCS_ANCHOR_RE = re.compile(r"(?i)\bno[\s-]?(?:vcs|git)\b")
+# STRICT since the 2026-07-29 register M1 [reproduced]: the token must be the anchor VALUE
+# (immediately after the label / alone in an entry cell) - the template's own placeholder
+# prose contains the words "no-vcs" and used to pass the gate as a valid anchor.
+_NOVCS_VALUE_RE = re.compile(r"(?i)\bAnchor\b[\s`'·:*]*no[\s-]?vcs\b")
+_NOVCS_CELL_RE = re.compile(r"(?i)^[\s`']*no[\s-]?vcs[\s`']*$")
+# Staleness budget (register M3): how many commits the header anchor may trail HEAD before
+# the map must be re-verified. Default 50 - roughly a small project's sprint of commits, so
+# a map refreshed each engagement never trips it while a genuinely abandoned map does
+# (chosen 2026-07-29 with the M3 fix; override per map with a `Staleness-budget` header
+# field and a stated rationale - CLAUDE.md §4, no unexplained thresholds).
+_MAP_STALENESS_BUDGET = 50
+_STALENESS_BUDGET_RE = re.compile(r"(?i)staleness-budget[^0-9]*(\d+)")
 
 # Code-without-QA gate: a live engagement (2026-07-21) delivered phase-2 implementation
 # code from inside an analysis workflow and no QA pass ever ran - the DoD items are
@@ -420,16 +431,55 @@ def _anchor_resolves(sha: str, repo_dir: Path) -> bool | None:
     return False
 
 
+def _commits_behind(sha: str, repo_dir: Path) -> int | None:
+    """How many commits HEAD is ahead of the anchor (register M3), or None when git can't
+    answer (no repo, unrelated history, detached oddities) - the bound then skips."""
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, regex-validated hex sha
+            ["git", "-C", str(repo_dir), "rev-list", "--count", f"{sha}..HEAD"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return int(result.stdout.decode().strip())
+    except ValueError:
+        return None
+
+
+def _split_cells(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
 def check_map(map_path: Path) -> list[str]:
-    """Mechanical hygiene findings for a codebase map; empty means the gate is satisfied."""
+    """Mechanical hygiene findings for a codebase map; empty means the gate is satisfied.
+
+    2026-07-29 register M1/M2/M3/M7: the anchor placeholder no longer passes as no-vcs,
+    per-entry As-of/Anchor cells are validated (entry SHAs must resolve), the header anchor
+    is bounded against HEAD, entry detection is column-driven (rename-tolerant), and the
+    line cap excludes the Deprecated section ADR-003 mandates keeping."""
     findings: list[str] = []
     text = map_path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
 
-    if len(lines) > _MAP_MAX_LINES:
+    # Line cap, EXCLUDING the Deprecated section (M7: ADR-003 mandates keeping deprecated
+    # entries, so they must not eat the live-content budget).
+    dep_lines = 0
+    in_dep = False
+    for line in lines:
+        if line.startswith("#"):
+            in_dep = "deprecated" in line.lower()
+        if in_dep:
+            dep_lines += 1
+    effective = len(lines) - dep_lines
+    if effective > _MAP_MAX_LINES:
         findings.append(
-            f"MAP-TOO-LONG: {map_path} is {len(lines)} lines (target ~200, max "
-            f"{_MAP_MAX_LINES}) - move detail to linked docs/artifacts, keep the map an index"
+            f"MAP-TOO-LONG: {map_path} is {effective} lines excluding Deprecated (target "
+            f"~200, max {_MAP_MAX_LINES}) - move detail to linked docs/artifacts, keep the "
+            "map an index"
         )
 
     # Header requirements: an As-of date and an Anchor SHA (document-control block).
@@ -448,37 +498,104 @@ def check_map(map_path: Path) -> list[str]:
                 f"MAP-STALE-ANCHOR: header anchor {anchor_sha.group(0)} does not resolve "
                 "in this repository - refresh the anchor (and re-verify entries) at close"
             )
-    elif _NOVCS_ANCHOR_RE.search(anchor_line):
+        elif resolves is True:
+            # M3: a resolvable anchor can still be ancient - bound it against HEAD.
+            budget_m = _STALENESS_BUDGET_RE.search(header)
+            budget = int(budget_m.group(1)) if budget_m else _MAP_STALENESS_BUDGET
+            behind = _commits_behind(anchor_sha.group(0), map_path.parent)
+            if behind is not None and behind > budget:
+                findings.append(
+                    f"MAP-STALE: header anchor is {behind} commits behind HEAD (budget "
+                    f"{budget}) - the code has moved on; re-verify the entries and refresh "
+                    "the anchor (raise `Staleness-budget` in the header, with a rationale, "
+                    "if this cadence is intended)"
+                )
+    elif _NOVCS_VALUE_RE.search(anchor_line):
         # A working project with no git repo has no commit SHA to anchor to. An honest
-        # `Anchor no-vcs` (the team is instructed to write exactly this, with a note) is a
-        # valid anchor, not a defect - entries anchor to the delivered file state instead.
+        # `Anchor no-vcs` (the token as the anchor VALUE - M1: prose mentioning no-vcs,
+        # like the template's own placeholder, does not count) is valid - entries anchor
+        # to the delivered file state instead.
         pass
     else:
+        placeholder = " (the template placeholder was left unfilled)" if "<" in anchor_line else ""
         findings.append(
-            f"MAP-NO-ANCHOR: {map_path} header has no `Anchor <commit sha>` - entries "
-            "cannot be checked against the code they describe (a working project with no "
-            "git repo writes `Anchor no-vcs`)"
+            f"MAP-NO-ANCHOR: {map_path} header has no `Anchor <commit sha>`{placeholder} - "
+            "entries cannot be checked against the code they describe (a working project "
+            "with no git repo writes exactly `Anchor no-vcs`)"
         )
 
-    # Every map-entry table row needs a 📊/🧠 basis tag. Entry rows are the data rows of
-    # the "Map entries" section's table (skip its header and |---| divider rows).
-    in_entries = False
+    # Entry rows: column-driven detection (M7 - a renamed section no longer disables the
+    # scan): any table whose header row carries a Basis column is an entries table. Each
+    # data row needs its 📊/🧠 tag, and - where the columns exist - a real As-of date and
+    # a real Anchor (SHA or the strict no-vcs token). Entry SHAs must resolve (M2: they
+    # read as verified provenance on resume, so they may not be decorative).
+    entry_shas: dict[str, int] = {}
+    columns: dict[str, int] | None = None
+    found_entry_table = False
     for lineno, line in enumerate(lines, start=1):
-        if line.startswith("#"):
-            in_entries = "map entries" in line.lower()
+        if not line.lstrip().startswith("|"):
+            columns = None
             continue
-        if not in_entries or not line.lstrip().startswith("|"):
-            continue
-        stripped = line.strip().strip("|").strip()
-        if not stripped or set(stripped) <= {"-", "|", ":", " "}:
-            continue
-        first_cell = stripped.split("|", 1)[0].strip().lower()
-        if first_cell in {"#", ""}:
-            continue  # column-header row
+        cells = _split_cells(line)
+        if not cells or set("".join(cells)) <= {"-", ":", " "}:
+            continue  # |---| divider
+        lowered = [c.lower() for c in cells]
+        if any("basis" in c for c in lowered):
+            columns = {name: i for i, name in enumerate(lowered)}
+            found_entry_table = True
+            continue  # the header row itself
+        if columns is None:
+            continue  # a table without a Basis column (history, deprecated, doc control)
         if "📊" not in line and "🧠" not in line:
             findings.append(
                 f"MAP-NO-BASIS: {map_path}:{lineno} map entry has no 📊 observed / 🧠 "
                 "inferred tag - every entry must state its evidence basis"
+            )
+        asof_idx = next((i for n, i in columns.items() if "as-of" in n or "as of" in n), None)
+        if asof_idx is not None and asof_idx < len(cells):
+            if not _DATE_RE.search(cells[asof_idx]):
+                findings.append(
+                    f"MAP-ENTRY-NO-ASOF: {map_path}:{lineno} entry has no real As-of date - "
+                    "provenance must be datable (ADR-003)"
+                )
+        anchor_idx = next((i for n, i in columns.items() if "anchor" in n), None)
+        if anchor_idx is not None and anchor_idx < len(cells):
+            cell = cells[anchor_idx]
+            sha_m = _SHA_RE.search(cell)
+            if sha_m:
+                entry_shas.setdefault(sha_m.group(0), lineno)
+            elif not _NOVCS_CELL_RE.match(cell):
+                findings.append(
+                    f"MAP-ENTRY-NO-ANCHOR: {map_path}:{lineno} entry anchor cell holds "
+                    f"neither a commit SHA nor `no-vcs` ({cell[:30]!r}) - entry provenance "
+                    "may not be decorative (ADR-003)"
+                )
+    if not found_entry_table:
+        # Fallback for legacy maps whose entries table predates the Basis column: the old
+        # section-name scan, so their rows still get the basis check.
+        in_entries = False
+        for lineno, line in enumerate(lines, start=1):
+            if line.startswith("#"):
+                in_entries = "map entries" in line.lower()
+                continue
+            if not in_entries or not line.lstrip().startswith("|"):
+                continue
+            stripped = line.strip().strip("|").strip()
+            if not stripped or set(stripped) <= {"-", "|", ":", " "}:
+                continue
+            first_cell = stripped.split("|", 1)[0].strip().lower()
+            if first_cell in {"#", ""}:
+                continue  # column-header row
+            if "📊" not in line and "🧠" not in line:
+                findings.append(
+                    f"MAP-NO-BASIS: {map_path}:{lineno} map entry has no 📊 observed / 🧠 "
+                    "inferred tag - every entry must state its evidence basis"
+                )
+    for sha, lineno in sorted(entry_shas.items(), key=lambda kv: kv[1]):
+        if _anchor_resolves(sha, map_path.parent) is False:
+            findings.append(
+                f"MAP-STALE-ENTRY-ANCHOR: {map_path}:{lineno} entry anchor {sha} does not "
+                "resolve in this repository - re-verify the entry and refresh its anchor"
             )
 
     for pattern, label in _SECRET_PATTERNS:

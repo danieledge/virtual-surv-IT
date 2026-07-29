@@ -11,6 +11,15 @@ of every other workflow: **$ARGUMENTS**
 This skill is **guided** - walk the user through each step in plain English, confirm before
 running anything, and never read raw data yourself (the `data/raw/` guard blocks it by design).
 
+**Show this callout at the start of every run - verbatim, loud, never buried or paraphrased**
+(user ruling 2026-07-29):
+
+> ⚠️ **Not a production-grade anonymisation pipeline.** The masking and validation here are
+> **best-effort with limited capabilities** (lexical/regex transforms, hand-mapped schema, no
+> NER). For anything sensitive, **pre-mask or sanitise your data by external, approved means
+> before it enters this project**, and treat this flow as a convenience and second check -
+> never as the control you rely on. Fully **synthetic** data remains the lowest-risk default.
+
 ## 1. Gather inputs first - ask, don't assume
 Establish via the question tool (batched in one call), and **wait for answers**:
 - **What are you trying to do?** (header `Goal`, **`multiSelect: false`** - the tool needs 2-4
@@ -39,6 +48,9 @@ plainly so the user chooses with eyes open, then proceed with their decision.
   already-governed data - **never** point it at `data/raw/`.
 
 ## 4. Masking path (run is automatic; config needs a human)
+Restate the limits first: this masking is **best-effort, not production-grade** - if the data
+can be pre-masked or sanitised by external approved tooling instead, recommend that and offer
+to validate the result (§5) rather than mask here.
 The mechanics auto-run, but three prerequisites are the user's to supply - confirm each:
 1. **Raw file placed in `data/raw/`** - agents are walled off from it; that's deliberate.
 2. **`MASKING_KEY` set** - check **presence only**, never print the value:

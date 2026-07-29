@@ -10,6 +10,7 @@ The domain and spec shorthand used throughout the repo and the team's artifacts.
 | BABOK | Business Analysis Body of Knowledge - the standard reference for how to do business analysis, from the International Institute of Business Analysis (IIBA) |
 | BRD / FSD | Business Requirements Document / Functional Specification Document (the plain-language "what we need" and the detailed "how it works") |
 | CI | Continuous Integration - the automated checks (tests, linters, scans) that run on every code change |
+| Codebase map | The team's per-project memory file (`docs/codebase-map.md`, ADR-003/ADR-007) - a bounded, PM-curated, hygiene-gated index of durable code facts, read at every engagement open and updated at every close |
 | DoD | Definition of Done - the checklist a deliverable must pass before it counts as finished |
 | EARS | Easy Approach to Requirements Syntax (unambiguous requirement phrasing) |
 | ETL | Extract, Transform, Load - the plumbing that pulls data from a source, reshapes it, and loads it where it is used |

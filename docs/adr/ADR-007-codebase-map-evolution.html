@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ADR-007: Codebase map evolution - regenerate the mechanical, curate the durable (proposed)</title>
+<title>ADR-007: Codebase map evolution - regenerate the mechanical, curate the durable (re-scoped)</title>
 <style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
@@ -50,13 +50,13 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-27</span></header>
-<h1 id="adr-007-codebase-map-evolution-regenerate-the-mechanical-curate-the-durable-proposed">ADR-007: Codebase map evolution - regenerate the mechanical, curate the durable (proposed)</h1>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-29</span></header>
+<h1 id="adr-007-codebase-map-evolution-regenerate-the-mechanical-curate-the-durable-re-scoped">ADR-007: Codebase map evolution - regenerate the mechanical, curate the durable (re-scoped)</h1>
 <blockquote>
 <p>Architecture Decision Record (Nygard format). One file per significant decision, so the
 <em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
-<p><strong>Document control</strong> · ID <code>ADR-007</code> · Version <code>0.1</code> · Status <code>Proposed</code>
-· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-27</code></p>
+<p><strong>Document control</strong> · ID <code>ADR-007</code> · Version <code>0.2</code> · Status <code>Re-scoped</code>
+· Classification <code>Internal</code> · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of <code>2026-07-29</code></p>
 <table>
 <thead>
 <tr>
@@ -73,6 +73,12 @@ a { color: #0969da; }
 <td>deep-research synthesis (3 parallel researchers: tooling landscape, agent-memory evidence, internal audit)</td>
 <td>Proposed design</td>
 </tr>
+<tr>
+<td>0.2</td>
+<td>2026-07-29</td>
+<td>workflow-robustness remediation phase 4 (user ruling D3)</td>
+<td>Re-scoped: staleness subset implemented in <code>check_map</code>; the generative layer (repo_skeleton / map.d / /map-codebase / fingerprint drift stamps) is parked, revisit on demand</td>
+</tr>
 </tbody>
 </table>
 </blockquote>
@@ -81,22 +87,41 @@ a { color: #0969da; }
 <tbody>
 <tr>
 <td><strong>Status</strong></td>
-<td><strong>Proposed</strong> - nothing implemented; targets 0.31/0.32</td>
+<td><strong>Re-scoped</strong> (2026-07-29, ruling D3) - the staleness-detection goal is implemented in reduced, git-based form; the generative layer is parked. This ADR missed both its original target releases (0.31, 0.32) without a decision - the register's M6 finding; this revision IS that decision.</td>
 </tr>
 <tr>
 <td><strong>Date</strong></td>
-<td>2026-07-27</td>
+<td>2026-07-27 (proposed) · 2026-07-29 (re-scoped)</td>
 </tr>
 <tr>
 <td><strong>Deciders</strong></td>
-<td>Morgan (orchestrator), human approver</td>
+<td>Morgan (orchestrator), human approver (remediation plan D3)</td>
 </tr>
 <tr>
 <td><strong>Traceability</strong></td>
-<td>ADR-003 (engagement memory - this evolves, does not replace, its §2 discipline); <code>check_map</code> in <code>scripts/check_artifacts.py</code>; engage probe contract (SKILL.md step 0); user-reported pain: first-contact on large codebases, silent staleness</td>
+<td>ADR-003 (engagement memory - this evolves, does not replace, its §2 discipline); <code>check_map</code> in <code>scripts/check_artifacts.py</code>; 2026-07-29 robustness register M2/M3/M6/M7</td>
 </tr>
 </tbody>
 </table>
+<h2 id="re-scope-2026-07-29-what-stands-what-is-parked">Re-scope (2026-07-29 - what stands, what is parked)</h2>
+<p><strong>Implemented</strong> (remediation phase 4, in <code>check_map</code> / the template - a reduced, git-based
+form of §Decision item 4's drift-stamp goal):</p>
+<ul>
+<li>per-entry <strong>As-of and Anchor validation</strong> (<code>MAP-ENTRY-NO-ASOF</code> / <code>MAP-ENTRY-NO-ANCHOR</code>)
+  and entry-SHA resolution (<code>MAP-STALE-ENTRY-ANCHOR</code>) - entry provenance is no longer
+  decorative (register M2);</li>
+<li>a <strong>staleness bound</strong>: the header anchor is compared against HEAD and <code>MAP-STALE</code> fires
+  past the map's <code>Staleness-budget</code> (default 50 commits, override with rationale) -
+  register M3;</li>
+<li>the <strong>strict no-vcs anchor value</strong> (the template placeholder can no longer pass - M1),
+  column-driven entry detection (section renames no longer disable the scan - M7) and a
+  line cap that excludes the Deprecated section ADR-003 mandates keeping (M7).</li>
+</ul>
+<p><strong>Parked</strong> (revisit when a first-contact-on-large-codebase need actually materialises;
+nothing else in the product depends on them): <code>scripts.repo_skeleton</code>, the <code>map.d/</code> area
+files, <code>/map-codebase</code>, and content-fingerprint drift stamps (<code>MAP-DRIFT</code> /
+<code>MAP-DEAD-POINTER</code>). The git-based bound implemented above covers the silent-rot gap for
+anchored repos; no-vcs projects remain human-judged - an accepted residual.</p>
 <h2 id="context">Context</h2>
 <p>Today's map (ADR-003) is a single ≤250-line PM-curated file, created only as an engagement
 close side-effect. The internal audit confirmed four gaps: no first-contact survey (coverage
@@ -202,6 +227,6 @@ staging. Phase 2: /map-codebase skill + root index section + map.d/ discovery + 
 (<code>process-first-contact-map</code>); ADR-003 revision note pointing here. Phase 3 (optional,
 demand-driven): blast-radius refresh automation; human-facing rendered map browser via the
 existing dashboard.</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-007-codebase-map-evolution.md &middot; 2026-07-27</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-007-codebase-map-evolution.md &middot; 2026-07-29</div>
 </body>
 </html>

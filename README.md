@@ -712,7 +712,7 @@ a convention), that's stated rather than dressed up.
 | **Safe data by architecture** | Raw data under `data/raw/` is kept from the model's file-read tools; work happens downstream, on masked or synthetic data. | Raw-data hook (read tools + Bash) + OS `permissions.deny` (Read/Grep/Glob) + `.gitignore` + a CI job that fails on tracked data files + keyed masking as the sanctioned ingest path. Solid on the file-read tools; the Bash channel is lexically guarded, not a sandbox (ADR-002). |
 | **Fail closed on crash** | A guard that errors exits 2 and blocks. | Crash-wrappers exit 2 (block); the launcher version-probes interpreters. Two limits are deliberate and documented: a malformed payload or a Python-less host leaves the guard inert (ADR-002). |
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
-| **Remembers, safely** | Each working project gets one codebase map: bounded, SHA-anchored, 📊/🧠-tagged, PM-written only, **advisory context never enforcement**, and no PII/MNPI/secrets, ever. | ADR-003 + a DoD gate (read at open, update/correct/deprecate at close) + `check_artifacts` map hygiene (size, header, basis tags, secret patterns, anchor resolution, mechanical). The guard hooks stay the only enforcement layer. |
+| **Remembers, safely** | Each working project gets one codebase map: bounded, SHA-anchored, 📊/🧠-tagged, PM-written only, **advisory context never enforcement**, and no PII/MNPI/secrets, ever. | ADR-003/ADR-007 + `check_artifacts` map hygiene - mechanical: size (excl. Deprecated), header fields, per-entry As-of/Anchor validation, anchor resolution + a staleness budget against HEAD, basis tags, secret patterns. The read-at-open / update-at-close discipline itself is prompt-enforced and eval-sampled, not mechanical. The guard hooks stay the only enforcement layer. |
 | **Show the journey** | Iteration history is evidence: failed review/QA passes stay visible append-only (journey strip, test cycles, clarification rounds), never smoothed into a clean narrative. | Two DoD gates ("a multi-pass engagement whose docs read first-pass-clean fails") + the templates' append-only structures. Prompt-enforced, eval-sampled. |
 | **Self-tested** | The team's own quality is regression-tested like code. | 220+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 9 rubrics, 42 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
@@ -1140,8 +1140,9 @@ cost, since the probe script itself is only `command -v` checks - and (b) I/O, n
 plugin-mode `find` over `~/.claude/plugins/cache` / `marketplaces` (no `-maxdepth`) used to resolve
 the plugin root when the operating guide isn't in the working dir. **How to pin it:** run the step-0
 Bash block alone under `time` - under ~5s implicates model latency; slower implicates the `find`/I/O.
-**Candidate mitigations (not yet applied):** defer the codebase-map + CHANGELOG reads out of turn 0
-(load them lazily when the work needs them, shrinking the cold turn-1 payload), and bound the
+**Partially applied:** the codebase-map read is already just-in-time since 0.18 - the probe
+loads only the map header + §3 history slice, never the bulky §2 body. **Still candidates
+(not yet applied):** defer the CHANGELOG read out of turn 0, and bound the
 plugin-resolution `find` with `-maxdepth`. Tracked; needs the `time` measurement first so a fix
 targets the real bottleneck rather than guessing.
 
@@ -1165,9 +1166,10 @@ things compound here:
   separate steps, so a compaction in between leaves the index behind reality - which, combined with
   the persona/discipline decay above, is the exact "stalled engagement, gate never fires" failure the
   discipline exists to stop.
-- **Candidate mitigations (not yet applied):** (a) **trim the turn-0 payload** - defer the
-  codebase-map and CHANGELOG out of the step-0 probe (load lazily; ~280 lines saved every engage),
-  the same lever as the cold-start issue above and the biggest single win; (b) make the brief-write
+- **Candidate mitigations (partially applied):** (a) **trim the turn-0 payload** - the
+  codebase-map half landed in 0.18 (the probe loads only the header + §3 slice; §2 is read
+  just-in-time), deferring the CHANGELOG remains a candidate,
+  the same lever as the cold-start issue above; (b) make the brief-write
   and START-HERE update **index-first / atomic** so the index reflects the brief even if compaction
   interrupts; (c) **enforce condensed subagent returns** (`agent-design.md` §5 flags this as
   aspirational, not enforced) so a verbose `code-reviewer` return can't balloon the orchestrator

@@ -59,7 +59,8 @@ Report.
 > share**, by giving me access you **confirm it carries no PII/MNPI or anything your data policy
 > prohibits - or that you've anonymised/masked it appropriately.** 🤖 I **can't verify that for
 > you** - keeping shared data safe and compliant is **your responsibility.** 🟢 Unsure? Go
-> synthetic or run **`/prepare-data`** first.
+> synthetic, or **pre-mask/sanitise by your own approved external means** - `/prepare-data`
+> can help but is **best-effort, not production-grade**.
 
 ## The data-attestation question (include only when data is plausibly involved)
 

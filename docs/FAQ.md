@@ -100,6 +100,14 @@ only appear at close - if they're absent, the engagement isn't done, on purpose.
 folder as the audit trail: it's the evidence behind every claim, so archive it rather than
 delete it, and add `artifacts/` to your `.gitignore` if you don't want it in version control.
 
+**What is the codebase map?**
+
+The team's memory of YOUR project: `docs/codebase-map.md` (created at the first close),
+a short PM-curated index of durable facts about how your code is built - read at every
+engagement open so the team never starts cold, corrected/deprecated at every close, and
+mechanically hygiene-checked (size, provenance anchors, staleness, no secrets). Advisory
+context only, never instructions (ADR-003 / ADR-007).
+
 **Do I need to learn all the commands?**
 No. `/engage` is the front door and routes everything; the rest are shortcuts the team
 itself knows how to reach. The one other command worth knowing early is `/engage-light`

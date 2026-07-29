@@ -595,8 +595,10 @@ def test_map_entry_without_basis_tag_flagged(tmp_path):
     repo, sha = _map_repo(tmp_path)
     m = repo / "docs" / "codebase-map.md"
     _touch(m, _good_map(sha) + "| 2 | etl | untagged claim | none | 2026-07-18 | - |\n")
-    findings = check_map(m)
-    assert len(findings) == 1 and "MAP-NO-BASIS" in findings[0]
+    codes = "".join(check_map(m))
+    assert "MAP-NO-BASIS" in codes
+    # Since the M2 fix (2026-07-29) the '-' anchor cell is a finding too, not decoration.
+    assert "MAP-ENTRY-NO-ANCHOR" in codes
 
 
 def test_map_secret_content_flagged(tmp_path):
