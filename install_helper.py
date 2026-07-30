@@ -204,6 +204,27 @@ class InstallAbort(Exception):
 # ------------------------------------------------------------------ subprocess wrapper
 
 
+def installed_version(repo: Path) -> Optional[str]:
+    """The plugin version in the clone's manifest, or None when unreadable."""
+    try:
+        manifest = json.loads((repo / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        version = manifest.get("version")
+        return version if isinstance(version, str) and version else None
+    except (OSError, ValueError):
+        return None
+
+
+def changelog_headline(changelog: Path, version: str) -> Optional[str]:
+    """The `## [<version>] - date - title` line from the changelog, cleaned for console."""
+    try:
+        for line in changelog.read_text(encoding="utf-8").splitlines():
+            if line.startswith(f"## [{version}]"):
+                return line[3:].strip()
+    except OSError:
+        pass
+    return None
+
+
 def command_argv(name: str, resolved: Optional[str] = None) -> list:
     """The argv prefix that actually launches `name` on this platform.
 
@@ -543,10 +564,32 @@ class Installer:
 
     def persist(self) -> None:
         self.cfg.update(
-            {"repo_path": str(self.repo), "branch": self.branch, "last_run": "2026-07-29"}
+            {"repo_path": str(self.repo), "branch": self.branch, "last_run": "2026-07-30"}
         )
+        version = installed_version(self.repo) if self.repo else None
+        if version:
+            self.cfg["last_version"] = version
         save_config(self.cfg_path, self.cfg)
         self.step_ok(f"Settings saved to {self.cfg_path}")
+
+    def whats_new(self, previous: Optional[str]) -> None:
+        """After a successful install/update: what did you just get."""
+        s = self.style
+        version = installed_version(self.repo) if self.repo else None
+        if not version:
+            return
+        self.say("")
+        if previous and previous != version:
+            self.say(s.bold(s.cyan(f"What's new: {previous} -> {version}")))
+        else:
+            self.say(s.bold(s.cyan(f"What's new in {version}")))
+        headline = changelog_headline(self.repo / "CHANGELOG.md", version)
+        if headline:
+            self.say(f"  {headline}")
+        overview = self.repo / "docs" / "releases" / f"{version}.md"
+        if overview.is_file():
+            self.say(f"  Plain-language overview: {overview}")
+        self.say(f"  Full detail: {self.repo / 'CHANGELOG.md'}")
 
     # ---- summary
 
@@ -619,7 +662,9 @@ class Installer:
                 7, total, "Plugin " + ("update" if self.mode == "update" else "install")
             )
             self.plugin()
+            previous = self.cfg.get("last_version")
             self.persist()
+            self.whats_new(previous)
         except InstallAbort:
             aborted = True
         except subprocess.TimeoutExpired as exc:

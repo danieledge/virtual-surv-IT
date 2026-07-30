@@ -329,3 +329,32 @@ def test_command_argv_unresolved_falls_back_to_name(monkeypatch):
 
     monkeypatch.setattr(ih.shutil, "which", lambda _n: None)
     assert ih.command_argv("claude") == ["claude"]
+
+
+# --- what's new after install/update (2026-07-30) -----------------------------------------
+
+
+def test_installed_version_reads_manifest(tmp_path):
+    from install_helper import installed_version
+
+    plug = tmp_path / ".claude-plugin"
+    plug.mkdir()
+    (plug / "plugin.json").write_text('{"version": "0.33.1"}', encoding="utf-8")
+    assert installed_version(tmp_path) == "0.33.1"
+    assert installed_version(tmp_path / "nowhere") is None
+
+
+def test_changelog_headline_extracts_the_entry_line(tmp_path):
+    from install_helper import changelog_headline
+
+    log = tmp_path / "CHANGELOG.md"
+    log.write_text(
+        "# Changelog\n\n## [0.33.1] - 2026-07-29 - Platform capability adoption\n\n"
+        "### Added\n\n## [0.33.0] - 2026-07-29 - Workflow robustness\n",
+        encoding="utf-8",
+    )
+    assert (
+        changelog_headline(log, "0.33.1") == "[0.33.1] - 2026-07-29 - Platform capability adoption"
+    )
+    assert changelog_headline(log, "0.31.0") is None
+    assert changelog_headline(tmp_path / "missing.md", "0.33.1") is None
