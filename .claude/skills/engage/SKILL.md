@@ -292,11 +292,10 @@ criteria) **into the batched calls above**, or ask a single targeted question **
 material is genuinely missing. Never assume scope, jurisdiction, data availability or success
 criteria - but don't manufacture a question to fill a step. **The fix-cycle (Q3) is captured here
 and is the single source of truth - the review skill must NOT re-ask it** (it inherits this answer).
-**Regulatory citations are ON by default for detection-logic work and need no question when
-wanted - only fold in a citations question when the user's own framing suggests they don't want
-them** ("skip the legal stuff", "not for a regulated jurisdiction", prior feedback that citations
-came back wrong). Record either way: `set-decision regulatory-citations off` (declined) makes it
-explicit and persists across compaction; unset means the default (on) applies.
+**Regulatory citations are a PROJECT-WIDE preference (`.claude/team-preferences.json`
+`regulatory_citations`, on unless explicitly `false`), not something to ask per
+engagement** - set once via the installer's "Project preferences" menu, or Morgan writes
+it directly on the user's word at any point (no consent gate on that file).
 
 **2a. Don't re-ask the outcome as one blurred question.** The *action* on findings is already
 its own question (the Q3 fix-cycle: report / fix / loop) and the *documents* are the artifact

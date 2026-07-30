@@ -9,9 +9,10 @@ engagement actually needs jurisdiction or stack detail, and **edit it to match y
 **Our operating jurisdictions: Europe (EU), UK, US, Singapore, Hong Kong, Japan.** When
 designing or reviewing detection logic, cite the specific obligation it serves, and assess
 against the regime(s) applicable to the data/desk in question - not every rule applies to every
-flow. Citations are ON by default; a user can decline them for a given engagement
-(recorded as `decisions.regulatory-citations off` in the engagement state, never a silent
-omission - CLAUDE.md §6a). Key frameworks per jurisdiction:
+flow. Citations are ON by default project-wide; a user can turn them off for the whole
+project (`.claude/team-preferences.json` `regulatory_citations: false`, set via the
+installer's "Project preferences" menu or told to Morgan directly - never a silent
+omission when off, CLAUDE.md §6a). Key frameworks per jurisdiction:
 
 - **EU:** MLR / 6AMLD (AML), Market Abuse Regulation (MAR), MiFID II.
 - **UK:** MLR 2017 / JMLSG (AML), UK MAR, FCA SYSC / SUP record-keeping, PRA SS1/23 (model risk).

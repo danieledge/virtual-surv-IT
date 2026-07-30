@@ -966,7 +966,7 @@ def choose_action(style: Style) -> str:
         ("3", "Status line only"),
         ("4", "Enable the team for a project (+ optional permission allow-list)"),
         ("5", "Check for updates (read-only - shows what an update would bring)"),
-        ("6", "Document format preferences (does a project also get .docx by default?)"),
+        ("6", "Project preferences (docx export, regulatory citations)"),
         ("7", "Demo - watch the whole run, nothing executed or written"),
         ("q", "Quit"),
     )
@@ -1678,42 +1678,63 @@ class Installer:
         self.step_ok("Status line", f"wired in {target} (restart to see it)")
 
     def format_preferences_step(self) -> None:
-        """Standalone, easily re-runnable: change a project's document-format default
-        any time (menu option 6) - most users install once and never re-run the full
-        flow, so this preference needs a path that isn't buried inside first-time
-        project enablement (2026-07-30 user feedback)."""
+        """Standalone, easily re-runnable: change a project's preferences any time (menu
+        option 6) - most users install once and never re-run the full flow, so these
+        need a path that isn't buried inside first-time project enablement (2026-07-30
+        user feedback). Both preferences here are PROJECT-WIDE (team-preferences.json),
+        not per-engagement - a deliberate simplification over an earlier per-engagement
+        design for regulatory citations."""
         self.step_intro(
-            "Controlled documents (BRD, FSD, etc.) always get .md + .html - this sets "
-            "whether a project also gets a Word (.docx) copy by default."
+            "Two project-wide preferences: whether controlled documents (BRD, FSD, etc.) "
+            "also get a Word (.docx) copy, and whether detection-logic work cites "
+            "regulatory obligations by default."
         )
         raw = ask("  Which project directory?", ".", False, style=self.style)
         project = Path(raw).expanduser().resolve()
         if not project.is_dir():
-            self.step_fail("Document format preferences", f"not a directory: {project}")
+            self.step_fail("Project preferences", f"not a directory: {project}")
             return
         prefs_path = project / ".claude" / "team-preferences.json"
-        current = "docx" in (_read_json_dict(prefs_path).get("extra_formats") or [])
-        self.say(self.style.dim(f"    currently: docx by default = {'on' if current else 'off'}"))
-        wanted = confirm(
+        existing = _read_json_dict(prefs_path)
+        docx_current = "docx" in (existing.get("extra_formats") or [])
+        citations_current = existing.get("regulatory_citations", True)  # unset = on
+        self.say(
+            self.style.dim(
+                f"    currently: docx by default = {'on' if docx_current else 'off'}, "
+                f"regulatory citations = {'on' if citations_current else 'off'}"
+            )
+        )
+        docx_wanted = confirm(
             "  Produce .docx by default for controlled documents in this project?",
-            default=current,
+            default=docx_current,
+            assume_yes=False,
+            style=self.style,
+        )
+        citations_wanted = confirm(
+            "  Detection-logic work cites regulatory obligations by default - keep that on?",
+            default=citations_current,
             assume_yes=False,
             style=self.style,
         )
         if self.demo:
-            verb = "on" if wanted else "off"
-            self.step_ok("Document format preferences", f"would set docx default -> {verb}")
-            return
-        if wanted == current:
             self.step_ok(
-                "Document format preferences",
-                f"unchanged (docx default {'on' if current else 'off'})",
+                "Project preferences",
+                f"would set docx -> {'on' if docx_wanted else 'off'}, "
+                f"citations -> {'on' if citations_wanted else 'off'}",
             )
             return
-        write_team_preferences(project, extra_formats=["docx"] if wanted else [])
+        if docx_wanted == docx_current and citations_wanted == citations_current:
+            self.step_ok("Project preferences", "unchanged")
+            return
+        write_team_preferences(
+            project,
+            extra_formats=["docx"] if docx_wanted else [],
+            regulatory_citations=citations_wanted,
+        )
         self.step_ok(
-            "Document format preferences",
-            f"docx default -> {'on' if wanted else 'off'} ({prefs_path})",
+            "Project preferences",
+            f"docx -> {'on' if docx_wanted else 'off'}, "
+            f"citations -> {'on' if citations_wanted else 'off'} ({prefs_path})",
         )
 
     def enable_step(self) -> None:
@@ -1845,7 +1866,7 @@ class Installer:
             ]
         if self.subset == "formats":
             return [
-                ("Document format preferences", self.format_preferences_step),
+                ("Project preferences", self.format_preferences_step),
             ]
         return [
             ("Preflight checks", self.preflight),
@@ -1946,16 +1967,29 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     return 0
 
 
-def write_team_preferences(project: Path, extra_formats: list) -> bool:
-    """Project-scoped rendering preference (`.claude/team-preferences.json`): which EXTRA
-    output formats controlled documents get automatically, beyond the always-required
-    .md + .html. Currently the only valid extra is "docx" (scripts/render_docx.py). Never
-    changes the .md/.html requirement itself - opt-in additive only. Merge-only (a
-    pre-existing file's other keys are preserved); best-effort, never raises."""
+def write_team_preferences(
+    project: Path, extra_formats: Optional[list] = None, regulatory_citations: Optional[bool] = None
+) -> bool:
+    """Project-scoped preferences (`.claude/team-preferences.json`), merge-only (a
+    pre-existing file's other keys, and any key not passed here, are preserved) and
+    best-effort (never raises):
+
+    - extra_formats: which EXTRA output formats controlled documents get automatically,
+      beyond the always-required .md + .html. Currently the only valid extra is "docx"
+      (scripts/render_docx.py). Never changes the .md/.html requirement - additive only.
+    - regulatory_citations: whether detection-logic work cites the specific regulatory
+      obligation it serves (CLAUDE.md §2 / ADR-001). Defaults to True (on) whenever the
+      key is absent - only an explicit False turns it off project-wide.
+
+    Pass only the preference(s) you want to change; omitted arguments leave the
+    corresponding key untouched (or unset, which reads as the default)."""
     try:
         target = project / ".claude" / "team-preferences.json"
         prefs = _read_json_dict(target)
-        prefs["extra_formats"] = sorted(set(extra_formats))
+        if extra_formats is not None:
+            prefs["extra_formats"] = sorted(set(extra_formats))
+        if regulatory_citations is not None:
+            prefs["regulatory_citations"] = bool(regulatory_citations)
         _write_json_backup(target, prefs)
         return True
     except OSError:

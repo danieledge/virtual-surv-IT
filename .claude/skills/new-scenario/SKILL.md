@@ -22,17 +22,18 @@ each step to the right agent and chain them in this session:
 1. **business-analyst** - turn "$ARGUMENTS" into a spec using
    `docs/templates/scenario-spec.md` (obligation, data, detection requirements,
    true-positive / false-positive acceptance criteria). **Regulatory citations are ON by
-   default - check `decisions.regulatory-citations` in the engagement state first** (a
-   per-engagement decision, not a project setting: some engagements are for a non-regulatory
-   use of this scaffolding, or the user simply doesn't want citations this time). If unset,
-   cite the obligation by RETRIEVING it from the regulatory register
+   default - check the PROJECT preference first**: `.claude/team-preferences.json`'s
+   `regulatory_citations` key (absent or `true` = on; only an explicit `false` turns it
+   off - set via the installer's "Project preferences" menu, or Morgan may write it
+   directly on the user's word, no consent gate on that file). When on, cite the
+   obligation by RETRIEVING it from the regulatory register
    (`<python> -m scripts.check_citations --typology <x>` / `config/regulatory-register.yaml`)
    (`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the bundled scripts")
    - never invent a pinpoint article/section/rule; flag any
    citation not in the register as to-verify (ADR-001; `compliance-reviewer` runs the check).
-   If the decision is `off`, skip citations entirely - but state it plainly in the spec
-   ("Regulatory citations: declined by user decision, `<date>`") rather than silently
-   omitting them; never let a reader assume the obligation was checked and cleared.
+   When off, skip citations entirely - but state it plainly in the spec
+   ("Regulatory citations: off (project preference)") rather than silently omitting
+   them; never let a reader assume the obligation was checked and cleared.
 2. **Domain SME** - pick by domain: `trade-surveillance-sme`, `tm-sme`, or
    `comms-surveillance-sme`. Have them review the proposed detection logic and thresholds.
    (Advisory/read-only - they recommend, they do not edit.)

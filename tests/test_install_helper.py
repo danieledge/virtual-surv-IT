@@ -1801,19 +1801,48 @@ def test_relocation_preserves_explicit_repo_flag(tmp_path, monkeypatch):
 # ------------------------------------------------ standalone document-format menu step
 
 
+def _confirm_by_prompt(answers: dict):
+    """A fake `confirm` distinguishing the docx vs citations question by prompt text,
+    since format_preferences_step asks both in one pass."""
+
+    def _fn(prompt, default, assume_yes, style=None):
+        key = "docx" if "docx" in prompt.lower() else "citations"
+        return answers.get(key, default)
+
+    return _fn
+
+
 def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, monkeypatch, capsys):
-    """Menu option 6: re-runnable any time, independent of project enablement."""
+    """Menu option 6: re-runnable any time, independent of project enablement. Both
+    preferences are project-wide (team-preferences.json), asked in one pass."""
     import install_helper as ih
 
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)  # user says: turn docx on
+    monkeypatch.setattr(
+        ih, "confirm", _confirm_by_prompt({"docx": True, "citations": True})
+    )  # turn docx on; citations stays on (the default)
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
     inst.format_preferences_step()
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
     assert prefs["extra_formats"] == ["docx"]
-    assert "docx default -> on" in capsys.readouterr().out
+    assert prefs["regulatory_citations"] is True
+    assert "docx -> on" in capsys.readouterr().out
+
+
+def test_format_preferences_step_can_turn_off_citations(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": False}))
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
+    inst.format_preferences_step()
+    prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
+    assert prefs["regulatory_citations"] is False
+    assert "citations -> off" in capsys.readouterr().out
 
 
 def test_format_preferences_step_no_write_when_unchanged(tmp_path, monkeypatch):
@@ -1822,13 +1851,14 @@ def test_format_preferences_step_no_write_when_unchanged(tmp_path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)  # matches the current default (off)
+    # matches the current defaults: docx off, citations on
+    monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": True}))
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
     inst.format_preferences_step()
     assert not (project / ".claude" / "team-preferences.json").exists()
 
 
-def test_format_preferences_step_can_turn_off_again(tmp_path, monkeypatch):
+def test_format_preferences_step_can_turn_docx_off_again(tmp_path, monkeypatch):
     import install_helper as ih
     from install_helper import write_team_preferences
 
@@ -1836,7 +1866,7 @@ def test_format_preferences_step_can_turn_off_again(tmp_path, monkeypatch):
     project.mkdir()
     write_team_preferences(project, extra_formats=["docx"])
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)  # turn it back off
+    monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": True}))
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
     inst.format_preferences_step()
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
@@ -1849,7 +1879,7 @@ def test_format_preferences_step_demo_never_writes(tmp_path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": True, "citations": False}))
     args = _args(yes=False)
     args.demo = True
     inst = ih.Installer(args, ih.Style(False), ih.marks(), subset="formats")
@@ -1862,3 +1892,22 @@ def test_menu_option_6_maps_to_formats():
 
     assert MENU_ACTIONS["6"] == "formats"
     assert MENU_ACTIONS["7"] == "demo"
+
+
+def test_write_team_preferences_regulatory_citations_flag(tmp_path):
+    from install_helper import write_team_preferences
+
+    write_team_preferences(tmp_path, regulatory_citations=False)
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["regulatory_citations"] is False
+    assert "extra_formats" not in prefs  # omitted arg leaves the other key untouched
+
+
+def test_write_team_preferences_omitted_args_preserve_existing(tmp_path):
+    from install_helper import write_team_preferences
+
+    write_team_preferences(tmp_path, extra_formats=["docx"], regulatory_citations=False)
+    write_team_preferences(tmp_path, extra_formats=["docx"])  # citations arg omitted this time
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["regulatory_citations"] is False  # untouched by the second call
+    assert prefs["extra_formats"] == ["docx"]
