@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 for s in apply-project-anchor.sh apply-document-redirect.sh apply-session-brief.sh \
-  apply-post-edit-lint.sh apply-module-redirect.sh; do
+  apply-post-edit-lint.sh apply-module-redirect.sh apply-subagent-budget.sh; do
   if [ -f "$s" ]; then
     echo "== $s"
     bash "$s"

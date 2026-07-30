@@ -475,7 +475,10 @@ the user informed and in charge, check before anything irreversible.
   context, so a verbose return balloons Morgan and pushes a long engagement toward premature
   compaction. The orchestrator's context is an attention budget (Anthropic's context-engineering
   guidance); state the budget in the brief, and if a return blows it, send it back to be distilled
-  (or distil it before acting) rather than carrying the bloat.
+  (or distil it before acting) rather than carrying the bloat. A PostToolUse hook on Task
+  completion (`scripts/subagent_return_budget.py`, audit finding #4, 2026-07-30) now gives one-line
+  feedback the moment a return is clearly (2x) over budget - advisory, never blocking, don't rely
+  on it instead of briefing well in the first place.
 - **Coordinate through artifacts, not chatter (the "blackboard")** - agents read/write the shared
   set (Delivery Report, RTM, specs); each step's output is the next step's input.
 - **Challenge the agents - the PM is a sceptic, not a relay.** Don't pass findings through verbatim:
