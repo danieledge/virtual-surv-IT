@@ -319,16 +319,29 @@ def statusline_command(repo: Path) -> str:
 
 
 def merge_statusline(settings: dict, command: str):
-    """Set statusLine in a settings dict. Returns (settings, verdict) where verdict is
-    'added', 'already' (identical command present) or 'conflict' (a DIFFERENT statusLine
-    exists - the caller must get explicit confirmation before overwriting)."""
+    """Set statusLine in a settings dict. Returns (settings, verdict):
+    'added' (none existed), 'already' (identical command present, nothing to do),
+    'ours-moved' (OUR statusline.sh at another path - e.g. an old clone location -
+    updated in place without a scare prompt), or 'conflict' (a genuinely foreign
+    statusLine - the caller must show it to the user and get explicit confirmation)."""
     current = settings.get("statusLine")
     if isinstance(current, dict) and current.get("command") == command:
         return settings, "already"
+    if isinstance(current, dict) and "statusline.sh" in str(current.get("command", "")):
+        settings["statusLine"] = {"type": "command", "command": command}
+        return settings, "ours-moved"
     if current is not None:
         return settings, "conflict"
     settings["statusLine"] = {"type": "command", "command": command}
     return settings, "added"
+
+
+def current_statusline_command(settings: dict) -> str:
+    """The existing statusLine command for display, best-effort."""
+    current = settings.get("statusLine")
+    if isinstance(current, dict):
+        return str(current.get("command", "")) or "(unreadable command)"
+    return str(current) if current is not None else ""
 
 
 def command_argv(name: str, resolved: Optional[str] = None) -> list:
@@ -986,15 +999,30 @@ class Installer:
         if verdict == "already":
             self.step_ok("Status line", "already wired to this clone")
             return
+        if verdict == "ours-moved":
+            # Our own script at another path (an old clone location): update without a
+            # scare prompt, but say what happened.
+            self.say(
+                self.style.dim(
+                    "    Found my status line pointing at an older clone path - updating it."
+                )
+            )
         if verdict == "conflict":
+            existing = current_statusline_command(json.loads(target.read_text(encoding="utf-8")))
+            self.say(
+                self.style.yellow(
+                    f"    You already have a status line configured that is not mine:\n"
+                    f"      {existing}"
+                )
+            )
             keep = confirm(
-                "  You already have a different statusLine configured - shall I replace it?",
+                "  Shall I replace it with the team's status line?",
                 default=False,
                 assume_yes=self.args.yes,
                 style=self.style,
             )
             if not keep:
-                self.step_skip("Status line", "existing statusLine kept")
+                self.step_skip("Status line", "your existing statusLine kept")
                 return
             settings["statusLine"] = {"type": "command", "command": command}
         if self.demo:

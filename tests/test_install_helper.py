@@ -721,3 +721,26 @@ def test_full_sync_step_fetches_and_checks_out(monkeypatch, tmp_path):
     joined = [" ".join(c) for c in calls]
     assert any("fetch origin main" in c for c in joined)
     assert any("checkout -B main origin/main" in c for c in joined)
+
+
+# --- statusline conflict detection refinement (2026-07-30) --------------------------------
+
+
+def test_merge_statusline_ours_at_old_path_updates_silently(tmp_path):
+    from install_helper import merge_statusline, statusline_command
+
+    new_cmd = statusline_command(tmp_path / "new-clone")
+    old = {"statusLine": {"type": "command", "command": 'bash "/old/clone/scripts/statusline.sh"'}}
+    settings, verdict = merge_statusline(old, new_cmd)
+    assert verdict == "ours-moved"
+    assert settings["statusLine"]["command"] == new_cmd  # updated in place, no prompt path
+
+
+def test_merge_statusline_foreign_still_conflicts(tmp_path):
+    from install_helper import current_statusline_command, merge_statusline, statusline_command
+
+    foreign = {"statusLine": {"type": "command", "command": "starship prompt"}}
+    settings, verdict = merge_statusline(foreign, statusline_command(tmp_path))
+    assert verdict == "conflict"
+    assert settings["statusLine"]["command"] == "starship prompt"  # untouched
+    assert current_statusline_command(settings) == "starship prompt"
