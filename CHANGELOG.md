@@ -3,7 +3,63 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [0.33.2] - 2026-07-30 - Archive marker + closed-pack fast path (startup cost)
+## [0.33.3] - 2026-07-30 - Optional docx export, mechanised audit findings, engage-startup fix
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+### Added
+- **Opt-in `.docx` export** for controlled documents (BRD, FSD, delivery report, etc.) -
+  `scripts/render_docx.py` walks the same sanitised HTML `render_html.py` already produces
+  (one Markdown parse, one XSS allow-list, both formats derived from it - `.md` stays the
+  sole authored source). `python-docx` is an optional dependency, same tier as
+  Markdown/bleach; a missing library degrades to one clear error, never a crash.
+- **Project-wide preferences** (`.claude/team-preferences.json`): `extra_formats` (docx
+  on/off) and `regulatory_citations` (on by default; a project can turn citations off).
+  Two ways to change them - the installer's re-runnable "Project preferences" menu
+  (option 6), or the new **`/preferences`** skill, which lets Morgan read/write the file
+  directly in-session (no consent gate on it, no engagement opened).
+- **Self-relocating installer**: running `install_helper.py` from inside the clone it is
+  about to `git checkout` could fail to overwrite the running `.py` file on Windows - it
+  now copies itself to a temp file and re-execs from there first, so no manual workaround
+  is needed.
+- **`/engage` step-0 probe collapsed into one script** (`scripts/engage_probe.py`):
+  replaces an 18-line hand-assembled bash compound the model had to reproduce verbatim
+  every engage. Computes `VERSION_CHANGED` and the checked-out git branch directly rather
+  than leaving either to prose derivation.
+- **Eight mechanised audit findings** (a systematic review of where the team relied on
+  prompted recall for things a script could check instead):
+  - the resume-vs-new engagement menu is now computed (`engagement_state list --menu`),
+    not re-derived from text - closes two live defects from the same day;
+  - a review-shaped artifact missing or leaving empty the mandatory Developer-guidance
+    section is now caught mechanically (`FINDINGS-NO-DEV-GUIDANCE`);
+  - a rendered `REVIEW-<slug>.md` that has drifted from its source findings pack (added
+    findings, changed dispositions) is now caught (`STALE-FINDINGS-RENDER` /
+    `COUNT-MISMATCH`);
+  - a subagent return clearly over the condensed-return token budget now gets PostToolUse
+    feedback instead of silently ballooning the orchestrator's context;
+  - the two LOCKED question-tool menus (review-type, artifact packaging) are now guarded
+    against the exact drift class that got them locked in the first place, before a
+    malformed version ever reaches the user.
+
+### Fixed
+- **`/engage` taking several minutes on a corporate Windows box**, traced to two causes:
+  an unbounded `find` in the plugin-root fallback search, and the safety-guard launcher
+  re-executing `python3`/`python`/`py` to version-check them on every single hook fire (5
+  hooks per Bash call) - on a box where `python3.exe` is the Windows Store execution-alias
+  stub, that repeated hang was the whole story. The guard launcher now caches the first
+  working interpreter; `install_helper.py` pre-seeds that cache at project-enable time so
+  even the first hook call never pays the discovery cost.
+- A latent bug in the 0.33.2 archive feature: `archive`/`unarchive` were never added to
+  the root-level-command exemption list, so calling `archive <slug>` without `--dir` while
+  an engagement was ACTIVE resolved the target path twice and failed.
+- `render_findings.py` emitted a plain "## Developer guidance" heading; the documented
+  spec is "## 🔵 Developer guidance - improving future code" verbatim - fixed the renderer
+  to match the spec.
+- `render_findings.py`, `render_docx.py` and `engage_probe.py` were missing from the
+  execution guard's team-script allow-list, so plugin users would hit consent prompts
+  running them despite being consent-free team tooling.
+
+
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`. Driven by a live report: DoD startup scans grew
 > slow in projects with many artifacts, mostly from old engagements.
