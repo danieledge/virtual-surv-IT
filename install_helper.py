@@ -391,6 +391,95 @@ def current_statusline_command(settings: dict) -> str:
     return str(current) if current is not None else ""
 
 
+def _windows_registry_path_dirs() -> list:
+    """PATH directories re-read FRESH from the registry (user then machine).
+
+    Corporate Windows: an installer updates the registry PATH, but every already-open
+    terminal (and anything launched from it, like this script) keeps the stale copy it
+    inherited at start - so `shutil.which` misses a CLI that a brand-new shell would
+    find. Reading the registry sees what that new shell would see. Best-effort: any
+    failure returns what was gathered so far."""
+    dirs: list = []
+    try:
+        import winreg  # Windows-only stdlib; guarded by the caller's platform check
+
+        for hive, key in (
+            (winreg.HKEY_CURRENT_USER, r"Environment"),
+            (
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+            ),
+        ):
+            try:
+                with winreg.OpenKey(hive, key) as k:
+                    val, _ = winreg.QueryValueEx(k, "Path")
+                dirs += [os.path.expandvars(d) for d in str(val).split(";") if d.strip()]
+            except OSError:
+                continue
+    except Exception:
+        pass
+    return dirs
+
+
+_claude_cache: Optional[tuple] = None  # memo for find_claude (registry reads once per run)
+
+
+def find_claude(refresh: bool = False) -> tuple:
+    """Locate the Claude CLI even when this session's PATH is stale.
+
+    Returns (absolute_path_or_None, how) with how in "path" | "known-location" |
+    "registry" | "". Order: the live PATH, then the documented install locations
+    (native installer, npm global), then - Windows only - directories from a fresh
+    registry PATH read (catches 'installed a minute ago, terminal opened an hour
+    ago'). Never raises."""
+    global _claude_cache
+    if _claude_cache is not None and not refresh:
+        return _claude_cache
+    result: tuple = (None, "")
+    hit = shutil.which("claude")
+    if hit:
+        result = (hit, "path")
+    else:
+        home = Path.home()
+        if sys.platform == "win32":
+            names = ("claude.exe", "claude.cmd", "claude.bat")
+            candidates = [home / ".local" / "bin" / "claude.exe"]
+            appdata = os.environ.get("APPDATA")
+            if appdata:
+                candidates += [Path(appdata) / "npm" / n for n in ("claude.cmd", "claude.bat")]
+        else:
+            names = ("claude",)
+            candidates = [
+                home / ".local" / "bin" / "claude",
+                home / ".claude" / "local" / "claude",
+                home / ".npm-global" / "bin" / "claude",
+                Path("/usr/local/bin/claude"),
+                Path("/opt/homebrew/bin/claude"),
+            ]
+        for c in candidates:
+            try:
+                if c.is_file():
+                    result = (str(c), "known-location")
+                    break
+            except OSError:
+                continue
+        if result[0] is None and sys.platform == "win32":
+            for d in _windows_registry_path_dirs():
+                found = next((p for n in names if (p := Path(d) / n) and _is_file_safe(p)), None)
+                if found:
+                    result = (str(found), "registry")
+                    break
+    _claude_cache = result
+    return result
+
+
+def _is_file_safe(p: Path) -> bool:
+    try:
+        return p.is_file()
+    except OSError:
+        return False
+
+
 def command_argv(name: str, resolved: Optional[str] = None) -> list:
     """The argv prefix that identifies how to launch `name` on this platform.
 
@@ -398,8 +487,13 @@ def command_argv(name: str, resolved: Optional[str] = None) -> list:
     CreateProcess cannot launch a batch file by bare name without a shell, so those
     return a `cmd /c` prefix - which run_cmd converts to the safe /s string form
     (windows_shim_cmdline) before launching. Everywhere else (and for real
-    executables) the resolved absolute path is used directly."""
-    resolved = resolved if resolved is not None else (shutil.which(name) or name)
+    executables) the resolved absolute path is used directly. `claude` gets the
+    find_claude fallback so a stale corporate PATH still launches it by full path."""
+    if resolved is None:
+        resolved = shutil.which(name)
+        if resolved is None and name == "claude":
+            resolved = find_claude()[0]
+        resolved = resolved or name
     if str(resolved).lower().endswith((".cmd", ".bat")):
         return ["cmd", "/c", str(resolved)]
     return [str(resolved)]
@@ -718,14 +812,26 @@ class Installer:
             self.step_skip("git", "not found - a real run needs it")
         else:
             self.step_fail("git", "git is required - install it and re-run")
-        if shutil.which("claude"):
+        claude_path, how = find_claude(refresh=True)
+        if how == "path":
             self.step_ok("claude CLI found")
+        elif claude_path:
+            # Installed, but this terminal's PATH copy predates the install (common on
+            # corporate Windows). Full-path launches keep the run working regardless.
+            self.step_ok(f"claude CLI found at {claude_path}")
+            self.say(
+                self.style.dim(
+                    "  (it is not on this terminal's PATH - I will launch it by full path;"
+                    " open a fresh terminal and `claude` will work by name.)"
+                )
+            )
         elif self.demo:
             self.step_skip("claude CLI", f"not found - a real run needs it: {CLAUDE_DOCS_URL}")
         else:
             self.step_fail(
                 "claude CLI",
-                f"Claude Code is not on PATH - install it first: {CLAUDE_DOCS_URL}",
+                "not on PATH and not in the usual install locations - install it first"
+                f" ({CLAUDE_DOCS_URL}), then open a NEW terminal and re-run me",
             )
         try:
             proc = run_cmd(["git", "ls-remote", "--heads", REPO_URL, "main"], timeout=30)

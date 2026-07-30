@@ -328,6 +328,9 @@ def test_command_argv_unresolved_falls_back_to_name(monkeypatch):
     import install_helper as ih
 
     monkeypatch.setattr(ih.shutil, "which", lambda _n: None)
+    # claude gets the find_claude fallback (stale corporate PATH); when even that
+    # misses, the bare name survives so the error surfaces at launch, not resolve.
+    monkeypatch.setattr(ih, "find_claude", lambda refresh=False: (None, ""))
     assert ih.command_argv("claude") == ["claude"]
 
 
@@ -1224,3 +1227,100 @@ def test_menu_check_for_updates_without_clone_fails_soft(monkeypatch, tmp_path, 
     out = capsys.readouterr().out
     assert rc == 0
     assert "no usable clone" in out and "Traceback" not in out
+
+
+# ------------------------------------------------------ stale-PATH claude discovery
+
+
+def _clear_claude_cache():
+    import install_helper as ih
+
+    ih._claude_cache = None
+
+
+def test_find_claude_prefers_live_path(monkeypatch):
+    import install_helper as ih
+
+    _clear_claude_cache()
+    monkeypatch.setattr(ih.shutil, "which", lambda n: "/usr/bin/claude")
+    assert ih.find_claude(refresh=True) == ("/usr/bin/claude", "path")
+
+
+def test_find_claude_falls_back_to_known_location(monkeypatch, tmp_path):
+    """CLI installed to ~/.local/bin but the session PATH is stale: which() misses,
+    the documented location is probed and wins."""
+    import install_helper as ih
+
+    _clear_claude_cache()
+    home = tmp_path / "home"
+    binary = home / ".local" / "bin" / ("claude.exe" if ih.sys.platform == "win32" else "claude")
+    binary.parent.mkdir(parents=True)
+    binary.write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih.shutil, "which", lambda n: None)
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: home))
+    path, how = ih.find_claude(refresh=True)
+    assert path == str(binary)
+    assert how == "known-location"
+    _clear_claude_cache()
+
+
+def test_find_claude_windows_registry_catches_stale_session(monkeypatch, tmp_path):
+    """The corporate case: installed a minute ago, terminal opened an hour ago. The
+    registry PATH (what a NEW shell would see) locates it."""
+    import install_helper as ih
+
+    _clear_claude_cache()
+    stale_dir = tmp_path / "fresh-path-dir"
+    stale_dir.mkdir()
+    (stale_dir / "claude.cmd").write_text("@echo off\n", encoding="utf-8")
+    monkeypatch.setattr(ih.shutil, "which", lambda n: None)
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path / "nohome"))
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(ih, "_windows_registry_path_dirs", lambda: [str(stale_dir)])
+    monkeypatch.delenv("APPDATA", raising=False)
+    path, how = ih.find_claude(refresh=True)
+    assert path == str(stale_dir / "claude.cmd")
+    assert how == "registry"
+    _clear_claude_cache()
+
+
+def test_find_claude_not_found_never_raises(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    _clear_claude_cache()
+    monkeypatch.setattr(ih.shutil, "which", lambda n: None)
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path / "nohome"))
+    monkeypatch.setattr(ih, "_windows_registry_path_dirs", lambda: ["Z:\\missing"])
+    assert ih.find_claude(refresh=True) == (None, "")
+    _clear_claude_cache()
+
+
+def test_find_claude_memoises_registry_probe(monkeypatch, tmp_path):
+    """Repeated launches (every run_cmd resolves argv[0]) must not re-read the registry."""
+    import install_helper as ih
+
+    _clear_claude_cache()
+    calls = []
+    monkeypatch.setattr(ih.shutil, "which", lambda n: None)
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path / "nohome"))
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(ih, "_windows_registry_path_dirs", lambda: calls.append(1) or [])
+    ih.find_claude(refresh=True)
+    ih.find_claude()
+    ih.find_claude()
+    assert len(calls) == 1
+    _clear_claude_cache()
+
+
+def test_command_argv_uses_find_claude_fallback(monkeypatch):
+    """Bare `claude` in an argv resolves to the off-PATH shim, which then routes
+    through the cmd /s /c quoted form like any discovered .cmd."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda n: None)
+    monkeypatch.setattr(
+        ih, "find_claude", lambda refresh=False: (r"C:\Users\A B\npm\claude.cmd", "registry")
+    )
+    assert ih.command_argv("claude") == ["cmd", "/c", r"C:\Users\A B\npm\claude.cmd"]
+    # other names keep the plain bare-name fallback
+    assert ih.command_argv("git") == ["git"]
