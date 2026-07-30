@@ -76,7 +76,7 @@ grep -m1 '"version"' "${PR:-.}/.claude-plugin/plugin.json" 2>/dev/null | head -1
 bash scripts/check-review-tools.sh 2>/dev/null || bash "$PR/scripts/check-review-tools.sh" 2>/dev/null; \
 MF=$(ls docs/codebase-map.md CODEBASE-MAP.md 2>/dev/null | head -1); [ -n "$MF" ] && { head -20 "$MF"; echo "...(map section 2 body read just-in-time on demand; section 3 history below for the version compare:)"; awk '/^## 3\./{f=1} /^## 4\./{f=0} f' "$MF"; }; \
 awk '/^## \[/{n++} n==1' "${PR:-.}/CHANGELOG.md" 2>/dev/null | head -30; \
-[ -f docs/team-extensions.md ] && { (python3 -m scripts.extensions show || python -m scripts.extensions show) 2>/dev/null || head -60 docs/team-extensions.md; }; \
+[ -f docs/team-extensions.md ] && { EX="${PR:-.}/scripts/extensions.py"; (python3 "$EX" show || python "$EX" show) 2>/dev/null || head -60 docs/team-extensions.md; }; \
 printf '%s\n' "$G" | head -400
 ```
 

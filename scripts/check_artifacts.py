@@ -28,7 +28,9 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      content, and (best effort, when `git` is available) an anchor that still resolves.
      A missing map is NOT a failure - first engagements create it at close.
   6. the engagement-summary email is a `.txt` (the one artifact never rendered to HTML) - a
-     `.md`/`.html` email is `SUMMARY-WRONG-EXT`;
+     `.md`/`.html` email is `SUMMARY-WRONG-EXT`; the email is always FROM Morgan
+     (`EMAIL-NOT-MORGAN`) and every roster name it mentions carries a 🤖-marked mention
+     (`EMAIL-AGENT-UNMARKED`) - it is the pack's most-forwarded artifact;
   7. once the engagement is ✅ closed, no content artifact still carries a mutable interim/
      in-progress status banner - the status lives only in START-HERE (`STALE-STATUS`);
   8. any structured findings pack under `artifacts/data/findings-*.json` validates against
@@ -212,6 +214,52 @@ def check_agent_identity(text: str, where: Path) -> list[str]:
             f"('{m.group(0)}') - an agent and a human never share a sign-off/approval line; "
             "auto-fix: split into separate lines (only the human grant carries authority)"
         )
+    return findings
+
+
+def check_summary_email(text: str, where: Path) -> list[str]:
+    """The engagement-summary email is Morgan's cover note to an outside reader - the
+    artifact most likely to be forwarded with no context, so identity is enforced
+    harder here than in reports (template + user rule 2026-07-30, after a live email
+    went out signed by the human requester).
+
+    EMAIL-NOT-MORGAN - a `From:` line that does not name Morgan, or a sign-off tail
+      (last non-empty lines) with no Morgan in it: the email is always FROM Morgan;
+      the human's sign-off lives in the delivery report, never the email.
+    EMAIL-AGENT-UNMARKED - a roster name mentioned anywhere in the email with no line
+      carrying both that name and the 🤖 marker: every agent mentioned must be
+      unmistakably an AI on at least its first marked mention (per-name, stricter
+      than the file-level AGENT-UNMARKED used for reports).
+    """
+    findings: list[str] = []
+    lines = text.splitlines()
+    for ln in lines:
+        if re.match(r"(?i)^\s*From\s*:", ln):
+            if "morgan" not in ln.lower():
+                findings.append(
+                    f"EMAIL-NOT-MORGAN: {where} From line does not name Morgan - the summary "
+                    "email is Morgan's cover note (docs/templates/engagement-summary-email.md): "
+                    "From: 🤖 Morgan - PM & Orchestrator, Virtual Surveillance IT"
+                )
+            break
+    tail = [ln.strip() for ln in lines if ln.strip()][-6:]
+    if not any("morgan" in ln.lower() for ln in tail):
+        findings.append(
+            f"EMAIL-NOT-MORGAN: {where} sign-off does not name Morgan - the summary email is "
+            "signed off as 🤖 Morgan, never the human requester (the human's sign-off lives "
+            "in the delivery report; DoD / operating guide rule 3)"
+        )
+    for name in sorted(_ROSTER):
+        cap = name.capitalize()
+        name_re = re.compile(rf"\b{cap}\b")
+        if not name_re.search(text):
+            continue
+        if not any(_AI_MARKER in ln and name_re.search(ln) for ln in lines):
+            findings.append(
+                f"EMAIL-AGENT-UNMARKED: {where} mentions agent '{cap}' but no line marks "
+                f"'{cap}' with 🤖 - every roster name in the email must be unmistakably an "
+                "AI agent on at least one mention (add 🤖 at the first mention)"
+            )
     return findings
 
 
@@ -880,6 +928,14 @@ def check(artifacts_dir: Path) -> list[str]:
             f"SUMMARY-WRONG-EXT: {stray.name} - the engagement-summary email is a .txt, not "
             ".html; remove this rendered copy (the .txt is the deliverable)"
         )
+
+    # The email itself: always FROM Morgan, agents 🤖-marked, roster/identity rules apply
+    # to it exactly as to reports (it is the most-forwarded artifact of the pack).
+    for email in sorted(artifacts_dir.rglob("engagement-summary-*.txt")):
+        email_text = email.read_text(encoding="utf-8", errors="replace")
+        findings.extend(check_summary_email(email_text, email))
+        findings.extend(check_roster(email_text, email))
+        findings.extend(check_agent_identity(email_text, email))
 
     code_files = [
         f for f in artifacts_dir.rglob("*") if f.is_file() and f.suffix.lower() in _CODE_EXTS

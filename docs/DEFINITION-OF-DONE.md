@@ -62,7 +62,9 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > `SUMMARY-WRONG-EXT` · `STALE-STATUS` · `STALE-DOCSTATUS` · `CODE-NO-QA` / `CODE-NO-TESTS`
 > (scoped per folder - a sibling engagement's QA never vouches) · `FINDING-NO-IMPACT` ·
 > `FINDINGS-CWORD-LABELS` · `FINDINGS-INVALID` · `ROSTER-UNKNOWN` / `ROSTER-ROLE-MISMATCH` ·
-> `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` · `RATIFIED-CLAIM-PENDING` ·
+> `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` · `EMAIL-NOT-MORGAN` / `EMAIL-AGENT-UNMARKED`
+> (the summary email is always FROM Morgan; every roster name in it carries a 🤖-marked
+> mention) · `RATIFIED-CLAIM-PENDING` ·
 > `REVIEW-FINGERPRINT-GAP` · `STATE-MISSING` / `STATE-INVALID` / `STATE-STALE-RENDER` ·
 > `REGISTRY-STALE` · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;
 > pre-existing ones grandfathered per the D2 ruling) · map hygiene: `MAP-TOO-LONG` ·

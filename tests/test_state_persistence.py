@@ -74,7 +74,10 @@ def test_close_clears_the_active_marker(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
     art = tmp_path / "artifacts"
     ws = art / "audit"
-    (ws / "engagement-summary-audit.txt").write_text("Done. - Morgan\n", encoding="utf-8")
+    (ws / "engagement-summary-audit.txt").write_text(
+        "Done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+        encoding="utf-8",
+    )
     _run(ws, "add-artifact", "engagement-summary-audit.txt", "--title", "Email", "--final")
     _run(ws, "set-team", "Ana (analysis)")
     assert _run(ws, "set-status", "closed", "--verdict", "done") == 0

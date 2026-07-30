@@ -89,7 +89,10 @@ def test_empty_dir_passes(tmp_path):
 def test_md_without_html_is_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "REVIEW-foo.md")
-    _touch(art / "engagement-summary-foo.txt")
+    _touch(
+        art / "engagement-summary-foo.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["REVIEW-foo.md", "engagement-summary-foo.txt"])
     findings = check(art)
     assert len(findings) == 1
@@ -111,7 +114,10 @@ def test_complete_gate_passes(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "delivery-report.md")
     _touch(art / "delivery-report.html")
-    _touch(art / "engagement-summary-spoofing.txt")
+    _touch(
+        art / "engagement-summary-spoofing.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["delivery-report.md", "engagement-summary-spoofing.txt"])
     assert check(art) == []
 
@@ -119,7 +125,10 @@ def test_complete_gate_passes(tmp_path):
 def test_nested_artifacts_are_checked(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "sub" / "spec.md")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["spec.md", "engagement-summary-x.txt"])
     findings = check(art)
     assert len(findings) == 1
@@ -142,7 +151,10 @@ def test_finding_without_impact_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "REVIEW-x.md", _finding_block(with_impact=False))
     _touch(art / "REVIEW-x.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["REVIEW-x.md", "engagement-summary-x.txt"])
     findings = check(art)
     assert len(findings) == 1 and "FINDING-NO-IMPACT" in findings[0]
@@ -152,7 +164,10 @@ def test_finding_with_impact_passes(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "REVIEW-x.md", _finding_block(with_impact=True) + _finding_block(True))
     _touch(art / "REVIEW-x.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["REVIEW-x.md", "engagement-summary-x.txt"])
     assert check(art) == []
 
@@ -161,7 +176,10 @@ def test_artifact_without_finding_blocks_not_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "delivery-report.md", "# Report\n\nProse only, tables elsewhere.\n")
     _touch(art / "delivery-report.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["delivery-report.md", "engagement-summary-x.txt"])
     assert check(art) == []
 
@@ -185,7 +203,10 @@ def test_index_satisfies_gate(tmp_path):
     for stem in ("delivery-report", "qa-handover"):
         _touch(art / f"{stem}.md")
         _touch(art / f"{stem}.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["delivery-report.md", "qa-handover.md", "engagement-summary-x.txt"])
     assert check(art) == []
 
@@ -269,7 +290,10 @@ def test_summary_email_before_close_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "review-pass-1.md")
     _touch(art / "review-pass-1.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, status=STATUS_OPEN, listed=["review-pass-1.md", "engagement-summary-x.txt"])
     findings = check(art)
     assert len(findings) == 1 and "SUMMARY-BEFORE-CLOSE" in findings[0]
@@ -315,7 +339,10 @@ def test_code_without_qa_handover_flagged(tmp_path):
     _touch(art / "wash_trade_model.py", "def score(): ...")
     _touch(art / "report.md")
     _touch(art / "report.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["wash_trade_model.py", "report.md", "engagement-summary-x.txt"])
     codes = "".join(check(art))
     assert "CODE-NO-QA" in codes and "CODE-NO-TESTS" in codes
@@ -327,7 +354,10 @@ def test_code_with_qa_and_tests_passes(tmp_path):
     _touch(art / "test_wash_trade_model.py", "def test_score(): ...")
     _touch(art / "qa-handover.md")
     _touch(art / "qa-handover.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(
         art,
         listed=[
@@ -343,7 +373,10 @@ def test_code_with_qa_and_tests_passes(tmp_path):
 def test_test_files_alone_do_not_trigger_gate(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "test_something.py", "def test_x(): ...")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _touch(art / "notes.md")
     _touch(art / "notes.html")
     _index(art, listed=["test_something.py", "engagement-summary-x.txt", "notes.md"])
@@ -380,7 +413,10 @@ def test_stale_index_uses_whole_tokens_not_substrings(tmp_path):
     for stem in ("report", "final-report"):
         _touch(art / f"{stem}.md")
         _touch(art / f"{stem}.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _touch(
         art / "START-HERE.md",
         "# S\n| Status | ✅ CLOSED |\n- final-report.md\n- engagement-summary-x.txt\n",
@@ -1128,3 +1164,62 @@ def test_workspace_dirs_discovery(tmp_path):
     art = _ws(tmp_path, "audit")
     (art / "not-a-pack").mkdir()
     assert [p.name for p in workspace_dirs(art)] == ["audit"]
+
+
+# ------------------------------------------------ summary email identity (2026-07-30)
+
+from pathlib import Path  # noqa: E402
+
+
+MORGAN_EMAIL = """To:        Daniel
+From:      🤖 Morgan - PM & Orchestrator, Virtual Surveillance IT (AI agent, not a human)
+Subject:   Review complete
+
+Hi Daniel,
+
+The review is complete. 🤖 Yuki (data-quality-reviewer) confirmed coverage.
+
+🤖 Morgan
+PM & Orchestrator - Virtual Surveillance IT (AI agent)
+"""
+
+
+def test_summary_email_from_morgan_passes():
+    from scripts.check_artifacts import check_summary_email
+
+    assert check_summary_email(MORGAN_EMAIL, Path("e.txt")) == []
+
+
+def test_summary_email_signed_by_human_fires():
+    """The live failure: the email went out signed by the requester, not Morgan."""
+    from scripts.check_artifacts import check_summary_email
+
+    text = MORGAN_EMAIL.replace(
+        "🤖 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+        "Best regards,\nDaniel\n",
+    ).replace("From:      🤖 Morgan - PM & Orchestrator", "From:      Daniel")
+    codes = [f.split(":")[0] for f in check_summary_email(text, Path("e.txt"))]
+    assert codes.count("EMAIL-NOT-MORGAN") == 2  # From line AND sign-off
+
+
+def test_summary_email_unmarked_agent_mention_fires():
+    """User rule 2026-07-30: any agent mentioned in the body carries 🤖."""
+    from scripts.check_artifacts import check_summary_email
+
+    text = MORGAN_EMAIL.replace("🤖 Yuki", "Yuki")
+    findings = check_summary_email(text, Path("e.txt"))
+    assert any("EMAIL-AGENT-UNMARKED" in f and "Yuki" in f for f in findings)
+    # Morgan is marked in the signature, so no Morgan finding
+    assert not any("'Morgan'" in f for f in findings)
+
+
+def test_summary_email_checked_inside_pack(tmp_path):
+    """The email content check runs as part of the artifacts scan (and so as part of
+    the close gate)."""
+    pack = tmp_path / "artifacts" / "eng-x"
+    pack.mkdir(parents=True)
+    (pack / "engagement-summary-eng-x.txt").write_text(
+        "Hi,\n\nAll done.\n\nBest,\nDaniel\n", encoding="utf-8"
+    )
+    findings = check(tmp_path / "artifacts")
+    assert any("EMAIL-NOT-MORGAN" in f for f in findings)
