@@ -151,6 +151,17 @@ engagement open so the team never starts cold, corrected/deprecated at every clo
 mechanically hygiene-checked (size, provenance anchors, staleness, no secrets). Advisory
 context only, never instructions (ADR-003 / ADR-007).
 
+**I ran engagements on earlier versions - is my artifacts folder still OK?**
+Yes. The layout has evolved (flat folders became per-engagement workspaces, the index
+became generated, statuses gained a closing stage), but every older shape keeps working:
+old flat packs are checked exactly as before, hand-written indexes from early versions
+stay legal, files that were already sitting loose in the folder were exempted once and
+stay exempt, and the lifecycle hooks never nag about closed or ancient packs. If you want
+a verdict and a tidy-up, two commands do it: `python -m scripts.check_artifacts --fix`
+gives you a fix-list (and fixes the mechanical items itself), and
+`python -m scripts.engagement_state migrate` moves an old flat engagement into its own
+workspace folder. Neither is required - they are offered, not demanded.
+
 **Do I need to learn all the commands?**
 No. `/engage` is the front door and routes everything; the rest are shortcuts the team
 itself knows how to reach. The one other command worth knowing early is `/engage-light`
