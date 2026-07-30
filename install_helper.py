@@ -57,6 +57,7 @@ import os
 import shutil
 import subprocess  # fixed-argv calls to git/claude/pip, no shell  # nosec B404
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -421,6 +422,82 @@ def _windows_registry_path_dirs() -> list:
     return dirs
 
 
+def _read_json_dict(path: Path) -> dict:
+    """A dict from a JSON file, or {} on absence/garbage/BOM trouble. Never raises."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_json_backup(path: Path, data: dict) -> None:
+    """utf-8, trailing newline, .bak of any existing content first."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_file():
+        backup = path.with_suffix(path.suffix + ".bak")
+        backup.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def register_plugin_directly(repo: Path, claude_dir: Path, version: Optional[str]) -> list:
+    """Register the marketplace + plugin by writing the same JSON the claude CLI
+    writes, for boxes where group policy blocks launching the CLI at all (the
+    interactive Claude Code app still runs and reads these files at startup).
+
+    Schema verified against a real install 2026-07-30:
+      plugins/known_marketplaces.json  name -> {source, installLocation, lastUpdated}
+      plugins/installed_plugins.json   {version: 2, plugins: {id: [{scope, ...}]}}
+      settings.json                    enabledPlugins: {id: true}
+    Local-directory marketplace: source {source: local, path}, installLocation = the
+    clone itself; installPath = the clone (the repo root IS the plugin). Merge-only:
+    other marketplaces/plugins/settings are preserved, .bak written beside each file.
+    Returns the list of files touched."""
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    plugins_dir = claude_dir / "plugins"
+    touched = []
+
+    km_path = plugins_dir / "known_marketplaces.json"
+    km = _read_json_dict(km_path)
+    km[MARKETPLACE] = {
+        "source": {"source": "local", "path": str(repo)},
+        "installLocation": str(repo),
+        "lastUpdated": now,
+    }
+    _write_json_backup(km_path, km)
+    touched.append(str(km_path))
+
+    ip_path = plugins_dir / "installed_plugins.json"
+    ip = _read_json_dict(ip_path)
+    ip.setdefault("version", 2)
+    plugins = ip.get("plugins")
+    if not isinstance(plugins, dict):
+        plugins = {}
+        ip["plugins"] = plugins
+    plugins[PLUGIN_ID] = [
+        {
+            "scope": "user",
+            "installPath": str(repo),
+            "version": version or "unknown",
+            "installedAt": now,
+            "lastUpdated": now,
+        }
+    ]
+    _write_json_backup(ip_path, ip)
+    touched.append(str(ip_path))
+
+    st_path = claude_dir / "settings.json"
+    st = _read_json_dict(st_path)
+    enabled = st.get("enabledPlugins")
+    if not isinstance(enabled, dict):
+        enabled = {}
+        st["enabledPlugins"] = enabled
+    enabled[PLUGIN_ID] = True
+    _write_json_backup(st_path, st)
+    touched.append(str(st_path))
+    return touched
+
+
 def _claude_via_npm_prefix() -> Optional[str]:
     """Ask npm where its prefix is, then look for claude under it. Covers custom
     corporate prefixes no hardcoded candidate list can know. Best-effort: npm absent,
@@ -527,6 +604,27 @@ def _is_file_safe(p: Path) -> bool:
         return False
 
 
+def _find_node() -> Optional[str]:
+    """node.exe, surviving the same stale-PATH problem as claude: live PATH first,
+    then the standard Program Files install dirs, then a fresh registry PATH read.
+    Without this, the policy-safe node launch silently falls back to the blocked
+    cmd/APPDATA path exactly on the boxes that need it."""
+    hit = shutil.which("node")
+    if hit:
+        return hit
+    if sys.platform != "win32":
+        return None
+    for env in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+        base = os.environ.get(env)
+        if base and _is_file_safe(Path(base) / "nodejs" / "node.exe"):
+            return str(Path(base) / "nodejs" / "node.exe")
+    for d in _windows_registry_path_dirs():
+        p = Path(d) / "node.exe"
+        if _is_file_safe(p):
+            return str(p)
+    return None
+
+
 def node_launch_for(resolved) -> Optional[list]:
     """A [node.exe, cli.js] argv for an npm-installed claude, or None.
 
@@ -555,7 +653,7 @@ def node_launch_for(resolved) -> Optional[list]:
             pass
     if pkg is None:
         return None
-    node = shutil.which("node")
+    node = _find_node()
     if not node:
         return None
     for rel in ("cli.js", "bin/cli.js", "bin/claude.js", "bin/claude"):
@@ -1238,25 +1336,63 @@ class Installer:
                 fatal=False,
             )
 
+    def say_claude_launch_trace(self) -> None:
+        """One dim line naming exactly how claude is being launched - the difference
+        between 'cmd.exe is blocked', 'the APPDATA exe is blocked' and 'the CLI ran
+        and failed' when reading a report from a locked-down box."""
+        try:
+            argv = command_argv("claude")
+        except Exception:
+            argv = ["claude"]
+        self.say(self.style.dim(f"    (claude launched as: {' '.join(argv)})"))
+
+    def register_directly(self, reason: str) -> None:
+        """The no-CLI path: write the registration JSON the CLI would have written.
+        The interactive Claude Code app reads these at startup, so a box that can run
+        Claude Code but blocks OUR launch of the CLI binary still gets the plugin."""
+        self.say(self.style.dim(f"    ({reason} - registering directly in ~/.claude instead)"))
+        if self.demo:
+            for name in ("known_marketplaces.json", "installed_plugins.json", "settings.json"):
+                self.say(self.style.dim(f"    would update ~/.claude/.../{name}"))
+        else:
+            version = installed_version(self.repo) if self.repo else None
+            register_plugin_directly(self.repo, user_settings_path().parent, version)
+        self.direct_registered = True
+        self.step_ok(
+            "Marketplace + plugin " + self.did("registered directly", "would register directly"),
+            "restart Claude Code to load it",
+        )
+
     def marketplace(self) -> None:
         self.step_intro("Pointing Claude Code's marketplace at your clone.")
-        if self.mode == "update":
-            proc = run_cmd(["claude", "plugin", "marketplace", "update", MARKETPLACE], timeout=120)
-            if proc.returncode == 0:
-                self.step_ok(f"Marketplace {MARKETPLACE} " + self.did("refreshed", "would refresh"))
-                return
-        # Fresh add (install mode, or an update where the marketplace was missing/broken).
-        run_cmd(["claude", "plugin", "marketplace", "remove", MARKETPLACE], timeout=120)
-        proc = run_cmd(["claude", "plugin", "marketplace", "add", self.repo], timeout=120)
+        self.direct_registered = False
+        try:
+            if self.mode == "update":
+                proc = run_cmd(
+                    ["claude", "plugin", "marketplace", "update", MARKETPLACE], timeout=120
+                )
+                if proc.returncode == 0:
+                    self.step_ok(
+                        f"Marketplace {MARKETPLACE} " + self.did("refreshed", "would refresh")
+                    )
+                    return
+            # Fresh add (install mode, or an update where the marketplace was missing/broken).
+            run_cmd(["claude", "plugin", "marketplace", "remove", MARKETPLACE], timeout=120)
+            proc = run_cmd(["claude", "plugin", "marketplace", "add", self.repo], timeout=120)
+        except OSError as exc:
+            # CreateProcess refused the CLI binary itself (WinError 1260 = blocked by
+            # group policy). The CLI is only a JSON writer here - write it ourselves.
+            self.say_claude_launch_trace()
+            self.register_directly(f"could not launch the claude CLI: {exc}")
+            return
         if proc.returncode != 0:
-            self.step_fail(
-                "Add marketplace",
-                (
-                    proc.stderr.strip()
-                    or proc.stdout.strip()
-                    or "claude plugin marketplace add failed"
-                ),
-            )
+            err = proc.stderr.strip() or proc.stdout.strip()
+            if "group policy" in err.lower() or "blocked" in err.lower():
+                self.say_claude_launch_trace()
+                self.register_directly("the claude CLI launch is blocked by policy")
+                return
+            self.say_claude_launch_trace()
+            self.step_fail("Add marketplace", err or "claude plugin marketplace add failed")
         self.step_ok(
             f"Marketplace {MARKETPLACE} " + self.did("->", "would point at") + f" {self.repo}"
         )
@@ -1264,18 +1400,30 @@ class Installer:
     def plugin(self) -> None:
         verb = "Updating" if self.mode == "update" else "Installing"
         self.step_intro(f"{verb} the team plugin from that marketplace.")
-        if self.mode == "update":
-            proc = run_cmd(["claude", "plugin", "update", PLUGIN_ID], timeout=300)
-            if proc.returncode == 0:
-                self.step_ok(f"Plugin {PLUGIN_ID} " + self.did("updated", "would be updated"))
-                return
-        run_cmd(["claude", "plugin", "uninstall", PLUGIN_ID], timeout=120)
-        proc = run_cmd(["claude", "plugin", "install", PLUGIN_ID], timeout=300)
+        if getattr(self, "direct_registered", False):
+            # register_plugin_directly already wrote the installed-plugin record.
+            self.step_ok(f"Plugin {PLUGIN_ID} registered directly (see previous step)")
+            return
+        try:
+            if self.mode == "update":
+                proc = run_cmd(["claude", "plugin", "update", PLUGIN_ID], timeout=300)
+                if proc.returncode == 0:
+                    self.step_ok(f"Plugin {PLUGIN_ID} " + self.did("updated", "would be updated"))
+                    return
+            run_cmd(["claude", "plugin", "uninstall", PLUGIN_ID], timeout=120)
+            proc = run_cmd(["claude", "plugin", "install", PLUGIN_ID], timeout=300)
+        except OSError as exc:
+            self.say_claude_launch_trace()
+            self.register_directly(f"could not launch the claude CLI: {exc}")
+            return
         if proc.returncode != 0:
-            self.step_fail(
-                "Install plugin",
-                (proc.stderr.strip() or proc.stdout.strip() or "claude plugin install failed"),
-            )
+            err = proc.stderr.strip() or proc.stdout.strip()
+            if "group policy" in err.lower() or "blocked" in err.lower():
+                self.say_claude_launch_trace()
+                self.register_directly("the claude CLI launch is blocked by policy")
+                return
+            self.say_claude_launch_trace()
+            self.step_fail("Install plugin", err or "claude plugin install failed")
         self.step_ok(f"Plugin {PLUGIN_ID} " + self.did("installed", "would be installed"))
 
     def persist(self) -> None:
@@ -1690,17 +1838,39 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
     if not project.is_dir():
         print(f"{fail} not a directory: {project}")
         return 1
+    blocked = None
     try:
         proc = runner(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID], cwd=project)
-    except (subprocess.TimeoutExpired, OSError) as exc:
+    except subprocess.TimeoutExpired as exc:
         print(f"{fail} enable failed for {project}: {exc}")
         return 1
-    if proc.returncode == 0:
-        print(f"{ok} enabled for {project}")
+    except OSError as exc:
+        blocked = str(exc)  # CLI binary itself refused (e.g. group policy)
+    if blocked is None:
+        if proc.returncode == 0:
+            print(f"{ok} enabled for {project}")
+            return 0
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        last = detail[-1] if detail else "unknown error"
+        if "group policy" not in last.lower() and "blocked" not in last.lower():
+            print(f"{fail} enable failed for {project}: {last}")
+            return 1
+        blocked = last
+    # The CLI is only writing enabledPlugins into the project settings - do it directly.
+    try:
+        target = project / ".claude" / "settings.json"
+        settings = _read_json_dict(target)
+        enabled = settings.get("enabledPlugins")
+        if not isinstance(enabled, dict):
+            enabled = {}
+            settings["enabledPlugins"] = enabled
+        enabled[PLUGIN_ID] = True
+        _write_json_backup(target, settings)
+        print(f"{ok} enabled for {project} (written directly; claude CLI blocked: {blocked})")
         return 0
-    detail = (proc.stderr or proc.stdout or "").strip().splitlines()
-    print(f"{fail} enable failed for {project}: {detail[-1] if detail else 'unknown error'}")
-    return 1
+    except OSError as exc:
+        print(f"{fail} enable failed for {project}: {exc}")
+        return 1
 
 
 # ------------------------------------------------------------------ CLI

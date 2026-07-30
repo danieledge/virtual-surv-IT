@@ -938,8 +938,11 @@ def test_run_enable_project_fails_soft_on_timeout_and_oserror(tmp_path, capsys):
     def oserror_runner(argv, cwd=None, timeout=300):
         raise OSError("exec format error")
 
-    assert run_enable_project(tmp_path, Style(False), marks(), runner=oserror_runner) == 1
-    assert "exec format error" in capsys.readouterr().out
+    # A launch-level OSError (blocked, missing, wrong arch) now falls back to the
+    # direct enabledPlugins write - same outcome the CLI would have produced.
+    assert run_enable_project(tmp_path, Style(False), marks(), runner=oserror_runner) == 0
+    out = capsys.readouterr().out
+    assert "written directly" in out and "exec format error" in out
 
 
 def test_statusline_conflict_display_tolerates_bom(monkeypatch, tmp_path, capsys):
@@ -1458,3 +1461,96 @@ def test_claude_via_npm_prefix_fails_soft(monkeypatch):
         ih.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("blocked"))
     )
     assert ih._claude_via_npm_prefix() is None
+
+
+# ------------------------------------------------ direct registration (CLI blocked)
+
+
+def test_register_plugin_directly_writes_cli_schema(tmp_path):
+    """Group-policy boxes: the CLI can't launch, so the helper writes the same JSON
+    the CLI would (schema captured from a real install 2026-07-30). Merge-only."""
+    from install_helper import MARKETPLACE, PLUGIN_ID, register_plugin_directly
+
+    claude_dir = tmp_path / ".claude"
+    (claude_dir / "plugins").mkdir(parents=True)
+    (claude_dir / "plugins" / "known_marketplaces.json").write_text(
+        json.dumps({"other": {"source": {"source": "github", "repo": "x/y"}}}),
+        encoding="utf-8",
+    )
+    (claude_dir / "settings.json").write_text(
+        json.dumps({"enabledPlugins": {"other@other": True}, "model": "opus"}),
+        encoding="utf-8",
+    )
+    repo = tmp_path / "clone"
+    repo.mkdir()
+    touched = register_plugin_directly(repo, claude_dir, "0.33.1")
+    km = json.loads((claude_dir / "plugins" / "known_marketplaces.json").read_text())
+    assert km["other"]["source"]["repo"] == "x/y"  # preserved
+    assert km[MARKETPLACE]["source"] == {"source": "local", "path": str(repo)}
+    assert km[MARKETPLACE]["installLocation"] == str(repo)
+    ip = json.loads((claude_dir / "plugins" / "installed_plugins.json").read_text())
+    assert ip["version"] == 2
+    entry = ip["plugins"][PLUGIN_ID][0]
+    assert entry["scope"] == "user" and entry["installPath"] == str(repo)
+    assert entry["version"] == "0.33.1"
+    st = json.loads((claude_dir / "settings.json").read_text())
+    assert st["enabledPlugins"][PLUGIN_ID] is True
+    assert st["enabledPlugins"]["other@other"] is True and st["model"] == "opus"
+    assert len(touched) == 3
+    # pre-existing files got backups
+    assert (claude_dir / "settings.json.bak").is_file()
+
+
+def test_register_plugin_directly_from_empty_claude_dir(tmp_path):
+    from install_helper import PLUGIN_ID, register_plugin_directly
+
+    claude_dir = tmp_path / ".claude"
+    register_plugin_directly(tmp_path / "clone", claude_dir, None)
+    ip = json.loads((claude_dir / "plugins" / "installed_plugins.json").read_text())
+    assert ip["plugins"][PLUGIN_ID][0]["version"] == "unknown"
+
+
+def test_run_enable_project_falls_back_to_direct_write_on_policy_block(tmp_path, capsys):
+    """AppLocker refuses the CLI launch (OSError) -> enabledPlugins written straight
+    into the project settings, exactly what the CLI would have done."""
+    from install_helper import PLUGIN_ID, Style, run_enable_project
+
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    def blocked_runner(argv, **kw):
+        raise OSError("[WinError 1260] This program is blocked by group policy")
+
+    rc = run_enable_project(
+        project, Style(enabled=False), {"ok": "OK", "fail": "X"}, runner=blocked_runner
+    )
+    assert rc == 0
+    settings = json.loads((project / ".claude" / "settings.json").read_text())
+    assert settings["enabledPlugins"][PLUGIN_ID] is True
+    out = capsys.readouterr().out
+    assert "written directly" in out
+
+
+def test_run_enable_project_policy_text_in_stderr_also_falls_back(tmp_path):
+    from install_helper import PLUGIN_ID, Style, run_enable_project
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    runner = lambda argv, **kw: _proc(
+        returncode=1, stderr="This program is blocked by group policy\n"
+    )  # noqa: E731
+    rc = run_enable_project(project, Style(enabled=False), {"ok": "OK", "fail": "X"}, runner=runner)
+    assert rc == 0
+    settings = json.loads((project / ".claude" / "settings.json").read_text())
+    assert settings["enabledPlugins"][PLUGIN_ID] is True
+
+
+def test_run_enable_project_ordinary_failure_still_fails(tmp_path):
+    from install_helper import Style, run_enable_project
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    runner = lambda argv, **kw: _proc(returncode=1, stderr="No such plugin\n")  # noqa: E731
+    rc = run_enable_project(project, Style(enabled=False), {"ok": "OK", "fail": "X"}, runner=runner)
+    assert rc == 1
+    assert not (project / ".claude" / "settings.json").exists()
