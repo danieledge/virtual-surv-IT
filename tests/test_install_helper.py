@@ -1367,3 +1367,94 @@ def test_run_cmd_decodes_utf8_with_replacement_not_console_codepage(monkeypatch)
         assert kwargs["encoding"] == "utf-8"
         assert kwargs["errors"] == "replace"
         assert "text" not in kwargs
+
+
+# ------------------------------------------------------ group-policy-safe node launch
+
+
+def _npm_layout(tmp_path, shim_name="claude.cmd"):
+    npm = tmp_path / "npm"
+    pkg = npm / "node_modules" / "@anthropic-ai" / "claude-code"
+    pkg.mkdir(parents=True)
+    (pkg / "cli.js").write_text("// cli\n", encoding="utf-8")
+    shim = npm / shim_name
+    shim.write_text("@echo off\n", encoding="utf-8")
+    return npm, pkg, shim
+
+
+def test_node_launch_for_rewrites_shim_to_node_cli(monkeypatch, tmp_path):
+    """Group policy blocks cmd.exe and %APPDATA% executables; node.exe + cli.js is the
+    policy-safe launch. The shim's sibling node_modules locates the package."""
+    import install_helper as ih
+
+    npm, pkg, shim = _npm_layout(tmp_path)
+    monkeypatch.setattr(ih.shutil, "which", lambda n: "/usr/bin/node" if n == "node" else None)
+    assert ih.node_launch_for(str(shim)) == ["/usr/bin/node", str(pkg / "cli.js")]
+
+
+def test_node_launch_for_walks_up_from_package_bin(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    npm, pkg, _ = _npm_layout(tmp_path)
+    exe = pkg / "bin" / "claude.exe"
+    exe.parent.mkdir()
+    exe.write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(ih.shutil, "which", lambda n: "node.exe" if n == "node" else None)
+    assert ih.node_launch_for(str(exe)) == ["node.exe", str(pkg / "cli.js")]
+
+
+def test_node_launch_for_none_without_node_or_package(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    npm, pkg, shim = _npm_layout(tmp_path)
+    monkeypatch.setattr(ih.shutil, "which", lambda n: None)  # node missing
+    assert ih.node_launch_for(str(shim)) is None
+    lone = tmp_path / "claude.cmd"  # shim with no package next to it
+    lone.write_text("@echo off\n", encoding="utf-8")
+    monkeypatch.setattr(ih.shutil, "which", lambda n: "/usr/bin/node" if n == "node" else None)
+    assert ih.node_launch_for(str(lone)) is None
+
+
+def test_command_argv_claude_prefers_node_over_cmd_shim(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    npm, pkg, shim = _npm_layout(tmp_path)
+
+    def which(n):
+        return {"claude": str(shim), "node": "/usr/bin/node"}.get(n)
+
+    monkeypatch.setattr(ih.shutil, "which", which)
+    assert ih.command_argv("claude") == ["/usr/bin/node", str(pkg / "cli.js")]
+    # a non-claude .cmd (no node available) still routes through cmd /c
+    monkeypatch.setattr(ih.shutil, "which", lambda n: str(shim) if n == "other" else None)
+    assert ih.command_argv("other")[0] == "cmd"
+
+
+def test_claude_via_npm_prefix_queries_npm(monkeypatch, tmp_path):
+    """The custom-corporate-prefix case: npm knows where it installs, we ask it."""
+    import install_helper as ih
+
+    prefix = tmp_path / "corp-npm"
+    prefix.mkdir()
+    (prefix / "claude.cmd").write_text("@echo off\n", encoding="utf-8")
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(ih.shutil, "which", lambda n: "npm.cmd" if "npm" in n else None)
+    monkeypatch.setattr(
+        ih.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout=f"{prefix}\n", stderr=""),
+    )
+    assert ih._claude_via_npm_prefix() == str(prefix / "claude.cmd")
+
+
+def test_claude_via_npm_prefix_fails_soft(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda n: None)  # no npm at all
+    assert ih._claude_via_npm_prefix() is None
+    monkeypatch.setattr(ih.shutil, "which", lambda n: "npm")
+    monkeypatch.setattr(
+        ih.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("blocked"))
+    )
+    assert ih._claude_via_npm_prefix() is None

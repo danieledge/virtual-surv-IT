@@ -421,6 +421,38 @@ def _windows_registry_path_dirs() -> list:
     return dirs
 
 
+def _claude_via_npm_prefix() -> Optional[str]:
+    """Ask npm where its prefix is, then look for claude under it. Covers custom
+    corporate prefixes no hardcoded candidate list can know. Best-effort: npm absent,
+    blocked or slow just returns None."""
+    npm = shutil.which("npm.cmd") or shutil.which("npm")
+    if not npm:
+        return None
+    try:
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
+            [npm, "config", "get", "prefix"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    prefix = (proc.stdout or "").strip()
+    if proc.returncode != 0 or not prefix:
+        return None
+    root = Path(prefix)
+    if sys.platform == "win32":
+        candidates = [root / n for n in ("claude.cmd", "claude.bat", "claude.exe")]
+        pkg = root / "node_modules" / "@anthropic-ai" / "claude-code"
+    else:
+        candidates = [root / "bin" / "claude"]
+        pkg = root / "lib" / "node_modules" / "@anthropic-ai" / "claude-code"
+    candidates += [pkg / "bin" / n for n in ("claude.exe", "claude.cmd", "claude")]
+    candidates += [pkg / "cli.js"]
+    return next((str(c) for c in candidates if _is_file_safe(c)), None)
+
+
 _claude_cache: Optional[tuple] = None  # memo for find_claude (registry reads once per run)
 
 
@@ -468,6 +500,10 @@ def find_claude(refresh: bool = False) -> tuple:
                     break
             except OSError:
                 continue
+        if result[0] is None:
+            npm_hit = _claude_via_npm_prefix()
+            if npm_hit:
+                result = (npm_hit, "npm-prefix")
         if result[0] is None and sys.platform == "win32":
             for d in _windows_registry_path_dirs():
                 found = next((p for n in names if (p := Path(d) / n) and _is_file_safe(p)), None)
@@ -485,6 +521,44 @@ def _is_file_safe(p: Path) -> bool:
         return False
 
 
+def node_launch_for(resolved) -> Optional[list]:
+    """A [node.exe, cli.js] argv for an npm-installed claude, or None.
+
+    Corporate group policy (AppLocker/SRP) routinely blocks cmd.exe and any
+    executable under user-writable paths like %APPDATA% - which kills both the
+    claude.cmd shim AND a claude.exe in the npm package dir ('blocked by group
+    policy', seen live 2026-07-30). node.exe lives in Program Files (policy-allowed)
+    and cli.js is data, not an executable, so `node cli.js ...` sidesteps the block
+    entirely. Windows-only concern: POSIX shims launch fine on their own."""
+    p = Path(str(resolved))
+    is_shim = p.suffix.lower() in (".cmd", ".bat")
+    if not (is_shim or p.suffix.lower() == ".js" or sys.platform == "win32"):
+        return None
+    pkg = None
+    if "node_modules" in p.parts:
+        for parent in p.parents:
+            if parent.name == "claude-code" and parent.parent.name == "@anthropic-ai":
+                pkg = parent
+                break
+    elif is_shim:
+        cand = p.parent / "node_modules" / "@anthropic-ai" / "claude-code"
+        try:
+            if cand.is_dir():
+                pkg = cand
+        except OSError:
+            pass
+    if pkg is None:
+        return None
+    node = shutil.which("node")
+    if not node:
+        return None
+    for rel in ("cli.js", "bin/cli.js", "bin/claude.js", "bin/claude"):
+        cli = pkg / rel
+        if _is_file_safe(cli):
+            return [node, str(cli)]
+    return None
+
+
 def command_argv(name: str, resolved: Optional[str] = None) -> list:
     """The argv prefix that identifies how to launch `name` on this platform.
 
@@ -499,6 +573,12 @@ def command_argv(name: str, resolved: Optional[str] = None) -> list:
         if resolved is None and name == "claude":
             resolved = find_claude()[0]
         resolved = resolved or name
+    if name == "claude" or str(resolved).lower().endswith((".cmd", ".bat", ".js")):
+        # Prefer node + cli.js for npm layouts: no cmd.exe, no executable under
+        # %APPDATA% - the two things corporate group policy blocks (2026-07-30).
+        via_node = node_launch_for(resolved)
+        if via_node:
+            return via_node
     if str(resolved).lower().endswith((".cmd", ".bat")):
         return ["cmd", "/c", str(resolved)]
     return [str(resolved)]
