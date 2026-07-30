@@ -424,3 +424,22 @@ def test_run_enable_project_missing_dir(tmp_path, capsys):
     from install_helper import Style, marks, run_enable_project
 
     assert run_enable_project(tmp_path / "ghost", Style(False), marks()) == 1
+
+
+# --- demo mode: full UX, zero execution (2026-07-30) --------------------------------------
+
+
+def test_demo_mode_executes_nothing(monkeypatch, capsys):
+    import subprocess as _sp
+
+    import install_helper as ih
+
+    def boom(*a, **k):
+        raise AssertionError("demo mode must never spawn a subprocess")
+
+    monkeypatch.setattr(_sp, "run", boom)
+    rc = ih.main(["--demo"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "DEMO MODE" in out and "would run:" in out
+    assert "Summon the team" in out and "nothing was executed" in out

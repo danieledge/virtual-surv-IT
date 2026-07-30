@@ -859,6 +859,114 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
     return 1
 
 
+def run_demo(style: Style, mark_map: dict) -> int:
+    """--demo: the run exactly as a user sees it, executing NOTHING.
+
+    Every step prints with the real step machinery and shows the exact command it would
+    run, dimmed and prefixed 'would run:'. No subprocess is spawned, no file is written -
+    the whole function is print statements over the real constants, so the walkthrough
+    cannot drift from what the real flow invokes without failing review here."""
+    s = style
+    ok = mark_map["ok"]
+    tracker = StepTracker()
+
+    def say(text=""):
+        print(text)
+
+    def would(argv):
+        say(s.dim("      would run: " + " ".join(argv)))
+
+    def header(n, title):
+        say("")
+        say(s.bold(f"[{n}/9] {title}"))
+
+    say(s.bold(s.cyan("Compliance Surveillance Team - plugin install helper")))
+    say(s.yellow("DEMO MODE - this walkthrough shows the run; nothing is executed or written."))
+    say(s.dim("Mode: install (config: ~/.config/virt-surv-it/installer.json)"))
+
+    header(1, "Preflight checks")
+    for line in (
+        f"Python {sys.version_info.major}.{sys.version_info.minor}",
+        "git found",
+        "claude CLI found",
+    ):
+        say(f"  {ok} {line}")
+    would(["git", "ls-remote", "--heads", REPO_URL, "main"])
+    say(f"  {ok} GitHub remote reachable")
+    tracker.record("Preflight", "ok")
+
+    header(2, "Release channel")
+    say("  Channel? main = stable, dev = cutting edge [main]:  (demo: main chosen)")
+    say(f"  {ok} Channel: main")
+    tracker.record("Release channel: main", "ok")
+
+    header(3, "Local clone")
+    say(f"  Clone location [{DEFAULT_CLONE_DIR}]:  (demo: default)")
+    would(["git", "clone", REPO_URL, str(DEFAULT_CLONE_DIR)])
+    say(f"  {ok} Clone ready at {DEFAULT_CLONE_DIR}")
+    tracker.record("Local clone", "ok")
+
+    header(4, "Sync to origin/main")
+    would(["git", "-C", str(DEFAULT_CLONE_DIR), "fetch", "origin", "main"])
+    say(f"  {ok} Working tree clean - no local changes at risk")
+    would(["git", "-C", str(DEFAULT_CLONE_DIR), "checkout", "-B", "main", "origin/main"])
+    say(f"  {ok} Synced to origin/main")
+    tracker.record("Sync", "ok")
+
+    header(5, "Optional pip requirements")
+    say("  Install optional dev requirements (pytest, render deps)? [y/N]:  (demo: skipped)")
+    say("  ~ skipped - the plugin works without them")
+    tracker.record("Dev requirements", "skip", "optional")
+
+    header(6, "Claude Code marketplace")
+    would(["claude", "plugin", "marketplace", "add", str(DEFAULT_CLONE_DIR)])
+    say(f"  {ok} Marketplace '{MARKETPLACE}' registered")
+    tracker.record("Marketplace", "ok")
+
+    header(7, "Plugin install")
+    would(["claude", "plugin", "install", PLUGIN_ID])
+    say(f"  {ok} Plugin installed")
+    tracker.record("Plugin install", "ok")
+
+    header(8, "Status line (optional)")
+    say(
+        "  Wire the team status line (shows dormant/engaged + cost, zero tokens)? [y/N]:  (demo: yes)"
+    )
+    say(f"  {ok} Status line: would be wired in {user_settings_path()} (backup taken first)")
+    tracker.record("Status line", "ok", "demo")
+
+    header(9, "Enable for a project (optional)")
+    say("  Enable the team for a project now (per-project scope)? [y/N]:  (demo: yes, '.')")
+    would(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID])
+    say(f"  {ok} enabled for <your project>")
+    say(
+        "  Also add the recommended permission allow-list to it (fewer prompts)? [Y/n]:  (demo: yes)"
+    )
+    say(
+        f"  {ok} would add {len(RECOMMENDED_ALLOW)} allow entries (add-only; deny rules and hooks untouched)"
+    )
+    tracker.record("Project enablement", "ok", "demo")
+
+    say("")
+    say(s.bold(s.cyan("What's new in <version>")))
+    say("  [<version>] - <date> - <release title from the CHANGELOG>")
+    say(f"  Overview: {DEFAULT_CLONE_DIR / 'docs' / 'releases'}/<cycle>.md")
+
+    say("")
+    say(s.bold(s.cyan("Summary")))
+    for line in tracker.summary_lines(mark_map):
+        say(line)
+    say("")
+    say(s.bold("Still yours to do by hand:"))
+    say("  1. Any FURTHER projects: re-run step 9, /plugin inside Claude Code, or")
+    say("     python install_helper.py --enable-project <dir>")
+    say("  2. Restart Claude Code so the new plugin version loads.")
+    say("")
+    say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
+    say(s.yellow("DEMO MODE ended - nothing was executed or written."))
+    return 0
+
+
 # ------------------------------------------------------------------ CLI
 
 
@@ -882,6 +990,11 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--pip",
         action="store_true",
         help="with --yes: also pip-install requirements-dev.txt (default: skip)",
+    )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="show the full run exactly as a user sees it, executing and writing nothing",
     )
     parser.add_argument(
         "--enable-project",
@@ -909,6 +1022,8 @@ def parse_args(argv=None) -> argparse.Namespace:
 def main(argv=None) -> int:
     args = parse_args(argv)
     style = Style(supports_color())
+    if args.demo:
+        return run_demo(style, marks())
     if args.enable_project or args.permissions:
         rc = 0
         for target in args.enable_project or []:
