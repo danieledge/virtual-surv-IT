@@ -962,7 +962,7 @@ class Installer:
             wanted = confirm(
                 "  Shall I wire the status line - it shows the team's state and session "
                 "cost at zero token cost?",
-                default=self.args.statusline,
+                default=True if sys.stdin.isatty() else self.args.statusline,
                 assume_yes=False,
                 style=self.style,
             )
