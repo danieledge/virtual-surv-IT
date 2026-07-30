@@ -20,9 +20,26 @@
 # ADR-002 rec 10), and there are no Bash() deny entries either, so on a Python-less host the
 # guards are inert (see ADR-002 §launcher trade-off). A hard block here would brick every tool
 # call on a Python-less host, which is not the guard's job.
+#
+# Cache the resolved interpreter (2026-07-30 corporate report): FIVE hooks match Bash, so
+# this loop runs 5x per Bash call, all session long. On a Windows box where `python3.exe`
+# is the App Execution Alias stub (present via `command -v` but not a real interpreter),
+# actually EXECUTING it to version-check triggers a multi-second Microsoft Store redirect
+# check EVERY time - "several minutes" for a single /engage turned out to be that stub hang
+# repeated dozens of times. `command -v` alone (existence, no execution) is cheap and safe
+# to redo every call; only the EXECUTION probe needs to happen once and be trusted after.
+CACHE="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/.guard-interpreter"
+if [ -f "$CACHE" ]; then
+	cached=$(cat "$CACHE" 2>/dev/null)
+	if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
+		exec "$cached" "$@"
+	fi
+fi
 for interpreter in python3 python py; do
 	if command -v "$interpreter" >/dev/null 2>&1; then
 		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
+			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
+			printf '%s' "$interpreter" >"$CACHE" 2>/dev/null
 			exec "$interpreter" "$@"
 		fi
 	fi
