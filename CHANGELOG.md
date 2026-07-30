@@ -3,7 +3,22 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [0.33.3] - 2026-07-30 - Optional docx export, mechanised audit findings, engage-startup fix
+## [0.33.4] - 2026-07-30 - Task-list gate panel, backed by a nudge
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+### Added
+- **`scripts/todo_panel_nudge.py`**: a Stop-hook nudge for the operating guide's
+  claim that engagement gates (brief → build → tests → review → QA → DoD gate →
+  close) appear in Claude Code's native task list (TodoWrite). Searching every kept
+  live eval transcript for genuine TodoWrite calls found zero - the claim was prose
+  only, never verified, and evidently not happening reliably. TodoWrite can't be
+  called by a hook or observed from outside the running turn, so this can't be a
+  mechanical check the way the 0.33.3 audit findings were - it nudges once, when a
+  gated engagement's phase reaches delivery, and self-suppresses (via a marker Morgan
+  logs once the panel is seeded) without the hook ever writing state itself.
+
+
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
 
