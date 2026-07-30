@@ -1324,3 +1324,23 @@ def test_command_argv_uses_find_claude_fallback(monkeypatch):
     assert ih.command_argv("claude") == ["cmd", "/c", r"C:\Users\A B\npm\claude.cmd"]
     # other names keep the plain bare-name fallback
     assert ih.command_argv("git") == ["git"]
+
+
+def test_find_claude_npm_package_bin_dir(monkeypatch, tmp_path):
+    """The reported corporate layout: no shims on PATH, the CLI living only in
+    APPDATA\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin."""
+    import install_helper as ih
+
+    _clear_claude_cache()
+    appdata = tmp_path / "AppData" / "Roaming"
+    pkg_bin = appdata / "npm" / "node_modules" / "@anthropic-ai" / "claude-code" / "bin"
+    pkg_bin.mkdir(parents=True)
+    (pkg_bin / "claude.exe").write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih.shutil, "which", lambda n: None)
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path / "nohome"))
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setenv("APPDATA", str(appdata))
+    path, how = ih.find_claude(refresh=True)
+    assert path == str(pkg_bin / "claude.exe")
+    assert how == "known-location"
+    _clear_claude_cache()

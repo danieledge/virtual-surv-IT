@@ -446,7 +446,12 @@ def find_claude(refresh: bool = False) -> tuple:
             candidates = [home / ".local" / "bin" / "claude.exe"]
             appdata = os.environ.get("APPDATA")
             if appdata:
-                candidates += [Path(appdata) / "npm" / n for n in ("claude.cmd", "claude.bat")]
+                npm_dir = Path(appdata) / "npm"
+                candidates += [npm_dir / n for n in ("claude.cmd", "claude.bat")]
+                # Seen on corporate devices: the npm shims are absent/blocked and only
+                # the package's own bin dir is reachable (npm\node_modules\...\bin).
+                pkg_bin = npm_dir / "node_modules" / "@anthropic-ai" / "claude-code" / "bin"
+                candidates += [pkg_bin / n for n in names]
         else:
             names = ("claude",)
             candidates = [
