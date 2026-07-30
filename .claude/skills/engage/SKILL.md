@@ -121,6 +121,15 @@ engagement doesn't compact prematurely. Note ⚠️ stale-looking entries in the
 → one gets created at close. Then the **operating guide** (standing rules, roster, routing - if the `cat` came back
 empty, Read it before proceeding; an engagement without it misses standing user preferences).
 
+**Allow-list tip (banner, one short line, only when flagged).** The tooling probe's last
+lines report `ALLOWLIST: present|missing` for the working project (mechanical, computed
+fresh each run). On `missing`, add ONE friendly line to the banner: *"Tip: fewer
+permission prompts in this project - run `python <clone>/install_helper.py --permissions .`"*
+(plugin mode: `python "$PLUGIN_ROOT/install_helper.py" --permissions .`; repo-as-project:
+`python install_helper.py --permissions .`). It is the USER's command to run - never run
+it yourself, never edit settings (ADR-002 rec 5), never repeat the tip later in the
+engagement, and on `present` say nothing.
+
 **What's new (banner, one short line only).** The probe returns the newest CHANGELOG
 release block - read from the **plugin's** changelog (`"${PR:-.}/CHANGELOG.md"`: the plugin
 root in installed mode, the repo itself in repo-as-project; **not** the working project's own

@@ -426,10 +426,17 @@ def test_run_enable_project_missing_dir(tmp_path, capsys):
     assert run_enable_project(tmp_path / "ghost", Style(False), marks()) == 1
 
 
-# --- demo mode: full UX, zero execution (2026-07-30) --------------------------------------
+# --- demo mode: the real flow as a dry run (2026-07-30) -----------------------------------
 
 
-def test_demo_mode_executes_nothing(monkeypatch, capsys):
+def _isolate_home(monkeypatch, tmp_path):
+    """Point every home-derived path at tmp so a demo run can prove it wrote nothing."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))  # Path.home() on Windows
+
+
+def test_demo_mode_executes_nothing_and_writes_nothing(monkeypatch, tmp_path, capsys):
     import subprocess as _sp
 
     import install_helper as ih
@@ -438,8 +445,279 @@ def test_demo_mode_executes_nothing(monkeypatch, capsys):
         raise AssertionError("demo mode must never spawn a subprocess")
 
     monkeypatch.setattr(_sp, "run", boom)
-    rc = ih.main(["--demo"])
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "DEFAULT_CLONE_DIR", tmp_path / "clone")
+    original_run_cmd = ih.run_cmd
+    rc = ih.main(["--demo"])  # non-tty stdin: every prompt takes its default
     out = capsys.readouterr().out
     assert rc == 0
     assert "DEMO MODE" in out and "would run:" in out
     assert "Summon the team" in out and "nothing was executed" in out
+    assert not (tmp_path / "xdg").exists()  # no config file created
+    assert not (tmp_path / "clone").exists()  # no clone created
+    assert not (tmp_path / "home").exists()  # no user settings written
+    assert ih.run_cmd is original_run_cmd  # module runner restored after the run
+
+
+def test_demo_mode_with_yes_is_noninteractive_dry_run(monkeypatch, tmp_path, capsys):
+    import subprocess as _sp
+
+    import install_helper as ih
+
+    monkeypatch.setattr(_sp, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("ran")))
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "DEFAULT_CLONE_DIR", tmp_path / "clone")
+    rc = ih.main(["--demo", "--yes"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "would run:" in out and "nothing was executed" in out
+    assert not (tmp_path / "xdg").exists()
+
+
+def test_demo_stdout_shapes():
+    from install_helper import demo_stdout
+
+    assert demo_stdout(["git", "-C", "/r", "status", "--porcelain"]) == ""
+    assert demo_stdout(["git", "-C", "/r", "rev-parse", "--short", "HEAD"]) == "abc1234"
+    assert demo_stdout(["git", "-C", "/r", "rev-list", "--count", "origin/main..HEAD"]) == "0"
+    assert demo_stdout(["git", "ls-remote", "--heads", "https://x", "main"]) == "ref"
+    assert demo_stdout(["claude", "plugin", "install", "x"]) == ""
+
+
+def test_demo_runner_prints_would_run_and_fakes_success(capsys):
+    from install_helper import Style, make_demo_runner
+
+    runner = make_demo_runner(Style(False))
+    proc = runner(["git", "clone", "https://x", "/dest"])
+    out = capsys.readouterr().out
+    assert "would run: git clone https://x /dest" in out
+    assert proc.returncode == 0 and proc.stderr == ""
+    head = runner(["git", "-C", "/dest", "rev-parse", "--short", "HEAD"])
+    assert head.stdout == "abc1234"
+
+
+# --- boxed banner + ruled headers with ASCII fallbacks (2026-07-30) -----------------------
+
+
+class _AsciiStream(io.StringIO):
+    encoding = "ascii"
+
+
+class _Utf8Stream(io.StringIO):
+    encoding = "utf-8"
+
+
+def test_render_banner_unicode_box():
+    from install_helper import Style, render_banner
+
+    rows = render_banner(["Title line", "sub"], Style(False), stream=_Utf8Stream())
+    assert rows[0].startswith("┌") and rows[0].endswith("┐")
+    assert rows[-1].startswith("└") and rows[-1].endswith("┘")
+    assert all(row.startswith("│") and row.endswith("│") for row in rows[1:-1])
+    assert len({len(row) for row in rows}) == 1  # every row the same width
+
+
+def test_render_banner_ascii_fallback():
+    from install_helper import Style, render_banner
+
+    rows = render_banner(["Title line", "sub"], Style(False), stream=_AsciiStream())
+    assert rows[0].startswith("+-") and rows[0].endswith("+")
+    assert all(row.startswith("|") and row.endswith("|") for row in rows[1:-1])
+
+
+def test_rule_header_pads_to_width_and_names_the_step():
+    from install_helper import RULE_WIDTH, Style, rule_header
+
+    line = rule_header(3, 9, "Local clone", Style(False), stream=_AsciiStream())
+    assert "Step 3 of 9: Local clone" in line
+    assert line.startswith("--")
+    assert len(line) == RULE_WIDTH
+
+
+def test_morgan_intro_marks_ai_identity_with_ascii_fallback():
+    from install_helper import morgan_intro
+
+    plain = morgan_intro(stream=_AsciiStream())
+    assert plain.startswith("Morgan (PM)") and "AI agent" in plain
+    fancy = morgan_intro(stream=_Utf8Stream())
+    assert fancy.startswith("🎩 ")
+
+
+def test_banner_version_line_reads_sibling_manifest(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    plug = tmp_path / ".claude-plugin"
+    plug.mkdir()
+    (plug / "plugin.json").write_text('{"version": "1.2.3"}', encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "install_helper.py"))
+    assert "v1.2.3" in ih.banner_version_line()
+
+
+def test_banner_version_line_falls_back_to_configured_clone(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)  # manifest carries version 9.9.9
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "bare" / "install_helper.py"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    cfg_dir = tmp_path / "xdg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(json.dumps({"repo_path": str(clone)}), encoding="utf-8")
+    assert "v9.9.9" in ih.banner_version_line()
+
+
+def test_banner_version_line_never_missing(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    # No sibling manifest, no config anywhere: the fixed fallback line, not a crash.
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "bare" / "install_helper.py"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty-xdg"))
+    line = ih.banner_version_line()
+    assert line == "compliance-surveillance-team (version shown after install)"
+
+
+# --- grouped summary (2026-07-30) ---------------------------------------------------------
+
+
+def _args(**overrides):
+    base = dict(
+        mode=None,
+        branch=None,
+        repo=None,
+        yes=False,
+        pip=False,
+        demo=False,
+        enable_project=None,
+        statusline=False,
+        permissions=None,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_print_summary_groups_by_status(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    inst = ih.Installer(_args(), ih.Style(False), {"ok": "OK", "fail": "X", "skip": "~"})
+    inst.tracker.record("Alpha", "ok")
+    inst.tracker.record("Beta", "skip", "why")
+    inst.tracker.record("Gamma", "fail", "boom")
+    inst.print_summary(aborted=False)
+    out = capsys.readouterr().out
+    assert out.index("Completed") < out.index("Skipped") < out.index("Failed")
+    assert "OK Alpha" in out and "~ Beta" in out and "X Gamma" in out
+
+
+def test_print_summary_omits_empty_groups(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    inst = ih.Installer(_args(), ih.Style(False), {"ok": "OK", "fail": "X", "skip": "~"})
+    inst.tracker.record("Alpha", "ok")
+    inst.print_summary(aborted=False)
+    out = capsys.readouterr().out
+    assert "Completed" in out
+    assert "Skipped" not in out and "Failed" not in out
+
+
+# --- interactive menu + partial runs (2026-07-30) -----------------------------------------
+
+
+class _TtyStdin(io.StringIO):
+    def isatty(self):
+        return True
+
+
+def _fake_clone(tmp_path):
+    clone = tmp_path / "clone"
+    (clone / ".git").mkdir(parents=True)
+    plug = clone / ".claude-plugin"
+    plug.mkdir()
+    (plug / "plugin.json").write_text('{"version": "9.9.9"}', encoding="utf-8")
+    return clone
+
+
+def _menu_session(monkeypatch, tmp_path, answers):
+    """Fake a tty with scripted answers; exhausted answers return the default."""
+    import sys as _sys
+
+    feed = iter(answers)
+    monkeypatch.setattr(_sys, "stdin", _TtyStdin())
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(feed, ""))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def test_menu_setup_only_skips_sync_and_uses_clone_asis(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    _menu_session(monkeypatch, tmp_path, ["2", "", ""])  # option 2, then prompt defaults
+    (tmp_path / "xdg" / "virt-surv-it").mkdir(parents=True)
+    (tmp_path / "xdg" / "virt-surv-it" / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
+    )
+    calls = []
+
+    def runner(argv, cwd=None, timeout=300):
+        calls.append([str(a) for a in argv])
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    joined = [" ".join(c) for c in calls]
+    assert not any("fetch" in c or "checkout" in c or "clone" in c for c in joined)
+    assert "Step 2 of 6" in out  # truthful numbering for the shorter plan
+    assert "code not updated" in out and "Code not updated" in out
+    assert "Summon the team" in out
+
+
+def test_menu_setup_only_without_clone_fails_cleanly(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    _menu_session(monkeypatch, tmp_path, ["2"])
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    # The script-root fallback would find the dev repo itself; point it nowhere.
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "run a full install first" in out
+
+
+def test_menu_quit_runs_nothing(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    _menu_session(monkeypatch, tmp_path, ["q"])
+    calls = []
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: calls.append(a) or _FakeProc(0))
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert calls == []
+    assert "nothing changed" in out
+
+
+def test_full_sync_step_fetches_and_checks_out(monkeypatch, tmp_path):
+    """The full plan still syncs - guards the setup subset against regressing the default."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    calls = []
+
+    def runner(argv, cwd=None, timeout=300):
+        calls.append([str(a) for a in argv])
+        return _FakeProc(0, stdout="")
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    inst.sync_branch()
+    joined = [" ".join(c) for c in calls]
+    assert any("fetch origin main" in c for c in joined)
+    assert any("checkout -B main origin/main" in c for c in joined)

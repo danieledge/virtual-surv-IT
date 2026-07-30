@@ -2,12 +2,21 @@
 """
 install_helper.py (repo root) - guided install/update for the Claude Code plugin.
 
-Walks a human through the real install path from README "Quick start": clone or update a
-local copy of the repo, pick a release channel (main = stable, dev = cutting edge), point
-the Claude Code marketplace at the clone, and install or update the
-compliance-surveillance-team plugin - with a step-by-step console trail and a closing
-summary of the actions that stay manual (per-project enablement, a session restart -
-the hooks ship pre-wired; apply-*.sh scripts are maintainer tools, not user steps).
+Morgan, the team's PM persona, walks a human through the real install path from README
+"Quick start": clone or update a local copy of the repo, pick a release channel (main =
+stable, dev = cutting edge), point the Claude Code marketplace at the clone, and install
+or update the compliance-surveillance-team plugin - with a step-by-step console trail and
+a closing summary of the actions that stay manual (per-project enablement, a session
+restart - the hooks ship pre-wired; apply-*.sh scripts are maintainer tools, not user
+steps).
+
+Run with no arguments on a terminal and a menu offers the subsets: full run, environment
+setup only (no code pull), status line only, per-project enablement, or a demo. The CLI
+flags remain the non-interactive equivalents for scripts and CI.
+
+--demo runs the REAL interactive flow as a dry run: the same prompts, the same step
+logic, but every command prints as a dimmed "would run:" line instead of executing and
+no file is written. Read-only probes (PATH lookups, directory checks) stay real.
 
 Design constraints:
 - stdlib only, Python 3.9+ - the helper must run before any pip install has happened.
@@ -27,15 +36,17 @@ Design constraints:
 - Settings persist in ~/.config/virt-surv-it/installer.json (XDG_CONFIG_HOME honoured),
   never by rewriting this script.
 - Windows-friendly: pathlib throughout, no ANSI when the stream is not a tty or NO_COLOR
-  is set, ASCII fallbacks for the check marks when the console encoding cannot carry them.
+  is set, ASCII fallbacks for every non-ASCII glyph (check marks, box drawing, the 🎩)
+  when the console encoding cannot carry them.
 
 Usage:
-  python install_helper.py                         # auto: update if configured, else install
-  python install_helper.py install                 # fresh clone + marketplace + plugin install
+  python install_helper.py                 # menu on a terminal; full run when piped
+  python install_helper.py install         # fresh clone + marketplace + plugin install
   python install_helper.py update          # fetch/reset + marketplace + plugin update
   python install_helper.py --branch dev    # pick the channel up front
-  python install_helper.py --yes           # non-interactive, safe defaults
+  python install_helper.py --yes           # non-interactive full run, safe defaults
   python install_helper.py --yes --pip     # also install requirements-dev.txt
+  python install_helper.py --demo          # the real flow as a dry run, nothing executed
 """
 
 from __future__ import annotations
@@ -55,6 +66,9 @@ PLUGIN_ID = "compliance-surveillance-team@virtual-surv-it"
 BRANCHES = ("main", "dev")
 DEFAULT_CLONE_DIR = Path.home() / "virtual-surv-IT"
 CLAUDE_DOCS_URL = "https://claude.com/claude-code"
+
+BANNER_TITLE = "Virtual Surv-IT - team installer"
+RULE_WIDTH = 64  # ruled step headers pad to this width
 
 # The README's recommended per-project allow-list: fewer permission prompts on the team's
 # own consent-free tooling. Merged ADD-ONLY by --permissions; the safety model is
@@ -157,15 +171,82 @@ class Style:
         return self._paint(text, "2")
 
 
-def marks(stream=None) -> dict:
-    """Unicode check marks, with ASCII fallbacks for consoles that cannot encode them."""
+def _can_encode(text: str, stream=None) -> bool:
+    """True when the stream's encoding can carry every character in text."""
     stream = stream if stream is not None else sys.stdout
     encoding = getattr(stream, "encoding", None) or "utf-8"
     try:
-        "✓✗".encode(encoding)
-        return {"ok": "✓", "fail": "✗", "skip": "~"}
+        text.encode(encoding)
+        return True
     except (UnicodeEncodeError, LookupError):
-        return {"ok": "OK", "fail": "X", "skip": "~"}
+        return False
+
+
+def marks(stream=None) -> dict:
+    """Unicode check marks, with ASCII fallbacks for consoles that cannot encode them."""
+    if _can_encode("✓✗", stream):
+        return {"ok": "✓", "fail": "✗", "skip": "~"}
+    return {"ok": "OK", "fail": "X", "skip": "~"}
+
+
+def box_chars(stream=None) -> dict:
+    """Box-drawing characters, with ASCII fallbacks like marks()."""
+    if _can_encode("┌─┐│└┘", stream):
+        return {"tl": "┌", "tr": "┐", "bl": "└", "br": "┘", "h": "─", "v": "│"}
+    return {"tl": "+", "tr": "+", "bl": "+", "br": "+", "h": "-", "v": "|"}
+
+
+def render_banner(lines, style: Style, stream=None) -> list:
+    """The boxed banner as a list of printable rows, cyan/bold when styled."""
+    c = box_chars(stream)
+    inner = max(len(line) for line in lines)
+    rows = [c["tl"] + c["h"] * (inner + 2) + c["tr"]]
+    for line in lines:
+        rows.append(f"{c['v']} {line.ljust(inner)} {c['v']}")
+    rows.append(c["bl"] + c["h"] * (inner + 2) + c["br"])
+    return [style.cyan(style.bold(row)) for row in rows]
+
+
+def rule_header(number: int, total: int, title: str, style: Style, stream=None) -> str:
+    """A ruled step header padded to RULE_WIDTH, e.g. '── Step 3 of 9: Local clone ────'."""
+    h = box_chars(stream)["h"]
+    label = f"{h * 2} Step {number} of {total}: {title} "
+    pad = h * max(0, RULE_WIDTH - len(label))
+    return style.bold(label) + style.dim(pad)
+
+
+def morgan_intro(stream=None) -> str:
+    """Morgan's opening line with the mandatory AI-identity attribution.
+
+    The 🎩 persona marker is encoding-probed like every other glyph."""
+    hat = "🎩 " if _can_encode("🎩", stream) else ""
+    return (
+        f"{hat}Morgan (PM) here - I'm an AI agent with Virtual Surveillance IT. "
+        "Let's get the team set up."
+    )
+
+
+def banner_version_line() -> str:
+    """The banner's second line - always present, never a crash.
+
+    Resolution order: the script's own sibling manifest (the helper sits at the clone
+    root, so this covers every normal run including demo and fresh installs), then the
+    configured clone's manifest, then a fixed fallback (a standalone-downloaded helper
+    file has no manifest anywhere yet)."""
+    version = installed_version(Path(__file__).resolve().parent)
+    if not version:
+        repo = load_config(config_path()).get("repo_path")
+        if isinstance(repo, str) and repo:
+            version = installed_version(Path(repo))
+    suffix = f"v{version}" if version else "(version shown after install)"
+    return f"compliance-surveillance-team {suffix}"
+
+
+def print_banner(style: Style, stream=None) -> None:
+    """Boxed banner (tool name + version line) and Morgan's intro."""
+    for row in render_banner([BANNER_TITLE, banner_version_line()], style, stream):
+        print(row)
+    print(morgan_intro(stream))
 
 
 # ------------------------------------------------------------------ step tracking
@@ -189,6 +270,7 @@ class StepTracker:
         return any(status == "fail" for _, status, _ in self.steps)
 
     def summary_lines(self, mark_map: Optional[dict] = None) -> list:
+        """Flat one-line-per-step view (kept for callers that want the ungrouped form)."""
         mark_map = mark_map or {"ok": "✓", "fail": "✗", "skip": "~"}
         lines = []
         for name, status, detail in self.steps:
@@ -263,7 +345,8 @@ def command_argv(name: str, resolved: Optional[str] = None) -> list:
 
 
 def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
-    """Fixed-argv runner, output captured. Tests monkeypatch this symbol.
+    """Fixed-argv runner, output captured. Tests monkeypatch this symbol; --demo swaps
+    it for make_demo_runner's dry-run stand-in for the duration of the run.
 
     The first element is resolved via command_argv so Windows `.cmd` shims
     (the npm-installed `claude`) launch correctly."""
@@ -276,6 +359,37 @@ def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
         text=True,
         timeout=timeout,
     )
+
+
+# ------------------------------------------------------------------ demo dry-run layer
+
+
+def demo_stdout(argv) -> str:
+    """Canned stdout per command shape, so the real step logic behaves in a dry run:
+    clean working tree, zero commits ahead, reachable remote, a placeholder commit."""
+    argv = [str(a) for a in argv]
+    if "rev-parse" in argv:
+        return "abc1234"
+    if "rev-list" in argv:
+        return "0"
+    if "ls-remote" in argv:
+        return "ref"
+    # Includes `git status --porcelain`: empty output means a clean tree.
+    return ""
+
+
+def make_demo_runner(style: Style):
+    """A run_cmd stand-in for --demo: prints the exact argv, executes nothing.
+
+    Returns a successful CompletedProcess carrying demo_stdout's canned output; no
+    subprocess is spawned and returncode is always 0."""
+
+    def runner(argv, cwd: Optional[Path] = None, timeout: int = 300):
+        argv = [str(a) for a in argv]
+        print(style.dim("    would run: " + " ".join(argv)))
+        return subprocess.CompletedProcess(argv, 0, stdout=demo_stdout(argv), stderr="")
+
+    return runner
 
 
 # ------------------------------------------------------------------ pure git helpers
@@ -325,23 +439,25 @@ def decide_mode(explicit: Optional[str], cfg: dict) -> str:
 # ------------------------------------------------------------------ prompts
 
 
-def ask(prompt: str, default: str, assume_yes: bool) -> str:
+def ask(prompt: str, default: str, assume_yes: bool, style: Optional[Style] = None) -> str:
     """One-line prompt with a default; --yes or a closed stdin takes the default."""
     if assume_yes or not sys.stdin.isatty():
         return default
+    s = style or Style(False)
     try:
-        answer = input(f"{prompt} [{default}]: ").strip()
+        answer = input(f"{s.cyan(prompt)} {s.bold('[' + default + ']')}: ").strip()
     except EOFError:
         return default
     return answer or default
 
 
-def confirm(prompt: str, default: bool, assume_yes: bool) -> bool:
+def confirm(prompt: str, default: bool, assume_yes: bool, style: Optional[Style] = None) -> bool:
     if assume_yes or not sys.stdin.isatty():
         return default
+    s = style or Style(False)
     hint = "Y/n" if default else "y/N"
     try:
-        answer = input(f"{prompt} [{hint}]: ").strip().lower()
+        answer = input(f"{s.cyan(prompt)} {s.bold('[' + hint + ']')}: ").strip().lower()
     except EOFError:
         return default
     if not answer:
@@ -349,14 +465,60 @@ def confirm(prompt: str, default: bool, assume_yes: bool) -> bool:
     return answer in ("y", "yes")
 
 
+# ------------------------------------------------------------------ interactive menu
+
+
+MENU_ACTIONS = {
+    "1": "full",
+    "2": "setup",
+    "3": "statusline",
+    "4": "enable",
+    "5": "demo",
+    "q": "quit",
+}
+
+
+def choose_action(style: Style) -> str:
+    """The interactive front door: pick which subset to run. Callers gate on a tty;
+    a closed stdin or empty answer takes the full run."""
+    s = style
+    print("")
+    print(s.bold("What can I do for you?"))
+    options = (
+        ("1", "Install or update the team (full run - recommended)"),
+        ("2", "Environment setup only (marketplace + plugin + extras; does not pull latest code)"),
+        ("3", "Status line only"),
+        ("4", "Enable the team for a project (+ optional permission allow-list)"),
+        ("5", "Demo - watch the whole run, nothing executed or written"),
+        ("q", "Quit"),
+    )
+    for key, text in options:
+        print(f"  {s.cyan(key + ')')} {text}")
+    while True:
+        try:
+            answer = input(f"{s.cyan('  What shall it be?')} {s.bold('[1]')}: ").strip().lower()
+        except EOFError:
+            return "full"
+        if not answer:
+            return "full"
+        if answer in MENU_ACTIONS:
+            return MENU_ACTIONS[answer]
+        print("  1-5 or q, please.")
+
+
 # ------------------------------------------------------------------ the installer
 
 
 class Installer:
-    def __init__(self, args, style: Style, mark_map: dict):
+    """Runs a plan of steps. subset picks the plan: 'full' (default), 'setup'
+    (environment only, clone used as-is), 'statusline', or 'enable'."""
+
+    def __init__(self, args, style: Style, mark_map: dict, subset: str = "full"):
         self.args = args
         self.style = style
         self.marks = mark_map
+        self.subset = subset
+        self.demo = bool(getattr(args, "demo", False))
         self.tracker = StepTracker()
         self.cfg_path = config_path()
         self.cfg = load_config(self.cfg_path)
@@ -372,7 +534,7 @@ class Installer:
 
     def step_header(self, number: int, total: int, title: str) -> None:
         self.say("")
-        self.say(self.style.cyan(self.style.bold(f"[{number}/{total}] {title}")))
+        self.say(rule_header(number, total, title, self.style))
 
     def step_ok(self, name: str, detail: str = "") -> None:
         self.tracker.record(name, "ok", detail)
@@ -391,19 +553,34 @@ class Installer:
         if fatal:
             raise InstallAbort(detail or name)
 
+    def did(self, past: str, conditional: str) -> str:
+        """Honest wording: the conditional form in demo, the past tense for real runs."""
+        return conditional if self.demo else past
+
+    def step_intro(self, text: str) -> None:
+        """One dimmed line under the step header: what this step does, Morgan's voice."""
+        self.say(self.style.dim(f"  {text}"))
+
     # ---- steps
 
     def preflight(self) -> None:
+        self.step_intro("Checking you have what I need: Python, git and the Claude CLI.")
         if sys.version_info >= (3, 9):
             self.step_ok(f"Python {sys.version_info.major}.{sys.version_info.minor}")
         else:
             self.step_fail("Python version", "3.9 or newer required")
+        # PATH probes stay real in demo (honest preflight); a missing tool downgrades to
+        # a skip there because the dry run executes nothing anyway.
         if shutil.which("git"):
             self.step_ok("git found")
+        elif self.demo:
+            self.step_skip("git", "not found - a real run needs it")
         else:
             self.step_fail("git", "git is required - install it and re-run")
         if shutil.which("claude"):
             self.step_ok("claude CLI found")
+        elif self.demo:
+            self.step_skip("claude CLI", f"not found - a real run needs it: {CLAUDE_DOCS_URL}")
         else:
             self.step_fail(
                 "claude CLI",
@@ -420,9 +597,14 @@ class Installer:
 
     def choose_branch(self) -> None:
         default = self.args.branch or self.cfg.get("branch", "main")
-        self.say(self.style.dim("  main = stable releases, dev = latest integrated changes"))
+        self.step_intro("Picking your release channel - main is stable, dev is the latest work.")
         while True:
-            picked = ask("  Release channel (main/dev)", default, self.args.yes).lower()
+            picked = ask(
+                "  Which channel shall I track for you (main/dev)?",
+                default,
+                self.args.yes,
+                style=self.style,
+            ).lower()
             try:
                 self.branch = validate_branch(picked)
                 break
@@ -433,15 +615,19 @@ class Installer:
         self.step_ok(f"Channel: {self.branch}")
 
     def resolve_repo(self) -> None:
+        self.step_intro("Finding your local clone of the team repo - or making one for you.")
         if self.args.repo:
             candidate = Path(self.args.repo).expanduser().resolve()
         elif self.mode == "update":
             configured = self.cfg.get("repo_path")
-            script_root = Path(__file__).resolve().parents[1]
+            script_root = Path(__file__).resolve().parent  # helper sits at the repo ROOT
             if configured and looks_like_repo(Path(configured)):
                 candidate = Path(configured)
             elif looks_like_repo(script_root):
                 candidate = script_root
+            elif self.demo:
+                # Dry run: fall through to the would-clone path with the default target.
+                candidate = Path(self.cfg.get("repo_path", str(DEFAULT_CLONE_DIR))).expanduser()
             else:
                 self.step_fail(
                     "Locate clone",
@@ -451,12 +637,26 @@ class Installer:
         else:
             default = self.cfg.get("repo_path", str(DEFAULT_CLONE_DIR))
             candidate = (
-                Path(ask("  Clone directory", default, self.args.yes)).expanduser().resolve()
+                Path(
+                    ask(
+                        "  Where shall I keep your local clone?",
+                        default,
+                        self.args.yes,
+                        style=self.style,
+                    )
+                )
+                .expanduser()
+                .resolve()
             )
 
         if looks_like_repo(candidate):
             self.repo = candidate
             self.step_ok(f"Using existing clone: {candidate}")
+        elif self.demo and not (candidate.exists() and any(candidate.iterdir())):
+            # Dry run: show the clone command and accept the path without cloning.
+            run_cmd(["git", "clone", REPO_URL, candidate], timeout=600)
+            self.repo = candidate
+            self.step_ok(f"Would clone to {candidate}")
         elif candidate.exists() and any(candidate.iterdir()):
             self.step_fail(
                 "Clone directory",
@@ -471,12 +671,42 @@ class Installer:
             self.repo = candidate
             self.step_ok(f"Cloned to {candidate}")
 
+    def locate_clone_asis(self) -> None:
+        """Setup-style runs use the clone exactly as it sits on disk - no fetch, no reset.
+        A missing or invalid clone is a clean failure pointing at the full install."""
+        self.step_intro("Using your existing clone exactly as it sits - no code pull in this run.")
+        if self.args.repo:
+            candidate = Path(self.args.repo).expanduser().resolve()
+        else:
+            configured = self.cfg.get("repo_path")
+            script_root = Path(__file__).resolve().parent
+            if configured and looks_like_repo(Path(configured)):
+                candidate = Path(configured)
+            else:
+                candidate = script_root
+        if looks_like_repo(candidate):
+            self.repo = candidate
+            self.step_ok(f"Using clone as-is: {candidate}", "code not updated")
+        elif self.demo:
+            self.repo = candidate
+            self.step_ok(f"Would use clone at {candidate}", "demo")
+        else:
+            self.step_fail(
+                "Locate clone",
+                "no usable clone found - run a full install first "
+                "(menu option 1, or: python install_helper.py install)",
+            )
+
     def sync_branch(self) -> None:
+        self.step_intro(
+            "Bringing your clone up to date with the chosen channel - "
+            "your local changes are protected."
+        )
         repo = self.repo
         proc = run_cmd(["git", "-C", repo, "fetch", "origin", self.branch], timeout=300)
         if proc.returncode != 0:
             self.step_fail("Fetch origin", proc.stderr.strip() or "git fetch failed")
-        self.step_ok(f"Fetched origin/{self.branch}")
+        self.step_ok(self.did("Fetched", "Would fetch") + f" origin/{self.branch}")
 
         if is_dirty(repo):
             self.say(self.style.yellow("  The clone has uncommitted local changes."))
@@ -485,7 +715,12 @@ class Installer:
                     "Working tree",
                     "dirty - refusing to reset; commit or stash your changes, then re-run",
                 )
-            if confirm("  Stash them and continue?", default=False, assume_yes=False):
+            if confirm(
+                "  Shall I stash them and carry on?",
+                default=False,
+                assume_yes=False,
+                style=self.style,
+            ):
                 proc = run_cmd(
                     [
                         "git",
@@ -513,7 +748,12 @@ class Installer:
             detail = f"{ahead} local commit(s) not on origin/{self.branch}"
             if self.args.yes or not sys.stdin.isatty():
                 self.step_fail("Local commits", detail + " - refusing to discard them")
-            if not confirm(f"  {detail}. Discard and match origin?", False, False):
+            if not confirm(
+                f"  {detail}. Shall I discard them and match origin?",
+                False,
+                False,
+                style=self.style,
+            ):
                 self.step_fail("Local commits", detail + " - left in place, aborting")
 
         proc = run_cmd(["git", "-C", repo, "checkout", "-B", self.branch, f"origin/{self.branch}"])
@@ -521,20 +761,28 @@ class Installer:
             self.step_fail("Checkout branch", proc.stderr.strip() or "git checkout failed")
         head = run_cmd(["git", "-C", repo, "rev-parse", "--short", "HEAD"])
         commit = head.stdout.strip() if head.returncode == 0 else "?"
-        self.step_ok(f"On {self.branch} at {commit}", f"matches origin/{self.branch}")
+        self.step_ok(
+            self.did(f"On {self.branch} at {commit}", f"Would be on {self.branch} at {commit}"),
+            f"matches origin/{self.branch}",
+        )
 
     def optional_pip(self) -> None:
+        self.step_intro(
+            "Optional extras for working on the team itself - the plugin runs fine without them."
+        )
         req = self.repo / "requirements-dev.txt"
-        if not req.exists():
+        # In demo the clone may not exist yet; still walk the real prompt.
+        if not req.exists() and not self.demo:
             self.step_skip("Dev requirements", "requirements-dev.txt not present")
             return
         wanted = (
             self.args.pip
             if self.args.yes
             else confirm(
-                "  Install optional dev requirements (pytest, render deps)?",
+                "  Shall I install the optional dev requirements (pytest, render deps)?",
                 default=self.args.pip,
                 assume_yes=False,
+                style=self.style,
             )
         )
         if not wanted:
@@ -542,7 +790,7 @@ class Installer:
             return
         proc = run_cmd([sys.executable, "-m", "pip", "install", "-r", req], timeout=600)
         if proc.returncode == 0:
-            self.step_ok("Dev requirements installed")
+            self.step_ok("Dev requirements " + self.did("installed", "would be installed"))
         else:
             # pip may be absent or blocked in locked-down environments; never fatal.
             self.step_fail(
@@ -552,10 +800,11 @@ class Installer:
             )
 
     def marketplace(self) -> None:
+        self.step_intro("Pointing Claude Code's marketplace at your clone.")
         if self.mode == "update":
             proc = run_cmd(["claude", "plugin", "marketplace", "update", MARKETPLACE], timeout=120)
             if proc.returncode == 0:
-                self.step_ok(f"Marketplace {MARKETPLACE} refreshed")
+                self.step_ok(f"Marketplace {MARKETPLACE} " + self.did("refreshed", "would refresh"))
                 return
         # Fresh add (install mode, or an update where the marketplace was missing/broken).
         run_cmd(["claude", "plugin", "marketplace", "remove", MARKETPLACE], timeout=120)
@@ -569,13 +818,17 @@ class Installer:
                     or "claude plugin marketplace add failed"
                 ),
             )
-        self.step_ok(f"Marketplace {MARKETPLACE} -> {self.repo}")
+        self.step_ok(
+            f"Marketplace {MARKETPLACE} " + self.did("->", "would point at") + f" {self.repo}"
+        )
 
     def plugin(self) -> None:
+        verb = "Updating" if self.mode == "update" else "Installing"
+        self.step_intro(f"{verb} the team plugin from that marketplace.")
         if self.mode == "update":
             proc = run_cmd(["claude", "plugin", "update", PLUGIN_ID], timeout=300)
             if proc.returncode == 0:
-                self.step_ok(f"Plugin {PLUGIN_ID} updated")
+                self.step_ok(f"Plugin {PLUGIN_ID} " + self.did("updated", "would be updated"))
                 return
         run_cmd(["claude", "plugin", "uninstall", PLUGIN_ID], timeout=120)
         proc = run_cmd(["claude", "plugin", "install", PLUGIN_ID], timeout=300)
@@ -584,9 +837,12 @@ class Installer:
                 "Install plugin",
                 (proc.stderr.strip() or proc.stdout.strip() or "claude plugin install failed"),
             )
-        self.step_ok(f"Plugin {PLUGIN_ID} installed")
+        self.step_ok(f"Plugin {PLUGIN_ID} " + self.did("installed", "would be installed"))
 
     def persist(self) -> None:
+        if self.demo:
+            self.say(self.style.dim(f"    would save settings to {self.cfg_path}"))
+            return
         self.cfg.update(
             {"repo_path": str(self.repo), "branch": self.branch, "last_run": "2026-07-30"}
         )
@@ -601,6 +857,10 @@ class Installer:
         s = self.style
         version = installed_version(self.repo) if self.repo else None
         if not version:
+            if self.demo:
+                self.say("")
+                self.say(s.bold(s.cyan("What's new")))
+                self.say(s.dim("  shown after a real run"))
             return
         self.say("")
         if previous and previous != version:
@@ -632,47 +892,78 @@ class Installer:
 
     def print_summary(self, aborted: bool) -> None:
         s = self.style
+        m = self.marks
         self.say("")
-        self.say(s.bold(s.cyan("Summary " + ("(aborted)" if aborted else ""))))
-        for line in self.tracker.summary_lines(self.marks):
-            self.say(line)
+        self.say(s.bold(s.cyan("Summary" + (" (aborted)" if aborted else ""))))
+        groups = (
+            ("Completed", "ok", s.green, m["ok"]),
+            ("Skipped", "skip", s.yellow, m["skip"]),
+            ("Failed", "fail", s.red, m["fail"]),
+        )
+        for title, status, paint, mark in groups:
+            rows = [(name, detail) for name, st, detail in self.tracker.steps if st == status]
+            if not rows:
+                continue
+            self.say(paint(f"  {title}"))
+            for name, detail in rows:
+                suffix = f"  {s.dim('(' + detail + ')')}" if detail else ""
+                self.say(f"    {paint(mark)} {name}{suffix}")
         if self.stashed:
             self.say(s.yellow("  Your local changes are stashed: git stash pop to restore."))
         if aborted:
             self.say("")
-            self.say("Fix the failed step above and re-run - the helper is safe to repeat.")
+            self.say("Fix the failed step above and run me again - I'm safe to repeat.")
+            self._demo_footer()
             return
-        self.say("")
-        self.say(s.bold("Still yours to do by hand:"))
-        self.say(
-            "  1. Any FURTHER projects: enable per project via step 9 on a re-run, /plugin\n"
-            "     inside Claude Code, or `python install_helper.py --enable-project <dir>`.\n"
-            "     (Per-project enablement is the README's token-economy rule - avoid user scope.)"
-        )
-        self.say("  2. Restart Claude Code so the new plugin version loads.")
-        self.say(
-            "  (The safety and lifecycle hooks ship pre-wired - nothing to apply. The\n"
-            "  optional status line is offered during the run, or later via\n"
-            "  bash scripts/apply-statusline.sh.)"
-        )
+        if self.subset == "setup":
+            self.say("")
+            self.say(
+                s.yellow(
+                    "Code not updated - run a full install or update when you want the latest."
+                )
+            )
+        if self.subset in ("full", "setup"):
+            self.say("")
+            self.say(s.bold("Over to you - the two things I can't do from this script:"))
+            self.say(
+                "  1. Enable the team for any FURTHER projects: run me again and pick option 4,\n"
+                "     use /plugin inside Claude Code, or `python install_helper.py --enable-project <dir>`.\n"
+                "     (Per-project enablement is the README's token-economy rule - avoid user scope.)"
+            )
+            self.say("  2. Restart Claude Code so the new plugin version loads.")
+            self.say(
+                "  (The safety and lifecycle hooks ship pre-wired - nothing to apply. The\n"
+                "  optional status line is offered during the run, or later via menu option 3\n"
+                "  or bash scripts/apply-statusline.sh.)"
+            )
         self.say("")
         self.say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
+        self._demo_footer()
+
+    def _demo_footer(self) -> None:
+        if self.demo:
+            self.say(self.style.yellow("DEMO MODE ended - nothing was executed or written."))
 
     def statusline_step(self) -> None:
         """Optional: wire the team status line into the USER-level Claude settings so it
-        shows in every project. Opt-in (interactive yes, or --statusline with --yes);
-        add-only with backup; a DIFFERENT existing statusLine is never overwritten
-        without an explicit interactive yes. Windows note: the command runs via bash
-        (Git Bash ships with Git for Windows)."""
-        wanted = (
-            self.args.statusline
-            if self.args.yes
-            else confirm(
-                "  Wire the team status line (shows dormant/engaged + cost, zero tokens)?",
+        shows in every project. Opt-in (interactive yes, --statusline with --yes, or the
+        menu's status-line-only choice); add-only with backup; a DIFFERENT existing
+        statusLine is never overwritten without an explicit interactive yes. Windows
+        note: the command runs via bash (Git Bash ships with Git for Windows). In demo
+        the current file is read for real, but nothing is written or backed up."""
+        self.step_intro("An optional status line: the team's state and session cost at a glance.")
+        if self.subset == "statusline":
+            wanted = True  # the user picked this from the menu
+        elif self.args.yes:
+            wanted = self.args.statusline
+        else:
+            wanted = confirm(
+                "  Shall I wire the status line - it shows the team's state and session "
+                "cost at zero token cost?",
                 default=self.args.statusline,
                 assume_yes=False,
+                style=self.style,
             )
-        )
         if not wanted:
             self.step_skip("Status line", "skipped - bash scripts/apply-statusline.sh any time")
             return
@@ -695,14 +986,19 @@ class Installer:
             return
         if verdict == "conflict":
             keep = confirm(
-                "  A different statusLine is already configured - replace it?",
+                "  You already have a different statusLine configured - shall I replace it?",
                 default=False,
                 assume_yes=self.args.yes,
+                style=self.style,
             )
             if not keep:
                 self.step_skip("Status line", "existing statusLine kept")
                 return
             settings["statusLine"] = {"type": "command", "command": command}
+        if self.demo:
+            self.say(self.style.dim(f"    would write statusLine into {target} (backup first)"))
+            self.step_ok("Status line", "demo - nothing written")
+            return
         if target.is_file():
             backup = target.with_name("settings.json.bak-2026-07-30")
             n = 1
@@ -717,73 +1013,132 @@ class Installer:
     def enable_step(self) -> None:
         """Optional: enable the team for a project right now, and offer the recommended
         permission allow-list for the same project. Interactive only - non-interactive
-        runs use the --enable-project / --permissions flags."""
+        runs use the --enable-project / --permissions flags. In demo the directory check
+        stays real but nothing is executed or written."""
+        self.step_intro("Switching the team on per project - that keeps your token cost down.")
         if self.args.yes:
             self.step_skip(
                 "Project enablement",
                 "non-interactive - use --enable-project <dir> (and --permissions <dir>)",
             )
             return
-        wanted = confirm(
-            "  Enable the team for a project now (per-project scope)?",
-            default=False,
-            assume_yes=False,
-        )
-        if not wanted:
-            self.step_skip(
-                "Project enablement",
-                "later: run /plugin inside Claude Code from the project",
+        if self.subset != "enable":  # the menu's enable-only choice skips the re-ask
+            wanted = confirm(
+                "  Shall I enable the team for a project now (per-project scope)?",
+                default=False,
+                assume_yes=False,
+                style=self.style,
             )
-            return
-        try:
-            raw = input("  Project directory [.]: ").strip() or "."
-        except EOFError:
-            raw = "."
+            if not wanted:
+                self.step_skip(
+                    "Project enablement",
+                    "later: run /plugin inside Claude Code from the project",
+                )
+                return
+        raw = ask("  Which project directory?", ".", False, style=self.style)
         target = Path(raw)
+        if self.demo:
+            project = target.expanduser().resolve()
+            if not project.is_dir():
+                self.step_fail("Project enablement", f"not a directory: {project}", fatal=False)
+                return
+            run_cmd(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID], cwd=project)
+            self.step_ok("Project enablement", f"would enable for {project}")
+            if confirm(
+                "  Shall I also add the recommended permission allow-list (fewer prompts)?",
+                default=True,
+                assume_yes=False,
+                style=self.style,
+            ):
+                self._demo_permissions(project)
+            return
         if run_enable_project(target, self.style, self.marks) == 0:
             self.step_ok("Project enablement", str(target.expanduser().resolve()))
             if confirm(
-                "  Also add the recommended permission allow-list to it (fewer prompts)?",
+                "  Shall I also add the recommended permission allow-list (fewer prompts)?",
                 default=True,
                 assume_yes=False,
+                style=self.style,
             ):
                 run_permissions(target, self.style, self.marks)
         else:
             self.step_fail("Project enablement", "see message above", fatal=False)
 
+    def _demo_permissions(self, project: Path) -> None:
+        """Dry-run twin of run_permissions: read the real settings file (read-only) to
+        count what a real run would add; on an unreadable file, report the upper bound."""
+        target = project / ".claude" / "settings.json"
+        count = str(len(RECOMMENDED_ALLOW))
+        if target.is_file():
+            count = f"up to {len(RECOMMENDED_ALLOW)}"
+            try:
+                settings = json.loads(target.read_text(encoding="utf-8"))
+                if isinstance(settings, dict):
+                    _, added = merge_allow(settings)  # throwaway copy, nothing written
+                    count = str(len(added))
+            except (OSError, ValueError, InstallAbort):
+                pass
+        self.say(
+            self.style.dim(
+                f"    would add {count} allow entries to {target} "
+                "(add-only; deny rules and hooks untouched)"
+            )
+        )
+
     # ---- orchestration
+
+    def build_plan(self) -> list:
+        """(title, step) rows for the chosen subset; titles may be lazy callables so
+        they can reflect choices made by earlier steps (branch, mode)."""
+        if self.subset == "setup":
+            return [
+                ("Preflight checks", self.preflight),
+                ("Locate existing clone", self.locate_clone_asis),
+                ("Claude Code marketplace", self.marketplace),
+                (
+                    lambda: "Plugin " + ("update" if self.mode == "update" else "install"),
+                    self.plugin,
+                ),
+                ("Status line (optional)", self.statusline_step),
+                ("Enable for a project (optional)", self.enable_step),
+            ]
+        if self.subset == "statusline":
+            return [
+                ("Locate existing clone", self.locate_clone_asis),
+                ("Status line", self.statusline_step),
+            ]
+        if self.subset == "enable":
+            return [
+                ("Preflight checks", self.preflight),
+                ("Enable for a project", self.enable_step),
+            ]
+        return [
+            ("Preflight checks", self.preflight),
+            ("Release channel", self.choose_branch),
+            ("Local clone", self.resolve_repo),
+            (lambda: f"Sync to origin/{self.branch}", self.sync_branch),
+            ("Optional pip requirements", self.optional_pip),
+            ("Claude Code marketplace", self.marketplace),
+            (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
+            ("Status line (optional)", self.statusline_step),
+            ("Enable for a project (optional)", self.enable_step),
+        ]
 
     def run(self) -> int:
         s = self.style
-        self.say(s.bold(s.cyan("Compliance Surveillance Team - plugin install helper")))
-        self.mode = decide_mode(self.args.mode, self.cfg)
-        self.say(s.dim(f"Mode: {self.mode} (config: {self.cfg_path})"))
-        total = 9
+        if self.subset in ("full", "setup"):
+            self.mode = decide_mode(self.args.mode, self.cfg)
+            self.say(s.dim(f"Mode: {self.mode} (config: {self.cfg_path})"))
+        plan = self.build_plan()
         aborted = False
         try:
-            self.step_header(1, total, "Preflight checks")
-            self.preflight()
-            self.step_header(2, total, "Release channel")
-            self.choose_branch()
-            self.step_header(3, total, "Local clone")
-            self.resolve_repo()
-            self.step_header(4, total, f"Sync to origin/{self.branch}")
-            self.sync_branch()
-            self.step_header(5, total, "Optional pip requirements")
-            self.optional_pip()
-            self.step_header(6, total, "Claude Code marketplace")
-            self.marketplace()
-            self.step_header(
-                7, total, "Plugin " + ("update" if self.mode == "update" else "install")
-            )
-            self.plugin()
-            self.step_header(8, total, "Status line (optional)")
-            self.statusline_step()
-            self.step_header(9, total, "Enable for a project (optional)")
-            self.enable_step()
-            previous = self.cfg.get("last_version")
-            self.persist()
-            self.whats_new(previous)
+            for number, (title, step) in enumerate(plan, 1):
+                self.step_header(number, len(plan), title() if callable(title) else title)
+                step()
+            if self.subset in ("full", "setup"):
+                previous = self.cfg.get("last_version")
+                self.persist()
+                self.whats_new(previous)
         except InstallAbort:
             aborted = True
         except subprocess.TimeoutExpired as exc:
@@ -859,114 +1214,6 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
     return 1
 
 
-def run_demo(style: Style, mark_map: dict) -> int:
-    """--demo: the run exactly as a user sees it, executing NOTHING.
-
-    Every step prints with the real step machinery and shows the exact command it would
-    run, dimmed and prefixed 'would run:'. No subprocess is spawned, no file is written -
-    the whole function is print statements over the real constants, so the walkthrough
-    cannot drift from what the real flow invokes without failing review here."""
-    s = style
-    ok = mark_map["ok"]
-    tracker = StepTracker()
-
-    def say(text=""):
-        print(text)
-
-    def would(argv):
-        say(s.dim("      would run: " + " ".join(argv)))
-
-    def header(n, title):
-        say("")
-        say(s.bold(f"[{n}/9] {title}"))
-
-    say(s.bold(s.cyan("Compliance Surveillance Team - plugin install helper")))
-    say(s.yellow("DEMO MODE - this walkthrough shows the run; nothing is executed or written."))
-    say(s.dim("Mode: install (config: ~/.config/virt-surv-it/installer.json)"))
-
-    header(1, "Preflight checks")
-    for line in (
-        f"Python {sys.version_info.major}.{sys.version_info.minor}",
-        "git found",
-        "claude CLI found",
-    ):
-        say(f"  {ok} {line}")
-    would(["git", "ls-remote", "--heads", REPO_URL, "main"])
-    say(f"  {ok} GitHub remote reachable")
-    tracker.record("Preflight", "ok")
-
-    header(2, "Release channel")
-    say("  Channel? main = stable, dev = cutting edge [main]:  (demo: main chosen)")
-    say(f"  {ok} Channel: main")
-    tracker.record("Release channel: main", "ok")
-
-    header(3, "Local clone")
-    say(f"  Clone location [{DEFAULT_CLONE_DIR}]:  (demo: default)")
-    would(["git", "clone", REPO_URL, str(DEFAULT_CLONE_DIR)])
-    say(f"  {ok} Clone ready at {DEFAULT_CLONE_DIR}")
-    tracker.record("Local clone", "ok")
-
-    header(4, "Sync to origin/main")
-    would(["git", "-C", str(DEFAULT_CLONE_DIR), "fetch", "origin", "main"])
-    say(f"  {ok} Working tree clean - no local changes at risk")
-    would(["git", "-C", str(DEFAULT_CLONE_DIR), "checkout", "-B", "main", "origin/main"])
-    say(f"  {ok} Synced to origin/main")
-    tracker.record("Sync", "ok")
-
-    header(5, "Optional pip requirements")
-    say("  Install optional dev requirements (pytest, render deps)? [y/N]:  (demo: skipped)")
-    say("  ~ skipped - the plugin works without them")
-    tracker.record("Dev requirements", "skip", "optional")
-
-    header(6, "Claude Code marketplace")
-    would(["claude", "plugin", "marketplace", "add", str(DEFAULT_CLONE_DIR)])
-    say(f"  {ok} Marketplace '{MARKETPLACE}' registered")
-    tracker.record("Marketplace", "ok")
-
-    header(7, "Plugin install")
-    would(["claude", "plugin", "install", PLUGIN_ID])
-    say(f"  {ok} Plugin installed")
-    tracker.record("Plugin install", "ok")
-
-    header(8, "Status line (optional)")
-    say(
-        "  Wire the team status line (shows dormant/engaged + cost, zero tokens)? [y/N]:  (demo: yes)"
-    )
-    say(f"  {ok} Status line: would be wired in {user_settings_path()} (backup taken first)")
-    tracker.record("Status line", "ok", "demo")
-
-    header(9, "Enable for a project (optional)")
-    say("  Enable the team for a project now (per-project scope)? [y/N]:  (demo: yes, '.')")
-    would(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID])
-    say(f"  {ok} enabled for <your project>")
-    say(
-        "  Also add the recommended permission allow-list to it (fewer prompts)? [Y/n]:  (demo: yes)"
-    )
-    say(
-        f"  {ok} would add {len(RECOMMENDED_ALLOW)} allow entries (add-only; deny rules and hooks untouched)"
-    )
-    tracker.record("Project enablement", "ok", "demo")
-
-    say("")
-    say(s.bold(s.cyan("What's new in <version>")))
-    say("  [<version>] - <date> - <release title from the CHANGELOG>")
-    say(f"  Overview: {DEFAULT_CLONE_DIR / 'docs' / 'releases'}/<cycle>.md")
-
-    say("")
-    say(s.bold(s.cyan("Summary")))
-    for line in tracker.summary_lines(mark_map):
-        say(line)
-    say("")
-    say(s.bold("Still yours to do by hand:"))
-    say("  1. Any FURTHER projects: re-run step 9, /plugin inside Claude Code, or")
-    say("     python install_helper.py --enable-project <dir>")
-    say("  2. Restart Claude Code so the new plugin version loads.")
-    say("")
-    say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
-    say(s.yellow("DEMO MODE ended - nothing was executed or written."))
-    return 0
-
-
 # ------------------------------------------------------------------ CLI
 
 
@@ -981,7 +1228,7 @@ def parse_args(argv=None) -> argparse.Namespace:
         choices=["install", "update"],
         default=None,
         help="install = fresh clone + plugin install; update = sync an existing clone; "
-        "default auto-detects from the saved config",
+        "default shows the menu on a terminal, else auto-detects from the saved config",
     )
     parser.add_argument("--branch", choices=list(BRANCHES), help="release channel (main = stable)")
     parser.add_argument("--repo", help="path to the clone (overrides the saved location)")
@@ -994,7 +1241,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--demo",
         action="store_true",
-        help="show the full run exactly as a user sees it, executing and writing nothing",
+        help="dry-run the real interactive flow: answer the real prompts, every command "
+        "prints as 'would run:', nothing is executed or written",
     )
     parser.add_argument(
         "--enable-project",
@@ -1020,18 +1268,39 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def main(argv=None) -> int:
+    global run_cmd
     args = parse_args(argv)
     style = Style(supports_color())
-    if args.demo:
-        return run_demo(style, marks())
     if args.enable_project or args.permissions:
+        # Scripting path: no banner, no menu.
         rc = 0
         for target in args.enable_project or []:
             rc = max(rc, run_enable_project(Path(target), style, marks()))
         if args.permissions:
             rc = max(rc, run_permissions(Path(args.permissions), style, marks()))
         return rc
-    return Installer(args, style, marks()).run()
+
+    print_banner(style)
+    subset = "full"
+    if not args.demo and args.mode is None and not args.yes and sys.stdin.isatty():
+        action = choose_action(style)
+        if action == "quit":
+            print("No problem - nothing changed. See you next time.")
+            return 0
+        if action == "demo":
+            args.demo = True
+        elif action != "full":
+            subset = action
+
+    if args.demo:
+        print(style.yellow("DEMO MODE - the full interactive run; nothing is executed or written."))
+        saved = run_cmd
+        run_cmd = make_demo_runner(style)
+        try:
+            return Installer(args, style, marks(), subset=subset).run()
+        finally:
+            run_cmd = saved
+    return Installer(args, style, marks(), subset=subset).run()
 
 
 if __name__ == "__main__":

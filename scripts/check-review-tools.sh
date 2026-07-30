@@ -17,12 +17,26 @@ TTL_DAYS="${CST_TOOLCHECK_TTL_DAYS:-7}"
 REFRESH=0
 case "${1:-}" in --refresh | --force) REFRESH=1 ;; esac
 
+# Allow-list presence - computed FRESH on every run (both cache paths), never cached: the
+# user may add it minutes after being tipped, and a stale "missing" would nag for the TTL.
+# Marker: the scripts wildcard from the recommended set (install_helper.py
+# RECOMMENDED_ALLOW). Detection only - this script never edits settings (ADR-002 rec 5).
+allowlist_line() {
+  if [ -f ".claude/settings.json" ] && grep -q 'python3\? -m scripts\.\*' ".claude/settings.json" 2>/dev/null; then
+    echo "ALLOWLIST: present"
+  else
+    echo "ALLOWLIST: missing - fewer permission prompts if added; the user runs:"
+    echo "  python <clone>/install_helper.py --permissions ."
+  fi
+}
+
 # Serve from cache when it's fresh and a refresh wasn't requested.
 if [ "$REFRESH" -eq 0 ] && [ -f "$CACHE" ] && [ -n "$(find "$CACHE" -mtime "-${TTL_DAYS}" 2>/dev/null)" ]; then
   cat "$CACHE"
   echo
   echo "(cached - from a probe within the last ${TTL_DAYS} day(s); re-run with --refresh after"
   echo " installing or removing analysers.)"
+  allowlist_line
   exit 0
 fi
 
@@ -83,4 +97,6 @@ if mkdir -p "$(dirname "$CACHE")" 2>/dev/null; then
 fi
 
 printf '%s\n' "$report"
+
+allowlist_line
 exit 0
