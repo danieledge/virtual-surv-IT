@@ -60,6 +60,7 @@ TOOLS=(
   "pmd|Java static analysis|via Maven/Gradle or brew/apt"
   "spotbugs|Java bugs/security|via Maven/Gradle or brew/apt"
   "pwsh|PowerShell + PSScriptAnalyzer|install PowerShell, then Install-Module PSScriptAnalyzer"
+  "ast-grep|structural multi-lang search (find-all-implementations/callers by AST pattern)|brew/cargo/npm install ast-grep, or https://ast-grep.github.io/guide/quick-start.html"
 )
 # NOTE: profilers/benchmarks (py-spy, scalene, hyperfine, cProfile, Measure-Command, JMH) are
 # intentionally NOT listed - the team is STATIC-ONLY for now (it does not execute reviewed code,

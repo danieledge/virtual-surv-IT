@@ -1276,8 +1276,43 @@ def _cmd_set_footprint(args: argparse.Namespace) -> int:
     return _mutate(args, fn)
 
 
+_OPEN_STATUSES = ("in_progress", "blocked", "closing")
+
+
+def resume_menu(root: Path, max_shown: int = 3) -> dict:
+    """The engage skill's step-0b resume-vs-new menu, COMPUTED rather than left for the
+    model to re-derive from `list`'s text output (audit finding #1, 2026-07-30 - two
+    DATED-TODAY live defects cited as evidence the prose version already fails: a menu
+    offering only one open engagement when several existed, and a session folding a new
+    engagement's artifacts into the wrong open pack).
+
+    Returns {"open": [rows...], "shown": [...], "more": N, "archived": N, "default": slug
+    or None}. `open` sorted by `opened` date descending (None sorts last - an unreadable
+    open date is not "most recent"); `shown` is the top `max_shown`; `default` is the
+    ACTIVE marker's slug when it is itself an open engagement, else the most recent open
+    one, else None (nothing to resume - "start new" is the only real option)."""
+    rows = [r for r in scan_engagements(root) if r.get("status") in _OPEN_STATUSES]
+    rows.sort(key=lambda r: r.get("opened") or "", reverse=True)
+    active = read_active(root)
+    default = active if any((r.get("dir") or r.get("slug")) == active for r in rows) else None
+    if default is None and rows:
+        default = rows[0].get("dir") or rows[0].get("slug")
+    shown = rows[:max_shown]
+    return {
+        "open": rows,
+        "shown": shown,
+        "more": max(0, len(rows) - len(shown)),
+        "archived": len(archived_slugs(root)),
+        "default": default,
+    }
+
+
 def _cmd_list(args: argparse.Namespace) -> int:
     root = args.dir or _default_artifacts_dir()
+    if getattr(args, "menu", False):
+        menu = resume_menu(root)
+        print(json.dumps(menu, ensure_ascii=False, indent=2))
+        return 0
     rows = scan_engagements(root)
     if not rows:
         print(f"no engagements in {root}")
@@ -1472,6 +1507,12 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_set_footprint)
 
     p = sub.add_parser("list", help="list this project's engagements (registry scan)")
+    p.add_argument(
+        "--menu",
+        action="store_true",
+        help="print the computed resume-vs-new menu (JSON: open/shown/more/archived/default) "
+        "instead of the plain table - the engage skill's step 0b renders this directly",
+    )
     p.set_defaults(fn=_cmd_list)
 
     p = sub.add_parser(
@@ -1486,6 +1527,8 @@ def main(argv: list[str] | None = None) -> int:
         _cmd_migrate,
         _cmd_set_active,
         _cmd_clear_active,
+        _cmd_archive,
+        _cmd_unarchive,
     ):
         args.dir = resolve_pack_dir(args)
     try:
