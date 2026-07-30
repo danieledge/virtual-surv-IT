@@ -360,10 +360,45 @@ def user_settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
 
 
-def statusline_command(repo: Path) -> str:
+def find_bash() -> Optional[str]:
+    """bash for the status line, surviving Git for Windows' default PATH: the
+    installer only adds Git\\cmd (git.exe), not Git\\bin (bash.exe) - so `git` works
+    while `bash` misses ('installed but not on PATH', seen live 2026-07-30). Derive
+    bash from git's own install root first, then the standard install dirs, then a
+    fresh registry PATH read. POSIX: just which()."""
+    hit = shutil.which("bash")
+    if hit:
+        return hit
+    if sys.platform != "win32":
+        return None
+    candidates = []
+    git = shutil.which("git")
+    if git:
+        root = Path(git).resolve().parent.parent  # Git\cmd\git.exe -> Git
+        candidates += [root / "bin" / "bash.exe", root / "usr" / "bin" / "bash.exe"]
+    for env in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+        base = os.environ.get(env)
+        if base:
+            candidates.append(Path(base) / "Git" / "bin" / "bash.exe")
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        candidates.append(Path(local) / "Programs" / "Git" / "bin" / "bash.exe")
+    for c in candidates:
+        if _is_file_safe(c):
+            return str(c)
+    for d in _windows_registry_path_dirs():
+        p = Path(d) / "bash.exe"
+        if _is_file_safe(p):
+            return str(p)
+    return None
+
+
+def statusline_command(repo: Path, bash: str = "bash") -> str:
     """The statusLine command pointing at the clone's script by absolute path, so the
-    status line works from every project (dormant ones just show 'team dormant')."""
-    return f'bash "{(repo / "scripts" / "statusline.sh").resolve()}"'
+    status line works from every project (dormant ones just show 'team dormant').
+    `bash` may be a full path (quoted if needed) when it is not on PATH."""
+    bash_part = bash if bash == "bash" else f'"{bash}"'
+    return f'{bash_part} "{(repo / "scripts" / "statusline.sh").resolve()}"'
 
 
 def merge_statusline(settings: dict, command: str):
@@ -1540,14 +1575,17 @@ class Installer:
         note: the command runs via bash (Git Bash ships with Git for Windows). In demo
         the current file is read for real, but nothing is written or backed up."""
         self.step_intro("An optional status line: the team's state and session cost at a glance.")
-        if sys.platform == "win32" and not shutil.which("bash"):
-            # The wired command runs `bash .../statusline.sh`; without Git Bash it
-            # would be a broken setting. Honest skip instead of wiring it.
+        bash = find_bash()
+        if sys.platform == "win32" and not bash:
+            # The wired command runs bash; with Git Bash truly absent it would be a
+            # broken setting. Honest skip instead of wiring it.
             self.step_skip(
                 "Status line",
-                "needs Git Bash on PATH (ships with Git for Windows) - install it and re-run",
+                "needs Git Bash (ships with Git for Windows) - install it and re-run",
             )
             return
+        if bash and bash != shutil.which("bash"):
+            self.say(self.style.dim(f"    (bash found off PATH at {bash} - wiring by full path)"))
         if self.subset == "statusline":
             wanted = True  # the user picked this from the menu
         elif self.args.yes:
@@ -1575,7 +1613,11 @@ class Installer:
                     "Status line", f"{target} unreadable ({exc}) - not touching it", fatal=False
                 )
                 return
-        command = statusline_command(self.repo)
+        # Bare `bash` when it resolves on PATH (portable across reinstalls); the full
+        # discovered path only when that is the sole way to reach it.
+        command = statusline_command(
+            self.repo, "bash" if shutil.which("bash") else (bash or "bash")
+        )
         # Display the existing command from the ALREADY-PARSED settings; a second
         # read of the file could race an editor or trip over a BOM.
         existing = current_statusline_command(settings)

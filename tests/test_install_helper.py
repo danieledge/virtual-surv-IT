@@ -1536,9 +1536,10 @@ def test_run_enable_project_policy_text_in_stderr_also_falls_back(tmp_path):
 
     project = tmp_path / "proj"
     project.mkdir()
-    runner = lambda argv, **kw: _proc(
-        returncode=1, stderr="This program is blocked by group policy\n"
-    )  # noqa: E731
+
+    def runner(argv, **kw):
+        return _proc(returncode=1, stderr="This program is blocked by group policy\n")
+
     rc = run_enable_project(project, Style(enabled=False), {"ok": "OK", "fail": "X"}, runner=runner)
     assert rc == 0
     settings = json.loads((project / ".claude" / "settings.json").read_text())
@@ -1554,3 +1555,47 @@ def test_run_enable_project_ordinary_failure_still_fails(tmp_path):
     rc = run_enable_project(project, Style(enabled=False), {"ok": "OK", "fail": "X"}, runner=runner)
     assert rc == 1
     assert not (project / ".claude" / "settings.json").exists()
+
+
+# ------------------------------------------------------ Git Bash off-PATH discovery
+
+
+def test_find_bash_derives_from_git_root(monkeypatch, tmp_path):
+    """Git for Windows puts Git\\cmd on PATH but not Git\\bin - git resolves, bash
+    doesn't. bash.exe is found from git's own install root."""
+    import install_helper as ih
+
+    git_root = tmp_path / "Git"
+    (git_root / "cmd").mkdir(parents=True)
+    (git_root / "bin").mkdir()
+    git_exe = git_root / "cmd" / "git.exe"
+    git_exe.write_text("", encoding="utf-8")
+    bash_exe = git_root / "bin" / "bash.exe"
+    bash_exe.write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(ih.shutil, "which", lambda n: str(git_exe) if n == "git" else None)
+    monkeypatch.setattr(ih, "_windows_registry_path_dirs", lambda: [])
+    assert ih.find_bash() == str(bash_exe)
+
+
+def test_find_bash_prefers_path_and_none_when_absent(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda n: "/usr/bin/bash" if n == "bash" else None)
+    assert ih.find_bash() == "/usr/bin/bash"
+    monkeypatch.setattr(ih.shutil, "which", lambda n: None)
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(ih, "_windows_registry_path_dirs", lambda: [])
+    for var in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)", "LOCALAPPDATA"):
+        monkeypatch.delenv(var, raising=False)
+    assert ih.find_bash() is None
+
+
+def test_statusline_command_quotes_full_bash_path(tmp_path):
+    from install_helper import statusline_command
+
+    cmd = statusline_command(tmp_path, r"C:\Program Files\Git\bin\bash.exe")
+    assert cmd.startswith('"C:\\Program Files\\Git\\bin\\bash.exe" "')
+    assert cmd == statusline_command(tmp_path, r"C:\Program Files\Git\bin\bash.exe")
+    # bare bash stays unquoted
+    assert statusline_command(tmp_path).startswith('bash "')
