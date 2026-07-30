@@ -205,3 +205,64 @@ def test_cold_resume_recovers_everything_from_disk(tmp_path, monkeypatch):
     assert state["decisions"]["fix-cycle"].startswith("report only")
     assert state["decisions"]["data-attestation"] == "no data involved"
     assert state["execution_consent_outcome"]["outcome"] == "declined"
+
+
+# ------------------------------------------------ nested-pack prevention (2026-07-30)
+
+
+def test_default_artifacts_dir_resolves_outermost_from_inside_workspace(monkeypatch, tmp_path):
+    """Live defect: a session cd'd into artifacts/<old>/ ran init and created
+    artifacts/<old>/artifacts/<new>/. The default must resolve to the OUTERMOST
+    artifacts root, not append another level."""
+    from scripts.engagement_state import _default_artifacts_dir
+
+    inside = tmp_path / "proj" / "artifacts" / "old-engagement"
+    inside.mkdir(parents=True)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(inside)
+    assert _default_artifacts_dir() == (tmp_path / "proj" / "artifacts").resolve()
+    # and from the project root the classic default still applies
+    monkeypatch.chdir(tmp_path / "proj")
+    assert _default_artifacts_dir() == tmp_path / "proj" / "artifacts"
+
+
+def test_init_from_inside_workspace_lands_at_root(monkeypatch, tmp_path):
+    from scripts.engagement_state import main as es_main
+
+    root = tmp_path / "proj" / "artifacts"
+    old = root / "old"
+    old.mkdir(parents=True)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(old)
+    assert es_main(["init", "--title", "New", "--slug", "new-work"]) == 0
+    assert (root / "new-work" / "engagement-state.json").is_file()
+    assert not (old / "artifacts").exists()
+
+
+def test_init_refuses_explicit_nested_dir(tmp_path, capsys):
+    from scripts.engagement_state import main as es_main
+
+    root = tmp_path / "artifacts"
+    assert es_main(["--dir", str(root / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
+    nested = root / "old" / "artifacts" / "new"
+    rc = es_main(["--dir", str(nested), "init", "--title", "New", "--slug", "new"])
+    assert rc == 2
+    assert "refusing to init inside another engagement pack" in capsys.readouterr().err
+    # nested directly in a pack without a second artifacts level - also refused
+    rc = es_main(["--dir", str(root / "old" / "sub"), "init", "--title", "S", "--slug", "s"])
+    assert rc == 2
+
+
+def test_checker_flags_existing_nested_pack(tmp_path):
+    from scripts.check_artifacts import check_registry
+    from scripts.engagement_state import main as es_main, render_registry
+
+    root = tmp_path / "artifacts"
+    assert es_main(["--dir", str(root / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
+    # simulate pre-fix damage: a pack nested inside old
+    nested = root / "old" / "artifacts" / "new"
+    nested.mkdir(parents=True)
+    (nested / "engagement-state.json").write_text("{}", encoding="utf-8")
+    render_registry(root)
+    findings = check_registry(root)
+    assert any("NESTED-PACK" in f and str(nested) in f for f in findings)

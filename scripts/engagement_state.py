@@ -121,7 +121,16 @@ def _force_utf8_output() -> None:
 
 def _default_artifacts_dir() -> Path:
     root = os.environ.get("CLAUDE_PROJECT_DIR")
-    return (Path(root) if root else Path.cwd()) / "artifacts"
+    base = Path(root) if root else Path.cwd()
+    # A session that has cd'd INSIDE artifacts/ (e.g. into an existing workspace) must
+    # not nest a new pack there - a live init from artifacts/<old>/ created
+    # artifacts/<old>/artifacts/<new>/ (2026-07-30). Resolve to the OUTERMOST
+    # `artifacts` directory on the path instead of blindly appending another one.
+    resolved = base.resolve()
+    tops = [p for p in (resolved, *resolved.parents) if p.name == "artifacts"]
+    if tops:
+        return tops[-1]  # outermost = the project's real artifacts root
+    return base / "artifacts"
 
 
 # ------------------------------------------------------------------ workspaces (0.31)
@@ -774,6 +783,23 @@ def _cmd_init(args: argparse.Namespace) -> int:
     workspaced = args.dir is None
     if args.dir is None:
         args.dir = _default_artifacts_dir() / args.slug
+    else:
+        # Explicit --dir: refuse a target nested inside another engagement pack or a
+        # second artifacts level (artifacts/<old>/artifacts/<new> - the 2026-07-30
+        # live defect). Legal shapes stay legal: a flat pack at the artifacts root,
+        # a workspace at artifacts/<slug>, any standalone dir (tests, custom layouts).
+        d = Path(args.dir).resolve()
+        chain = (d, *d.parents)
+        parent = d.parent
+        nested_in_pack = state_path(parent).is_file() and parent.name != "artifacts"
+        if sum(1 for p in chain if p.name == "artifacts") > 1 or nested_in_pack:
+            print(
+                f"refusing to init inside another engagement pack: {d} - workspaces "
+                "live at <project>/artifacts/<slug>/ only (run init from the project "
+                "root, or pass --dir <project>/artifacts/<slug>)",
+                file=sys.stderr,
+            )
+            return 2
     target = state_path(args.dir)
     if target.exists():
         print(f"refusing to overwrite existing {target}", file=sys.stderr)

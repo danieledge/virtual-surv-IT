@@ -67,7 +67,8 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > mention) · `RATIFIED-CLAIM-PENDING` ·
 > `REVIEW-FINGERPRINT-GAP` · `STATE-MISSING` / `STATE-INVALID` / `STATE-STALE-RENDER` ·
 > `REGISTRY-STALE` / `REGISTRY-HTML-STALE` (the registry's HTML mirror is written
-> best-effort, so its freshness is checked explicitly) · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;
+> best-effort, so its freshness is checked explicitly) · `NESTED-PACK` (a pack
+> initialised inside another workspace; init now refuses the shape) · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;
 > pre-existing ones grandfathered per the D2 ruling) · map hygiene: `MAP-TOO-LONG` ·
 > `MAP-NO-ASOF` / `MAP-NO-ANCHOR` · `MAP-STALE-ANCHOR` / `MAP-STALE` (staleness budget) ·
 > `MAP-ENTRY-NO-ASOF` / `MAP-ENTRY-NO-ANCHOR` / `MAP-STALE-ENTRY-ANCHOR` · `MAP-NO-BASIS` ·

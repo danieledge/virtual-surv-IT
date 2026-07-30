@@ -1318,6 +1318,19 @@ def check_registry(artifacts_dir: Path) -> list[str]:
             ]
     except Exception as exc:
         return [f"REGISTRY-STALE: registry unreadable ({exc}) - regenerate it"]
+    # Nested packs: a state file deeper than artifacts/<slug>/ means an engagement was
+    # initialised from inside another workspace (live defect 2026-07-30 - a cd into
+    # artifacts/<old>/ before init created artifacts/<old>/artifacts/<new>/). Flag it;
+    # the fix is a move, which only the human/PM should perform on real deliverables.
+    for sp in sorted(artifacts_dir.rglob("engagement-state.json")):
+        rel = sp.relative_to(artifacts_dir)
+        if len(rel.parts) > 2:
+            return [
+                f"NESTED-PACK: {sp.parent} is an engagement pack nested inside another "
+                "engagement - packs live at artifacts/<slug>/ only; move the folder "
+                f"to {artifacts_dir / sp.parent.name} and re-run the check (a session "
+                "that cd's into a workspace before init causes this)"
+            ]
     # The HTML mirror is written best-effort: when the render libraries are not
     # installed, every mutation silently updates the .md/.json and leaves the .html
     # behind (user report 2026-07-30) - so its freshness needs an explicit check.
