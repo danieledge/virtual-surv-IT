@@ -768,7 +768,9 @@ class Installer:
 
     def optional_pip(self) -> None:
         self.step_intro(
-            "Optional extras for working on the team itself - the plugin runs fine without them."
+            "Optional extras, installed once per Python environment (not per project): the HTML "
+            "renderer's libraries (without them artifact .html rendering degrades) plus test "
+            "tooling. The plugin core needs no pip at all."
         )
         req = self.repo / "requirements-dev.txt"
         # In demo the clone may not exist yet; still walk the real prompt.
