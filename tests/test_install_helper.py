@@ -1344,3 +1344,26 @@ def test_find_claude_npm_package_bin_dir(monkeypatch, tmp_path):
     assert path == str(pkg_bin / "claude.exe")
     assert how == "known-location"
     _clear_claude_cache()
+
+
+def test_run_cmd_decodes_utf8_with_replacement_not_console_codepage(monkeypatch):
+    """Step-4 crash seen live: git's UTF-8 output decoded with cp1252 raises
+    UnicodeDecodeError in subprocess's reader thread. run_cmd must pin utf-8 +
+    errors=replace on every branch so the decode is total."""
+    import install_helper as ih
+
+    seen = []
+
+    def fake_run(*args, **kwargs):
+        seen.append(kwargs)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    ih.run_cmd(["git", "fetch", "origin", "main"])
+    monkeypatch.setattr(ih.shutil, "which", lambda n: r"C:\npm\claude.cmd")
+    ih.run_cmd(["claude", "plugin", "list"])
+    assert len(seen) == 2  # plain executable + Windows shim branch
+    for kwargs in seen:
+        assert kwargs["encoding"] == "utf-8"
+        assert kwargs["errors"] == "replace"
+        assert "text" not in kwargs

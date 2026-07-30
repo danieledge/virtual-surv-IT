@@ -523,9 +523,17 @@ def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
 
     The first element is resolved via command_argv; Windows `.cmd`/`.bat` shims (the
     npm-installed `claude`) launch via the quoted cmd.exe string form so paths with
-    spaces survive."""
+    spaces survive.
+
+    Output decodes as UTF-8 with replacement, never the console codepage: git and
+    claude emit UTF-8, and plain text=True on Windows decodes with cp1252 whose
+    undefined bytes (0x81/0x8d/...) raise UnicodeDecodeError inside subprocess's
+    reader thread ('Exception in Thread-N', seen live on a corporate box, 2026-07-30).
+    errors='replace' makes the decode total: worst case is a mangled character in a
+    log line, never a crash."""
     argv = [str(a) for a in argv]
     prefix = command_argv(argv[0])
+    decode = {"encoding": "utf-8", "errors": "replace"}
     if prefix[0] == "cmd":
         # Batch shim: one explicit string, shell=False. This branch is unreachable on
         # POSIX (which() never resolves a bare name to *.cmd/*.bat there).
@@ -533,15 +541,15 @@ def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
             windows_shim_cmdline(prefix[-1], argv[1:]),
             cwd=str(cwd) if cwd else None,
             capture_output=True,
-            text=True,
             timeout=timeout,
+            **decode,
         )
     return subprocess.run(  # argv is a fixed list built here, shell=False  # nosec B603
         prefix + argv[1:],
         cwd=str(cwd) if cwd else None,
         capture_output=True,
-        text=True,
         timeout=timeout,
+        **decode,
     )
 
 
