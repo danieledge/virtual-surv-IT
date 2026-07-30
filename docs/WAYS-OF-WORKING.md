@@ -40,7 +40,7 @@ flowchart LR
     Reqs([requirements pack]) --> Build
 ```
 
-> The canonical index of **all 23 skills** lives in
+> The canonical index of **all 24 skills** lives in
 > [`docs/team-operating-guide.md`](team-operating-guide.md) §Command index; the table below is
 > a summary by entry point.
 

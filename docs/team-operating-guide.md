@@ -33,7 +33,7 @@ Route by **deliverable type**, not habit:
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
-## Command index (canonical - all 23 skills)
+## Command index (canonical - all 24 skills)
 
 - `/engage` - front door: intake + orchestration for any request (problem, review or build)
 - `/engage-light` - explicit low-ceremony profile: same safety gates + code chain, one-page
@@ -59,6 +59,8 @@ Route by **deliverable type**, not habit:
 - `/remediate` - legacy / poorly-built code: assess → prioritise → fix → re-review → hand over
 - `/handover` - handover pack: dev docs + independent QA evidence + change/ops artifacts
 - `/run-evals` - team-quality eval harness against golden cases (regression net)
+- `/preferences` - view/change project-wide settings (docx export, regulatory citations);
+  quick utility, no engagement opened
 
 ## Asking questions (standing user preference)
 

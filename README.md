@@ -470,7 +470,7 @@ deliverable in both `.md` and `.html`** in the engagement's own `artifacts/<slug
 (one folder per engagement, with a generated `START-HERE.md` index and a machine-readable state
 file). Focused commands for each entry point:
 
-> The canonical index of **all 23 skills** lives in
+> The canonical index of **all 24 skills** lives in
 > [`docs/team-operating-guide.md`](docs/team-operating-guide.md) §Command index; the table below
 > is a summary.
 
@@ -499,6 +499,7 @@ file). Focused commands for each entry point:
 | `/reg-change-impact` | a regulatory change → impacted scenarios/controls | change-impact assessment |
 | `/beta-assess-quantexa` | (beta, vendor-specific) a Quantexa TM estate vs BRD/TSD traceability assessment | platform KB + traceability |
 | `/run-evals` | score the live team against the golden cases | regression net (spends tokens) |
+| `/preferences` | view/change project-wide settings (docx export, regulatory citations) | quick utility, no engagement |
 
 **Example requests** (the PM routes each to the right specialists, and only those):
 
@@ -569,7 +570,7 @@ a convention), that's stated rather than dressed up.
 | Principle | What it means | What enforces it |
 |---|---|---|
 | **Engineering first** | Assists the engineering *behind* surveillance, not compliance, legal or regulatory advice. | Scope statement + proof-of-concept framing; obligations are cited from a verified register, never interpreted as advice. |
-| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage`, and costs ~nothing until then. | `disable-model-invocation` on all 23 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
+| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage`, and costs ~nothing until then. | `disable-model-invocation` on all 24 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
 | **Right-sized, not all-hands** | Only the agents a task needs (typically 2-5, never all 16), the simplest thing that works. | The PM states the intended agent count at the gate (you can veto it); a golden eval case samples the behaviour. Prompt-enforced. |
 | **Independent review** | Reviewers, SMEs and the model validator recommend; builders fix. Advisors hold no edit tools; QA and validation run as separate agents from the build. | Advisory agents carry **no `Write`/`Edit` tools**; build/QA/validation separation is by routing distinct agents with isolated context (see `docs/agent-design.md`). |
 | **Humans hold the keys** | Execution consent and config are human-only; nothing touches a live system without sign-off. | The consent-write gate blocks the model from **writing or editing** the consent marker, `settings*.json` and the hook files; the `CST_ALLOW_*` overrides live in the launch environment the model can't reach. Bash-channel writes are lexically guarded, not sandboxed (a documented PoC limit, ADR-002). |
@@ -783,7 +784,7 @@ python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked
 
 ## 📁 Layout
 
-In one line: `.claude/agents/` (16 subagents) · `.claude/skills/` (23 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
+In one line: `.claude/agents/` (16 subagents) · `.claude/skills/` (24 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
 
 <details>
 <summary>📁 <b>One consolidated map of the repo</b></summary>
@@ -798,7 +799,7 @@ CLAUDE.md                       # shared team handbook (example defaults - custo
                                   model-validator · code-reviewer · performance-reviewer ·
                                   compliance-reviewer · data-quality-reviewer
    helper                         review-scorer (haiku - review prep, scoring, filter tallies)
-.claude/skills/                 # 23 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
+.claude/skills/                 # 24 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
                                 #   /new-scenario, /tune-thresholds, … (see "Using them")
 .claude/hooks/ + settings.json  # always-on data-safety + code-execution guards
 rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
@@ -873,7 +874,7 @@ uses and how (audited 2026-07-29 against the current Claude Code docs):
 
 | Feature | How the team uses it |
 |---|---|
-| **Skills / slash commands** | All 23 workflows ship as skills with `disable-model-invocation: true` - the dormancy mechanism: their descriptions load into no ordinary session, so the team costs ~nothing until you type `/engage`. `argument-hint` on every command. |
+| **Skills / slash commands** | All 24 workflows ship as skills with `disable-model-invocation: true` - the dormancy mechanism: their descriptions load into no ordinary session, so the team costs ~nothing until you type `/engage`. `argument-hint` on every command. |
 | **Subagents** | 16 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Write/Edit. |
 | **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), plus engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop, a `UserPromptSubmit` persona re-anchor that survives compaction, a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint. Hook and settings edits are human-only (ADR-002); hook changes ship staged, are applied by the maintainer via the `apply-*.sh` scripts, and releases ship with everything already wired - end users apply nothing. |
 | **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
@@ -952,7 +953,7 @@ so ±15%); the rest are estimates with no run behind them yet:
 - **Clean console**: detail to artifacts, not the chat.
 - **True dormancy (0.8.x, from the 2026-07-01 setup audit)**: a session that never types
   `/engage` now pays almost nothing for the team:
-  - all 23 skills set `disable-model-invocation: true`, so their **descriptions don't load into
+  - all 24 skills set `disable-model-invocation: true`, so their **descriptions don't load into
     context at all** (they stay typeable as slash commands; `/engage` reads a routed workflow's
     `SKILL.md` when chaining);
   - `CLAUDE.md` slimmed again (from ~185 lines / ~3.1k tokens to roughly 125 / ~2k), with the roster, routing
@@ -1155,7 +1156,7 @@ treats a local-scope plugin as mutable and **re-validates it every startup** (gi
 settings re-merge + re-scan) - that's the trigger. The ~20-27s amplifier is **Windows filesystem
 overhead** (git working-tree operations + real-time AV scanning) over the plugin's **large file
 tree**: 754 tracked files, of which **306 are the vendored pip-less Python libs in `vendor/`** - the
-16 agents / 23 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (16
+16 agents / 24 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (16
 file-opens is milliseconds). Largely a Claude-Code-×-Windows-×-local-install interaction, not
 plugin logic. **Mitigations (not yet applied):** (a) a **Windows Defender exclusion** for the plugin
 cache dir - usually the biggest, free win, and a quick A/B test; (b) installing via a
