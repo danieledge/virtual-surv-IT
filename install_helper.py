@@ -480,22 +480,26 @@ def register_plugin_directly(repo: Path, claude_dir: Path, version: Optional[str
     writes, for boxes where group policy blocks launching the CLI at all (the
     interactive Claude Code app still runs and reads these files at startup).
 
-    Schema verified against a real install 2026-07-30:
-      plugins/known_marketplaces.json  name -> {source, installLocation, lastUpdated}
+    Schema captured by running the real CLI against a directory marketplace and
+    diffing every file it touched (2026-07-30):
+      plugins/known_marketplaces.json  name -> {source: {source: directory, path},
+                                                installLocation: path, lastUpdated}
       plugins/installed_plugins.json   {version: 2, plugins: {id: [{scope, ...}]}}
-      settings.json                    enabledPlugins: {id: true}
-    Local-directory marketplace: source {source: local, path}, installLocation = the
-    clone itself; installPath = the clone (the repo root IS the plugin). Merge-only:
-    other marketplaces/plugins/settings are preserved, .bak written beside each file.
-    Returns the list of files touched."""
+      settings.json                    enabledPlugins: {id: true} AND
+                                       extraKnownMarketplaces: {name: {source}}
+    installPath = the clone (the repo root IS the plugin; the CLI copies to a cache
+    dir but loads from whatever installPath records). Merge-only: other marketplaces,
+    plugins and settings are preserved, .bak written beside each file. Returns the
+    list of files touched."""
     now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     plugins_dir = claude_dir / "plugins"
     touched = []
+    source = {"source": "directory", "path": str(repo)}
 
     km_path = plugins_dir / "known_marketplaces.json"
     km = _read_json_dict(km_path)
     km[MARKETPLACE] = {
-        "source": {"source": "local", "path": str(repo)},
+        "source": source,
         "installLocation": str(repo),
         "lastUpdated": now,
     }
@@ -528,6 +532,11 @@ def register_plugin_directly(repo: Path, claude_dir: Path, version: Optional[str
         enabled = {}
         st["enabledPlugins"] = enabled
     enabled[PLUGIN_ID] = True
+    extra = st.get("extraKnownMarketplaces")
+    if not isinstance(extra, dict):
+        extra = {}
+        st["extraKnownMarketplaces"] = extra
+    extra[MARKETPLACE] = {"source": source}
     _write_json_backup(st_path, st)
     touched.append(str(st_path))
     return touched

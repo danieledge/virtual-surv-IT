@@ -1486,7 +1486,7 @@ def test_register_plugin_directly_writes_cli_schema(tmp_path):
     touched = register_plugin_directly(repo, claude_dir, "0.33.1")
     km = json.loads((claude_dir / "plugins" / "known_marketplaces.json").read_text())
     assert km["other"]["source"]["repo"] == "x/y"  # preserved
-    assert km[MARKETPLACE]["source"] == {"source": "local", "path": str(repo)}
+    assert km[MARKETPLACE]["source"] == {"source": "directory", "path": str(repo)}
     assert km[MARKETPLACE]["installLocation"] == str(repo)
     ip = json.loads((claude_dir / "plugins" / "installed_plugins.json").read_text())
     assert ip["version"] == 2
@@ -1496,6 +1496,10 @@ def test_register_plugin_directly_writes_cli_schema(tmp_path):
     st = json.loads((claude_dir / "settings.json").read_text())
     assert st["enabledPlugins"][PLUGIN_ID] is True
     assert st["enabledPlugins"]["other@other"] is True and st["model"] == "opus"
+    assert st["extraKnownMarketplaces"][MARKETPLACE]["source"] == {
+        "source": "directory",
+        "path": str(repo),
+    }
     assert len(touched) == 3
     # pre-existing files got backups
     assert (claude_dir / "settings.json.bak").is_file()
