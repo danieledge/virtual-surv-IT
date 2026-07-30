@@ -17,7 +17,7 @@ cd "$(dirname "$0")"
 
 for s in apply-project-anchor.sh apply-document-redirect.sh apply-session-brief.sh \
   apply-post-edit-lint.sh apply-module-redirect.sh apply-subagent-budget.sh \
-  apply-locked-menu-guard.sh; do
+  apply-locked-menu-guard.sh apply-todo-panel-nudge.sh; do
   if [ -f "$s" ]; then
     echo "== $s"
     bash "$s"

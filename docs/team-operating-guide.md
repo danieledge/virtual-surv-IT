@@ -193,7 +193,10 @@ skipped. The Python helper scripts need only `<python>`, never bash:
   close), keep exactly one in_progress, and tick each as its evidence lands. The panel is
   Claude Code's own UI, so it costs no console space and no tokens beyond the update
   itself. Presentation only: the engagement's STATE stays in `engagement-state.json` - the
-  todo list never becomes a second source of truth.
+  todo list never becomes a second source of truth. A live audit (2026-07-30) found no
+  genuine TodoWrite calls in any kept eval transcript despite this rule - a Stop-hook nudge
+  (`scripts/todo_panel_nudge.py`) now reminds once a delivery-phase engagement looks
+  unseeded, since TodoWrite can't be called or verified from outside the turn.
   Hide detail by default; offer to expand via the question tool.
 
 ## Outcome discipline (every engagement)

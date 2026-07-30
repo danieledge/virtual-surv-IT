@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""Stop-hook nudge: seed the native task-list gate panel - warn-first, self-suppressing.
+
+The operating guide claims delivery-phase engagements track their gates in Claude Code's
+native task list (TodoWrite): "the moment the plan is agreed, seed one todo per planned
+gate... keep exactly one in_progress, ticking each as its evidence lands." A search of
+every kept live eval transcript found ZERO genuine TodoWrite tool calls (2026-07-30) -
+this was pure prose, never mechanically encouraged, and evidently not happening
+reliably. TodoWrite itself cannot be called BY a hook (it is model-invoked, no external
+driver) and its live content is not observable from outside the running turn (ephemeral,
+never persisted) - so this cannot verify compliance the way dod_stop_gate.py verifies
+DoD findings from disk. It can only nudge at the structurally right moment.
+
+Self-suppressing WITHOUT the hook writing state (every hook in this repo stays
+read-only - engagement-state.json is mutated only via engagement_state.py commands, by
+the model): the nudge asks Morgan to record `log-note "todo-panel-seeded"` once the
+panel is seeded, and this hook checks the pack's `log` for that exact marker before
+nudging again. Fires only once per engagement (not once per turn, which would itself
+become the console noise the task-list feature exists to avoid) - after the marker
+appears, silent for the rest of the engagement, including through close.
+
+Deliberately narrow, matching dod_stop_gate.py's low-noise design:
+  * fires only while a pack is genuinely gated (open/closing; the flat pack's pre-0.31
+    open/blocked/closing semantics) AND `phase` has reached "delivery" or "close" - the
+    point the operating guide names ("the moment the plan is agreed");
+  * nudges once per stop cycle (the Stop hook's `stop_hook_active` flag, same loop-safety
+    as dod_stop_gate.py) and self-suppresses permanently once the marker is logged;
+  * fails open on any internal error - a soft UX nicety must never brick a stop.
+
+Stdin: the Stop-hook JSON payload. Stdout: a single JSON `{"decision":"block","reason":...}`
+for the one nudge, else nothing. Exit code is always 0.
+
+Wire via scripts/apply-todo-panel-nudge.sh (HUMAN-run - hook/config edits are human-only,
+ADR-002 rec 5) into `.claude/settings.json` + `hooks/hooks.json` -> hooks.Stop.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+_GATED_PHASES = ("delivery", "close")
+_SEEDED_MARKER = "todo-panel-seeded"
+
+
+def _load_input() -> dict:
+    try:
+        return json.load(sys.stdin)
+    except Exception:
+        return {}
+
+
+def _reason() -> str:
+    return (
+        "🎩 Task-panel nudge (Stop hook, warn-first, one-time): this engagement has "
+        "reached delivery and the operating guide's 'native task-list progress' rule "
+        "applies - seed one todo per planned gate (brief → build → tests → review → QA "
+        "→ DoD gate → close) via TodoWrite if you have not already, keeping exactly one "
+        "in_progress and ticking each as its evidence lands. Once the panel reflects the "
+        f'current gates, record `engagement_state log-note "{_SEEDED_MARKER}"` so this '
+        "reminder never fires again for this engagement. (One-time nudge - it will not "
+        "repeat this stop cycle regardless.)"
+    )
+
+
+def _load_checker(project_root: Path):
+    """Mirrors dod_stop_gate.py's loader exactly (G3 fix: package import first, then a
+    __file__-relative fallback for plugin mode against a foreign project)."""
+    try:
+        sys.path.insert(0, str(project_root))
+        from scripts import check_artifacts
+
+        return check_artifacts
+    except Exception:  # nosec B110
+        pass
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for candidate in (
+        here.with_name("check_artifacts.py"),
+        here.parent.parent / "check_artifacts.py",
+    ):
+        try:
+            if candidate.is_file():
+                spec = importlib.util.spec_from_file_location("check_artifacts", candidate)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                return module
+        except Exception:  # nosec B112
+            continue
+    return None
+
+
+def _needs_nudge(pack: Path) -> bool:
+    """Reads the pack's own state file directly (phase + log aren't exposed by
+    pack_status, which only returns the words-only status). Fail-safe: an unreadable or
+    missing state file never nudges."""
+    state_file = pack / "engagement-state.json"
+    try:
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if state.get("phase") not in _GATED_PHASES:
+        return False
+    log = state.get("log")
+    if isinstance(log, list) and any(_SEEDED_MARKER in str(entry) for entry in log):
+        return False
+    return True
+
+
+def main() -> int:
+    data = _load_input()
+    if data.get("stop_hook_active"):
+        return 0
+
+    cwd = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
+    artifacts = cwd / "artifacts"
+    if not artifacts.is_dir():
+        return 0
+
+    ca = _load_checker(cwd)
+    if ca is None:
+        return 0
+
+    try:
+        packs = ca.engagement_packs(artifacts)
+        gated = [ws for ws in packs if ca.pack_status(ws) in ("open", "closing")]
+        flat_status = ca.pack_status(artifacts)
+        if flat_status in ("open", "blocked", "closing"):
+            gated.append(artifacts)
+        if not gated:
+            return 0
+        if not any(_needs_nudge(pack) for pack in gated):
+            return 0
+    except Exception:
+        return 0
+
+    print(json.dumps({"decision": "block", "reason": _reason()}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
