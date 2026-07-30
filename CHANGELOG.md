@@ -3,6 +3,34 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.2] - 2026-07-30 - Archive marker + closed-pack fast path (startup cost)
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`. Driven by a live report: DoD startup scans grew
+> slow in projects with many artifacts, mostly from old engagements.
+
+### Added
+- **`.archive` marker**: any directory under `artifacts/` carrying a `.archive` file is
+  excluded from every scanner - DoD checker, Stop gate, registry, status line, resume
+  menu. Archive-in-place by design (nothing moves, relative links keep working);
+  `artifacts/archive/` is available as an optional tidy destination. Any directory can
+  be excluded this way, not just engagement packs (legacy dumps, foreign exports).
+- **`engagement_state archive <slug>` / `--all-closed` / `unarchive <slug>`**: the
+  tool-assisted path writes a provenance line into the marker and re-renders the
+  registry (which now shows a collapsed "Archived: N" line). Archiving an OPEN pack is
+  refused (`--force` records the exception in the pack log first).
+- **`ARCHIVED-OPEN` safeguard**: a bare `.archive` on a pack whose state is not closed
+  is a CLI-checker warning, never a silent skip - archiving is not a close-gate dodge.
+- **Closed-pack fingerprint fast path**: a successful close now stores a stat-only
+  fingerprint (names/sizes/mtimes of deliverables); scans skip an unchanged closed
+  pack entirely. Editing any deliverable invalidates it and forces a full re-scan.
+  Packs closed before 0.33.2 keep full-scanning until archived or re-closed - the
+  checker nudges (`archive --all-closed`) when five or more are in that state.
+
+### Fixed
+- **Status line on Windows**: piped Python output was cp1252-encoded, so the emoji
+  marks raised and every render fell to the static no-stats fallback; `PYTHONUTF8=1`
+  makes the render total.
+
 ## [0.33.1] - 2026-07-29 - Platform capability adoption + document-input routing
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.

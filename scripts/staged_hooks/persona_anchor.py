@@ -123,6 +123,7 @@ def _open_engagements(artifacts: Path, ca) -> list[tuple[str, str]]:
                 (p.name, p)
                 for p in artifacts.iterdir()
                 if p.is_dir()
+                and not (p / ".archive").is_file()  # archived = out of play (0.33.2)
                 and ((p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file())
             )
     except OSError:

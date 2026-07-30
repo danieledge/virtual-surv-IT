@@ -446,8 +446,53 @@ def engagement_packs(artifacts_dir: Path) -> list[Path]:
         p
         for p in artifacts_dir.iterdir()
         if p.is_dir()
+        and not (p / ".archive").is_file()  # archived packs are out of play (0.33.2)
         and ((p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file())
     )
+
+
+def _under_archive(path: Path, base: Path) -> bool:
+    """True when any directory from path's parent up to (and including) base carries the
+    `.archive` marker - the subtree is excluded from every scan (0.33.2)."""
+    cur = path if path.is_dir() else path.parent
+    while True:
+        try:
+            if (cur / ".archive").is_file():
+                return True
+        except OSError:
+            return False
+        if cur == base or cur == cur.parent:
+            return False
+        cur = cur.parent
+
+
+def archived_open_packs(artifacts_dir: Path) -> list[str]:
+    """ARCHIVED-OPEN safeguard: a `.archive` marker on a pack whose state is not closed
+    would silently dodge the close gate. One cheap state-file read per archived pack -
+    that is the entire cost archived packs keep. CLI-report only (the stop gate stays
+    silent for archived packs by design - archiving IS the mute button; this warning
+    surfaces on explicit checker runs so the dodge is visible, not fatal)."""
+    findings = []
+    if not artifacts_dir.is_dir():
+        return findings
+    for p in sorted(artifacts_dir.iterdir()):
+        if not (p.is_dir() and (p / ".archive").is_file()):
+            continue
+        state_file = p / "engagement-state.json"
+        if not state_file.is_file():
+            continue  # a plain archived directory - nothing to guard
+        try:
+            status = json.loads(state_file.read_text(encoding="utf-8")).get("status")
+        except Exception:
+            status = "unreadable"
+        if status != "closed":
+            findings.append(
+                f"ARCHIVED-OPEN: {p.name}/ is archived but its status is '{status}' - "
+                "archiving does not close an engagement; unarchive it and close properly "
+                "(python -m scripts.engagement_state unarchive " + p.name + "), or leave "
+                "this warning standing as the record of abandoned work"
+            )
+    return findings
 
 
 def find_codebase_map(project_dir: Path) -> Path | None:
@@ -881,7 +926,11 @@ def check(artifacts_dir: Path) -> list[str]:
     # artifacts/data/ holds machine-readable source (findings packs); the top-level artifacts/ is the
     # user-navigable set. Exclude the data/ subtree from the .md/.html-sibling and index scans.
     data_dir = artifacts_dir / "data"
-    md_files = [m for m in sorted(artifacts_dir.rglob("*.md")) if data_dir not in m.parents]
+    md_files = [
+        m
+        for m in sorted(artifacts_dir.rglob("*.md"))
+        if data_dir not in m.parents and not _under_archive(m, artifacts_dir)
+    ]
     for md in md_files:
         # The summary email must be a .txt; a .md copy is the wrong type, not a missing render -
         # flag it and do NOT demand an .html sibling for it (that would be the wrong fix).
@@ -924,6 +973,8 @@ def check(artifacts_dir: Path) -> list[str]:
 
     # A wrongly-rendered email copy - the summary email is a .txt only, never an .html.
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
+        if _under_archive(stray, artifacts_dir):
+            continue
         findings.append(
             f"SUMMARY-WRONG-EXT: {stray.name} - the engagement-summary email is a .txt, not "
             ".html; remove this rendered copy (the .txt is the deliverable)"
@@ -932,13 +983,17 @@ def check(artifacts_dir: Path) -> list[str]:
     # The email itself: always FROM Morgan, agents 🤖-marked, roster/identity rules apply
     # to it exactly as to reports (it is the most-forwarded artifact of the pack).
     for email in sorted(artifacts_dir.rglob("engagement-summary-*.txt")):
+        if _under_archive(email, artifacts_dir):
+            continue
         email_text = email.read_text(encoding="utf-8", errors="replace")
         findings.extend(check_summary_email(email_text, email))
         findings.extend(check_roster(email_text, email))
         findings.extend(check_agent_identity(email_text, email))
 
     code_files = [
-        f for f in artifacts_dir.rglob("*") if f.is_file() and f.suffix.lower() in _CODE_EXTS
+        f
+        for f in artifacts_dir.rglob("*")
+        if f.is_file() and f.suffix.lower() in _CODE_EXTS and not _under_archive(f, artifacts_dir)
     ]
     non_test_code = [f for f in code_files if not _TEST_FILE_RE.search(f.name)]
     if non_test_code:
@@ -1323,6 +1378,8 @@ def check_registry(artifacts_dir: Path) -> list[str]:
     # artifacts/<old>/ before init created artifacts/<old>/artifacts/<new>/). Flag it;
     # the fix is a move, which only the human/PM should perform on real deliverables.
     for sp in sorted(artifacts_dir.rglob("engagement-state.json")):
+        if _under_archive(sp, artifacts_dir):
+            continue
         rel = sp.relative_to(artifacts_dir)
         if len(rel.parts) > 2:
             return [
@@ -1382,10 +1439,25 @@ def main(argv: list[str]) -> int:
                 es.render_registry(artifacts_dir)
                 print("FIXED REGISTRY-STALE: regenerated the root registry")
 
+    es = _load_engagement_state_module()
+    skipped_fresh = 0
     if workspaces:
         findings = []
         for pack in workspaces:
+            # 0.33.2 fast path: a closed pack whose stat-only fingerprint still matches
+            # the one stored at its gate-passing close needs no content re-scan.
+            if es is not None and not do_fix:
+                try:
+                    state = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
+                    if state.get("status") == "closed" and state.get(
+                        "scan_fingerprint"
+                    ) == es.compute_fingerprint(pack):
+                        skipped_fresh += 1
+                        continue
+                except Exception:
+                    pass  # unreadable state falls through to the full scan (fail-safe)
             findings.extend(f"[{pack.name}] {f}" for f in check(pack))
+        findings.extend(archived_open_packs(artifacts_dir))
         if (artifacts_dir / "engagement-state.json").is_file():
             # A flat pack's rglob checks would cross into sibling workspaces and produce
             # noise; during the transitional coexistence the one finding is "migrate it".
@@ -1410,12 +1482,40 @@ def main(argv: list[str]) -> int:
             findings.append(f"MAP-NOT-FOUND: {map_path} was given explicitly but does not exist")
             map_note = f"map missing: {map_path}"
 
+    notes = [map_note]
+    if skipped_fresh:
+        notes.append(f"{skipped_fresh} closed pack(s) skipped via fingerprint")
+    archived_count = sum(
+        1
+        for p in (artifacts_dir.iterdir() if artifacts_dir.is_dir() else [])
+        if p.is_dir() and (p / ".archive").is_file()
+    )
+    if archived_count:
+        notes.append(f"{archived_count} archived dir(s) excluded")
+    # Startup-cost nudge: many closed, unarchived, unfingerprinted packs = slow scans
+    # the user can end with one command. Informational, never a finding.
+    stale_closed = 0
+    if es is not None and workspaces:
+        for pack in workspaces:
+            try:
+                st = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
+                if st.get("status") == "closed" and not st.get("scan_fingerprint"):
+                    stale_closed += 1
+            except Exception:
+                continue
+    if stale_closed >= 5:
+        print(
+            f"note: {stale_closed} closed engagement(s) are re-scanned every run - archive "
+            "them (`python -m scripts.engagement_state archive --all-closed`) or re-close "
+            "once to store a fingerprint; either ends the cost"
+        )
+    note_text = "; ".join(notes)
     if findings:
         for line in findings:
             print(line)
-        print(f"DoD artifact gate: {len(findings)} finding(s) - NOT satisfied ({map_note})")
+        print(f"DoD artifact gate: {len(findings)} finding(s) - NOT satisfied ({note_text})")
         return 1
-    print(f"DoD artifact gate: OK ({artifacts_dir}; {map_note})")
+    print(f"DoD artifact gate: OK ({artifacts_dir}; {note_text})")
     return 0
 
 

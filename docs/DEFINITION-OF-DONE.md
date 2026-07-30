@@ -68,11 +68,19 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > `REVIEW-FINGERPRINT-GAP` · `STATE-MISSING` / `STATE-INVALID` / `STATE-STALE-RENDER` ·
 > `REGISTRY-STALE` / `REGISTRY-HTML-STALE` (the registry's HTML mirror is written
 > best-effort, so its freshness is checked explicitly) · `NESTED-PACK` (a pack
-> initialised inside another workspace; init now refuses the shape) · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;
+> initialised inside another workspace; init now refuses the shape) · `ARCHIVED-OPEN`
+> (a `.archive` marker on a pack that never passed the close gate - warned, never a
+> silent skip; 0.33.2) · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;
 > pre-existing ones grandfathered per the D2 ruling) · map hygiene: `MAP-TOO-LONG` ·
 > `MAP-NO-ASOF` / `MAP-NO-ANCHOR` · `MAP-STALE-ANCHOR` / `MAP-STALE` (staleness budget) ·
 > `MAP-ENTRY-NO-ASOF` / `MAP-ENTRY-NO-ANCHOR` / `MAP-STALE-ENTRY-ANCHOR` · `MAP-NO-BASIS` ·
 > `MAP-SECRET`.
+>
+> **Scan scope (0.33.2).** Directories carrying a `.archive` marker are excluded from
+> every scan (archive-in-place; `engagement_state archive <slug>` / `--all-closed`,
+> `unarchive` to reverse). A ✅ closed pack whose stat-only `scan_fingerprint`
+> (stored at its gate-passing close) still matches is skipped without content reads -
+> the verification it passed at close stands until a deliverable changes.
 >
 > That same mechanical check also ships as a **warn-first `Stop` hook** (`scripts/dod_stop_gate.py`),
 > wired into **both** tracked hook files - `.claude/settings.json` (repo-as-project) and

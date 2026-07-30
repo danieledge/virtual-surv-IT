@@ -216,3 +216,23 @@ where that step slots into the flow.
 ---
 
 Next: [Overview](OVERVIEW.md) · [Demos](demos/README.md) · [Glossary](glossary.md) · [README](../README.md)
+
+## Startup feels slow in a project with lots of old engagements - can I speed it up?
+
+Yes, two ways (0.33.2):
+
+1. **Archive them.** Say "archive the old engagements" to Morgan (or run
+   `python -m scripts.engagement_state archive --all-closed` yourself). That drops a
+   `.archive` marker file into each closed pack - nothing moves, links keep working,
+   and every scanner (DoD checker, end-of-turn gate, registry, status line, resume
+   menu) skips the folder from then on. Works on any directory under `artifacts/`,
+   not just engagement packs - `touch artifacts/legacy-stuff/.archive` excludes a
+   folder by hand. `unarchive <slug>` brings one back.
+2. **Nothing at all.** Engagements closed on 0.33.2+ store a fingerprint at close;
+   unchanged closed packs are skipped automatically. Packs closed on older versions
+   keep full-scanning until archived (the checker nudges you when several are in
+   that state).
+
+Archiving an *open* engagement is refused - it would silence the close gate. A
+hand-touched marker on an open pack shows as an `ARCHIVED-OPEN` warning, never a
+silent skip.

@@ -48,7 +48,8 @@ if art.is_dir():
         packs.append(("(flat)", state))
     try:
         packs += [(p.name, p / "engagement-state.json") for p in sorted(art.iterdir())
-                  if p.is_dir() and (p / "engagement-state.json").is_file()]
+                  if p.is_dir() and (p / "engagement-state.json").is_file()
+                  and not (p / ".archive").is_file()]  # archived = out of play (0.33.2)
     except OSError:
         pass
     active = None

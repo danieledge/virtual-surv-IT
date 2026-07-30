@@ -184,13 +184,69 @@ def workspace_states(root: Path) -> list[Path]:
     )
 
 
+# ------------------------------------------------------------------ archive (0.33.2)
+# A directory containing a `.archive` marker file is OUT OF PLAY: every scanner (DoD
+# checker, stop gate, registry, statusline, resume menu) skips it, so old engagements
+# stop costing startup time. Archive-in-place by design - nothing moves, so relative
+# links inside old reports keep working; `artifacts/archive/` exists purely as an
+# optional tidy destination (it ships with its own marker). One safeguard lives in the
+# checker: a marker on a pack whose state is still OPEN is ARCHIVED-OPEN, not a silent
+# skip - archiving is not a way to dodge the close gate.
+
+ARCHIVE_MARKER = ".archive"
+
+
+def is_archived(pack: Path) -> bool:
+    """True when the directory carries the `.archive` marker."""
+    try:
+        return (pack / ARCHIVE_MARKER).is_file()
+    except OSError:
+        return False
+
+
+def archived_slugs(root: Path) -> list[str]:
+    """Names of one-level subdirectories carrying the marker (packs or plain dirs)."""
+    if not root.is_dir():
+        return []
+    return sorted(p.name for p in root.iterdir() if p.is_dir() and is_archived(p))
+
+
+# Files the closed-pack fingerprint ignores: the state file (the fingerprint is stored
+# inside it), the generated index renders (re-rendered by the same mutation that stores
+# the fingerprint) and the archive marker itself. Everything else - the deliverables -
+# is covered by name, size and mtime.
+_FINGERPRINT_EXCLUDE = {STATE_FILENAME, "START-HERE.md", "START-HERE.html", ARCHIVE_MARKER}
+
+
+def compute_fingerprint(pack: Path) -> str:
+    """A cheap stat-only fingerprint of the pack's deliverable files.
+
+    Stored in the state at a successful close; while it still matches, scanners skip
+    the full content re-scan (the verification the pack passed at close still stands).
+    Any edit to a deliverable changes size or mtime and forces a real re-scan."""
+    entries = []
+    for p in sorted(pack.rglob("*")):
+        if not p.is_file() or p.name in _FINGERPRINT_EXCLUDE:
+            continue
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        entries.append(f"{p.relative_to(pack)}|{st.st_size}|{int(st.st_mtime)}")
+    return hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
+
+
 def scan_engagements(root: Path) -> list[dict]:
-    """Registry rows derived from the packs on disk (flat pack first, then workspaces)."""
+    """Registry rows derived from the packs on disk (flat pack first, then workspaces).
+    Archived (`.archive`-marked) packs are excluded - the registry names them in its own
+    collapsed line via archived_slugs()."""
     rows: list[dict] = []
     candidates: list[tuple[str, Path]] = []
     if state_path(root).is_file():
         candidates.append(("(flat)", root))
-    candidates.extend((sp.parent.name, sp.parent) for sp in workspace_states(root))
+    candidates.extend(
+        (sp.parent.name, sp.parent) for sp in workspace_states(root) if not is_archived(sp.parent)
+    )
     for slug, pack in candidates:
         try:
             state = load_state(pack)
@@ -224,9 +280,10 @@ def scan_engagements(root: Path) -> list[dict]:
 def render_registry(root: Path) -> list[Path]:
     """(Re)generate the derived root registry. Removes it when no packs remain."""
     rows = scan_engagements(root)
+    archived = archived_slugs(root)
     json_path = root / REGISTRY_JSON
     md_path = root / REGISTRY_MD
-    if not rows:
+    if not rows and not archived:
         for p in (json_path, md_path, md_path.with_suffix(".html")):
             p.unlink(missing_ok=True)
         return []
@@ -254,6 +311,12 @@ def render_registry(root: Path) -> list[Path]:
             f"| {link} | {mark} {r.get('status')} | {r.get('profile') or ''} "
             f"| {r.get('title') or ''} | {r.get('opened') or ''} | {r.get('closed') or ''} |"
         )
+    if archived:
+        lines += [
+            "",
+            f"Archived: {len(archived)} (`.archive` marker - excluded from scans): "
+            + ", ".join(f"`{s}/`" for s in archived),
+        ]
     lines.append("")
     md_path.write_text("\n".join(lines), encoding="utf-8")
     written = [json_path, md_path]
@@ -950,6 +1013,10 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
         clear_active(args.dir.parent, args.dir.name)
         return 0
     if not gate_findings:
+        # 0.33.2 fast path: the pack just passed the full gate - fingerprint it so later
+        # scans can skip an unchanged closed pack instead of re-reading every file.
+        state["scan_fingerprint"] = compute_fingerprint(args.dir)
+        _write_state(args.dir, state)
         # R1: a closed engagement is no longer this session's ACTIVE one.
         clear_active(args.dir.parent, args.dir.name)
         return 0
@@ -1087,6 +1154,75 @@ def _cmd_set_active(args: argparse.Namespace) -> int:
 def _cmd_clear_active(args: argparse.Namespace) -> int:
     clear_active(args.dir or _default_artifacts_dir())
     print("ACTIVE marker cleared")
+    return 0
+
+
+def _cmd_archive(args: argparse.Namespace) -> int:
+    """Archive-in-place: write the `.archive` marker so every scanner skips the pack.
+    Nothing moves (relative links inside old reports keep working). Closed packs only -
+    archiving is not a way to dodge the close gate; --force records the exception."""
+    root = args.dir or _default_artifacts_dir()
+    targets: list[Path]
+    if args.all_closed:
+        targets = [sp.parent for sp in workspace_states(root) if not is_archived(sp.parent)]
+    else:
+        if not args.slug:
+            print("archive: give a <slug> or --all-closed", file=sys.stderr)
+            return 2
+        targets = [root / args.slug]
+    archived_now = 0
+    for pack in targets:
+        if not state_path(pack).is_file():
+            if not args.all_closed:
+                print(f"no engagement pack at {pack}", file=sys.stderr)
+                return 2
+            continue
+        try:
+            state = load_state(pack)
+        except Exception as exc:
+            print(f"skipping {pack.name}: unreadable state ({exc})", file=sys.stderr)
+            continue
+        status = state.get("status")
+        if status != "closed":
+            if args.all_closed:
+                continue  # --all-closed archives only the closed ones, silently
+            if not args.force:
+                print(
+                    f"refusing to archive {pack.name}: status is '{status}', not closed - "
+                    "close the engagement first (or --force to archive abandoned work; "
+                    "the exception is logged in the pack)",
+                    file=sys.stderr,
+                )
+                return 2
+            state.setdefault("log", []).append(
+                f"{_dt.date.today().isoformat()}: archived while '{status}' (--force) - "
+                "close gate never passed"
+            )
+            _write_state(pack, state)
+        (pack / ARCHIVE_MARKER).write_text(
+            f"archived {_dt.date.today().isoformat()} via engagement_state archive "
+            f"(status: {status})\n",
+            encoding="utf-8",
+        )
+        clear_active(root, pack.name)
+        archived_now += 1
+        print(f"archived: {pack.name}/ ({ARCHIVE_MARKER} written - excluded from scans)")
+    if args.all_closed and archived_now == 0:
+        print("nothing to archive: no closed, unarchived packs")
+    render_registry(root)
+    return 0
+
+
+def _cmd_unarchive(args: argparse.Namespace) -> int:
+    root = args.dir or _default_artifacts_dir()
+    pack = root / args.slug
+    marker = pack / ARCHIVE_MARKER
+    if not marker.is_file():
+        print(f"{pack.name} is not archived (no {ARCHIVE_MARKER})", file=sys.stderr)
+        return 2
+    marker.unlink()
+    render_registry(root)
+    print(f"unarchived: {pack.name}/ (back in scan scope)")
     return 0
 
 
@@ -1290,6 +1426,23 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("clear-active", help="remove the ACTIVE-engagement marker")
     p.set_defaults(fn=_cmd_clear_active)
+
+    p = sub.add_parser(
+        "archive",
+        help="mark a closed pack .archive - excluded from every scan (in-place, no move)",
+    )
+    p.add_argument("slug", nargs="?", help="workspace directory name under artifacts/")
+    p.add_argument(
+        "--all-closed", action="store_true", help="archive every closed, unarchived pack"
+    )
+    p.add_argument(
+        "--force", action="store_true", help="archive an OPEN pack (logged in the pack first)"
+    )
+    p.set_defaults(fn=_cmd_archive)
+
+    p = sub.add_parser("unarchive", help="remove the .archive marker (back in scan scope)")
+    p.add_argument("slug")
+    p.set_defaults(fn=_cmd_unarchive)
 
     p = sub.add_parser(
         "record-consent-outcome",

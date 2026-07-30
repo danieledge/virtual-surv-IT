@@ -324,6 +324,12 @@ must be visible **between** gates.
 - **Engagements live in workspaces (ADR-008).** Each engagement owns `artifacts/<slug>/`
   (its state, index and artifacts); the root `ENGAGEMENTS.md`/`engagements.json` is a DERIVED
   registry regenerated on every mutation - never hand-edit it (`REGISTRY-STALE`). Several
+  **Archiving (0.33.2):** a `.archive` marker file excludes any directory from every
+  scanner, in place (no moves; `archive <slug>` / `--all-closed` / `unarchive`; the
+  registry keeps a collapsed `Archived: N` line). Closed packs only - an open pack is
+  refused (`--force` logs the exception; a bare hand-touched marker on an open pack is
+  `ARCHIVED-OPEN`, warned not silent). Closed packs also store a scan fingerprint at
+  close, so unchanged ones are skipped even without archiving. Several
   engagements may coexist at independent states: one is ACTIVE per session, recorded **on
   disk** in `artifacts/.active-engagement.json` (written by `init`, switched with
   `set-active`, cleared at close; ambiguous commands resolve to it) - name it in the
