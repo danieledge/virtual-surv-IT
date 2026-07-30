@@ -6,8 +6,8 @@ Walks a human through the real install path from README "Quick start": clone or 
 local copy of the repo, pick a release channel (main = stable, dev = cutting edge), point
 the Claude Code marketplace at the clone, and install or update the
 compliance-surveillance-team plugin - with a step-by-step console trail and a closing
-summary of the actions that stay manual (per-project enablement, the human-run
-apply-*.sh hook scripts, a session restart).
+summary of the actions that stay manual (per-project enablement, a session restart -
+the hooks ship pre-wired; apply-*.sh scripts are maintainer tools, not user steps).
 
 Design constraints:
 - stdlib only, Python 3.9+ - the helper must run before any pip install has happened.
@@ -587,6 +587,10 @@ class Installer:
         if headline:
             self.say(f"  {headline}")
         overview = self.repo / "docs" / "releases" / f"{version}.md"
+        if not overview.is_file():
+            # Release cycles share one page (e.g. 0.33.md covers all 0.33.x).
+            major_minor = ".".join(version.split(".")[:2])
+            overview = self.repo / "docs" / "releases" / f"{major_minor}.md"
         if overview.is_file():
             self.say(f"  Overview: {overview}")
         self.say(f"  Full detail: {self.repo / 'CHANGELOG.md'}")
@@ -623,16 +627,11 @@ class Installer:
             "     If /plugin shows it enabled at user scope, disable it there - per-project\n"
             "     enablement is the README's token-economy step."
         )
-        applies = self.apply_scripts()
-        if self.branch == "dev" and applies:
-            self.say(
-                "  2. Staged hook improvements are applied by a human, never by this helper\n"
-                "     (ADR-002: hook and settings edits are human acts). From the clone, review\n"
-                "     and run the ones you want:"
-            )
-            for rel in applies:
-                self.say(f"       bash {rel}  - see the script header for what it wires")
-        self.say("  3. Restart Claude Code so the new plugin version loads.")
+        self.say("  2. Restart Claude Code so the new plugin version loads.")
+        self.say(
+            "  (The safety and lifecycle hooks ship pre-wired - nothing to apply. The\n"
+            "  status line is the one optional extra: bash scripts/apply-statusline.sh.)"
+        )
         self.say("")
         self.say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
 

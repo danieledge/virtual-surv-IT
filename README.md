@@ -11,9 +11,9 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.1** (2026-07-29) - *[platform capability adoption](docs/releases/0.33.1.md)*, on top of *[0.33.0 - the team got harder to fool](docs/releases/0.33.0.md)*<br/>
+🏷️ **Current version: 0.33.1** (2026-07-29) - *[the team got harder to fool, and uses more of the platform](docs/releases/0.33.md)*<br/>
 A workflow-robustness release: the quality checks now fail safe, a close has to pass the gate to count, and sessions resume from disk without re-asking you anything.<br/>
-📖 [Release overview](docs/releases/0.33.1.md) · 📜 [Full changelog](CHANGELOG.md)
+📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 </td></tr>
 </table>
@@ -175,7 +175,7 @@ and reviewers to build on, not accredited regulatory tooling.)*
 
 > 📌 **Latest release - 0.33.1 (2026-07-29), platform capability adoption** on top of the
 > 0.33.0 workflow-robustness release. What they mean for you:
-> [`docs/releases/0.33.1.md`](docs/releases/0.33.1.md) · [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) · full detail: [`CHANGELOG.md`](CHANGELOG.md).
+> [`docs/releases/0.33.md`](docs/releases/0.33.md) · full detail: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## ✨ Features
 
@@ -185,7 +185,7 @@ What the team gives you at 0.33.1, each row tied to where the claim is enforced 
 |---|---|---|
 | A real engineering team, right-sized | Morgan (PM) + 16 specialist subagents; a typical task fires only 2-5 of them, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
 | Independent review by construction | Advisors and reviewers hold no `Write`/`Edit` tools; QA and validation run as separate agents from the build. More than rules: pipelines/ETL, scripts, ML, reviews and docs all route to their own specialist. | Tool grants in [`.claude/agents/`](.claude/agents/), pinned by [`tests/test_docs_consistency.py`](tests/test_docs_consistency.py) · routing table in [`docs/team-operating-guide.md`](docs/team-operating-guide.md) |
-| Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | [ADR-008](docs/adr/ADR-008-multi-engagement-workspaces.md) · [ADR-006](docs/adr/ADR-006-machine-readable-engagement-state.md) · [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) |
+| Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | [ADR-008](docs/adr/ADR-008-multi-engagement-workspaces.md) · [ADR-006](docs/adr/ADR-006-machine-readable-engagement-state.md) · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
 | Three always-on safety guards, human-only consent | Raw data under `data/raw/` blocked from the model, execution gated on a human-created marker, and the model blocked from writing the marker, settings or the hooks themselves. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
 | Document conversion front door | Excel/CSV/PDF/DOCX read via the vendored converter - no pip needed - with a JSON evidence report every run; a PreToolUse hook redirects binary-document reads to it. | [`docs/house-rules.md`](docs/house-rules.md) · [`scripts/convert_file.py`](scripts/convert_file.py) · [`scripts/document_input_redirect.py`](scripts/document_input_redirect.py) |
 | A real review subsystem | Context-routed lenses, the standard analysers per language, schema-validated findings packs rendered to one canonical layout, and a build fingerprint tying the reviewed code to the shipped artifact. | [`docs/code-review-method.md`](docs/code-review-method.md) · [`docs/review/`](docs/review/) · the [review demo](docs/demos/review-demo.md) |
@@ -221,7 +221,7 @@ on **`dev`** and are promoted to `main` at a release), clone or safe update (it 
 reset a dirty tree), optional `pip install -r requirements-dev.txt`, then the real
 `claude plugin marketplace add` / `claude plugin install compliance-surveillance-team@virtual-surv-it`
 commands - and it closes by listing what stays manual (per-project enablement below, the
-human-run `apply-*.sh` hook scripts, a restart). Re-runnable; `install`/`update` auto-detect
+restart; hooks ship pre-wired). Re-runnable; `install`/`update` auto-detect
 from `~/.config/virt-surv-it/installer.json`; `--yes` for non-interactive defaults.
 
 **2. Scope the enablement to the projects that need it.** If the install enabled the plugin at
@@ -857,7 +857,7 @@ engagements. Descriptions are taken from each script's own docstring.
 | `scripts/post_edit_lint.py` | PostToolUse lint on Python files written during a live engagement, so defects surface one edit later, not at the gate (staged copy in `scripts/staged_hooks/`) | run by Claude Code (engagement-scoped) |
 | `scripts/statusline.sh` | Statusline render: dormant-vs-engaged, active slug/status/phase, at zero context cost | run by Claude Code (statusline) |
 | `scripts/apply-project-anchor.sh` | Syncs the staged `dod_stop_gate` / `persona_anchor` copies into the live hooks | human-only |
-| `scripts/apply-document-redirect.sh` · `apply-post-edit-lint.sh` · `apply-session-brief.sh` · `apply-guard-exec-allow.sh` · `apply-statusline.sh` | Wire the corresponding staged hook (or the statusline) into both tracked hook files; the consent-write gate blocks the model from doing this | human-only |
+| `scripts/apply-document-redirect.sh` · `apply-post-edit-lint.sh` · `apply-session-brief.sh` · `apply-guard-exec-allow.sh` · `apply-statusline.sh` | Maintenance: re-wire a staged hook (or the optional statusline) into the tracked hook files after a hand-edit; the consent-write gate blocks the model from doing this. Shipped releases come pre-wired - end users never need these | human-only |
 | `scripts/install-git-hooks.sh` | Installs the opt-in AI-review git hooks (pre-commit / pre-push) | human-only |
 | `install_helper.py` (repo root) | Guided install/update of the plugin from a terminal: channel pick, clone/safe update, marketplace add, plugin install | human-only |
 | `scripts/eval_engage.py` | Headless live-`/engage` eval driver: runs a full engagement in a sandboxed repo copy and scores it | maintainer |
@@ -875,7 +875,7 @@ uses and how (audited 2026-07-29 against the current Claude Code docs):
 |---|---|
 | **Skills / slash commands** | All 23 workflows ship as skills with `disable-model-invocation: true` - the dormancy mechanism: their descriptions load into no ordinary session, so the team costs ~nothing until you type `/engage`. `argument-hint` on every command. |
 | **Subagents** | 16 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Write/Edit. |
-| **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), plus engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop, a `UserPromptSubmit` persona re-anchor that survives compaction, a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint. Hook and settings edits are human-only (ADR-002); hook changes ship staged and are applied by the human via the `apply-*.sh` scripts. |
+| **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), plus engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop, a `UserPromptSubmit` persona re-anchor that survives compaction, a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint. Hook and settings edits are human-only (ADR-002); hook changes ship staged, are applied by the maintainer via the `apply-*.sh` scripts, and releases ship with everything already wired - end users apply nothing. |
 | **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
 | **Permissions** | A curated `permissions.allow` block (fewer prompts on the team's own consent-free tooling) and `permissions.deny` as the hard floor under the raw-data wall. |
 | **CLAUDE.md layering** | A lean always-on core (dormancy, data safety, the execution gate) with the operating detail split into docs the team loads only when engaged - the context-budget discipline. |
@@ -989,7 +989,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
   resume-or-new selection at the front door, and the stop-gate arming only on gated workspaces
   (a ⛔ parked sibling stays silent). Hardened in 0.33.0 (fail-safe gates, the 🔒 closing window,
   disk-first resume, the ADR-010 placement rule - see
-  [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md)).
+  [`docs/releases/0.33.md`](docs/releases/0.33.md)).
 - ✅ / 🅿️ **Codebase map evolution: RE-SCOPED (0.33.0, ADR-007)**. The staleness-detection goal
   shipped in reduced, git-based form: strict anchor validation, per-entry As-of/SHA checks, and
   a `MAP-STALE` staleness budget against HEAD. The generative layer (a deterministic
@@ -1079,8 +1079,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 | [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
 | [`docs/internal/engagement-flow-poster-flowchart.html`](docs/internal/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory; point-in-time render at v0.28.0 - predates workspaces and the closing window); [render it in the browser](https://raw.githack.com/danieledge/virtual-surv-IT/main/docs/internal/engagement-flow-poster-flowchart.html), or see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline; the normative lifecycle spec (maintainer doc) is [`docs/internal/engagement-flow-spec.md`](docs/internal/engagement-flow-spec.md) |
 | [`docs/adr/`](docs/adr/) | Architecture decision records ADR-001 to ADR-011: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule, the session-resume brief - indexed with statuses in [`docs/adr/README.md`](docs/adr/README.md) |
-| [`docs/releases/0.33.1.md`](docs/releases/0.33.1.md) | The 0.33.1 release overview - platform capability adoption (links back to 0.33.0's workflow-robustness overview) |
-| [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md) | The 0.33.0 release overview - what the workflow-robustness release means in practice |
+| [`docs/releases/0.33.md`](docs/releases/0.33.md) | The 0.33.x release overview - the whole cycle (workflow robustness + platform capability adoption) on one page |
 | [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
 
 <sub>[↑ Back to top](#readme-top)</sub>
