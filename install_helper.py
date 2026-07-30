@@ -204,10 +204,28 @@ class InstallAbort(Exception):
 # ------------------------------------------------------------------ subprocess wrapper
 
 
+def command_argv(name: str, resolved: Optional[str] = None) -> list:
+    """The argv prefix that actually launches `name` on this platform.
+
+    Windows npm shims are `.cmd`/`.bat` batch files: `shutil.which` finds them but
+    CreateProcess cannot launch a batch file by bare name without a shell, so the
+    resolved path is routed through `cmd /c`. Everywhere else (and for real
+    executables) the resolved absolute path is used directly."""
+    resolved = resolved if resolved is not None else (shutil.which(name) or name)
+    if str(resolved).lower().endswith((".cmd", ".bat")):
+        return ["cmd", "/c", str(resolved)]
+    return [str(resolved)]
+
+
 def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
-    """Fixed-argv runner, output captured. Tests monkeypatch this symbol."""
+    """Fixed-argv runner, output captured. Tests monkeypatch this symbol.
+
+    The first element is resolved via command_argv so Windows `.cmd` shims
+    (the npm-installed `claude`) launch correctly."""
+    argv = [str(a) for a in argv]
+    argv = command_argv(argv[0]) + argv[1:]
     return subprocess.run(  # argv is a fixed list built here, shell=False  # nosec B603
-        [str(a) for a in argv],
+        argv,
         cwd=str(cwd) if cwd else None,
         capture_output=True,
         text=True,

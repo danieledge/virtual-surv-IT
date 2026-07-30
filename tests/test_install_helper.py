@@ -299,3 +299,33 @@ def test_run_permissions_refuses_unparseable_settings(tmp_path, capsys):
     assert run_permissions(tmp_path, Style(False), marks()) == 1
     assert "refusing" in capsys.readouterr().out
     assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched
+
+
+# --- Windows .cmd shim launch (2026-07-30) ------------------------------------------------
+
+
+def test_command_argv_routes_cmd_shims_through_shell():
+    from install_helper import command_argv
+
+    assert command_argv("claude", resolved=r"C:\Users\d\AppData\Roaming\npm\claude.CMD") == [
+        "cmd",
+        "/c",
+        r"C:\Users\d\AppData\Roaming\npm\claude.CMD",
+    ]
+    assert command_argv("claude", resolved=r"C:\x\claude.bat")[0:2] == ["cmd", "/c"]
+
+
+def test_command_argv_plain_executables_untouched():
+    from install_helper import command_argv
+
+    assert command_argv("git", resolved="/usr/bin/git") == ["/usr/bin/git"]
+    assert command_argv("claude", resolved=r"C:\Program Files\claude\claude.exe") == [
+        r"C:\Program Files\claude\claude.exe"
+    ]
+
+
+def test_command_argv_unresolved_falls_back_to_name(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda _n: None)
+    assert ih.command_argv("claude") == ["claude"]
