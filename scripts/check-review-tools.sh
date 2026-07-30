@@ -76,6 +76,28 @@ for entry in "${TOOLS[@]}"; do
   fi
 done
 
+# Artifact-renderer libraries (Python, not CLI binaries - a single import probe, not
+# command -v). Checked here so a missing renderer is known BEFORE Morgan attempts a
+# render, not discovered as a failed tool call mid-engagement (each failed attempt is a
+# wasted round-trip). Cached with everything else on this same TTL.
+renderers=()
+render_missing=()
+for c in python3 python py; do
+  command -v "$c" >/dev/null 2>&1 && PY_PROBE="$c" && break
+done
+if [ -n "${PY_PROBE:-}" ]; then
+  if "$PY_PROBE" -c "import markdown, bleach" >/dev/null 2>&1; then
+    renderers+=("markdown+bleach (.html export)")
+  else
+    render_missing+=(".html export (markdown+bleach)  →  pip install -r requirements-dev.txt")
+  fi
+  if "$PY_PROBE" -c "import docx" >/dev/null 2>&1; then
+    renderers+=("python-docx (.docx export)")
+  else
+    render_missing+=(".docx export (python-docx)  →  pip install -r requirements-dev.txt")
+  fi
+fi
+
 # Build the report once, then both cache and print it.
 report="$(
   echo "=== Review/perf tooling check ==="
@@ -86,6 +108,10 @@ report="$(
   echo
   echo "⚠️  Missing (${#missing[@]}) - reviews still run but degrade to inference-only (🧠) for these:"
   if [ "${#missing[@]}" -eq 0 ]; then echo "   (none - full tool-backed 📊 coverage)"; else printf '   - %s\n' "${missing[@]}"; fi
+  echo
+  echo "Artifact renderers:"
+  if [ "${#renderers[@]}" -gt 0 ]; then printf '   ✅ %s\n' "${renderers[@]}"; fi
+  if [ "${#render_missing[@]}" -gt 0 ]; then printf '   ⚠️  %s\n' "${render_missing[@]}"; fi
   echo
   echo "Note: Morgan records this once and skips the missing tools for the rest of the session"
   echo "(does not re-invoke them). Install the ones you care about for measured (📊) findings."

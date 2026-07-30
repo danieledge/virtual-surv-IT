@@ -18,6 +18,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from install_helper import _relocate_if_running_inside_target_repo as _real_relocate
 from install_helper import (
     InstallAbort,
     StepTracker,
@@ -36,6 +37,17 @@ from install_helper import (
 
 def _proc(returncode: int = 0, stdout: str = "", stderr: str = "") -> SimpleNamespace:
     return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_relocation(monkeypatch):
+    """install_helper.py itself lives inside a real git clone (this repo) - without this,
+    every test that reaches main()/_main() would trigger a REAL self-relocation subprocess
+    spawn (2026-07-30 corp fix). The three tests that actually exercise relocation call
+    _real_relocate (captured above, before this patch applies) directly instead."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_relocate_if_running_inside_target_repo", lambda *a, **k: None)
 
 
 # ------------------------------------------------------------------ config persistence
@@ -1664,3 +1676,123 @@ def test_demo_project_enablement_never_calls_the_real_writer():
     src = inspect.getsource(ih.Installer.enable_step)
     demo_branch = src.split("if self.demo:", 1)[1].split("\n        if run_enable_project", 1)[0]
     assert "run_enable_project" not in demo_branch
+
+
+# ------------------------------------------------ team-preferences.json (docx opt-in)
+
+
+def test_write_team_preferences_creates_file(tmp_path):
+    from install_helper import write_team_preferences
+
+    assert write_team_preferences(tmp_path, extra_formats=["docx"]) is True
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["extra_formats"] == ["docx"]
+
+
+def test_write_team_preferences_merges_and_preserves_other_keys(tmp_path):
+    from install_helper import write_team_preferences
+
+    target = tmp_path / ".claude" / "team-preferences.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(json.dumps({"some_other_key": "kept"}), encoding="utf-8")
+    write_team_preferences(tmp_path, extra_formats=["docx"])
+    prefs = json.loads(target.read_text())
+    assert prefs["some_other_key"] == "kept"
+    assert prefs["extra_formats"] == ["docx"]
+
+
+def test_write_team_preferences_best_effort(tmp_path, monkeypatch):
+    from install_helper import write_team_preferences
+
+    monkeypatch.setattr(
+        Path, "write_text", lambda *a, **k: (_ for _ in ()).throw(OSError("locked"))
+    )
+    assert write_team_preferences(tmp_path, extra_formats=["docx"]) is False
+
+
+def test_demo_project_enablement_never_writes_team_preferences():
+    """The docx-default question in demo mode must only print a dim 'would write' line,
+    never call write_team_preferences."""
+    import inspect
+
+    import install_helper as ih
+
+    src = inspect.getsource(ih.Installer.enable_step)
+    demo_branch = src.split("if self.demo:", 1)[1].split("\n        if run_enable_project", 1)[0]
+    assert "write_team_preferences(" not in demo_branch
+    assert "would write" in demo_branch
+
+
+# ------------------------------------------------ self-relocation (running the script from inside the clone)
+
+
+def test_relocates_when_script_lives_inside_a_repo(tmp_path, monkeypatch):
+    """The live corp fix: running install_helper.py from inside the clone about to be
+    git-checked-out can fail to overwrite the running .py file on Windows. The script
+    must copy itself out and re-exec before any sync happens."""
+    import install_helper as ih
+
+    fake_repo = tmp_path / "clone"
+    (fake_repo / ".claude-plugin").mkdir(parents=True)
+    (fake_repo / ".claude-plugin" / "plugin.json").write_text(
+        '{"name":"compliance-surveillance-team"}', encoding="utf-8"
+    )
+    (fake_repo / ".git").mkdir()
+    script = fake_repo / "install_helper.py"
+    script.write_text("print('child ran')", encoding="utf-8")
+
+    monkeypatch.setattr(ih, "__file__", str(script))
+    calls = []
+
+    def fake_run(argv, **kw):
+        calls.append(argv)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    args = _args(mode=None, yes=True)
+    args.repo = None
+    with pytest.raises(SystemExit) as exc:
+        _real_relocate(args, ["--yes"])
+    assert exc.value.code == 0
+    assert len(calls) == 1
+    argv = calls[0]
+    assert argv[0] == sys.executable
+    assert Path(argv[1]).parent != fake_repo  # relocated to somewhere else
+    assert Path(argv[1]).read_text(encoding="utf-8") == "print('child ran')"
+    assert "--repo" in argv and str(fake_repo) in argv
+
+
+def test_no_relocation_when_not_inside_a_repo(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    script = tmp_path / "install_helper.py"
+    script.write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(script))
+    calls = []
+    monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: calls.append(1))
+    _real_relocate(_args(mode=None, yes=True), ["--yes"])
+    assert calls == []  # ran in place - no repo here to protect
+
+
+def test_relocation_preserves_explicit_repo_flag(tmp_path, monkeypatch):
+    """If the user already passed --repo, do not override it with the script's own dir."""
+    import install_helper as ih
+
+    fake_repo = tmp_path / "clone"
+    (fake_repo / ".claude-plugin").mkdir(parents=True)
+    (fake_repo / ".claude-plugin" / "plugin.json").write_text("{}", encoding="utf-8")
+    (fake_repo / ".git").mkdir()
+    script = fake_repo / "install_helper.py"
+    script.write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(script))
+    calls = []
+    monkeypatch.setattr(
+        ih.subprocess, "run", lambda argv, **kw: calls.append(argv) or SimpleNamespace(returncode=0)
+    )
+    args = _args(mode=None, yes=True)
+    args.repo = "/somewhere/else"
+    with pytest.raises(SystemExit):
+        _real_relocate(args, ["--repo", "/somewhere/else"])
+    argv = calls[0]
+    assert argv.count("--repo") == 1
+    assert "/somewhere/else" in argv

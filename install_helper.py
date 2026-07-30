@@ -57,6 +57,7 @@ import os
 import shutil
 import subprocess  # fixed-argv calls to git/claude/pip, no shell  # nosec B404
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -452,7 +453,7 @@ def _windows_registry_path_dirs() -> list:
                 dirs += [os.path.expandvars(d) for d in str(val).split(";") if d.strip()]
             except OSError:
                 continue
-    except Exception:
+    except Exception:  # best-effort registry probe; any failure just yields no dirs  # nosec B110
         pass
     return dirs
 
@@ -1715,6 +1716,18 @@ class Installer:
                 style=self.style,
             ):
                 self._demo_permissions(project)
+            if confirm(
+                "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
+                "produce a Word (.docx) copy by default, for reviewers who redline in Word?",
+                default=False,
+                assume_yes=False,
+                style=self.style,
+            ):
+                self.say(
+                    self.style.dim(
+                        f"    would write {project / '.claude' / 'team-preferences.json'}"
+                    )
+                )
             return
         if run_enable_project(target, self.style, self.marks) == 0:
             self.step_ok("Project enablement", str(target.expanduser().resolve()))
@@ -1725,6 +1738,14 @@ class Installer:
                 style=self.style,
             ):
                 run_permissions(target, self.style, self.marks)
+            if confirm(
+                "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
+                "produce a Word (.docx) copy by default, for reviewers who redline in Word?",
+                default=False,
+                assume_yes=False,
+                style=self.style,
+            ):
+                write_team_preferences(target.expanduser().resolve(), extra_formats=["docx"])
         else:
             self.step_fail("Project enablement", "see message above", fatal=False)
 
@@ -1880,6 +1901,22 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     return 0
 
 
+def write_team_preferences(project: Path, extra_formats: list) -> bool:
+    """Project-scoped rendering preference (`.claude/team-preferences.json`): which EXTRA
+    output formats controlled documents get automatically, beyond the always-required
+    .md + .html. Currently the only valid extra is "docx" (scripts/render_docx.py). Never
+    changes the .md/.html requirement itself - opt-in additive only. Merge-only (a
+    pre-existing file's other keys are preserved); best-effort, never raises."""
+    try:
+        target = project / ".claude" / "team-preferences.json"
+        prefs = _read_json_dict(target)
+        prefs["extra_formats"] = sorted(set(extra_formats))
+        _write_json_backup(target, prefs)
+        return True
+    except OSError:
+        return False
+
+
 def write_guard_interpreter_cache(project: Path) -> None:
     """Pre-seed the project's guard-launcher interpreter cache with the interpreter
     running THIS installer (sys.executable) - a known-good, already-version-checked
@@ -1995,6 +2032,46 @@ def parse_args(argv=None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _relocate_if_running_inside_target_repo(
+    args: argparse.Namespace, argv: Optional[list] = None
+) -> None:
+    """If this script lives inside the git repo it is about to sync (`git checkout` the
+    branch), that checkout can fail to overwrite the currently-executing .py file -
+    observed live on a corporate Windows box (2026-07-30), where the workaround was
+    copying the script out by hand before every run. Copies itself to a temp file and
+    re-execs from there FIRST, passing the original repo location through explicitly, so
+    the checkout below can freely replace the original and no manual copy is needed.
+
+    Self-limiting, not marker-based: the relocated copy's own __file__ lives in a plain
+    temp dir (never a git repo), so looks_like_repo() is False on the second pass and
+    this is a no-op - no infinite loop, no state to track."""
+    try:
+        here = Path(__file__).resolve()
+        repo_dir = here.parent
+        if not looks_like_repo(repo_dir):
+            return  # not running from inside a clone - nothing at risk
+        tmp_dir = Path(tempfile.mkdtemp(prefix="virt-surv-it-installer-"))
+        tmp_copy = tmp_dir / here.name
+        shutil.copy2(here, tmp_copy)
+        # Honour whatever argv THIS invocation actually parsed (explicit argv=[...] in
+        # tests/embedding, else the real process argv) - never re-read sys.argv blindly,
+        # which would leak an unrelated caller's own CLI args into the child.
+        child_argv = list(argv if argv is not None else sys.argv[1:])
+        if not args.repo:
+            # Preserve "I was found inside this clone" - the copy no longer lives there.
+            child_argv += ["--repo", str(repo_dir)]
+        proc = subprocess.run(  # fixed argv (sys.executable + our own tmp copy), shell=False  # nosec B603
+            [sys.executable, str(tmp_copy), *child_argv]
+        )
+        sys.exit(proc.returncode)
+    except SystemExit:
+        raise
+    except (
+        Exception
+    ):  # best-effort: fall through to the normal (possibly failing) run  # nosec B110
+        pass
+
+
 def main(argv=None) -> int:
     """Entry point: _main plus the last-resort Ctrl-C net (menu, banner, prompts that
     sit outside an Installer run). Exit code 130 mirrors the shell convention."""
@@ -2018,6 +2095,9 @@ def _main(argv=None) -> int:
         if args.permissions:
             rc = max(rc, run_permissions(Path(args.permissions), style, marks()))
         return rc
+
+    if not args.demo:
+        _relocate_if_running_inside_target_repo(args, argv)
 
     print_banner(style)
     subset = "full"

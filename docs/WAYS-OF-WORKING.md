@@ -72,7 +72,7 @@ that holds review, performance, compliance, QA evidence, handover and change/ops
 of a single file - easier to read and distribute than many separate documents. Ask for
 **separate artifacts** only when a control needs a standalone (e.g. a change request to attach
 to a ticket); the templates below are the building blocks. Everything is produced in **`.md`
-and `.html`** (via `scripts/render_html.py`) - the **one exception** is the engagement-summary
+and `.html`** (via `scripts/render_html.py`). An optional third format, **`.docx`** (via `scripts/render_docx.py`, python-docx), is available for non-technical reviewers who redline in Word - opt-in per project (`.claude/team-preferences.json`, set by the installer) or on request; `.md` stays the one authored source either way. The **one exception** to .md+.html is the engagement-summary
 email, which is an email and stays a `.txt` (see the last row).
 
 > **Where each artifact lives:** everything an engagement produces goes in its own workspace

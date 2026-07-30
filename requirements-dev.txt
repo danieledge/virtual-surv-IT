@@ -7,6 +7,10 @@ Markdown>=3.5    # scripts/render_html.py - artifacts are produced in .md and .h
 bleach[css]>=6.0 # scripts/render_html.py - sanitises rendered HTML (XSS guard); pinned so the
                  #   render path never silently falls back to emitting raw, unsanitised HTML.
                  #   The [css] extra (tinycss2) lets the sanitiser keep table text-align.
+python-docx>=1.0 # scripts/render_docx.py - optional .docx export for non-technical reviewers
+                 #   who want to redline a controlled document in Word; opt-in (team-preferences.json
+                 #   or --docx), never required. Absent -> the render degrades to a clear error, same
+                 #   pattern as Markdown/bleach above.
 
 claude-agent-sdk>=0.2   # scripts/eval_engage.py - headless live-/engage eval driver (dev-only;
                         #   needs the Claude Code CLI on PATH and its auth; never vendored)
