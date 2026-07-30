@@ -27,7 +27,10 @@ def _closeable(tmp_path):
     """A pack the full DoD checker accepts at close: summary email present and listed."""
     art = tmp_path / "artifacts"
     _run(art, "init", "--title", "T", "--slug", "t")
-    (art / "engagement-summary-t.txt").write_text("Done. - Morgan\n", encoding="utf-8")
+    (art / "engagement-summary-t.txt").write_text(
+        "Done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+        encoding="utf-8",
+    )
     _run(art, "add-artifact", "engagement-summary-t.txt", "--title", "Summary email", "--final")
     _run(art, "set-team", "Ana (analysis)")
     return art

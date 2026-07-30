@@ -203,7 +203,15 @@ the state file cannot represent one (ADR-002).
 **0b. Existing engagements?** If `artifacts/` already holds engagement workspaces
 (`<python> -m scripts.engagement_state list` - also rendered at `artifacts/ENGAGEMENTS.md`),
 ask ONE question via the question tool before classifying: **resume** one of the open
-engagements (options list each slug with its ⏳/⛔ status and title) or **start new**. One
+engagements (options list each slug with its ⏳/⛔ status AND title, so a scope mismatch is
+visible) or **start new**. **Scope-fit decides the default, not the marker**: when the
+incoming request matches an open engagement's title/scope, default to resuming it; when it
+is a different deliverable or scope, default to **start new** - an open pack is never a
+reason to fold unrelated work into it (live defect 2026-07-30: a fresh session recorded a
+new engagement's artifacts into the previous engagement's START-HERE). The same rule holds
+MID-engagement: before every `add-artifact`, the artifact must belong to the ACTIVE
+engagement's brief - work outside it gets its own `init` (new slug), even in the same
+session. One
 engagement is ACTIVE per session, and the slug is recorded ON DISK
 (`artifacts/.active-engagement.json`, written by `init`, switched with `set-active`, cleared
 at close) - the `list` output marks it, so offer it as the default resume target rather than
