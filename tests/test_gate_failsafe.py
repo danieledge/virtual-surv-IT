@@ -63,7 +63,10 @@ def test_no_index_pack_is_not_closed(tmp_path):
 
 def test_no_index_summary_email_is_premature_not_required(tmp_path):
     art = tmp_path / "artifacts"
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     codes = "".join(check(art))
     assert "SUMMARY-BEFORE-CLOSE" in codes
     assert "MISSING-SUMMARY-EMAIL" not in codes
@@ -222,7 +225,10 @@ def test_closing_status_allows_close_artifacts_without_demanding_them(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "delivery-report.md")
     _touch(art / "delivery-report.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(
         art,
         "🔒 CLOSING - finishing close artifacts",
