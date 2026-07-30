@@ -225,6 +225,30 @@ def changelog_headline(changelog: Path, version: str) -> Optional[str]:
     return None
 
 
+def user_settings_path() -> Path:
+    """The user-level Claude Code settings file (~/.claude/settings.json)."""
+    return Path.home() / ".claude" / "settings.json"
+
+
+def statusline_command(repo: Path) -> str:
+    """The statusLine command pointing at the clone's script by absolute path, so the
+    status line works from every project (dormant ones just show 'team dormant')."""
+    return f'bash "{(repo / "scripts" / "statusline.sh").resolve()}"'
+
+
+def merge_statusline(settings: dict, command: str):
+    """Set statusLine in a settings dict. Returns (settings, verdict) where verdict is
+    'added', 'already' (identical command present) or 'conflict' (a DIFFERENT statusLine
+    exists - the caller must get explicit confirmation before overwriting)."""
+    current = settings.get("statusLine")
+    if isinstance(current, dict) and current.get("command") == command:
+        return settings, "already"
+    if current is not None:
+        return settings, "conflict"
+    settings["statusLine"] = {"type": "command", "command": command}
+    return settings, "added"
+
+
 def command_argv(name: str, resolved: Optional[str] = None) -> list:
     """The argv prefix that actually launches `name` on this platform.
 
@@ -621,19 +645,111 @@ class Installer:
         self.say("")
         self.say(s.bold("Still yours to do by hand:"))
         self.say(
-            "  1. Enable per project: from each project that should have the team, run /plugin\n"
-            "     inside Claude Code (or, from that project's directory:\n"
-            f"     claude plugin enable --scope project {PLUGIN_ID}).\n"
-            "     If /plugin shows it enabled at user scope, disable it there - per-project\n"
-            "     enablement is the README's token-economy step."
+            "  1. Any FURTHER projects: enable per project via step 9 on a re-run, /plugin\n"
+            "     inside Claude Code, or `python install_helper.py --enable-project <dir>`.\n"
+            "     (Per-project enablement is the README's token-economy rule - avoid user scope.)"
         )
         self.say("  2. Restart Claude Code so the new plugin version loads.")
         self.say(
             "  (The safety and lifecycle hooks ship pre-wired - nothing to apply. The\n"
-            "  status line is the one optional extra: bash scripts/apply-statusline.sh.)"
+            "  optional status line is offered during the run, or later via\n"
+            "  bash scripts/apply-statusline.sh.)"
         )
         self.say("")
         self.say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
+
+    def statusline_step(self) -> None:
+        """Optional: wire the team status line into the USER-level Claude settings so it
+        shows in every project. Opt-in (interactive yes, or --statusline with --yes);
+        add-only with backup; a DIFFERENT existing statusLine is never overwritten
+        without an explicit interactive yes. Windows note: the command runs via bash
+        (Git Bash ships with Git for Windows)."""
+        wanted = (
+            self.args.statusline
+            if self.args.yes
+            else confirm(
+                "  Wire the team status line (shows dormant/engaged + cost, zero tokens)?",
+                default=self.args.statusline,
+                assume_yes=False,
+            )
+        )
+        if not wanted:
+            self.step_skip("Status line", "skipped - bash scripts/apply-statusline.sh any time")
+            return
+        target = user_settings_path()
+        settings = {}
+        if target.is_file():
+            try:
+                settings = json.loads(target.read_text(encoding="utf-8"))
+                if not isinstance(settings, dict):
+                    raise ValueError("settings root is not an object")
+            except (OSError, ValueError) as exc:
+                self.step_fail(
+                    "Status line", f"{target} unreadable ({exc}) - not touching it", fatal=False
+                )
+                return
+        command = statusline_command(self.repo)
+        settings, verdict = merge_statusline(settings, command)
+        if verdict == "already":
+            self.step_ok("Status line", "already wired to this clone")
+            return
+        if verdict == "conflict":
+            keep = confirm(
+                "  A different statusLine is already configured - replace it?",
+                default=False,
+                assume_yes=self.args.yes,
+            )
+            if not keep:
+                self.step_skip("Status line", "existing statusLine kept")
+                return
+            settings["statusLine"] = {"type": "command", "command": command}
+        if target.is_file():
+            backup = target.with_name("settings.json.bak-2026-07-30")
+            n = 1
+            while backup.exists():
+                n += 1
+                backup = target.with_name(f"settings.json.bak-2026-07-30.{n}")
+            backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        self.step_ok("Status line", f"wired in {target} (restart to see it)")
+
+    def enable_step(self) -> None:
+        """Optional: enable the team for a project right now, and offer the recommended
+        permission allow-list for the same project. Interactive only - non-interactive
+        runs use the --enable-project / --permissions flags."""
+        if self.args.yes:
+            self.step_skip(
+                "Project enablement",
+                "non-interactive - use --enable-project <dir> (and --permissions <dir>)",
+            )
+            return
+        wanted = confirm(
+            "  Enable the team for a project now (per-project scope)?",
+            default=False,
+            assume_yes=False,
+        )
+        if not wanted:
+            self.step_skip(
+                "Project enablement",
+                "later: run /plugin inside Claude Code from the project",
+            )
+            return
+        try:
+            raw = input("  Project directory [.]: ").strip() or "."
+        except EOFError:
+            raw = "."
+        target = Path(raw)
+        if run_enable_project(target, self.style, self.marks) == 0:
+            self.step_ok("Project enablement", str(target.expanduser().resolve()))
+            if confirm(
+                "  Also add the recommended permission allow-list to it (fewer prompts)?",
+                default=True,
+                assume_yes=False,
+            ):
+                run_permissions(target, self.style, self.marks)
+        else:
+            self.step_fail("Project enablement", "see message above", fatal=False)
 
     # ---- orchestration
 
@@ -642,7 +758,7 @@ class Installer:
         self.say(s.bold(s.cyan("Compliance Surveillance Team - plugin install helper")))
         self.mode = decide_mode(self.args.mode, self.cfg)
         self.say(s.dim(f"Mode: {self.mode} (config: {self.cfg_path})"))
-        total = 7
+        total = 9
         aborted = False
         try:
             self.step_header(1, total, "Preflight checks")
@@ -661,6 +777,10 @@ class Installer:
                 7, total, "Plugin " + ("update" if self.mode == "update" else "install")
             )
             self.plugin()
+            self.step_header(8, total, "Status line (optional)")
+            self.statusline_step()
+            self.step_header(9, total, "Enable for a project (optional)")
+            self.enable_step()
             previous = self.cfg.get("last_version")
             self.persist()
             self.whats_new(previous)
@@ -721,6 +841,24 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     return 0
 
 
+def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=None) -> int:
+    """Enable the plugin for one project (claude plugin enable --scope project, run from
+    that project's directory). Human-run; per-project scope is the token-economy rule."""
+    runner = runner or run_cmd
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    project = project_dir.expanduser().resolve()
+    if not project.is_dir():
+        print(f"{fail} not a directory: {project}")
+        return 1
+    proc = runner(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID], cwd=project)
+    if proc.returncode == 0:
+        print(f"{ok} enabled for {project}")
+        return 0
+    detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+    print(f"{fail} enable failed for {project}: {detail[-1] if detail else 'unknown error'}")
+    return 1
+
+
 # ------------------------------------------------------------------ CLI
 
 
@@ -746,6 +884,20 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="with --yes: also pip-install requirements-dev.txt (default: skip)",
     )
     parser.add_argument(
+        "--enable-project",
+        metavar="PROJECT_DIR",
+        action="append",
+        dest="enable_project",
+        help="standalone: enable the plugin for PROJECT_DIR (repeatable) and exit; "
+        "combine with --permissions to also add the allow-list",
+    )
+    parser.add_argument(
+        "--statusline",
+        action="store_true",
+        help="with --yes: wire the team status line into your user-level Claude settings "
+        "(interactive runs simply ask)",
+    )
+    parser.add_argument(
         "--permissions",
         metavar="PROJECT_DIR",
         help="standalone: merge the README's recommended permissions.allow entries into "
@@ -757,8 +909,13 @@ def parse_args(argv=None) -> argparse.Namespace:
 def main(argv=None) -> int:
     args = parse_args(argv)
     style = Style(supports_color())
-    if args.permissions:
-        return run_permissions(Path(args.permissions), style, marks())
+    if args.enable_project or args.permissions:
+        rc = 0
+        for target in args.enable_project or []:
+            rc = max(rc, run_enable_project(Path(target), style, marks()))
+        if args.permissions:
+            rc = max(rc, run_permissions(Path(args.permissions), style, marks()))
+        return rc
     return Installer(args, style, marks()).run()
 
 

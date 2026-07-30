@@ -358,3 +358,69 @@ def test_changelog_headline_extracts_the_entry_line(tmp_path):
     )
     assert changelog_headline(log, "0.31.0") is None
     assert changelog_headline(tmp_path / "missing.md", "0.33.1") is None
+
+
+# --- statusline wired by the helper (2026-07-30) ------------------------------------------
+
+
+def test_merge_statusline_added_already_conflict(tmp_path):
+    from install_helper import merge_statusline, statusline_command
+
+    cmd = statusline_command(tmp_path)
+    s, verdict = merge_statusline({}, cmd)
+    assert verdict == "added" and s["statusLine"]["command"] == cmd
+    s2, verdict = merge_statusline(s, cmd)
+    assert verdict == "already"
+    s3, verdict = merge_statusline({"statusLine": {"type": "command", "command": "other"}}, cmd)
+    assert verdict == "conflict" and s3["statusLine"]["command"] == "other"  # untouched
+
+
+def test_statusline_command_is_absolute(tmp_path):
+    from install_helper import statusline_command
+
+    cmd = statusline_command(tmp_path)
+    assert "statusline.sh" in cmd and str(tmp_path.resolve()) in cmd
+
+
+# --- per-project enablement wired into the helper (2026-07-30) ----------------------------
+
+
+class _FakeProc:
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.returncode, self.stdout, self.stderr = returncode, stdout, stderr
+
+
+def test_run_enable_project_invokes_claude_in_project_cwd(tmp_path, capsys):
+    from install_helper import PLUGIN_ID, Style, marks, run_enable_project
+
+    calls = []
+
+    def runner(argv, cwd=None, timeout=300):
+        calls.append((argv, cwd))
+        return _FakeProc(0)
+
+    rc = run_enable_project(tmp_path, Style(False), marks(), runner=runner)
+    assert rc == 0
+    argv, cwd = calls[0]
+    assert argv == ["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID]
+    assert cwd == tmp_path.resolve()
+    assert "enabled for" in capsys.readouterr().out
+
+
+def test_run_enable_project_failure_surfaces(tmp_path, capsys):
+    from install_helper import Style, marks, run_enable_project
+
+    rc = run_enable_project(
+        tmp_path,
+        Style(False),
+        marks(),
+        runner=lambda *a, **k: _FakeProc(1, stderr="no such plugin"),
+    )
+    assert rc == 1
+    assert "no such plugin" in capsys.readouterr().out
+
+
+def test_run_enable_project_missing_dir(tmp_path, capsys):
+    from install_helper import Style, marks, run_enable_project
+
+    assert run_enable_project(tmp_path / "ghost", Style(False), marks()) == 1

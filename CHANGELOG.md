@@ -36,12 +36,6 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
   dormant-by-default promise as a number) and a cold-resume check (`--resume-run` against a
   kept sandbox) added to CONTRIBUTING's promotion gate.
 
-### Deferred (recorded, not silently dropped)
-- Notification pings: excluded by user decision for this batch.
-- `context: fork` for `/run-evals` and any Dynamic Workflows pilot: both need a
-  guard-binding verification spike first (do the project's PreToolUse guards bind to
-  forked/workflow-spawned agents exactly as to Task subagents?); not adopted on trust.
-
 ### Notes
 - All four apply scripts are HUMAN-run (ADR-002 rec 5); every new hook is
   engagement-scoped, advisory-or-redirect (never a new consent surface), and fails open.
