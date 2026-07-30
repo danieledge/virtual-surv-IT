@@ -480,8 +480,13 @@ def test_demo_stdout_shapes():
     assert demo_stdout(["git", "-C", "/r", "status", "--porcelain"]) == ""
     assert demo_stdout(["git", "-C", "/r", "rev-parse", "--short", "HEAD"]) == "abc1234"
     assert demo_stdout(["git", "-C", "/r", "rev-list", "--count", "origin/main..HEAD"]) == "0"
+    assert demo_stdout(["git", "-C", "/r", "rev-list", "--count", "HEAD..origin/main"]) == "3"
     assert demo_stdout(["git", "ls-remote", "--heads", "https://x", "main"]) == "ref"
     assert demo_stdout(["claude", "plugin", "install", "x"]) == ""
+    manifest = demo_stdout(["git", "-C", "/r", "show", "origin/main:.claude-plugin/plugin.json"])
+    assert json.loads(manifest)["version"] == "9.9.9"
+    changelog = demo_stdout(["git", "-C", "/r", "show", "origin/main:CHANGELOG.md"])
+    assert "## [9.9.9]" in changelog
 
 
 def test_demo_runner_prints_would_run_and_fakes_success(capsys):
@@ -744,3 +749,478 @@ def test_merge_statusline_foreign_still_conflicts(tmp_path):
     assert verdict == "conflict"
     assert settings["statusLine"]["command"] == "starship prompt"  # untouched
     assert current_statusline_command(settings) == "starship prompt"
+
+
+# --- Windows hardening (2026-07-30) -------------------------------------------------------
+
+
+def test_windows_shim_cmdline_survives_spaces_everywhere():
+    from install_helper import windows_shim_cmdline
+
+    line = windows_shim_cmdline(
+        r"C:\Users\John Smith\AppData\Roaming\npm\claude.CMD",
+        ["plugin", "marketplace", "add", r"C:\Users\John Smith\virtual-surv-IT"],
+    )
+    # /s + one outer quote pair pins cmd.exe's re-parse; both spaced paths stay quoted.
+    assert line.startswith('cmd.exe /s /c "') and line.endswith('"')
+    assert '"C:\\Users\\John Smith\\AppData\\Roaming\\npm\\claude.CMD"' in line
+    assert '"C:\\Users\\John Smith\\virtual-surv-IT"' in line
+    assert "plugin marketplace add" in line
+
+
+def test_run_cmd_routes_batch_shims_via_quoted_string(monkeypatch):
+    import install_helper as ih
+
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+        return ih.subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    monkeypatch.setattr(ih.shutil, "which", lambda _n: r"C:\np m\claude.CMD")  # uppercase + space
+    ih.run_cmd(["claude", "plugin", "list"])
+    assert isinstance(seen["cmd"], str)
+    assert seen["cmd"].startswith('cmd.exe /s /c "')
+    assert '"C:\\np m\\claude.CMD"' in seen["cmd"]
+
+
+def test_run_cmd_keeps_list_form_for_real_executables(monkeypatch):
+    import install_helper as ih
+
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+        return ih.subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    monkeypatch.setattr(ih.shutil, "which", lambda _n: "/usr/bin/git")
+    ih.run_cmd(["git", "status"])
+    assert seen["cmd"] == ["/usr/bin/git", "status"]
+
+
+class _Cp437Stream(io.StringIO):
+    encoding = "cp437"
+
+
+class _Cp1252Stream(io.StringIO):
+    encoding = "cp1252"
+
+
+def test_glyphs_degrade_per_windows_codepage():
+    from install_helper import box_chars, marks, morgan_intro
+
+    # cp437 (legacy US console) carries box drawing but not the check marks or the hat.
+    assert box_chars(_Cp437Stream())["tl"] == "┌"
+    assert marks(_Cp437Stream())["ok"] == "OK"
+    assert not morgan_intro(stream=_Cp437Stream()).startswith("🎩")
+    # cp1252 (western Windows) carries none of them.
+    assert box_chars(_Cp1252Stream())["tl"] == "+"
+    assert marks(_Cp1252Stream())["ok"] == "OK"
+    assert not morgan_intro(stream=_Cp1252Stream()).startswith("🎩")
+
+
+def test_reads_tolerate_utf8_bom_and_crlf(tmp_path):
+    from install_helper import changelog_headline, installed_version, load_config
+
+    plug = tmp_path / ".claude-plugin"
+    plug.mkdir()
+    (plug / "plugin.json").write_text('{"version": "1.0.0"}', encoding="utf-8-sig")
+    assert installed_version(tmp_path) == "1.0.0"
+    log = tmp_path / "CHANGELOG.md"
+    log.write_text("# C\r\n\r\n## [1.0.0] - d - Title\r\n", encoding="utf-8-sig")
+    assert changelog_headline(log, "1.0.0") == "[1.0.0] - d - Title"
+    cfg = tmp_path / "installer.json"
+    cfg.write_text('{"branch": "dev"}', encoding="utf-8-sig")
+    assert load_config(cfg) == {"branch": "dev"}
+
+
+def test_statusline_step_skips_without_bash_on_windows(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(ih.shutil, "which", lambda _n: None)
+    inst = ih.Installer(_args(), ih.Style(False), ih.marks(), subset="statusline")
+    inst.repo = tmp_path
+    inst.statusline_step()
+    out = capsys.readouterr().out
+    assert "Git Bash" in out
+    assert not (tmp_path / "home" / ".claude").exists()  # nothing wired
+    assert any(status == "skip" for _n, status, _d in inst.tracker.steps)
+
+
+def test_looks_like_repo_accepts_worktree_git_file(tmp_path):
+    from install_helper import looks_like_repo
+
+    (tmp_path / ".git").write_text("gitdir: /main/.git/worktrees/x\n", encoding="utf-8")
+    plug = tmp_path / ".claude-plugin"
+    plug.mkdir()
+    (plug / "plugin.json").write_text("{}", encoding="utf-8")
+    assert looks_like_repo(tmp_path) is True
+
+
+# --- both-platform hardening (2026-07-30) -------------------------------------------------
+
+
+def test_save_config_is_atomic_and_best_effort(tmp_path):
+    from install_helper import load_config, save_config
+
+    path = tmp_path / "cfg" / "installer.json"
+    assert save_config(path, {"a": 1}) is True
+    assert load_config(path) == {"a": 1}
+    assert list(path.parent.glob("*.tmp")) == []  # temp+rename leaves no litter
+    blocker = tmp_path / "plainfile"
+    blocker.write_text("x", encoding="utf-8")
+    # Parent "directory" is a file: unwritable location degrades to False, no raise.
+    assert save_config(blocker / "nested" / "cfg.json", {"a": 1}) is False
+
+
+def test_persist_warns_when_config_unwritable(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(ih, "save_config", lambda *_a, **_k: False)
+    inst = ih.Installer(_args(), ih.Style(False), ih.marks())
+    inst.repo = tmp_path
+    inst.persist()
+    out = capsys.readouterr().out
+    assert "without saving" in out
+    assert not inst.tracker.failed  # a warning (skip), not a failure
+
+
+def test_keyboard_interrupt_mid_run_prints_summary_and_exits_130(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih.shutil, "which", lambda n: "/usr/bin/" + n)
+
+    def boom(argv, cwd=None, timeout=300):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(ih, "run_cmd", boom)
+    rc = ih.main(["--yes", "install"])
+    out = capsys.readouterr().out
+    assert rc == 130
+    assert "Cancelled" in out and "Summary" in out
+
+
+def test_keyboard_interrupt_at_menu_returns_130(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    _menu_session(monkeypatch, tmp_path, [])
+
+    def interrupt(prompt=""):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("builtins.input", interrupt)
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 130
+    assert "Cancelled" in out
+
+
+def test_run_enable_project_fails_soft_on_timeout_and_oserror(tmp_path, capsys):
+    import subprocess as _sp
+
+    from install_helper import Style, marks, run_enable_project
+
+    def timeout_runner(argv, cwd=None, timeout=300):
+        raise _sp.TimeoutExpired(cmd=argv, timeout=timeout)
+
+    assert run_enable_project(tmp_path, Style(False), marks(), runner=timeout_runner) == 1
+    assert "enable failed" in capsys.readouterr().out
+
+    def oserror_runner(argv, cwd=None, timeout=300):
+        raise OSError("exec format error")
+
+    assert run_enable_project(tmp_path, Style(False), marks(), runner=oserror_runner) == 1
+    assert "exec format error" in capsys.readouterr().out
+
+
+def test_statusline_conflict_display_tolerates_bom(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    claude_dir = tmp_path / "home" / ".claude"
+    claude_dir.mkdir(parents=True)
+    (claude_dir / "settings.json").write_text(
+        '{"statusLine": {"type": "command", "command": "starship prompt"}}',
+        encoding="utf-8-sig",  # BOM as a Windows editor would leave it
+    )
+    inst = ih.Installer(_args(), ih.Style(False), ih.marks(), subset="statusline")
+    inst.repo = tmp_path
+    inst.statusline_step()  # non-tty confirm declines the replacement by default
+    out = capsys.readouterr().out
+    assert "starship prompt" in out  # existing command shown, no traceback
+    assert "statusLine kept" in out
+    written = (claude_dir / "settings.json").read_text(encoding="utf-8-sig")
+    assert "starship" in written  # untouched
+
+
+# --- update preview: pure parsers (2026-07-30) --------------------------------------------
+
+
+def test_parse_manifest_version_tolerant():
+    from install_helper import parse_manifest_version
+
+    assert parse_manifest_version('{"version": "1.2.3"}') == "1.2.3"
+    assert parse_manifest_version('\ufeff{"version": "1.2.3"}') == "1.2.3"  # BOM
+    assert parse_manifest_version("{broken") is None
+    assert parse_manifest_version('["a", "list"]') is None
+    assert parse_manifest_version('{"name": "x"}') is None
+    assert parse_manifest_version('{"version": ""}') is None
+    assert parse_manifest_version(None) is None
+
+
+def test_list_headlines_between_ranges():
+    from install_helper import list_headlines_between
+
+    text = (
+        "# Changelog\n\n"
+        "## [0.35.0] - d - Newest\n\n"
+        "## [0.34.0] - d - Middle\n\n"
+        "## [0.33.1] - d - Local\n\n"
+        "## [0.33.0] - d - Older\n"
+    )
+    assert list_headlines_between(text, "0.33.1") == [
+        "[0.35.0] - d - Newest",
+        "[0.34.0] - d - Middle",
+    ]
+    # Local version absent from the changelog (or unknown): every headline, no error.
+    assert len(list_headlines_between(text, "9.9.9")) == 4
+    assert len(list_headlines_between(text, None)) == 4
+    assert list_headlines_between(text, "not-semver !") == list_headlines_between(text, None)
+    assert list_headlines_between("", "0.33.1") == []
+    assert list_headlines_between(None, "0.33.1") == []
+
+
+def _preview_runner(mapping, default=None):
+    default = default if default is not None else _FakeProc(0, stdout="")
+
+    def runner(argv, cwd=None, timeout=300):
+        joined = " ".join(str(a) for a in argv)
+        for key, result in mapping.items():
+            if key in joined:
+                if isinstance(result, Exception):
+                    raise result
+                return result
+        return default
+
+    return runner
+
+
+def test_gather_update_preview_happy_path():
+    from install_helper import gather_update_preview
+
+    changelog = "# C\n\n## [0.34.0] - d - New\n\n## [0.33.1] - d - Old\n"
+    runner = _preview_runner(
+        {
+            "rev-list": _FakeProc(0, stdout="4\n"),
+            "plugin.json": _FakeProc(0, stdout='{"version": "0.34.0"}'),
+            "CHANGELOG.md": _FakeProc(0, stdout=changelog),
+        }
+    )
+    preview = gather_update_preview(Path("/r"), "main", "0.33.1", runner=runner)
+    assert preview["behind"] == 4
+    assert preview["remote_version"] == "0.34.0"
+    assert preview["headlines"] == ["[0.34.0] - d - New"]
+    assert preview["notes"] == []
+
+
+def test_gather_update_preview_degrades_on_git_errors():
+    from install_helper import gather_update_preview
+
+    # Shallow clone / detached HEAD / missing remote files: every probe errors.
+    runner = _preview_runner({}, default=_FakeProc(128, stderr="fatal: bad revision"))
+    preview = gather_update_preview(Path("/r"), "main", "0.33.1", runner=runner)
+    assert preview["behind"] is None
+    assert preview["remote_version"] is None
+    assert preview["headlines"] == []
+    assert len(preview["notes"]) == 3  # one clear note per degraded probe
+
+
+def test_gather_update_preview_degrades_on_garbage_output():
+    from install_helper import gather_update_preview
+
+    runner = _preview_runner(
+        {
+            "rev-list": _FakeProc(0, stdout="not-a-number\n"),
+            "plugin.json": _FakeProc(0, stdout="{broken json"),
+            "CHANGELOG.md": _FakeProc(0, stdout=""),
+        }
+    )
+    preview = gather_update_preview(Path("/r"), "main", "0.33.1", runner=runner)
+    assert preview["behind"] is None and preview["remote_version"] is None
+    assert preview["headlines"] == []
+    assert len(preview["notes"]) == 3
+
+
+def test_gather_update_preview_survives_raising_runner():
+    import subprocess as _sp
+
+    from install_helper import gather_update_preview
+
+    runner = _preview_runner(
+        {
+            "rev-list": _sp.TimeoutExpired(cmd="git", timeout=1),
+            "plugin.json": OSError("no git"),
+            "CHANGELOG.md": _sp.TimeoutExpired(cmd="git", timeout=1),
+        }
+    )
+    preview = gather_update_preview(Path("/r"), "main", None, runner=runner)
+    assert preview["behind"] is None and preview["remote_version"] is None
+    assert len(preview["notes"]) == 3  # degraded, never raised
+
+
+# --- update preview: wired into sync + the check menu item (2026-07-30) -------------------
+
+
+def test_sync_preview_decline_keeps_clone_asis(monkeypatch, tmp_path, capsys):
+    import sys as _sys
+
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    calls = []
+
+    def runner(argv, cwd=None, timeout=300):
+        joined = " ".join(str(a) for a in argv)
+        calls.append(joined)
+        if "rev-list" in joined and "HEAD.." in joined:
+            return _FakeProc(0, stdout="2\n")
+        if "plugin.json" in joined:
+            return _FakeProc(0, stdout='{"version": "10.0.0"}')
+        if "CHANGELOG" in joined:
+            return _FakeProc(0, stdout="## [10.0.0] - d - Big\n\n## [9.9.9] - d - Cur\n")
+        return _FakeProc(0, stdout="")
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    monkeypatch.setattr(_sys, "stdin", _TtyStdin())
+    answers = iter(["n"])  # decline "Shall I bring you up to date?"
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers, ""))
+    inst = ih.Installer(_args(), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    inst.sync_branch()
+    out = capsys.readouterr().out
+    assert "9.9.9 -> 10.0.0" in out
+    assert "[10.0.0] - d - Big" in out
+    assert "[9.9.9]" not in out  # local entry excluded from the preview list
+    assert not any("checkout" in c for c in calls)
+    assert inst.code_stale is True
+    assert not inst.tracker.failed  # declining is a skip, not a failure
+
+
+def test_sync_preview_up_to_date_says_so(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+    def runner(argv, cwd=None, timeout=300):
+        joined = " ".join(str(a) for a in argv)
+        if "rev-list" in joined and "HEAD.." in joined:
+            return _FakeProc(0, stdout="0\n")
+        return _FakeProc(0, stdout="")
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    inst.sync_branch()
+    out = capsys.readouterr().out
+    assert "Already up to date" in out
+    assert "would bring" not in out  # preview skipped entirely
+
+
+def test_print_update_preview_caps_headlines_at_five(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    inst = ih.Installer(_args(), ih.Style(False), ih.marks())
+    preview = {
+        "behind": 9,
+        "remote_version": "2.0.0",
+        "headlines": [f"[1.0.{i}] - d - t{i}" for i in range(7)],
+        "notes": [],
+    }
+    inst.print_update_preview(preview, "main", "0.9.0")
+    out = capsys.readouterr().out
+    assert "t4" in out and "t5" not in out
+    assert "... and 2 more" in out
+    assert "0.9.0 -> 2.0.0" in out
+
+
+def test_menu_check_for_updates_is_read_only(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    _menu_session(monkeypatch, tmp_path, ["5"])
+    cfg_dir = tmp_path / "xdg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
+    )
+    calls = []
+
+    def runner(argv, cwd=None, timeout=300):
+        joined = " ".join(str(a) for a in argv)
+        calls.append(joined)
+        if "rev-list" in joined and "HEAD.." in joined:
+            return _FakeProc(0, stdout="2\n")
+        if "plugin.json" in joined:
+            return _FakeProc(0, stdout='{"version": "10.0.0"}')
+        if "CHANGELOG" in joined:
+            return _FakeProc(0, stdout="## [10.0.0] - d - Big\n## [9.9.9] - d - Cur\n")
+        return _FakeProc(0, stdout="")
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Step 2 of 2" in out  # truthful numbering: preflight-lite + check
+    assert "10.0.0" in out and "nothing changed" in out
+    assert any("fetch" in c for c in calls)
+    forbidden = ("checkout", "marketplace", "plugin install", "plugin update", "clone http")
+    assert not any(any(word in c for word in forbidden) for c in calls)
+    assert not (tmp_path / "home").exists()  # wrote nothing
+
+
+def test_menu_check_for_updates_fetch_failure_fails_soft(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    _menu_session(monkeypatch, tmp_path, ["5"])
+    cfg_dir = tmp_path / "xdg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
+    )
+
+    def runner(argv, cwd=None, timeout=300):
+        joined = " ".join(str(a) for a in argv)
+        if "fetch" in joined:
+            return _FakeProc(128, stderr="fatal: unable to access remote")
+        return _FakeProc(0, stdout="")
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0  # informational check: a failed fetch never aborts the process
+    assert "check your connection" in out
+    assert "Traceback" not in out
+
+
+def test_menu_check_for_updates_without_clone_fails_soft(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    _menu_session(monkeypatch, tmp_path, ["5"])
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0, stdout=""))
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "no usable clone" in out and "Traceback" not in out

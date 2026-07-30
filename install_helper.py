@@ -116,17 +116,33 @@ def config_path() -> Path:
 
 
 def load_config(path: Path) -> dict:
-    """Missing or corrupt config is not an error - the run just starts fresh."""
+    """Missing or corrupt config is not an error - the run just starts fresh.
+
+    utf-8-sig: tolerates a BOM left by a Windows editor; reads BOM-less files too."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
 
 
-def save_config(path: Path, cfg: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+def save_config(path: Path, cfg: dict) -> bool:
+    """Best-effort atomic write: temp file + os.replace, so a concurrent or interrupted
+    run never leaves a half-written config (last writer wins whole). Returns False
+    instead of raising when the location is unwritable - the run continues, it just
+    will not remember its settings."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+        return True
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
 
 
 # ------------------------------------------------------------------ console styling
@@ -287,24 +303,55 @@ class InstallAbort(Exception):
 
 
 def installed_version(repo: Path) -> Optional[str]:
-    """The plugin version in the clone's manifest, or None when unreadable."""
+    """The plugin version in the clone's manifest, or None when unreadable.
+
+    utf-8-sig read: BOM-tolerant for files a Windows editor may have touched."""
     try:
-        manifest = json.loads((repo / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        manifest = json.loads(
+            (repo / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8-sig")
+        )
         version = manifest.get("version")
         return version if isinstance(version, str) and version else None
     except (OSError, ValueError):
         return None
 
 
+def parse_manifest_version(text) -> Optional[str]:
+    """Version string from a plugin.json BODY (e.g. `git show` output). Tolerant of
+    garbage, non-dict JSON, a missing/empty version and a leading BOM; never raises."""
+    try:
+        data = json.loads(str(text).lstrip("\ufeff"))
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    version = data.get("version")
+    return version if isinstance(version, str) and version else None
+
+
 def changelog_headline(changelog: Path, version: str) -> Optional[str]:
     """The `## [<version>] - date - title` line from the changelog, cleaned for console."""
     try:
-        for line in changelog.read_text(encoding="utf-8").splitlines():
+        for line in changelog.read_text(encoding="utf-8-sig").splitlines():
             if line.startswith(f"## [{version}]"):
                 return line[3:].strip()
     except OSError:
         pass
     return None
+
+
+def list_headlines_between(changelog_text, local_version: Optional[str]) -> list:
+    """`## [x.y.z] ...` headline lines from the top of a changelog BODY down to (not
+    including) the entry for local_version. A local version that never appears (or
+    None) yields every headline - the caller caps the display. Pure and total: any
+    input coerces via str() and the worst case is an empty list."""
+    headlines = []
+    for line in str(changelog_text).splitlines():
+        if line.startswith("## ["):
+            if local_version and line.startswith(f"## [{local_version}]"):
+                break
+            headlines.append(line[3:].strip())
+    return headlines
 
 
 def user_settings_path() -> Path:
@@ -345,11 +392,12 @@ def current_statusline_command(settings: dict) -> str:
 
 
 def command_argv(name: str, resolved: Optional[str] = None) -> list:
-    """The argv prefix that actually launches `name` on this platform.
+    """The argv prefix that identifies how to launch `name` on this platform.
 
     Windows npm shims are `.cmd`/`.bat` batch files: `shutil.which` finds them but
-    CreateProcess cannot launch a batch file by bare name without a shell, so the
-    resolved path is routed through `cmd /c`. Everywhere else (and for real
+    CreateProcess cannot launch a batch file by bare name without a shell, so those
+    return a `cmd /c` prefix - which run_cmd converts to the safe /s string form
+    (windows_shim_cmdline) before launching. Everywhere else (and for real
     executables) the resolved absolute path is used directly."""
     resolved = resolved if resolved is not None else (shutil.which(name) or name)
     if str(resolved).lower().endswith((".cmd", ".bat")):
@@ -357,16 +405,40 @@ def command_argv(name: str, resolved: Optional[str] = None) -> list:
     return [str(resolved)]
 
 
+def windows_shim_cmdline(shim_path: str, rest) -> str:
+    """The full cmd.exe command line for a .cmd/.bat shim, safe for spaces anywhere.
+
+    The naive list form ["cmd", "/c", shim, *args] breaks when two or more arguments
+    need quoting: cmd /c re-parses its tail and strips the FIRST and LAST quote
+    character on the line, mangling a shim path with spaces (e.g. a username with a
+    space) combined with a quoted repo path. `/s` plus one outer quote pair pins the
+    parse (documented in `cmd /?`); the inner line is built by list2cmdline, the same
+    quoting CreateProcess itself uses."""
+    inner = subprocess.list2cmdline([str(shim_path)] + [str(a) for a in rest])
+    return f'cmd.exe /s /c "{inner}"'
+
+
 def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
     """Fixed-argv runner, output captured. Tests monkeypatch this symbol; --demo swaps
     it for make_demo_runner's dry-run stand-in for the duration of the run.
 
-    The first element is resolved via command_argv so Windows `.cmd` shims
-    (the npm-installed `claude`) launch correctly."""
+    The first element is resolved via command_argv; Windows `.cmd`/`.bat` shims (the
+    npm-installed `claude`) launch via the quoted cmd.exe string form so paths with
+    spaces survive."""
     argv = [str(a) for a in argv]
-    argv = command_argv(argv[0]) + argv[1:]
+    prefix = command_argv(argv[0])
+    if prefix[0] == "cmd":
+        # Batch shim: one explicit string, shell=False. This branch is unreachable on
+        # POSIX (which() never resolves a bare name to *.cmd/*.bat there).
+        return subprocess.run(  # fixed command line built above, shell=False  # nosec B603
+            windows_shim_cmdline(prefix[-1], argv[1:]),
+            cwd=str(cwd) if cwd else None,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
     return subprocess.run(  # argv is a fixed list built here, shell=False  # nosec B603
-        argv,
+        prefix + argv[1:],
         cwd=str(cwd) if cwd else None,
         capture_output=True,
         text=True,
@@ -379,14 +451,27 @@ def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
 
 def demo_stdout(argv) -> str:
     """Canned stdout per command shape, so the real step logic behaves in a dry run:
-    clean working tree, zero commits ahead, reachable remote, a placeholder commit."""
+    clean working tree, zero commits ahead, a few commits behind (so the update
+    preview shows), reachable remote, a placeholder commit and remote files."""
     argv = [str(a) for a in argv]
     if "rev-parse" in argv:
         return "abc1234"
     if "rev-list" in argv:
-        return "0"
+        # HEAD..origin/x = commits behind (plausible preview); origin/x..HEAD = ahead.
+        return "3" if str(argv[-1]).startswith("HEAD..") else "0"
     if "ls-remote" in argv:
         return "ref"
+    if "show" in argv:
+        target = str(argv[-1])
+        if target.endswith("plugin.json"):
+            return '{"version": "9.9.9"}'
+        if target.endswith("CHANGELOG.md"):
+            return (
+                "# Changelog\n\n"
+                "## [9.9.9] - 2026-01-02 - Demo release\n\n"
+                "## [9.9.8] - 2026-01-01 - Earlier demo release\n"
+            )
+        return ""
     # Includes `git status --porcelain`: empty output means a clean tree.
     return ""
 
@@ -436,7 +521,47 @@ def commits_ahead(repo: Path, branch: str, runner=None) -> int:
 
 
 def looks_like_repo(path: Path) -> bool:
+    """.git may be a directory (normal clone) or a FILE (git worktree) - .exists()
+    covers both. A bare repo has neither a .git child nor the manifest, so it is
+    correctly rejected."""
     return (path / ".git").exists() and (path / ".claude-plugin" / "plugin.json").exists()
+
+
+def gather_update_preview(repo: Path, branch: str, local_version: Optional[str], runner=None):
+    """Read-only look at what origin/<branch> would bring, AFTER a fetch.
+
+    Informational and total: every probe fails soft (error rc, garbage output, a
+    raising runner - shallow clones and detached HEADs included) into None/[] plus a
+    human note. It must never raise and never block the update itself."""
+    runner = runner or run_cmd
+
+    def probe(argv):
+        try:
+            proc = runner(argv)
+        except (subprocess.TimeoutExpired, OSError):
+            return None
+        return proc if proc is not None and proc.returncode == 0 else None
+
+    info = {"behind": None, "remote_version": None, "headlines": [], "notes": []}
+    proc = probe(["git", "-C", repo, "rev-list", "--count", f"HEAD..origin/{branch}"])
+    if proc is not None:
+        try:
+            info["behind"] = int(proc.stdout.strip())
+        except (ValueError, TypeError, AttributeError):
+            pass
+    if info["behind"] is None:
+        info["notes"].append("could not count new commits (shallow clone or detached HEAD?)")
+    proc = probe(["git", "-C", repo, "show", f"origin/{branch}:.claude-plugin/plugin.json"])
+    if proc is not None:
+        info["remote_version"] = parse_manifest_version(proc.stdout)
+    if info["remote_version"] is None:
+        info["notes"].append("could not read the remote manifest")
+    proc = probe(["git", "-C", repo, "show", f"origin/{branch}:CHANGELOG.md"])
+    if proc is not None and str(proc.stdout or "").strip():
+        info["headlines"] = list_headlines_between(proc.stdout, local_version)
+    else:
+        info["notes"].append("could not read the remote changelog")
+    return info
 
 
 def decide_mode(explicit: Optional[str], cfg: dict) -> str:
@@ -486,7 +611,8 @@ MENU_ACTIONS = {
     "2": "setup",
     "3": "statusline",
     "4": "enable",
-    "5": "demo",
+    "5": "check",
+    "6": "demo",
     "q": "quit",
 }
 
@@ -502,7 +628,8 @@ def choose_action(style: Style) -> str:
         ("2", "Environment setup only (marketplace + plugin + extras; does not pull latest code)"),
         ("3", "Status line only"),
         ("4", "Enable the team for a project (+ optional permission allow-list)"),
-        ("5", "Demo - watch the whole run, nothing executed or written"),
+        ("5", "Check for updates (read-only - shows what an update would bring)"),
+        ("6", "Demo - watch the whole run, nothing executed or written"),
         ("q", "Quit"),
     )
     for key, text in options:
@@ -516,7 +643,7 @@ def choose_action(style: Style) -> str:
             return "full"
         if answer in MENU_ACTIONS:
             return MENU_ACTIONS[answer]
-        print("  1-5 or q, please.")
+        print("  1-6 or q, please.")
 
 
 # ------------------------------------------------------------------ the installer
@@ -539,6 +666,7 @@ class Installer:
         self.branch = "main"
         self.mode = "install"
         self.stashed = False
+        self.code_stale = False  # user declined the update: clone used as-is
 
     # ---- console helpers
 
@@ -721,6 +849,26 @@ class Installer:
             self.step_fail("Fetch origin", proc.stderr.strip() or "git fetch failed")
         self.step_ok(self.did("Fetched", "Would fetch") + f" origin/{self.branch}")
 
+        # Update preview: read-only, fail-soft, before anything is checked out. A
+        # declined update is a skip, not a failure - the later steps still run
+        # against the clone as-is.
+        local_version = installed_version(repo)
+        preview = gather_update_preview(repo, self.branch, local_version)
+        if preview["behind"] == 0:
+            self.step_ok(f"Already up to date with origin/{self.branch}")
+        else:
+            self.say(self.style.bold("  Here is what an update would bring:"))
+            self.print_update_preview(preview, self.branch, local_version)
+            if not confirm(
+                "  Shall I bring you up to date?",
+                default=True,
+                assume_yes=self.args.yes,
+                style=self.style,
+            ):
+                self.code_stale = True
+                self.step_skip("Sync", "declined - staying on your current code")
+                return
+
         if is_dirty(repo):
             self.say(self.style.yellow("  The clone has uncommitted local changes."))
             if self.args.yes or not sys.stdin.isatty():
@@ -778,6 +926,77 @@ class Installer:
             self.did(f"On {self.branch} at {commit}", f"Would be on {self.branch} at {commit}"),
             f"matches origin/{self.branch}",
         )
+
+    def print_update_preview(self, preview: dict, branch: str, local_version) -> None:
+        """Console rendering of gather_update_preview's result. Purely informational:
+        missing fields simply do not print; degradation notes print dimmed."""
+        s = self.style
+        behind, remote = preview.get("behind"), preview.get("remote_version")
+        if behind is not None:
+            self.say(f"  {behind} new commit(s) on origin/{branch}")
+        if remote and local_version and remote != local_version:
+            self.say(f"  Version: {local_version} -> {remote}")
+        elif remote and not local_version:
+            self.say(f"  Remote version: {remote}")
+        headlines = list(preview.get("headlines") or [])
+        shown = headlines[:5]
+        if shown:
+            for line in shown:
+                self.say(f"    {line}")
+            if len(headlines) > 5:
+                self.say(s.dim(f"    ... and {len(headlines) - 5} more"))
+        for note in preview.get("notes") or []:
+            self.say(s.dim(f"  note: {note}"))
+
+    def preflight_lite(self) -> None:
+        """Just enough for a read-only check: Python is running, git exists."""
+        self.step_intro("Just the basics for a read-only check: git and your clone.")
+        if shutil.which("git"):
+            self.step_ok("git found")
+        else:
+            self.step_fail("git", "git is required - install it and re-run")
+
+    def check_updates_step(self) -> None:
+        """Menu option: fetch + show the update preview, then STOP. Nothing is checked
+        out, installed or written; every probe fails soft into a clear line."""
+        self.step_intro(
+            "Fetching origin and showing what an update would bring - changing nothing."
+        )
+        if self.args.repo:
+            repo = Path(self.args.repo).expanduser().resolve()
+        else:
+            configured = self.cfg.get("repo_path")
+            script_root = Path(__file__).resolve().parent
+            if isinstance(configured, str) and configured and looks_like_repo(Path(configured)):
+                repo = Path(configured)
+            elif looks_like_repo(script_root):
+                repo = script_root
+            else:
+                self.step_fail(
+                    "Check for updates",
+                    "no usable clone found - run a full install first (menu option 1)",
+                    fatal=False,
+                )
+                return
+        branch = self.cfg.get("branch")
+        branch = branch if branch in BRANCHES else "main"
+        proc = run_cmd(["git", "-C", repo, "fetch", "origin", branch], timeout=300)
+        if proc.returncode != 0:
+            self.step_fail(
+                "Fetch origin",
+                (proc.stderr.strip().splitlines() or ["git fetch failed"])[-1]
+                + " - check your connection and re-run",
+                fatal=False,
+            )
+            return
+        local_version = installed_version(repo)
+        preview = gather_update_preview(repo, branch, local_version)
+        if preview["behind"] == 0:
+            self.step_ok(f"Already up to date with origin/{branch}")
+            return
+        self.say(self.style.bold("  Here is what an update would bring:"))
+        self.print_update_preview(preview, branch, local_version)
+        self.step_ok("Check complete - nothing changed", "run a full update (option 1) to apply")
 
     def optional_pip(self) -> None:
         self.step_intro(
@@ -864,8 +1083,13 @@ class Installer:
         version = installed_version(self.repo) if self.repo else None
         if version:
             self.cfg["last_version"] = version
-        save_config(self.cfg_path, self.cfg)
-        self.step_ok(f"Settings saved to {self.cfg_path}")
+        if save_config(self.cfg_path, self.cfg):
+            self.step_ok(f"Settings saved to {self.cfg_path}")
+        else:
+            # Read-only home or a locked config dir: a warning, never a crash.
+            self.step_skip(
+                "Settings", f"could not write {self.cfg_path} - continuing without saving"
+            )
 
     def whats_new(self, previous: Optional[str]) -> None:
         """After a successful install/update: what did you just get."""
@@ -930,7 +1154,7 @@ class Installer:
             self.say("Fix the failed step above and run me again - I'm safe to repeat.")
             self._demo_footer()
             return
-        if self.subset == "setup":
+        if self.subset == "setup" or self.code_stale:
             self.say("")
             self.say(
                 s.yellow(
@@ -939,20 +1163,16 @@ class Installer:
             )
         if self.subset in ("full", "setup"):
             self.say("")
-            self.say(s.bold("Over to you - the two things I can't do from this script:"))
+            self.say(s.bold("Over to you:"))
             self.say(
-                "  1. Enable the team for any FURTHER projects: run me again and pick option 4,\n"
-                "     use /plugin inside Claude Code, or `python install_helper.py --enable-project <dir>`.\n"
-                "     (Per-project enablement is the README's token-economy rule - avoid user scope.)"
+                "  1. Enable more projects any time: run me again (option 4) "
+                "or /plugin inside Claude Code."
             )
-            self.say("  2. Restart Claude Code so the new plugin version loads.")
-            self.say(
-                "  (The safety and lifecycle hooks ship pre-wired - nothing to apply. The\n"
-                "  optional status line is offered during the run, or later via menu option 3\n"
-                "  or bash scripts/apply-statusline.sh.)"
-            )
+            self.say("  2. Restart Claude Code to load the new version.")
         self.say("")
         self.say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
+        hat = "🎩 " if _can_encode("🎩") else ""
+        self.say(f"{hat}I look forward to working with you. - Morgan")
         self._demo_footer()
 
     def _demo_footer(self) -> None:
@@ -967,6 +1187,14 @@ class Installer:
         note: the command runs via bash (Git Bash ships with Git for Windows). In demo
         the current file is read for real, but nothing is written or backed up."""
         self.step_intro("An optional status line: the team's state and session cost at a glance.")
+        if sys.platform == "win32" and not shutil.which("bash"):
+            # The wired command runs `bash .../statusline.sh`; without Git Bash it
+            # would be a broken setting. Honest skip instead of wiring it.
+            self.step_skip(
+                "Status line",
+                "needs Git Bash on PATH (ships with Git for Windows) - install it and re-run",
+            )
+            return
         if self.subset == "statusline":
             wanted = True  # the user picked this from the menu
         elif self.args.yes:
@@ -986,7 +1214,7 @@ class Installer:
         settings = {}
         if target.is_file():
             try:
-                settings = json.loads(target.read_text(encoding="utf-8"))
+                settings = json.loads(target.read_text(encoding="utf-8-sig"))
                 if not isinstance(settings, dict):
                     raise ValueError("settings root is not an object")
             except (OSError, ValueError) as exc:
@@ -995,6 +1223,9 @@ class Installer:
                 )
                 return
         command = statusline_command(self.repo)
+        # Display the existing command from the ALREADY-PARSED settings; a second
+        # read of the file could race an editor or trip over a BOM.
+        existing = current_statusline_command(settings)
         settings, verdict = merge_statusline(settings, command)
         if verdict == "already":
             self.step_ok("Status line", "already wired to this clone")
@@ -1008,7 +1239,6 @@ class Installer:
                 )
             )
         if verdict == "conflict":
-            existing = current_statusline_command(json.loads(target.read_text(encoding="utf-8")))
             self.say(
                 self.style.yellow(
                     f"    You already have a status line configured that is not mine:\n"
@@ -1102,7 +1332,7 @@ class Installer:
         if target.is_file():
             count = f"up to {len(RECOMMENDED_ALLOW)}"
             try:
-                settings = json.loads(target.read_text(encoding="utf-8"))
+                settings = json.loads(target.read_text(encoding="utf-8-sig"))
                 if isinstance(settings, dict):
                     _, added = merge_allow(settings)  # throwaway copy, nothing written
                     count = str(len(added))
@@ -1142,6 +1372,11 @@ class Installer:
                 ("Preflight checks", self.preflight),
                 ("Enable for a project", self.enable_step),
             ]
+        if self.subset == "check":
+            return [
+                ("Preflight checks", self.preflight_lite),
+                ("Check for updates", self.check_updates_step),
+            ]
         return [
             ("Preflight checks", self.preflight),
             ("Release channel", self.choose_branch),
@@ -1161,6 +1396,7 @@ class Installer:
             self.say(s.dim(f"Mode: {self.mode} (config: {self.cfg_path})"))
         plan = self.build_plan()
         aborted = False
+        cancelled = False
         try:
             for number, (title, step) in enumerate(plan, 1):
                 self.step_header(number, len(plan), title() if callable(title) else title)
@@ -1171,10 +1407,24 @@ class Installer:
                 self.whats_new(previous)
         except InstallAbort:
             aborted = True
+        except KeyboardInterrupt:
+            # Ctrl-C at a prompt or mid-subprocess: clean note, summary, exit 130.
+            self.say("")
+            self.say(self.style.yellow("Cancelled."))
+            self.tracker.record("Cancelled", "fail", "interrupted (Ctrl-C)")
+            aborted = True
+            cancelled = True
         except subprocess.TimeoutExpired as exc:
             self.tracker.record("Command timed out", "fail", str(exc.cmd))
             aborted = True
+        except OSError as exc:
+            # A command that failed to launch or a filesystem surprise mid-step:
+            # a clear FAIL row and the summary, never a traceback.
+            self.tracker.record("Step failed", "fail", str(exc))
+            aborted = True
         self.print_summary(aborted)
+        if cancelled:
+            return 130
         return 1 if aborted else 0
 
 
@@ -1195,7 +1445,7 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     settings: dict = {}
     if target.is_file():
         try:
-            settings = json.loads(target.read_text(encoding="utf-8"))
+            settings = json.loads(target.read_text(encoding="utf-8-sig"))
             if not isinstance(settings, dict):
                 raise ValueError("settings root is not an object")
         except (OSError, ValueError) as exc:
@@ -1235,7 +1485,11 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
     if not project.is_dir():
         print(f"{fail} not a directory: {project}")
         return 1
-    proc = runner(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID], cwd=project)
+    try:
+        proc = runner(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID], cwd=project)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        print(f"{fail} enable failed for {project}: {exc}")
+        return 1
     if proc.returncode == 0:
         print(f"{ok} enabled for {project}")
         return 0
@@ -1298,6 +1552,17 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def main(argv=None) -> int:
+    """Entry point: _main plus the last-resort Ctrl-C net (menu, banner, prompts that
+    sit outside an Installer run). Exit code 130 mirrors the shell convention."""
+    try:
+        return _main(argv)
+    except KeyboardInterrupt:
+        print("")
+        print("Cancelled.")
+        return 130
+
+
+def _main(argv=None) -> int:
     global run_cmd
     args = parse_args(argv)
     style = Style(supports_color())
