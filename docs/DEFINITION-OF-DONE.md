@@ -109,7 +109,10 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       point: written by `/engage`, or by the invoked skill's *standard open* when it is called
       directly. It is the opening bookend to the engagement-summary email below.
 - [ ] **Traceable** - each requirement links requirement → design → code → test → obligation
-      in the RTM (requirements traceability matrix, `docs/templates/rtm.md`).
+      in the RTM (requirements traceability matrix, `docs/templates/rtm.md`). Regulatory
+      citations are ON by default; when `decisions.regulatory-citations` is `off` (a recorded
+      per-engagement choice, never silent), the obligation link is stated as declined rather
+      than omitted - the RTM still traces requirement → design → code → test.
 - [ ] **Open questions dispositioned** - every open question raised upstream (spec/BRD/review, e.g.
       a BA's questions for an SME) is **formally closed** by its owner (✅ answered / ⏭️ needs
       deployment input / 🔴 open-decision-required) in a tracked decision log - not left dangling or
