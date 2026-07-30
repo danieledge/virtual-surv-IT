@@ -2,7 +2,9 @@
 
 > Loaded just-in-time by `engage` step 3. Two stages because the question tool caps a question at
 > 4 options - **never spec one giant multi-select of every template** (an 11-option list forces
-> improvisation).
+> improvisation). `scripts/locked_menu_guard.py` (audit finding #7, 2026-07-30) mechanically
+> checks stage 1's options and each stage-2 group's multiSelect/option-set before the question
+> reaches the user - don't rely on it instead of following this file.
 
 **Stage 1** (header `Artifacts`, `multiSelect: false`):
 *"How should the deliverables be packaged?"* →
