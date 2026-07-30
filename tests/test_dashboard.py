@@ -29,7 +29,10 @@ def _mk_project(tmp_path, name="proj"):
     (p / "artifacts").mkdir(parents=True)
     (p / "artifacts" / "report.md").write_text("x", encoding="utf-8")
     (p / "artifacts" / "report.html").write_text("x", encoding="utf-8")
-    (p / "artifacts" / "engagement-summary-x.txt").write_text("x", encoding="utf-8")
+    (p / "artifacts" / "engagement-summary-x.txt").write_text(
+        "Done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+        encoding="utf-8",
+    )
     (p / "artifacts" / "START-HERE.md").write_text(
         "# START HERE - proj\n\n| **Status** | ✅ CLOSED 2026-07-27 |\n\n"
         "Artifacts: [`report.md`](report.md) · engagement-summary-x.txt\n",
