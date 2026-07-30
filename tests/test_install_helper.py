@@ -1603,3 +1603,13 @@ def test_statusline_command_quotes_full_bash_path(tmp_path):
     assert cmd == statusline_command(tmp_path, r"C:\Program Files\Git\bin\bash.exe")
     # bare bash stays unquoted
     assert statusline_command(tmp_path).startswith('bash "')
+
+
+def test_statusline_script_forces_utf8_python():
+    """Windows pipes cp1252-encode Python stdout; without PYTHONUTF8 the emoji render
+    raised and every statusline fell to the static no-stats fallback (2026-07-30)."""
+    text = (Path(__file__).resolve().parents[1] / "scripts" / "statusline.sh").read_text(
+        encoding="utf-8"
+    )
+    line = next(ln for ln in text.splitlines() if '"$PY_BIN" - "$INPUT"' in ln)
+    assert "PYTHONUTF8=1" in line and "PYTHONIOENCODING=utf-8" in line

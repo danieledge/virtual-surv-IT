@@ -21,7 +21,10 @@ for c in python3 python py; do
 done
 [ -z "$PY_BIN" ] && { printf '🕶 virt-surv-IT'; exit 0; }
 
-"$PY_BIN" - "$INPUT" 2>/dev/null <<'PY' || printf '🕶 virt-surv-IT'
+# PYTHONUTF8: on Windows, Python encodes piped stdout with the locale codepage
+# (cp1252), so printing the emoji marks raised UnicodeEncodeError and every render
+# fell to the static fallback - glasses, no stats (live report 2026-07-30).
+PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY_BIN" - "$INPUT" 2>/dev/null <<'PY' || printf '🕶 virt-surv-IT'
 import json, sys
 from pathlib import Path
 
