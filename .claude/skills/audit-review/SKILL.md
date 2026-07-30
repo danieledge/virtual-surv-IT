@@ -51,9 +51,11 @@ Run an **evaluator-optimizer loop**:
    the console**, with the full findings in the **clean artifact**. Give an explicit verdict
    (✅ audit-ready / ⚠️ conditional / ❌ not yet), standards cited, audit/regulatory checks, the
    🔵 style & form lane, a tooling-coverage section, **and - MANDATORY - a `## 🔵 Developer
-   guidance - improving future code` section** (2-4 points, even on a clean pass; verify it's in
-   the artifact before presenting). Use the standalone clean review artifact by default; fold
-   into the consolidated `delivery-report.md` only when audit is part of a larger handover.
+   guidance - improving future code` section** (2-4 points, even on a clean pass;
+   `check_artifacts` mechanically flags it missing/empty as `FINDINGS-NO-DEV-GUIDANCE`, but
+   verify it's genuinely there before presenting, don't rely on the gate). Use the standalone
+   clean review artifact by default; fold into the consolidated `delivery-report.md` only when
+   audit is part of a larger handover.
 
 6. **Independent read of the consolidated pack (Audit depth - the check on Morgan).** Before close,
    hand the finished audit artifact / `delivery-report` **itself** to **compliance-reviewer**

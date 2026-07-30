@@ -1247,3 +1247,78 @@ def test_registry_html_mirror_staleness_flagged(tmp_path):
     findings = check_registry(art)
     assert any("REGISTRY-HTML-STALE" in f and "no rendered .html" in f for f in findings)
     assert any("pip install -r requirements.txt" in f for f in findings)
+
+
+# ------------------------------------------------ developer-guidance check (audit #2)
+
+
+def test_dev_guidance_missing_heading_fires(tmp_path):
+    from scripts.check_artifacts import check_summary_email as _unused  # noqa: F401
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    review = art / "REVIEW-x.md"
+    review.write_text(
+        "# Review\n\n## Findings\n\n_No findings._\n\n## Limitations & residual risk\n"
+        "_(none stated)_\n",
+        encoding="utf-8",
+    )
+    (review.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["REVIEW-x.md"])
+    findings = run_check(art)
+    assert any(
+        "FINDINGS-NO-DEV-GUIDANCE" in f and "no '## 🔵 Developer guidance'" in f for f in findings
+    )
+
+
+def test_dev_guidance_placeholder_only_fires(tmp_path):
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    review = art / "REVIEW-x.md"
+    review.write_text(
+        "# Review\n\n## Findings\n\n_No findings._\n\n"
+        "## 🔵 Developer guidance - improving future code\n_(none provided)_\n\n"
+        "## Limitations & residual risk\n_(none stated)_\n",
+        encoding="utf-8",
+    )
+    (review.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["REVIEW-x.md"])
+    findings = run_check(art)
+    assert any("FINDINGS-NO-DEV-GUIDANCE" in f and "empty/unfilled" in f for f in findings)
+
+
+def test_dev_guidance_filled_in_passes(tmp_path):
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    review = art / "REVIEW-x.md"
+    review.write_text(
+        "# Review\n\n## Findings\n\n_No findings._\n\n"
+        "## 🔵 Developer guidance - improving future code\n"
+        "Consider adding docstrings to the public API.\n\n"
+        "## Limitations & residual risk\n_(none stated)_\n",
+        encoding="utf-8",
+    )
+    (review.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["REVIEW-x.md"])
+    findings = run_check(art)
+    assert not any("FINDINGS-NO-DEV-GUIDANCE" in f for f in findings)
+
+
+def test_non_review_artifact_without_findings_section_unaffected(tmp_path):
+    """A BRD/FSD has no '## Findings' section at all - never flagged for lacking
+    developer guidance, which is a review-only concept."""
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    brd = art / "BRD-x.md"
+    brd.write_text("# BRD\n\n## Executive summary\n\nSomething.\n", encoding="utf-8")
+    (brd.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["BRD-x.md"])
+    findings = run_check(art)
+    assert not any("FINDINGS-NO-DEV-GUIDANCE" in f for f in findings)

@@ -97,7 +97,9 @@ and states what's applicable vs not.
    ⚠️ **MANDATORY - `developer_guidance` is not optional.** The pack's `developer_guidance` field
    must always be populated (2-4 constructive points on the author's coding style and what to
    improve next time; if the code is strong, say what's done well), **even on a clean pass** - the
-   renderer emits it as the `## 🔵 Developer guidance` section. An empty one means you are not done.
+   renderer emits it as the `## 🔵 Developer guidance` section. `check_artifacts` mechanically
+   flags a missing or empty section as `FINDINGS-NO-DEV-GUIDANCE` (audit finding #2, 2026-07-30 -
+   this used to be a prose-only reminder with no backstop), but don't rely on the gate to catch it.
 
 **5. Close - don't dead-end.** Summarise from the scoreboard, then offer concrete next steps
 with a recommendation - *"3 🔴, 5 🟠. I can fix the criticals, run `/remediate`, or produce a

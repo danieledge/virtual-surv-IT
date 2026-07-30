@@ -125,6 +125,16 @@ _FINDINGS_CWORD_RE = re.compile(
     r"^\*\*(?:condition|consequence|correction)\b|\b5[\s\-]?c\b[\s\-]*summary", re.I | re.M
 )
 
+# Developer guidance (audit finding #2, 2026-07-30): output-format.md states this section
+# is "mandatory even on a clean review" and claims "the review skills mechanically check
+# the artifact for it" - but nothing did. Four files (deep-review, audit-review,
+# security-audit SKILL.md + the code-reviewer agent) each carry their own prose reminder
+# to verify it before finishing; none is backed by a check. "## Findings" (render_findings.py
+# always emits it) identifies a genuine review-shaped artifact - only those are held to this.
+_FINDINGS_SECTION_RE = re.compile(r"^## Findings\s*$", re.M)
+_DEV_GUIDANCE_HEADING_RE = re.compile(r"^## 🔵 Developer guidance\b.*$", re.M)
+_DEV_GUIDANCE_PLACEHOLDER = "_(none provided)_"
+
 # Roster gate: an artifact must not attribute work to a persona who is not on the team, or to
 # the wrong role. A live delivery report (2026-07-23) invented "Chidi (code-reviewer)" and
 # "Priya (compliance-reviewer)" and called Ravi the TM-SME - fabricated reviewers on a
@@ -968,6 +978,24 @@ def check(artifacts_dir: Path) -> list[str]:
                 "print the five NAMED fields instead (Standard, Problem, Likely cause, Impact, Fix), "
                 "each on its own line, the same five for every finding (docs/review/output-format.md)"
             )
+        if _FINDINGS_SECTION_RE.search(text):
+            dg = _DEV_GUIDANCE_HEADING_RE.search(text)
+            if not dg:
+                findings.append(
+                    f"FINDINGS-NO-DEV-GUIDANCE: {md} is a review-shaped artifact (has a "
+                    "'## Findings' section) but has no '## 🔵 Developer guidance' heading - "
+                    "mandatory even on a clean review (docs/review/output-format.md)"
+                )
+            else:
+                rest = text[dg.end() :]
+                next_heading = re.search(r"^## ", rest, re.M)
+                body = rest[: next_heading.start()] if next_heading else rest
+                if not body.strip() or body.strip() == _DEV_GUIDANCE_PLACEHOLDER:
+                    findings.append(
+                        f"FINDINGS-NO-DEV-GUIDANCE: {md} has the Developer guidance heading "
+                        "but the section is empty/unfilled - constructive guidance is mandatory "
+                        "even on a clean review, not just the header (docs/review/output-format.md)"
+                    )
         findings.extend(check_roster(text, md))
         findings.extend(check_agent_identity(text, md))
 
@@ -1454,8 +1482,10 @@ def main(argv: list[str]) -> int:
                     ) == es.compute_fingerprint(pack):
                         skipped_fresh += 1
                         continue
-                except Exception:
-                    pass  # unreadable state falls through to the full scan (fail-safe)
+                except (
+                    Exception
+                ):  # best-effort probe; unreadable state falls through to a full scan  # nosec B110
+                    pass
             findings.extend(f"[{pack.name}] {f}" for f in check(pack))
         findings.extend(archived_open_packs(artifacts_dir))
         if (artifacts_dir / "engagement-state.json").is_file():
@@ -1501,7 +1531,9 @@ def main(argv: list[str]) -> int:
                 st = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
                 if st.get("status") == "closed" and not st.get("scan_fingerprint"):
                     stale_closed += 1
-            except Exception:
+            except (
+                Exception
+            ):  # best-effort nudge count; an unreadable state just isn't counted  # nosec B112
                 continue
     if stale_closed >= 5:
         print(

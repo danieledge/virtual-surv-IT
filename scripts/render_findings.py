@@ -155,7 +155,7 @@ def render(pack: dict) -> str:
         lines.append("_No findings._")
     lines += [
         "",
-        "## Developer guidance",
+        "## 🔵 Developer guidance - improving future code",
         pack.get("developer_guidance", "_(none provided)_"),
         "",
         "## Limitations & residual risk",

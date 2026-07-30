@@ -61,7 +61,11 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > close-only `REVIEW-*.md`) · `SUMMARY-BEFORE-CLOSE` · `MISSING-SUMMARY-EMAIL` ·
 > `SUMMARY-WRONG-EXT` · `STALE-STATUS` · `STALE-DOCSTATUS` · `CODE-NO-QA` / `CODE-NO-TESTS`
 > (scoped per folder - a sibling engagement's QA never vouches) · `FINDING-NO-IMPACT` ·
-> `FINDINGS-CWORD-LABELS` · `FINDINGS-INVALID` · `ROSTER-UNKNOWN` / `ROSTER-ROLE-MISMATCH` ·
+> `FINDINGS-CWORD-LABELS` · `FINDINGS-INVALID` · `FINDINGS-NO-DEV-GUIDANCE` (a review-shaped
+> artifact - has `## Findings` - missing or leaving empty the mandatory `## 🔵 Developer
+> guidance` section; audit finding #2, 2026-07-30 - four files each carried a prose-only
+> reminder, one claiming it was already mechanically checked, before this existed) ·
+> `ROSTER-UNKNOWN` / `ROSTER-ROLE-MISMATCH` ·
 > `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` · `EMAIL-NOT-MORGAN` / `EMAIL-AGENT-UNMARKED`
 > (the summary email is always FROM Morgan; every roster name in it carries a 🤖-marked
 > mention) · `RATIFIED-CLAIM-PENDING` ·

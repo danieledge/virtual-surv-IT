@@ -85,8 +85,9 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
    summary**, standards cited (OWASP ASVS / CWE), a **tooling-coverage** section (which scanners
    ran, which were unavailable - say so rather than upgrading a guess to a certainty), the 🔵
    style/form lane, **and - MANDATORY - a `## 🔵 Developer guidance - improving future code`
-   section** (2-4 security-hardening points, even on a clean pass; verify it is in the artifact
-   before presenting).
+   section** (2-4 security-hardening points, even on a clean pass; `check_artifacts` mechanically
+   flags it missing/empty as `FINDINGS-NO-DEV-GUIDANCE`, but verify it is genuinely in the
+   artifact before presenting, don't rely on the gate).
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
 schema `docs/review/findings-schema.json`). Write the findings to
