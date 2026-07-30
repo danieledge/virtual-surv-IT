@@ -203,8 +203,12 @@ the state file cannot represent one (ADR-002).
 **0b. Existing engagements?** If `artifacts/` already holds engagement workspaces
 (`<python> -m scripts.engagement_state list` - also rendered at `artifacts/ENGAGEMENTS.md`),
 ask ONE question via the question tool before classifying: **resume** one of the open
-engagements (options list each slug with its ⏳/⛔ status AND title, so a scope mismatch is
-visible) or **start new**. **Scope-fit decides the default, not the marker**: when the
+engagements or **start new**. **One option PER open pack**: build the options from the
+`list` output - EVERY ⏳/⛔/🔒 engagement gets its own option showing slug, status and
+title (so a scope mismatch is visible), never just the ACTIVE one (live defect
+2026-07-30: a menu offered one open engagement when several existed). More than 3 open:
+show the 3 most recently opened plus "start new", and name the remainder in the question
+text. **Scope-fit decides the default, not the marker**: when the
 incoming request matches an open engagement's title/scope, default to resuming it; when it
 is a different deliverable or scope, default to **start new** - an open pack is never a
 reason to fold unrelated work into it (live defect 2026-07-30: a fresh session recorded a
