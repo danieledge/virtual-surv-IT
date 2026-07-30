@@ -13,7 +13,7 @@
 
 🏷️ **Current version: 0.33.1** (2026-07-29) - *[platform capability adoption](docs/releases/0.33.1.md)*, on top of *[0.33.0 - the team got harder to fool](docs/releases/0.33.0.md)*<br/>
 A workflow-robustness release: the quality checks now fail safe, a close has to pass the gate to count, and sessions resume from disk without re-asking you anything.<br/>
-📖 [Plain-language release overview](docs/releases/0.33.1.md) · 📜 [Full changelog](CHANGELOG.md)
+📖 [Release overview](docs/releases/0.33.1.md) · 📜 [Full changelog](CHANGELOG.md)
 
 </td></tr>
 </table>

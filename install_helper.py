@@ -588,7 +588,7 @@ class Installer:
             self.say(f"  {headline}")
         overview = self.repo / "docs" / "releases" / f"{version}.md"
         if overview.is_file():
-            self.say(f"  Plain-language overview: {overview}")
+            self.say(f"  Overview: {overview}")
         self.say(f"  Full detail: {self.repo / 'CHANGELOG.md'}")
 
     # ---- summary

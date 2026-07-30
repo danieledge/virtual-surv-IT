@@ -5,7 +5,7 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [0.33.1] - 2026-07-29 - Platform capability adoption + document-input routing
 
-> Plain-language overview: `docs/releases/0.33.1.md` (and 0.33.0's, which this builds on).
+> Overview: `docs/releases/0.33.1.md` (and 0.33.0's, which this builds on).
 
 ### Added
 - **Document-input routing (live pain fix)**: handed a PDF mid-engagement, the team was
