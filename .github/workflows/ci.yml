@@ -33,6 +33,9 @@ jobs:
         run: python -m scripts.validate_masking
       - name: Validate plugin manifest (declared agents/skills resolve)
         run: python -m scripts.validate_manifest
+      - name: Install helper demo smoke (full flow, dry run, both OSes)
+        shell: bash
+        run: python install_helper.py --demo < /dev/null
 
   lint:
     name: Lint & static analysis
