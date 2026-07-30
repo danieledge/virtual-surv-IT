@@ -193,7 +193,10 @@ def test_set_status_closed_sets_date_clears_outstanding(tmp_path):
     _run(tmp_path, "init", "--title", "T", "--slug", "t")
     _run(tmp_path, "set-team", "Amara (BA)", "Linh (QA)")
     # The close now runs the full DoD checker (R6 gate) - give it the closing email.
-    (tmp_path / "engagement-summary-t.txt").write_text("Done. - Morgan\n", encoding="utf-8")
+    (tmp_path / "engagement-summary-t.txt").write_text(
+        "Done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+        encoding="utf-8",
+    )
     _run(tmp_path, "add-artifact", "engagement-summary-t.txt", "--title", "Email", "--final")
     assert _run(tmp_path, "set-status", "closed", "--verdict", "ready") == 0
     state = load_state(tmp_path)
@@ -217,7 +220,10 @@ def test_close_requires_team_and_finalised_artifacts(tmp_path):
     with pytest.raises(SystemExit):
         _run(tmp_path, "set-status", "closed")  # artifact still interim
     _run(tmp_path, "finalise-artifacts")
-    (tmp_path / "engagement-summary-t.txt").write_text("Done. - Morgan\n", encoding="utf-8")
+    (tmp_path / "engagement-summary-t.txt").write_text(
+        "Done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+        encoding="utf-8",
+    )
     _run(tmp_path, "add-artifact", "engagement-summary-t.txt", "--title", "Email", "--final")
     assert _run(tmp_path, "set-status", "closed", "--verdict", "ready") == 0
     state = load_state(tmp_path)
