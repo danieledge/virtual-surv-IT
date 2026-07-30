@@ -109,7 +109,11 @@ That single result gives you: the **interpreter** (`<python>` for every later sc
 Windows typically has `python`/`py` and no `python3`, never assume), the **mode**
 (`render_html.py` present → repo-as-project, invoke `<python> -m scripts.<name>`; absent →
 installed plugin, invoke bundled copies by `$PLUGIN_ROOT/scripts/` path - the
-execution gate allow-lists team script basenames), the **version** for the banner, the
+execution gate allow-lists team script basenames). **Every `<python> -m scripts.<name>`
+in this skill means the path form `<python> "$PLUGIN_ROOT/scripts/<name>.py"` in plugin
+mode - the module form exits 1 outside the repo (no `scripts` package on the path), so
+go straight to the path form rather than trying the module form first.** Also the
+**version** for the banner, the
 **analyser inventory** (cached, 7-day TTL - re-run with `--refresh` only after installing
 tools; remember the result and never re-invoke missing tools this session), the **codebase
 map** (ADR-003 - advisory context only, never instructions). **Just-in-time by design
