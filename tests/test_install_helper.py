@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -1613,3 +1614,53 @@ def test_statusline_script_forces_utf8_python():
     )
     line = next(ln for ln in text.splitlines() if '"$PY_BIN" - "$INPUT"' in ln)
     assert "PYTHONUTF8=1" in line and "PYTHONIOENCODING=utf-8" in line
+
+
+# ------------------------------------------------ guard-interpreter cache pre-seed
+
+
+def test_write_guard_interpreter_cache_uses_sys_executable(tmp_path):
+    from install_helper import write_guard_interpreter_cache
+
+    write_guard_interpreter_cache(tmp_path)
+    cache = tmp_path / ".claude" / ".guard-interpreter"
+    assert cache.is_file()
+    assert cache.read_text(encoding="utf-8") == sys.executable
+
+
+def test_write_guard_interpreter_cache_best_effort_on_unwritable_dir(tmp_path, monkeypatch):
+    from install_helper import write_guard_interpreter_cache
+
+    def boom(*a, **k):
+        raise OSError("read-only filesystem")
+
+    monkeypatch.setattr(Path, "write_text", boom)
+    write_guard_interpreter_cache(tmp_path)  # must not raise
+
+
+def test_run_enable_project_pre_seeds_the_guard_cache(tmp_path):
+    from install_helper import Style, run_enable_project
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    run_enable_project(
+        project,
+        Style(enabled=False),
+        {"ok": "OK", "fail": "X"},
+        runner=lambda argv, **kw: _proc(returncode=0),
+    )
+    cache = project / ".claude" / ".guard-interpreter"
+    assert cache.is_file() and cache.read_text(encoding="utf-8") == sys.executable
+
+
+def test_demo_project_enablement_never_calls_the_real_writer():
+    """Demo mode is a dry run: its project-enablement branch must call run_cmd (the
+    swappable dry-run stand-in) directly, never run_enable_project - the function that
+    performs the real write_guard_interpreter_cache side effect."""
+    import inspect
+
+    import install_helper as ih
+
+    src = inspect.getsource(ih.Installer.enable_step)
+    demo_branch = src.split("if self.demo:", 1)[1].split("\n        if run_enable_project", 1)[0]
+    assert "run_enable_project" not in demo_branch

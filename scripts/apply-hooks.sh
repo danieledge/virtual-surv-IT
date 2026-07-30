@@ -6,8 +6,10 @@
 # needed).
 #
 # Deliberately excluded:
-#   apply-statusline.sh       - USER-level settings, opt-in (the installer offers it)
-#   apply-guard-exec-allow.sh - guard allow-list changes are reviewed one by one
+#   apply-statusline.sh                 - USER-level settings, opt-in (the installer offers it)
+#   apply-guard-exec-allow.sh           - guard allow-list changes are reviewed one by one
+#   apply-guard-interpreter-cache.sh    - guard-launcher change, reviewed one by one (same
+#                                          category as the exec-allow guard, not routine wiring)
 #
 #   bash scripts/apply-hooks.sh
 set -euo pipefail

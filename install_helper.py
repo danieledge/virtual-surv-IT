@@ -1880,6 +1880,23 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     return 0
 
 
+def write_guard_interpreter_cache(project: Path) -> None:
+    """Pre-seed the project's guard-launcher interpreter cache with the interpreter
+    running THIS installer (sys.executable) - a known-good, already-version-checked
+    absolute path. run-guard.sh (fired by every PreToolUse hook) otherwise has to
+    discover this itself on first use, by EXECUTING each of python3/python/py to
+    version-check it; on a Windows box where python3.exe is the Microsoft Store
+    execution-alias stub, that first discovery costs a multi-second Store-redirect
+    hang (live corporate report 2026-07-30). Writing it here means even that one
+    hang never happens. Best-effort: never fails project enablement."""
+    try:
+        cache = project / ".claude" / ".guard-interpreter"
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(sys.executable, encoding="utf-8")
+    except OSError:
+        pass
+
+
 def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=None) -> int:
     """Enable the plugin for one project (claude plugin enable --scope project, run from
     that project's directory). Human-run; per-project scope is the token-economy rule."""
@@ -1889,6 +1906,7 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
     if not project.is_dir():
         print(f"{fail} not a directory: {project}")
         return 1
+    write_guard_interpreter_cache(project)
     blocked = None
     try:
         proc = runner(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID], cwd=project)

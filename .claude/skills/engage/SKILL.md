@@ -66,7 +66,7 @@ G=$(cat docs/team-operating-guide.md 2>/dev/null); PR=""; \
 if [ -z "$G" ]; then \
   for d in $(grep -o '"installPath": *"[^"]*"' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null | cut -d'"' -f4); do \
     grep -q 'compliance-surveillance-team' "$d/.claude-plugin/plugin.json" 2>/dev/null && PR="$d" && break; done; \
-  if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -name team-operating-guide.md 2>/dev/null | sort -V | tail -1); \
+  if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -maxdepth 6 -path '*/compliance-surveillance-team/*/docs/team-operating-guide.md' 2>/dev/null | sort -V | tail -1); \
     [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; \
   [ -n "$PR" ] && G=$(cat "$PR/docs/team-operating-guide.md" 2>/dev/null); fi; \
 echo "PLUGIN_ROOT=${PR:-repo-as-project}"; \
