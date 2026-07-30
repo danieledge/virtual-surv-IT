@@ -428,9 +428,15 @@ def _claude_via_npm_prefix() -> Optional[str]:
     npm = shutil.which("npm.cmd") or shutil.which("npm")
     if not npm:
         return None
+    if npm.lower().endswith((".cmd", ".bat")):
+        # CreateProcess cannot launch a batch file from a plain argv; same quoted
+        # cmd /s /c form run_cmd uses for shims.
+        cmdline = windows_shim_cmdline(npm, ["config", "get", "prefix"])
+    else:
+        cmdline = [npm, "config", "get", "prefix"]
     try:
-        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
-            [npm, "config", "get", "prefix"],
+        proc = subprocess.run(  # fixed command line built above, shell=False  # nosec B603
+            cmdline,
             capture_output=True,
             encoding="utf-8",
             errors="replace",
