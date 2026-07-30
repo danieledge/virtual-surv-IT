@@ -744,6 +744,80 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+_FINDING_ID_RE = re.compile(r"^###\s+\S+\s+(\S+)\s+—", re.M)
+_TALLY_LINE_RE = re.compile(r"^\*\*Disposition tally:\*\*\s*(.+)$", re.M)
+_KIND_PREFIX = {"review": "REVIEW", "security-audit": "SECURITY-AUDIT", "performance": "PERF"}
+
+
+def check_findings_render_freshness(artifacts_dir: Path) -> list[str]:
+    """Close-time reconciliation, mechanised (audit finding #3, 2026-07-30): a 2026-07-25
+    live failure shipped a stale finding count and a struck citation still cited elsewhere
+    - the close-checklist's "one authoritative number everywhere" rule was, and largely
+    still is, a prose re-read-every-document instruction. This closes the two pieces that
+    ARE mechanically checkable without inventing a new textual convention: does the
+    rendered REVIEW-<slug>.md's finding-ID set and disposition tally still match the
+    CURRENT data/findings-<slug>.json pack, or did the pack change after the last render
+    (a fix cycle, a re-review) without a re-render catching up. (Late-cycle prose changes
+    and struck-citation sweeping stay judgement calls - no existing marker distinguishes a
+    struck citation from a live one in free text, so a mechanical check there would be
+    guessing at a convention nothing emits yet.)"""
+    findings: list[str] = []
+    data_dir = artifacts_dir / "data"
+    if not data_dir.is_dir():
+        return findings
+    for pack_path in sorted(data_dir.rglob("findings-*.json")):
+        try:
+            pack = json.loads(pack_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue  # FINDINGS-INVALID already covers unreadable/malformed packs
+        if not isinstance(pack, dict):
+            continue
+        slug = pack.get("slug")
+        if not slug:
+            continue
+        prefix = _KIND_PREFIX.get(pack.get("kind", "review"), "REVIEW")
+        root = pack_path.parent.parent if pack_path.parent.name == "data" else pack_path.parent
+        rendered = root / f"{prefix}-{slug}.md"
+        if not rendered.is_file():
+            continue  # MISSING-HTML-style existence gap is a different, already-covered check
+        text = rendered.read_text(encoding="utf-8", errors="replace")
+        pack_findings = pack.get("findings") or []
+        pack_ids = {f.get("id") for f in pack_findings if isinstance(f, dict) and f.get("id")}
+        rendered_ids = set(_FINDING_ID_RE.findall(text))
+        if pack_ids != rendered_ids:
+            missing = pack_ids - rendered_ids
+            extra = rendered_ids - pack_ids
+            detail = []
+            if missing:
+                detail.append(f"in the pack but not rendered: {', '.join(sorted(missing))}")
+            if extra:
+                detail.append(f"rendered but not in the pack: {', '.join(sorted(extra))}")
+            findings.append(
+                f"STALE-FINDINGS-RENDER: {rendered.name} finding IDs no longer match "
+                f"{pack_path.name} ({'; '.join(detail)}) - the pack changed after the last "
+                f"render (run: python -m scripts.render_findings {pack_path})"
+            )
+            continue  # a mismatched ID set makes a tally comparison meaningless too
+        disp_counts = {
+            d: sum(1 for f in pack_findings if isinstance(f, dict) and f.get("disposition") == d)
+            for d in ("fixed", "open", "accepted", "deferred")
+        }
+        expected_tally = (
+            f"✅ {disp_counts['fixed']}  ·  🔴 {disp_counts['open']}  ·  "
+            f"⚖️ {disp_counts['accepted']}  ·  ⏭️ {disp_counts['deferred']}"
+        )
+        m = _TALLY_LINE_RE.search(text)
+        actual_tally = m.group(1).strip() if m else None
+        if actual_tally is not None and actual_tally != expected_tally:
+            findings.append(
+                f"COUNT-MISMATCH: {rendered.name}'s Disposition tally ({actual_tally}) does "
+                f"not match {pack_path.name}'s current dispositions ({expected_tally}) - a "
+                f"finding's disposition changed after the last render "
+                f"(run: python -m scripts.render_findings {pack_path})"
+            )
+    return findings
+
+
 def _load_engagement_state_module():
     """Import scripts.engagement_state in BOTH run modes (package import when available,
     __file__-relative load under direct-path plugin invocation). None = module unavailable;
@@ -931,6 +1005,7 @@ def check(artifacts_dir: Path) -> list[str]:
         return findings
 
     findings.extend(check_findings_packs(artifacts_dir))
+    findings.extend(check_findings_render_freshness(artifacts_dir))
     findings.extend(check_state(artifacts_dir))
     findings.extend(check_review_fingerprints(artifacts_dir))
     # artifacts/data/ holds machine-readable source (findings packs); the top-level artifacts/ is the
@@ -1500,6 +1575,7 @@ def main(argv: list[str]) -> int:
             findings.extend(check_root_orphans(artifacts_dir, create_snapshot=True))
             # P5: the ROOT data/ lane in workspace mode was validated by nothing.
             findings.extend(check_findings_packs(artifacts_dir))
+            findings.extend(check_findings_render_freshness(artifacts_dir))
         findings.extend(check_registry(artifacts_dir))
     else:
         findings = check(artifacts_dir)

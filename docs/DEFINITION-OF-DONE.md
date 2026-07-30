@@ -71,7 +71,12 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > mention) · `RATIFIED-CLAIM-PENDING` ·
 > `REVIEW-FINGERPRINT-GAP` · `STATE-MISSING` / `STATE-INVALID` / `STATE-STALE-RENDER` ·
 > `REGISTRY-STALE` / `REGISTRY-HTML-STALE` (the registry's HTML mirror is written
-> best-effort, so its freshness is checked explicitly) · `NESTED-PACK` (a pack
+> best-effort, so its freshness is checked explicitly) · `STALE-FINDINGS-RENDER` /
+> `COUNT-MISMATCH` (audit finding #3, 2026-07-30 - the rendered `REVIEW-<slug>.md`'s
+> finding IDs and disposition tally no longer match the current `data/findings-<slug>.json`
+> pack; the close-checklist's "one authoritative number everywhere" rule, mechanised for
+> the parts a marker exists to check - late-cycle prose changes and struck-citation
+> sweeping stay judgement calls) · `NESTED-PACK` (a pack
 > initialised inside another workspace; init now refuses the shape) · `ARCHIVED-OPEN`
 > (a `.archive` marker on a pack that never passed the close gate - warned, never a
 > silent skip; 0.33.2) · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;
