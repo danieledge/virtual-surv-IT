@@ -66,7 +66,8 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > (the summary email is always FROM Morgan; every roster name in it carries a 🤖-marked
 > mention) · `RATIFIED-CLAIM-PENDING` ·
 > `REVIEW-FINGERPRINT-GAP` · `STATE-MISSING` / `STATE-INVALID` / `STATE-STALE-RENDER` ·
-> `REGISTRY-STALE` · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;
+> `REGISTRY-STALE` / `REGISTRY-HTML-STALE` (the registry's HTML mirror is written
+> best-effort, so its freshness is checked explicitly) · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;
 > pre-existing ones grandfathered per the D2 ruling) · map hygiene: `MAP-TOO-LONG` ·
 > `MAP-NO-ASOF` / `MAP-NO-ANCHOR` · `MAP-STALE-ANCHOR` / `MAP-STALE` (staleness budget) ·
 > `MAP-ENTRY-NO-ASOF` / `MAP-ENTRY-NO-ANCHOR` / `MAP-STALE-ENTRY-ANCHOR` · `MAP-NO-BASIS` ·

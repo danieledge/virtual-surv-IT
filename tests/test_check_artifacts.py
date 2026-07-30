@@ -1223,3 +1223,27 @@ def test_summary_email_checked_inside_pack(tmp_path):
     )
     findings = check(tmp_path / "artifacts")
     assert any("EMAIL-NOT-MORGAN" in f for f in findings)
+
+
+def test_registry_html_mirror_staleness_flagged(tmp_path):
+    """The HTML mirror is best-effort at write time (silently skipped when render libs
+    are missing) - so the checker must flag a missing or older ENGAGEMENTS.html
+    (user report 2026-07-30)."""
+    import os
+    import time
+
+    art = _ws(tmp_path, "audit")
+    from scripts.engagement_state import render_registry
+
+    render_registry(art)
+    md, html = art / "ENGAGEMENTS.md", art / "ENGAGEMENTS.html"
+    assert md.is_file()
+    if html.is_file():  # render libs present in dev env: exercise both variants
+        assert check_registry(art) == []
+        old = time.time() - 3600
+        os.utime(html, (old, old))
+        assert any("REGISTRY-HTML-STALE" in f and "older" in f for f in check_registry(art))
+        html.unlink()
+    findings = check_registry(art)
+    assert any("REGISTRY-HTML-STALE" in f and "no rendered .html" in f for f in findings)
+    assert any("pip install -r requirements.txt" in f for f in findings)

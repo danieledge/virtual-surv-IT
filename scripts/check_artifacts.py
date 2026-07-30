@@ -1318,6 +1318,29 @@ def check_registry(artifacts_dir: Path) -> list[str]:
             ]
     except Exception as exc:
         return [f"REGISTRY-STALE: registry unreadable ({exc}) - regenerate it"]
+    # The HTML mirror is written best-effort: when the render libraries are not
+    # installed, every mutation silently updates the .md/.json and leaves the .html
+    # behind (user report 2026-07-30) - so its freshness needs an explicit check.
+    md_path = artifacts_dir / es.REGISTRY_MD
+    html_path = md_path.with_suffix(".html")
+    if md_path.is_file():
+        hint = (
+            "re-render via `python -m scripts.engagement_state render`; if that still "
+            "skips it, the HTML render libraries are missing - install them with "
+            "`python -m pip install -r requirements.txt` (the installer's pip step)"
+        )
+        try:
+            if not html_path.is_file():
+                return [
+                    f"REGISTRY-HTML-STALE: {es.REGISTRY_MD} has no rendered .html mirror - {hint}"
+                ]
+            if html_path.stat().st_mtime < md_path.stat().st_mtime - 1:
+                return [
+                    f"REGISTRY-HTML-STALE: ENGAGEMENTS.html is older than {es.REGISTRY_MD} "
+                    f"(a mutation updated the registry without the mirror) - {hint}"
+                ]
+        except OSError:
+            pass
     return []
 
 
