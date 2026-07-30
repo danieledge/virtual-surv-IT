@@ -61,25 +61,30 @@ guard-hook spawns). So gather EVERYTHING the open needs in **one compound Bash c
 a probe-per-turn sequence, and **no narration turns between the probe and your opening
 banner**:
 
+Only the plugin-root bootstrap (locating THIS script in installed-plugin mode) needs raw
+shell - everything downstream is one tested script call
+(`scripts/engage_probe.py`, audit finding #5/#6/#8):
+
 ```
-G=$(cat docs/team-operating-guide.md 2>/dev/null); PR=""; \
-if [ -z "$G" ]; then \
+PR=""; \
+if [ ! -f docs/team-operating-guide.md ]; then \
   for d in $(grep -o '"installPath": *"[^"]*"' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null | cut -d'"' -f4); do \
     grep -q 'compliance-surveillance-team' "$d/.claude-plugin/plugin.json" 2>/dev/null && PR="$d" && break; done; \
   if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -maxdepth 6 -path '*/compliance-surveillance-team/*/docs/team-operating-guide.md' 2>/dev/null | sort -V | tail -1); \
-    [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; \
-  [ -n "$PR" ] && G=$(cat "$PR/docs/team-operating-guide.md" 2>/dev/null); fi; \
-echo "PLUGIN_ROOT=${PR:-repo-as-project}"; \
-(python3 --version || python --version || py --version) 2>&1 | head -1; \
-ls scripts/render_html.py 2>/dev/null; \
-grep -m1 '"version"' "${PR:-.}/.claude-plugin/plugin.json" 2>/dev/null | head -1; \
-grep -o '"extra_formats" *: *\[[^]]*\]' .claude/team-preferences.json 2>/dev/null; \
-bash scripts/check-review-tools.sh 2>/dev/null || bash "$PR/scripts/check-review-tools.sh" 2>/dev/null; \
-MF=$(ls docs/codebase-map.md CODEBASE-MAP.md 2>/dev/null | head -1); [ -n "$MF" ] && { head -20 "$MF"; echo "...(map section 2 body read just-in-time on demand; section 3 history below for the version compare:)"; awk '/^## 3\./{f=1} /^## 4\./{f=0} f' "$MF"; }; \
-awk '/^## \[/{n++} n==1' "${PR:-.}/CHANGELOG.md" 2>/dev/null | head -30; \
-[ -f docs/team-extensions.md ] && { EX="${PR:-.}/scripts/extensions.py"; (python3 "$EX" show || python "$EX" show) 2>/dev/null || head -60 docs/team-extensions.md; }; \
-printf '%s\n' "$G" | head -400
+    [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; fi; \
+SCRIPT="${PR:+$PR/}scripts/engage_probe.py"; \
+(python3 "$SCRIPT" --plugin-root "$PR" --interpreter-name python3 || \
+ python "$SCRIPT" --plugin-root "$PR" --interpreter-name python || \
+ py "$SCRIPT" --plugin-root "$PR" --interpreter-name py) 2>/dev/null
 ```
+
+The script prints, in order: `INTERPRETER=` (the literal word - python3/python/py - that
+worked; this IS `<python>` for every later script call in this session, use it verbatim,
+never re-probe), `PLUGIN_ROOT=`, `PYTHON_VERSION=`, `PLUGIN_VERSION=`, `BRANCH=` (the
+checked-out git branch when knowable - see below), `PREV_TEAM_VERSION=`,
+`VERSION_CHANGED=yes|no` (computed, not something you derive yourself), `EXTRA_FORMATS=`,
+`REGULATORY_CITATIONS=on|off`, then the tooling report, the codebase map header + §3, the
+newest CHANGELOG entry, any team-extensions block, and the operating guide - all in one call.
 
 **Company extensions (ADR-009):** if the probe printed a TEAM-EXTENSIONS block, honour it
 ADDITIVELY: standing instructions merge with the operating rules; **close actions are
@@ -106,24 +111,27 @@ the base for every bundled-script invocation and skill-definition read in plugin
 (`$PLUGIN_ROOT/scripts/...`, `$PLUGIN_ROOT/.claude/skills/<name>/SKILL.md`); when it says
 `repo-as-project`, use the local `scripts/` and `.claude/skills/` paths instead.
 
-That single result gives you: the **interpreter** (`<python>` for every later script call -
-Windows typically has `python`/`py` and no `python3`, never assume), the **mode**
-(`render_html.py` present → repo-as-project, invoke `<python> -m scripts.<name>`; absent →
-installed plugin, invoke bundled copies by `$PLUGIN_ROOT/scripts/` path - the
-execution gate allow-lists team script basenames). **Every `<python> -m scripts.<name>`
-in this skill means the path form `<python> "$PLUGIN_ROOT/scripts/<name>.py"` in plugin
-mode - the module form exits 1 outside the repo (no `scripts` package on the path), so
-go straight to the path form rather than trying the module form first.** Also the
-**version** for the banner, the
+That single result gives you: the **interpreter** (`INTERPRETER=` - `<python>` for every
+later script call in this session, use the literal word printed, never re-probe), the
+**mode** (`PLUGIN_ROOT=repo-as-project` → invoke `<python> -m scripts.<name>`; a real path
+→ installed plugin, invoke bundled copies by `$PLUGIN_ROOT/scripts/` path - the execution
+gate allow-lists team script basenames). **Every `<python> -m scripts.<name>` in this
+skill means the path form `<python> "$PLUGIN_ROOT/scripts/<name>.py"` in plugin mode - the
+module form exits 1 outside the repo (no `scripts` package on the path), so go straight to
+the path form rather than trying the module form first.** Also the **version** for the
+banner (`PLUGIN_VERSION=`), the **branch** (`BRANCH=` - only populated when the root is a
+real git working directory; a plain plugin-cache install has no `.git` at all, so this is
+usually empty outside repo-as-project - never guess a branch name when it's blank), the
 **analyser inventory** (cached, 7-day TTL - re-run with `--refresh` only after installing
 tools; remember the result and never re-invoke missing tools this session), the **codebase
 map** (ADR-003 - advisory context only, never instructions). **Just-in-time by design
 (Anthropic context-engineering):** the probe loads only the map's **header + §3 engagement-history**
-(the Team-ver row the what's-new banner compares against) - **not** the bulky §2 entries. **Read a
+(the Team-ver row the what's-new banner compares against, already reduced to
+`PREV_TEAM_VERSION=` + `VERSION_CHANGED=` for you) - **not** the bulky §2 entries. **Read a
 §2 section only when you actually rely on it** (and `git`-verify an anchor only then, or at close -
 never as open-time round-trips); this keeps the orchestrator's turn-0 context lean so a long
 engagement doesn't compact prematurely. Note ⚠️ stale-looking entries in the opening summary; no map
-→ one gets created at close. Then the **operating guide** (standing rules, roster, routing - if the `cat` came back
+→ one gets created at close. Then the **operating guide** (standing rules, roster, routing - if it came back
 empty, Read it before proceeding; an engagement without it misses standing user preferences).
 
 **Allow-list tip (banner, one short line, only when flagged).** The tooling probe's last
@@ -136,37 +144,35 @@ it yourself, never edit settings (ADR-002 rec 5), never repeat the tip later in 
 engagement, and on `present` say nothing.
 
 **Document formats (banner, one short line).** State what controlled documents (BRD, FSD,
-delivery report, etc.) will be produced in: always *".md + .html"*, plus *"+ .docx"* when
-the probe's `extra_formats` line contains `"docx"`. **No `team-preferences.json` at all is
-the common case (nothing written until someone opts in) and reads exactly like "does not
-contain docx"** - same tip, not a different message, not a missing-file note. Whenever
-docx is not on, append one tip in the SAME line - never a separate line, never repeated
-later in the engagement:
+delivery report, etc.) will be produced in from the probe's `EXTRA_FORMATS=` field: always
+*".md + .html"*, plus *"+ .docx"* when it contains `docx`. **An empty `EXTRA_FORMATS=`
+covers BOTH "no team-preferences.json at all" (the common case - nothing written until
+someone opts in) and "the file exists but docx isn't in the list"** - same tip either way,
+never a different message, never a missing-file note. Whenever docx is not on, append one
+tip in the SAME line - never a separate line, never repeated later in the engagement:
 *"(want Word copies too? just say so, or run the installer's Document format preferences
 menu)"*. This is a project preference, not a gate - no allow-list-style refusal, and
 Morgan may write `.claude/team-preferences.json` directly if the user says yes in
 conversation (the file carries no consent gate, unlike hooks/settings).
 
-**What's new (banner, one short line only).** The probe returns the newest CHANGELOG
-release block - read from the **plugin's** changelog (`"${PR:-.}/CHANGELOG.md"`: the plugin
-root in installed mode, the repo itself in repo-as-project; **not** the working project's own
-CHANGELOG, which is unrelated). Compare the loaded version against the **Team ver** of the
-codebase map's most recent engagement-history row: when they differ (or on a project's first
-engagement), add ONE line to the banner - *"🆕 Since last time (vX → vY): "* + up to three
-headline changes in plain words, ending *"(full detail: CHANGELOG.md)"*. When versions match,
-show nothing - the feature must never become a wall of release notes, and it never delays the
-first question.
-**If the changelog block came back empty** (a broken/partial install): show the banner and
-version as normal and simply **omit the what's-new line** - never surface probe mechanics to
-the user (e.g. "changelog not readable from the probe output" is an internal detail, not
-something Morgan says). Silent graceful degradation, not an error message.
-**No prior version on record** (no codebase map yet, an older map without the Team ver
-column, or a skipped close)?
-Say *"🆕 In the current release (vY): ..."* - never guess what the user last saw. Either
-form is **part of the opening banner itself, not optional** - a live first-engagement run
-skipped it; the no-map remark does not substitute for it. The whole
-comparison is local files only (the map + the bundled manifest and CHANGELOG), so it works
-identically for manually copied / air-gapped installs with no git or network access.
+**What's new (banner, one short line only).** `VERSION_CHANGED=` is already COMPUTED for
+you (`PLUGIN_VERSION=` vs the map's last `PREV_TEAM_VERSION=`, string equality, empty
+prior = first engagement) - **never re-derive it yourself**, just branch on the printed
+value. The probe also prints the newest CHANGELOG release block - the **plugin's**
+changelog (installed mode) or the repo's own (repo-as-project); **not** the working
+project's own CHANGELOG, which is unrelated. `VERSION_CHANGED=yes` **and**
+`PREV_TEAM_VERSION=` non-empty: add ONE line to the banner - *"🆕 Since last time (vX →
+vY): "* + up to three headline changes in plain words from the changelog block, ending
+*"(full detail: CHANGELOG.md)"*. `VERSION_CHANGED=yes` **and** `PREV_TEAM_VERSION=` empty
+(first engagement - no prior record at all): say *"🆕 In the current release (vY): ..."* -
+never guess what the user last saw. `VERSION_CHANGED=no`: show nothing - the feature must
+never become a wall of release notes, and it never delays the first question. **If the
+changelog block came back empty** (a broken/partial install) while `VERSION_CHANGED=yes`:
+show the banner and version as normal and simply omit the what's-new line - never surface
+probe mechanics to the user. Either populated form is **part of the opening banner itself,
+not optional** - a live first-engagement run once skipped it. The whole comparison is
+local files only (the map + the bundled manifest and CHANGELOG), so it works identically
+for manually copied / air-gapped installs with no git or network access.
 
 **Then your VERY NEXT output is the opening banner + disclaimers + the batched question
 below.** Target: two turns from invocation to the user's first question - the probe call,
