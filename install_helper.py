@@ -948,7 +948,8 @@ MENU_ACTIONS = {
     "3": "statusline",
     "4": "enable",
     "5": "check",
-    "6": "demo",
+    "6": "formats",
+    "7": "demo",
     "q": "quit",
 }
 
@@ -965,7 +966,8 @@ def choose_action(style: Style) -> str:
         ("3", "Status line only"),
         ("4", "Enable the team for a project (+ optional permission allow-list)"),
         ("5", "Check for updates (read-only - shows what an update would bring)"),
-        ("6", "Demo - watch the whole run, nothing executed or written"),
+        ("6", "Document format preferences (does a project also get .docx by default?)"),
+        ("7", "Demo - watch the whole run, nothing executed or written"),
         ("q", "Quit"),
     )
     for key, text in options:
@@ -979,7 +981,7 @@ def choose_action(style: Style) -> str:
             return "full"
         if answer in MENU_ACTIONS:
             return MENU_ACTIONS[answer]
-        print("  1-6 or q, please.")
+        print("  1-7 or q, please.")
 
 
 # ------------------------------------------------------------------ the installer
@@ -1675,6 +1677,45 @@ class Installer:
         target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
         self.step_ok("Status line", f"wired in {target} (restart to see it)")
 
+    def format_preferences_step(self) -> None:
+        """Standalone, easily re-runnable: change a project's document-format default
+        any time (menu option 6) - most users install once and never re-run the full
+        flow, so this preference needs a path that isn't buried inside first-time
+        project enablement (2026-07-30 user feedback)."""
+        self.step_intro(
+            "Controlled documents (BRD, FSD, etc.) always get .md + .html - this sets "
+            "whether a project also gets a Word (.docx) copy by default."
+        )
+        raw = ask("  Which project directory?", ".", False, style=self.style)
+        project = Path(raw).expanduser().resolve()
+        if not project.is_dir():
+            self.step_fail("Document format preferences", f"not a directory: {project}")
+            return
+        prefs_path = project / ".claude" / "team-preferences.json"
+        current = "docx" in (_read_json_dict(prefs_path).get("extra_formats") or [])
+        self.say(self.style.dim(f"    currently: docx by default = {'on' if current else 'off'}"))
+        wanted = confirm(
+            "  Produce .docx by default for controlled documents in this project?",
+            default=current,
+            assume_yes=False,
+            style=self.style,
+        )
+        if self.demo:
+            verb = "on" if wanted else "off"
+            self.step_ok("Document format preferences", f"would set docx default -> {verb}")
+            return
+        if wanted == current:
+            self.step_ok(
+                "Document format preferences",
+                f"unchanged (docx default {'on' if current else 'off'})",
+            )
+            return
+        write_team_preferences(project, extra_formats=["docx"] if wanted else [])
+        self.step_ok(
+            "Document format preferences",
+            f"docx default -> {'on' if wanted else 'off'} ({prefs_path})",
+        )
+
     def enable_step(self) -> None:
         """Optional: enable the team for a project right now, and offer the recommended
         permission allow-list for the same project. Interactive only - non-interactive
@@ -1801,6 +1842,10 @@ class Installer:
             return [
                 ("Preflight checks", self.preflight_lite),
                 ("Check for updates", self.check_updates_step),
+            ]
+        if self.subset == "formats":
+            return [
+                ("Document format preferences", self.format_preferences_step),
             ]
         return [
             ("Preflight checks", self.preflight),

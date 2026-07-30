@@ -1796,3 +1796,69 @@ def test_relocation_preserves_explicit_repo_flag(tmp_path, monkeypatch):
     argv = calls[0]
     assert argv.count("--repo") == 1
     assert "/somewhere/else" in argv
+
+
+# ------------------------------------------------ standalone document-format menu step
+
+
+def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, monkeypatch, capsys):
+    """Menu option 6: re-runnable any time, independent of project enablement."""
+    import install_helper as ih
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)  # user says: turn docx on
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
+    inst.format_preferences_step()
+    prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
+    assert prefs["extra_formats"] == ["docx"]
+    assert "docx default -> on" in capsys.readouterr().out
+
+
+def test_format_preferences_step_no_write_when_unchanged(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)  # matches the current default (off)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
+    inst.format_preferences_step()
+    assert not (project / ".claude" / "team-preferences.json").exists()
+
+
+def test_format_preferences_step_can_turn_off_again(tmp_path, monkeypatch):
+    import install_helper as ih
+    from install_helper import write_team_preferences
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    write_team_preferences(project, extra_formats=["docx"])
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)  # turn it back off
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
+    inst.format_preferences_step()
+    prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
+    assert prefs["extra_formats"] == []
+
+
+def test_format_preferences_step_demo_never_writes(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    args = _args(yes=False)
+    args.demo = True
+    inst = ih.Installer(args, ih.Style(False), ih.marks(), subset="formats")
+    inst.format_preferences_step()
+    assert not (project / ".claude" / "team-preferences.json").exists()
+
+
+def test_menu_option_6_maps_to_formats():
+    from install_helper import MENU_ACTIONS
+
+    assert MENU_ACTIONS["6"] == "formats"
+    assert MENU_ACTIONS["7"] == "demo"
