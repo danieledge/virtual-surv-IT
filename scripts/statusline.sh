@@ -12,7 +12,16 @@ set -u
 
 INPUT=$(cat 2>/dev/null || true)
 
-python3 - "$INPUT" 2>/dev/null <<'PY' || printf '🕶 virt-surv-IT'
+# Resolve the interpreter like run-guard.sh does - Windows (Git Bash) has python or the
+# py launcher, rarely python3; a hardcoded python3 degraded the whole line to the static
+# fallback there (2026-07-30 fix).
+PY_BIN=""
+for c in python3 python py; do
+  command -v "$c" >/dev/null 2>&1 && PY_BIN="$c" && break
+done
+[ -z "$PY_BIN" ] && { printf '🕶 virt-surv-IT'; exit 0; }
+
+"$PY_BIN" - "$INPUT" 2>/dev/null <<'PY' || printf '🕶 virt-surv-IT'
 import json, sys
 from pathlib import Path
 
