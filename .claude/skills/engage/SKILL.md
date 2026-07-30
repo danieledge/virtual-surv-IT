@@ -73,6 +73,7 @@ echo "PLUGIN_ROOT=${PR:-repo-as-project}"; \
 (python3 --version || python --version || py --version) 2>&1 | head -1; \
 ls scripts/render_html.py 2>/dev/null; \
 grep -m1 '"version"' "${PR:-.}/.claude-plugin/plugin.json" 2>/dev/null | head -1; \
+grep -o '"extra_formats" *: *\[[^]]*\]' .claude/team-preferences.json 2>/dev/null; \
 bash scripts/check-review-tools.sh 2>/dev/null || bash "$PR/scripts/check-review-tools.sh" 2>/dev/null; \
 MF=$(ls docs/codebase-map.md CODEBASE-MAP.md 2>/dev/null | head -1); [ -n "$MF" ] && { head -20 "$MF"; echo "...(map section 2 body read just-in-time on demand; section 3 history below for the version compare:)"; awk '/^## 3\./{f=1} /^## 4\./{f=0} f' "$MF"; }; \
 awk '/^## \[/{n++} n==1' "${PR:-.}/CHANGELOG.md" 2>/dev/null | head -30; \
@@ -133,6 +134,18 @@ permission prompts in this project - run `python <clone>/install_helper.py --per
 `python install_helper.py --permissions .`). It is the USER's command to run - never run
 it yourself, never edit settings (ADR-002 rec 5), never repeat the tip later in the
 engagement, and on `present` say nothing.
+
+**Document formats (banner, one short line).** State what controlled documents (BRD, FSD,
+delivery report, etc.) will be produced in: always *".md + .html"*, plus *"+ .docx"* when
+the probe's `extra_formats` line contains `"docx"`. **No `team-preferences.json` at all is
+the common case (nothing written until someone opts in) and reads exactly like "does not
+contain docx"** - same tip, not a different message, not a missing-file note. Whenever
+docx is not on, append one tip in the SAME line - never a separate line, never repeated
+later in the engagement:
+*"(want Word copies too? just say so, or run the installer's Document format preferences
+menu)"*. This is a project preference, not a gate - no allow-list-style refusal, and
+Morgan may write `.claude/team-preferences.json` directly if the user says yes in
+conversation (the file carries no consent gate, unlike hooks/settings).
 
 **What's new (banner, one short line only).** The probe returns the newest CHANGELOG
 release block - read from the **plugin's** changelog (`"${PR:-.}/CHANGELOG.md"`: the plugin
