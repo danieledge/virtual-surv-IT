@@ -279,6 +279,30 @@ def scan_engagements(root: Path) -> list[dict]:
     return rows
 
 
+def _load_render_html_module():
+    """Import scripts.render_html in BOTH run modes (package import when available,
+    __file__-relative load under direct-path plugin invocation). None = module
+    unavailable; callers then degrade to .md-only rather than raising ImportError
+    ("No module named 'scripts.render_html'" - live corp report 2026-07-31, where
+    plugin-mode path invocation has no scripts.* package on sys.path)."""
+    try:
+        from scripts import render_html  # normal `-m` / package mode
+
+        return render_html
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("render_html.py")
+        spec = importlib.util.spec_from_file_location("render_html", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
 def render_registry(root: Path) -> list[Path]:
     """(Re)generate the derived root registry. Removes it when no packs remain."""
     rows = scan_engagements(root)
@@ -322,24 +346,24 @@ def render_registry(root: Path) -> list[Path]:
     lines.append("")
     md_path.write_text("\n".join(lines), encoding="utf-8")
     written = [json_path, md_path]
-    try:
-        from scripts.render_html import _title_from, render
-
-        md_text = md_path.read_text(encoding="utf-8")
-        html_path = md_path.with_suffix(".html")
-        html_path.write_text(
-            render(
-                md_text,
-                _title_from(md_text, md_path.stem),
-                source=md_path.name,
-                generated=_dt.date.today().isoformat(),
-            ),
-            encoding="utf-8",
-        )
-        written.append(html_path)
-    # The HTML mirror is best-effort; the .md/.json are already written.
-    except Exception:  # nosec B110
-        pass
+    render_html = _load_render_html_module()
+    if render_html is not None:
+        try:
+            md_text = md_path.read_text(encoding="utf-8")
+            html_path = md_path.with_suffix(".html")
+            html_path.write_text(
+                render_html.render(
+                    md_text,
+                    render_html._title_from(md_text, md_path.stem),
+                    source=md_path.name,
+                    generated=_dt.date.today().isoformat(),
+                ),
+                encoding="utf-8",
+            )
+            written.append(html_path)
+        # The HTML mirror is best-effort; the .md/.json are already written.
+        except Exception:  # nosec B110
+            pass
     return written
 
 
@@ -801,14 +825,19 @@ def render_files(artifacts_dir: Path) -> list[Path]:
     md_path = index_path(artifacts_dir)
     md_path.write_text(md_text, encoding="utf-8")
     written = [md_path]
+    render_html = _load_render_html_module()
+    if render_html is None:
+        print(
+            "note: .html sibling not rendered (scripts.render_html unavailable)",
+            file=sys.stderr,
+        )
+        return written
     try:
-        from scripts.render_html import _title_from, render  # stdlib-safe import point
-
         html_path = md_path.with_suffix(".html")
         html_path.write_text(
-            render(
+            render_html.render(
                 md_text,
-                _title_from(md_text, md_path.stem),
+                render_html._title_from(md_text, md_path.stem),
                 source=md_path.name,
                 generated=_dt.date.today().isoformat(),
             ),
