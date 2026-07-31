@@ -283,13 +283,6 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     citations_on = prefs.get("regulatory_citations", True)
     tool_report = run_tool_probe(root, project_dir)
     extensions_block = run_extensions_show(root, project_dir)
-    guide_path = root / "docs" / "team-operating-guide.md"
-    try:
-        guide = "\n".join(
-            guide_path.read_text(encoding="utf-8", errors="replace").splitlines()[:400]
-        )
-    except OSError:
-        guide = ""
 
     lines = [
         f"PLUGIN_ROOT={pr_display}",
@@ -315,8 +308,6 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         lines += ["", changelog_entry]
     if extensions_block:
         lines += ["", extensions_block.rstrip()]
-    if guide:
-        lines += ["", guide]
     return "\n".join(lines)
 
 

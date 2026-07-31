@@ -134,6 +134,23 @@ def test_build_report_never_raises_on_totally_empty_project(tmp_path):
     assert "PLUGIN_VERSION=" in out
 
 
+def test_build_report_never_embeds_the_operating_guide(tmp_path):
+    """Live report 2026-07-31: build_report used to inline up to 400 lines
+    (~32KB in this repo) of docs/team-operating-guide.md into its own stdout, large
+    enough to trip the harness's own "output too large - written to a file" behavior.
+    Pure duplication too - the engage skill already has its own separate, explicit
+    "read docs/team-operating-guide.md" instruction (SKILL.md), so the model was
+    receiving the same content twice. Report size must stay small regardless of how
+    large the real guide file is."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "team-operating-guide.md").write_text(
+        "UNIQUE-GUIDE-MARKER\n" * 500, encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "UNIQUE-GUIDE-MARKER" not in out
+    assert len(out) < 5000
+
+
 def test_git_branch_reports_real_clone(tmp_path):
     import subprocess
 
