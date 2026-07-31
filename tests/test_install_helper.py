@@ -744,7 +744,7 @@ def test_menu_setup_only_skips_sync_and_uses_clone_asis(monkeypatch, tmp_path, c
     # OWN plan must still never sync - no fetch of its own, no checkout, no clone.
     assert len(fetch_calls) == 1
     assert not any("checkout" in c or "clone" in c for c in git_calls)
-    assert "Step 2 of 6" in out  # truthful numbering for the shorter plan
+    assert "Step 2 of 7" in out  # truthful numbering for the shorter plan (+ guard cache step)
     assert "code not updated" in out and "Code not updated" in out
     assert "Summon the team" in out
 
@@ -961,6 +961,67 @@ def test_sync_never_reexecs_in_demo_mode(monkeypatch, tmp_path):
     inst.repo = clone
     inst.branch = "main"
     inst.sync_branch()  # no SystemExit, no assertion error
+
+
+# --- guard-interpreter cache pre-warm (P1, 2026-07-31 corp report) ------------------------
+
+
+def _fake_clone_with_guard(tmp_path):
+    clone = _fake_clone(tmp_path)
+    hooks = clone / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    (hooks / "run-guard.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (hooks / "guard-raw-data.py").write_text("", encoding="utf-8")
+    return clone
+
+
+def test_prewarm_guard_cache_runs_the_launcher_and_reports_the_cached_interpreter(
+    monkeypatch, tmp_path
+):
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+
+    def runner(argv, cwd=None, timeout=300):
+        # Mimic what the real launcher does: write the cache file it would have written.
+        (clone / ".claude" / ".guard-interpreter").write_text("python3", encoding="utf-8")
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert inst.tracker.steps[-1][1] == "ok"
+    assert "python3" in inst.tracker.steps[-1][0]
+
+
+def test_prewarm_guard_cache_skips_cleanly_without_a_launcher(monkeypatch, tmp_path):
+    """A clone predating the guard launcher (or a custom layout without one) must skip,
+    not fail - the guard still self-warms on first real use exactly as before."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)  # no .claude/hooks/ at all
+    monkeypatch.setattr(
+        ih, "run_cmd", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run"))
+    )
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert inst.tracker.steps[-1][1] == "skip"
+
+
+def test_prewarm_guard_cache_never_runs_in_demo_mode(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(
+        ih, "run_cmd", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run"))
+    )
+    inst = ih.Installer(_args(yes=True, demo=True), ih.Style(False), ih.marks())
+    inst.demo = True
+    inst.repo = clone
+    inst.prewarm_guard_cache()  # no assertion error - never reaches run_cmd
+    assert inst.tracker.steps[-1][1] == "ok"
 
 
 # --- statusline conflict detection refinement (2026-07-30) --------------------------------

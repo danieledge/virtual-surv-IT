@@ -1363,6 +1363,52 @@ class Installer:
             return
         sys.exit(proc.returncode)
 
+    def prewarm_guard_cache(self) -> None:
+        """P1 (2026-07-31 corp report): the safety guards' interpreter cache
+        (.claude/.guard-interpreter, read by run-guard.sh) was previously written only
+        on a project's first real /engage - so every fresh install/update paid the full
+        cold-start probe cost (worst case on Windows: the python3 Store-stub hang,
+        repeated across five PreToolUse hooks) on its very next session. One
+        `command -v`-then-version-check here, reusing the launcher's OWN logic (never
+        duplicated), writes the cache once at install time instead - free for every
+        project that later resolves to this same plugin root (CLAUDE_PLUGIN_ROOT is one
+        shared value per install, not per-project). Best-effort: a missing launcher, no
+        POSIX shell found, or any failure just skips - the guard still self-warms on
+        first real use exactly as before, this is a pure latency optimisation."""
+        self.step_intro(
+            "Priming the safety guards' interpreter cache so your first real /engage "
+            "doesn't pay that cost itself."
+        )
+        launcher = self.repo / ".claude" / "hooks" / "run-guard.sh"
+        noop_target = self.repo / ".claude" / "hooks" / "guard-raw-data.py"
+        if not launcher.is_file() or not noop_target.is_file():
+            self.step_skip("Guard interpreter cache", "launcher not found in this clone")
+            return
+        if sys.platform == "win32":
+            shell = find_bash()
+        else:
+            shell = "sh"
+        if not shell:
+            self.step_skip("Guard interpreter cache", "no POSIX shell found - warms on first use")
+            return
+        cache = self.repo / ".claude" / ".guard-interpreter"
+        if self.demo:
+            self.step_ok(f"Would warm {cache}", "demo")
+            return
+        try:
+            proc = run_cmd(
+                [shell, str(launcher), str(noop_target)],
+                cwd=self.repo,
+                timeout=30,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            self.step_skip("Guard interpreter cache", f"probe failed ({exc}) - warms on first use")
+            return
+        if proc.returncode == 0 and cache.is_file():
+            self.step_ok(f"Cached: {cache.read_text(encoding='utf-8').strip()}")
+        else:
+            self.step_skip("Guard interpreter cache", "no suitable interpreter found yet")
+
     def print_update_preview(self, preview: dict, branch: str, local_version) -> None:
         """Console rendering of gather_update_preview's result. Purely informational:
         missing fields simply do not print; degradation notes print dimmed."""
@@ -1927,6 +1973,7 @@ class Installer:
             return [
                 ("Preflight checks", self.preflight),
                 ("Locate existing clone", self.locate_clone_asis),
+                ("Guard interpreter cache", self.prewarm_guard_cache),
                 ("Claude Code marketplace", self.marketplace),
                 (
                     lambda: "Plugin " + ("update" if self.mode == "update" else "install"),
@@ -1959,6 +2006,7 @@ class Installer:
             ("Release channel", self.choose_branch),
             ("Local clone", self.resolve_repo),
             (lambda: f"Sync to origin/{self.branch}", self.sync_branch),
+            ("Guard interpreter cache", self.prewarm_guard_cache),
             ("Optional pip requirements", self.optional_pip),
             ("Claude Code marketplace", self.marketplace),
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
