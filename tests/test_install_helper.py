@@ -134,6 +134,52 @@ def test_decide_mode_install_when_no_valid_clone(tmp_path):
     assert decide_mode(None, {"repo_path": str(tmp_path / "gone")}) == "install"
 
 
+def test_install_mode_offers_the_manual_clone_as_default(monkeypatch, tmp_path, capsys):
+    """A new user who manually `git clone`d the repo and runs install_helper.py from
+    inside it (no separate distributed installer exists) has no configured repo_path yet,
+    so decide_mode picks 'install' - which used to always default to DEFAULT_CLONE_DIR,
+    ignoring the perfectly good clone the script was already running from. Accepting
+    that friendly default silently created a second, orphaned clone. The default must
+    now be the script's own directory when that's already a real clone."""
+    import install_helper as ih
+
+    manual_clone = _fake_clone(tmp_path)
+    monkeypatch.setattr(ih, "__file__", str(manual_clone / "install_helper.py"))
+    _isolate_home(monkeypatch, tmp_path)  # no installer.json - "install" mode
+    calls = []
+
+    def runner(argv, cwd=None, timeout=300):
+        calls.append([str(a) for a in argv])
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    assert ih.decide_mode(None, inst.cfg) == "install"
+    inst.mode = "install"
+    inst.resolve_repo()
+    out = capsys.readouterr().out
+    assert inst.repo == manual_clone
+    assert "Using existing clone" in out
+    assert not any(len(c) >= 2 and c[0] == "git" and c[1] == "clone" for c in calls)
+
+
+def test_install_mode_still_defaults_to_default_clone_dir_when_not_a_clone(
+    monkeypatch, tmp_path, capsys
+):
+    """A genuinely fresh install (script run standalone, not from inside a clone) must
+    keep offering DEFAULT_CLONE_DIR - the manual-clone fix must not change this case."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    monkeypatch.setattr(ih, "DEFAULT_CLONE_DIR", tmp_path / "default-clone")
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0))
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.mode = "install"
+    inst.resolve_repo()
+    assert inst.repo == tmp_path / "default-clone"
+
+
 # ------------------------------------------------------------------ git state via mocked runner
 
 

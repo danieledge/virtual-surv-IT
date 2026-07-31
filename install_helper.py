@@ -1170,7 +1170,17 @@ class Installer:
                 )
                 return
         else:
-            default = self.cfg.get("repo_path", str(DEFAULT_CLONE_DIR))
+            # A new user who manually `git clone`d the repo and is running this script
+            # from inside that clone (the only copy they have - there's no separate
+            # distributed installer) had no configured repo_path yet, so "install" mode
+            # asked where to put a clone and defaulted to DEFAULT_CLONE_DIR, ignoring the
+            # perfectly good one it was already running from - the friendly path (accept
+            # the default) silently created a second, orphaned clone. Default to the
+            # script's own directory when that's a real clone instead.
+            script_root = Path(__file__).resolve().parent
+            default = self.cfg.get("repo_path") or (
+                str(script_root) if looks_like_repo(script_root) else str(DEFAULT_CLONE_DIR)
+            )
             candidate = (
                 Path(
                     ask(
