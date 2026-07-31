@@ -89,6 +89,61 @@ def test_guard_stdin_and_exit_code_pass_through_unchanged(tmp_path):
     assert proc.returncode == 0  # a harmless /tmp read is allowed
 
 
+def _run_with_env(project_dir: Path, extra_env: dict, path_prefix: Path | None = None):
+    import os
+
+    path = str(path_prefix) + ":" + os.environ["PATH"] if path_prefix else os.environ["PATH"]
+    env = {"CLAUDE_PROJECT_DIR": str(project_dir), "PATH": path, **extra_env}
+    return subprocess.run(
+        ["sh", str(LAUNCHER), str(NOOP_TARGET)],
+        input=PAYLOAD,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+
+
+def _fake_interpreter_bin_dir(tmp_path: Path) -> Path:
+    """python3/python/py all copies of the REAL interpreter, so every candidate the
+    launcher tries genuinely passes the version check and can exec the guard for real -
+    which of the three gets cached then reveals the probe ORDER, not just correctness."""
+    import shutil as _shutil
+
+    bindir = tmp_path / "fakebin"
+    bindir.mkdir()
+    real = Path(sys.executable)
+    for name in ("python3", "python", "py"):
+        target = bindir / name
+        _shutil.copy2(real, target)
+        target.chmod(0o755)
+    return bindir
+
+
+def test_probe_order_tries_python3_first_off_windows(tmp_path):
+    """P2 (2026-07-31 corp report): off Windows, python3 first is correct and unchanged -
+    it is the real interpreter there, not a Store stub."""
+    bindir = _fake_interpreter_bin_dir(tmp_path)
+    proj = tmp_path / "proj"
+    (proj / ".claude").mkdir(parents=True)
+    proc = _run_with_env(proj, {"OS": ""}, path_prefix=bindir)
+    assert proc.returncode == 0
+    cache = proj / ".claude" / ".guard-interpreter"
+    assert cache.read_text(encoding="utf-8").strip() == "python3"
+
+
+def test_probe_order_skips_python3_first_on_windows(tmp_path):
+    """P2: with OS=Windows_NT (set by Windows itself, inherited into Git Bash), python3
+    - the likely Store-stub name there - must not be the first one tried."""
+    bindir = _fake_interpreter_bin_dir(tmp_path)
+    proj = tmp_path / "proj"
+    (proj / ".claude").mkdir(parents=True)
+    proc = _run_with_env(proj, {"OS": "Windows_NT"}, path_prefix=bindir)
+    assert proc.returncode == 0
+    cache = proj / ".claude" / ".guard-interpreter"
+    assert cache.read_text(encoding="utf-8").strip() == "python"
+
+
 def test_staged_and_live_launchers_match_when_installed():
     """Once scripts/apply-guard-interpreter-cache.sh has been run, the two copies must be
     byte-identical (same contract as every other staged hook)."""
