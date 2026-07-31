@@ -449,3 +449,55 @@ def test_no_limit_on_engagement_count(tmp_path, monkeypatch):
     }
     assert rows == statuses
     assert _run_env(monkeypatch, tmp_path, "--slug", "eng-3", "set-status", "in_progress") == 0
+
+
+def test_slug_flag_accepted_before_or_after_subcommand(tmp_path, monkeypatch):
+    """Live corp report 2026-07-31: --slug is a top-level argparse flag, so typing it
+    AFTER the subcommand used to exit 2 'unrecognized arguments' - only the pre-subcommand
+    order worked. Both orders must now resolve to the same pack."""
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "eng-a")
+    _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "eng-b")
+    assert _run_env(monkeypatch, tmp_path, "--slug", "eng-a", "log-note", "before") == 0
+    assert _run_env(monkeypatch, tmp_path, "log-note", "--slug", "eng-a", "after") == 0
+    state = load_state(tmp_path / "artifacts" / "eng-a")
+    assert any("before" in entry for entry in state["log"])
+    assert any("after" in entry for entry in state["log"])
+
+
+def test_archive_force_excludes_stateless_directory(tmp_path, monkeypatch):
+    """Live corp report 2026-07-31: `archive <name> --force` on a directory with no
+    engagement-state.json (a legacy/non-workspace directory the DoD scan still walks)
+    exited 2 with no way to exclude it - only a hand-written .archive marker worked."""
+    art = tmp_path / "artifacts"
+    (art / "legacy").mkdir(parents=True)
+    (art / "legacy" / "notes.md").write_text("old", encoding="utf-8")
+    assert _run_env(monkeypatch, tmp_path, "archive", "legacy") == 2
+    assert not (art / "legacy" / ".archive").is_file()
+    assert _run_env(monkeypatch, tmp_path, "archive", "legacy", "--force") == 0
+    assert (art / "legacy" / ".archive").is_file()
+    assert _run_env(monkeypatch, tmp_path, "archive", "nosuch", "--force") == 2
+
+
+def test_show_prints_state_and_always_exits_0(tmp_path, monkeypatch, capsys):
+    """Unlike validate (exits 1 on findings), show is for inspection only - it must
+    always exit 0 once the state file was found, and a missing pack is a clean 2, not a
+    traceback."""
+    _run_env(monkeypatch, tmp_path, "init", "--title", "T", "--slug", "t")
+    capsys.readouterr()
+    assert _run_env(monkeypatch, tmp_path, "--slug", "t", "show") == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert shown == load_state(tmp_path / "artifacts" / "t")
+    assert _run_env(monkeypatch, tmp_path, "--slug", "nosuch", "show") == 2
+
+
+def test_render_exits_nonzero_when_html_sibling_skipped(tmp_path, monkeypatch):
+    """Live corp report 2026-07-31: render exited 0 even when the .html sibling was
+    skipped, falsely signalling success - it must reflect a partial render in its exit
+    code so a caller doesn't have to parse stderr to notice."""
+    import scripts.engagement_state as es_module
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "T", "--slug", "t")
+    assert _run_env(monkeypatch, tmp_path, "--slug", "t", "render") == 0
+    monkeypatch.setattr(es_module, "_load_render_html_module", lambda: None)
+    assert _run_env(monkeypatch, tmp_path, "--slug", "t", "render") == 2
+    assert (tmp_path / "artifacts" / "t" / "START-HERE.md").is_file()

@@ -22,6 +22,7 @@ Design constraints:
 Usage (all consent-free team tooling, `python -m scripts.engagement_state <cmd>`):
   init --title T --slug S [--requested-by R] [--team-version V] [--phase plan]
   validate                     # exit 1 with findings if the state is invalid
+  show                         # print the state as-is; always exits 0 once found
   render                       # regenerate START-HERE.md + .html from the state
   set-status {in_progress,blocked,closing,closed} [--verdict TEXT]
   set-phase {open,classify,plan,delivery,close}
@@ -948,9 +949,34 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
+def _cmd_show(args: argparse.Namespace) -> int:
+    """Print this engagement's state as-is. Unlike validate (exits 1 on any finding) or
+    list (only a one-line-per-engagement summary, no detail), show always exits 0 once a
+    state file was found and parsed - safe to run purely for inspection, including on a
+    pack that would currently fail validation."""
+    try:
+        state = load_state(args.dir)
+    except FileNotFoundError:
+        print(f"no {STATE_FILENAME} in {args.dir}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"{STATE_FILENAME} is not valid JSON: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(state, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_render(args: argparse.Namespace) -> int:
-    for path in render_files(args.dir):
+    written = render_files(args.dir)
+    for path in written:
         print(f"wrote {path}")
+    # render_files degrades .html failures to a stderr note rather than raising (every
+    # OTHER mutator ends with a render and must never brick on a missing renderer) - but
+    # `render` is invoked FOR the render, so silently exiting 0 on a skipped .html sibling
+    # falsely signalled success (live corp report 2026-07-31) with no way to script around
+    # it. The .md is always written first; the .html is appended only on success.
+    if index_path(args.dir).with_suffix(".html") not in written:
+        return 2
     return 0
 
 
@@ -1467,6 +1493,13 @@ def main(argv: list[str] | None = None) -> int:
         "validate", parents=[common], help="check the state file; exit 1 on findings"
     )
     p.set_defaults(fn=_cmd_validate)
+
+    p = sub.add_parser(
+        "show",
+        parents=[common],
+        help="print the state as-is (always exits 0 once found - safe for inspection)",
+    )
+    p.set_defaults(fn=_cmd_show)
 
     p = sub.add_parser(
         "render", parents=[common], help="regenerate START-HERE.md/.html from the state"
