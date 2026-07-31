@@ -73,11 +73,26 @@ if [ ! -f docs/team-operating-guide.md ]; then \
   if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -maxdepth 6 -path '*/compliance-surveillance-team/*/docs/team-operating-guide.md' 2>/dev/null | sort -V | tail -1); \
     [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; fi; \
 SCRIPT="${PR:+$PR/}scripts/engage_probe.py"; \
-(PYTHONIOENCODING=utf-8 python3 "$SCRIPT" --plugin-root "$PR" --interpreter-name python3 || \
- PYTHONIOENCODING=utf-8 python "$SCRIPT" --plugin-root "$PR" --interpreter-name python || \
- PYTHONIOENCODING=utf-8 py "$SCRIPT" --plugin-root "$PR" --interpreter-name py) 2>/dev/null || \
-echo "PROBE_FAILED - run by hand to see why: PYTHONIOENCODING=utf-8 py \"$SCRIPT\" --plugin-root \"$PR\""
+CACHED=$(cat "${PR:-.}/.claude/.guard-interpreter" 2>/dev/null); \
+if [ -n "$CACHED" ] && command -v "$CACHED" >/dev/null 2>&1; then ORDER="$CACHED"; \
+elif [ "${OS:-}" = "Windows_NT" ]; then ORDER="python py python3"; \
+else ORDER="python3 python py"; fi; \
+OUT=""; \
+for I in $ORDER; do \
+  OUT=$(PYTHONIOENCODING=utf-8 "$I" "$SCRIPT" --plugin-root "$PR" --interpreter-name "$I" 2>/dev/null) && break; \
+  OUT=""; \
+done; \
+if [ -n "$OUT" ]; then echo "$OUT"; else \
+echo "PROBE_FAILED - run by hand to see why: PYTHONIOENCODING=utf-8 py \"$SCRIPT\" --plugin-root \"$PR\""; fi
 ```
+
+**This reads the SAME interpreter cache the safety guards already warmed** (`.guard-
+interpreter`, written by the five PreToolUse hooks that just ran for this very Bash call,
+or by the installer's own pre-warm step) instead of independently probing python3 first -
+a live corporate report (2026-07-31) traced ">2 minutes" opens to exactly that: an
+unconditional `python3` attempt first, with no Windows-awareness and no cache, hitting the
+Microsoft Store execution-alias stub every single time. A cache miss still falls back to a
+Windows-aware order (python/py before python3 there), never a hardcoded python3-first list.
 
 **On Windows, `PYTHONIOENCODING=utf-8` is not optional.** The probe's report contains emoji;
 a cp1252 console (the Windows default) makes a bare `print()` of it raise
