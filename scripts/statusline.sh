@@ -15,9 +15,17 @@ INPUT=$(cat 2>/dev/null || true)
 # Resolve the interpreter like run-guard.sh does - Windows (Git Bash) has python or the
 # py launcher, rarely python3; a hardcoded python3 degraded the whole line to the static
 # fallback there (2026-07-30 fix).
+#
+# `command -v` only checks that a name resolves on PATH - it does not run the binary. On
+# Windows, "python3" often resolves to the Microsoft Store execution-alias stub, which
+# exists on PATH but exits 49 without launching a real interpreter; command -v still
+# reported it as found, so PY_BIN latched onto the stub, the heredoc below silently
+# failed, and every render fell to the static fallback (live corp report 2026-07-31 -
+# the 2026-07-30 fix above only addressed the encoding, not this stub-detection gap).
+# `--version` actually invokes the binary, so the stub's exit 49 correctly skips it.
 PY_BIN=""
 for c in python3 python py; do
-  command -v "$c" >/dev/null 2>&1 && PY_BIN="$c" && break
+  "$c" --version >/dev/null 2>&1 && PY_BIN="$c" && break
 done
 [ -z "$PY_BIN" ] && { printf '🕶 virt-surv-IT'; exit 0; }
 

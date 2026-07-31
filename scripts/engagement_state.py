@@ -61,7 +61,9 @@ The close window (2026-07-29 register R5/G4/R6):
     mistaken close is reversible from disk.
 
 All commands accept --dir ARTIFACTS_DIR (default: $CLAUDE_PROJECT_DIR/artifacts, else
-./artifacts). Every mutator ends with validate + render.
+./artifacts). --dir/--slug may go before OR after the subcommand (except on init, which
+takes --dir before it only, and --slug as the new pack's own name). Every mutator ends
+with validate + render.
 """
 
 from __future__ import annotations
@@ -1378,6 +1380,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
+    # argparse only looks at the top-level parser's own optionals until it hits the
+    # subcommand positional - after that, remaining args go to the subparser, so a bare
+    # "--dir"/"--slug" typed AFTER the subcommand name errors "unrecognized arguments"
+    # (live corp report 2026-07-31: `log-note --slug X "..."` exited 2; `--slug X log-note
+    # "..."` worked). Mirroring --dir/--slug onto every resolvable subcommand accepts both
+    # orders; SUPPRESS defaults keep an omitted flag from overwriting a value already set
+    # at the top level (argparse merges the subparser's namespace over the parent's, and an
+    # ordinary default=None would clobber a correctly-parsed top-level value with None).
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--dir", type=Path, default=argparse.SUPPRESS)
+    common.add_argument("--slug", dest="target_slug", default=argparse.SUPPRESS)
+
     p = sub.add_parser("init", help="create the state file and first render")
     p.add_argument("--title", required=True)
     p.add_argument("--slug", required=True)
@@ -1392,64 +1406,88 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.set_defaults(fn=_cmd_init)
 
-    p = sub.add_parser("validate", help="check the state file; exit 1 on findings")
+    p = sub.add_parser(
+        "validate", parents=[common], help="check the state file; exit 1 on findings"
+    )
     p.set_defaults(fn=_cmd_validate)
 
-    p = sub.add_parser("render", help="regenerate START-HERE.md/.html from the state")
+    p = sub.add_parser(
+        "render", parents=[common], help="regenerate START-HERE.md/.html from the state"
+    )
     p.set_defaults(fn=_cmd_render)
 
-    p = sub.add_parser("set-status", help="change lifecycle status (renders)")
+    p = sub.add_parser("set-status", parents=[common], help="change lifecycle status (renders)")
     p.add_argument("status", choices=_STATUSES)
     p.add_argument("--verdict", default=None)
     p.set_defaults(fn=_cmd_set_status)
 
-    p = sub.add_parser("set-phase", help="change lifecycle phase (renders)")
+    p = sub.add_parser("set-phase", parents=[common], help="change lifecycle phase (renders)")
     p.add_argument("phase", choices=_PHASES)
     p.set_defaults(fn=_cmd_set_phase)
 
     p = sub.add_parser(
-        "set-profile", help="change ceremony profile (e.g. light -> standard upgrade)"
+        "set-profile",
+        parents=[common],
+        help="change ceremony profile (e.g. light -> standard upgrade)",
     )
     p.add_argument("profile", choices=_PROFILES)
     p.set_defaults(fn=_cmd_set_profile)
 
-    p = sub.add_parser("add-artifact", help="add/update an artifact row (renders)")
+    p = sub.add_parser(
+        "add-artifact", parents=[common], help="add/update an artifact row (renders)"
+    )
     p.add_argument("path")
     p.add_argument("--title", required=True)
     p.add_argument("--final", action="store_true", help="mark final (default interim)")
     p.set_defaults(fn=_cmd_add_artifact)
 
-    p = sub.add_parser("add-outstanding", help="append an outstanding item (renders)")
+    p = sub.add_parser(
+        "add-outstanding", parents=[common], help="append an outstanding item (renders)"
+    )
     p.add_argument("text")
     p.set_defaults(fn=_cmd_add_outstanding)
 
-    p = sub.add_parser("resolve-outstanding", help="remove outstanding items matching a substring")
+    p = sub.add_parser(
+        "resolve-outstanding",
+        parents=[common],
+        help="remove outstanding items matching a substring",
+    )
     p.add_argument("substring")
     p.set_defaults(fn=_cmd_resolve_outstanding)
 
-    p = sub.add_parser("set-decision", help="record a decision of record (renders)")
+    p = sub.add_parser(
+        "set-decision", parents=[common], help="record a decision of record (renders)"
+    )
     p.add_argument("key")
     p.add_argument("value")
     p.set_defaults(fn=_cmd_set_decision)
 
-    p = sub.add_parser("log-note", help="append a dated event/completion note to the log (renders)")
+    p = sub.add_parser(
+        "log-note",
+        parents=[common],
+        help="append a dated event/completion note to the log (renders)",
+    )
     p.add_argument("text")
     p.set_defaults(fn=_cmd_log_note)
 
     p = sub.add_parser(
-        "add-ratification", help="record a decision awaiting human ratification (renders)"
+        "add-ratification",
+        parents=[common],
+        help="record a decision awaiting human ratification (renders)",
     )
     p.add_argument("text")
     p.set_defaults(fn=_cmd_add_ratification)
 
     p = sub.add_parser(
-        "ratify", help="mark pending ratification(s) matching a substring as ratified"
+        "ratify",
+        parents=[common],
+        help="mark pending ratification(s) matching a substring as ratified",
     )
     p.add_argument("substring")
     p.add_argument("--by", default=None, help="who ratified (e.g. 'ops lead')")
     p.set_defaults(fn=_cmd_ratify)
 
-    p = sub.add_parser("set-team", help="record the delivering team (renders)")
+    p = sub.add_parser("set-team", parents=[common], help="record the delivering team (renders)")
     p.add_argument("members", nargs="+", help='e.g. "Amara (BA)" "Linh (QA)"')
     p.set_defaults(fn=_cmd_set_team)
 
@@ -1481,6 +1519,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "record-consent-outcome",
+        parents=[common],
         help="record a NON-granting execution-consent outcome (asked/declined; renders). "
         "A grant is never representable - it is only the human-created marker (ADR-002)",
     )
@@ -1489,7 +1528,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_record_consent_outcome)
 
     p = sub.add_parser(
-        "set-runtime", help="persist the step-0 run-mode probe (mode/plugin-root/interpreter)"
+        "set-runtime",
+        parents=[common],
+        help="persist the step-0 run-mode probe (mode/plugin-root/interpreter)",
     )
     p.add_argument("--mode", choices=("repo", "plugin"), default=None)
     p.add_argument("--plugin-root", dest="plugin_root", default=None)
@@ -1497,11 +1538,15 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_set_runtime)
 
     p = sub.add_parser(
-        "finalise-artifacts", help="mark every artifact row final (close step; renders)"
+        "finalise-artifacts",
+        parents=[common],
+        help="mark every artifact row final (close step; renders)",
     )
     p.set_defaults(fn=_cmd_finalise_artifacts)
 
-    p = sub.add_parser("set-footprint", help="update agent/token footprint (renders)")
+    p = sub.add_parser(
+        "set-footprint", parents=[common], help="update agent/token footprint (renders)"
+    )
     p.add_argument("--agents", type=int, default=None)
     p.add_argument("--tokens", default=None)
     p.set_defaults(fn=_cmd_set_footprint)
