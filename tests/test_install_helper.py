@@ -878,6 +878,91 @@ def test_full_sync_step_fetches_and_checks_out(monkeypatch, tmp_path):
     assert any("checkout -B main origin/main" in c for c in joined)
 
 
+def test_sync_reexecs_when_install_helper_itself_changed(monkeypatch, tmp_path, capsys):
+    """A pulled update that changes install_helper.py itself must restart the run on
+    the new code - otherwise an installer-level fix never actually takes effect until
+    a second, separate invocation."""
+    import subprocess as sp
+
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    (clone / "install_helper.py").write_text("NEW VERSION", encoding="utf-8")
+    running_copy = tmp_path / "old_install_helper.py"
+    running_copy.write_text("OLD VERSION", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(running_copy))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0, stdout=""))
+    spawned = {}
+
+    def fake_run(argv, **kwargs):
+        spawned["argv"] = argv
+        return _FakeProc(7)
+
+    monkeypatch.setattr(sp, "run", fake_run)
+    inst = ih.Installer(_args(yes=True, branch="main"), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    with pytest.raises(SystemExit) as exc_info:
+        inst.sync_branch()
+    assert exc_info.value.code == 7
+    assert spawned["argv"][0] == sys.executable
+    assert spawned["argv"][1] == str(clone / "install_helper.py")
+    assert "--repo" in spawned["argv"] and str(clone) in spawned["argv"]
+    assert "--branch" in spawned["argv"] and "main" in spawned["argv"]
+    assert "--yes" in spawned["argv"]
+    out = capsys.readouterr().out
+    assert "restarting with the new version" in out
+
+
+def test_sync_does_not_reexec_when_install_helper_unchanged(monkeypatch, tmp_path):
+    """The common case (an update that doesn't touch install_helper.py, or no new
+    commits at all) must never spawn a second process."""
+    import subprocess as sp
+
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    content = "SAME VERSION"
+    (clone / "install_helper.py").write_text(content, encoding="utf-8")
+    running_copy = tmp_path / "running_install_helper.py"
+    running_copy.write_text(content, encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(running_copy))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0, stdout=""))
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not re-exec"))
+    )
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    inst.sync_branch()  # no SystemExit, no assertion error
+
+
+def test_sync_never_reexecs_in_demo_mode(monkeypatch, tmp_path):
+    """Demo mode must never spawn a subprocess, full stop - even if a coincidental
+    content mismatch would otherwise trigger the re-exec."""
+    import subprocess as sp
+
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    (clone / "install_helper.py").write_text("NEW", encoding="utf-8")
+    running_copy = tmp_path / "old.py"
+    running_copy.write_text("OLD", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(running_copy))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0, stdout=""))
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not re-exec"))
+    )
+    inst = ih.Installer(_args(yes=True, demo=True), ih.Style(False), ih.marks())
+    inst.demo = True
+    inst.repo = clone
+    inst.branch = "main"
+    inst.sync_branch()  # no SystemExit, no assertion error
+
+
 # --- statusline conflict detection refinement (2026-07-30) --------------------------------
 
 

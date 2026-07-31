@@ -1330,6 +1330,38 @@ class Installer:
             self.did(f"On {self.branch} at {commit}", f"Would be on {self.branch} at {commit}"),
             f"matches origin/{self.branch}",
         )
+        self._reexec_if_self_updated()
+
+    def _reexec_if_self_updated(self) -> None:
+        """If the sync above just pulled a NEW install_helper.py, the rest of THIS run
+        would otherwise keep executing the OLD in-memory logic - defeating the entire
+        point of shipping a fix at the installer level. Re-exec the freshly-checked-out
+        script with the same choices this run already made (repo location, branch) baked
+        in via argv, so nothing gets re-asked; the new process's own summary is the one
+        the user sees. Best-effort throughout: any failure just falls through to finish
+        THIS run on the old code, same philosophy as _relocate_if_running_inside_target_repo."""
+        if self.demo:
+            return  # never spawns a subprocess outside run_cmd's mocked demo path
+        new_script = self.repo / "install_helper.py"
+        try:
+            if not new_script.is_file():
+                return
+            running = Path(__file__).resolve().read_bytes()
+            fresh = new_script.read_bytes()
+            if running == fresh:
+                return
+            self.say(
+                self.style.yellow(
+                    "  install_helper.py itself was updated - restarting with the new version..."
+                )
+            )
+            child_argv = _argv_from_args(self.args, repo=self.repo, branch=self.branch)
+            proc = subprocess.run(  # fixed argv (sys.executable + freshly-pulled script), shell=False  # nosec B603
+                [sys.executable, str(new_script), *child_argv]
+            )
+        except OSError:
+            return
+        sys.exit(proc.returncode)
 
     def print_update_preview(self, preview: dict, branch: str, local_version) -> None:
         """Console rendering of gather_update_preview's result. Purely informational:
@@ -2163,6 +2195,27 @@ def parse_args(argv=None) -> argparse.Namespace:
         "PROJECT_DIR/.claude/settings.json (add-only, backs the file up first) and exit",
     )
     return parser.parse_args(argv)
+
+
+def _argv_from_args(args: argparse.Namespace, repo: Path, branch: str) -> list:
+    """Rebuild an equivalent CLI argv from a parsed Namespace, with repo/branch pinned to
+    what THIS run already resolved. Used only for the self-update re-exec
+    (Installer._reexec_if_self_updated) - --repo/--branch stop the restarted process from
+    re-asking choices already made; --enable-project/--permissions are deliberately
+    omitted since that scripting path exits _main() before an Installer ever runs."""
+    argv = []
+    if args.mode:
+        argv.append(args.mode)
+    argv += ["--branch", branch, "--repo", str(repo)]
+    if args.yes:
+        argv.append("--yes")
+    if args.pip:
+        argv.append("--pip")
+    if args.demo:
+        argv.append("--demo")
+    if args.statusline:
+        argv.append("--statusline")
+    return argv
 
 
 def _relocate_if_running_inside_target_repo(
