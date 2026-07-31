@@ -975,16 +975,20 @@ def _fake_clone_with_guard(tmp_path):
     return clone
 
 
-def test_prewarm_guard_cache_runs_the_launcher_and_reports_the_cached_interpreter(
-    monkeypatch, tmp_path
-):
+def test_prewarm_guard_cache_probes_directly_and_writes_the_cache(monkeypatch, tmp_path):
+    """The chosen interpreter is probed as a DIRECT child of this process (not through a
+    nested sh + exec chain) and the cache is written by this step itself."""
     import install_helper as ih
 
     clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(ih.sys, "platform", "linux")
+    monkeypatch.setattr(
+        ih.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "python3" else None
+    )
+    calls = []
 
     def runner(argv, cwd=None, timeout=300):
-        # Mimic what the real launcher does: write the cache file it would have written.
-        (clone / ".claude" / ".guard-interpreter").write_text("python3", encoding="utf-8")
+        calls.append(argv)
         return _FakeProc(0)
 
     monkeypatch.setattr(ih, "run_cmd", runner)
@@ -992,7 +996,73 @@ def test_prewarm_guard_cache_runs_the_launcher_and_reports_the_cached_interprete
     inst.repo = clone
     inst.prewarm_guard_cache()
     assert inst.tracker.steps[-1][1] == "ok"
-    assert "python3" in inst.tracker.steps[-1][0]
+    assert "/usr/bin/python3" in inst.tracker.steps[-1][0]
+    assert calls == [["/usr/bin/python3", "-c", calls[0][2]]]
+    cache = clone / ".claude" / ".guard-interpreter"
+    assert cache.read_text(encoding="utf-8") == "/usr/bin/python3"
+
+
+def test_prewarm_guard_cache_windows_order_tries_python_before_python3(monkeypatch, tmp_path):
+    """P2's Windows-aware order, mirrored here: python/py before python3, since python3
+    is the likely Store-stub name there."""
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"C:\\{name}.exe")
+    tried = []
+
+    def runner(argv, cwd=None, timeout=300):
+        tried.append(argv[0])
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert tried[0] == "C:\\python.exe"  # first candidate tried, not python3
+
+
+def test_prewarm_guard_cache_skips_a_hanging_candidate_and_tries_the_next(monkeypatch, tmp_path):
+    """A per-candidate timeout (or any failure) must move on to the next candidate, not
+    give up or wait it out - this is the actual fix for the live report: the old design
+    (shelling out to run-guard.sh through sh + exec) could hang for MINUTES on Windows
+    because killing the direct `sh` child didn't reliably kill an orphaned, still-hung
+    python3.exe grandchild. Probing candidates directly makes each one this process's own
+    direct child, so a short timeout on a broken candidate reliably falls through."""
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(ih.sys, "platform", "linux")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    order = []
+
+    def runner(argv, cwd=None, timeout=300):
+        order.append(argv[0])
+        if argv[0] == "/usr/bin/python3":
+            raise subprocess.TimeoutExpired(cmd=argv, timeout=timeout)
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert order[0] == "/usr/bin/python3"  # tried first, hung, moved on
+    assert inst.tracker.steps[-1][1] == "ok"
+    assert "/usr/bin/python" in inst.tracker.steps[-1][0]
+    assert "/usr/bin/python3" not in inst.tracker.steps[-1][0]
+
+
+def test_prewarm_guard_cache_skips_cleanly_when_nothing_works(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert inst.tracker.steps[-1][1] == "skip"
+    assert not (clone / ".claude" / ".guard-interpreter").exists()
 
 
 def test_prewarm_guard_cache_skips_cleanly_without_a_launcher(monkeypatch, tmp_path):

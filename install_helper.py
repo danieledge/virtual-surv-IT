@@ -1368,46 +1368,74 @@ class Installer:
         (.claude/.guard-interpreter, read by run-guard.sh) was previously written only
         on a project's first real /engage - so every fresh install/update paid the full
         cold-start probe cost (worst case on Windows: the python3 Store-stub hang,
-        repeated across five PreToolUse hooks) on its very next session. One
-        `command -v`-then-version-check here, reusing the launcher's OWN logic (never
-        duplicated), writes the cache once at install time instead - free for every
-        project that later resolves to this same plugin root (CLAUDE_PLUGIN_ROOT is one
-        shared value per install, not per-project). Best-effort: a missing launcher, no
-        POSIX shell found, or any failure just skips - the guard still self-warms on
-        first real use exactly as before, this is a pure latency optimisation."""
+        repeated across five PreToolUse hooks) on its very next session. Writes the cache
+        once at install time instead - free for every project that later resolves to
+        this same plugin root (CLAUDE_PLUGIN_ROOT is one shared value per install, not
+        per-project).
+
+        Probes each candidate DIRECTLY (not by shelling out to run-guard.sh through sh +
+        exec): a live report (2026-07-31) showed that nested chain hanging for MINUTES on
+        a corporate Windows box even with a 30s subprocess timeout set - the timeout
+        killed the direct `sh` child, but the Store-stub `python3.exe` it had exec'd into
+        can survive as an orphaned process still holding the output pipe open, which
+        subprocess.run then blocks reading from regardless of the nominal timeout (a
+        known Windows child-process-tree gotcha). Probing python.exe directly makes it
+        the immediate child of THIS process, so a short, PER-CANDIDATE timeout reliably
+        bounds it (Windows' TerminateProcess is forceful, unlike POSIX SIGTERM). Same
+        Windows-aware order as P2's run-guard.sh fix, kept in sync by comment, not code -
+        this never invokes the launcher, so it cannot drift into calling it differently,
+        only into forgetting to update the order if run-guard.sh's ever changes again.
+
+        Best-effort throughout: a missing clone-side launcher (nothing to warm for) or no
+        interpreter found at all just skips - the guard still self-warms on first real
+        use exactly as before, this is a pure latency optimisation, never a hard
+        requirement, and it must never be the thing that makes an install look hung."""
         self.step_intro(
             "Priming the safety guards' interpreter cache so your first real /engage "
             "doesn't pay that cost itself."
         )
         launcher = self.repo / ".claude" / "hooks" / "run-guard.sh"
-        noop_target = self.repo / ".claude" / "hooks" / "guard-raw-data.py"
-        if not launcher.is_file() or not noop_target.is_file():
+        if not launcher.is_file():
             self.step_skip("Guard interpreter cache", "launcher not found in this clone")
-            return
-        if sys.platform == "win32":
-            shell = find_bash()
-        else:
-            shell = "sh"
-        if not shell:
-            self.step_skip("Guard interpreter cache", "no POSIX shell found - warms on first use")
             return
         cache = self.repo / ".claude" / ".guard-interpreter"
         if self.demo:
             self.step_ok(f"Would warm {cache}", "demo")
             return
-        try:
-            proc = run_cmd(
-                [shell, str(launcher), str(noop_target)],
-                cwd=self.repo,
-                timeout=30,
-            )
-        except (subprocess.TimeoutExpired, OSError) as exc:
-            self.step_skip("Guard interpreter cache", f"probe failed ({exc}) - warms on first use")
-            return
-        if proc.returncode == 0 and cache.is_file():
-            self.step_ok(f"Cached: {cache.read_text(encoding='utf-8').strip()}")
-        else:
+        order = (
+            ("python", "py", "python3") if sys.platform == "win32" else ("python3", "python", "py")
+        )
+        self.say(self.style.dim("  probing... (tightly bounded - a few seconds at most)"))
+        sys.stdout.flush()
+        chosen = None
+        for name in order:
+            resolved = shutil.which(name)
+            if not resolved:
+                continue
+            try:
+                proc = run_cmd(
+                    [
+                        resolved,
+                        "-c",
+                        "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)",
+                    ],
+                    timeout=3,
+                )
+            except (subprocess.TimeoutExpired, OSError):
+                continue  # this candidate is the hung/broken one - move on, don't wait on it
+            if proc.returncode == 0:
+                chosen = resolved
+                break
+        if chosen is None:
             self.step_skip("Guard interpreter cache", "no suitable interpreter found yet")
+            return
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(chosen, encoding="utf-8")
+        except OSError as exc:
+            self.step_skip("Guard interpreter cache", f"could not write cache ({exc})")
+            return
+        self.step_ok(f"Cached: {chosen}")
 
     def print_update_preview(self, preview: dict, branch: str, local_version) -> None:
         """Console rendering of gather_update_preview's result. Purely informational:
