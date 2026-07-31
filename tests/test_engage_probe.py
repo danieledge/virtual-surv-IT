@@ -240,3 +240,81 @@ def test_find_bash_falls_back_to_git_root_on_windows(monkeypatch, tmp_path):
     monkeypatch.setattr(ep.sys, "platform", "win32")
     monkeypatch.setattr(ep.shutil, "which", lambda n: str(git_exe) if n == "git" else None)
     assert ep._find_bash() == str(git_root / "bin" / "bash.exe")
+
+
+# ------------------------------------------------------ tool-probe cache fast path (P3)
+
+
+def test_run_tool_probe_reads_fresh_cache_without_spawning_bash(monkeypatch, tmp_path):
+    """A warm cache must be read directly - no Git Bash spawn at all (live Windows corp
+    report 2026-07-31: the subprocess spawn alone cost ~2.2s on every warm /engage, even
+    though check-review-tools.sh's own cache-hit branch does no real work)."""
+    import subprocess as sp
+
+    import scripts.engage_probe as ep
+
+    (tmp_path / ".claude").mkdir()
+    cache = tmp_path / ".claude" / ".tool-availability"
+    cache.write_text("=== Review/perf tooling check ===\nChecked: 2026-07-31\n\nbody\n")
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not spawn"))
+    )
+    out = ep.run_tool_probe(tmp_path, tmp_path)
+    assert "body" in out
+    assert "(cached - from a probe within the last 7 day(s)" in out
+    assert "ALLOWLIST:" in out
+
+
+def test_run_tool_probe_falls_through_on_stale_cache(monkeypatch, tmp_path):
+    """A cache past its TTL must fall through to the real script, not serve stale data
+    forever."""
+    import os as _os
+    import time as _time
+
+    import scripts.engage_probe as ep
+
+    (tmp_path / ".claude").mkdir()
+    cache = tmp_path / ".claude" / ".tool-availability"
+    cache.write_text("stale body\n")
+    old = _time.time() - 8 * 86400  # default TTL is 7 days
+    _os.utime(cache, (old, old))
+    assert ep._read_cached_tool_probe(tmp_path) is None
+
+
+def test_run_tool_probe_falls_through_when_no_cache(tmp_path):
+    import scripts.engage_probe as ep
+
+    assert ep._read_cached_tool_probe(tmp_path) is None
+
+
+def test_read_cached_tool_probe_honours_ttl_env_override(monkeypatch, tmp_path):
+    import os as _os
+    import time as _time
+
+    import scripts.engage_probe as ep
+
+    (tmp_path / ".claude").mkdir()
+    cache = tmp_path / ".claude" / ".tool-availability"
+    cache.write_text("body\n")
+    two_days_ago = _time.time() - 2 * 86400
+    _os.utime(cache, (two_days_ago, two_days_ago))
+    monkeypatch.setenv("CST_TOOLCHECK_TTL_DAYS", "1")
+    assert ep._read_cached_tool_probe(tmp_path) is None  # stale under the shorter TTL
+    monkeypatch.setenv("CST_TOOLCHECK_TTL_DAYS", "7")
+    assert ep._read_cached_tool_probe(tmp_path) is not None  # fresh under the longer TTL
+
+
+def test_allowlist_line_detects_present_entry(tmp_path):
+    import scripts.engage_probe as ep
+
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(
+        '{"permissions": {"allow": ["Bash(python3 -m scripts.*)"]}}', encoding="utf-8"
+    )
+    assert ep._allowlist_line(tmp_path) == "ALLOWLIST: present"
+
+
+def test_allowlist_line_missing_without_settings(tmp_path):
+    import scripts.engage_probe as ep
+
+    assert "ALLOWLIST: missing" in ep._allowlist_line(tmp_path)

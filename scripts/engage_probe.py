@@ -30,6 +30,7 @@ import re
 import shutil
 import subprocess  # fixed argv, shell=False, invoking our own sibling scripts  # nosec B404
 import sys
+import time
 from pathlib import Path
 
 _TEAM_VER_ROW_RE = re.compile(
@@ -169,7 +170,63 @@ def _find_bash() -> str:
     return "bash"
 
 
+def _allowlist_line(project_dir: Path) -> str:
+    """Mirrors check-review-tools.sh's allowlist_line() exactly - computed fresh every
+    call (never cached: the user may add the entry minutes after being tipped)."""
+    settings = project_dir / ".claude" / "settings.json"
+    present = False
+    if settings.is_file():
+        try:
+            text = settings.read_text(encoding="utf-8", errors="replace")
+            present = bool(re.search(r"python3? -m scripts\.\*", text))
+        except OSError:
+            present = False
+    if present:
+        return "ALLOWLIST: present"
+    return (
+        "ALLOWLIST: missing - fewer permission prompts if added; the user runs:\n"
+        "  python <clone>/install_helper.py --permissions ."
+    )
+
+
+def _read_cached_tool_probe(project_dir: Path) -> str | None:
+    """check-review-tools.sh's own cache-hit branch, read directly instead of shelling
+    out to it - on Windows, spawning Git Bash just to `cat` a file and check its mtime
+    cost ~2.2s on every single warm /engage (P3, live corp report 2026-07-31), even
+    though the cache-hit path inside the script does no real work. None means "no fresh
+    cache" - the caller falls through to the real script (first run, stale, or missing)."""
+    cache_env = os.environ.get("CST_TOOLCHECK_CACHE") or ".claude/.tool-availability"
+    cache = Path(cache_env)
+    if not cache.is_absolute():
+        cache = project_dir / cache
+    try:
+        ttl_days = int(os.environ.get("CST_TOOLCHECK_TTL_DAYS") or 7)
+    except ValueError:
+        ttl_days = 7
+    try:
+        mtime = cache.stat().st_mtime
+    except OSError:
+        return None
+    if time.time() - mtime >= ttl_days * 86400:
+        return None  # stale - let the real script re-probe and re-cache
+    try:
+        report = cache.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return (
+        report.rstrip("\n")
+        + "\n\n"
+        + f"(cached - from a probe within the last {ttl_days} day(s); re-run with --refresh after\n"
+        + " installing or removing analysers.)\n"
+        + _allowlist_line(project_dir)
+        + "\n"
+    )
+
+
 def run_tool_probe(root: Path, project_dir: Path) -> str:
+    cached = _read_cached_tool_probe(project_dir)
+    if cached is not None:
+        return cached
     for candidate in (
         project_dir / "scripts" / "check-review-tools.sh",
         root / "scripts" / "check-review-tools.sh",
