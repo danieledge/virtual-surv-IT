@@ -35,7 +35,18 @@ if [ -f "$CACHE" ]; then
 		exec "$cached" "$@"
 	fi
 fi
-for interpreter in python3 python py; do
+# Probe order (2026-07-31 corporate report, P2): the loop below still EXECUTES the first
+# name command -v resolves, to version-check it, before any cache exists - on Windows,
+# "python3" resolving to the Store stub means that first, uncached call pays the multi-
+# second stub hang even though `python`/`py` were sitting right behind it. $OS is set to
+# "Windows_NT" by the OS itself and inherited into Git Bash, so this is a real, not
+# heuristic, signal - try the real interpreters first there and leave the stub for last.
+if [ "${OS:-}" = "Windows_NT" ]; then
+	order="python py python3"
+else
+	order="python3 python py"
+fi
+for interpreter in $order; do
 	if command -v "$interpreter" >/dev/null 2>&1; then
 		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
 			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
