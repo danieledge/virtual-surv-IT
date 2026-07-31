@@ -52,16 +52,21 @@ def _load_input() -> dict:
         return {}
 
 
-def _reason() -> str:
+def _reason(slug: str | None, phase: str) -> str:
+    name = f"'{slug}'" if slug else "this engagement (flat pack)"
+    log_note = (
+        f'engagement_state --slug {slug} log-note "{_SEEDED_MARKER}"'
+        if slug
+        else f'engagement_state log-note "{_SEEDED_MARKER}"'
+    )
     return (
-        "🎩 Task-panel nudge (Stop hook, warn-first, one-time): this engagement has "
-        "reached delivery and the operating guide's 'native task-list progress' rule "
+        f"🎩 Task-panel nudge (Stop hook, warn-first, one-time) for {name}: its phase just "
+        f"reached '{phase}' and the operating guide's 'native task-list progress' rule "
         "applies - seed one todo per planned gate (brief → build → tests → review → QA "
         "→ DoD gate → close) via TodoWrite if you have not already, keeping exactly one "
         "in_progress and ticking each as its evidence lands. Once the panel reflects the "
-        f'current gates, record `engagement_state log-note "{_SEEDED_MARKER}"` so this '
-        "reminder never fires again for this engagement. (One-time nudge - it will not "
-        "repeat this stop cycle regardless.)"
+        f"current gates, record `{log_note}` so this reminder never fires again for this "
+        "engagement. (One-time nudge - it will not repeat this stop cycle regardless.)"
     )
 
 
@@ -93,21 +98,22 @@ def _load_checker(project_root: Path):
     return None
 
 
-def _needs_nudge(pack: Path) -> bool:
+def _needs_nudge(pack: Path) -> str | None:
     """Reads the pack's own state file directly (phase + log aren't exposed by
     pack_status, which only returns the words-only status). Fail-safe: an unreadable or
-    missing state file never nudges."""
+    missing state file never nudges. Returns the triggering phase, or None."""
     state_file = pack / "engagement-state.json"
     try:
         state = json.loads(state_file.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return False
-    if state.get("phase") not in _GATED_PHASES:
-        return False
+        return None
+    phase = state.get("phase")
+    if phase not in _GATED_PHASES:
+        return None
     log = state.get("log")
     if isinstance(log, list) and any(_SEEDED_MARKER in str(entry) for entry in log):
-        return False
-    return True
+        return None
+    return phase
 
 
 def main() -> int:
@@ -132,12 +138,15 @@ def main() -> int:
             gated.append(artifacts)
         if not gated:
             return 0
-        if not any(_needs_nudge(pack) for pack in gated):
+        triggered = next(((pack, phase) for pack in gated if (phase := _needs_nudge(pack))), None)
+        if triggered is None:
             return 0
     except Exception:
         return 0
 
-    print(json.dumps({"decision": "block", "reason": _reason()}))
+    pack, phase = triggered
+    slug = None if pack == artifacts else pack.name
+    print(json.dumps({"decision": "block", "reason": _reason(slug, phase)}))
     return 0
 
 
