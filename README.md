@@ -173,13 +173,9 @@ and reviewers to build on, not accredited regulatory tooling.)*
 
 <sub>[↑ Back to top](#readme-top)</sub>
 
-> 📌 **Latest release - 0.33.1 (2026-07-29), platform capability adoption** on top of the
-> 0.33.0 workflow-robustness release. What they mean for you:
-> [`docs/releases/0.33.md`](docs/releases/0.33.md) · full detail: [`CHANGELOG.md`](CHANGELOG.md).
-
 ## ✨ Features
 
-What the team gives you at 0.33.1, each row tied to where the claim is enforced or demonstrated:
+What the team gives you today, each row tied to where the claim is enforced or demonstrated:
 
 | Capability | What you concretely get | Where to see it |
 |---|---|---|
