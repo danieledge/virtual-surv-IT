@@ -1204,9 +1204,37 @@ def _cmd_archive(args: argparse.Namespace) -> int:
     archived_now = 0
     for pack in targets:
         if not state_path(pack).is_file():
-            if not args.all_closed:
-                print(f"no engagement pack at {pack}", file=sys.stderr)
+            if args.all_closed:
+                continue
+            if not args.force:
+                print(
+                    f"no engagement pack at {pack} (no {STATE_FILENAME}) - if this is a "
+                    "legacy/non-workspace directory the DoD scan still walks, --force "
+                    "excludes it from scope the same way (writes .archive, no state "
+                    "required)",
+                    file=sys.stderr,
+                )
                 return 2
+            # No state to gate on - a legacy/pre-workspace directory, or any other
+            # artifacts/ subdirectory the DoD scan still walks. Here --force means
+            # "exclude it from scope", not "archive an open engagement" (live corp
+            # report 2026-07-31: `archive <name> --force` on such a directory exited 2
+            # with no way to mark it excluded at all - a manual empty .archive file was
+            # the only workaround).
+            if not pack.is_dir():
+                print(f"no directory at {pack}", file=sys.stderr)
+                return 2
+            (pack / ARCHIVE_MARKER).write_text(
+                f"archived {_dt.date.today().isoformat()} via engagement_state archive "
+                "(--force; no engagement-state.json found - excluded from DoD scope only)\n",
+                encoding="utf-8",
+            )
+            clear_active(root, pack.name)
+            archived_now += 1
+            print(
+                f"archived: {pack.name}/ ({ARCHIVE_MARKER} written - excluded from "
+                "scans; no engagement state found)"
+            )
             continue
         try:
             state = load_state(pack)
@@ -1538,7 +1566,10 @@ def main(argv: list[str] | None = None) -> int:
         "--all-closed", action="store_true", help="archive every closed, unarchived pack"
     )
     p.add_argument(
-        "--force", action="store_true", help="archive an OPEN pack (logged in the pack first)"
+        "--force",
+        action="store_true",
+        help="archive an OPEN pack (logged in the pack first), or a legacy/non-workspace "
+        "directory with no engagement-state.json (excluded from scope only, nothing logged)",
     )
     p.set_defaults(fn=_cmd_archive)
 
