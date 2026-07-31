@@ -73,10 +73,19 @@ if [ ! -f docs/team-operating-guide.md ]; then \
   if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -maxdepth 6 -path '*/compliance-surveillance-team/*/docs/team-operating-guide.md' 2>/dev/null | sort -V | tail -1); \
     [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; fi; \
 SCRIPT="${PR:+$PR/}scripts/engage_probe.py"; \
-(python3 "$SCRIPT" --plugin-root "$PR" --interpreter-name python3 || \
- python "$SCRIPT" --plugin-root "$PR" --interpreter-name python || \
- py "$SCRIPT" --plugin-root "$PR" --interpreter-name py) 2>/dev/null
+(PYTHONIOENCODING=utf-8 python3 "$SCRIPT" --plugin-root "$PR" --interpreter-name python3 || \
+ PYTHONIOENCODING=utf-8 python "$SCRIPT" --plugin-root "$PR" --interpreter-name python || \
+ PYTHONIOENCODING=utf-8 py "$SCRIPT" --plugin-root "$PR" --interpreter-name py) 2>/dev/null || \
+echo "PROBE_FAILED - run by hand to see why: PYTHONIOENCODING=utf-8 py \"$SCRIPT\" --plugin-root \"$PR\""
 ```
+
+**On Windows, `PYTHONIOENCODING=utf-8` is not optional.** The probe's report contains emoji;
+a cp1252 console (the Windows default) makes a bare `print()` of it raise
+`UnicodeEncodeError`, which silently exits every one of python3/python/py non-zero - the
+`2>/dev/null` then hides the traceback entirely, so the probe LOOKS like it just does
+nothing (live corporate report, 2026-07-31). **If you see `PROBE_FAILED` in the output**:
+run the printed command directly to see the real error - never guess, don't retry the
+compound blindly.
 
 The script prints, in order: `INTERPRETER=` (the literal word - python3/python/py - that
 worked; this IS `<python>` for every later script call in this session, use it verbatim,
