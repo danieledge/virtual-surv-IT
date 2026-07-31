@@ -64,9 +64,11 @@ cloud-agnostic default - customise to your environment.
 - Any other data proceeds **only on the user's attestation** (asked in `engage`'s batched
   opening gate) that it is
   anonymised/masked or carries no prohibited PII/MNPI - that responsibility is the **user's**.
-  Prefer synthetic; **recommend `/prepare-data`** (masking via `scripts.ingest` +
+  Prefer synthetic, and prefer data **pre-masked/sanitised by external, approved means**;
+  `/prepare-data` (masking via `scripts.ingest` +
   `config/masking-schema.yaml`, validated by `scripts.validate_masking`, key from `MASKING_KEY`)
-  and route there on a "no/unsure" answer.
+  is a **best-effort aid with limited capabilities - not a production-grade anonymisation
+  pipeline** - route there on a "no/unsure" answer, with that warning stated.
 - **Pseudonymised ≠ anonymous.** Masked output is still personal data (GDPR) - keep it governed;
   prefer fully **synthetic** for anything leaving the environment.
 
@@ -94,7 +96,8 @@ and the **deliverable → owner routing table** all live there.
 Real developers and QA reviewers rely on the outputs, so "done" is an evidenced gate, not a
 claim: `docs/DEFINITION-OF-DONE.md` - traceable, tested, independently QA'd, code- and
 performance-reviewed, compliance-reviewed, documented for handover, artifacts in `.md` + `.html`,
-an **engagement-summary email** (`.txt` in `artifacts/`, signed as Morgan), and human sign-off.
+an **engagement-summary email** (`.txt` in the engagement's `artifacts/<slug>/` workspace,
+signed as Morgan), and human sign-off.
 
 ## 7. Guardrails
 
@@ -112,8 +115,11 @@ an **engagement-summary email** (`.txt` in `artifacts/`, signed as Morgan), and 
   PDF / DOCX → data, deps vendored so no pip), `render_html`, `ingest`, `gen_synthetic`,
   `synthesise`, `validate_masking`, `validate_manifest`, `check_citations`, `eval_score`,
   `calibrate_spoofing`, `check_artifacts`, `engagement_state`, `extensions`,
-  `convert_sarif`. So read a spreadsheet with
-  `python -m scripts.convert_file <file>` and just run it - do **not** hand-parse it, and do **not**
+  `convert_sarif`. So read ANY document input - a spreadsheet, a **PDF**, a DOCX, a CSV -
+  with `python -m scripts.convert_file <file>` and just run it (deps are vendored in the
+  plugin: no pip, no installs, corp-safe; `--layout` preserves PDF columns/tables). Do
+  **not** hand-parse documents, do **not** read their binary bytes via shell/PowerShell
+  one-liners, and do **not**
   tell the user to create `.claude/.exec-consent` to convert or render a file. Consent is only for
   executing the deliverable being built or reviewed.
 - An advisory agent that wants to edit code hands back to the orchestrator instead.
@@ -128,10 +134,14 @@ an **engagement-summary email** (`.txt` in `artifacts/`, signed as Morgan), and 
   `docs/WAYS-OF-WORKING.md`; review method in `docs/code-review-method.md`.
 - **Traceability spine:** `BRD-001 → FSD-001 → code → test → obligation`, tracked in the RTM
   (`docs/templates/rtm.md`), checked by `compliance-reviewer`.
-- **Artifacts in `.md` + `.html`:** author under `artifacts/` (git-ignored), render with
+- **Artifacts in `.md` + `.html`:** author in the engagement's workspace `artifacts/<slug>/`
+  (git-ignored; one placement rule: ADR-010 + the operating guide's "Where every document
+  lives" table), render with
   `python -m scripts.render_html` - or, from a plugin install in a foreign project, the bundled
   copy by path (resolution rule: `docs/team-operating-guide.md` §Run mode). Templates in
   `docs/templates/`.
+- **Project memory:** one codebase map per working project (`docs/codebase-map.md`,
+  ADR-003/ADR-007) - PM-curated, advisory-only, hygiene-gated; read at open, updated at close.
 - **Model tiering (cost):** **opus** for the highest-stakes judgement - the last *specialist* word
   before handover, with no independent domain re-check downstream (`model-validator`,
   `compliance-reviewer`, `code-reviewer`; the PM challenges their *findings* but does not re-run the

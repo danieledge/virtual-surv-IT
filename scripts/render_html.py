@@ -228,12 +228,17 @@ _EMPTY_THEAD = re.compile(r"<thead>\s*<tr>\s*(?:<th[^>]*>\s*</th>\s*)+</tr>\s*</
 _MD_LINK = re.compile(r'(<a\s+[^>]*href=")(?!https?:|mailto:|#)([^":]+?)\.md((?:#[^"]*)?)"', re.I)
 
 
-def render(md_text: str, title: str, source: str = "", generated: str = "") -> str:
+def markdown_to_safe_html(md_text: str, html_links: bool = True) -> str:
+    """The shared first stage every artifact renderer builds on: Markdown -> sanitised
+    HTML fragment. `render()` (this module) turns that fragment into a styled standalone
+    page; `render_docx.py` walks the SAME sanitised fragment into a Word document - one
+    parse, one sanitisation pass, so both output formats can never drift from each other
+    or from the XSS allow-list. `html_links=False` skips the .md -> .html link repoint
+    (render_docx has no .html sibling to point at)."""
     if markdown is None:
         raise RuntimeError(
             "The 'Markdown' package is required: pip install -r requirements-dev.txt"
         )
-
     # toc_depth 2-2: a `[TOC]` contents block lists only the MAJOR sections (h2 / `## N.`), not the
     # H1 title and not h3+ subsections - so a large report's Contents stays a short, clickable index.
     raw_body = markdown.markdown(
@@ -246,7 +251,13 @@ def render(md_text: str, title: str, source: str = "", generated: str = "") -> s
     safe_body = _sanitise(raw_body)
     # Drop empty metadata-table header rows, and repoint inter-artifact .md links to .html.
     safe_body = _EMPTY_THEAD.sub("", safe_body)
-    safe_body = _MD_LINK.sub(r'\1\2.html\3"', safe_body)
+    if html_links:
+        safe_body = _MD_LINK.sub(r'\1\2.html\3"', safe_body)
+    return safe_body
+
+
+def render(md_text: str, title: str, source: str = "", generated: str = "") -> str:
+    safe_body = markdown_to_safe_html(md_text)
 
     # html.escape() the title so injected HTML/JS in a Markdown H1 cannot
     # break out of the <title> element.

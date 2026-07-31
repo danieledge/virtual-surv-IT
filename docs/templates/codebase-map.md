@@ -8,7 +8,11 @@
 
 > **Document control** · ID `MAP-001` · Version `0.1` · Status `Live`
 > · Classification `Internal` · Owner `Morgan (PM)` · As-of `<YYYY-MM-DD>`
-> · Anchor `<full or short commit SHA the map was last verified against; write `no-vcs` if the working project has no git repo>`
+> · Anchor `<commit SHA last verified against - a project without a git repo writes exactly the value no-vcs>`
+> · Staleness-budget `50` <commits the anchor may trail HEAD before MAP-STALE; tune with a stated rationale>
+
+> ⚠️ The gate rejects unfilled placeholders: the Anchor value must BE a SHA (or exactly
+> `no-vcs`) - placeholder prose does not count (2026-07-29 register M1).
 >
 > | Version | Date | Engagement | Change |
 > |---|---|---|---|

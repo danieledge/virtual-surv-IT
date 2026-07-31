@@ -40,10 +40,17 @@ flowchart LR
     Reqs([requirements pack]) --> Build
 ```
 
+> The canonical index of **all 24 skills** lives in
+> [`docs/team-operating-guide.md`](team-operating-guide.md) §Command index; the table below is
+> a summary by entry point.
+
 | You bring… | Command | What runs |
 |---|---|---|
 | Data to get ready (real or none) | `/prepare-data` | guided synthetic-or-mask → validate, before any agent sees it |
 | An idea / problem | `/engage` → `/write-brd` | discovery → BRD → FSD → build → review |
+| A small, non-regulated job | `/engage-light` | same safety gates, one-page brief, 2-3 agents; refuses detection logic (upgrades to standard) |
+| A single detection scenario | `/new-scenario` | spec → SME review → build → compliance review |
+| A security-focused audit | `/security-audit` | OWASP ASVS / CWE + threat model, security-focused evaluator-optimizer loop |
 | A BRD | `/brd-to-fsd` | functional spec + traceability |
 | A need to elicit (BA) | `/elicit-requirements` | stakeholder analysis → requirements → RTM (BABOK) |
 | A regulatory change | `/reg-change-impact` | obligation Δ → affected scenarios/controls/data → plan |
@@ -65,8 +72,12 @@ that holds review, performance, compliance, QA evidence, handover and change/ops
 of a single file - easier to read and distribute than many separate documents. Ask for
 **separate artifacts** only when a control needs a standalone (e.g. a change request to attach
 to a ticket); the templates below are the building blocks. Everything is produced in **`.md`
-and `.html`** (via `scripts/render_html.py`) - the **one exception** is the engagement-summary
+and `.html`** (via `scripts/render_html.py`). An optional third format, **`.docx`** (via `scripts/render_docx.py`, python-docx), is available for non-technical reviewers who redline in Word - opt-in per project (`.claude/team-preferences.json` - set by the installer's re-runnable "Document format preferences" menu option any time, or just tell Morgan to turn it on/off - the file carries no gate) or on request; `.md` stays the one authored source either way. The **one exception** to .md+.html is the engagement-summary
 email, which is an email and stays a `.txt` (see the last row).
+
+> **Where each artifact lives:** everything an engagement produces goes in its own workspace
+> `artifacts/<slug>/` (one placement rule, ADR-010); the full document-type address table is in
+> `docs/team-operating-guide.md` ("Where every document lives").
 
 > **This catalogue is the canonical template index.** The skills reference their common domain
 > templates inline (e.g. `/tune-thresholds` → the tuning decision register), but a template
@@ -112,7 +123,7 @@ email, which is an email and stays a `.txt` (see the last row).
 | Tuning decision register | `tuning-decision-register.md` | **SR 11-7**/FFIEC model-change-management (running log) |
 | Control mapping | `control-mapping.md` | scenario -> obligation -> internal control -> effectiveness |
 | Data lineage | `data-lineage.md` | feed -> field -> transform -> scenario (+ RTS 25, reconciliation) |
-| **Engagement summary email** (always, at close) | `engagement-summary-email.md` | PM cover note - **`.txt` in `artifacts/`**, signed as Morgan ("Hi," if recipient unknown) |
+| **Engagement summary email** (always, at close) | `engagement-summary-email.md` | PM cover note - **`.txt` in the workspace `artifacts/<slug>/`**, signed as Morgan ("Hi," if recipient unknown) |
 
 > **Generic vs domain-specific templates.** Some artifacts have a **generic** and a **domain**
 > variant - use the domain one when it applies, the generic one otherwise (they are *not*

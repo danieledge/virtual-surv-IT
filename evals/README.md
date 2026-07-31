@@ -80,6 +80,15 @@ standing in for the human, per ADR-002 - creates the sandbox's `.claude/.exec-co
 the session itself remains blocked from writing it. Scoring then combines a deterministic
 artifact probe of the sandbox, an uncontaminated normalizer pass over the transcript
 (`eval_score` against `expected.yaml`), and the rubric LLM-judge. Outputs land under
+**Retention rule (2026-07-30 audit):** under `evals/runs/`, keep IN FULL (a) any run id
+named in a committed `evals/eval-baseline-*.md` or `evals/artifact-review-*.md` (those
+sandboxes are cited evidence and `--rescore`/`--resume-run` operate on kept runs), and
+(b) all runs from the last 7 days. For anything else, delete the `*/sandbox/` subdirs and
+keep the scoring outputs (`transcript.md`, `events.jsonl`, `score.json`, `report.md`);
+whole run dirs older than 30 days may be purged unless referenced. Rationale: kept
+sandboxes are full repo copies (~80% of bytes) and the lifecycle hooks treat stale kept
+sandboxes as live engagement state.
+
 `evals/runs/<timestamp>/<case>/` (git-ignored): `transcript.md`, `gates.json` (every simulated
 Q&A), `findings.json`, `score.json`, `report.md`.
 

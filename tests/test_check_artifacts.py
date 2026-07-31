@@ -89,7 +89,10 @@ def test_empty_dir_passes(tmp_path):
 def test_md_without_html_is_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "REVIEW-foo.md")
-    _touch(art / "engagement-summary-foo.txt")
+    _touch(
+        art / "engagement-summary-foo.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["REVIEW-foo.md", "engagement-summary-foo.txt"])
     findings = check(art)
     assert len(findings) == 1
@@ -111,7 +114,10 @@ def test_complete_gate_passes(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "delivery-report.md")
     _touch(art / "delivery-report.html")
-    _touch(art / "engagement-summary-spoofing.txt")
+    _touch(
+        art / "engagement-summary-spoofing.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["delivery-report.md", "engagement-summary-spoofing.txt"])
     assert check(art) == []
 
@@ -119,7 +125,10 @@ def test_complete_gate_passes(tmp_path):
 def test_nested_artifacts_are_checked(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "sub" / "spec.md")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["spec.md", "engagement-summary-x.txt"])
     findings = check(art)
     assert len(findings) == 1
@@ -142,7 +151,10 @@ def test_finding_without_impact_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "REVIEW-x.md", _finding_block(with_impact=False))
     _touch(art / "REVIEW-x.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["REVIEW-x.md", "engagement-summary-x.txt"])
     findings = check(art)
     assert len(findings) == 1 and "FINDING-NO-IMPACT" in findings[0]
@@ -152,7 +164,10 @@ def test_finding_with_impact_passes(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "REVIEW-x.md", _finding_block(with_impact=True) + _finding_block(True))
     _touch(art / "REVIEW-x.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["REVIEW-x.md", "engagement-summary-x.txt"])
     assert check(art) == []
 
@@ -161,7 +176,10 @@ def test_artifact_without_finding_blocks_not_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "delivery-report.md", "# Report\n\nProse only, tables elsewhere.\n")
     _touch(art / "delivery-report.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["delivery-report.md", "engagement-summary-x.txt"])
     assert check(art) == []
 
@@ -185,7 +203,10 @@ def test_index_satisfies_gate(tmp_path):
     for stem in ("delivery-report", "qa-handover"):
         _touch(art / f"{stem}.md")
         _touch(art / f"{stem}.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["delivery-report.md", "qa-handover.md", "engagement-summary-x.txt"])
     assert check(art) == []
 
@@ -269,7 +290,10 @@ def test_summary_email_before_close_flagged(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "review-pass-1.md")
     _touch(art / "review-pass-1.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, status=STATUS_OPEN, listed=["review-pass-1.md", "engagement-summary-x.txt"])
     findings = check(art)
     assert len(findings) == 1 and "SUMMARY-BEFORE-CLOSE" in findings[0]
@@ -292,15 +316,19 @@ def test_open_engagement_needs_no_summary_email(tmp_path):
     assert check(art) == []
 
 
-def test_legacy_folder_without_index_keeps_email_gate(tmp_path):
-    # Pre-lifecycle folders have no index: they get MISSING-INDEX plus the legacy
-    # email requirement, never a crash on the missing status.
+def test_folder_without_index_is_not_closed(tmp_path):
+    # 2026-07-29 register G1 [reproduced]: a pack with NO index used to route down the
+    # closed/legacy branch, disarming the close-only guards exactly when the team forgot
+    # the index. No readable status is now fail-safe NOT closed: the delivery report is
+    # premature and the email is not demanded (creating the index is the fix, not the
+    # email).
     art = tmp_path / "artifacts"
     _touch(art / "delivery-report.md")
     _touch(art / "delivery-report.html")
     findings = check(art)
     codes = "".join(findings)
-    assert "MISSING-INDEX" in codes and "MISSING-SUMMARY-EMAIL" in codes
+    assert "MISSING-INDEX" in codes and "FINAL-BEFORE-CLOSE" in codes
+    assert "MISSING-SUMMARY-EMAIL" not in codes
 
 
 # --- code-without-QA gate (the 2026-07-21 live failure) ----------------------------------
@@ -311,7 +339,10 @@ def test_code_without_qa_handover_flagged(tmp_path):
     _touch(art / "wash_trade_model.py", "def score(): ...")
     _touch(art / "report.md")
     _touch(art / "report.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(art, listed=["wash_trade_model.py", "report.md", "engagement-summary-x.txt"])
     codes = "".join(check(art))
     assert "CODE-NO-QA" in codes and "CODE-NO-TESTS" in codes
@@ -323,7 +354,10 @@ def test_code_with_qa_and_tests_passes(tmp_path):
     _touch(art / "test_wash_trade_model.py", "def test_score(): ...")
     _touch(art / "qa-handover.md")
     _touch(art / "qa-handover.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _index(
         art,
         listed=[
@@ -339,7 +373,10 @@ def test_code_with_qa_and_tests_passes(tmp_path):
 def test_test_files_alone_do_not_trigger_gate(tmp_path):
     art = tmp_path / "artifacts"
     _touch(art / "test_something.py", "def test_x(): ...")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _touch(art / "notes.md")
     _touch(art / "notes.html")
     _index(art, listed=["test_something.py", "engagement-summary-x.txt", "notes.md"])
@@ -376,7 +413,10 @@ def test_stale_index_uses_whole_tokens_not_substrings(tmp_path):
     for stem in ("report", "final-report"):
         _touch(art / f"{stem}.md")
         _touch(art / f"{stem}.html")
-    _touch(art / "engagement-summary-x.txt")
+    _touch(
+        art / "engagement-summary-x.txt",
+        "Hi,\n\nAll done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+    )
     _touch(
         art / "START-HERE.md",
         "# S\n| Status | ✅ CLOSED |\n- final-report.md\n- engagement-summary-x.txt\n",
@@ -591,8 +631,10 @@ def test_map_entry_without_basis_tag_flagged(tmp_path):
     repo, sha = _map_repo(tmp_path)
     m = repo / "docs" / "codebase-map.md"
     _touch(m, _good_map(sha) + "| 2 | etl | untagged claim | none | 2026-07-18 | - |\n")
-    findings = check_map(m)
-    assert len(findings) == 1 and "MAP-NO-BASIS" in findings[0]
+    codes = "".join(check_map(m))
+    assert "MAP-NO-BASIS" in codes
+    # Since the M2 fix (2026-07-29) the '-' anchor cell is a finding too, not decoration.
+    assert "MAP-ENTRY-NO-ANCHOR" in codes
 
 
 def test_map_secret_content_flagged(tmp_path):
@@ -856,8 +898,12 @@ def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
     assert "findings-t.json" not in joined  # never named by MISSING-HTML / STALE-INDEX
 
 
-def test_apply_fixes_renders_report_from_pack(tmp_path):
+def test_apply_fixes_renders_report_from_pack_at_close(tmp_path):
+    # D4 ruling 2026-07-29 (register P3): REVIEW-<slug>.md is close-only, so --fix renders
+    # it during the 🔒 closing window (tests/test_placement_fixes.py pins the mid-engagement
+    # refusal side).
     art = tmp_path / "artifacts"
+    _index(art, status="🔒 CLOSING - finishing close artifacts")
     _pack(art, _VALID_PACK)  # slug "t" -> REVIEW-t.md rendered up into artifacts/
     apply_fixes(art)
     report = art / "REVIEW-t.md"
@@ -1010,7 +1056,10 @@ def test_review_without_fingerprints_raises_nothing(tmp_path):
 
 
 def _closed_light_pack(tmp_path, profile_args):
-    from scripts.engagement_state import main as es_main
+    # A DEFECTIVE closed pack (no summary email). `set-status closed` now refuses such a
+    # close (R6 gate, tests/test_closing_status.py), so this fixture hand-mints the closed
+    # state on disk - exactly the resumed-session mint the checker must still judge.
+    from scripts.engagement_state import load_state, main as es_main, state_path
 
     art = tmp_path / "artifacts"
     es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t", *profile_args])
@@ -1019,7 +1068,13 @@ def _closed_light_pack(tmp_path, profile_args):
     es_main(["--dir", str(art), "add-artifact", "engagement-brief.md", "--title", "Brief"])
     es_main(["--dir", str(art), "set-team", "Ana (analysis)"])
     es_main(["--dir", str(art), "finalise-artifacts"])
-    es_main(["--dir", str(art), "set-status", "closed", "--verdict", "done"])
+    state = load_state(art)
+    state["status"] = "closed"
+    state["engagement"]["closed"] = "2026-07-29"
+    state["outstanding"] = []
+    state["verdict"] = "done"
+    state_path(art).write_text(json.dumps(state), encoding="utf-8")
+    es_main(["--dir", str(art), "render"])
     return art
 
 
@@ -1109,3 +1164,161 @@ def test_workspace_dirs_discovery(tmp_path):
     art = _ws(tmp_path, "audit")
     (art / "not-a-pack").mkdir()
     assert [p.name for p in workspace_dirs(art)] == ["audit"]
+
+
+# ------------------------------------------------ summary email identity (2026-07-30)
+
+from pathlib import Path  # noqa: E402
+
+
+MORGAN_EMAIL = """To:        Daniel
+From:      🤖 Morgan - PM & Orchestrator, Virtual Surveillance IT (AI agent, not a human)
+Subject:   Review complete
+
+Hi Daniel,
+
+The review is complete. 🤖 Yuki (data-quality-reviewer) confirmed coverage.
+
+🤖 Morgan
+PM & Orchestrator - Virtual Surveillance IT (AI agent)
+"""
+
+
+def test_summary_email_from_morgan_passes():
+    from scripts.check_artifacts import check_summary_email
+
+    assert check_summary_email(MORGAN_EMAIL, Path("e.txt")) == []
+
+
+def test_summary_email_signed_by_human_fires():
+    """The live failure: the email went out signed by the requester, not Morgan."""
+    from scripts.check_artifacts import check_summary_email
+
+    text = MORGAN_EMAIL.replace(
+        "🤖 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+        "Best regards,\nDaniel\n",
+    ).replace("From:      🤖 Morgan - PM & Orchestrator", "From:      Daniel")
+    codes = [f.split(":")[0] for f in check_summary_email(text, Path("e.txt"))]
+    assert codes.count("EMAIL-NOT-MORGAN") == 2  # From line AND sign-off
+
+
+def test_summary_email_unmarked_agent_mention_fires():
+    """User rule 2026-07-30: any agent mentioned in the body carries 🤖."""
+    from scripts.check_artifacts import check_summary_email
+
+    text = MORGAN_EMAIL.replace("🤖 Yuki", "Yuki")
+    findings = check_summary_email(text, Path("e.txt"))
+    assert any("EMAIL-AGENT-UNMARKED" in f and "Yuki" in f for f in findings)
+    # Morgan is marked in the signature, so no Morgan finding
+    assert not any("'Morgan'" in f for f in findings)
+
+
+def test_summary_email_checked_inside_pack(tmp_path):
+    """The email content check runs as part of the artifacts scan (and so as part of
+    the close gate)."""
+    pack = tmp_path / "artifacts" / "eng-x"
+    pack.mkdir(parents=True)
+    (pack / "engagement-summary-eng-x.txt").write_text(
+        "Hi,\n\nAll done.\n\nBest,\nDaniel\n", encoding="utf-8"
+    )
+    findings = check(tmp_path / "artifacts")
+    assert any("EMAIL-NOT-MORGAN" in f for f in findings)
+
+
+def test_registry_html_mirror_staleness_flagged(tmp_path):
+    """The HTML mirror is best-effort at write time (silently skipped when render libs
+    are missing) - so the checker must flag a missing or older ENGAGEMENTS.html
+    (user report 2026-07-30)."""
+    import os
+    import time
+
+    art = _ws(tmp_path, "audit")
+    from scripts.engagement_state import render_registry
+
+    render_registry(art)
+    md, html = art / "ENGAGEMENTS.md", art / "ENGAGEMENTS.html"
+    assert md.is_file()
+    if html.is_file():  # render libs present in dev env: exercise both variants
+        assert check_registry(art) == []
+        old = time.time() - 3600
+        os.utime(html, (old, old))
+        assert any("REGISTRY-HTML-STALE" in f and "older" in f for f in check_registry(art))
+        html.unlink()
+    findings = check_registry(art)
+    assert any("REGISTRY-HTML-STALE" in f and "no rendered .html" in f for f in findings)
+    assert any("pip install -r requirements.txt" in f for f in findings)
+
+
+# ------------------------------------------------ developer-guidance check (audit #2)
+
+
+def test_dev_guidance_missing_heading_fires(tmp_path):
+    from scripts.check_artifacts import check_summary_email as _unused  # noqa: F401
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    review = art / "REVIEW-x.md"
+    review.write_text(
+        "# Review\n\n## Findings\n\n_No findings._\n\n## Limitations & residual risk\n"
+        "_(none stated)_\n",
+        encoding="utf-8",
+    )
+    (review.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["REVIEW-x.md"])
+    findings = run_check(art)
+    assert any(
+        "FINDINGS-NO-DEV-GUIDANCE" in f and "no '## 🔵 Developer guidance'" in f for f in findings
+    )
+
+
+def test_dev_guidance_placeholder_only_fires(tmp_path):
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    review = art / "REVIEW-x.md"
+    review.write_text(
+        "# Review\n\n## Findings\n\n_No findings._\n\n"
+        "## 🔵 Developer guidance - improving future code\n_(none provided)_\n\n"
+        "## Limitations & residual risk\n_(none stated)_\n",
+        encoding="utf-8",
+    )
+    (review.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["REVIEW-x.md"])
+    findings = run_check(art)
+    assert any("FINDINGS-NO-DEV-GUIDANCE" in f and "empty/unfilled" in f for f in findings)
+
+
+def test_dev_guidance_filled_in_passes(tmp_path):
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    review = art / "REVIEW-x.md"
+    review.write_text(
+        "# Review\n\n## Findings\n\n_No findings._\n\n"
+        "## 🔵 Developer guidance - improving future code\n"
+        "Consider adding docstrings to the public API.\n\n"
+        "## Limitations & residual risk\n_(none stated)_\n",
+        encoding="utf-8",
+    )
+    (review.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["REVIEW-x.md"])
+    findings = run_check(art)
+    assert not any("FINDINGS-NO-DEV-GUIDANCE" in f for f in findings)
+
+
+def test_non_review_artifact_without_findings_section_unaffected(tmp_path):
+    """A BRD/FSD has no '## Findings' section at all - never flagged for lacking
+    developer guidance, which is a review-only concept."""
+    from scripts.check_artifacts import check as run_check
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    brd = art / "BRD-x.md"
+    brd.write_text("# BRD\n\n## Executive summary\n\nSomething.\n", encoding="utf-8")
+    (brd.with_suffix(".html")).write_text("<p>x</p>", encoding="utf-8")
+    _index(art, listed=["BRD-x.md"])
+    findings = run_check(art)
+    assert not any("FINDINGS-NO-DEV-GUIDANCE" in f for f in findings)

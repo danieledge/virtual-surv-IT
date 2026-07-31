@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ADR-005: Persona re-anchoring - a dormancy-aware per-turn hook (proposed)</title>
+<title>ADR-005: Persona re-anchoring - a dormancy-aware per-turn hook (accepted)</title>
 <style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
   color: #1a1a1a; background: #fff; }
@@ -50,13 +50,13 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-23</span></header>
-<h1 id="adr-005-persona-re-anchoring-a-dormancy-aware-per-turn-hook-proposed">ADR-005: Persona re-anchoring - a dormancy-aware per-turn hook (proposed)</h1>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
+<h1 id="adr-005-persona-re-anchoring-a-dormancy-aware-per-turn-hook-accepted">ADR-005: Persona re-anchoring - a dormancy-aware per-turn hook (accepted)</h1>
 <blockquote>
 <p>Architecture Decision Record (Nygard format). One file per significant decision, so the
 <em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
-<p><strong>Document control</strong> · ID <code>ADR-005</code> · Version <code>0.1</code> · Status <code>Proposed</code>
-· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-23</code></p>
+<p><strong>Document control</strong> · ID <code>ADR-005</code> · Version <code>0.2</code> · Status <code>Accepted</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-24</code></p>
 <table>
 <thead>
 <tr>
@@ -73,6 +73,12 @@ a { color: #0969da; }
 <td>persona-decay discussion (user-reported)</td>
 <td>Initial proposal: dormancy-aware UserPromptSubmit re-anchor hook</td>
 </tr>
+<tr>
+<td>0.2</td>
+<td>2026-07-24</td>
+<td>best-practice review remediation</td>
+<td>Accepted &amp; implemented: <code>scripts/persona_anchor.py</code> (tested, ≤8-line anchor, live-engagement trigger); wiring by a one-shot human-run script, retired 2026-07-30 after its wiring was committed (re-wiring today: <code>bash scripts/apply-project-anchor.sh</code>)</td>
+</tr>
 </tbody>
 </table>
 </blockquote>
@@ -81,7 +87,7 @@ a { color: #0969da; }
 <tbody>
 <tr>
 <td><strong>Status</strong></td>
-<td><strong>Proposed</strong> - design only; NOT wired into <code>hooks.json</code> until human sign-off</td>
+<td><strong>Accepted / implemented</strong> - <code>scripts/persona_anchor.py</code>; wiring into the two hook files was human-run (ADR-002 rec 5; applied 2026-07-24 - the hook ships wired). The original one-shot wiring script was retired 2026-07-30 once its wiring was committed; the live re-wiring path today is <code>bash scripts/apply-project-anchor.sh</code> (syncs the staged copies to the live hooks)</td>
 </tr>
 <tr>
 <td><strong>Date</strong></td>
@@ -164,9 +170,10 @@ philosophy as ADR-004.</p>
 <li>Standard rigor for a team-behaviour change: full pytest + a live golden-slice spot check.</li>
 </ul>
 <h2 id="status-next-step">Status / next step</h2>
-<p><strong>Proposed.</strong> Not wired into <code>hooks.json</code>. Implementation (the hook script, the engaged-signal
-check, the anchor content + its source-of-truth file, the dormancy guard, the tests above) awaits
-human sign-off on this ADR.</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-005-persona-reanchoring-hook.md &middot; 2026-07-23</div>
+<p><strong>Accepted and implemented</strong> (0.27.0; wiring human-applied 2026-07-24 - the hook ships wired in
+both hook files). The hook script (<code>scripts/persona_anchor.py</code>), the engaged-signal check, the
+anchor content, the dormancy guard and the tests above all landed; re-wiring today is
+<code>bash scripts/apply-project-anchor.sh</code>.</p>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-005-persona-reanchoring-hook.md &middot; 2026-07-30</div>
 </body>
 </html>

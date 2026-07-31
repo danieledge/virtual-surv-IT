@@ -17,12 +17,26 @@ TTL_DAYS="${CST_TOOLCHECK_TTL_DAYS:-7}"
 REFRESH=0
 case "${1:-}" in --refresh | --force) REFRESH=1 ;; esac
 
+# Allow-list presence - computed FRESH on every run (both cache paths), never cached: the
+# user may add it minutes after being tipped, and a stale "missing" would nag for the TTL.
+# Marker: the scripts wildcard from the recommended set (install_helper.py
+# RECOMMENDED_ALLOW). Detection only - this script never edits settings (ADR-002 rec 5).
+allowlist_line() {
+  if [ -f ".claude/settings.json" ] && grep -q 'python3\? -m scripts\.\*' ".claude/settings.json" 2>/dev/null; then
+    echo "ALLOWLIST: present"
+  else
+    echo "ALLOWLIST: missing - fewer permission prompts if added; the user runs:"
+    echo "  python <clone>/install_helper.py --permissions ."
+  fi
+}
+
 # Serve from cache when it's fresh and a refresh wasn't requested.
 if [ "$REFRESH" -eq 0 ] && [ -f "$CACHE" ] && [ -n "$(find "$CACHE" -mtime "-${TTL_DAYS}" 2>/dev/null)" ]; then
   cat "$CACHE"
   echo
   echo "(cached - from a probe within the last ${TTL_DAYS} day(s); re-run with --refresh after"
   echo " installing or removing analysers.)"
+  allowlist_line
   exit 0
 fi
 
@@ -46,6 +60,7 @@ TOOLS=(
   "pmd|Java static analysis|via Maven/Gradle or brew/apt"
   "spotbugs|Java bugs/security|via Maven/Gradle or brew/apt"
   "pwsh|PowerShell + PSScriptAnalyzer|install PowerShell, then Install-Module PSScriptAnalyzer"
+  "ast-grep|structural multi-lang search (find-all-implementations/callers by AST pattern)|brew/cargo/npm install ast-grep, or https://ast-grep.github.io/guide/quick-start.html"
 )
 # NOTE: profilers/benchmarks (py-spy, scalene, hyperfine, cProfile, Measure-Command, JMH) are
 # intentionally NOT listed - the team is STATIC-ONLY for now (it does not execute reviewed code,
@@ -62,6 +77,28 @@ for entry in "${TOOLS[@]}"; do
   fi
 done
 
+# Artifact-renderer libraries (Python, not CLI binaries - a single import probe, not
+# command -v). Checked here so a missing renderer is known BEFORE Morgan attempts a
+# render, not discovered as a failed tool call mid-engagement (each failed attempt is a
+# wasted round-trip). Cached with everything else on this same TTL.
+renderers=()
+render_missing=()
+for c in python3 python py; do
+  command -v "$c" >/dev/null 2>&1 && PY_PROBE="$c" && break
+done
+if [ -n "${PY_PROBE:-}" ]; then
+  if "$PY_PROBE" -c "import markdown, bleach" >/dev/null 2>&1; then
+    renderers+=("markdown+bleach (.html export)")
+  else
+    render_missing+=(".html export (markdown+bleach)  →  pip install -r requirements-dev.txt")
+  fi
+  if "$PY_PROBE" -c "import docx" >/dev/null 2>&1; then
+    renderers+=("python-docx (.docx export)")
+  else
+    render_missing+=(".docx export (python-docx)  →  pip install -r requirements-dev.txt")
+  fi
+fi
+
 # Build the report once, then both cache and print it.
 report="$(
   echo "=== Review/perf tooling check ==="
@@ -73,6 +110,10 @@ report="$(
   echo "⚠️  Missing (${#missing[@]}) - reviews still run but degrade to inference-only (🧠) for these:"
   if [ "${#missing[@]}" -eq 0 ]; then echo "   (none - full tool-backed 📊 coverage)"; else printf '   - %s\n' "${missing[@]}"; fi
   echo
+  echo "Artifact renderers:"
+  if [ "${#renderers[@]}" -gt 0 ]; then printf '   ✅ %s\n' "${renderers[@]}"; fi
+  if [ "${#render_missing[@]}" -gt 0 ]; then printf '   ⚠️  %s\n' "${render_missing[@]}"; fi
+  echo
   echo "Note: Morgan records this once and skips the missing tools for the rest of the session"
   echo "(does not re-invoke them). Install the ones you care about for measured (📊) findings."
 )"
@@ -83,4 +124,6 @@ if mkdir -p "$(dirname "$CACHE")" 2>/dev/null; then
 fi
 
 printf '%s\n' "$report"
+
+allowlist_line
 exit 0

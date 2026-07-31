@@ -1,4 +1,4 @@
-# Engagement workflow - Mermaid diagrams (v0.29.0)
+# Engagement workflow - Mermaid diagrams (v0.29.0 - point-in-time; the lifecycle gained the closing window, workspace hardening and three lifecycle hooks in 0.33.x)
 
 Companion to `engagement-flow-spec.md`. Diagram 0 is the simple view (core concepts only -
 simplified by omission, never by distortion); diagrams 1-4 are the complete detail: the

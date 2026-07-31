@@ -26,7 +26,7 @@ be introduced later; until then, opening a PR constitutes that agreement.
 A promotion is a release: the DoD requires prompt-touching changes to be **eval-gated**, and the
 gate is now mechanical, not a documented intention:
 
-1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 33 cases) in a
+1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 43 golden cases) in a
    Claude Code session on this repo.
 2. Record the result as **`evals/eval-baseline-<version>.md`** (date · cases run · pass/fail ·
    notes; `Scope: full` — or `Scope: deterministic-only` for a patch release with no prompt
@@ -34,7 +34,14 @@ gate is now mechanical, not a documented intention:
 3. Run **`python -m scripts.release_gate`** (add `--allow-deterministic` for a patch release). It
    verifies version/badge/CHANGELOG consistency, that the baseline exists for the version being
    promoted, and that **no prompt file was committed after the baseline** (a stale baseline fails).
-4. Only on `release gate: OK` - merge `dev` → `main` and push.
+4. **Dormancy footprint check**: run `claude plugin details compliance-surveillance-team`
+   and note the projected token cost in the baseline record - the dormant-by-default
+   promise is a number, not a vibe; investigate any jump against the previous release.
+5. **Cold-resume check (full baselines)**: re-run one kept sandbox through
+   `scripts.eval_engage --resume-run <run>/<case>` - a fresh session must pick up the
+   engagement from disk (ACTIVE marker, decisions, consent outcome) without re-asking;
+   with the SessionStart resume brief applied, this also exercises ADR-011 live.
+6. Only on `release gate: OK` - merge `dev` → `main` and push.
 
 ## Ground rules (non-negotiable)
 
@@ -119,7 +126,7 @@ Two things worth knowing:
 - **The three safety hooks are a separate thing** from this tooling - they run *inside Claude
   Code* to block raw-data reads, un-consented code execution, and model writes of the consent
   marker / settings / the hooks themselves. They're explained in `docs/house-rules.md` and
-  threat-modelled in `docs/adr/ADR-002`.
+  threat-modelled in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
 
 ## Adding or changing components
 
@@ -180,7 +187,7 @@ asserting parsed-JSON equality of the `PreToolUse` block (`.claude/settings.json
 the permissions list, so the whole files differ by design). **Editing the hook
 files from inside a Claude session requires the human-set `CST_ALLOW_CONFIG_EDIT=1`** (the
 consent-write guard blocks model edits of them - by design). See `docs/house-rules.md` and
-`docs/adr/ADR-002`.
+[`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
 
 ## Conventions
 

@@ -85,15 +85,16 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
    summary**, standards cited (OWASP ASVS / CWE), a **tooling-coverage** section (which scanners
    ran, which were unavailable - say so rather than upgrading a guess to a certainty), the 🔵
    style/form lane, **and - MANDATORY - a `## 🔵 Developer guidance - improving future code`
-   section** (2-4 security-hardening points, even on a clean pass; verify it is in the artifact
-   before presenting).
+   section** (2-4 security-hardening points, even on a clean pass; `check_artifacts` mechanically
+   flags it missing/empty as `FINDINGS-NO-DEV-GUIDANCE`, but verify it is genuinely in the
+   artifact before presenting, don't rely on the gate).
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
 schema `docs/review/findings-schema.json`). Write the findings to
 `artifacts/data/findings-<slug>.json` with **`"kind": "security-audit"`** (each finding the five
 named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition), then run
 **`<python> -m scripts.check_artifacts --fix`** (allow-listed): it validates the pack
-(`FINDINGS-INVALID` → fix and re-run) and renders `artifacts/SECURITY-AUDIT-<slug>.md` + `.html`
+(`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `artifacts/<slug>/SECURITY-AUDIT-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first)
 (the `kind` drives the `SECURITY-AUDIT-` prefix). Don't hand-author or hand-edit the report.
 (`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin
 session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the

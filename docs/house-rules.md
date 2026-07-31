@@ -60,11 +60,13 @@ engagement. This file ships with the plugin and is **general by design**.
   must match the disposition.
 
 ## Execution safety
+The per-channel confidence statement for all of the below - what each control does and does not
+guarantee, channel by channel - is [`docs/safety-model.md`](safety-model.md).
 - **Hooks are declared in TWO files by design - keep them in sync.** The PreToolUse guards live in
   both `hooks/hooks.json` (plugin-install mode) and `.claude/settings.json` (repo-as-project mode);
   JSON can't carry a comment, so this note + `tests/test_hooks_in_sync.py` are the guard against
   drift. Edit one → edit the other identically. (The standard `hooks/hooks.json` is **auto-loaded**;
-  it must *not* be re-declared in `plugin.json` - that double-loads it. See `docs/adr/ADR-002`.)
+  it must *not* be re-declared in `plugin.json` - that double-loads it. See [`docs/adr/ADR-002`](adr/ADR-002-safety-hook-threat-model.md).)
 - **Reviewing code is static by default; executing it is gated.** Running tests, the script, or a
   profiler *executes* the code. `guard-code-execution.py` blocks these unless authorised by the
   `.claude/.exec-consent` marker or the human-set `CST_ALLOW_EXEC=1`. **The marker is human-only**
@@ -84,13 +86,13 @@ engagement. This file ships with the plugin and is **general by design**.
   bypasses lexical checks (indirection, subshells, `eval`, `base64|sh`). The real raw-data boundary
   is the `permissions.deny` list in `.claude/settings.json`, `data/raw/` in `.gitignore`, and
   masking-at-source via `scripts/ingest.py`. Any new file-reading tool must be added to the guard
-  matcher. (Full bypass enumeration + hardening backlog: `docs/adr/ADR-002`.)
+  matcher. (Full bypass enumeration + hardening backlog: [`docs/adr/ADR-002`](adr/ADR-002-safety-hook-threat-model.md).)
 - **Plugin installs don't ship the `permissions.deny` backstop - recreate it.** A plugin can carry
   hooks (`hooks/hooks.json`) but **not** a `permissions.deny` list, so a foreign project that installs
   this plugin gets the raw-data *guard hook* but not the OS-level deny backstop the fail-open paths
   and README lean on. When you install the plugin into a real project, copy the `Read`/`Grep`/`Glob`
   `data/raw/**` deny entries from this repo's `.claude/settings.json` into that project's own
-  `.claude/settings.json`. (Acknowledged residual: `docs/adr/ADR-002`.)
+  `.claude/settings.json`. (Acknowledged residual: [`docs/adr/ADR-002`](adr/ADR-002-safety-hook-threat-model.md).)
 - **Lexical/regex redaction is best-effort and order-sensitive.** Every new PII pattern needs an
   ordering rationale *and* an overlap test (date vs phone vs account); never rely on it as the sole
   control - free-text comms needs NER (named-entity recognition) before real data. The masking engine is **basic** by design.
@@ -117,7 +119,7 @@ surveillance engagement), so it lives here; per-engagement findings do not.
   coverage-assurance methodology; detection-tuning practice; the DA/BA/role boundary) and checked
   each against primary/authoritative sources. Result: **33 verified · 8 partial · 15
   industry-standard-uncited · 0 unsupported; no claim false or fabricated.** The full verdict
-  register with citations is `docs/evidence-base.md`. What that pass establishes:
+  register with citations is `docs/internal/evidence-base.md`. What that pass establishes:
   - **Verified with a primary source:** the tuning methodology cluster (ATL/BTL, risk-based
     segmentation, statistical thresholds, post-deployment MI, change-management logging) grounds in
     SR 11-7, FFIEC RBA, RTS 25 and vendor methodology; the spoofing/layering typology and signature
@@ -135,5 +137,5 @@ surveillance engagement), so it lives here; per-engagement findings do not.
     (`spoofing.md`), which are looser catch-alls than the cases (Coscia ~0.08% fill, <500ms).
   - **Caveat carried forward:** FCA Market Watch 79 is a data/model-governance authority, **not** an
     e-comms-lexicon authority - cite it only for testing/coverage/governance, never for lexicon
-    design. Per-file inline-citation threading is a mechanical follow-up (`docs/evidence-base.md`
+    design. Per-file inline-citation threading is a mechanical follow-up (`docs/internal/evidence-base.md`
     §Deferred).

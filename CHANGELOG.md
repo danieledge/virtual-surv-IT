@@ -3,6 +3,275 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.5] - 2026-07-31 - Corporate Windows hardening: probe, statusline, engagement_state fixes
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+Eleven issues from a live corporate Windows 11 / Python 3.13 run, reported with a
+diagnosis precise enough to fix directly against.
+
+### Fixed
+- **`/engage` step-0 probe failed silently on cp1252 consoles**: the probe's report
+  contains emoji, and a Windows console's default cp1252 codepage made every one of the
+  python3/python/py fallback attempts crash on `print()` - hidden entirely by the
+  compound's `2>/dev/null`. All three attempts now run under `PYTHONIOENCODING=utf-8`,
+  and a final fallback prints the exact command to re-run by hand if the probe still
+  fails for a genuinely different reason.
+- **`scripts/statusline.sh` fell back to the static glyph even with a working
+  interpreter available**: it resolved `python3`/`python`/`py` with `command -v`, which
+  only checks PATH existence - true for the Windows Store execution-alias stub, which
+  exists on PATH but exits 49 without running. `--version` now actually invokes the
+  candidate, so the stub is correctly skipped in favour of a real interpreter behind it.
+- **`engagement_state.py --slug`/`--dir` only worked before the subcommand**: both are
+  top-level argparse flags, so `log-note --slug X "..."` exited 2 "unrecognized
+  arguments" while `--slug X log-note "..."` worked - an unintuitive, undocumented
+  ordering requirement. Every resolvable subcommand now accepts both flags on either
+  side via a shared parent parser (SUPPRESS defaults prevent an omitted post-subcommand
+  flag from overwriting a value already parsed at the top level).
+- **`engagement_state.py`'s internal `render_html` import failed under plugin-mode path
+  invocation** ("No module named 'scripts.render_html'"), silently skipping every
+  `.html` sibling render - which in turn made `check_artifacts`'s
+  `REGISTRY-HTML-STALE` finding re-fire on every single mutation with no way to clear
+  it. Fixed with the same package-import-first / `__file__`-relative-fallback pattern
+  `check_artifacts.py` already uses for `engagement_state` itself; `REGISTRY-HTML-STALE`
+  no longer loops in plugin mode as a direct result.
+- **`archive <slug> --force` couldn't exclude a legacy/non-workspace directory**: it
+  required an `engagement-state.json` before even checking `--force`, so a directory
+  the DoD scan still walked (with real findings) had no command to exclude it - only a
+  hand-written empty `.archive` file worked. `--force` now also covers a stateless
+  target, writing the marker directly.
+- **`engagement_state.py render` exited 0 on a partial (`.html`-skipped) render**,
+  falsely signalling success. It now exits 2 when the `.html` sibling wasn't actually
+  written, matching `render_files`' own returned file list.
+- **The task-panel Stop-hook nudge omitted which engagement triggered it**, requiring
+  investigation in any project with more than one open pack. It now names the specific
+  slug (or "flat pack") and the phase that crossed the gate, plus a `--slug`-scoped
+  log-note command to copy-paste.
+
+### Added
+- **`engagement_state.py show [--slug S]`**: prints an engagement's state as-is and
+  always exits 0 once found - `validate` exits 1 on any finding (unsafe for pure
+  inspection) and `list` only gives a one-line summary; there was no safe way to
+  actually look at one engagement's disk state without opening the JSON by hand.
+
+## [0.33.4] - 2026-07-30 - Task-list gate panel, backed by a nudge
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+### Added
+- **`scripts/todo_panel_nudge.py`**: a Stop-hook nudge for the operating guide's
+  claim that engagement gates (brief → build → tests → review → QA → DoD gate →
+  close) appear in Claude Code's native task list (TodoWrite). Searching every kept
+  live eval transcript for genuine TodoWrite calls found zero - the claim was prose
+  only, never verified, and evidently not happening reliably. TodoWrite can't be
+  called by a hook or observed from outside the running turn, so this can't be a
+  mechanical check the way the 0.33.3 audit findings were - it nudges once, when a
+  gated engagement's phase reaches delivery, and self-suppresses (via a marker Morgan
+  logs once the panel is seeded) without the hook ever writing state itself.
+
+
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+### Added
+- **Opt-in `.docx` export** for controlled documents (BRD, FSD, delivery report, etc.) -
+  `scripts/render_docx.py` walks the same sanitised HTML `render_html.py` already produces
+  (one Markdown parse, one XSS allow-list, both formats derived from it - `.md` stays the
+  sole authored source). `python-docx` is an optional dependency, same tier as
+  Markdown/bleach; a missing library degrades to one clear error, never a crash.
+- **Project-wide preferences** (`.claude/team-preferences.json`): `extra_formats` (docx
+  on/off) and `regulatory_citations` (on by default; a project can turn citations off).
+  Two ways to change them - the installer's re-runnable "Project preferences" menu
+  (option 6), or the new **`/preferences`** skill, which lets Morgan read/write the file
+  directly in-session (no consent gate on it, no engagement opened).
+- **Self-relocating installer**: running `install_helper.py` from inside the clone it is
+  about to `git checkout` could fail to overwrite the running `.py` file on Windows - it
+  now copies itself to a temp file and re-execs from there first, so no manual workaround
+  is needed.
+- **`/engage` step-0 probe collapsed into one script** (`scripts/engage_probe.py`):
+  replaces an 18-line hand-assembled bash compound the model had to reproduce verbatim
+  every engage. Computes `VERSION_CHANGED` and the checked-out git branch directly rather
+  than leaving either to prose derivation.
+- **Eight mechanised audit findings** (a systematic review of where the team relied on
+  prompted recall for things a script could check instead):
+  - the resume-vs-new engagement menu is now computed (`engagement_state list --menu`),
+    not re-derived from text - closes two live defects from the same day;
+  - a review-shaped artifact missing or leaving empty the mandatory Developer-guidance
+    section is now caught mechanically (`FINDINGS-NO-DEV-GUIDANCE`);
+  - a rendered `REVIEW-<slug>.md` that has drifted from its source findings pack (added
+    findings, changed dispositions) is now caught (`STALE-FINDINGS-RENDER` /
+    `COUNT-MISMATCH`);
+  - a subagent return clearly over the condensed-return token budget now gets PostToolUse
+    feedback instead of silently ballooning the orchestrator's context;
+  - the two LOCKED question-tool menus (review-type, artifact packaging) are now guarded
+    against the exact drift class that got them locked in the first place, before a
+    malformed version ever reaches the user.
+
+### Fixed
+- **`/engage` taking several minutes on a corporate Windows box**, traced to two causes:
+  an unbounded `find` in the plugin-root fallback search, and the safety-guard launcher
+  re-executing `python3`/`python`/`py` to version-check them on every single hook fire (5
+  hooks per Bash call) - on a box where `python3.exe` is the Windows Store execution-alias
+  stub, that repeated hang was the whole story. The guard launcher now caches the first
+  working interpreter; `install_helper.py` pre-seeds that cache at project-enable time so
+  even the first hook call never pays the discovery cost.
+- A latent bug in the 0.33.2 archive feature: `archive`/`unarchive` were never added to
+  the root-level-command exemption list, so calling `archive <slug>` without `--dir` while
+  an engagement was ACTIVE resolved the target path twice and failed.
+- `render_findings.py` emitted a plain "## Developer guidance" heading; the documented
+  spec is "## 🔵 Developer guidance - improving future code" verbatim - fixed the renderer
+  to match the spec.
+- `render_findings.py`, `render_docx.py` and `engage_probe.py` were missing from the
+  execution guard's team-script allow-list, so plugin users would hit consent prompts
+  running them despite being consent-free team tooling.
+
+
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`. Driven by a live report: DoD startup scans grew
+> slow in projects with many artifacts, mostly from old engagements.
+
+### Added
+- **`.archive` marker**: any directory under `artifacts/` carrying a `.archive` file is
+  excluded from every scanner - DoD checker, Stop gate, registry, status line, resume
+  menu. Archive-in-place by design (nothing moves, relative links keep working);
+  `artifacts/archive/` is available as an optional tidy destination. Any directory can
+  be excluded this way, not just engagement packs (legacy dumps, foreign exports).
+- **`engagement_state archive <slug>` / `--all-closed` / `unarchive <slug>`**: the
+  tool-assisted path writes a provenance line into the marker and re-renders the
+  registry (which now shows a collapsed "Archived: N" line). Archiving an OPEN pack is
+  refused (`--force` records the exception in the pack log first).
+- **`ARCHIVED-OPEN` safeguard**: a bare `.archive` on a pack whose state is not closed
+  is a CLI-checker warning, never a silent skip - archiving is not a close-gate dodge.
+- **Closed-pack fingerprint fast path**: a successful close now stores a stat-only
+  fingerprint (names/sizes/mtimes of deliverables); scans skip an unchanged closed
+  pack entirely. Editing any deliverable invalidates it and forces a full re-scan.
+  Packs closed before 0.33.2 keep full-scanning until archived or re-closed - the
+  checker nudges (`archive --all-closed`) when five or more are in that state.
+
+### Fixed
+- **Status line on Windows**: piped Python output was cp1252-encoded, so the emoji
+  marks raised and every render fell to the static no-stats fallback; `PYTHONUTF8=1`
+  makes the render total.
+
+## [0.33.1] - 2026-07-29 - Platform capability adoption + document-input routing
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+### Added
+- **Document-input routing (live pain fix)**: handed a PDF mid-engagement, the team was
+  observed PowerShell-hand-parsing binary bytes, unaware of the bundled converter. Now:
+  `convert_file` gains `--layout` (pypdf layout mode - columns/tables stay readable);
+  standing "Document inputs" rule in the operating guide + engage step 1a + CLAUDE.md §7
+  (never Read/hand-parse binaries, converter is vendored/no-pip/corp-safe, scanned pages
+  escalate to the user); and a STAGED PreToolUse redirect hook
+  (`document_input_redirect.py`, engagement-scoped, fails open) that blocks binary-document
+  reads/hand-parsing with the exact converter command. 11 tests.
+- **SessionStart resume brief (ADR-011)**: on `compact`/`resume`, a staged hook re-briefs a
+  mid-engagement session - ACTIVE pack, status/phase, re-read `engagement-state.json`
+  first, recorded answers are never re-asked, a consent `declined` stands. Dormancy-exact
+  (zero output when no pack is live); 7 tests.
+- **PostToolUse lint feedback**: a staged hook checks Python the moment a builder writes it
+  (`py_compile` always; `ruff` when on PATH) and feeds findings back over the PostToolUse
+  channel - the write-path half of the "verification as hooks" pattern whose Stop-gate
+  half shipped in 0.17.0. Engagement-scoped, advisory, fails open; 5 tests.
+- **Native task-list progress (TodoWrite)**: engage step 5 + the operating guide's console
+  rules now seed one todo per planned gate and tick them as evidence lands - presentation
+  only, the state file stays the record.
+- **Status line**: `scripts/statusline.sh` renders dormant-vs-engaged (ACTIVE slug, status,
+  phase) + model + session cost at zero token cost; wired by the human via
+  `scripts/apply-statusline.sh` (repo-scoped setting).
+- **Skill tool scopes**: `/run-evals` pre-approves its own harness commands
+  (`allowed-tools`); `/meet-the-team` declares `disallowed-tools: Write, Edit`.
+- **Release checklist**: dormancy footprint step (`claude plugin details` - the
+  dormant-by-default promise as a number) and a cold-resume check (`--resume-run` against a
+  kept sandbox) added to CONTRIBUTING's promotion gate.
+
+### Notes
+- All four apply scripts are HUMAN-run (ADR-002 rec 5); every new hook is
+  engagement-scoped, advisory-or-redirect (never a new consent surface), and fails open.
+  The three safety guards are untouched.
+
+## [0.33.0] - 2026-07-29 - Workflow-robustness remediation: fail-safe gates, disk-first resume, one placement rule, real map provenance
+
+> User-facing overview of what this release means in practice: [`docs/releases/0.33.0.md`](docs/releases/0.33.0.md).
+
+Closes the 34-finding robustness register (`docs/internal/` carries the method; the register
+and per-finding close-out live in the maintainer's git-ignored `artifacts/`). Four phases,
+each test-first; 58 new tests (suite 714 passed / 12 skipped); hooks staged and human-applied.
+
+### Fixed - the gates fail safe (register G1-G9)
+- A pack with NO readable status (including no START-HERE at all) is NOT closed - the
+  close-only guards stay armed exactly when the index was forgotten (the 2026-07-22 failure
+  class; previously fail-open).
+- ONE shared status parser (`pack_status`: state-file-first, legend-aware index fallback) and
+  ONE workspace-detection rule (`engagement_packs`: state file OR index) across the checker
+  and both lifecycle hooks - a words-only status arms everything, a stray ⏳ in a closed
+  index re-arms nothing, and a hand-made index-only workspace is gated, not just anchored.
+- The DoD Stop gate loads the checker file-relative, so it is no longer a silent no-op in
+  plugin mode (pinned by a subprocess test that imports it the way plugin mode does); it now
+  also checks the derived registry and the artifacts root at turn end.
+- `CODE-NO-QA` / `CODE-NO-TESTS` are scoped per folder - code can no longer pass on a
+  sibling engagement's QA paperwork (reproduced live leak).
+- Workspace mode scans the artifacts ROOT: new files there are `ORPHAN-ARTIFACT`;
+  pre-existing flat files are grandfathered once into `.dod-root-allowlist.json`.
+
+### Added - the close window + gate-verified close (register R5/G4/R6)
+- New 🔒 `closing` status marks the close as underway ON DISK: close artifacts (delivery
+  report, summary email, `REVIEW-<slug>.md`) are legitimate during it, and the stop-gate
+  nudge tells an interrupted close to FINISH - never to delete deliverables.
+- `set-status closed` runs the full mechanical DoD gate itself and REFUSES (rolling back) on
+  any finding; the cleared outstanding list is snapshotted into the log first, so a mistaken
+  close is reversible from disk.
+
+### Added - resume reads disk, never re-asks (register R1-R8)
+- `.active-engagement.json` records the session's ACTIVE engagement (written at init,
+  honoured by ambiguous commands, cleared at close); the persona anchor names it.
+- The intake gate answers (go-ahead / fix-cycle / data-attestation) persist as decisions;
+  `set-runtime` caches the run-mode probe; `set-phase` is wired into the flow - a cold
+  resume recovers slug, phase, runtime and every gate answer from disk alone (tested).
+- `record-consent-outcome` records the NON-granting outcomes only (`asked`/`declined`) so a
+  "No" survives compaction and is never re-asked into an accidental yes; anything
+  grant-shaped fails validation - the grant remains exclusively the human-created marker
+  (ADR-002 untouched).
+- `add-artifact` flags rows recorded before their file exists (post-crash forensics).
+
+### Changed - one placement rule (ADR-010, register P1-P9)
+- Canonical layout decided and documented: everything in the engagement's
+  `artifacts/<slug>/` workspace root, `data/` for machine-readable packs, `adr/` for client
+  ADRs; a grouping subfolder carries its own tests + QA. "Where every document lives" table
+  in the operating guide; the five previously homeless deliverable types have addresses;
+  flat-path instructions swept from CLAUDE.md, the DoD, flow-spec, output-format, templates
+  and eight skills.
+- `REVIEW-<slug>.md` is close-only in the TOOL too: `--fix` renders findings packs at 🔒/✅
+  only, and an uppercase `REVIEW-*.md` existing earlier is flagged (case-sensitive;
+  `review-pass-N.md` stays interim-legal).
+- START-HERE hand-edits are detectable (`INDEX-HAND-EDITED`, content-hash in the render
+  marker) and `--fix` backs the hand-edited text up before re-rendering; the email-rename
+  fix updates the STATE row instead of text-patching the generated index.
+- Findings packs validate recursively, including the root `data/` lane in workspace mode.
+
+### Changed - codebase-map provenance is real (register M1-M8, ADR-007 re-scoped)
+- The template placeholder can no longer pass as a `no-vcs` anchor (strict value-only
+  escape; unfilled placeholders called out; pinned by a raw-template test).
+- Per-entry As-of/Anchor validation, entry-SHA resolution, and a `MAP-STALE` staleness
+  budget against HEAD (default 50 commits, per-map override with rationale). Entries
+  detection is column-driven (section renames tolerated); the line cap excludes Deprecated.
+- engage-light's close-time map opt-out removed (ADR-003 both-directions rule stands in
+  every profile). ADR-007 re-scoped in place (staleness subset implemented, generative
+  layer parked); ADR-003 revision note; README corrections; map pointers in CLAUDE.md,
+  glossary and FAQ.
+
+### Changed - docs truth pass
+- `docs/DEFINITION-OF-DONE.md` rewritten for the ADR-006/008/010 world: the state file as
+  the record, the generated index, the 🔒 closing window, the gate-verified close, persisted
+  session decisions, and the full mechanical finding-code register.
+- `docs/` split: 8 maintainer-only documents (research, evidence base, design specs,
+  roadmaps, flow diagrams, old eval baselines) moved to `docs/internal/` with references
+  fixed - `docs/` now holds what the team loads at runtime plus the user-facing set.
+- `/prepare-data` warns loudly at every touchpoint that it is NOT a production-grade
+  anonymisation pipeline: capabilities are limited; pre-mask/sanitise by external approved
+  means rather than relying on it (user ruling).
+
 ## [0.32.0] - 2026-07-29 - Company extensions + explicit AI identity
 
 ### Added

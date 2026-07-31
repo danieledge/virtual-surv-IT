@@ -1,21 +1,43 @@
-# ADR-007: Codebase map evolution - regenerate the mechanical, curate the durable (proposed)
+# ADR-007: Codebase map evolution - regenerate the mechanical, curate the durable (re-scoped)
 
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-007` · Version `0.1` · Status `Proposed`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-27`
+> **Document control** · ID `ADR-007` · Version `0.2` · Status `Re-scoped`
+> · Classification `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-07-29`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-27 | deep-research synthesis (3 parallel researchers: tooling landscape, agent-memory evidence, internal audit) | Proposed design |
+> | 0.2 | 2026-07-29 | workflow-robustness remediation phase 4 (user ruling D3) | Re-scoped: staleness subset implemented in `check_map`; the generative layer (repo_skeleton / map.d / /map-codebase / fingerprint drift stamps) is parked, revisit on demand |
 
 | | |
 |---|---|
-| **Status** | **Proposed** - nothing implemented; targets 0.31/0.32 |
-| **Date** | 2026-07-27 |
-| **Deciders** | Morgan (orchestrator), human approver |
-| **Traceability** | ADR-003 (engagement memory - this evolves, does not replace, its §2 discipline); `check_map` in `scripts/check_artifacts.py`; engage probe contract (SKILL.md step 0); user-reported pain: first-contact on large codebases, silent staleness |
+| **Status** | **Re-scoped** (2026-07-29, ruling D3) - the staleness-detection goal is implemented in reduced, git-based form; the generative layer is parked. This ADR missed both its original target releases (0.31, 0.32) without a decision - the register's M6 finding; this revision IS that decision. |
+| **Date** | 2026-07-27 (proposed) · 2026-07-29 (re-scoped) |
+| **Deciders** | Morgan (orchestrator), human approver (remediation plan D3) |
+| **Traceability** | ADR-003 (engagement memory - this evolves, does not replace, its §2 discipline); `check_map` in `scripts/check_artifacts.py`; 2026-07-29 robustness register M2/M3/M6/M7 |
+
+## Re-scope (2026-07-29 - what stands, what is parked)
+
+**Implemented** (remediation phase 4, in `check_map` / the template - a reduced, git-based
+form of §Decision item 4's drift-stamp goal):
+
+- per-entry **As-of and Anchor validation** (`MAP-ENTRY-NO-ASOF` / `MAP-ENTRY-NO-ANCHOR`)
+  and entry-SHA resolution (`MAP-STALE-ENTRY-ANCHOR`) - entry provenance is no longer
+  decorative (register M2);
+- a **staleness bound**: the header anchor is compared against HEAD and `MAP-STALE` fires
+  past the map's `Staleness-budget` (default 50 commits, override with rationale) -
+  register M3;
+- the **strict no-vcs anchor value** (the template placeholder can no longer pass - M1),
+  column-driven entry detection (section renames no longer disable the scan - M7) and a
+  line cap that excludes the Deprecated section ADR-003 mandates keeping (M7).
+
+**Parked** (revisit when a first-contact-on-large-codebase need actually materialises;
+nothing else in the product depends on them): `scripts.repo_skeleton`, the `map.d/` area
+files, `/map-codebase`, and content-fingerprint drift stamps (`MAP-DRIFT` /
+`MAP-DEAD-POINTER`). The git-based bound implemented above covers the silent-rot gap for
+anchored repos; no-vcs projects remain human-judged - an accepted residual.
 
 ## Context
 

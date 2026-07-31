@@ -50,7 +50,7 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-02</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
 <h1 id="data-safety-demo">🛡️ Data-safety demo</h1>
 <p><em>A real <code>/demo</code> transcript: Morgan shows the §5 keystone - real data never reaches the model - and
 deliberately triggers the raw-data guard so you watch it block. <a href="README.html">Back to demos</a>.</em></p>
@@ -102,6 +102,7 @@ model never saw a byte. And notice it didn't just say "no" - it told me the safe
 </ol>
 </blockquote>
 <pre><code class="language-console">$ python3 -m scripts.validate_masking --in masked-with-a-leak.jsonl
+[INFO] Scanning masked file masked-with-a-leak.jsonl (residual PII + k-anonymity). Note: 'no original identifier survived' and detection fidelity need the originals and are NOT checked in this mode.
 [FAIL] no residual PII in masked file (string fields): ['EMAIL', 'IBAN', 'PHONE', 'ACCT']
 [PASS] k-anonymity: no quasi-identifiers declared - skipped (declare to enforce)
 RESULT: FAIL
@@ -130,6 +131,6 @@ rather than pretending otherwise.</p>
 <li><strong>Clear about the edge</strong> - regex redaction isn't enough for free-text comms; the docs say so.</li>
 </ul>
 <p><strong>The keystone, end-to-end: real data never reaches the model, and it's enforced, not just promised.</strong></p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: data-safety-demo.md &middot; 2026-07-02</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: data-safety-demo.md &middot; 2026-07-30</div>
 </body>
 </html>

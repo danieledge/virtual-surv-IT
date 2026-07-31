@@ -51,9 +51,11 @@ Run an **evaluator-optimizer loop**:
    the console**, with the full findings in the **clean artifact**. Give an explicit verdict
    (✅ audit-ready / ⚠️ conditional / ❌ not yet), standards cited, audit/regulatory checks, the
    🔵 style & form lane, a tooling-coverage section, **and - MANDATORY - a `## 🔵 Developer
-   guidance - improving future code` section** (2-4 points, even on a clean pass; verify it's in
-   the artifact before presenting). Use the standalone clean review artifact by default; fold
-   into the consolidated `delivery-report.md` only when audit is part of a larger handover.
+   guidance - improving future code` section** (2-4 points, even on a clean pass;
+   `check_artifacts` mechanically flags it missing/empty as `FINDINGS-NO-DEV-GUIDANCE`, but
+   verify it's genuinely there before presenting, don't rely on the gate). Use the standalone
+   clean review artifact by default; fold into the consolidated `delivery-report.md` only when
+   audit is part of a larger handover.
 
 6. **Independent read of the consolidated pack (Audit depth - the check on Morgan).** Before close,
    hand the finished audit artifact / `delivery-report` **itself** to **compliance-reviewer**
@@ -61,15 +63,16 @@ Run an **evaluator-optimizer loop**:
    code: does the **verdict follow from the findings register**? is any claim in the summary
    **unsupported by an artifact**? are dispositions, counts and evidence tags (📊/📄/🧠) internally
    consistent? This is the one pass Morgan cannot reliably do on its **own** output (ungrounded
-   self-review is unreliable - `docs/research-virtual-team.md`); fix or escalate what it flags before
+   self-review is unreliable - `docs/internal/research-virtual-team.md`); fix or escalate what it flags before
    ✅. Right-sized: it reads the pack, it does not re-run the review.
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`).
 Step 1's `/deep-review` already wrote `artifacts/data/findings-<slug>.json`; **consolidate the
 compliance-reviewer findings from step 2 into the same pack** (append to `findings[]`; use the pack's
 narrative fields for the audit skeleton), then run **`<python> -m scripts.check_artifacts --fix`** -
-it validates the pack (`FINDINGS-INVALID` → fix and re-run) and renders `artifacts/REVIEW-<slug>.md`
-+ `.html`. Don't hand-author or hand-edit the rendered report.
+it validates the pack (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's
+`artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status
+closing` first). Don't hand-author or hand-edit the rendered report.
 (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
 installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
 "Run mode & the bundled scripts".)

@@ -52,19 +52,31 @@ A 2026-07-25 independently-reviewed close shipped a fix-cycle-1 developer handov
 inside a fix-cycle-2 pack: stale test counts, a stale requirement range, "unresolved" items that
 were resolved, and a citation struck by the compliance review still cited in the one document a
 maintainer actually reads. The banner strip and index flip are NOT the close - reconciliation is.
-Before setting the state to closed (`engagement_state set-status closed`, which re-renders
-START-HERE to ✅ - ADR-006), re-open **every document the engagement produced or touched**,
+Enter the close explicitly first - `engagement_state set-status closing` (2026-07-29 register
+R5: the close window is recorded on disk, so the close artifacts you write during this
+checklist are never read as premature by the gate or a resumed session). Then, before setting
+the state to closed (`engagement_state set-status closed`, which re-renders
+START-HERE to ✅ - ADR-006, **runs the full DoD gate itself and refuses on findings**,
+register R6), re-open **every document the engagement produced or touched**,
 explicitly including code-adjacent ones (deliverable README, module docstrings, inline doc
 comments), and verify each against the FINAL state:
 
 - **Counts and ranges** - test totals, requirement/AC ranges, findings tallies: one authoritative
   number everywhere. If a findings list is enumerated in more than one document, the membership
-  must be identical, by ID, in all of them.
+  must be identical, by ID, in all of them. **`check_artifacts` mechanically verifies the
+  finding-ID set and disposition tally in a rendered `REVIEW-<slug>.md` against its source
+  `data/findings-<slug>.json`** (`STALE-FINDINGS-RENDER` / `COUNT-MISMATCH`, audit finding #3,
+  2026-07-30) - re-run `render_findings` if it flags either; this covers the findings-pack case,
+  not free-text counts elsewhere (test totals in prose, requirement ranges), which still need
+  your own re-read.
 - **Late-cycle changes propagated** - anything changed after a document's last revision (a later
   fix cycle, a re-review, a struck or replaced citation, a superseded requirement) is reconciled
-  into that document, or the document's version history says why not.
+  into that document, or the document's version history says why not. No mechanical check exists
+  for this - it requires understanding what changed and why, genuinely a judgement call.
 - **Struck citations** - any obligation/citation recorded as withdrawn or corrected anywhere in
-  the pack must be swept from EVERY other file, including source docstrings.
+  the pack must be swept from EVERY other file, including source docstrings. No mechanical check
+  exists for this either - nothing in the codebase currently marks a citation as "struck" in a
+  detectable way, so a checker here would be guessing at a convention that doesn't exist yet.
 - **Prose that references removed state** - text describing the interim banner, "pending"
   cross-references, or pre-build "next actions" has no place in a closed document.
 - **Document-control Status close-out** - under a ✅ CLOSED index no document stays

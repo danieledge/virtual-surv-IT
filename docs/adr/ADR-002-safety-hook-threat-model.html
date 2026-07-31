@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-002: Safety-hook threat model and additive hardening</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
+<h1 id="adr-002-safety-hook-threat-model-and-additive-hardening">ADR-002: Safety-hook threat model and additive hardening</h1>
+<blockquote>
+<p>Architecture Decision Record (Nygard format). One file per significant decision, so the
+<em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
+<p><strong>Document control</strong> · ID <code>ADR-002</code> · Version <code>0.6</code> · Status <code>Accepted (implemented)</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-06</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-06-29</td>
+<td>project review (red-team)</td>
+<td>Initial draft</td>
+</tr>
+<tr>
+<td>0.2</td>
+<td>2026-07-01</td>
+<td>setup audit (user-authorised)</td>
+<td>Crash paths fail closed; launcher version probe; launcher no-Python trade-off recorded; rec-7 status corrected</td>
+</tr>
+<tr>
+<td>0.3</td>
+<td>2026-07-01</td>
+<td>setup audit (user-authorised)</td>
+<td>Rec 5 implemented: <code>guard-consent-writes.py</code> blocks model writes of the consent marker + settings; consent granting is human-only</td>
+</tr>
+<tr>
+<td>0.3.1</td>
+<td>2026-07-01</td>
+<td>setup audit (user-authorised)</td>
+<td>Live false positive fixed (stderr redirect ≠ marker write); self-protection added: model Write/Edit of <code>.claude/hooks/*</code> and <code>hooks/hooks.json</code> blocked (Bash stays advisory for these paths); maintenance via <code>CST_ALLOW_CONFIG_EDIT=1</code></td>
+</tr>
+<tr>
+<td>0.4</td>
+<td>2026-07-02</td>
+<td>human-applied (the consent-write gate blocks model edits of the guards; the user copied the prepared files in)</td>
+<td>Exec-guard <code>_TEAM_ALLOW</code> accepts the plugin's bundled scripts by path (basename-whitelisted - enables full plugin-mode operation from foreign projects; a hostile file <em>named</em> like a team script in a <code>scripts/</code> dir would pass: accepted lexical residual). Two live false positives fixed: <code>make</code> anchored to segment start (blocked commit messages containing the word), <code>sh &lt;file&gt;.sh</code> given a lookbehind (multi-file <code>shellcheck a.sh b.sh</code> was blocked). Both guards' block messages now print the absolute marker path from <code>CLAUDE_PROJECT_DIR</code>.</td>
+</tr>
+<tr>
+<td>0.4.1</td>
+<td>2026-07-02</td>
+<td>human-applied (reported from a live Windows plugin install)</td>
+<td>Windows correctness: <code>_TEAM_ALLOW</code> path separators accept backslashes (<code>[/\\]</code> - slash-only regexes blocked <code>python C:\...\scripts\render_html.py</code>); the <code>py</code> launcher added to the interpreter token (it was invisible to the guard - <code>py evil.py</code> was NOT blocked and <code>py -m scripts.x</code> was NOT allowed); raw-data marker gains the <code>data\raw\</code> backslash variant for Bash string matching.</td>
+</tr>
+<tr>
+<td>0.4.2</td>
+<td>2026-07-05</td>
+<td>human-applied via <code>apply-guard-hardening.sh</code></td>
+<td>Recs 10-13 applied: anchored <code>pytest</code>/<code>unittest</code>, broader runner list (cargo/swift/bundle exec/jest/vitest/php/julia/lua), consent guard gains read-only <code>jq</code> + read-only <code>git</code> safe verbs and a <code>find -exec/-delete</code> block, raw guard gains a word-bounded case-insensitive marker (no-trailing-slash + case-fold), plugin-mode fail-open comments softened, <code>data/raw</code> write-protect + <code>python3 -m scripts.ingest</code> twin in settings, <code>pwsh</code> allow entry removed. Regression: <code>tests/test_guard_hardening.py</code>.</td>
+</tr>
+<tr>
+<td>0.5</td>
+<td>2026-07-05</td>
+<td>evening setup review + truth audit (PREPARED 2026-07-05; human applies via <code>apply-guard-fixes.sh</code>)</td>
+<td>Rec 14 recorded (four defects: multi-<code>.py</code> launcher false positive, unanchored <code>pwsh</code>/<code>powershell</code>, <code>pre-commit</code> consent-free execution path incl. <code>.pre-commit-config.yaml</code> write-protect, pytest allow-entry contradiction); Tier-2 backlog recs 15-16 added (parent-rooted/wildcard Grep vs <code>data/raw</code>; secrets deny-protected on <code>Read</code> only); staleness fixed (status to Accepted, Context three-hook present, rec 7/8/13 texts, test count 14 to 17, pin-cites, launcher trade-off extended to the consent-write gate). Regression: <code>tests/test_guard_fixes.py</code>.</td>
+</tr>
+<tr>
+<td>0.6</td>
+<td>2026-07-06</td>
+<td>Fable 5 static red-team (analysis only; NOT fixed in this pass)</td>
+<td>Backlog recs 17-22 added from an adversarial static pass on all three guards: exec-guard wrapper-prefix bypass of the segment-anchored runners (<code>timeout 5 pytest</code>), backslash line-continuation split (<code>python3 \</code>+newline+<code>evil.py</code>), absolute/tilde/<code>../</code> shebang-direct exec, <code>python &lt; file</code> stdin redirect, novel launcher gaps (<code>deno test</code>/<code>bun test</code>/<code>node --test</code>/<code>xargs</code>), and the read-tool coverage gap for non-<code>{Read,Grep,Glob,Bash}</code> tools. Recs 15-16 (Grep/Glob vs <code>data/raw</code>; secrets Grep/Glob) re-confirmed with concrete PoCs; rec-5 remainder (model-authored <code>scripts/</code> file becomes <code>_TEAM_ALLOW</code>-runnable) re-confirmed. All fixes are human-apply-only (guard <code>.py</code>/<code>settings.json</code>/tests are model-blocked). No guard logic changed.</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Status</strong></td>
+<td>Accepted (implemented; open backlog items are recorded below)</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-06-29</td>
+</tr>
+<tr>
+<td><strong>Deciders</strong></td>
+<td>Morgan (orchestrator), human approver</td>
+</tr>
+<tr>
+<td><strong>Traceability</strong></td>
+<td>Obligation: data-safety (CLAUDE.md §5) + static-by-default execution (§7); <code>docs/house-rules.md</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="context">Context</h2>
+<p>Three always-on PreToolUse hooks are the plugin's headline safety controls:
+<code>.claude/hooks/guard-raw-data.py</code> (block reads of raw PII under <code>data/raw/</code>),
+<code>.claude/hooks/guard-code-execution.py</code> (block code execution without consent) and, since 0.3,
+<code>.claude/hooks/guard-consent-writes.py</code> (block the model granting itself execution consent or
+editing harness config / the guards themselves). A red-team of the original two was performed.
+The finding that frames everything: <strong>the guards are advisory lexical filters, not
+enforcement boundaries.</strong> They raise the bar for a <em>cooperative</em> agent but stop a <em>motivated</em> one
+only where the OS <code>permissions.deny</code> layer backs them up - and that layer covers <code>Read</code>/<code>Grep</code>/
+<code>Glob</code> but leaves the <code>Bash</code> tool almost entirely uncovered. The hooks' own docstrings
+(<code>guard-code-execution.py:26-30</code>, <code>guard-raw-data.py:14-22</code>) and <code>docs/house-rules.md:79-83</code>
+already concede this as accepted residual risk; this ADR records the decision and the hardening
+backlog explicitly.</p>
+<p>Two structural facts dominate:</p>
+<ul>
+<li><strong>As of 0.1, <code>Write</code>/<code>Edit</code> were in neither hook's matcher</strong>, so the model could author a
+  script, or write the consent marker itself, then run it through an allowed path. Since 0.3 the
+  third hook (<code>guard-consent-writes.py</code>, matcher <code>Write|Edit|MultiEdit|NotebookEdit|Bash</code>) closes
+  the marker/config half of that; the "author a script under <code>scripts/</code> and run it via
+  <code>_TEAM_ALLOW</code>" half remains the deferred rec-5 remainder.</li>
+<li><strong><code>permissions.deny</code> has zero <code>Bash(...)</code> entries</strong> (<code>.claude/settings.json:3-34</code>). Every
+  Bash-based bypass below has no OS backstop - only the soft hook.</li>
+</ul>
+<blockquote>
+<p><strong>Live posture note (updated 0.3, re-worded 2026-07-30):</strong> <code>.claude/.exec-consent</code> is
+git-ignored and absent from a fresh clone - the gate ships closed (a working machine may
+carry a local marker). Since 0.3 the model <strong>cannot create it</strong>: <code>guard-consent-writes.py</code>
+(rec 5) blocks Write/Edit/Bash writes of the marker and of <code>.claude/settings*.json</code>. Consent is
+granted only by the human (<code>! touch .claude/.exec-consent</code>, a terminal, or <code>CST_ALLOW_EXEC=1</code>);
+the model may still <em>delete</em> the marker (closing the gate is fail-safe) and read it. The
+maintenance override for deliberate config-editing sessions is the human-set
+<code>CST_ALLOW_CONFIG_EDIT=1</code>. This was demonstrated live on 2026-07-01: the guard blocked the very
+session that authored it from writing the marker.</p>
+<p><strong>On session-scoping (considered, superseded):</strong> stamping the marker with a session id (so
+parallel same-project sessions don't inherit each other's consent) was considered alongside
+rec 5, but a human-created marker carries no session identity to verify, and the stronger
+property - <em>no model can open the gate at all</em> - makes the marker an explicit human, per-project
+decision. Accepted residual: consent remains project-scoped and persists until the human (or a
+"No" at intake) removes it; parallel sessions in the same project share it <em>by human choice</em>.</p>
+</blockquote>
+<h2 id="decision">Decision</h2>
+<ol>
+<li><strong>Represent the hooks accurately.</strong> They are a <em>defence-in-depth and consent-recording</em> layer
+   and a strong nudge for a cooperative agent. They must <strong>not</strong> be represented to an auditor as a
+   control that <em>prevents</em> raw-data egress or unauthorised execution by a determined actor.</li>
+<li><strong>Adopt the ranked, additive hardening backlog below</strong> (no change to either hook's core intent;
+   string-matching stays advisory). Hook-code changes are gated on the team's own review process.</li>
+<li><strong>Name the real boundary.</strong> The only mechanism that actually contains a hostile Bash command is
+   the OS/filesystem: least-privilege file permissions so the agent's process cannot read
+   <code>data/raw/</code>, or keeping raw data off the host entirely. The "<code>permissions.deny</code> is the real
+   boundary" claim in <code>guard-raw-data.py:18-19</code> holds for <code>Read</code>/<code>Grep</code>/<code>Glob</code> but <strong>not for Bash</strong>.</li>
+</ol>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li><strong>Positive:</strong> the security posture is documented and accurate; the hardening backlog shrinks the
+  <em>accidental / easy</em> bypass surface materially; auditors get a truthful control description.</li>
+<li><strong>Negative / accepted:</strong> the irreducible residual risk (below) remains until a real sandbox or
+  filesystem-ACL boundary is added; the backlog is work; some lexical hardening may marginally
+  increase false-positive blocks on benign commands (tune with the allow-list).</li>
+</ul>
+<h2 id="hardening-backlog-ranked-additive-only">Hardening backlog (ranked, additive only)</h2>
+<p><strong>Tier 1 - closes the widest holes, lexical:</strong>
+1. <strong>Segment-split Bash before matching (both hooks)</strong> - split on <code>;</code>, <code>&amp;&amp;</code>, <code>||</code>, <code>|</code>, newlines;
+   evaluate each segment independently so <code>_TEAM_ALLOW</code> exempts only the matching <em>segment</em>, not
+   the whole line (kills the "allowed-substring-anywhere" bypass) and the raw guard inspects each
+   piped sub-command.
+2. <strong>Anchor <code>_TEAM_ALLOW</code></strong> to segment start instead of <code>.search()</code> anywhere
+   (<code>guard-code-execution.py:78-81,116</code>).
+3. <strong>Block inline-code / stdin forms and drop the <code>-c</code> exemption</strong> (<code>:72-73</code>): <code>python … -c</code>,
+   <code>python … -</code> (stdin/heredoc), <code>bash -c</code>, <code>sh -c</code>, <code>zsh -c</code>, <code>node -e</code>, <code>ruby -e</code>, <code>perl -e</code>,
+   <code>deno eval</code>, <code>php -r</code>.
+4. <strong>Fix the interpreter regex</strong> <code>python3?</code> → <code>python(3(\.\d+)?)?</code> (so <code>python3.11 evil.py</code> is
+   caught) and broaden the runner list: <code>uv run</code>, <code>poetry run</code>, <code>pipenv run</code>, <code>tox</code>, <code>nox</code>,
+   <code>make</code>, <code>just</code>, <code>docker run</code>, <code>pnpm</code>, <code>tsx</code>, <code>Rscript</code>, <code>source</code>/<code>. file</code>.
+5. <strong>Gate <code>Write</code>/<code>Edit</code></strong> with a new PreToolUse matcher that blocks writing/editing
+   <code>.claude/.exec-consent</code> and <code>.claude/settings*.json</code> (closes consent self-grant) and warns on
+   new files under <code>scripts/</code> (which <code>_TEAM_ALLOW</code> would then run).</p>
+<p><strong>Tier 2 - the OS boundary (<code>permissions.deny</code>):</strong>
+6. Add absolute-path <code>Grep</code>/<code>Glob</code> deny variants mirroring <code>Read</code>
+   (<code>/*/data/raw/**</code>, <code>/**/data/raw/**</code>).
+7. Treat path-less <code>Grep</code>/<code>Glob</code> as in-scope in the raw guard (search root defaults to cwd, which
+   contains <code>data/raw</code>; broadened by rec 15), and check the real Grep <code>glob</code> param - <strong>the <code>glob</code>
+   half is done</strong> (the hook reads both <code>glob</code> and the legacy <code>include</code> since 2026-06-29).
+8. Extend the secret denies (<code>.env</code>, <code>*.pem</code>, <code>secrets/</code>) to absolute / non-<code>./</code> forms - <strong>done</strong>
+   (the absolute-path <code>Read</code> deny variants are committed in <code>.claude/settings.json</code>). Residual:
+   they cover <code>Read</code> only - no <code>Grep</code>/<code>Glob</code> secret denies, and neither guard covers secret reads
+   via Bash (rec 16).</p>
+<p><strong>Tier 3 - the only thing that actually contains Bash:</strong>
+9. Filesystem ACLs / uid-separation so the agent process cannot open <code>data/raw/</code>, or keep raw data
+   off the box entirely. This is the real boundary; everything above is belt-and-braces over it.</p>
+<p><strong>Logged 2026-07-05 (setup audit); APPLIED 2026-07-05 by the human via <code>apply-guard-hardening.sh</code>
+(full suite + ruff green).</strong> The guard logic and <code>.claude/settings.json</code> are model-blocked (rec 5 /
+house-rule "don't edit the guards"), so these were recorded here and applied by a human maintenance
+run, not changed in-session. Regression coverage: <code>tests/test_guard_hardening.py</code>.
+10. <strong>Plugin-mode backstop is absent, and three fail-open paths still cite it.</strong> A plugin ships
+    <code>hooks/hooks.json</code> but not a <code>permissions.deny</code> list, so in a foreign-project install the
+    raw-data <em>hook</em> is the sole file-tool control. Yet <code>guard-raw-data.py</code> (malformed-JSON exit 0),
+    <code>run-guard.sh</code> (no-Python exit 0) and the unresolved-launcher case (<code>sh</code> exits 127 = non-blocking)
+    all fail open citing "the deny list remains the hard boundary" - true only in repo-as-project
+    mode. Additive fix: (a) tell installers to recreate the deny entries (done - <code>docs/house-rules.md</code>,
+    README §safety-hooks); (b) soften those three comments so they don't assert a backstop that may be
+    absent. Extends the exec-gate concession in §exit-code-semantics to the raw-data guard.
+11. <strong>Consent-write guard false positives (read-only inspection is meant to be allowed).</strong> <code>git</code> and
+    <code>jq</code> are not in <code>_SAFE_VERB</code>, so <code>git check-ignore .claude/.exec-consent</code> and
+    <code>jq '.x' .claude/settings.json</code> - pure reads - default-deny, contradicting the docstring. <code>\bpytest\b</code>
+    and <code>\bunittest\b</code> in <code>guard-code-execution.py</code> are unanchored, so a commit message or prose
+    containing the word blocks (the exact class already fixed for <code>make</code>). Additive fixes: anchor
+    <code>pytest</code>/<code>unittest</code> to segment start like <code>make</code>; allow read-only <code>jq</code>, and read-only <code>git</code>
+    subcommands only (<code>git</code> must <strong>not</strong> be blanket-safe - <code>git checkout</code>/<code>git stash</code>/<code>git restore</code>
+    mutate). Accept-or-fix, not silently leave.
+12. <strong>Newly-noted lexical bypass classes</strong> (all consistent with the "string-matching is advisory"
+    residual, listed so they aren't re-discovered): trailing-slash-free raw markers
+    (<code>cd data/raw &amp;&amp; cat *</code>, <code>cp -r data/raw /tmp</code>), <code>find … -exec sed -i</code> slipping the safe-verb
+    list, a symlinked-<code>settings.json</code> two-step (the Write/Edit check is string-only, not realpath),
+    case-folded paths on case-insensitive filesystems, and exec-runner misses (<code>cargo run</code>,
+    <code>swift run</code>, <code>bundle exec</code>, bare <code>jest</code>/<code>vitest</code>, <code>julia</code>, <code>lua</code>, <code>php &lt;file&gt;.php</code>,
+    interpreter-via-heredoc). Tier-3 (rec 9) is the real containment for all of these.
+13. <strong><code>settings.json</code> allow-list vs exec guard contradiction (resolved 2026-07-05,
+    <code>apply-guard-hardening.sh</code>).</strong> <code>Bash(pwsh -Command Invoke-ScriptAnalyzer:*)</code> was allow-listed
+    as a static analyser while the exec guard's blanket <code>\bpwsh\b|\bpowershell\b</code> blocked every
+    pwsh call pre-consent, so the "allowed" analyser could never run without consent. The
+    misleading allow entry was removed; PowerShell static analysis runs under the §7 exec gate.
+    The same contradiction for the three pytest allow entries is rec 14(d).</p>
+<p><strong>Logged 2026-07-05 (evening setup review + truth audit); PREPARED 2026-07-05, pending human
+application via <code>apply-guard-fixes.sh</code> (the guards and <code>.claude/settings.json</code> are model-blocked,
+rec 5 / house rule "don't edit the guards"). Regression tests: <code>tests/test_guard_fixes.py</code>
+(written to FAIL until the fixes are applied).</strong>
+14. <strong>Four defects found live during the 2026-07-05 audits:</strong>
+    - <strong>(a) Multi-<code>.py</code> launcher false positive.</strong> <code>_PY</code> includes bare <code>py</code>, so in any command
+      naming two <code>.py</code> paths the trailing "py" of the first filename parsed as the Windows <code>py</code>
+      launcher "running" the second - <code>git diff -- a.py b.py</code>, <code>git add</code> over two rule files,
+      multi-file <code>grep</code>/<code>wc</code> were all reproduced blocking read-only commands during the audits,
+      breaking static review over multiple Python files. Third instance of the prose/argument FP
+      class this ADR has fixed twice (<code>make</code>-in-prose, <code>shellcheck a.sh b.sh</code>); same fix shape: a
+      negative lookbehind <code>(?&lt;![\w.-])</code> so the bare <code>py</code> alternative only matches as a standalone
+      token. The file-run pattern also gains <code>(?:\s+-\S+)*</code> so the versioned launcher form
+      <code>py -3 foo.py</code> is caught - it previously slipped past unblocked.
+    - <strong>(b) Unanchored <code>pwsh</code>/<code>powershell</code>.</strong> <code>\bpwsh\b</code> blocked the word inside a grep pattern
+      or prose (observed live on a benign grep, 2026-07-05). Fix: anchored to segment start with
+      optional env-var prefixes, exactly as <code>pytest</code> was anchored (rec 11).
+    - <strong>(c) <code>pre-commit</code> was a consent-free execution path.</strong> <code>Bash(pre-commit run:*)</code> was
+      allow-listed, no <code>_EXEC_PATTERNS</code> entry matched pre-commit, and <code>.pre-commit-config.yaml</code>
+      was model-writable - a session could add <code>entry: &lt;anything&gt;, language: system</code> and execute
+      it pre-consent via <code>git commit</code> or <code>pre-commit run</code>. Fix: an anchored <code>pre-commit</code> exec
+      pattern, <code>.pre-commit-config.yaml</code> added to the consent guard's protected set
+      (write-protect only; read-only inspection stays allowed), and the allow entry removed.
+      <strong>Adjacent unfixed class (recorded residual):</strong> git external-diff/merge drivers -
+      <code>.git/config</code> is model-writable and a configured external driver executes on plain
+      <code>git diff</code>/merge; same shape as (c), no fix in this pass.
+    - <strong>(d) pytest allow entries repeated the rec-13 contradiction.</strong> <code>Bash(pytest:*)</code>,
+      <code>Bash(python -m pytest:*)</code> and <code>Bash(python3 -m pytest:*)</code> were allow-listed while the exec
+      guard blocks all three pre-consent, so the entries could never take effect and misled
+      readers of <code>settings.json</code>. Removed; the exec gate (consent marker / <code>CST_ALLOW_EXEC</code>) is
+      the control either way.</p>
+<p><strong>Tier-2 backlog additions (logged 2026-07-05 from the same audit; NOT fixed in this pass):</strong>
+15. <strong>Parent-rooted / wildcard-spelled <code>Grep</code> reaches <code>data/raw</code> content.</strong> A <code>Grep</code> rooted at a
+    parent directory (<code>path="data"</code>, path-less, or wildcard spellings like <code>data/r*/**</code>) reads
+    <code>data/raw</code> content past both the hook's path checks and the literal deny patterns - broader
+    than the path-less <code>Grep</code>/<code>Glob</code> deferral recorded under rec 7, and in plugin mode there is
+    no deny list at all (rec 10).
+16. <strong>Secrets are deny-protected on <code>Read</code> only.</strong> <code>Grep(pattern="KEY=", path=".env")</code> egresses
+    secret lines; there are no <code>Grep</code>/<code>Glob</code> deny entries for <code>.env</code> / <code>*.pem</code> / <code>secrets/</code>, and
+    neither guard checks secret paths. Extends rec 8's residual.</p>
+<p><strong>Tier-1/Tier-2 backlog additions (logged 2026-07-06 from the Fable 5 static red-team; NOT fixed
+in this pass; all fixes human-apply-only per the standing "don't edit the guards" rule).</strong> Recs
+15-16 above were re-confirmed with PoCs in the same pass (<code>Grep(pattern="account_number",
+path="data")</code> and <code>Grep(pattern="KEY=", path=".env")</code> respectively), as was the rec-5 remainder
+(a model-authored <code>scripts/evil.py</code> is accepted by <code>_TEAM_ALLOW</code> alt-1 <code>{_PY}\s+-m\s+scripts\.</code>
+and then runnable via <code>python -m scripts.evil</code>). New findings:</p>
+<ol>
+<li><strong>Wrapper-prefix defeats the segment-start-anchored runners (Tier-1, med).</strong> The runner
+    patterns are anchored <code>^(?:\w+=\S+\s+)*&lt;runner&gt;</code> (guard-code-execution.py:78 <code>pytest</code>, :82
+    <code>pre-commit</code>, :85 <code>pwsh</code>/<code>powershell</code>, :104 <code>^make</code>). A leading wrapper word that is not a
+    <code>KEY=VAL</code> assignment breaks <code>^</code>, and no bare-runner <code>\b</code> pattern backs it up. PoC:
+    <code>Bash("timeout 5 pytest")</code>, <code>Bash("nice make")</code>, <code>Bash("nohup pre-commit run")</code>,
+    <code>Bash("setsid pwsh -File x.ps1")</code>. The anchoring was added to kill prose false positives
+    (recs 11/14b) and opened this. Interpreter+file and <code>python -m pytest</code> forms use <code>\b</code> and are
+    unaffected. <em>Additive fix:</em> regression test asserting these block; guard-logic fix (tolerate a
+    known wrapper-word set before the anchor, or a tighter non-prose boundary) is human-applied.</li>
+<li><strong>Backslash line-continuation splits interpreter from file (Tier-1, med).</strong> <code>_SEGMENT_SPLIT</code>
+    (:144) splits on <code>\n</code>, so <code>python3 \</code>+newline+<code>evil.py</code> becomes two segments (<code>python3 \</code>,
+    <code>evil.py</code>), neither matching <code>\b{_PY}(?:\s+-\S+)*\s+\S*\.py\b</code> (:113); the shell reassembles
+    and runs it. PoC: <code>Bash("python3 \\\n  evil.py")</code>. <em>Additive fix:</em> regression test; human fix
+    collapses <code>\</code>+newline before segmenting.</li>
+<li><strong>Absolute / tilde / parent shebang-direct exec (Tier-1, low).</strong> The file-by-path pattern is
+    <code>(^|\s)\./\S+</code> (:107) - only <code>./</code>-rooted. A shebang-bearing script run directly by an
+    absolute/<code>~</code>/<code>../</code> path has no <code>./</code>. PoC: <code>Bash("/tmp/evil.sh")</code>, <code>Bash("~/evil.sh")</code>,
+    <code>Bash("../build/evil.sh")</code>. (The <code>bash /tmp/evil.sh</code> form is still caught by :112.) <em>Additive
+    fix:</em> regression test; human fix broadens the path-exec pattern.</li>
+<li><strong><code>python &lt; file</code> stdin-redirect exec (Tier-1, low).</strong> The stdin form is only
+    <code>\b{_PY}\s+-\s*$</code> (:91, i.e. <code>python -</code>); a <code>&lt;</code> file redirect is neither that nor the
+    file-run pattern (the <code>&lt;</code> breaks <code>(?:\s+-\S+)*\s+\S*\.py</code>). PoC: <code>Bash("python3 &lt; evil.py")</code>.
+    Same residual family as heredoc/stdin (rec-3 class), concrete missed form. <em>Additive fix:</em>
+    regression test; human fix adds a stdin-redirect pattern.</li>
+<li><strong>Novel/partial-coverage launchers (Tier-1, low).</strong> <code>deno\s+(run|eval)</code> and <code>bun\s+run</code> (:92)
+    cover <code>run</code> but not <code>test</code>; <code>node\s+\S+\.[mc]?js</code> (:95) needs a <code>.js</code> file so <code>node --test</code>
+    slips; <code>xargs</code> is not a token (<code>echo evil.py | xargs python3</code> splits so <code>.py</code> never sits next
+    to <code>python</code>). PoC: <code>Bash("deno test")</code>, <code>Bash("bun test")</code>, <code>Bash("node --test")</code>,
+    <code>Bash("echo evil.py | xargs python3")</code>. Extends the rec-12 exec-runner-miss class. <em>Additive
+    fix:</em> regression test; human fix adds the tokens.</li>
+<li><strong>Raw/read guard enumerates a fixed tool set (Tier-2, low; not exploitable today).</strong>
+    <code>_extract_path_candidates</code> (guard-raw-data.py:92-127) returns <code>[]</code> for any tool outside
+    <code>{Read,Grep,Glob,Bash}</code>, and the hook matcher + deny list name only those, so a read tool
+    outside the set (<code>NotebookRead</code>, a local-FS MCP <code>read_file</code>) targeting <code>data/raw/</code> is covered
+    by nothing. No such tool is installed today (the session's deferred MCP tools are
+    Gmail/GDrive/Cloudflare/UniFi - none read local FS), so this is an architectural coverage gap,
+    not a live hole. <em>Additive fix:</em> a docs/deployment rule - when installing any new read tool,
+    add it to the hook matcher, to <code>_extract_path_candidates</code>, and to the deny list; regression
+    test asserting unknown-read-tool handling.</li>
+</ol>
+<blockquote>
+<p><strong>Scope note.</strong> All of recs 17-21 are lexical bypasses of the <em>advisory</em> exec guard on the
+<strong>Bash</strong> channel, which by design has no OS <code>permissions.deny</code> backstop - so each is only as
+severe as the missing Tier-3 boundary behind it (guardrail against a <em>cooperative</em> agent, not a
+<em>motivated</em> one; §Context). They raise no new class of risk beyond the one this ADR already
+records; they are individual lexical gaps worth closing to keep the advisory guard honest. The
+sync check found <strong>no</strong> matcher divergence between <code>hooks/hooks.json</code> and <code>.claude/settings.json</code>
+(the only divergence is the deny/allow lists living solely in <code>settings.json</code> - that is rec 10).</p>
+</blockquote>
+<h2 id="hook-exit-code-semantics-and-the-launcher-added-02">Hook exit-code semantics and the launcher (added 0.2)</h2>
+<p>Claude Code treats hook <strong>exit 2 as block, exit 0 as allow, and <em>any other</em> exit code -
+including 1, the conventional Unix failure code - as a NON-blocking error: the tool call
+proceeds.</strong> That makes every <em>crash</em> path in a guard a fail-open path. The 2026-07-01 setup
+audit found two concrete instances, both fixed the same day (user-authorised, per Decision 2):</p>
+<ol>
+<li><strong>Import-time crash on older Pythons.</strong> <code>guard-code-execution.py</code> used PEP 604 (<code>str | None</code>)
+   and both guards used PEP 585 (<code>list[str]</code>) annotations, which raise at def-time on
+   Python ≤ 3.9 - traceback → exit 1 → every command proceeds, gate silently inert. Fixed with
+   <code>from __future__ import annotations</code>; both guards additionally wrap <code>main()</code> so <strong>any</strong>
+   unexpected exception now exits 2 (fail closed). The deliberate exit-0 for a malformed
+   (non-JSON) payload is retained and now covered by regression tests, as is the
+   valid-JSON-but-not-a-dict crash path (<code>tests/test_guards.py</code>).</li>
+<li><strong>The launcher's interpreter population.</strong> <code>run-guard.sh</code> (added after 0.1; not previously
+   recorded here) tries <code>python3</code>, <code>python</code>, <code>py</code> and now <strong>version-probes for ≥ 3.9</strong>
+   (<code>Path.is_relative_to</code>) before exec'ing, skipping interpreters that would crash at runtime.
+   <strong>Recorded trade-off:</strong> if <em>no</em> suitable Python exists, the launcher exits 0 (allow). For the
+   raw-data guard the <code>permissions.deny</code> list remains the backstop; <strong>for the execution gate
+   there is no backstop</strong> (no <code>Bash()</code> deny entries), so on a Python-less host the execution
+   gate is inert - and so is the <strong>consent-write gate</strong> (noted 2026-07-05): it also has no
+   <code>permissions.deny</code> backstop, so on a Python-less host model writes of the consent marker,
+   <code>settings.json</code> and the guards themselves would proceed unguarded.
+   Accepted for now because hard-blocking every tool call on a Python-less host
+   would brick the session for a control that is advisory-by-design (see Decision 1); revisit if
+   rec 5 lands or a <code>Bash()</code> deny becomes viable.</li>
+</ol>
+<h2 id="alternatives-considered">Alternatives considered</h2>
+<ul>
+<li><strong>Represent the hooks as a preventive control / "good enough".</strong> Rejected: it misrepresents the control to an
+  auditor and gives false comfort; a motivated actor bypasses the lexical layer trivially.</li>
+<li><strong>Try to make the lexical matcher complete.</strong> Rejected as impossible: string-matching arbitrary
+  shell is undecidable (env indirection <code>X=python;$X f</code>, <code>$(…)</code>, <code>eval</code>, <code>base64|sh</code>, heredocs).</li>
+<li><strong>Remove the hooks (rely only on <code>permissions.deny</code> + discipline).</strong> Rejected: the hooks add
+  real value as consent-recording and a cooperative-agent nudge, and cover tool forms the deny
+  list misses.</li>
+</ul>
+<h2 id="residual-risk-cannot-be-closed-lexically">Residual risk (cannot be closed lexically)</h2>
+<p>After Tiers 1-2, the irreducible core remains: env-var indirection, command substitution, <code>eval</code>,
+<code>base64 | sh</code>, heredocs, and dynamic path assembly can always reconstruct a blocked operation from
+unblocked tokens. For <strong>execution</strong>, only the <code>CST_ALLOW_EXEC</code> env-var path (which the model cannot
+set for the hook subprocess) plus a real sandbox on synthetic data and trusted-code discipline is
+sound; since 0.3 the marker file is <strong>no longer model-writable</strong> (rec 5, <code>guard-consent-writes.py</code>) -
+its Bash rules are still lexical/advisory like the other guards, but the Write/Edit path check is a
+strong control. For <strong>raw data</strong>, only
+filesystem permissions / not-on-box (rec 9) actually contain a hostile Bash command. This matches
+the accepted-residual-risk notes already in the hooks and <code>docs/house-rules.md</code>.</p>
+<h2 id="implementation-status-follow-up">Implementation status &amp; follow-up</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Implementation status</td>
+<td><strong>partially implemented (2026-06-29, updated 2026-07-01).</strong> Done: Tier-1 recs 1-4 in <code>guard-code-execution.py</code> (segment-split, anchored <code>_TEAM_ALLOW</code>, block <code>python -c</code>/<code>-</code>/<code>node -e</code>/<code>ruby -e</code>/<code>perl -e</code>/<code>php -r</code>/<code>bash -c</code>, versioned-interpreter fix, broader runners), backed by 7 new <code>tests/test_guards.py</code> cases; Tier-2 rec 6 (absolute-path <code>Grep</code>/<code>Glob</code> deny variants in <code>.claude/settings.json</code>); Tier-2 rec 7 <strong>first half</strong> (the raw guard now checks the real Grep <code>glob</code> param alongside the legacy <code>include</code>, <code>guard-raw-data.py</code>); crash-path fail-closed + launcher version probe (see §exit-code semantics above, 2026-07-01). Tier-1 rec 5 <strong>implemented (2026-07-01)</strong>: <code>guard-consent-writes.py</code> (new hook, dual-wired in <code>hooks/hooks.json</code> + <code>.claude/settings.json</code>, matcher <code>Write|Edit|MultiEdit|NotebookEdit|Bash</code>) blocks model writes of <code>.claude/.exec-consent</code> and <code>.claude/settings*.json</code>; deletion + read-only inspection allowed; human override <code>CST_ALLOW_CONFIG_EDIT</code>; 17 tests in <code>tests/test_guard_consent.py</code>; <code>/engage</code> and <code>/demo</code> now have the <strong>user</strong> create the marker (<code>! touch .claude/.exec-consent</code>). <em>Rec-5 remainder deferred:</em> the "warn on new files under <code>scripts/</code>" half (a new script written by the model becomes runnable via <code>_TEAM_ALLOW</code>; needs <code>permissionDecision: ask</code> semantics to avoid breaking legitimate build deliverables). <strong>Also deferred:</strong> Tier-2 rec 7 second half (path-less <code>Grep</code>/<code>Glob</code>; broadened by rec 15), rec 8's <code>Grep</code>/<code>Glob</code> half (rec 16), Tier-3 (the OS/ACL boundary). Recs 10-13 applied 2026-07-05 (<code>apply-guard-hardening.sh</code>, <code>tests/test_guard_hardening.py</code>); rec 14 applied 2026-07-06 (regression net: <code>tests/test_guard_fixes.py</code>) (<code>tests/test_guard_fixes.py</code>).</td>
+</tr>
+<tr>
+<td>Implementing agent / team</td>
+<td><code>platform-engineer</code> (hooks + settings), human approver for the OS/ACL boundary</td>
+</tr>
+<tr>
+<td>Target completion</td>
+<td>Tier-1 rec 5 next; Tier-3 is a deployment-guidance item</td>
+</tr>
+<tr>
+<td>Follow-up actions</td>
+<td>implement the <code>Write</code>/<code>Edit</code> consent-marker gate (rec 5); add Tier-2 recs 7-8; document the Tier-3 filesystem boundary in deployment guidance; <code>tests/test_guards.py</code> is the regression net</td>
+</tr>
+<tr>
+<td>Linked tickets / PRs</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sign-off">Sign-off</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Name</th>
+<th>Decision</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Author / owner</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>compliance-reviewer</code> (DoD gate)</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Human approver (or <code>[IT team]</code>)</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-002-safety-hook-threat-model.md &middot; 2026-07-30</div>
+</body>
+</html>

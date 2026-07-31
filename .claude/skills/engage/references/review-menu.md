@@ -2,7 +2,9 @@
 
 > Loaded just-in-time by `engage` step 1b. Use **exactly** these questions, options and
 > descriptions - do not improvise, merge or reword (a loose version once offered "Quick **and**
-> Deep" as a multi-select - illogical, Deep already includes Quick).
+> Deep" as a multi-select - illogical, Deep already includes Quick). `scripts/locked_menu_guard.py`
+> (audit finding #7, 2026-07-30) mechanically blocks that exact class of drift before the
+> question reaches the user - don't rely on it instead of following this file.
 
 **Critical construction rules:**
 - **Ask Q1, Q2 and Q3 in ONE `AskUserQuestion` call** (one screen, not three round-trips). They

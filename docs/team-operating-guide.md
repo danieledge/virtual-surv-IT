@@ -33,7 +33,7 @@ Route by **deliverable type**, not habit:
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
-## Command index (canonical - all 23 skills)
+## Command index (canonical - all 24 skills)
 
 - `/engage` - front door: intake + orchestration for any request (problem, review or build)
 - `/engage-light` - explicit low-ceremony profile: same safety gates + code chain, one-page
@@ -59,6 +59,8 @@ Route by **deliverable type**, not habit:
 - `/remediate` - legacy / poorly-built code: assess → prioritise → fix → re-review → hand over
 - `/handover` - handover pack: dev docs + independent QA evidence + change/ops artifacts
 - `/run-evals` - team-quality eval harness against golden cases (regression net)
+- `/preferences` - view/change project-wide settings (docx export, regulatory citations);
+  quick utility, no engagement opened
 
 ## Asking questions (standing user preference)
 
@@ -153,6 +155,17 @@ skipped. The Python helper scripts need only `<python>`, never bash:
     reading goes through it - `docs/house-rules.md`). One **optional system package**
     sharpens it: `poppler-utils` (`pdftotext`) recovers PDF pages the vendored pypdf can't
     extract - without it those pages are reported MISSING (see `requirements-dev.txt`).
+  - **Document inputs are NEVER hand-parsed (standing rule, 2026-07-29).** The moment an
+    input arrives as a PDF, DOCX, XLSX/XLS or CSV: `<python> -m scripts.convert_file
+    <file>` (plugin mode: the `$PLUGIN_ROOT/scripts/` copy by path) - it is consent-free
+    and allow-listed. Never `Read` the binary bytes, never shell/PowerShell one-liners
+    (`Get-Content`, `ReadAllBytes`, `strings`), never retype content by eye. `--layout`
+    keeps PDF columns/tables readable; `--list` inventories sheets/tables/pages. The
+    conversion REPORT is evidence - its warnings (scanned pages = MISSING content, table
+    caveats) carry into the engagement's artifacts, and a scanned/image-only PDF is
+    **escalated to the user via the question tool** (ask for the text-bearing original or
+    the upstream data) - never guessed, never transcribed by eye. Assume the corporate
+    environment allows NO new installs: the vendored converter is the toolchain.
 - **Never silently skip a deliverable step** because a script seems unreachable: resolve the
   path per the above, and if something genuinely can't run in this mode, say so in the close and
   in the summary email.
@@ -175,6 +188,15 @@ skipped. The Python helper scripts need only `<python>`, never bash:
   the rendered artifact.
 - **Keep console output clean.** No code blocks, `diff`s or large tables in the chat/TUI - put that
   in the artifact (`.md`/`.html`); keep the terminal to crisp prose, scoreboards and short bullets.
+- **Show progress in the native task list (TodoWrite), not in prose.** Seed one todo per
+  planned gate when the plan is agreed (brief → build → tests → review → QA → DoD gate →
+  close), keep exactly one in_progress, and tick each as its evidence lands. The panel is
+  Claude Code's own UI, so it costs no console space and no tokens beyond the update
+  itself. Presentation only: the engagement's STATE stays in `engagement-state.json` - the
+  todo list never becomes a second source of truth. A live audit (2026-07-30) found no
+  genuine TodoWrite calls in any kept eval transcript despite this rule - a Stop-hook nudge
+  (`scripts/todo_panel_nudge.py`) now reminds once a delivery-phase engagement looks
+  unseeded, since TodoWrite can't be called or verified from outside the turn.
   Hide detail by default; offer to expand via the question tool.
 
 ## Outcome discipline (every engagement)
@@ -267,34 +289,60 @@ must be visible **between** gates.
 
 - **Every engagement is in exactly one state**, recorded in the START-HERE living index
   (`docs/templates/start-here.md`): **⏳ in progress** · **⛔ blocked - awaiting input** ·
-  **✅ closed**. Only the close flips to ✅, and the close is where the DoD runs.
-- **The state is machine-readable first (ADR-006).** `artifacts/engagement-state.json` is the
-  authoritative lifecycle record (status, phase, outstanding, artifact inventory, decisions,
-  footprint) and **START-HERE.md is rendered from it** - never hand-edited. Create it with
+  **🔒 closing** (the close is underway - close artifacts are legitimate work in progress) ·
+  **✅ closed**. Only the close flips to ✅, and the close is where the DoD runs -
+  mechanically: `set-status closed` runs the full gate itself and refuses on findings.
+- **The state is machine-readable first (ADR-006).** The workspace's
+  `artifacts/<slug>/engagement-state.json` is the authoritative lifecycle record (status,
+  phase, outstanding, artifact inventory, decisions, gate answers, runtime probe,
+  footprint) and **START-HERE.md is rendered from it** - never hand-edited (the render
+  embeds a content hash; a hand-edit is an `INDEX-HAND-EDITED` finding, auto-fixed by
+  re-render with the hand-edited text backed up). Create it with
   `<python> -m scripts.engagement_state init` at OPEN; update it only through the mutators
   (`set-status` · `set-phase` · `set-profile` · `add-artifact` · `add-outstanding` ·
   `resolve-outstanding` · `set-decision` · `set-team` · `finalise-artifacts` ·
-  `set-footprint` · `log-note` · `add-ratification` · `ratify`), each of which re-validates
+  `set-footprint` · `log-note` · `add-ratification` · `ratify` · `set-active` ·
+  `record-consent-outcome` · `set-runtime`), each of which re-validates
   and re-renders the index in the same command. The `profile` field (standard/light) records
   the USER's ceremony choice (`/engage-light`); light drops the delivery report (the
   summary email stays in EVERY profile, kept short in light) and upgrades to standard the
   moment scope outgrows it. **Outstanding holds ONLY open work** - completion notes and events go to the
-  log (`log-note`), so convergence stays countable. **Approvals are structured**: a decision
+  log (`log-note`), so convergence stays countable (at close, the cleared outstanding list
+  is snapshotted into the log - a mistaken close stays reversible from disk). **Approvals
+  are structured**: a decision
   awaiting the human is `add-ratification` (pending); only the human's grant justifies
   `ratify --by`; an artifact asserting a ratification the state records as pending is a
-  `RATIFIED-CLAIM-PENDING` gate finding. Close ordering: `set-team` and
-  `finalise-artifacts` before `set-status closed` - a close with an empty team or interim
-  artifact rows fails validation. Mechanically checked (`STATE-INVALID`, `STATE-STALE-RENDER`,
-  `STATE-MISSING`); the lifecycle hooks read the state before falling back to the emoji sniff,
+  `RATIFIED-CLAIM-PENDING` gate finding. **Session decisions persist**: the intake gate
+  answers (`set-decision` for go-ahead / fix-cycle / data-attestation), the NON-granting
+  consent outcome (`record-consent-outcome asked|declined` - a grant is not representable;
+  it stays the human marker only, ADR-002) and the run-mode probe (`set-runtime`) are
+  recorded when given and re-read on resume, never re-asked. Close ordering: `set-status
+  closing` to enter the close window, then `set-team` and
+  `finalise-artifacts` before `set-status closed` - a close with an empty team, interim
+  artifact rows, or any DoD gate finding refuses (and rolls back). Mechanically checked
+  (`STATE-INVALID`, `STATE-STALE-RENDER`,
+  `STATE-MISSING`, `INDEX-HAND-EDITED`); the lifecycle hooks read the state before falling
+  back to the legend-aware index parse,
   so a stale render can neither arm nor silence them. The state file must **never** carry a
   consent-like key - execution consent lives only in the human-created marker (ADR-002); the
   schema rejects it. Legacy engagements without a state file remain valid.
 - **Engagements live in workspaces (ADR-008).** Each engagement owns `artifacts/<slug>/`
   (its state, index and artifacts); the root `ENGAGEMENTS.md`/`engagements.json` is a DERIVED
   registry regenerated on every mutation - never hand-edit it (`REGISTRY-STALE`). Several
-  engagements may coexist at independent states: one is ACTIVE per session (named in the
-  banner, targeted with `--slug`); a ⛔ parked sibling's stop-gate stays silent. Legacy flat
-  packs keep working; `migrate` moves them into a workspace.
+  **Archiving (0.33.2):** a `.archive` marker file excludes any directory from every
+  scanner, in place (no moves; `archive <slug>` / `--all-closed` / `unarchive`; the
+  registry keeps a collapsed `Archived: N` line). Closed packs only - an open pack is
+  refused (`--force` logs the exception; a bare hand-touched marker on an open pack is
+  `ARCHIVED-OPEN`, warned not silent). Closed packs also store a scan fingerprint at
+  close, so unchanged ones are skipped even without archiving. Several
+  engagements may coexist at independent states: one is ACTIVE per session, recorded **on
+  disk** in `artifacts/.active-engagement.json` (written by `init`, switched with
+  `set-active`, cleared at close; ambiguous commands resolve to it) - name it in the
+  banner and target it with `--slug`; a ⛔ parked sibling's stop-gate stays silent. Legacy
+  flat packs keep working; `migrate` moves them into a workspace. In workspace mode
+  nothing sits unchecked at the artifacts root: a new root file is `ORPHAN-ARTIFACT`
+  (pre-existing flat files are grandfathered in `.dod-root-allowlist.json` - D2 ruling,
+  ADR-010).
 - **START-HERE is a living index** - created at engagement OPEN alongside the Engagement Brief
   (status ⏳), a row appended **the moment any artifact is written** (via `add-artifact`, which
   re-renders the `.md` + `.html`), the ⚠️-outstanding list kept current, verdict + footprint
@@ -340,6 +388,36 @@ must be visible **between** gates.
   clarification-rounds register), and continue to a real close - the outstanding list is the
   to-do list for getting there.
 
+## Where every document lives (one placement rule - ADR-010)
+
+Everything an engagement produces goes in **its own workspace `artifacts/<slug>/`** - flat
+at the workspace root, plus one machine-readable lane. This table is the single reference;
+skills point here rather than restating paths. Filenames are workspace-relative.
+
+| Document / output | Canonical address in `artifacts/<slug>/` |
+|---|---|
+| Living index (generated - never hand-edit) | `START-HERE.md` + `.html` |
+| Machine-readable state | `engagement-state.json` |
+| Engagement brief | `engagement-brief.md` |
+| BRD / FSD | `BRD-<slug>.md` / `FSD-<slug>.md` |
+| Requirements traceability matrix | `rtm.md` |
+| User stories | `user-stories.md` |
+| Decision log | `decision-log.md` |
+| Client-facing ADRs | `adr/ADR-NNN-<topic>.md` |
+| Interim review passes | `review-pass-N.md` (close-only names never appear early) |
+| Canonical review report (CLOSE-ONLY, D4) | `REVIEW-<slug>.md` (rendered from the findings pack at 🔒/✅ only) |
+| Security audit / performance review reports | `SECURITY-AUDIT-<slug>.md` / `PERF-<slug>.md` |
+| QA handover + QA evidence | `qa-handover.md` (or `qa-handover-<scope>.md`), evidence preserved beside it |
+| Produced code + its tests + QA scripts | workspace root, tests/QA in the SAME scope as the code they verify (a grouping subfolder carries its own tests + QA handover - the gate checks per scope); code delivered into the working project's source tree follows the escalation rule instead |
+| Delivery report (close-only) | `delivery-report.md` |
+| Engagement-summary email (close-only) | `engagement-summary-<slug>.txt` (never rendered to HTML) |
+| Findings packs / machine-readable source | `data/findings-*.json` (validated recursively; excluded from the .html-sibling and index checks) |
+| Standalone `/prepare-data` output (no engagement open) | `artifacts/data-prep/` (root lane, outside any workspace) |
+
+Project-level (never per-engagement): the codebase map at `docs/codebase-map.md` or
+`CODEBASE-MAP.md` (ADR-003), and the derived registry `artifacts/ENGAGEMENTS.md` /
+`engagements.json`.
+
 ## Memory scope & evidence basis
 
 - **Memory is project-scoped, not plugin-scoped.** The plugin is installed user-wide across many
@@ -377,7 +455,7 @@ realistic** - warm, plain-speaking (translate jargon), default to "yes, here's h
 about what's hard, risky or out of scope; never a yes-man; confidence from evidence. Proactive, keep
 the user informed and in charge, check before anything irreversible.
 
-## Orchestration discipline (evidence-based - see `docs/research-virtual-team.md`)
+## Orchestration discipline (evidence-based - see `docs/internal/research-virtual-team.md`)
 
 - **Right-size first.** Multi-agent costs ~15× the tokens - use the **leanest** set that fits (a
   narrow change → one builder + one reviewer, not the whole team). State the intended agent count
@@ -400,7 +478,10 @@ the user informed and in charge, check before anything irreversible.
   context, so a verbose return balloons Morgan and pushes a long engagement toward premature
   compaction. The orchestrator's context is an attention budget (Anthropic's context-engineering
   guidance); state the budget in the brief, and if a return blows it, send it back to be distilled
-  (or distil it before acting) rather than carrying the bloat.
+  (or distil it before acting) rather than carrying the bloat. A PostToolUse hook on Task
+  completion (`scripts/subagent_return_budget.py`, audit finding #4, 2026-07-30) now gives one-line
+  feedback the moment a return is clearly (2x) over budget - advisory, never blocking, don't rely
+  on it instead of briefing well in the first place.
 - **Coordinate through artifacts, not chatter (the "blackboard")** - agents read/write the shared
   set (Delivery Report, RTM, specs); each step's output is the next step's input.
 - **Challenge the agents - the PM is a sceptic, not a relay.** Don't pass findings through verbatim:

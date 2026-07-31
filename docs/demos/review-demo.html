@@ -50,7 +50,7 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-02</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
 <h1 id="review-demo">🔍 Review demo</h1>
 <p><em>A real <code>/demo</code> transcript: Morgan reviews a small synthetic Python file end-to-end, narrating every
 decision. <a href="README.html">Back to demos</a>.</em></p>
@@ -76,20 +76,20 @@ that earns the top tier.</p>
 </blockquote>
 <h3 id="ravi-code-reviewer-opus-reviews-the-file">→ Ravi (<code>code-reviewer</code>, opus) reviews the file</h3>
 <pre><code>Findings
-🔴 Critical - Hardcoded credential - input_alert_export.py:9 - 🧠 inferred (gitleaks ran but did
+🔴 Critical - Hardcoded credential - input_alert_export.py:8 - 🧠 inferred (gitleaks ran but did
    not flag; reasoned by reading). CWE-798. DB_PASSWORD = &quot;s3cr3t-...&quot; is a plaintext secret.
    Fix: read from os.environ[&quot;DB_PASSWORD&quot;]; never hardcode.
-🔴 Critical - SQL injection - input_alert_export.py:19 - 🧠 inferred. CWE-89. trader_name is
+🔴 Critical - SQL injection - input_alert_export.py:15 - 🧠 inferred. CWE-89. trader_name is
    string-concatenated into the query.
    Fix: cur.execute(&quot;SELECT * FROM alerts WHERE trader = ?&quot;, (trader_name,))  # parameterised
-🟠 Warning - Resource leak - input_alert_export.py:32-35 - 🧠 inferred. open_db returns a cursor
+🟠 Warning - Resource leak - input_alert_export.py:27-29 - 🧠 inferred. open_db returns a cursor
    but the connection is never closed.
-🟡 Medium - O(n^2) dedupe - input_alert_export.py:23-29 - 🧠 inferred. `a not in unique` is a
+🟡 Medium - O(n^2) dedupe - input_alert_export.py:19-24 - 🧠 inferred. `a not in unique` is a
    linear scan in a loop. Fix: track membership with a set().
-🔵 Style - missing docstrings - input_alert_export.py:16,23,32,38 - 🧠 inferred. Non-blocking.
+🔵 Style - missing docstrings - input_alert_export.py:13,19,27,32 - 🧠 inferred. Non-blocking.
 
 Deliberately NOT flagged
-- LARGE_ORDER_MULTIPLE = 5.0 (line 13): correctly documented threshold with rationale + tuning
+- LARGE_ORDER_MULTIPLE = 5.0 (line 10): correctly documented threshold with rationale + tuning
   date per CLAUDE.md §4 - this is the planted FP-trap; flagging it would be a false positive.
 
 Tooling coverage: ruff/bandit/mypy/semgrep MISSING; gitleaks ran (no leaks reported - note the
@@ -117,22 +117,22 @@ as tool-verified facts.</p>
 <tbody>
 <tr>
 <td>🔴</td>
-<td>Hardcoded credential (<code>:9</code>)</td>
+<td>Hardcoded credential (<code>:8</code>)</td>
 <td>🧠 inferred</td>
 </tr>
 <tr>
 <td>🔴</td>
-<td>SQL injection (<code>:19</code>)</td>
+<td>SQL injection (<code>:15</code>)</td>
 <td>🧠 inferred</td>
 </tr>
 <tr>
 <td>🟠</td>
-<td>Connection leak (<code>:32-35</code>)</td>
+<td>Connection leak (<code>:27-29</code>)</td>
 <td>🧠 inferred</td>
 </tr>
 <tr>
 <td>🟡</td>
-<td>O(n²) dedupe (<code>:23-29</code>)</td>
+<td>O(n²) dedupe (<code>:19-24</code>)</td>
 <td>🧠 inferred</td>
 </tr>
 <tr>
@@ -153,15 +153,22 @@ This file is one of our eval golden cases, so I can score Ravi's review against 
 truth - the <strong>regression net</strong> live:</p>
 </blockquote>
 <pre><code class="language-console">$ python3 -m scripts.eval_score --expected evals/cases/review-seeded-bugs-py/expected.yaml --findings review.json
-VERDICT: PASS ✅
-recall = 1.0 (found all planted issues)
-must-find criticals missed: none
-false-positive traps triggered: none
+{
+  &quot;case&quot;: &quot;review-seeded-bugs-py&quot;,
+  &quot;passed&quot;: true,
+  &quot;recall&quot;: 1.0,
+  &quot;planted_total&quot;: 4,
+  &quot;planted_found&quot;: [&quot;SEC-1&quot;, &quot;SEC-2&quot;, &quot;PERF-1&quot;, &quot;BUG-1&quot;],
+  &quot;planted_missed&quot;: [],
+  &quot;must_find_missed&quot;: [],
+  &quot;false_positive_traps_triggered&quot;: []
+}
 </code></pre>
 <blockquote>
-<p>🎩 <strong>And there's the proof - VERDICT: PASS, recall 1.0, zero false alarms.</strong> The eval harness
-independently confirmed Ravi caught <em>every</em> planted issue and didn't trip the documented-threshold
-trap. If a future prompt tweak quietly weakened that review, this score would drop and we'd catch it.</p>
+<p>🎩 <strong>And there's the proof</strong> - my reading of that JSON: <strong>passed, recall 1.0, no must-find
+criticals missed, zero false-positive traps triggered.</strong> The eval harness independently
+confirmed Ravi caught <em>every</em> planted issue and didn't trip the documented-threshold trap. If a
+future prompt tweak quietly weakened that review, this score would drop and we'd catch it.</p>
 </blockquote>
 <hr>
 <h2 id="what-this-demo-showed">What this demo showed</h2>
@@ -174,6 +181,6 @@ trap. If a future prompt tweak quietly weakened that review, this score would dr
   not 📊 measured - no overselling).</li>
 <li><strong>The self-test</strong> - the result is <em>proven</em> with a real eval score, not just claimed.</li>
 </ul>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: review-demo.md &middot; 2026-07-02</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: review-demo.md &middot; 2026-07-30</div>
 </body>
 </html>

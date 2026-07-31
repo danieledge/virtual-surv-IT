@@ -87,7 +87,9 @@ When invoked:
 5. **Write the `## 🔵 Developer guidance - improving future code` section - ALWAYS, no
    exceptions.** 2-4 constructive points on the author's coding style and what to improve in
    future work (or what's done well, if it's strong), even on a clean pass. **The review is
-   incomplete without this heading** - verify it's in the artifact before finishing.
+   incomplete without this heading** - `check_artifacts` mechanically flags it missing/empty
+   as `FINDINGS-NO-DEV-GUIDANCE`, but verify it's genuinely in the artifact before finishing,
+   don't rely on the gate.
 6. The orchestrator (**Morgan**) then independently challenges and may **downgrade** findings -
    **and samples the filtered / below-threshold set to promote any false negative**
    (`docs/code-review-method.md`; a wrongly-filtered real issue is the costliest miss) - before

@@ -72,7 +72,7 @@ All thresholds live in `SpoofingThresholds`; none are hard-coded inline (§4).
 Thresholds are injectable so `data-analyst` can recalibrate and evidence the
 volume/coverage trade-off without touching detection logic.
 
-> **Enforcement-statistics context (evidence pass 2026-07-06, `docs/evidence-base.md` C41).** These
+> **Enforcement-statistics context (evidence pass 2026-07-06, `docs/internal/evidence-base.md` C41).** These
 > defaults are deliberately **conservative catch-alls, not case-derived constants**. The spoofing
 > mechanics and signature are verified against the Coscia and Sarao records (MAR Art 12), but the
 > published case statistics are *tighter* than these thresholds: in *US v Coscia* the large
@@ -139,7 +139,7 @@ detect_spoofing(spoofing_session(seed=1), SpoofingThresholds(large_qty_multiple=
 > `pytest` executes code, so inside the team it needs execution consent - granted by the human
 > only, via the `.claude/.exec-consent` marker or `CST_ALLOW_EXEC=1` (the `/engage` intake answer
 > records intent, it grants nothing) - see
-> [the safety hooks](../../README.md#-the-safety-hooks-plain-english).
+> [the safety hooks](../../README.md#-the-safety-hooks).
 > The `scripts.*` helpers (`gen_synthetic`, `validate_masking`) are always allowed.
 
 ## 7. Limitations & open items

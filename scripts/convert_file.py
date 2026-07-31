@@ -599,7 +599,7 @@ def _pdftotext_pages(source: Path) -> list[str] | None:
     return pages
 
 
-def read_pdf(source: Path, report: Report) -> list[str]:
+def read_pdf(source: Path, report: Report, layout: bool = False) -> list[str]:
     try:
         from pypdf import PdfReader
     except ImportError as exc:
@@ -611,10 +611,22 @@ def read_pdf(source: Path, report: Report) -> list[str]:
             reader.decrypt("")
         except Exception:
             raise ConversionError("PDF is encrypted and could not be opened without a password.")
-    pages = [page.extract_text() or "" for page in reader.pages]
+
+    def _extract(page) -> str:
+        if layout:
+            # pypdf's layout mode preserves horizontal spacing, keeping multi-column pages
+            # and table-shaped content readable instead of merging columns into one stream.
+            # Not the default: on plain prose it pads spacing and reads worse.
+            try:
+                return page.extract_text(extraction_mode="layout") or ""
+            except Exception:
+                return page.extract_text() or ""  # older pypdf / odd page: plain fallback
+        return page.extract_text() or ""
+
+    pages = [_extract(page) for page in reader.pages]
     report.data["format"] = "pdf"
     report.data["pages"] = len(pages)
-    report.data["pdf_engine"] = "pypdf"
+    report.data["pdf_engine"] = "pypdf(layout)" if layout else "pypdf"
     empty_idx = [i for i, t in enumerate(pages) if not t.strip()]
     if empty_idx:
         alt = _pdftotext_pages(source)
@@ -652,6 +664,12 @@ def read_pdf(source: Path, report: Report) -> list[str]:
         "PDF extraction is TEXT only - table structure in PDFs is layout, not data, and "
         "reconstructing it is unreliable. If this PDF carries tabular data, get the "
         "upstream Excel/CSV instead; that is the defensible source."
+        + (
+            ""
+            if layout
+            else " For column/table-shaped pages, re-run with --layout to "
+            "preserve horizontal spacing."
+        )
     )
     return pages
 
@@ -732,6 +750,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--encoding", help="csv only: source encoding (default: detected)")
     parser.add_argument("--report", help="evidence report path (default: <out>.report.json)")
     parser.add_argument(
+        "--layout",
+        action="store_true",
+        help="pdf only: layout-preserving extraction (keeps columns/tables readable; "
+        "default is plain text, better for prose)",
+    )
+    parser.add_argument(
         "--list", action="store_true", help="list sheets/tables/pages and exit without converting"
     )
     args = parser.parse_args(argv)
@@ -789,7 +813,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 kind = "docx"
         elif suffix == ".pdf":
-            pages = read_pdf(source, report)
+            pages = read_pdf(source, report, layout=args.layout)
             if args.list:
                 for i, t in enumerate(pages, start=1):
                     print(f"page {i}: {len(t)} chars")

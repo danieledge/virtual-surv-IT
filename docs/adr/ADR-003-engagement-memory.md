@@ -3,12 +3,13 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-003` · Version `0.1` · Status `Accepted (implemented)`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-18`
+> **Document control** · ID `ADR-003` · Version `0.2` · Status `Accepted (implemented)`
+> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-29`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-18 | memory-design engagement (user-authorised) | Initial decision: PM-curated codebase map per working project; lifecycle wiring; hygiene gate; per-agent memory deferred |
+> | 0.2 | 2026-07-29 | workflow-robustness remediation phase 4 | Revision note: [ADR-007](ADR-007-codebase-map-evolution.md) (re-scoped 2026-07-29, ruling D3) evolves this design's staleness story - per-entry As-of/Anchor validation, entry-SHA resolution and a HEAD staleness budget are now mechanical in `check_map`; ADR-007's generative layer is parked. This ADR remains the settled design for everything else. The open-time stale-anchor surfacing this ADR promised is delivered as the gate findings surfaced by the probe/close fix-list, not as open-time git round-trips (the engage skill's just-in-time rule stands). |
 
 | | |
 |---|---|

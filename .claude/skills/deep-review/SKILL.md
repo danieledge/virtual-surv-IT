@@ -86,7 +86,7 @@ and states what's applicable vs not.
       `executive_summary`, `developer_guidance`, `limitations`, `tooling_coverage`).
    2. Run **`<python> -m scripts.check_artifacts --fix`** (allow-listed - no consent needed): it
       **validates** the pack (a missing field is `FINDINGS-INVALID` → fix the pack and re-run) and
-      **renders** the canonical `artifacts/REVIEW-<slug>.md` + `.html`. The renderer owns the layout,
+      **renders** the canonical `artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first). The renderer owns the layout,
       so the report can't drift (no "5C"/C-word/inline). *(`<python>`: resolve your interpreter - try
       python3, then python, then py; installed-plugin sessions invoke the bundled `scripts/` copy by
       path - operating guide, "Run mode & the bundled scripts".)*
@@ -97,7 +97,9 @@ and states what's applicable vs not.
    ⚠️ **MANDATORY - `developer_guidance` is not optional.** The pack's `developer_guidance` field
    must always be populated (2-4 constructive points on the author's coding style and what to
    improve next time; if the code is strong, say what's done well), **even on a clean pass** - the
-   renderer emits it as the `## 🔵 Developer guidance` section. An empty one means you are not done.
+   renderer emits it as the `## 🔵 Developer guidance` section. `check_artifacts` mechanically
+   flags a missing or empty section as `FINDINGS-NO-DEV-GUIDANCE` (audit finding #2, 2026-07-30 -
+   this used to be a prose-only reminder with no backstop), but don't rely on the gate to catch it.
 
 **5. Close - don't dead-end.** Summarise from the scoreboard, then offer concrete next steps
 with a recommendation - *"3 🔴, 5 🟠. I can fix the criticals, run `/remediate`, or produce a

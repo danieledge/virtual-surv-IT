@@ -1,5 +1,7 @@
 # 🎬 Demo transcripts
 
+> ℹ️ **Vintage note (2026-07-30):** these transcripts were captured on early releases (pre-0.16). The engagement lifecycle that arrived later - the START-HERE index, per-engagement workspaces, the machine-readable state file and the closing window - does not appear in them; current behaviour adds that layer on top.
+
 **See the team work without running anything.** These are *real* transcripts of the `/demo` skill -
 Morgan (the PM) running a full engagement end-to-end on **safe synthetic data**, narrating every
 decision. They reproduce the actual console: the 🎩 narration, the commands and their output, the
@@ -27,3 +29,7 @@ generated at the moment, not scripted by the repo author.
 
 **To run a demo live:** open the repo in Claude Code and type **`/demo`**. To put the team to work
 on your own code, type **`/engage`**.
+
+---
+
+Next: [Overview](../OVERVIEW.md) · [FAQ](../FAQ.md) · [Glossary](../glossary.md) · [README](../../README.md)

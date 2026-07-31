@@ -81,6 +81,10 @@ SANDBOX_EXCLUDES = (
     ".pytest_cache",
     ".claude/.exec-consent",
     "node_modules",
+    # 2026-07-30 retention audit: the two README PNGs are 5.4M per kept sandbox (plus a
+    # second copy in the sandbox's own .git) and no eval case reads them - excluding the
+    # assets cuts a typical kept run by roughly two thirds.
+    "docs/assets",
 )
 
 # The sandbox session must stay hermetic: nothing it does may leave the box.

@@ -125,9 +125,9 @@ _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 #     (Lexical, like everything here: a hostile file *named* render_html.py in a scripts/ dir
 #     would pass - accepted residual, consistent with ADR-002's threat model.)
 _TEAM_SCRIPT_NAMES = (
-    r"(?:render_html|convert_file|ingest|gen_synthetic|synthesise|validate_masking|validate_manifest"
-    r"|check_citations|eval_score|calibrate_spoofing|check_artifacts|engagement_state"
-    r"|extensions|convert_sarif)\.py"
+    r"(?:render_html|render_findings|render_docx|convert_file|ingest|gen_synthetic|synthesise"
+    r"|validate_masking|validate_manifest|check_citations|eval_score|calibrate_spoofing"
+    r"|check_artifacts|engagement_state|extensions|convert_sarif|engage_probe)\.py"
 )
 
 # 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in

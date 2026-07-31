@@ -128,6 +128,20 @@ def test_new_team_script_basenames_staged():
         assert STAGED._TEAM_ALLOW.match(cmd), cmd
 
 
+def test_audit_batch_scripts_staged_2026_07_30():
+    """render_findings.py (check_artifacts' STALE-FINDINGS-RENDER/COUNT-MISMATCH fixes
+    literally suggest running it), render_docx.py (the opt-in .docx export) and
+    engage_probe.py (the collapsed step-0 probe) are all invoked directly by the model via
+    Bash - each needed adding, same gap class the memory note about this allow-list warns
+    about ('new scripts/ need an entry or plugin users get consent prompts')."""
+    for cmd in (
+        "python3 /x/plug/scripts/render_findings.py artifacts/data/findings-x.json",
+        'python3 "/Users/x/App Support/plug/scripts/render_docx.py" BRD-x.md',
+        "python scripts/engage_probe.py --plugin-root /x/plug --interpreter-name python",
+    ):
+        assert STAGED._TEAM_ALLOW.match(cmd), cmd
+
+
 def test_company_prefix_allows_exact_wrapper_only(monkeypatch):
     g = _load_with_env(monkeypatch, "python scripts/publish_pack.py|python3 tools/scan.py")
     ok = "python scripts/publish_pack.py artifacts/ --dest //share/packs"

@@ -61,24 +61,39 @@ guard-hook spawns). So gather EVERYTHING the open needs in **one compound Bash c
 a probe-per-turn sequence, and **no narration turns between the probe and your opening
 banner**:
 
+Only the plugin-root bootstrap (locating THIS script in installed-plugin mode) needs raw
+shell - everything downstream is one tested script call
+(`scripts/engage_probe.py`, audit finding #5/#6/#8):
+
 ```
-G=$(cat docs/team-operating-guide.md 2>/dev/null); PR=""; \
-if [ -z "$G" ]; then \
+PR=""; \
+if [ ! -f docs/team-operating-guide.md ]; then \
   for d in $(grep -o '"installPath": *"[^"]*"' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null | cut -d'"' -f4); do \
     grep -q 'compliance-surveillance-team' "$d/.claude-plugin/plugin.json" 2>/dev/null && PR="$d" && break; done; \
-  if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -name team-operating-guide.md 2>/dev/null | sort -V | tail -1); \
-    [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; \
-  [ -n "$PR" ] && G=$(cat "$PR/docs/team-operating-guide.md" 2>/dev/null); fi; \
-echo "PLUGIN_ROOT=${PR:-repo-as-project}"; \
-(python3 --version || python --version || py --version) 2>&1 | head -1; \
-ls scripts/render_html.py 2>/dev/null; \
-grep -m1 '"version"' "${PR:-.}/.claude-plugin/plugin.json" 2>/dev/null | head -1; \
-bash scripts/check-review-tools.sh 2>/dev/null || bash "$PR/scripts/check-review-tools.sh" 2>/dev/null; \
-MF=$(ls docs/codebase-map.md CODEBASE-MAP.md 2>/dev/null | head -1); [ -n "$MF" ] && { head -20 "$MF"; echo "...(map section 2 body read just-in-time on demand; section 3 history below for the version compare:)"; awk '/^## 3\./{f=1} /^## 4\./{f=0} f' "$MF"; }; \
-awk '/^## \[/{n++} n==1' "${PR:-.}/CHANGELOG.md" 2>/dev/null | head -30; \
-[ -f docs/team-extensions.md ] && { (python3 -m scripts.extensions show || python -m scripts.extensions show) 2>/dev/null || head -60 docs/team-extensions.md; }; \
-printf '%s\n' "$G" | head -400
+  if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -maxdepth 6 -path '*/compliance-surveillance-team/*/docs/team-operating-guide.md' 2>/dev/null | sort -V | tail -1); \
+    [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; fi; \
+SCRIPT="${PR:+$PR/}scripts/engage_probe.py"; \
+(PYTHONIOENCODING=utf-8 python3 "$SCRIPT" --plugin-root "$PR" --interpreter-name python3 || \
+ PYTHONIOENCODING=utf-8 python "$SCRIPT" --plugin-root "$PR" --interpreter-name python || \
+ PYTHONIOENCODING=utf-8 py "$SCRIPT" --plugin-root "$PR" --interpreter-name py) 2>/dev/null || \
+echo "PROBE_FAILED - run by hand to see why: PYTHONIOENCODING=utf-8 py \"$SCRIPT\" --plugin-root \"$PR\""
 ```
+
+**On Windows, `PYTHONIOENCODING=utf-8` is not optional.** The probe's report contains emoji;
+a cp1252 console (the Windows default) makes a bare `print()` of it raise
+`UnicodeEncodeError`, which silently exits every one of python3/python/py non-zero - the
+`2>/dev/null` then hides the traceback entirely, so the probe LOOKS like it just does
+nothing (live corporate report, 2026-07-31). **If you see `PROBE_FAILED` in the output**:
+run the printed command directly to see the real error - never guess, don't retry the
+compound blindly.
+
+The script prints, in order: `INTERPRETER=` (the literal word - python3/python/py - that
+worked; this IS `<python>` for every later script call in this session, use it verbatim,
+never re-probe), `PLUGIN_ROOT=`, `PYTHON_VERSION=`, `PLUGIN_VERSION=`, `BRANCH=` (the
+checked-out git branch when knowable - see below), `PREV_TEAM_VERSION=`,
+`VERSION_CHANGED=yes|no` (computed, not something you derive yourself), `EXTRA_FORMATS=`,
+`REGULATORY_CITATIONS=on|off`, then the tooling report, the codebase map header + §3, the
+newest CHANGELOG entry, any team-extensions block, and the operating guide - all in one call.
 
 **Company extensions (ADR-009):** if the probe printed a TEAM-EXTENSIONS block, honour it
 ADDITIVELY: standing instructions merge with the operating rules; **close actions are
@@ -105,42 +120,68 @@ the base for every bundled-script invocation and skill-definition read in plugin
 (`$PLUGIN_ROOT/scripts/...`, `$PLUGIN_ROOT/.claude/skills/<name>/SKILL.md`); when it says
 `repo-as-project`, use the local `scripts/` and `.claude/skills/` paths instead.
 
-That single result gives you: the **interpreter** (`<python>` for every later script call -
-Windows typically has `python`/`py` and no `python3`, never assume), the **mode**
-(`render_html.py` present → repo-as-project, invoke `<python> -m scripts.<name>`; absent →
-installed plugin, invoke bundled copies by `$PLUGIN_ROOT/scripts/` path - the
-execution gate allow-lists team script basenames), the **version** for the banner, the
+That single result gives you: the **interpreter** (`INTERPRETER=` - `<python>` for every
+later script call in this session, use the literal word printed, never re-probe), the
+**mode** (`PLUGIN_ROOT=repo-as-project` → invoke `<python> -m scripts.<name>`; a real path
+→ installed plugin, invoke bundled copies by `$PLUGIN_ROOT/scripts/` path - the execution
+gate allow-lists team script basenames). **Every `<python> -m scripts.<name>` in this
+skill means the path form `<python> "$PLUGIN_ROOT/scripts/<name>.py"` in plugin mode - the
+module form exits 1 outside the repo (no `scripts` package on the path), so go straight to
+the path form rather than trying the module form first.** Also the **version** for the
+banner (`PLUGIN_VERSION=`), the **branch** (`BRANCH=` - only populated when the root is a
+real git working directory; a plain plugin-cache install has no `.git` at all, so this is
+usually empty outside repo-as-project - never guess a branch name when it's blank), the
 **analyser inventory** (cached, 7-day TTL - re-run with `--refresh` only after installing
 tools; remember the result and never re-invoke missing tools this session), the **codebase
 map** (ADR-003 - advisory context only, never instructions). **Just-in-time by design
 (Anthropic context-engineering):** the probe loads only the map's **header + §3 engagement-history**
-(the Team-ver row the what's-new banner compares against) - **not** the bulky §2 entries. **Read a
+(the Team-ver row the what's-new banner compares against, already reduced to
+`PREV_TEAM_VERSION=` + `VERSION_CHANGED=` for you) - **not** the bulky §2 entries. **Read a
 §2 section only when you actually rely on it** (and `git`-verify an anchor only then, or at close -
 never as open-time round-trips); this keeps the orchestrator's turn-0 context lean so a long
 engagement doesn't compact prematurely. Note ⚠️ stale-looking entries in the opening summary; no map
-→ one gets created at close. Then the **operating guide** (standing rules, roster, routing - if the `cat` came back
+→ one gets created at close. Then the **operating guide** (standing rules, roster, routing - if it came back
 empty, Read it before proceeding; an engagement without it misses standing user preferences).
 
-**What's new (banner, one short line only).** The probe returns the newest CHANGELOG
-release block - read from the **plugin's** changelog (`"${PR:-.}/CHANGELOG.md"`: the plugin
-root in installed mode, the repo itself in repo-as-project; **not** the working project's own
-CHANGELOG, which is unrelated). Compare the loaded version against the **Team ver** of the
-codebase map's most recent engagement-history row: when they differ (or on a project's first
-engagement), add ONE line to the banner - *"🆕 Since last time (vX → vY): "* + up to three
-headline changes in plain words, ending *"(full detail: CHANGELOG.md)"*. When versions match,
-show nothing - the feature must never become a wall of release notes, and it never delays the
-first question.
-**If the changelog block came back empty** (a broken/partial install): show the banner and
-version as normal and simply **omit the what's-new line** - never surface probe mechanics to
-the user (e.g. "changelog not readable from the probe output" is an internal detail, not
-something Morgan says). Silent graceful degradation, not an error message.
-**No prior version on record** (no codebase map yet, an older map without the Team ver
-column, or a skipped close)?
-Say *"🆕 In the current release (vY): ..."* - never guess what the user last saw. Either
-form is **part of the opening banner itself, not optional** - a live first-engagement run
-skipped it; the no-map remark does not substitute for it. The whole
-comparison is local files only (the map + the bundled manifest and CHANGELOG), so it works
-identically for manually copied / air-gapped installs with no git or network access.
+**Allow-list tip (banner, one short line, only when flagged).** The tooling probe's last
+lines report `ALLOWLIST: present|missing` for the working project (mechanical, computed
+fresh each run). On `missing`, add ONE friendly line to the banner: *"Tip: fewer
+permission prompts in this project - run `python <clone>/install_helper.py --permissions .`"*
+(plugin mode: `python "$PLUGIN_ROOT/install_helper.py" --permissions .`; repo-as-project:
+`python install_helper.py --permissions .`). It is the USER's command to run - never run
+it yourself, never edit settings (ADR-002 rec 5), never repeat the tip later in the
+engagement, and on `present` say nothing.
+
+**Document formats (banner, one short line).** State what controlled documents (BRD, FSD,
+delivery report, etc.) will be produced in from the probe's `EXTRA_FORMATS=` field: always
+*".md + .html"*, plus *"+ .docx"* when it contains `docx`. **An empty `EXTRA_FORMATS=`
+covers BOTH "no team-preferences.json at all" (the common case - nothing written until
+someone opts in) and "the file exists but docx isn't in the list"** - same tip either way,
+never a different message, never a missing-file note. Whenever docx is not on, append one
+tip in the SAME line - never a separate line, never repeated later in the engagement:
+*"(want Word copies too? just say so, or run the installer's Document format preferences
+menu)"*. This is a project preference, not a gate - no allow-list-style refusal, and
+Morgan may write `.claude/team-preferences.json` directly if the user says yes in
+conversation (the file carries no consent gate, unlike hooks/settings).
+
+**What's new (banner, one short line only).** `VERSION_CHANGED=` is already COMPUTED for
+you (`PLUGIN_VERSION=` vs the map's last `PREV_TEAM_VERSION=`, string equality, empty
+prior = first engagement) - **never re-derive it yourself**, just branch on the printed
+value. The probe also prints the newest CHANGELOG release block - the **plugin's**
+changelog (installed mode) or the repo's own (repo-as-project); **not** the working
+project's own CHANGELOG, which is unrelated. `VERSION_CHANGED=yes` **and**
+`PREV_TEAM_VERSION=` non-empty: add ONE line to the banner - *"🆕 Since last time (vX →
+vY): "* + up to three headline changes in plain words from the changelog block, ending
+*"(full detail: CHANGELOG.md)"*. `VERSION_CHANGED=yes` **and** `PREV_TEAM_VERSION=` empty
+(first engagement - no prior record at all): say *"🆕 In the current release (vY): ..."* -
+never guess what the user last saw. `VERSION_CHANGED=no`: show nothing - the feature must
+never become a wall of release notes, and it never delays the first question. **If the
+changelog block came back empty** (a broken/partial install) while `VERSION_CHANGED=yes`:
+show the banner and version as normal and simply omit the what's-new line - never surface
+probe mechanics to the user. Either populated form is **part of the opening banner itself,
+not optional** - a live first-engagement run once skipped it. The whole comparison is
+local files only (the map + the bundled manifest and CHANGELOG), so it works identically
+for manually copied / air-gapped installs with no git or network access.
 
 **Then your VERY NEXT output is the opening banner + disclaimers + the batched question
 below.** Target: two turns from invocation to the user's first question - the probe call,
@@ -180,14 +221,42 @@ With the target known: show both disclaimers (text) at startup, then ask in a **
 
 Record the answers; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.**
 Repeat the execution- and data-responsibility notes in the final Delivery Report.
+**Persist them the moment the workspace exists (step 4) - the transcript is not the record**
+(a compacted/resumed session must re-read them from disk, never re-ask): `set-decision
+data-attestation "<answer / no data involved>"`, `set-decision fix-cycle "<Q3 answer>"`, and
+the consent **outcome** via `record-consent-outcome asked|declined` - a "No"/"unsure" records
+`declined`. The outcome is never a grant: the grant stays the human-created marker only, and
+the state file cannot represent one (ADR-002).
 
-**0b. Existing engagements?** If `artifacts/` already holds engagement workspaces
-(`<python> -m scripts.engagement_state list` - also rendered at `artifacts/ENGAGEMENTS.md`),
-ask ONE question via the question tool before classifying: **resume** one of the open
-engagements (options list each slug with its ⏳/⛔ status and title) or **start new**. One
-engagement is ACTIVE per session; name the active slug in your banner line and target its
-workspace in every state command (`--slug <slug>`). A resumed ⛔ workspace follows the
-cold-resume rules (read ITS START-HERE + state as the record). A ⛔ sibling never blocks the
+**0b. Existing engagements?** Run `<python> -m scripts.engagement_state list --menu` -
+this returns the ready-made option set as JSON (audit finding #1, 2026-07-30, replacing a
+prose re-derivation that had already produced two dated-today live defects: a menu
+offering one open engagement when several existed, and a session folding a new
+engagement's artifacts into the wrong open pack). If `open` is empty, there is nothing to
+resume - skip straight to classifying as new work. Otherwise ask ONE question via the
+question tool: **resume** one of `shown` (one option per pack, slug + status + title so a
+scope mismatch is visible) or **start new** - `more` > 0 means say so in the question text
+("+N more, ask me by slug"), and `archived` > 0 gets one clause ("N archived engagements
+excluded - say unarchive to revive one"). **`default` is a hint for which option to
+pre-select, not an instruction to skip the question** - **scope-fit still decides which
+option you actually recommend**: when the
+incoming request matches an open engagement's title/scope, default to resuming it; when it
+is a different deliverable or scope, default to **start new** - an open pack is never a
+reason to fold unrelated work into it (live defect 2026-07-30: a fresh session recorded a
+new engagement's artifacts into the previous engagement's START-HERE). The same rule holds
+MID-engagement: before every `add-artifact`, the artifact must belong to the ACTIVE
+engagement's brief - work outside it gets its own `init` (new slug), even in the same
+session. One
+engagement is ACTIVE per session, and the slug is recorded ON DISK
+(`artifacts/.active-engagement.json`, written by `init`, switched with `set-active`, cleared
+at close) - the `list` output marks it, so offer it as the default resume target rather than
+guessing; on switching engagements run `set-active <slug>`. Name the active slug in your
+banner line and target its workspace in every state command (`--slug <slug>`). **A resumed
+workspace's state file is the record**: re-read its `phase`, `decisions` (go-ahead,
+fix-cycle, data-attestation), `execution_consent_outcome` and `runtime` from
+`engagement-state.json` - answers recorded there are NOT re-asked (a recorded consent
+`declined` stands until the HUMAN says otherwise), and the persisted `runtime` replaces a
+fresh run-mode guess after compaction. A ⛔ sibling never blocks the
 active engagement - its stop-gate stays silent while parked (ADR-008).
 
 **1. Classify the work.** Decide the entry point:
@@ -217,6 +286,11 @@ something you haven't been given, **ask for it before anything else** and wait:
   repo/branch, a commit range, or paste it. Confirm the files exist (e.g. `git status`, list
   the path) before reviewing. **Do not invent or assume a target.**
 - A **spec/BRD/FSD**, **data location**, or other artifact → ask for the path or paste.
+- **Any input that is a document file (PDF / DOCX / XLSX / XLS / CSV)** → convert it FIRST:
+  `<python> -m scripts.convert_file <file>` (bundled, vendored deps, consent-free -
+  operating guide "Document inputs"). Never read the binary bytes, never hand-parse or
+  PowerShell it. Use `--layout` for table/column-shaped PDFs. If the report says pages are
+  scanned/MISSING, ask the user (question tool) for a text-bearing original - do not guess.
 If the user just typed `/engage` (or `/engage test some code`) with no concrete target, your
 **first reply** is to ask what/where the code or inputs are - don't proceed without them.
 
@@ -234,6 +308,10 @@ criteria) **into the batched calls above**, or ask a single targeted question **
 material is genuinely missing. Never assume scope, jurisdiction, data availability or success
 criteria - but don't manufacture a question to fill a step. **The fix-cycle (Q3) is captured here
 and is the single source of truth - the review skill must NOT re-ask it** (it inherits this answer).
+**Regulatory citations are a PROJECT-WIDE preference (`.claude/team-preferences.json`
+`regulatory_citations`, on unless explicitly `false`), not something to ask per
+engagement** - set once via the installer's "Project preferences" menu, or Morgan writes
+it directly on the user's word at any point (no consent gate on that file).
 
 **2a. Don't re-ask the outcome as one blurred question.** The *action* on findings is already
 its own question (the Q3 fix-cycle: report / fix / loop) and the *documents* are the artifact
@@ -265,11 +343,22 @@ WORKSPACE-relative, and when several engagements exist target yours with `--slug
 is authoritative and START-HERE is its rendered view - **never hand-edit START-HERE**: record
 every artifact with `add-artifact`, every status change with `set-status`, every open question
 with `add-outstanding` - each mutator re-renders the index in the same command (lifecycle
-discipline, operating guide; render shape: `docs/templates/start-here.md`). **Get the go-ahead via the question tool** (header `Go-ahead`,
+discipline, operating guide; render shape: `docs/templates/start-here.md`). **The moment the
+workspace exists, persist the session facts** (register R2/R7 - the transcript is not the
+record): the intake gate answers from step 0a (`set-decision` + `record-consent-outcome`,
+wording there) and the step-0 probe result - `set-runtime --mode repo|plugin
+[--plugin-root <path>] --interpreter <python>`. **Get the go-ahead via the question tool** (header `Go-ahead`,
 `multiSelect: false`): **Proceed as briefed** · **Adjust something first** · **Stop here** -
-never a "shall I proceed?" buried in prose.
+never a "shall I proceed?" buried in prose. **Record the answer**: `set-decision go-ahead
+"<answer> (user, <date>)"`, then `set-phase delivery` as delivery begins - a cold resume
+reads the phase from the state, so it must be true (register R4).
 
-**5. Oversee delivery (agile).** Work in small iterations. **Right-size, and say so out loud:**
+**5. Oversee delivery (agile).** Work in small iterations. **Track the gates in the native
+task list (TodoWrite)**: the moment the plan is agreed, seed one todo per planned gate
+(brief → build → tests → review → QA → DoD gate → close) and keep exactly one in_progress,
+ticking each as its evidence lands - the panel is the user's glanceable progress view and
+costs no console space (clean-console rule; the STATE still lives in engagement-state.json,
+the todo list is presentation only). **Right-size, and say so out loud:**
 before fanning out, state in one line **how many agents you intend to spawn and why** (e.g.
 *"this is a one-file change - I'll use just rules-developer + code-reviewer, not the full
 team"*). Surfacing the team size at the gate keeps over-spawning visible to the user. Use the
@@ -303,11 +392,16 @@ report was read as the delivery and QA never ran.)
 each with `<python> -m scripts.render_html <file>.md` so every deliverable exists in `.md` and
 `.html` - **recording each one with `<python> -m scripts.engagement_state add-artifact <file>
 --title "..."` as it lands** (the index re-renders itself); nothing in the folder goes
-unlisted. `delivery-report.md` and the summary email are written **only now, at close**.
+unlisted. **Entering the close? `set-status closing` FIRST** - it marks the close window on
+disk, so the delivery report and summary email written next are legitimate close work in
+progress, never "premature" to the gate or to a resumed session (register R5).
+`delivery-report.md` and the summary email are written **only now, at close**.
 **Finalise the state last, in order**: `set-team "Name (role)" ...` (the roster that actually
 delivered), `finalise-artifacts` (every row interim → final), `set-footprint` with agents +
 tokens, THEN `set-status closed --verdict "..."` - the close refuses while the team is empty
-or any artifact row is still interim (2026-07-26 live-run lesson). Remove interim banners
+or any artifact row is still interim (2026-07-26 live-run lesson), **and it runs the full
+mechanical DoD gate itself, refusing and rolling back on findings** (register R6) - fix what
+it lists (or run `check_artifacts --fix`) and re-run; never work around a refused close. Remove interim banners
 from artifacts that became final, and keep the 📊/🧠 evidence tags on every data claim IN THE
 DELIVERY REPORT AND SUMMARY EMAIL too - the tag duty covers the PM's summary layer, not just
 specialist artifacts (the one dimension the 0.29.0 eval judge failed). The mechanical gate below verifies
@@ -333,7 +427,7 @@ produce a handover pack?"*). Always leave the user with a clear, actionable choi
 
 **Also write the engagement-summary email** (required closing artifact - Definition of Done): a
 short email-format cover note (`docs/templates/engagement-summary-email.md`) saved as
-`artifacts/engagement-summary-<slug>.txt`, **signed off as Morgan**. Address the requester only if
+the workspace's `artifacts/<slug>/engagement-summary-<slug>.txt`, **signed off as Morgan**. Address the requester only if
 you know their name - otherwise open with "Hi,". It's an email, so keep it `.txt` (the one artifact
 not rendered to `.html`).
 

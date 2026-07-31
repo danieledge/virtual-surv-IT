@@ -10,22 +10,27 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
   1. every `artifacts/**/*.md` has a rendered `.html` sibling (same stem, same directory) -
      the `.md` + `.html` dual-artifact rule (CLAUDE.md §8);
   2. the START-HERE living index exists from the FIRST artifact onward, carries an
-     engagement Status (⏳ in progress / ⛔ blocked / ✅ closed), and stays current: every
-     artifact file is listed in it, every local link in it resolves. Born of a live
-     failure (2026-07-22): an engagement stalled on an unanswered clarification, the user
-     read an interim report as the delivery, and QA never ran - state must be visible;
+     engagement Status (⏳ in progress / ⛔ blocked / 🔒 closing / ✅ closed), and stays
+     current: every artifact file is listed in it, every local link in it resolves. Born of
+     a live failure (2026-07-22): an engagement stalled on an unanswered clarification, the
+     user read an interim report as the delivery, and QA never ran - state must be visible;
   3. close-only artifacts stay close-only: `delivery-report*.md` / `final-*` and the
-     `engagement-summary-*.txt` email may exist only when the index Status is ✅ closed
-     (before that they mislabel work-in-progress as a delivery);
-  4. at least one `engagement-summary-*.txt` exists once the engagement is ✅ closed (or in
-     a legacy folder with no status to read) - the required closing email, §6a;
+     `engagement-summary-*.txt` email may exist only when the Status is 🔒 closing or
+     ✅ closed (before that they mislabel work-in-progress as a delivery). A pack with NO
+     readable status - including no index at all - is treated as NOT closed (fail-safe,
+     2026-07-29 register G1: the pack whose team forgot the index is exactly the pack this
+     guard exists for);
+  4. at least one `engagement-summary-*.txt` exists once the engagement is ✅ closed - the
+     required closing email, §6a;
   5. if the working project has a codebase map (ADR-003: `docs/codebase-map.md` or root
      `CODEBASE-MAP.md`), it passes mechanical hygiene: bounded size, an As-of date and a
      commit-SHA anchor in the header, 📊/🧠 basis tags on map entries, no secret-shaped
      content, and (best effort, when `git` is available) an anchor that still resolves.
      A missing map is NOT a failure - first engagements create it at close.
   6. the engagement-summary email is a `.txt` (the one artifact never rendered to HTML) - a
-     `.md`/`.html` email is `SUMMARY-WRONG-EXT`;
+     `.md`/`.html` email is `SUMMARY-WRONG-EXT`; the email is always FROM Morgan
+     (`EMAIL-NOT-MORGAN`) and every roster name it mentions carries a 🤖-marked mention
+     (`EMAIL-AGENT-UNMARKED`) - it is the pack's most-forwarded artifact;
   7. once the engagement is ✅ closed, no content artifact still carries a mutable interim/
      in-progress status banner - the status lives only in START-HERE (`STALE-STATUS`);
   8. any structured findings pack under `artifacts/data/findings-*.json` validates against
@@ -37,7 +42,12 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      marker (`AGENT-UNMARKED`), and no line joins an agent and a human with `+`/`&`
      (`AGENT-HUMAN-COMBINED`) - roster names must never read as real people, and an agent
      never shares a sign-off line with the human approver (operating guide, "Voice, names
-     & console").
+     & console");
+ 10. in workspace mode, no file sits unchecked in the artifacts ROOT: a root file outside
+     every `artifacts/<slug>/` workspace is `ORPHAN-ARTIFACT` unless grandfathered in the
+     snapshot allowlist `.dod-root-allowlist.json`, taken on the rule's first run (D2
+     ruling 2026-07-29: pre-existing flat files are exempt, the layout applies to new
+     work only).
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
 No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
@@ -78,7 +88,18 @@ _SECRET_PATTERNS = [
 _SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 # Honest no-VCS anchor: a working project with no git repo has no SHA to anchor to.
-_NOVCS_ANCHOR_RE = re.compile(r"(?i)\bno[\s-]?(?:vcs|git)\b")
+# STRICT since the 2026-07-29 register M1 [reproduced]: the token must be the anchor VALUE
+# (immediately after the label / alone in an entry cell) - the template's own placeholder
+# prose contains the words "no-vcs" and used to pass the gate as a valid anchor.
+_NOVCS_VALUE_RE = re.compile(r"(?i)\bAnchor\b[\s`'·:*]*no[\s-]?vcs\b")
+_NOVCS_CELL_RE = re.compile(r"(?i)^[\s`']*no[\s-]?vcs[\s`']*$")
+# Staleness budget (register M3): how many commits the header anchor may trail HEAD before
+# the map must be re-verified. Default 50 - roughly a small project's sprint of commits, so
+# a map refreshed each engagement never trips it while a genuinely abandoned map does
+# (chosen 2026-07-29 with the M3 fix; override per map with a `Staleness-budget` header
+# field and a stated rationale - CLAUDE.md §4, no unexplained thresholds).
+_MAP_STALENESS_BUDGET = 50
+_STALENESS_BUDGET_RE = re.compile(r"(?i)staleness-budget[^0-9]*(\d+)")
 
 # Code-without-QA gate: a live engagement (2026-07-21) delivered phase-2 implementation
 # code from inside an analysis workflow and no QA pass ever ran - the DoD items are
@@ -103,6 +124,16 @@ _IMPACT_LINE_RE = re.compile(r"^\*\*Impact if unaddressed:?\*\*", re.M)
 _FINDINGS_CWORD_RE = re.compile(
     r"^\*\*(?:condition|consequence|correction)\b|\b5[\s\-]?c\b[\s\-]*summary", re.I | re.M
 )
+
+# Developer guidance (audit finding #2, 2026-07-30): output-format.md states this section
+# is "mandatory even on a clean review" and claims "the review skills mechanically check
+# the artifact for it" - but nothing did. Four files (deep-review, audit-review,
+# security-audit SKILL.md + the code-reviewer agent) each carry their own prose reminder
+# to verify it before finishing; none is backed by a check. "## Findings" (render_findings.py
+# always emits it) identifies a genuine review-shaped artifact - only those are held to this.
+_FINDINGS_SECTION_RE = re.compile(r"^## Findings\s*$", re.M)
+_DEV_GUIDANCE_HEADING_RE = re.compile(r"^## 🔵 Developer guidance\b.*$", re.M)
+_DEV_GUIDANCE_PLACEHOLDER = "_(none provided)_"
 
 # Roster gate: an artifact must not attribute work to a persona who is not on the team, or to
 # the wrong role. A live delivery report (2026-07-23) invented "Chidi (code-reviewer)" and
@@ -196,6 +227,52 @@ def check_agent_identity(text: str, where: Path) -> list[str]:
     return findings
 
 
+def check_summary_email(text: str, where: Path) -> list[str]:
+    """The engagement-summary email is Morgan's cover note to an outside reader - the
+    artifact most likely to be forwarded with no context, so identity is enforced
+    harder here than in reports (template + user rule 2026-07-30, after a live email
+    went out signed by the human requester).
+
+    EMAIL-NOT-MORGAN - a `From:` line that does not name Morgan, or a sign-off tail
+      (last non-empty lines) with no Morgan in it: the email is always FROM Morgan;
+      the human's sign-off lives in the delivery report, never the email.
+    EMAIL-AGENT-UNMARKED - a roster name mentioned anywhere in the email with no line
+      carrying both that name and the 🤖 marker: every agent mentioned must be
+      unmistakably an AI on at least its first marked mention (per-name, stricter
+      than the file-level AGENT-UNMARKED used for reports).
+    """
+    findings: list[str] = []
+    lines = text.splitlines()
+    for ln in lines:
+        if re.match(r"(?i)^\s*From\s*:", ln):
+            if "morgan" not in ln.lower():
+                findings.append(
+                    f"EMAIL-NOT-MORGAN: {where} From line does not name Morgan - the summary "
+                    "email is Morgan's cover note (docs/templates/engagement-summary-email.md): "
+                    "From: 🤖 Morgan - PM & Orchestrator, Virtual Surveillance IT"
+                )
+            break
+    tail = [ln.strip() for ln in lines if ln.strip()][-6:]
+    if not any("morgan" in ln.lower() for ln in tail):
+        findings.append(
+            f"EMAIL-NOT-MORGAN: {where} sign-off does not name Morgan - the summary email is "
+            "signed off as 🤖 Morgan, never the human requester (the human's sign-off lives "
+            "in the delivery report; DoD / operating guide rule 3)"
+        )
+    for name in sorted(_ROSTER):
+        cap = name.capitalize()
+        name_re = re.compile(rf"\b{cap}\b")
+        if not name_re.search(text):
+            continue
+        if not any(_AI_MARKER in ln and name_re.search(ln) for ln in lines):
+            findings.append(
+                f"EMAIL-AGENT-UNMARKED: {where} mentions agent '{cap}' but no line marks "
+                f"'{cap}' with 🤖 - every roster name in the email must be unmistakably an "
+                "AI agent on at least one mention (add 🤖 at the first mention)"
+            )
+    return findings
+
+
 def check_roster(text: str, where: Path) -> list[str]:
     """Flag `Name (role)` attributions whose name is off-roster or in the wrong role.
 
@@ -238,11 +315,15 @@ def check_roster(text: str, where: Path) -> list[str]:
 # final-sounding name was read as the delivery - with QA never run. The status makes
 # "not done" visible; the close-only rules below stop interim work masquerading as final.
 _STATUS_LINE_RE = re.compile(r"(?im)^.*\bstatus\b.*$")
-_STATUS_EMOJI = {"✅": "closed", "⛔": "blocked", "⏳": "open"}
+_STATUS_EMOJI = {"✅": "closed", "⛔": "blocked", "⏳": "open", "🔒": "closing"}
 # Local link targets in the index ([text](file.md)) - no scheme, no pure-anchor links.
 _LOCAL_LINK_RE = re.compile(r"\]\(([^)#][^)]*)\)")
-# Files that may only exist once the engagement is closed.
+# Files that may only exist once the engagement is closing/closed.
 _CLOSE_ONLY_MD_RE = re.compile(r"(?i)^(delivery-report.*|final-.*)\.md$")
+# The canonical rendered review report is close-only too (operating guide "REVIEW-*";
+# D4 ruling 2026-07-29, register P3). CASE-SENSITIVE by design: the interim, pass-scoped
+# `review-pass-N.md` names stay legal mid-engagement.
+_CLOSE_ONLY_REVIEW_RE = re.compile(r"^REVIEW-.*\.md$")
 # Filename-shaped tokens ("review-pass-1.md") - used for whole-token index-listing checks so a
 # short name is not treated as listed just because it is a substring of a longer listed name.
 _FILENAME_TOKEN_RE = re.compile(r"[\w.\-]+\.[A-Za-z0-9]+")
@@ -291,32 +372,137 @@ def _closed_is_negated(lowered: str) -> bool:
 
 
 def _index_status(text: str) -> str | None:
-    """Read the engagement status from START-HERE: 'open' | 'blocked' | 'closed', or None.
+    """Read the engagement status from START-HERE: 'open' | 'blocked' | 'closing' |
+    'closed', or None.
 
     Fail-SAFE by construction (a wrong 'closed' silently disables the close-only guards, which
     is the exact failure the gate exists to stop):
     - A status line carrying MORE THAN ONE distinct status emoji is a legend/key, not a state -
       it is skipped, not read as closed.
     - Exactly one emoji -> that state (the template's canonical form).
-    - Word fallback (no emoji): blocked/open are resolved BEFORE closed (not-done wins on
-      ambiguity), and a negated/qualified 'closed' ('not closed', 'cannot be closed') does not
-      count. Only lines that mention 'status' are considered, so prose elsewhere can't pose as
-      state.
+    - Word fallback (no emoji): blocked/closing/open are resolved BEFORE closed (not-done wins
+      on ambiguity), and a negated/qualified 'closed' ('not closed', 'cannot be closed') does
+      not count. Only lines that mention 'status' are considered, so prose elsewhere can't pose
+      as state.
     """
     for line in _STATUS_LINE_RE.findall(text):
         emojis = {e for e in _STATUS_EMOJI if e in line}
         if len(emojis) > 1:
-            continue  # a legend line lists all three symbols - not the engagement's state
+            continue  # a legend line lists the status symbols - not the engagement's state
         if len(emojis) == 1:
             return _STATUS_EMOJI[next(iter(emojis))]
         lowered = line.lower()
         if re.search(r"\bblocked\b", lowered):
             return "blocked"
+        if re.search(r"\bclosing\b", lowered):
+            return "closing"
         if re.search(r"\bin progress\b|\bopen\b", lowered):
             return "open"
         if re.search(r"\bclosed\b", lowered) and not _closed_is_negated(lowered):
             return "closed"
     return None
+
+
+# The state file's vocabulary mapped onto the index parser's (ADR-006 statuses on the
+# left). An unknown/unparseable state status falls through to the index parse.
+_STATE_STATUS_MAP = {
+    "in_progress": "open",
+    "blocked": "blocked",
+    "closing": "closing",
+    "closed": "closed",
+}
+
+
+def pack_status(pack: Path) -> str | None:
+    """The one shared "what state is this pack in" answer for the checker and both hooks.
+
+    2026-07-29 register G5: three non-equivalent parsers (this module's legend-aware one,
+    the hooks' raw emoji-substring sniff, the eval harness's first-status-line grab) meant
+    a words-only status line armed the checker but not the stop gate, and a stray ⏳
+    anywhere in a closed index re-armed the hooks. This helper is now the single rule:
+    the machine-readable state file (ADR-006) is authoritative when its status parses;
+    the fallback is the legend-aware `_index_status` - never a substring sniff.
+
+    Returns 'open' | 'blocked' | 'closing' | 'closed', or None (not an engagement pack).
+    """
+    state_file = pack / "engagement-state.json"
+    if state_file.is_file():
+        try:
+            raw = json.loads(state_file.read_text(encoding="utf-8")).get("status")
+        except Exception:
+            raw = None
+        mapped = _STATE_STATUS_MAP.get(raw)
+        if mapped is not None:
+            return mapped
+    try:
+        text = (pack / "START-HERE.md").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return _index_status(text)
+
+
+def engagement_packs(artifacts_dir: Path) -> list[Path]:
+    """Subdirectories that LOOK like engagement packs: a state file OR a START-HERE index.
+
+    2026-07-29 register G7: the checker required a state file where the persona anchor
+    accepted an index alone, so a hand-made `artifacts/<slug>/` pack was anchored but
+    never gated. This is now the single detection rule for gating and anchoring, in the
+    fail-safe direction: the gate sees everything the anchor sees. Registry consistency
+    stays keyed on the narrower `workspace_dirs` (state file present) because only
+    stateful packs are registrable."""
+    if not artifacts_dir.is_dir():
+        return []
+    return sorted(
+        p
+        for p in artifacts_dir.iterdir()
+        if p.is_dir()
+        and not (p / ".archive").is_file()  # archived packs are out of play (0.33.2)
+        and ((p / "engagement-state.json").is_file() or (p / "START-HERE.md").is_file())
+    )
+
+
+def _under_archive(path: Path, base: Path) -> bool:
+    """True when any directory from path's parent up to (and including) base carries the
+    `.archive` marker - the subtree is excluded from every scan (0.33.2)."""
+    cur = path if path.is_dir() else path.parent
+    while True:
+        try:
+            if (cur / ".archive").is_file():
+                return True
+        except OSError:
+            return False
+        if cur == base or cur == cur.parent:
+            return False
+        cur = cur.parent
+
+
+def archived_open_packs(artifacts_dir: Path) -> list[str]:
+    """ARCHIVED-OPEN safeguard: a `.archive` marker on a pack whose state is not closed
+    would silently dodge the close gate. One cheap state-file read per archived pack -
+    that is the entire cost archived packs keep. CLI-report only (the stop gate stays
+    silent for archived packs by design - archiving IS the mute button; this warning
+    surfaces on explicit checker runs so the dodge is visible, not fatal)."""
+    findings = []
+    if not artifacts_dir.is_dir():
+        return findings
+    for p in sorted(artifacts_dir.iterdir()):
+        if not (p.is_dir() and (p / ".archive").is_file()):
+            continue
+        state_file = p / "engagement-state.json"
+        if not state_file.is_file():
+            continue  # a plain archived directory - nothing to guard
+        try:
+            status = json.loads(state_file.read_text(encoding="utf-8")).get("status")
+        except Exception:
+            status = "unreadable"
+        if status != "closed":
+            findings.append(
+                f"ARCHIVED-OPEN: {p.name}/ is archived but its status is '{status}' - "
+                "archiving does not close an engagement; unarchive it and close properly "
+                "(python -m scripts.engagement_state unarchive " + p.name + "), or leave "
+                "this warning standing as the record of abandoned work"
+            )
+    return findings
 
 
 def find_codebase_map(project_dir: Path) -> Path | None:
@@ -348,16 +534,55 @@ def _anchor_resolves(sha: str, repo_dir: Path) -> bool | None:
     return False
 
 
+def _commits_behind(sha: str, repo_dir: Path) -> int | None:
+    """How many commits HEAD is ahead of the anchor (register M3), or None when git can't
+    answer (no repo, unrelated history, detached oddities) - the bound then skips."""
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, regex-validated hex sha
+            ["git", "-C", str(repo_dir), "rev-list", "--count", f"{sha}..HEAD"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return int(result.stdout.decode().strip())
+    except ValueError:
+        return None
+
+
+def _split_cells(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
 def check_map(map_path: Path) -> list[str]:
-    """Mechanical hygiene findings for a codebase map; empty means the gate is satisfied."""
+    """Mechanical hygiene findings for a codebase map; empty means the gate is satisfied.
+
+    2026-07-29 register M1/M2/M3/M7: the anchor placeholder no longer passes as no-vcs,
+    per-entry As-of/Anchor cells are validated (entry SHAs must resolve), the header anchor
+    is bounded against HEAD, entry detection is column-driven (rename-tolerant), and the
+    line cap excludes the Deprecated section ADR-003 mandates keeping."""
     findings: list[str] = []
     text = map_path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
 
-    if len(lines) > _MAP_MAX_LINES:
+    # Line cap, EXCLUDING the Deprecated section (M7: ADR-003 mandates keeping deprecated
+    # entries, so they must not eat the live-content budget).
+    dep_lines = 0
+    in_dep = False
+    for line in lines:
+        if line.startswith("#"):
+            in_dep = "deprecated" in line.lower()
+        if in_dep:
+            dep_lines += 1
+    effective = len(lines) - dep_lines
+    if effective > _MAP_MAX_LINES:
         findings.append(
-            f"MAP-TOO-LONG: {map_path} is {len(lines)} lines (target ~200, max "
-            f"{_MAP_MAX_LINES}) - move detail to linked docs/artifacts, keep the map an index"
+            f"MAP-TOO-LONG: {map_path} is {effective} lines excluding Deprecated (target "
+            f"~200, max {_MAP_MAX_LINES}) - move detail to linked docs/artifacts, keep the "
+            "map an index"
         )
 
     # Header requirements: an As-of date and an Anchor SHA (document-control block).
@@ -376,37 +601,104 @@ def check_map(map_path: Path) -> list[str]:
                 f"MAP-STALE-ANCHOR: header anchor {anchor_sha.group(0)} does not resolve "
                 "in this repository - refresh the anchor (and re-verify entries) at close"
             )
-    elif _NOVCS_ANCHOR_RE.search(anchor_line):
+        elif resolves is True:
+            # M3: a resolvable anchor can still be ancient - bound it against HEAD.
+            budget_m = _STALENESS_BUDGET_RE.search(header)
+            budget = int(budget_m.group(1)) if budget_m else _MAP_STALENESS_BUDGET
+            behind = _commits_behind(anchor_sha.group(0), map_path.parent)
+            if behind is not None and behind > budget:
+                findings.append(
+                    f"MAP-STALE: header anchor is {behind} commits behind HEAD (budget "
+                    f"{budget}) - the code has moved on; re-verify the entries and refresh "
+                    "the anchor (raise `Staleness-budget` in the header, with a rationale, "
+                    "if this cadence is intended)"
+                )
+    elif _NOVCS_VALUE_RE.search(anchor_line):
         # A working project with no git repo has no commit SHA to anchor to. An honest
-        # `Anchor no-vcs` (the team is instructed to write exactly this, with a note) is a
-        # valid anchor, not a defect - entries anchor to the delivered file state instead.
+        # `Anchor no-vcs` (the token as the anchor VALUE - M1: prose mentioning no-vcs,
+        # like the template's own placeholder, does not count) is valid - entries anchor
+        # to the delivered file state instead.
         pass
     else:
+        placeholder = " (the template placeholder was left unfilled)" if "<" in anchor_line else ""
         findings.append(
-            f"MAP-NO-ANCHOR: {map_path} header has no `Anchor <commit sha>` - entries "
-            "cannot be checked against the code they describe (a working project with no "
-            "git repo writes `Anchor no-vcs`)"
+            f"MAP-NO-ANCHOR: {map_path} header has no `Anchor <commit sha>`{placeholder} - "
+            "entries cannot be checked against the code they describe (a working project "
+            "with no git repo writes exactly `Anchor no-vcs`)"
         )
 
-    # Every map-entry table row needs a 📊/🧠 basis tag. Entry rows are the data rows of
-    # the "Map entries" section's table (skip its header and |---| divider rows).
-    in_entries = False
+    # Entry rows: column-driven detection (M7 - a renamed section no longer disables the
+    # scan): any table whose header row carries a Basis column is an entries table. Each
+    # data row needs its 📊/🧠 tag, and - where the columns exist - a real As-of date and
+    # a real Anchor (SHA or the strict no-vcs token). Entry SHAs must resolve (M2: they
+    # read as verified provenance on resume, so they may not be decorative).
+    entry_shas: dict[str, int] = {}
+    columns: dict[str, int] | None = None
+    found_entry_table = False
     for lineno, line in enumerate(lines, start=1):
-        if line.startswith("#"):
-            in_entries = "map entries" in line.lower()
+        if not line.lstrip().startswith("|"):
+            columns = None
             continue
-        if not in_entries or not line.lstrip().startswith("|"):
-            continue
-        stripped = line.strip().strip("|").strip()
-        if not stripped or set(stripped) <= {"-", "|", ":", " "}:
-            continue
-        first_cell = stripped.split("|", 1)[0].strip().lower()
-        if first_cell in {"#", ""}:
-            continue  # column-header row
+        cells = _split_cells(line)
+        if not cells or set("".join(cells)) <= {"-", ":", " "}:
+            continue  # |---| divider
+        lowered = [c.lower() for c in cells]
+        if any("basis" in c for c in lowered):
+            columns = {name: i for i, name in enumerate(lowered)}
+            found_entry_table = True
+            continue  # the header row itself
+        if columns is None:
+            continue  # a table without a Basis column (history, deprecated, doc control)
         if "📊" not in line and "🧠" not in line:
             findings.append(
                 f"MAP-NO-BASIS: {map_path}:{lineno} map entry has no 📊 observed / 🧠 "
                 "inferred tag - every entry must state its evidence basis"
+            )
+        asof_idx = next((i for n, i in columns.items() if "as-of" in n or "as of" in n), None)
+        if asof_idx is not None and asof_idx < len(cells):
+            if not _DATE_RE.search(cells[asof_idx]):
+                findings.append(
+                    f"MAP-ENTRY-NO-ASOF: {map_path}:{lineno} entry has no real As-of date - "
+                    "provenance must be datable (ADR-003)"
+                )
+        anchor_idx = next((i for n, i in columns.items() if "anchor" in n), None)
+        if anchor_idx is not None and anchor_idx < len(cells):
+            cell = cells[anchor_idx]
+            sha_m = _SHA_RE.search(cell)
+            if sha_m:
+                entry_shas.setdefault(sha_m.group(0), lineno)
+            elif not _NOVCS_CELL_RE.match(cell):
+                findings.append(
+                    f"MAP-ENTRY-NO-ANCHOR: {map_path}:{lineno} entry anchor cell holds "
+                    f"neither a commit SHA nor `no-vcs` ({cell[:30]!r}) - entry provenance "
+                    "may not be decorative (ADR-003)"
+                )
+    if not found_entry_table:
+        # Fallback for legacy maps whose entries table predates the Basis column: the old
+        # section-name scan, so their rows still get the basis check.
+        in_entries = False
+        for lineno, line in enumerate(lines, start=1):
+            if line.startswith("#"):
+                in_entries = "map entries" in line.lower()
+                continue
+            if not in_entries or not line.lstrip().startswith("|"):
+                continue
+            stripped = line.strip().strip("|").strip()
+            if not stripped or set(stripped) <= {"-", "|", ":", " "}:
+                continue
+            first_cell = stripped.split("|", 1)[0].strip().lower()
+            if first_cell in {"#", ""}:
+                continue  # column-header row
+            if "📊" not in line and "🧠" not in line:
+                findings.append(
+                    f"MAP-NO-BASIS: {map_path}:{lineno} map entry has no 📊 observed / 🧠 "
+                    "inferred tag - every entry must state its evidence basis"
+                )
+    for sha, lineno in sorted(entry_shas.items(), key=lambda kv: kv[1]):
+        if _anchor_resolves(sha, map_path.parent) is False:
+            findings.append(
+                f"MAP-STALE-ENTRY-ANCHOR: {map_path}:{lineno} entry anchor {sha} does not "
+                "resolve in this repository - re-verify the entry and refresh its anchor"
             )
 
     for pattern, label in _SECRET_PATTERNS:
@@ -423,13 +715,14 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
     """Validate any structured findings pack under artifacts/data/ against the schema. Shells out to
     validate_findings (by path, NOT an import) so this stays path-independent - an installed plugin
     invokes scripts by absolute path. A pack that fails is FINDINGS-INVALID: the model fixes the
-    DATA, not the rendered report. Inert until packs exist (fails open if the validator won't run)."""
+    DATA, not the rendered report. Inert until packs exist (fails open if the validator won't run).
+    Recursive over the data/ lane (2026-07-29 register P5: nested packs went unvalidated)."""
     findings: list[str] = []
     data_dir = artifacts_dir / "data"
     if not data_dir.is_dir():
         return findings
     validator = Path(__file__).with_name("validate_findings.py")
-    for pack in sorted(data_dir.glob("findings-*.json")):
+    for pack in sorted(data_dir.rglob("findings-*.json")):
         try:
             result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
                 [sys.executable, str(validator), str(pack)],
@@ -448,6 +741,80 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
                 or "schema validation failed"
             )
             findings.append(f"FINDINGS-INVALID: {pack.name} - {detail}")
+    return findings
+
+
+_FINDING_ID_RE = re.compile(r"^###\s+\S+\s+(\S+)\s+—", re.M)
+_TALLY_LINE_RE = re.compile(r"^\*\*Disposition tally:\*\*\s*(.+)$", re.M)
+_KIND_PREFIX = {"review": "REVIEW", "security-audit": "SECURITY-AUDIT", "performance": "PERF"}
+
+
+def check_findings_render_freshness(artifacts_dir: Path) -> list[str]:
+    """Close-time reconciliation, mechanised (audit finding #3, 2026-07-30): a 2026-07-25
+    live failure shipped a stale finding count and a struck citation still cited elsewhere
+    - the close-checklist's "one authoritative number everywhere" rule was, and largely
+    still is, a prose re-read-every-document instruction. This closes the two pieces that
+    ARE mechanically checkable without inventing a new textual convention: does the
+    rendered REVIEW-<slug>.md's finding-ID set and disposition tally still match the
+    CURRENT data/findings-<slug>.json pack, or did the pack change after the last render
+    (a fix cycle, a re-review) without a re-render catching up. (Late-cycle prose changes
+    and struck-citation sweeping stay judgement calls - no existing marker distinguishes a
+    struck citation from a live one in free text, so a mechanical check there would be
+    guessing at a convention nothing emits yet.)"""
+    findings: list[str] = []
+    data_dir = artifacts_dir / "data"
+    if not data_dir.is_dir():
+        return findings
+    for pack_path in sorted(data_dir.rglob("findings-*.json")):
+        try:
+            pack = json.loads(pack_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue  # FINDINGS-INVALID already covers unreadable/malformed packs
+        if not isinstance(pack, dict):
+            continue
+        slug = pack.get("slug")
+        if not slug:
+            continue
+        prefix = _KIND_PREFIX.get(pack.get("kind", "review"), "REVIEW")
+        root = pack_path.parent.parent if pack_path.parent.name == "data" else pack_path.parent
+        rendered = root / f"{prefix}-{slug}.md"
+        if not rendered.is_file():
+            continue  # MISSING-HTML-style existence gap is a different, already-covered check
+        text = rendered.read_text(encoding="utf-8", errors="replace")
+        pack_findings = pack.get("findings") or []
+        pack_ids = {f.get("id") for f in pack_findings if isinstance(f, dict) and f.get("id")}
+        rendered_ids = set(_FINDING_ID_RE.findall(text))
+        if pack_ids != rendered_ids:
+            missing = pack_ids - rendered_ids
+            extra = rendered_ids - pack_ids
+            detail = []
+            if missing:
+                detail.append(f"in the pack but not rendered: {', '.join(sorted(missing))}")
+            if extra:
+                detail.append(f"rendered but not in the pack: {', '.join(sorted(extra))}")
+            findings.append(
+                f"STALE-FINDINGS-RENDER: {rendered.name} finding IDs no longer match "
+                f"{pack_path.name} ({'; '.join(detail)}) - the pack changed after the last "
+                f"render (run: python -m scripts.render_findings {pack_path})"
+            )
+            continue  # a mismatched ID set makes a tally comparison meaningless too
+        disp_counts = {
+            d: sum(1 for f in pack_findings if isinstance(f, dict) and f.get("disposition") == d)
+            for d in ("fixed", "open", "accepted", "deferred")
+        }
+        expected_tally = (
+            f"✅ {disp_counts['fixed']}  ·  🔴 {disp_counts['open']}  ·  "
+            f"⚖️ {disp_counts['accepted']}  ·  ⏭️ {disp_counts['deferred']}"
+        )
+        m = _TALLY_LINE_RE.search(text)
+        actual_tally = m.group(1).strip() if m else None
+        if actual_tally is not None and actual_tally != expected_tally:
+            findings.append(
+                f"COUNT-MISMATCH: {rendered.name}'s Disposition tally ({actual_tally}) does "
+                f"not match {pack_path.name}'s current dispositions ({expected_tally}) - a "
+                f"finding's disposition changed after the last render "
+                f"(run: python -m scripts.render_findings {pack_path})"
+            )
     return findings
 
 
@@ -519,6 +886,22 @@ def check_state(artifacts_dir: Path) -> list[str]:
             "(state-hash differs or is missing) - the state is authoritative; run "
             "`python -m scripts.engagement_state render`"
         )
+    else:
+        # P7 (2026-07-29 register): the state-hash is copied verbatim into the render, so
+        # a hand-edit of the INDEX passed the staleness check. The render also embeds a
+        # content-hash; a mismatch means someone edited the generated view directly.
+        # Pre-P7 renders (no content-hash in the marker) are tolerated.
+        emb_content = getattr(es, "embedded_content_hash", None)
+        chash = getattr(es, "content_hash", None)
+        if emb_content is not None and chash is not None:
+            expected = emb_content(index_text)
+            if expected is not None and chash(index_text) != expected:
+                findings.append(
+                    "INDEX-HAND-EDITED: START-HERE.md content differs from what the state "
+                    "rendered - the index is a GENERATED view (ADR-006), never hand-edited; "
+                    "put the change into the state via `scripts.engagement_state` mutators "
+                    "(--fix re-renders and backs the hand-edited file up)"
+                )
 
     findings.extend(_check_ratified_claims(artifacts_dir, state))
     return findings
@@ -622,12 +1005,17 @@ def check(artifacts_dir: Path) -> list[str]:
         return findings
 
     findings.extend(check_findings_packs(artifacts_dir))
+    findings.extend(check_findings_render_freshness(artifacts_dir))
     findings.extend(check_state(artifacts_dir))
     findings.extend(check_review_fingerprints(artifacts_dir))
     # artifacts/data/ holds machine-readable source (findings packs); the top-level artifacts/ is the
     # user-navigable set. Exclude the data/ subtree from the .md/.html-sibling and index scans.
     data_dir = artifacts_dir / "data"
-    md_files = [m for m in sorted(artifacts_dir.rglob("*.md")) if data_dir not in m.parents]
+    md_files = [
+        m
+        for m in sorted(artifacts_dir.rglob("*.md"))
+        if data_dir not in m.parents and not _under_archive(m, artifacts_dir)
+    ]
     for md in md_files:
         # The summary email must be a .txt; a .md copy is the wrong type, not a missing render -
         # flag it and do NOT demand an .html sibling for it (that would be the wrong fix).
@@ -665,37 +1053,85 @@ def check(artifacts_dir: Path) -> list[str]:
                 "print the five NAMED fields instead (Standard, Problem, Likely cause, Impact, Fix), "
                 "each on its own line, the same five for every finding (docs/review/output-format.md)"
             )
+        if _FINDINGS_SECTION_RE.search(text):
+            dg = _DEV_GUIDANCE_HEADING_RE.search(text)
+            if not dg:
+                findings.append(
+                    f"FINDINGS-NO-DEV-GUIDANCE: {md} is a review-shaped artifact (has a "
+                    "'## Findings' section) but has no '## 🔵 Developer guidance' heading - "
+                    "mandatory even on a clean review (docs/review/output-format.md)"
+                )
+            else:
+                rest = text[dg.end() :]
+                next_heading = re.search(r"^## ", rest, re.M)
+                body = rest[: next_heading.start()] if next_heading else rest
+                if not body.strip() or body.strip() == _DEV_GUIDANCE_PLACEHOLDER:
+                    findings.append(
+                        f"FINDINGS-NO-DEV-GUIDANCE: {md} has the Developer guidance heading "
+                        "but the section is empty/unfilled - constructive guidance is mandatory "
+                        "even on a clean review, not just the header (docs/review/output-format.md)"
+                    )
         findings.extend(check_roster(text, md))
         findings.extend(check_agent_identity(text, md))
 
     # A wrongly-rendered email copy - the summary email is a .txt only, never an .html.
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
+        if _under_archive(stray, artifacts_dir):
+            continue
         findings.append(
             f"SUMMARY-WRONG-EXT: {stray.name} - the engagement-summary email is a .txt, not "
             ".html; remove this rendered copy (the .txt is the deliverable)"
         )
 
+    # The email itself: always FROM Morgan, agents 🤖-marked, roster/identity rules apply
+    # to it exactly as to reports (it is the most-forwarded artifact of the pack).
+    for email in sorted(artifacts_dir.rglob("engagement-summary-*.txt")):
+        if _under_archive(email, artifacts_dir):
+            continue
+        email_text = email.read_text(encoding="utf-8", errors="replace")
+        findings.extend(check_summary_email(email_text, email))
+        findings.extend(check_roster(email_text, email))
+        findings.extend(check_agent_identity(email_text, email))
+
     code_files = [
-        f for f in artifacts_dir.rglob("*") if f.is_file() and f.suffix.lower() in _CODE_EXTS
+        f
+        for f in artifacts_dir.rglob("*")
+        if f.is_file() and f.suffix.lower() in _CODE_EXTS and not _under_archive(f, artifacts_dir)
     ]
     non_test_code = [f for f in code_files if not _TEST_FILE_RE.search(f.name)]
     if non_test_code:
-        qa_handovers = sorted(artifacts_dir.rglob("qa-handover*.md")) + sorted(
-            artifacts_dir.rglob("*qa-handover*.md")
+        # 2026-07-29 register G9 [reproduced]: coverage is scoped to the code file's
+        # top-level container within this pack. Previously ANY qa-handover*.md in the tree
+        # satisfied the gate, so code in one engagement's subfolder passed on a SIBLING
+        # engagement's paperwork sitting at the root (the live vendorx case).
+        def _container(f: Path) -> str:
+            rel = f.relative_to(artifacts_dir)
+            return rel.parts[0] if len(rel.parts) > 1 else ""
+
+        qa_handovers = sorted(
+            set(artifacts_dir.rglob("qa-handover*.md"))
+            | set(artifacts_dir.rglob("*qa-handover*.md"))
         )
-        if not qa_handovers:
-            findings.append(
-                f"CODE-NO-QA: {len(non_test_code)} code file(s) in {artifacts_dir} but no "
-                "qa-handover*.md - delivered code requires an independent QA pass "
-                "(DoD; no workflow exempts it)"
-            )
-        test_files = [f for f in code_files if _TEST_FILE_RE.search(f.name)]
-        if not test_files:
-            findings.append(
-                f"CODE-NO-TESTS: {len(non_test_code)} code file(s) in {artifacts_dir} but no "
-                "test files (test_*/-_test.*/*.spec.*) - delivered code ships with its tests "
-                "(DoD 'Tested')"
-            )
+        qa_containers = {_container(qa) for qa in qa_handovers}
+        test_containers = {_container(f) for f in code_files if _TEST_FILE_RE.search(f.name)}
+        by_container: dict[str, list[Path]] = {}
+        for f in non_test_code:
+            by_container.setdefault(_container(f), []).append(f)
+        for container, files in sorted(by_container.items()):
+            scope = str(artifacts_dir / container) if container else str(artifacts_dir)
+            if container not in qa_containers:
+                findings.append(
+                    f"CODE-NO-QA: {len(files)} code file(s) in {scope} but no "
+                    "qa-handover*.md in the same scope - delivered code requires an "
+                    "independent QA pass (DoD; no workflow exempts it, and a sibling "
+                    "engagement's handover does not count)"
+                )
+            if container not in test_containers:
+                findings.append(
+                    f"CODE-NO-TESTS: {len(files)} code file(s) in {scope} but no "
+                    "test files (test_*/-_test.*/*.spec.*) in the same scope - delivered "
+                    "code ships with its tests (DoD 'Tested')"
+                )
 
     # The START-HERE living index: created at OPEN (with the first artifact), updated on
     # every artifact write, finalised at close (docs/templates/start-here.md). It is also
@@ -754,59 +1190,61 @@ def check(artifacts_dir: Path) -> list[str]:
                 )
 
     # Close-only artifacts: the delivery report and the summary email SIGNAL a close, so
-    # while the engagement is not yet closed they must not exist. An index with an UNREADABLE
-    # status (None) is treated as NOT closed here too - fail-safe, so a delivery report can't
-    # slip through on a status the gate couldn't parse (2026-07-23 review).
+    # while the engagement is not yet closed they must not exist. Fail-safe (2026-07-29
+    # register G1 [reproduced]): NO readable status - an unparseable line OR no index at
+    # all - is NOT closed. The old code routed a missing index down the closed/legacy
+    # branch, disarming every close-only guard exactly when the team forgot the index
+    # (the 2026-07-22 failure class). A 🔒 closing pack is the sanctioned close window:
+    # close artifacts are legitimate there, and nothing demands them yet (register R5).
     summaries = sorted(artifacts_dir.rglob("engagement-summary-*.txt"))
-    not_closed = status in ("open", "blocked") or (start_here is not None and status is None)
+    not_closed = status in ("open", "blocked") or status is None
     if not_closed:
-        state = status or "not readable"
+        state = status or ("no index" if start_here is None else "not readable")
         for md in non_index_md:
-            if _CLOSE_ONLY_MD_RE.match(md.name):
+            if _CLOSE_ONLY_MD_RE.match(md.name) or _CLOSE_ONLY_REVIEW_RE.match(md.name):
                 findings.append(
-                    f"FINAL-BEFORE-CLOSE: {md.name} exists but START-HERE.md status is "
+                    f"FINAL-BEFORE-CLOSE: {md.name} exists but the engagement status is "
                     f"'{state}', not closed - the delivery report is written at close only; "
                     "interim output takes a pass-scoped name (review-pass-N / qa-cycle-N / "
-                    "interim-*)"
+                    "interim-*). If this IS the close underway, enter it explicitly "
+                    "(`set-status closing`) and finish - never delete completed deliverables"
                 )
         if summaries:
             findings.append(
                 f"SUMMARY-BEFORE-CLOSE: {len(summaries)} engagement-summary-*.txt present "
-                f"but START-HERE.md status is '{state}', not closed - the summary email is the "
-                "closing artifact; a not-yet-closed engagement states what is outstanding instead"
+                f"but the engagement status is '{state}', not closed - the summary email is "
+                "the closing artifact. If this IS the close underway, enter it explicitly "
+                "(`set-status closing`) and finish - never delete completed deliverables"
             )
-    elif status == "closed" or start_here is None:
-        # Closed - or legacy (no index at all): the closing email is required once there
-        # are deliverables to summarise. (An index with an unreadable status already got
-        # INDEX-NO-STATUS; piling the email demand on top would point at the wrong fix.)
+    elif status == "closed":
+        # Closed: the closing email is required once there are deliverables to summarise.
         has_deliverables = bool(md_files)
         if has_deliverables and not summaries:
             # Uniform across profiles (user ruling 2026-07-27): every close ends with the
             # summary email - light keeps it SHORT, it does not drop it.
             findings.append(
-                "MISSING-SUMMARY-EMAIL: no artifacts/engagement-summary-*.txt found - the "
+                "MISSING-SUMMARY-EMAIL: no engagement-summary-*.txt in this pack - the "
                 "closing email (DoD / CLAUDE.md §6a) is a required artifact in EVERY "
                 "profile (light keeps it short, never absent)"
             )
         # Status is single-source: it lives ONLY in START-HERE. A content artifact still
         # carrying a mutable interim/in-progress banner after close points readers at an
         # out-of-date state (live report 2026-07-24: the brief said "in progress" at close).
-        if status == "closed":
-            for md in non_index_md:
-                head = "\n".join(md.read_text(encoding="utf-8", errors="replace").splitlines()[:8])
-                if _STALE_STATUS_RE.search(head):
-                    findings.append(
-                        f"STALE-STATUS: {md.name} still carries an interim/in-progress status "
-                        "banner but START-HERE is closed - engagement status lives ONLY in "
-                        "START-HERE; remove the stale banner"
-                    )
-                if _STALE_DOCSTATUS_RE.search(head):
-                    findings.append(
-                        f"STALE-DOCSTATUS: {md.name} document-control Status still reads "
-                        "Draft/In review/In progress under a ✅ CLOSED index - close it out, "
-                        "or state 'pending human sign-off' in the Status value where the human "
-                        "act is the only gap (close checklist: reconciliation sweep)"
-                    )
+        for md in non_index_md:
+            head = "\n".join(md.read_text(encoding="utf-8", errors="replace").splitlines()[:8])
+            if _STALE_STATUS_RE.search(head):
+                findings.append(
+                    f"STALE-STATUS: {md.name} still carries an interim/in-progress status "
+                    "banner but START-HERE is closed - engagement status lives ONLY in "
+                    "START-HERE; remove the stale banner"
+                )
+            if _STALE_DOCSTATUS_RE.search(head):
+                findings.append(
+                    f"STALE-DOCSTATUS: {md.name} document-control Status still reads "
+                    "Draft/In review/In progress under a ✅ CLOSED index - close it out, "
+                    "or state 'pending human sign-off' in the Status value where the human "
+                    "act is the only gap (close checklist: reconciliation sweep)"
+                )
 
     return findings
 
@@ -814,7 +1252,10 @@ def check(artifacts_dir: Path) -> list[str]:
 def apply_fixes(artifacts_dir: Path) -> list[str]:
     """Mechanically resolve the auto-fixable DoD defects (docs/DEFINITION-OF-DONE.md 'AUTO-FIX'
     class) so the close does not depend on the model remembering each step:
-      * render each findings pack (artifacts/data/findings-*.json) to its canonical REVIEW-<slug>.md;
+      * render each findings pack (artifacts/data/findings-*.json) to its canonical
+        REVIEW-<slug>.md - AT CLOSE ONLY (🔒 closing / ✅ closed; D4 ruling 2026-07-29,
+        register P3: the tool used to manufacture mid-engagement the very artifact the
+        prose declares close-only);
       * normalise a mis-typed engagement-summary email (.md / .html) to the required .txt;
       * render every remaining .md that lacks its .html sibling.
     Returns a log of what changed; idempotent (a second run is a no-op)."""
@@ -826,7 +1267,7 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
     # below then produces their siblings. render_findings validates + owns the layout, and refuses
     # an invalid pack (that surfaces as FINDINGS-INVALID from the check, not a silent bad report).
     data_dir = artifacts_dir / "data"
-    if data_dir.is_dir():
+    if data_dir.is_dir() and pack_status(artifacts_dir) in ("closing", "closed"):
         renderer = Path(__file__).with_name("render_findings.py")
         for pack in sorted(data_dir.glob("findings-*.json")):
             result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
@@ -847,16 +1288,39 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
             continue  # a correct .txt already exists - leave the duplicate for a human
         bad.rename(target)
         fixed.append(f"FIXED SUMMARY-WRONG-EXT: renamed {bad.name} -> {target.name}")
-        # Keep the index in sync so the rename can't create a STALE-INDEX. Drop the index's
-        # stale .html sibling too, so the render pass below regenerates it from the new text.
-        for idx in artifacts_dir.rglob("START-HERE.md"):
-            itext = idx.read_text(encoding="utf-8", errors="replace")
-            if bad.name in itext:
-                idx.write_text(itext.replace(bad.name, target.name), encoding="utf-8")
-                idx.with_suffix(".html").unlink(missing_ok=True)
-                fixed.append(
-                    f"FIXED STALE-INDEX: updated START-HERE reference {bad.name} -> {target.name}"
-                )
+        # Keep the record in sync so the rename can't create a STALE-INDEX. With a state
+        # file, the STATE is the record (P7: hand-editing the render is exactly the defect
+        # this tool polices) - update the artifact row and let the stale-render branch
+        # below re-render. Only a legacy hand-written index is text-patched directly.
+        es_sync = _load_engagement_state_module()
+        state_file = artifacts_dir / es_sync.STATE_FILENAME if es_sync is not None else None
+        if state_file is not None and state_file.is_file():
+            try:
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                for row in state.get("artifacts") or []:
+                    if isinstance(row, dict) and row.get("path") == bad.name:
+                        row["path"] = target.name
+                        state_file.write_text(
+                            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+                            encoding="utf-8",
+                        )
+                        fixed.append(
+                            f"FIXED STALE-INDEX: updated state artifact row {bad.name} -> "
+                            f"{target.name} (index re-renders below)"
+                        )
+                        break
+            except Exception as exc:
+                fixed.append(f"COULD-NOT-SYNC state after email rename: {exc}")
+        else:
+            for idx in artifacts_dir.rglob("START-HERE.md"):
+                itext = idx.read_text(encoding="utf-8", errors="replace")
+                if bad.name in itext:
+                    idx.write_text(itext.replace(bad.name, target.name), encoding="utf-8")
+                    idx.with_suffix(".html").unlink(missing_ok=True)
+                    fixed.append(
+                        f"FIXED STALE-INDEX: updated START-HERE reference {bad.name} -> "
+                        f"{target.name}"
+                    )
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
         stray.unlink()
         fixed.append(f"FIXED SUMMARY-WRONG-EXT: removed rendered email copy {stray.name}")
@@ -871,10 +1335,27 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
             try:
                 state = json.loads(state_file.read_text(encoding="utf-8"))
                 index = artifacts_dir / "START-HERE.md"
-                stale = not index.is_file() or es.embedded_hash(
-                    index.read_text(encoding="utf-8", errors="replace")
-                ) != es.state_hash(state)
-                if stale and not es.validate_state(state):
+                index_text = (
+                    index.read_text(encoding="utf-8", errors="replace") if index.is_file() else ""
+                )
+                stale = not index.is_file() or es.embedded_hash(index_text) != es.state_hash(state)
+                # P7: a hand-edited index (content-hash mismatch) is re-rendered too, but
+                # the hand-edited text is preserved in a backup first - never destroyed.
+                hand_edited = False
+                emb_content = getattr(es, "embedded_content_hash", None)
+                chash = getattr(es, "content_hash", None)
+                if index.is_file() and not stale and emb_content is not None and chash is not None:
+                    expected = emb_content(index_text)
+                    hand_edited = expected is not None and chash(index_text) != expected
+                if (stale or hand_edited) and not es.validate_state(state):
+                    if hand_edited:
+                        backup = index.with_name("START-HERE.md.hand-edited.bak")
+                        backup.write_text(index_text, encoding="utf-8")
+                        fixed.append(
+                            "FIXED INDEX-HAND-EDITED: backed up the hand-edited index to "
+                            f"{backup.name}, then re-rendered (the index is a generated "
+                            "view - ADR-006; put the change into the state instead)"
+                        )
                     index.with_suffix(".html").unlink(missing_ok=True)
                     es.render_files(artifacts_dir)
                     fixed.append(
@@ -905,12 +1386,71 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
 
 
 def workspace_dirs(artifacts_dir: Path) -> list[Path]:
-    """Engagement workspaces `artifacts/<slug>/` (0.31 multi-engagement layout)."""
+    """STATEFUL engagement workspaces `artifacts/<slug>/` (0.31 layout) - the registrable
+    subset. Gating iterates the broader `engagement_packs` (G7)."""
     if not artifacts_dir.is_dir():
         return []
     return sorted(
         p for p in artifacts_dir.iterdir() if p.is_dir() and (p / "engagement-state.json").is_file()
     )
+
+
+_ROOT_ALLOWLIST = ".dod-root-allowlist.json"
+_REGISTRY_NAMES = {"engagements.json", "ENGAGEMENTS.md", "ENGAGEMENTS.html"}
+
+
+def check_root_orphans(artifacts_dir: Path, create_snapshot: bool = False) -> list[str]:
+    """2026-07-29 register G2 [reproduced]: in workspace mode, a file written to the
+    artifacts ROOT belonged to no engagement and was checked by NOTHING - a real workspace
+    plus `artifacts/orphan-report.md` returned `DoD artifact gate: OK`. Every visible root
+    file must now be grandfathered in the snapshot allowlist or it is ORPHAN-ARTIFACT.
+
+    The allowlist (`.dod-root-allowlist.json`) is a one-time snapshot taken by the CLI
+    checker on its first workspace-mode run after this rule landed (D2 ruling 2026-07-29:
+    pre-existing flat files are exempt; the workspace layout applies to new work only).
+    The stop-gate consumer calls this read-only (create_snapshot=False): it never writes
+    the snapshot and stays silent until the CLI has taken one - a turn-end hook must not
+    mutate the pack it is judging."""
+    root_files = sorted(
+        p
+        for p in artifacts_dir.iterdir()
+        if p.is_file() and not p.name.startswith(".") and p.name not in _REGISTRY_NAMES
+    )
+    allowlist_path = artifacts_dir / _ROOT_ALLOWLIST
+    if not allowlist_path.is_file():
+        if create_snapshot:
+            allowlist_path.write_text(
+                json.dumps(
+                    {
+                        "grandfathered": [p.name for p in root_files],
+                        "note": "pre-existing artifacts-root files exempt from "
+                        "ORPHAN-ARTIFACT (D2 ruling 2026-07-29); new work goes in "
+                        "artifacts/<slug>/",
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            if root_files:
+                print(
+                    f"note: grandfathered {len(root_files)} pre-existing root file(s) "
+                    f"into {allowlist_path.name}"
+                )
+        return []
+    try:
+        allowed = set(
+            json.loads(allowlist_path.read_text(encoding="utf-8")).get("grandfathered") or []
+        )
+    except Exception:
+        allowed = set()
+    return [
+        f"ORPHAN-ARTIFACT: {p.name} sits in the artifacts ROOT, outside every engagement "
+        "workspace - no per-pack gate covers root files; move it into its engagement's "
+        f"artifacts/<slug>/ (pre-existing files are grandfathered in {_ROOT_ALLOWLIST})"
+        for p in root_files
+        if p.name not in allowed
+    ]
 
 
 def check_registry(artifacts_dir: Path) -> list[str]:
@@ -936,6 +1476,44 @@ def check_registry(artifacts_dir: Path) -> list[str]:
             ]
     except Exception as exc:
         return [f"REGISTRY-STALE: registry unreadable ({exc}) - regenerate it"]
+    # Nested packs: a state file deeper than artifacts/<slug>/ means an engagement was
+    # initialised from inside another workspace (live defect 2026-07-30 - a cd into
+    # artifacts/<old>/ before init created artifacts/<old>/artifacts/<new>/). Flag it;
+    # the fix is a move, which only the human/PM should perform on real deliverables.
+    for sp in sorted(artifacts_dir.rglob("engagement-state.json")):
+        if _under_archive(sp, artifacts_dir):
+            continue
+        rel = sp.relative_to(artifacts_dir)
+        if len(rel.parts) > 2:
+            return [
+                f"NESTED-PACK: {sp.parent} is an engagement pack nested inside another "
+                "engagement - packs live at artifacts/<slug>/ only; move the folder "
+                f"to {artifacts_dir / sp.parent.name} and re-run the check (a session "
+                "that cd's into a workspace before init causes this)"
+            ]
+    # The HTML mirror is written best-effort: when the render libraries are not
+    # installed, every mutation silently updates the .md/.json and leaves the .html
+    # behind (user report 2026-07-30) - so its freshness needs an explicit check.
+    md_path = artifacts_dir / es.REGISTRY_MD
+    html_path = md_path.with_suffix(".html")
+    if md_path.is_file():
+        hint = (
+            "re-render via `python -m scripts.engagement_state render`; if that still "
+            "skips it, the HTML render libraries are missing - install them with "
+            "`python -m pip install -r requirements.txt` (the installer's pip step)"
+        )
+        try:
+            if not html_path.is_file():
+                return [
+                    f"REGISTRY-HTML-STALE: {es.REGISTRY_MD} has no rendered .html mirror - {hint}"
+                ]
+            if html_path.stat().st_mtime < md_path.stat().st_mtime - 1:
+                return [
+                    f"REGISTRY-HTML-STALE: ENGAGEMENTS.html is older than {es.REGISTRY_MD} "
+                    f"(a mutation updated the registry without the mirror) - {hint}"
+                ]
+        except OSError:
+            pass
     return []
 
 
@@ -947,25 +1525,44 @@ def main(argv: list[str]) -> int:
     map_path = Path(positional[1]) if len(positional) > 1 else find_codebase_map(Path.cwd())
 
     # 0.31 layout: with per-engagement workspaces, each pack is checked in its own scope
-    # (findings slug-prefixed) plus the derived-registry consistency; a legacy flat pack
-    # alongside (or alone) is checked exactly as before.
-    workspaces = workspace_dirs(artifacts_dir)
+    # (findings slug-prefixed) plus the derived-registry consistency and the root orphan
+    # scan (G2); a legacy flat pack alongside (or alone) is checked exactly as before.
+    # Gating iterates engagement_packs (state file OR index - G7); registry consistency
+    # stays keyed on the stateful workspace_dirs subset.
+    workspaces = engagement_packs(artifacts_dir)
 
     if do_fix:
         for pack in workspaces or [artifacts_dir]:
             prefix = f"[{pack.name}] " if pack != artifacts_dir else ""
             for line in apply_fixes(pack):
                 print(f"{prefix}{line}")
-        if workspaces:
+        if workspace_dirs(artifacts_dir):
             es = _load_engagement_state_module()
             if es is not None and check_registry(artifacts_dir):
                 es.render_registry(artifacts_dir)
                 print("FIXED REGISTRY-STALE: regenerated the root registry")
 
+    es = _load_engagement_state_module()
+    skipped_fresh = 0
     if workspaces:
         findings = []
         for pack in workspaces:
+            # 0.33.2 fast path: a closed pack whose stat-only fingerprint still matches
+            # the one stored at its gate-passing close needs no content re-scan.
+            if es is not None and not do_fix:
+                try:
+                    state = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
+                    if state.get("status") == "closed" and state.get(
+                        "scan_fingerprint"
+                    ) == es.compute_fingerprint(pack):
+                        skipped_fresh += 1
+                        continue
+                except (
+                    Exception
+                ):  # best-effort probe; unreadable state falls through to a full scan  # nosec B110
+                    pass
             findings.extend(f"[{pack.name}] {f}" for f in check(pack))
+        findings.extend(archived_open_packs(artifacts_dir))
         if (artifacts_dir / "engagement-state.json").is_file():
             # A flat pack's rglob checks would cross into sibling workspaces and produce
             # noise; during the transitional coexistence the one finding is "migrate it".
@@ -974,6 +1571,11 @@ def main(argv: list[str]) -> int:
                 "`python -m scripts.engagement_state migrate` (flat pack not deep-checked "
                 "to avoid cross-workspace noise)"
             )
+        else:
+            findings.extend(check_root_orphans(artifacts_dir, create_snapshot=True))
+            # P5: the ROOT data/ lane in workspace mode was validated by nothing.
+            findings.extend(check_findings_packs(artifacts_dir))
+            findings.extend(check_findings_render_freshness(artifacts_dir))
         findings.extend(check_registry(artifacts_dir))
     else:
         findings = check(artifacts_dir)
@@ -986,12 +1588,42 @@ def main(argv: list[str]) -> int:
             findings.append(f"MAP-NOT-FOUND: {map_path} was given explicitly but does not exist")
             map_note = f"map missing: {map_path}"
 
+    notes = [map_note]
+    if skipped_fresh:
+        notes.append(f"{skipped_fresh} closed pack(s) skipped via fingerprint")
+    archived_count = sum(
+        1
+        for p in (artifacts_dir.iterdir() if artifacts_dir.is_dir() else [])
+        if p.is_dir() and (p / ".archive").is_file()
+    )
+    if archived_count:
+        notes.append(f"{archived_count} archived dir(s) excluded")
+    # Startup-cost nudge: many closed, unarchived, unfingerprinted packs = slow scans
+    # the user can end with one command. Informational, never a finding.
+    stale_closed = 0
+    if es is not None and workspaces:
+        for pack in workspaces:
+            try:
+                st = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
+                if st.get("status") == "closed" and not st.get("scan_fingerprint"):
+                    stale_closed += 1
+            except (
+                Exception
+            ):  # best-effort nudge count; an unreadable state just isn't counted  # nosec B112
+                continue
+    if stale_closed >= 5:
+        print(
+            f"note: {stale_closed} closed engagement(s) are re-scanned every run - archive "
+            "them (`python -m scripts.engagement_state archive --all-closed`) or re-close "
+            "once to store a fingerprint; either ends the cost"
+        )
+    note_text = "; ".join(notes)
     if findings:
         for line in findings:
             print(line)
-        print(f"DoD artifact gate: {len(findings)} finding(s) - NOT satisfied ({map_note})")
+        print(f"DoD artifact gate: {len(findings)} finding(s) - NOT satisfied ({note_text})")
         return 1
-    print(f"DoD artifact gate: OK ({artifacts_dir}; {map_note})")
+    print(f"DoD artifact gate: OK ({artifacts_dir}; {note_text})")
     return 0
 
 

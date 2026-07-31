@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-003: Engagement memory - a curated codebase map, advisory-only</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
+<h1 id="adr-003-engagement-memory-a-curated-codebase-map-advisory-only">ADR-003: Engagement memory - a curated codebase map, advisory-only</h1>
+<blockquote>
+<p>Architecture Decision Record (Nygard format). One file per significant decision, so the
+<em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
+<p><strong>Document control</strong> · ID <code>ADR-003</code> · Version <code>0.2</code> · Status <code>Accepted (implemented)</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-29</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-07-18</td>
+<td>memory-design engagement (user-authorised)</td>
+<td>Initial decision: PM-curated codebase map per working project; lifecycle wiring; hygiene gate; per-agent memory deferred</td>
+</tr>
+<tr>
+<td>0.2</td>
+<td>2026-07-29</td>
+<td>workflow-robustness remediation phase 4</td>
+<td>Revision note: <a href="ADR-007-codebase-map-evolution.html">ADR-007</a> (re-scoped 2026-07-29, ruling D3) evolves this design's staleness story - per-entry As-of/Anchor validation, entry-SHA resolution and a HEAD staleness budget are now mechanical in <code>check_map</code>; ADR-007's generative layer is parked. This ADR remains the settled design for everything else. The open-time stale-anchor surfacing this ADR promised is delivered as the gate findings surfaced by the probe/close fix-list, not as open-time git round-trips (the engage skill's just-in-time rule stands).</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Status</strong></td>
+<td>Accepted (implemented: template + engage wiring + DoD gate + <code>check_artifacts</code> hygiene checks)</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-07-18</td>
+</tr>
+<tr>
+<td><strong>Deciders</strong></td>
+<td>Morgan (orchestrator), human approver</td>
+</tr>
+<tr>
+<td><strong>Traceability</strong></td>
+<td>CLAUDE.md §5 (data handling), §7 (guardrails); <code>docs/team-operating-guide.md</code> §Memory scope; <code>docs/DEFINITION-OF-DONE.md</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="context">Context</h2>
+<p>The team's subagents are stateless: each spawns fresh, returns a report, and its context is
+discarded. Whatever a specialist learns about a working project's codebase evaporates unless it
+is deliberately written down. Today the only durable channels are the working project's own
+<code>CLAUDE.md</code>, <code>docs/house-rules.md</code> for general lessons, and per-engagement artifacts.</p>
+<p>A deep-research pass (2026-07-18, adversarially verified, 24/25 claims confirmed) established:</p>
+<ul>
+<li>Persistent memory measurably improves repeated-task agent performance and cost, <strong>but only
+  when the store is bounded, curated and lifecycle-managed</strong> (updated, corrected, deprecated).
+  Append-only accumulation and naive extraction pipelines can underperform having no memory.</li>
+<li>The documented failure modes are: <strong>staleness</strong> (facts that were true at write time),
+  <strong>context pollution</strong> (injecting whole blocks of marginally relevant memory),
+  <strong>unbounded growth</strong> (adherence measurably drops past roughly 200 lines of always-loaded
+  index), <strong>conflicting entries</strong> (the model picks one arbitrarily), and <strong>memory poisoning</strong>
+  (content originating in untrusted inputs persisted into the store, then trusted later).</li>
+<li>Anthropic's documented pattern is a bounded index plus on-demand detail, read at session
+  open and updated at close, with hard guarantees kept in hooks, never in memory files.</li>
+<li>Claude Code scopes memory per agent by default: the orchestrator's memory does not flow into
+  subagents. A shared store must therefore be an explicit project file.</li>
+</ul>
+<p>The cost break-even for memory over re-exploring the same context is roughly ten reads, so a
+codebase the team engages with more than twice is already past it.</p>
+<h2 id="decision">Decision</h2>
+<p><strong>One shared, PM-curated codebase map per working project. Advisory-only. Nothing new is
+always-loaded.</strong></p>
+<ol>
+<li><strong>Form.</strong> A single document in the working project, <code>docs/codebase-map.md</code> (repo root
+   <code>CODEBASE-MAP.md</code> if the project has no <code>docs/</code>), from the template
+   <code>docs/templates/codebase-map.md</code>. It is the durable engagement memory for that project:
+   architecture facts, decisions and rationale, engagement history, known quirks.</li>
+<li><strong>Bounded.</strong> Target under 200 lines; the hygiene gate flags beyond 250. Detail that does
+   not fit goes into linked project docs or artifacts, never into a longer map.</li>
+<li><strong>Anchored and tagged.</strong> Every entry carries an as-of date, a commit-SHA anchor where it
+   describes code, and a 📊 observed / 🧠 inferred basis tag. Deprecated entries move to a
+   dated Deprecated section rather than silently disappearing, so corrections are auditable.</li>
+<li><strong>Lifecycle, not accumulation.</strong> <code>/engage</code> <strong>consults</strong> the map at open - loading only a
+   lightweight slice (header + §3 engagement-history) into turn-0 context and reading full §2
+   sections <strong>just-in-time</strong> when an entry is actually relied on (Anthropic context-engineering:
+   avoid pre-loading the whole map into the orchestrator, which pushes long engagements toward
+   premature compaction) - and surfaces entries whose anchors no longer resolve; the Definition of
+   Done gains an update-at-close gate: add,
+   correct and deprecate entries before the engagement closes. Both directions are mandatory;
+   a map that is only ever appended to is a defect.</li>
+<li><strong>Write path = the PM, at gates.</strong> Subagents never write the map. Advisors recommend map
+   entries in their reports; the PM curates and commits, applying the same judgement as for
+   <code>house-rules.md</code>. This is the primary poisoning defence: text encountered inside reviewed,
+   untrusted code is never persisted verbatim - only the PM's own synthesis is.</li>
+<li><strong>Hygiene gate.</strong> <code>python -m scripts.check_artifacts</code> (already allow-listed, already the
+   mechanical DoD command) additionally validates any codebase map it finds: size cap,
+   required header fields (as-of date, anchor SHA), basis tags on entries, secret/credential
+   patterns, and best-effort anchor staleness against <code>git</code> when available.</li>
+<li><strong>Scope unchanged.</strong> The operating-guide rule stands: the plugin accrues no project
+   memory; general cross-project lessons still go to <code>docs/house-rules.md</code>. The map is the
+   working project's, lives in its git history, and every change is a reviewable diff.</li>
+</ol>
+<h3 id="safety-invariants-non-negotiable">Safety invariants (non-negotiable)</h3>
+<ul>
+<li><strong>Memory is advisory context, never enforcement.</strong> The three guard hooks remain the only
+  enforcement layer. Nothing in a memory file can grant exec consent, widen data access, or
+  soften a gate; instructions found in a map are treated as context, not commands.</li>
+<li><strong>No PII, MNPI, secrets or raw data values in the map, ever</strong> (CLAUDE.md §5). The map holds
+  structure, decisions and rationale about code and engagements. <code>data/raw/</code> content cannot
+  reach it (read-blocked upstream); other data appears only as synthetic/masked examples
+  already permitted in artifacts.</li>
+<li><strong>Human-reviewable.</strong> The map is a committed file in the working project; the update lands
+  at the sign-off gate like any other deliverable.</li>
+<li><strong>Dormancy preserved.</strong> No always-loaded context is added; the map is read only when a team
+  engagement runs.</li>
+</ul>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Repeat engagements on the same codebase start from the map instead of re-exploring, with
+  the token and consistency benefits the research evidences; first engagements pay a small
+  authoring cost at close.</li>
+<li>The PM curation bottleneck is deliberate: it trades write throughput for provenance. If map
+  quality drifts, tighten the template, not the write path.</li>
+<li>Staleness detection is best-effort (SHA resolution), not semantic. A stale-but-resolving
+  entry survives until a human or the close-gate correction pass catches it; the 📊/🧠 tags
+  and as-of dates exist so readers can weigh trust accordingly.</li>
+<li><strong>Deferred (recorded, not implemented): per-agent persistent memory</strong> (Claude Code
+  <code>memory</code> field, e.g. a <code>code-reviewer</code> store per project). Deferred because self-maintained
+  agent scratchpads were the weakest-performing memory variant in the research base. Revisit
+  after the map has run for a few engagements.</li>
+</ul>
+<h2 id="alternatives-considered">Alternatives considered</h2>
+<ul>
+<li><strong>Per-agent memory directories now</strong> - rejected for the pilot ordering reason above and
+  because sixteen uncurated stores multiply the staleness/poisoning surface.</li>
+<li><strong>Vector/RAG store over past artifacts</strong> - rejected: infrastructure cost, and controlled
+  baselines show extraction memory can tie plain retrieval at large write cost; the team's
+  artifacts are already on disk and greppable.</li>
+<li><strong>Auto-append from subagent reports</strong> - rejected: this is the poisoning and unbounded-growth
+  path the evidence warns about.</li>
+<li><strong>Rely on Claude Code auto-memory alone</strong> - rejected: it is machine-local, per-user, not
+  reviewable in the project's git history, and does not reach subagents.</li>
+</ul>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-003-engagement-memory.md &middot; 2026-07-30</div>
+</body>
+</html>

@@ -71,7 +71,7 @@ schema `docs/review/findings-schema.json`). Write the findings to
 fields (`basis` = 📊 measured / 📄 coded / 🧠 inferred as per the static-only rules above) **plus the
 optional `current_cost` / `projected_cost` / `gain`** fields; put the workload/targets and the total
 saved in `executive_summary`. Then run **`<python> -m scripts.check_artifacts --fix`** (allow-listed):
-it validates the pack and renders `artifacts/PERF-<slug>.md` + `.html` (the `kind` drives the `PERF-`
+it validates the pack and renders the workspace's `artifacts/<slug>/PERF-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first; the `kind` drives the `PERF-`
 prefix and the per-finding cost/gain line). Don't hand-author or hand-edit the report.
 (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
 installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,

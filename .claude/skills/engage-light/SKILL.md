@@ -50,14 +50,20 @@ mandatory chain applies in full kind, light in count**: tests (project's own fra
 command recorded) → ONE code-review pass with fixes → ONE independent QA verification cycle
 (evidence preserved). A QA fail still loops - light never ships a failing verdict.
 
-**4. Close-lite.** Run `<python> -m scripts.check_artifacts --fix` and fix the list; then
-`set-team`, `finalise-artifacts`, `set-footprint`, and `set-status closed --verdict "..."`.
+**4. Close-lite.** `set-status closing` first (marks the close window on disk - the summary
+email written next is legitimate close work, register R5); run
+`<python> -m scripts.check_artifacts --fix` and fix the list; then
+`set-team`, `finalise-artifacts`, `set-footprint`, and `set-status closed --verdict "..."` -
+the close runs the DoD gate itself and refuses on findings (register R6).
 **No delivery report** - but the **engagement-summary email stays, kept SHORT**
 (`engagement-summary-<slug>.txt` in artifacts/, signed as Morgan, "Hi," if the requester's
 name is unknown): a few lines covering what was done, the evidence in one line (test counts,
 verdict), residual risk, and ONE concrete next step - never a call or meeting. Every close
-ends with Morgan's email, whatever the profile. Update the codebase map ONLY if the
-project's architecture actually changed. Human sign-off remains the user's act.
+ends with Morgan's email, whatever the profile. **The codebase map update is NOT waived**
+(ADR-003: both directions are mandatory at every close - append the §3 history row with the
+Team-ver, and correct/deprecate any entry found wrong; register M4 removed light's former
+opt-out). Light may keep NEW §2 entries minimal when the architecture genuinely did not
+change - the history row and corrections never are. Human sign-off remains the user's act.
 
 **Upgrade rule (standing):** the moment scope grows past light - detection logic appears, a
 regulated obligation enters, the deliverable needs the full artifact set -
