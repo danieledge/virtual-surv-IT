@@ -3,6 +3,57 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.5] - 2026-07-31 - Corporate Windows hardening: probe, statusline, engagement_state fixes
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+Eleven issues from a live corporate Windows 11 / Python 3.13 run, reported with a
+diagnosis precise enough to fix directly against.
+
+### Fixed
+- **`/engage` step-0 probe failed silently on cp1252 consoles**: the probe's report
+  contains emoji, and a Windows console's default cp1252 codepage made every one of the
+  python3/python/py fallback attempts crash on `print()` - hidden entirely by the
+  compound's `2>/dev/null`. All three attempts now run under `PYTHONIOENCODING=utf-8`,
+  and a final fallback prints the exact command to re-run by hand if the probe still
+  fails for a genuinely different reason.
+- **`scripts/statusline.sh` fell back to the static glyph even with a working
+  interpreter available**: it resolved `python3`/`python`/`py` with `command -v`, which
+  only checks PATH existence - true for the Windows Store execution-alias stub, which
+  exists on PATH but exits 49 without running. `--version` now actually invokes the
+  candidate, so the stub is correctly skipped in favour of a real interpreter behind it.
+- **`engagement_state.py --slug`/`--dir` only worked before the subcommand**: both are
+  top-level argparse flags, so `log-note --slug X "..."` exited 2 "unrecognized
+  arguments" while `--slug X log-note "..."` worked - an unintuitive, undocumented
+  ordering requirement. Every resolvable subcommand now accepts both flags on either
+  side via a shared parent parser (SUPPRESS defaults prevent an omitted post-subcommand
+  flag from overwriting a value already parsed at the top level).
+- **`engagement_state.py`'s internal `render_html` import failed under plugin-mode path
+  invocation** ("No module named 'scripts.render_html'"), silently skipping every
+  `.html` sibling render - which in turn made `check_artifacts`'s
+  `REGISTRY-HTML-STALE` finding re-fire on every single mutation with no way to clear
+  it. Fixed with the same package-import-first / `__file__`-relative-fallback pattern
+  `check_artifacts.py` already uses for `engagement_state` itself; `REGISTRY-HTML-STALE`
+  no longer loops in plugin mode as a direct result.
+- **`archive <slug> --force` couldn't exclude a legacy/non-workspace directory**: it
+  required an `engagement-state.json` before even checking `--force`, so a directory
+  the DoD scan still walked (with real findings) had no command to exclude it - only a
+  hand-written empty `.archive` file worked. `--force` now also covers a stateless
+  target, writing the marker directly.
+- **`engagement_state.py render` exited 0 on a partial (`.html`-skipped) render**,
+  falsely signalling success. It now exits 2 when the `.html` sibling wasn't actually
+  written, matching `render_files`' own returned file list.
+- **The task-panel Stop-hook nudge omitted which engagement triggered it**, requiring
+  investigation in any project with more than one open pack. It now names the specific
+  slug (or "flat pack") and the phase that crossed the gate, plus a `--slug`-scoped
+  log-note command to copy-paste.
+
+### Added
+- **`engagement_state.py show [--slug S]`**: prints an engagement's state as-is and
+  always exits 0 once found - `validate` exits 1 on any finding (unsafe for pure
+  inspection) and `list` only gives a one-line summary; there was no safe way to
+  actually look at one engagement's disk state without opening the JSON by hand.
+
 ## [0.33.4] - 2026-07-30 - Task-list gate panel, backed by a nudge
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
