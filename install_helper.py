@@ -900,6 +900,50 @@ def gather_update_preview(repo: Path, branch: str, local_version: Optional[str],
     return info
 
 
+def check_for_update_upfront(cfg: dict, style: Style, args) -> None:
+    """A quick glance at whether a newer version is on origin, shown right after the
+    banner and before the menu - so "there's an update" is visible no matter which
+    option the user ends up picking (previously it only surfaced deep inside a full
+    run's sync step, or the dedicated "check for updates" option - invisible to anyone
+    who picked statusline/enable/preferences/etc). Silent, not just soft-failing, on
+    anything short of "a newer version exists": no clone yet (first install - nothing
+    to compare), unreachable network, or already up to date all print nothing, so a
+    routine run stays exactly as quiet as before. A short fetch timeout keeps a slow or
+    dead network from delaying the menu itself."""
+    if args.repo:
+        repo = Path(args.repo).expanduser().resolve()
+    else:
+        configured = cfg.get("repo_path")
+        script_root = Path(__file__).resolve().parent
+        if isinstance(configured, str) and configured and looks_like_repo(Path(configured)):
+            repo = Path(configured)
+        elif looks_like_repo(script_root):
+            repo = script_root
+        else:
+            return  # no clone yet - nothing to compare on a first install
+    if not looks_like_repo(repo):
+        return
+    branch = cfg.get("branch")
+    branch = branch if branch in BRANCHES else "main"
+    try:
+        proc = run_cmd(["git", "-C", repo, "fetch", "origin", branch], timeout=8)
+    except (subprocess.TimeoutExpired, OSError):
+        return
+    if proc is None or proc.returncode != 0:
+        return
+    local_version = installed_version(repo)
+    preview = gather_update_preview(repo, branch, local_version)
+    remote = preview.get("remote_version")
+    if not remote or not local_version or remote == local_version:
+        return
+    print(style.yellow(f"📦 A newer version is available: {local_version} -> {remote}"))
+    headline = (preview.get("headlines") or [None])[0]
+    if headline:
+        print(f"   {headline}")
+    print(style.dim("   Pick option 1 to update, or 5 to preview first."))
+    print("")
+
+
 def decide_mode(explicit: Optional[str], cfg: dict) -> str:
     """install | update. Explicit wins; else update when the configured clone still exists."""
     if explicit:
@@ -2181,6 +2225,8 @@ def _main(argv=None) -> int:
     print_banner(style)
     subset = "full"
     if not args.demo and args.mode is None and not args.yes and sys.stdin.isatty():
+        cfg = load_config(config_path())
+        check_for_update_upfront(cfg, style, args)
         action = choose_action(style)
         if action == "quit":
             print("No problem - nothing changed. See you next time.")
