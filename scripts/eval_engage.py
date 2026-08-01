@@ -410,6 +410,7 @@ async def run_engage_session(
     max_budget: float | None,
     sim_log: SimTranscript,
     workflow_cmd: str = "/engage",
+    team_model: str = "opus",
     extra_env: dict[str, str] | None = None,
     include_subagents: bool = True,
 ) -> SessionCapture:
@@ -442,6 +443,14 @@ async def run_engage_session(
 
     options = ClaudeAgentOptions(
         cwd=str(sandbox),
+        # Pin the ORCHESTRATOR's tier. setting_sources=["project"] already gives each SUBAGENT
+        # its own `model:` frontmatter (4 opus / 11 sonnet / 1 haiku), but nothing set the model
+        # for Morgan herself, so the top-level session silently inherited the SDK default while
+        # the operating guide requires opus ("routing, challenging findings and the §4/§5 calls
+        # are deep work"). That mattered more than it looks: the judge scores largely from the
+        # PM's own narration, so evaluating the orchestrator on a cheaper tier depresses the
+        # result in a way indistinguishable from a genuine regression (audit 2026-08-01).
+        model=team_model,
         setting_sources=["project"],
         # "default", not "acceptEdits": every tool call must route through can_use_tool -
         # acceptEdits short-circuits some calls past the callback, and AskUserQuestion then
@@ -880,6 +889,7 @@ async def run_case(
                 args.max_budget,
                 sim_log,
                 workflow_cmd=workflow_cmd,
+                team_model=args.team_model,
                 extra_env={str(k): str(v) for k, v in (manifest.get("session_env") or {}).items()},
                 include_subagents=not getattr(args, "exclude_subagent_output", False),
             ),
@@ -1289,6 +1299,13 @@ def main() -> int:
     )
     ap.add_argument(
         "--max-budget", type=float, default=None, help="per-case USD cap (SDK max_budget_usd)"
+    )
+    ap.add_argument(
+        "--team-model",
+        default="opus",
+        help="tier for the ORCHESTRATOR under test (default opus, per the operating guide). "
+        "Subagents always use their own model: frontmatter via setting_sources=['project']; "
+        "this only sets Morgan's own tier",
     )
     ap.add_argument(
         "--sim-model", default="sonnet", help="model playing the stakeholder (default sonnet)"

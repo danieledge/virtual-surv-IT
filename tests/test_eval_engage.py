@@ -421,3 +421,20 @@ def test_long_cases_declare_a_timeout_above_the_default():
             f"{case}: expected a per-case timeout_s above the {ee.DEFAULT_TIMEOUT_S}s default, "
             f"got {declared!r}"
         )
+
+
+def test_orchestrator_model_is_pinned_by_default():
+    """The team session must pin the ORCHESTRATOR's tier, not inherit the SDK default.
+
+    setting_sources=["project"] already gives each SUBAGENT its model: frontmatter, but until
+    the 2026-08-01 audit nothing set the model for Morgan herself, so the top-level session
+    silently ran on whatever the SDK defaulted to while the operating guide requires opus. The
+    judge scores largely from the PM's own narration, so a cheaper orchestrator depresses the
+    result in a way indistinguishable from a real regression.
+    """
+    import inspect
+
+    sig = inspect.signature(ee.run_engage_session)
+    assert sig.parameters["team_model"].default == "opus"
+    src = inspect.getsource(ee.run_engage_session)
+    assert "model=team_model" in src, "ClaudeAgentOptions must receive the pinned team model"
