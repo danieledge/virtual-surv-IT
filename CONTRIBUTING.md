@@ -31,9 +31,21 @@ gate is now mechanical, not a documented intention:
 2. Record the result as **`evals/eval-baseline-<version>.md`** (date · cases run · pass/fail ·
    notes; `Scope: full` — or `Scope: deterministic-only` for a patch release with no prompt
    changes, which used pytest + the deterministic scorer only). Commit it.
+   **The baseline MUST carry a machine-readable ` ```eval-verdict ` block** (format documented in
+   [`evals/README.md`](evals/README.md); each run drafts one into its `report.md`, so paste it
+   rather than hand-writing it). The gate parses that block, not the prose: a baseline whose
+   narrative says "passed" but whose block reports `unadjudicated_failures: 2` will not promote.
+   This exists because an audit (2026-08-01) found the deterministic scorer had stopped being the
+   arbiter of anything - raw pass rate across the recorded history is 17/49 (35%) while the
+   adjudicated rate in the baselines is near 100%, and no adjudication has ever gone the other way.
+   Adjudicating a raw failure to a pass is still allowed, but it must be **counted** in the block
+   (`cases_adjudicated_pass`) rather than absorbed into prose, and `verdict: pass` is reserved for
+   a baseline where every case passed **raw**.
 3. Run **`python -m scripts.release_gate`** (add `--allow-deterministic` for a patch release). It
    verifies version/badge/CHANGELOG consistency, that the baseline exists for the version being
-   promoted, and that **no prompt file was committed after the baseline** (a stale baseline fails).
+   promoted, that **no prompt file was committed after the baseline** (a stale baseline fails), and
+   that the baseline's verdict block parses, is internally consistent
+   (`raw + adjudicated + unadjudicated == total`) and reports **zero** unadjudicated failures.
 4. **Dormancy footprint check**: run `claude plugin details compliance-surveillance-team`
    and note the projected token cost in the baseline record - the dormant-by-default
    promise is a number, not a vibe; investigate any jump against the previous release.

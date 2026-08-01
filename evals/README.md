@@ -27,7 +27,18 @@ evals/
   rubrics/        what "good" looks like per deliverable (judge scores against these)
   cases/<case>/   a golden case: input file (synthetic) + expected.yaml (ground truth)
                   + notes.md (grading notes - optional but preferred)
+  results.jsonl   tracked, append-only numeric record of every scored run (below)
+  eval-baseline-<version>.md   the per-release record, carrying the verdict block (below)
 ```
+
+**What the judge actually sees** (fixed 2026-08-01 after an audit found it did not):
+the artifact listing handed to the normalizer and judge carries the **bodies** of the
+`.md`/`.txt` deliverables, not just their paths (6k chars per file, 60k total, truncation
+stated in-band), and the transcript retains **subagent output** tagged `[subagent]` and
+capped at 3k chars per block (`--exclude-subagent-output` restores the old PM-only view).
+Before that, "evidence basis", "traceability" and "clarity" were scored from filenames plus
+the PM's own narration of the work - a well-narrated empty deliverable scored like a real
+one.
 
 All eval inputs are **synthetic** (CLAUDE.md §5) - seeded with known issues on purpose.
 
@@ -97,6 +108,64 @@ independent QA -> DoD gate -> close end-to-end. **Each case is a real engagement
 with `--max-budget`, run at milestones. As with `/run-evals`, treat raw keyword scores as the
 starting point: adjudicate misses/traps against the transcript before calling a regression
 (baseline precedent: `evals/eval-baseline-0.27.0.md`).
+
+## The baseline verdict block (the release gate parses this)
+
+`scripts/release_gate.py` blocks a dev → main promotion unless the version's
+`evals/eval-baseline-<version>.md` **declares a verdict in machine-readable form**. Until
+2026-08-01 the gate only checked the file existed, so a baseline whose own prose said "No
+clean-pass claim is made for this baseline" satisfied it, and four versions shipped
+unevaluated. Every baseline now carries a fenced block:
+
+````
+```eval-verdict
+verdict: pass-with-adjudication
+cases_total: 7
+cases_passed_raw: 2
+cases_adjudicated_pass: 5
+unadjudicated_failures: 0
+runs: 20260729T225110Z, 20260730T010541Z
+```
+````
+
+- `verdict:` - `pass` | `pass-with-adjudication` | `fail`. `fail` blocks promotion, and
+  `pass` may only be claimed when **every** case passed RAW, so an adjudicated release
+  cannot be misread as a clean run.
+- The counts must satisfy `cases_passed_raw + cases_adjudicated_pass +
+  unadjudicated_failures == cases_total` - every case is accounted for or the gate says so.
+- **`unadjudicated_failures` > 0 blocks promotion.** Adjudication is a human act (read the
+  transcript, evidence why the raw FAIL is not a real failure, write it up in the record's
+  table). A budget-killed or timed-out case is **unevidenced, not passed** - it stays an
+  unadjudicated failure until it is re-run or adjudicated on evidence.
+- Blank lines and `#` comments inside the block are ignored; only the FIRST block counts.
+
+`scripts.eval_engage` drafts the raw block into each run's `report.md` - copy it into the
+baseline and move cases from `unadjudicated_failures` to `cases_adjudicated_pass` as you
+adjudicate them. The gate also ages a baseline against
+`docs/DEFINITION-OF-DONE.md`, `docs/house-rules.md`, `docs/WAYS-OF-WORKING.md` and
+`docs/code-review-method.md` alongside the agents/skills - those docs steer the team at run
+time exactly as a skill does.
+
+## The tracked results log (`evals/results.jsonl`)
+
+`evals/runs/` is git-ignored and pruned by the retention rule, so the numbers used to
+survive only as prose in a baseline. Every scored case now also appends one JSON row to
+**`evals/results.jsonl`** (tracked, append-only, deduped on `run_id` + `case` + `mode`):
+
+    {"run_id": "20260730T010541Z", "case": "process-full-lifecycle", "mode": "run",
+     "version": "0.33.1", "passed": false, "recall": 0.778, "must_find_missed": [...],
+     "traps_triggered": [], "judge_score": 0.48, "judge_pass": false, "cost_usd": 14.07,
+     "num_turns": 61, "duration_s": 2400.0, "timed_out": true, "session_error": false,
+     "recorded_at": "..."}
+
+Writing is automatic (live runs and `--rescore`). To backfill from saved run outputs:
+
+    python -m scripts.eval_engage --record evals/runs    # no session, no tokens
+
+`version` is the plugin version the run exercised - taken from the run's kept sandbox when
+backfilling, and `"unknown"` where the sandbox was pruned (never today's version stamped on
+an old row). Recall and judge scores are trendable from this file instead of being
+re-narrated each release.
 
 ## A case (`expected.yaml`)
 

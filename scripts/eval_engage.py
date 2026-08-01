@@ -38,6 +38,7 @@ Usage (needs the repo venv - the Agent SDK is a dev dependency, not vendored):
     python -m scripts.eval_engage --list
     python -m scripts.eval_engage --case process-right-sizing
     python -m scripts.eval_engage --all-engage --max-budget 15
+    python -m scripts.eval_engage --record evals/runs   # backfill evals/results.jsonl only
 Each full lifecycle run spends real tokens (it is a live engagement) - run at
 milestones, not per commit.
 """
@@ -69,6 +70,9 @@ CASES_ROOT = REPO_ROOT / "evals" / "cases"
 RUNS_ROOT = REPO_ROOT / "evals" / "runs"
 RUBRICS_ROOT = REPO_ROOT / "evals" / "rubrics"
 DEFAULT_PERSONA = REPO_ROOT / "evals" / "driver-default.md"
+# Tracked, append-only numeric record (evals/runs/ is git-ignored and pruned by the
+# retention rule, so before this file the only surviving numbers were prose baselines).
+RESULTS_FILE = REPO_ROOT / "evals" / "results.jsonl"
 
 # Never copied into the sandbox. `evals/` is the load-bearing one: it holds the ground
 # truth, and excluding it makes blindness structural rather than willpower.
@@ -94,6 +98,29 @@ _NET_BASH_RE = re.compile(
 _NET_TOOLS = {"WebFetch", "WebSearch"}
 
 _TRANSCRIPT_CAP = 80_000  # chars of transcript handed to the normalizer / judge
+
+# Subagent output is the WORK; the PM's own messages are the narration of it. Capturing
+# only the PM (parent_tool_use_id is None) meant the normalizer and judge scored an
+# engagement from its press release (2026-08-01 eval-harness audit). Subagent text is now
+# retained, tagged so attribution stays clear, and capped per block so one verbose
+# specialist cannot push the rest of the run out of the tail-sliced _TRANSCRIPT_CAP:
+# 3_000 chars ~ 750 tokens is a specialist's findings summary, not its full working.
+# Tuning date 2026-08-01. `--exclude-subagent-output` restores the old PM-only view.
+_SUBAGENT_TEXT_CAP = 3_000
+
+# What the normalizer and judge get to SEE of the deliverables. The listing used to be
+# PATHS ONLY, so "evidence basis", "traceability" and "clarity" were scored from filenames
+# plus the PM's narration - an eloquently-described empty document scored like a real one.
+# Bodies are now inlined, truncated in-band:
+#   * 6_000 chars/file (~1.5k tokens) covers a whole START-HERE or summary email, and the
+#     head of a spec/review - structure, headings, evidence tags, sign-off: what the
+#     rubrics actually score;
+#   * 60_000 chars total (~15k tokens) keeps the added prompt weight below the 80k-char
+#     transcript slice even for artifact-heavy engagements.
+# Tuning date 2026-08-01; revisit if a rubric starts scoring deep body content.
+_ARTIFACT_BODY_CAP = 6_000
+_ARTIFACT_LISTING_CAP = 60_000
+_ARTIFACT_BODY_SUFFIXES = (".md", ".txt")
 
 # A healthy headless session emits its first (System) message within seconds of spawn;
 # two minutes of total silence means it will never speak (see the watchdog in run_case).
@@ -331,6 +358,37 @@ class SessionCapture:
     error: str | None = None
 
 
+def _transcript_lines(
+    message: Any,
+    text_block_cls: type,
+    tool_block_cls: type,
+    from_subagent: bool,
+    subagent_cap: int = _SUBAGENT_TEXT_CAP,
+) -> list[str]:
+    """Transcript lines for one AssistantMessage.
+
+    The SDK block classes are passed in rather than imported so this stays usable (and
+    testable) without the Agent SDK installed. PM text is verbatim; subagent text is
+    tagged `[subagent]` and truncated to `subagent_cap` chars so one verbose specialist
+    cannot crowd the rest of the run out of the tail-sliced transcript. AskUserQuestion
+    tool calls are skipped - the gate exchange is appended separately, with the answer.
+    """
+    lines: list[str] = []
+    tag = "[subagent] " if from_subagent else ""
+    for block in message.content:
+        if isinstance(block, text_block_cls):
+            text = block.text
+            if from_subagent and len(text) > subagent_cap:
+                text = f"{text[:subagent_cap]}\n[... subagent output truncated at {subagent_cap} chars ...]"
+            lines.append(f"\n{tag}{text}" if tag else text)
+        elif isinstance(block, tool_block_cls) and block.name != "AskUserQuestion":
+            hint = str(block.input.get("description") or block.input.get("subagent_type") or "")[
+                :120
+            ]
+            lines.append(f"\n{tag}[tool] {block.name} {hint}\n")
+    return lines
+
+
 async def run_engage_session(
     cap: SessionCapture,
     scenario: str,
@@ -342,6 +400,7 @@ async def run_engage_session(
     sim_log: SimTranscript,
     workflow_cmd: str = "/engage",
     extra_env: dict[str, str] | None = None,
+    include_subagents: bool = True,
 ) -> SessionCapture:
     from claude_agent_sdk import (
         AssistantMessage,
@@ -467,15 +526,10 @@ async def run_engage_session(
         elif msg_type in ("AssistantMessage", "UserMessage"):
             result_pending = False  # conversation moved on - the prior result wasn't final
         cap.events.append({"type": msg_type, "repr": repr(message)[:4000]})
-        if isinstance(message, AssistantMessage) and message.parent_tool_use_id is None:
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    cap.transcript.append(block.text)
-                elif isinstance(block, ToolUseBlock) and block.name != "AskUserQuestion":
-                    hint = str(
-                        block.input.get("description") or block.input.get("subagent_type") or ""
-                    )[:120]
-                    cap.transcript.append(f"\n[tool] {block.name} {hint}\n")
+        if isinstance(message, AssistantMessage):
+            from_subagent = message.parent_tool_use_id is not None
+            if not from_subagent or include_subagents:
+                cap.transcript += _transcript_lines(message, TextBlock, ToolUseBlock, from_subagent)
         elif isinstance(message, ResultMessage):
             # A result can arrive MID-RUN with subagent tasks still in flight (the CLI
             # closes the main turn, TaskProgress frames keep coming, and a later result
@@ -656,14 +710,58 @@ Apply the rubric's weights and its pass/auto-fail rules exactly.
 """
 
 
-def _artifact_listing(sandbox: Path) -> str:
+def _artifact_listing(
+    sandbox: Path,
+    body_cap: int = _ARTIFACT_BODY_CAP,
+    total_cap: int = _ARTIFACT_LISTING_CAP,
+) -> str:
+    """The run's artifacts as paths PLUS truncated bodies of the .md/.txt deliverables.
+
+    This listing is the only view of the WORK the normalizer and judge get - the
+    transcript is the team talking about it. Paths alone let narration substitute for
+    substance, so each text deliverable is inlined (path order) up to `body_cap` chars
+    until `total_cap` is spent; every truncation and every skipped file is stated in-band
+    so the judge can tell "short" from "cut". Non-text artifacts (.html renders, data
+    files) stay path-only. Unreadable files are listed with their error, never raised.
+    """
     art = sandbox / "artifacts"
     if not art.is_dir():
         return "(no artifacts/ directory)"
-    return (
-        "\n".join(str(p.relative_to(sandbox)) for p in sorted(art.rglob("*")) if p.is_file())
-        or "(empty)"
-    )
+    files = [p for p in sorted(art.rglob("*")) if p.is_file()]
+    if not files:
+        return "(empty)"
+
+    out = ["## Files", *(str(p.relative_to(sandbox)) for p in files)]
+    bodies: list[str] = []
+    spent = 0
+    omitted = 0
+    for path in files:
+        if path.suffix.lower() not in _ARTIFACT_BODY_SUFFIXES:
+            continue
+        rel = path.relative_to(sandbox)
+        if spent >= total_cap:
+            omitted += 1
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            bodies.append(f"### {rel}\n(unreadable: {exc})")
+            continue
+        body = text[: min(body_cap, total_cap - spent)]
+        spent += len(body)
+        cut = (
+            f"\n[... truncated: {len(body)} of {len(text)} chars shown ...]"
+            if len(body) < len(text)
+            else ""
+        )
+        bodies.append(f"### {rel}\n{body}{cut}")
+    if bodies:
+        out += ["", "## Deliverable contents (truncated)", *bodies]
+    if omitted:
+        out.append(
+            f"\n[... {omitted} further text deliverable(s) omitted: listing cap reached ...]"
+        )
+    return "\n".join(out)
 
 
 async def normalize(transcript: str, listing: str, model: str) -> list[dict]:
@@ -769,6 +867,7 @@ async def run_case(
                 sim_log,
                 workflow_cmd=workflow_cmd,
                 extra_env={str(k): str(v) for k, v in (manifest.get("session_env") or {}).items()},
+                include_subagents=not getattr(args, "exclude_subagent_output", False),
             ),
             timeout=args.timeout
             if args.timeout > 0
@@ -813,7 +912,11 @@ async def run_case(
         }
     )
     result["passed"] = result["passed"] and not cap.timed_out and not cap.is_error
+    result["outcome"] = run_outcome(result)
     (out_dir / "score.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    # evals/runs/ is git-ignored and pruned; the tracked log is what makes the numbers
+    # trendable across releases rather than re-narrated in each baseline.
+    append_result(result_record(result, out_dir.parent.name))
 
     if not args.keep_sandbox:
         shutil.rmtree(sandbox, ignore_errors=True)
@@ -876,7 +979,206 @@ async def score_run(
     }
 
 
+# --------------------------------------------------------------------------- the record
+# The baseline's machine-readable verdict, emitted here and PARSED by scripts.release_gate
+# (format documented in evals/README.md). Before it, a baseline saying "no clean-pass claim
+# is made" satisfied the promotion gate, because the gate only checked the file existed.
+# The harness can only fill in the RAW column; adjudication is a human act, so the emitted
+# block starts at cases_adjudicated_pass: 0 and the human moves cases across as they
+# adjudicate them against the transcripts.
+VERDICT_FENCE = "eval-verdict"
+
+
+def verdict_block(results: list[dict], run_id: str) -> str:
+    """The draft ```eval-verdict block for a run, ready to paste into a baseline record.
+
+    `results` are per-case score dicts (as written to score.json). Verdict is `pass` only
+    when every case passed raw; otherwise `fail`, which the human upgrades to
+    `pass-with-adjudication` after evidencing each failure. The counts must satisfy
+    cases_passed_raw + cases_adjudicated_pass + unadjudicated_failures == cases_total -
+    the release gate enforces that identity, so moving a case is a two-number edit.
+    """
+    raw_pass = sum(1 for r in results if r.get("passed"))
+    total = len(results)
+    return "\n".join(
+        [
+            f"```{VERDICT_FENCE}",
+            "# raw harness output - adjudicate each failure against its transcript, then",
+            "# move it from unadjudicated_failures to cases_adjudicated_pass (and set",
+            "# verdict: pass-with-adjudication). The gate fails while any remain.",
+            f"verdict: {'pass' if raw_pass == total and total else 'fail'}",
+            f"cases_total: {total}",
+            f"cases_passed_raw: {raw_pass}",
+            "cases_adjudicated_pass: 0",
+            f"unadjudicated_failures: {total - raw_pass}",
+            f"runs: {run_id}",
+            "```",
+        ]
+    )
+
+
+def _plugin_version(root: Path = REPO_ROOT) -> str:
+    """Plugin version under `root` ('unknown' if unreadable - a trend row is never fatal)."""
+    try:
+        return str(
+            json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))[
+                "version"
+            ]
+        )
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return "unknown"
+
+
+def run_outcome(result: dict) -> str:
+    """Classify a run as "pass", "fail" or "unscorable".
+
+    A run killed by a timeout or a session error (an API 529, a dropped stream) produced no
+    gradeable output, so calling it a FAIL states something the evidence does not support: it
+    conflates "the team answered badly" with "the team never got to answer". Folding both into
+    one boolean is what made the headline pass rate unreadable - an audit on 2026-08-01 measured
+    17/49 (35%) raw passes and found 13 of the 32 failures were runs that died, three of them
+    on a confirmed API 529 after exhausting all ten retries. Excluding them the rate is 17/36
+    (47%), and the two "most-missed" items turned out to be missed almost only on dead runs
+    (NEXT-1: five misses, five of them dead runs, zero on a run that finished).
+
+    Kept separate from `passed`, which stays a strict boolean, so nothing downstream that
+    already reads `passed` changes meaning.
+    """
+    if result.get("timed_out") or result.get("session_error"):
+        return "unscorable"
+    return "pass" if result.get("passed") else "fail"
+
+
+def summarise_results(rows: list[dict]) -> dict:
+    """Aggregate trend rows the way a reader should read them: over SCORABLE runs only.
+
+    Reporting `passed / total` counts infrastructure deaths as quality failures and makes the
+    product look worse than the evidence says. Reporting `passed / scorable` plus an explicit
+    unscorable count states both facts without hiding either - the unscorable count is itself a
+    harness-health signal worth watching (it was 26% of runs over the 2026-07-25..30 window,
+    and those runs cost ~3x a healthy one while producing a median of 4 turns).
+    """
+    total = len(rows)
+    unscorable = [r for r in rows if (r.get("outcome") or run_outcome(r)) == "unscorable"]
+    scorable = [r for r in rows if (r.get("outcome") or run_outcome(r)) != "unscorable"]
+    passed = [r for r in scorable if r.get("passed")]
+    return {
+        "total": total,
+        "scorable": len(scorable),
+        "unscorable": len(unscorable),
+        "passed": len(passed),
+        "pass_rate_scorable": round(len(passed) / len(scorable), 3) if scorable else None,
+        "pass_rate_all": round(len(passed) / total, 3) if total else None,
+        "unscorable_rate": round(len(unscorable) / total, 3) if total else None,
+    }
+
+
+def result_record(result: dict, run_id: str, mode: str = "run", version: str | None = None) -> dict:
+    """Flatten one case result (score.json shape) into a trend row for evals/results.jsonl.
+
+    `run_id` is the run directory's UTC stamp - it doubles as the row's time axis, so no
+    separate clock is invented when backfilling historic runs. `mode` is "run" for a live
+    session, "rescore" for a --rescore pass over a kept run. `version` defaults to the
+    CURRENT plugin version, which is only true for a live run: a backfill must pass the
+    version the run actually exercised (or "unknown"), never let today's number be
+    stamped on a month-old row.
+    """
+    det = result.get("deterministic") or {}
+    jd = result.get("judge") or {}
+    return {
+        "run_id": run_id,
+        "case": result.get("case"),
+        "mode": mode,
+        "version": version or _plugin_version(),
+        "passed": bool(result.get("passed")),
+        "recall": det.get("recall"),
+        "must_find_missed": det.get("must_find_missed") or [],
+        "traps_triggered": det.get("false_positive_traps_triggered") or [],
+        "judge_score": jd.get("weighted_score"),
+        "judge_pass": jd.get("pass"),
+        "cost_usd": result.get("cost_usd"),
+        "num_turns": result.get("num_turns"),
+        "duration_s": result.get("duration_s"),
+        "timed_out": bool(result.get("timed_out")),
+        "session_error": bool(result.get("session_error")),
+        # "pass" | "fail" | "unscorable" - see run_outcome(). Derived rather than stored blindly
+        # so a backfilled historic row classifies the same way a live one does.
+        "outcome": result.get("outcome") or run_outcome(result),
+        "recorded_at": _now_utc(),
+    }
+
+
+def _row_key(row: dict) -> tuple:
+    return (row.get("run_id"), row.get("case"), row.get("mode"))
+
+
+def read_results(path: Path = RESULTS_FILE) -> list[dict]:
+    """Existing rows in the append-only log (a malformed line is skipped, not fatal)."""
+    if not path.is_file():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+
+def append_result(record: dict, path: Path = RESULTS_FILE) -> bool:
+    """Append one row unless (run_id, case, mode) is already recorded. True if written.
+
+    Append-only by contract: this never rewrites or reorders existing lines, so the file
+    stays a chronological record rather than a snapshot.
+    """
+    if _row_key(record) in {_row_key(r) for r in read_results(path)}:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, sort_keys=True) + "\n")
+    return True
+
+
+def record_run_dir(root: Path, path: Path = RESULTS_FILE) -> int:
+    """Backfill the log from saved run outputs; returns the number of rows appended.
+
+    Accepts a runs root, a single run dir or a single case dir - anything with
+    `score.json` / `score-rescore.json` beneath it. Layout assumed:
+    `<runs>/<run_id>/<case>/score*.json`, so the run id comes from the case dir's parent.
+    The version stamped is the one in the run's KEPT sandbox (the code actually under
+    test); where the sandbox was pruned it is "unknown" rather than today's version.
+    """
+    files = sorted(root.rglob("score.json")) + sorted(root.rglob("score-rescore.json"))
+    written = 0
+    for score_file in files:
+        try:
+            result = json.loads(score_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(result, dict):
+            continue
+        mode = "rescore" if score_file.name == "score-rescore.json" else "run"
+        result.setdefault("case", score_file.parent.name)
+        written += append_result(
+            result_record(
+                result,
+                score_file.parent.parent.name,
+                mode=mode,
+                version=_plugin_version(score_file.parent / "sandbox"),
+            ),
+            path,
+        )
+    return written
+
+
 def _write_report(run_root: Path, results: list[dict]) -> Path:
+    """Write `<run>/report.md`: the per-case scoreboard plus a draft verdict block.
+
+    `results` are the per-case score dicts; returns the report path.
+    """
     lines = [
         f"# Live /engage eval run - {run_root.name}",
         "",
@@ -891,13 +1193,21 @@ def _write_report(run_root: Path, results: list[dict]) -> Path:
             f"| {r['case']} | {'PASS' if r['passed'] else 'FAIL'} | {det.get('recall')} "
             f"| {', '.join(det.get('must_find_missed', [])) or '-'} "
             f"| {', '.join(det.get('false_positive_traps_triggered', [])) or '-'} "
-            f"| {jscore} | {r['gates_answered']} | {r.get('cost_usd') or '?'} | {r.get('num_turns') or '?'} |"
+            f"| {jscore} | {r.get('gates_answered', '?')} | {r.get('cost_usd') or '?'} "
+            f"| {r.get('num_turns') or '?'} |"
         )
-    n_pass = sum(r["passed"] for r in results)
+    n_pass = sum(bool(r.get("passed")) for r in results)
     lines += [
         "",
         f"**{n_pass}/{len(results)} passed.** Per-case detail: `<case>/transcript.md`, "
         "`findings.json`, `score.json`, `gates.json`.",
+        "",
+        "## Baseline verdict block (draft)",
+        "",
+        "Paste into `evals/eval-baseline-<version>.md` and adjudicate the failures - the",
+        "release gate parses this block and fails while any failure is unadjudicated.",
+        "",
+        verdict_block(results, run_root.name),
     ]
     report = run_root / "report.md"
     report.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -952,6 +1262,25 @@ def main() -> int:
         "--keep-sandbox", action="store_true", help="keep each case's sandbox for inspection"
     )
     ap.add_argument(
+        "--exclude-subagent-output",
+        action="store_true",
+        help="capture only the PM's messages in the transcript (the pre-2026-08-01 view); by "
+        "default subagent output is retained, tagged and per-block capped, so the judge "
+        "scores the work rather than the narration of it",
+    )
+    ap.add_argument(
+        "--record",
+        help=f"backfill {RESULTS_FILE.name} from saved run outputs under this path "
+        "(score.json / score-rescore.json), then exit - no live session, no tokens",
+    )
+    ap.add_argument(
+        "--summary",
+        action="store_true",
+        help=f"print the trend summary from {RESULTS_FILE.name} and exit - pass rate over "
+        "SCORABLE runs, with timed-out / errored runs counted separately rather than as "
+        "quality failures. No live session, no tokens",
+    )
+    ap.add_argument(
         "--resume-run",
         help="path to a saved run's <case> dir with a KEPT sandbox: launch a fresh session in "
         "that sandbox with an uncoached 'resume and close' ask (cold resume from the artifacts "
@@ -967,6 +1296,36 @@ def main() -> int:
     available = engage_cases()
     if args.list:
         print("\n".join(available))
+        return 0
+
+    if args.summary:
+        rows = read_results()
+        if not rows:
+            print(f"no rows in {RESULTS_FILE.relative_to(REPO_ROOT)} yet")
+            return 0
+        s = summarise_results(rows)
+        pr = s["pass_rate_scorable"]
+        print(f"rows: {s['total']}   scorable: {s['scorable']}   unscorable: {s['unscorable']}")
+        print(f"pass rate (scorable):  {s['passed']}/{s['scorable']}" + (f" = {pr:.0%}" if pr else ""))
+        print(
+            f"pass rate (all rows):  {s['passed']}/{s['total']} = {s['pass_rate_all']:.0%}"
+            "   <- counts dead runs as failures; do NOT quote this as a quality number"
+        )
+        print(f"unscorable rate:       {s['unscorable_rate']:.0%} (harness health, not team quality)")
+        if s["unscorable"]:
+            print("\nunscorable runs (no gradeable output - timeout or session error):")
+            for r in rows:
+                if (r.get("outcome") or run_outcome(r)) == "unscorable":
+                    why = "timeout" if r.get("timed_out") else "session error"
+                    print(f"  {r.get('run_id')}  {str(r.get('case'))[:32]:32s}  {why}")
+        return 0
+
+    if args.record:
+        src = Path(args.record).resolve()
+        if not src.is_dir():
+            ap.error(f"{src} is not a directory of saved run outputs")
+        added = record_run_dir(src)
+        print(f"recorded {added} new row(s) into {RESULTS_FILE.relative_to(REPO_ROOT)}")
         return 0
 
     lock = _acquire_driver_lock()
@@ -994,6 +1353,7 @@ def main() -> int:
             )
         )
         (out_dir / "score-rescore.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+        append_result(result_record(result, out_dir.parent.name, mode="rescore"))
         det = result["deterministic"]
         print(
             f"{'PASS' if result['passed'] else 'FAIL'}  {case_id}  recall={det.get('recall')}  "
