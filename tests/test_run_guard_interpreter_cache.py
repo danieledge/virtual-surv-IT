@@ -145,11 +145,17 @@ def test_probe_order_skips_python3_first_on_windows(tmp_path):
 
 
 def test_staged_and_live_launchers_match_when_installed():
-    """Once scripts/apply-guard-interpreter-cache.sh has been run, the two copies must be
-    byte-identical (same contract as every other staged hook)."""
-    if not LIVE_LAUNCHER.is_file():
-        pytest.skip("live launcher not installed in this checkout")
+    """HARD FAILURE, never a skip (audit 2026-08-01).
+
+    Both skip paths here hid real states: a missing live launcher means the guards do not start
+    at all, and an unapplied interpreter-cache fix is exactly the pending-work case the sync net
+    exists to surface. Skipping when the fix is unapplied makes the net go quiet at the one
+    moment it has something to report.
+    """
+    assert LIVE_LAUNCHER.is_file(), (
+        f"live launcher missing at {LIVE_LAUNCHER} - the guards cannot start without it"
+    )
     live = LIVE_LAUNCHER.read_text(encoding="utf-8")
-    if "CACHE=" not in live:
-        pytest.skip("interpreter-cache fix not yet applied to the live launcher")
-    assert live == LAUNCHER.read_text(encoding="utf-8")
+    assert live == LAUNCHER.read_text(encoding="utf-8"), (
+        "staged launcher not yet applied - run: bash scripts/apply-guard-interpreter-cache.sh"
+    )

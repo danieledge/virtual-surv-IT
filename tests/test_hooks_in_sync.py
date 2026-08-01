@@ -22,22 +22,102 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 _DISPATCHER = REPO / "scripts" / "bash_hook_dispatcher.py"
 
+# Staged copies live in scripts/staged_hooks/ and are promoted to their live location by a
+# human-run scripts/apply-*.sh (ADR-002 rec 5: the model cannot edit .claude/hooks/**).
+# Guards and the launcher live under .claude/hooks/; every other staged file is a scripts/ tool.
+_STAGED_DIR = REPO / "scripts" / "staged_hooks"
+
+
+def _live_path_for(staged: Path) -> Path:
+    if staged.name.startswith("guard-") or staged.name == "run-guard.sh":
+        return REPO / ".claude" / "hooks" / staged.name
+    return REPO / "scripts" / staged.name
+
+
+def _all_hooks(path: Path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data.get("hooks", data)  # settings.json nests under "hooks"; hooks.json also does
+
 
 def _pretooluse(path: Path):
-    data = json.loads(path.read_text(encoding="utf-8"))
-    hooks = data.get("hooks", data)  # settings.json nests under "hooks"; hooks.json also does
-    return hooks["PreToolUse"]
+    return _all_hooks(path)["PreToolUse"]
 
 
 def test_plugin_and_project_hooks_are_identical():
-    plugin = _pretooluse(REPO / "hooks" / "hooks.json")
-    project = _pretooluse(REPO / ".claude" / "settings.json")
+    """Compare the WHOLE hooks object, not just PreToolUse.
+
+    Until the 2026-08-01 audit this compared `PreToolUse` alone, while both files also declare
+    Stop, UserPromptSubmit, SessionStart and PostToolUse - four event families that could drift
+    between plugin mode and project mode with nothing failing, despite the docstring above
+    promising byte-for-byte identity.
+    """
+    plugin = _all_hooks(REPO / "hooks" / "hooks.json")
+    project = _all_hooks(REPO / ".claude" / "settings.json")
     assert plugin == project, (
-        "hooks/hooks.json and .claude/settings.json PreToolUse hooks have DRIFTED. "
+        "hooks/hooks.json and .claude/settings.json hooks have DRIFTED. "
         "They must stay identical (plugin mode vs project mode). Re-sync them."
+    )
+
+
+def test_every_declared_event_family_is_compared():
+    """Pin the family list so a NEW event family cannot be added to only one of the two files
+    and quietly sit outside the identity check above."""
+    plugin = _all_hooks(REPO / "hooks" / "hooks.json")
+    project = _all_hooks(REPO / ".claude" / "settings.json")
+    assert set(plugin) == set(project), (
+        f"event families differ: plugin={sorted(plugin)} project={sorted(project)}"
+    )
+    assert set(plugin) >= {"PreToolUse", "Stop", "UserPromptSubmit", "SessionStart", "PostToolUse"}
+
+
+# --------------------------------------------------------------- staged vs live
+
+_STAGED_FILES = sorted(
+    p for p in _STAGED_DIR.iterdir() if p.is_file() and not p.name.startswith(".")
+)
+
+
+def test_staged_dir_is_not_empty():
+    assert _STAGED_FILES, "no staged hook files found - the discovery glob is broken"
+
+
+@pytest.mark.parametrize("staged", _STAGED_FILES, ids=lambda p: p.name)
+def test_staged_file_has_a_live_counterpart(staged):
+    live = _live_path_for(staged)
+    assert live.exists(), (
+        f"staged {staged.name} has no live counterpart at {live.relative_to(REPO)} - "
+        "either the placement rule in _live_path_for is wrong or the file was never installed"
+    )
+
+
+@pytest.mark.parametrize("staged", _STAGED_FILES, ids=lambda p: p.name)
+def test_staged_matches_live(staged):
+    """HARD FAILURE, never a skip.
+
+    The 2026-08-01 audit found guard-code-execution.py drifted from its staged copy while the
+    full suite reported green, because its sync test called pytest.skip() when the two differed.
+    The live guard was missing three team-script allow-list entries, so plugin-mode /engage was
+    asking users for execution consent to run its own step-0 probe - and the regression net that
+    should have caught it went quiet precisely because the fix was unapplied.
+
+    A control that is silently inert looks identical to a healthy one. That is the failure mode
+    this project exists to warn about (FCA Market Watch 79: a feed that never fired for three
+    years), so a pending guard fix now FAILS the suite until the human applies it.
+    """
+    live = _live_path_for(staged)
+    if not live.exists():
+        pytest.fail(f"no live counterpart for {staged.name}")
+    staged_text = staged.read_text(encoding="utf-8")
+    live_text = live.read_text(encoding="utf-8")
+    assert staged_text == live_text, (
+        f"{staged.name} is STAGED but not applied: {live.relative_to(REPO)} differs from "
+        f"{staged.relative_to(REPO)}. Run the matching scripts/apply-*.sh (a human action - "
+        "the model is blocked from editing .claude/hooks/**), then re-run."
     )
 
 
