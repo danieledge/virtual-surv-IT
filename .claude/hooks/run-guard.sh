@@ -28,6 +28,20 @@
 # check EVERY time - "several minutes" for a single /engage turned out to be that stub hang
 # repeated dozens of times. `command -v` alone (existence, no execution) is cheap and safe
 # to redo every call; only the EXECUTION probe needs to happen once and be trusted after.
+
+# UTF-8 pin (2026-07-31 corporate report): the guards' stdin is the tool-call JSON payload,
+# which can carry non-ASCII (the Fix-cycle arrow "→" in locked_menu_guard.py's canonical
+# labels, curly quotes, section signs). Python 3 decodes stdin/stdout/stderr using the
+# platform's default text encoding unless told otherwise - on native Windows Python that's
+# the console codepage (e.g. cp1252), not UTF-8. Unlike a strict codec, cp1252 rarely raises
+# on decode; it silently mis-decodes multi-byte UTF-8 sequences into different-but-valid
+# characters, so a correctly-formed answer compares unequal to the guard's UTF-8 constant
+# and trips a false "drift" block instead of erroring loudly. Pin both interpreter env vars
+# before every exec path below (cache hit and full probe alike) so the guard always reads
+# and writes UTF-8 regardless of OS locale/console codepage.
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
+
 CACHE="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/.guard-interpreter"
 if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)

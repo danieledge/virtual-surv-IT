@@ -252,6 +252,12 @@ def mask_records(records: list[dict], schema: dict, key: bytes) -> list[dict]:
 
 
 def main() -> None:
+    # Force UTF-8 output so a cp1252 (Windows) console can't crash on non-ASCII (0.19.0).
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     ap = argparse.ArgumentParser(description="Mask raw records into the governed pipeline.")
     ap.add_argument("--schema", type=Path, default=Path("config/masking-schema.yaml"))
     ap.add_argument("--in", dest="inp", type=Path, required=True)

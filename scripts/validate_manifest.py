@@ -110,6 +110,12 @@ def _check() -> list[str]:
 
 
 def main() -> int:
+    # Force UTF-8 output so a cp1252 (Windows) console can't crash on non-ASCII (0.19.0).
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     problems = _check()
     if problems:
         print("Plugin manifest validation FAILED:", file=sys.stderr)

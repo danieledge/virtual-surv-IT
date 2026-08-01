@@ -171,6 +171,12 @@ def detection_rate(sessions: list[list[OrderEvent]]) -> float:
 
 
 def main() -> None:
+    # Force UTF-8 output so a cp1252 (Windows) console can't crash on non-ASCII (0.19.0).
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     # Demo over synthetic data: build a corpus, learn its shape, sample fresh data, and
     # confirm the synthetic data carries the same detectable behaviour.
     from scripts.gen_synthetic import benign_session, spoofing_session

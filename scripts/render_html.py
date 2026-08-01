@@ -23,6 +23,7 @@ import argparse
 import datetime as _dt
 import html
 import re
+import sys
 from pathlib import Path
 
 try:
@@ -283,6 +284,12 @@ def render(md_text: str, title: str, source: str = "", generated: str = "") -> s
 
 
 def main() -> None:
+    # Force UTF-8 output so a cp1252 (Windows) console can't crash on non-ASCII (0.19.0).
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     ap = argparse.ArgumentParser(description="Render a Markdown artifact to standalone HTML.")
     ap.add_argument("src", type=Path, help="path to the .md artifact")
     ap.add_argument("--out", type=Path, help="output .html path (default: alongside the .md)")
