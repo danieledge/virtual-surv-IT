@@ -988,6 +988,76 @@ def gate_findings(out_dir: Path) -> list[dict]:
     return out
 
 
+_RAW_CHUNK_CHARS = 300
+_RAW_MAX_PER_SOURCE = 120
+_RAW_MAX_TOTAL = 600
+
+
+def _chunk_text(text: str) -> list[str]:
+    """Split into line-sized chunks, because a chunk is the unit the mention-guard protects.
+
+    Dumping a whole file into one finding would let a single stray "outstanding" anywhere in it
+    veto an unrelated planted match (eval_score._matches applies exclude_keywords to the whole
+    haystack). Line-level chunks keep that guard LOCAL: the line claiming something is still
+    outstanding is vetoed, while the line evidencing the work still matches. That is what the
+    mention-guard was always meant to do.
+    """
+    out: list[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or set(line) <= {"-", "=", "|", "#", "*", "_", " "}:
+            continue
+        while line and len(out) < _RAW_MAX_PER_SOURCE:
+            out.append(line[:_RAW_CHUNK_CHARS])
+            line = line[_RAW_CHUNK_CHARS:]
+        if len(out) >= _RAW_MAX_PER_SOURCE:
+            break
+    return out
+
+
+def raw_evidence_findings(sandbox: Path, transcript: str) -> list[dict]:
+    """Feed the team's OWN words into the scored evidence: artifact bodies and PM prose.
+
+    Until now the scorer matched against `findings.json` alone, whose titles are the
+    NORMALIZER's paraphrase of the run. So a case was judged on someone else's summary of the
+    team's work, and any behaviour the paraphrase reworded became invisible.
+
+    Measured on run 20260801T190159Z, three "missed" must-find items were performed with the
+    manifest's own keywords VERBATIM in the delivered artifacts: process-close-reconciliation
+    REC-3 and REC-4 ("authoritative", "pending human sign-off", "Document control" appear 6, 20
+    and 35 times in the event stream), and process-evidence-tagging TAG-2, whose dimension the
+    LLM judge independently scored 1.0 while the deterministic layer called it missing. The
+    paraphrase had rewritten "🧠 Inferred" as "Declined to answer, refused to guess", and not one
+    occurrence of the keyword survived into a title.
+
+    Same shape as the escalation bug fixed earlier the same day: what the team actually did is a
+    fact, and facts belong in the evidence deterministically rather than via an LLM round trip.
+    """
+    findings: list[dict] = []
+
+    def _add(chunks: list[str], location: str) -> None:
+        for chunk in chunks:
+            if len(findings) >= _RAW_MAX_TOTAL:
+                return
+            findings.append(
+                {"severity": "warning", "location": location, "title": chunk, "kind": "raw"}
+            )
+
+    artifacts = sandbox / "artifacts"
+    if artifacts.is_dir():
+        for path in sorted(artifacts.rglob("*")):
+            if not path.is_file() or path.suffix.lower() not in (".md", ".txt", ".json"):
+                continue
+            try:
+                body = path.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                continue
+            _add(_chunk_text(body), str(path.relative_to(sandbox)))
+
+    _add(_chunk_text(transcript), "")
+    return findings
+
+
 async def score_run(
     case_id: str,
     out_dir: Path,
@@ -1000,7 +1070,11 @@ async def score_run(
     """The scoring layers alone - also reachable via --rescore over a saved run dir."""
     listing = _artifact_listing(sandbox)
     print(f"  [{case_id}] scoring (probe + normalizer + judge)...")
-    findings = probe_artifacts(sandbox) + gate_findings(out_dir)
+    findings = (
+        probe_artifacts(sandbox)
+        + gate_findings(out_dir)
+        + raw_evidence_findings(sandbox, transcript)
+    )
     # One-shot helpers flake occasionally (observed: an empty findings list on a rich
     # transcript; a spurious max-turns error) - retry once before degrading. A non-trivial
     # transcript never legitimately normalizes to zero findings.

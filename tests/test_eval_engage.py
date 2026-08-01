@@ -504,3 +504,67 @@ def test_gate_findings_records_every_exchange(tmp_path):
     out = ee.gate_findings(tmp_path)
     assert len(out) == 2
     assert "first?" in out[0]["title"] and "second?" in out[1]["title"]
+
+
+# --------------------------------------------------------------- raw evidence for the scorer
+
+
+def test_raw_evidence_carries_artifact_bodies_and_pm_prose(tmp_path):
+    """The scorer matched only the NORMALIZER's paraphrase, so behaviour it reworded vanished.
+
+    Measured on run 20260801T190159Z: three must-find items were performed with the manifest's
+    own keywords verbatim in the delivered artifacts, yet scored as missed. The paraphrase had
+    rewritten "🧠 Inferred" as "Declined to answer", and no occurrence of the keyword survived.
+    """
+    art = tmp_path / "artifacts" / "eng"
+    art.mkdir(parents=True)
+    (art / "delivery-report.md").write_text(
+        "# Report\n\n> Document control - Status `Final - pending human sign-off`\n",
+        encoding="utf-8",
+    )
+    (art / "engagement-summary-eng.txt").write_text(
+        "Hi,\nAll harmonised to one authoritative set of numbers.\n", encoding="utf-8"
+    )
+    out = ee.raw_evidence_findings(tmp_path, "Morgan: tagging this 🧠 inferred, assumption stated.")
+    blob = " ".join(f["title"] for f in out).lower()
+    assert "pending human sign-off" in blob
+    assert "authoritative" in blob
+    assert "inferred" in blob  # PM prose reaches the evidence too
+    assert all(f["kind"] == "raw" for f in out)
+    # Artifact chunks carry their path so a location-based spec can still match.
+    assert any("delivery-report.md" in (f["location"] or "") for f in out)
+
+
+def test_raw_evidence_chunks_so_mention_guards_stay_local(tmp_path):
+    """Chunking is load-bearing, not cosmetic.
+
+    eval_score applies exclude_keywords to the whole haystack, so dumping a file into ONE
+    finding would let a single stray "outstanding" veto an unrelated planted match. Line-level
+    chunks keep the guard local: the line claiming work is outstanding is vetoed, the line
+    evidencing the work still matches.
+    """
+    art = tmp_path / "artifacts"
+    art.mkdir(parents=True)
+    (art / "notes.md").write_text(
+        "The summary email was written and signed.\nThe RTM is still outstanding.\n",
+        encoding="utf-8",
+    )
+    out = ee.raw_evidence_findings(tmp_path, "")
+    titles = [f["title"] for f in out]
+    assert any("summary email was written" in t for t in titles)
+    assert any("still outstanding" in t for t in titles)
+    # The two statements must NOT share a finding, or the guard would veto both together.
+    assert not any("written" in t and "outstanding" in t for t in titles)
+
+
+def test_raw_evidence_is_bounded_and_tolerant(tmp_path):
+    """A huge artifact set must not explode findings.json, and unreadable input must not raise."""
+    art = tmp_path / "artifacts"
+    art.mkdir(parents=True)
+    (art / "big.md").write_text("\n".join(f"line {i} of evidence" for i in range(5000)), "utf-8")
+    out = ee.raw_evidence_findings(tmp_path, "\n".join(f"pm line {i}" for i in range(5000)))
+    assert len(out) <= 600
+    assert ee.raw_evidence_findings(tmp_path / "missing", "") == []
+    # Separator-only and blank lines contribute nothing.
+    (art / "rule.md").write_text("---\n\n| --- | --- |\n", encoding="utf-8")
+    assert not any(set(f["title"]) <= {"-", "|", " "} for f in ee.raw_evidence_findings(tmp_path, ""))
