@@ -211,6 +211,23 @@ and any residual risk the reader accepts by relying on this review. A governance
 reviewer reads this section first; a review with an empty limitations section reads as
 overclaiming, not as thorough.
 
+**Close this section with the standing run-provenance statement** (verbatim; the same block the
+templates in `docs/templates/` carry, so a review and a delivery report say the same thing):
+
+> **Run provenance & non-determinism** *(standing statement - keep it in the rendered artifact)*
+> · Model `<model id>` · Framework `compliance-surveillance-team <version>` · Run `<YYYY-MM-DD>`
+>
+> The findings and conclusions in this document are **one sample from a non-deterministic
+> process**. The same inputs, run again by the same model, can yield a different set of findings,
+> in a different order, with different confidence scores. **Absence of a finding is not evidence
+> of absence:** this document evidences what *was* found on this run, never that nothing further
+> exists. Anything load-bearing for a control decision needs human verification; repeat runs
+> raise confidence but never make the result exhaustive.
+
+It belongs here rather than only in the templates because this file is the format's source of
+truth: a review authored straight from these rules, without a template, would otherwise ship
+without the statement.
+
 ## Icons
 ✅ good · ⚠️ needs attention · ❌ problem · 📊 measured · 🧠 inferred · 🔇 filtered
 
