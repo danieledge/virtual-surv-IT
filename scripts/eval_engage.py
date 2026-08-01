@@ -945,6 +945,49 @@ async def run_case(
     return result
 
 
+def gate_findings(out_dir: Path) -> list[dict]:
+    """Turn each AskUserQuestion exchange into a deterministic finding.
+
+    Escalation was structurally unscorable before this. A case that tests "pause and ask the
+    user rather than deciding alone" recorded the question in gates.json, which the scorer never
+    read; scoring ran over findings.json, whose titles are the NORMALIZER's paraphrase. So the
+    behaviour was judged on someone else's summary of it.
+
+    Found on 2026-08-01 by process-gate-selfcorrect. The team did exactly the right thing: it
+    fired the question tool naming the contradiction and refusing to resolve it alone, and the
+    question text matched the manifest's own keyword ("escalate"). It scored recall 0.5 and a
+    FAIL anyway, because none of the normalizer's finding titles carried the wording. A false
+    negative, and the costliest kind: it reads as the team failing a discipline it actually
+    observed.
+
+    The question the team asked is a fact, not an interpretation, so it belongs in the evidence
+    deterministically rather than via an LLM round trip.
+    """
+    try:
+        gates = json.loads((out_dir / "gates.json").read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    out: list[dict] = []
+    for exchange in gates.get("exchanges") or []:
+        question = (exchange.get("question") or "").strip()
+        if not question:
+            continue
+        header = (exchange.get("header") or "").strip()
+        answer = (exchange.get("answer") or "").strip()
+        out.append(
+            {
+                "severity": "warning",
+                "location": "",
+                # The full question text, so keyword matching sees the team's OWN words.
+                "title": f"Asked the user via the question tool{f' [{header}]' if header else ''}: "
+                f"{question}"
+                + (f" (answered: {answer})" if answer else ""),
+                "kind": "behaviour",
+            }
+        )
+    return out
+
+
 async def score_run(
     case_id: str,
     out_dir: Path,
@@ -957,7 +1000,7 @@ async def score_run(
     """The scoring layers alone - also reachable via --rescore over a saved run dir."""
     listing = _artifact_listing(sandbox)
     print(f"  [{case_id}] scoring (probe + normalizer + judge)...")
-    findings = probe_artifacts(sandbox)
+    findings = probe_artifacts(sandbox) + gate_findings(out_dir)
     # One-shot helpers flake occasionally (observed: an empty findings list on a rich
     # transcript; a spurious max-turns error) - retry once before degrading. A non-trivial
     # transcript never legitimately normalizes to zero findings.

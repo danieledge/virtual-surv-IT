@@ -438,3 +438,69 @@ def test_orchestrator_model_is_pinned_by_default():
     assert sig.parameters["team_model"].default == "opus"
     src = inspect.getsource(ee.run_engage_session)
     assert "model=team_model" in src, "ClaudeAgentOptions must receive the pinned team model"
+
+
+# --------------------------------------------------------------- gate exchanges as evidence
+
+
+def test_gate_findings_carry_the_teams_own_wording(tmp_path):
+    """Escalation was structurally unscorable before this.
+
+    A case testing "pause and ask the user rather than deciding alone" recorded the question in
+    gates.json, which the scorer never read: scoring ran over findings.json, whose titles are
+    the NORMALIZER's paraphrase. So the behaviour was judged on someone else's summary of it.
+
+    Found live on 2026-08-01 by process-gate-selfcorrect, which fired the question tool naming
+    an evidence contradiction and refusing to resolve it alone - the exact behaviour under test,
+    with the manifest's own keyword in the question - and scored recall 0.5 and FAIL because no
+    paraphrased title carried the wording.
+    """
+    (tmp_path / "gates.json").write_text(
+        json.dumps(
+            {
+                "consent_granted": False,
+                "exchanges": [
+                    {
+                        "question": "NC-1's rationale is contradicted by the evidence - "
+                        "I can't resolve that myself, how should it be disposed?",
+                        "header": "NC-1",
+                        "answer": "Reopen NC-1",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = ee.gate_findings(tmp_path)
+    assert len(out) == 1
+    title = out[0]["title"]
+    # The team's OWN words must survive into the scored evidence, verbatim.
+    assert "I can't resolve that myself" in title
+    assert "NC-1" in title
+    assert "Reopen NC-1" in title
+    assert out[0]["kind"] == "behaviour"
+
+
+def test_gate_findings_tolerate_missing_or_empty(tmp_path):
+    assert ee.gate_findings(tmp_path) == []  # no gates.json at all
+    (tmp_path / "gates.json").write_text("{ not json", encoding="utf-8")
+    assert ee.gate_findings(tmp_path) == []
+    (tmp_path / "gates.json").write_text(json.dumps({"exchanges": []}), encoding="utf-8")
+    assert ee.gate_findings(tmp_path) == []
+    # An exchange with no question text contributes nothing rather than an empty finding.
+    (tmp_path / "gates.json").write_text(
+        json.dumps({"exchanges": [{"question": "   ", "answer": "x"}]}), encoding="utf-8"
+    )
+    assert ee.gate_findings(tmp_path) == []
+
+
+def test_gate_findings_records_every_exchange(tmp_path):
+    (tmp_path / "gates.json").write_text(
+        json.dumps(
+            {"exchanges": [{"question": "first?"}, {"question": "second?", "answer": "yes"}]}
+        ),
+        encoding="utf-8",
+    )
+    out = ee.gate_findings(tmp_path)
+    assert len(out) == 2
+    assert "first?" in out[0]["title"] and "second?" in out[1]["title"]
