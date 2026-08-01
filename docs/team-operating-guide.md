@@ -507,8 +507,18 @@ the user informed and in charge, check before anything irreversible.
 ## Orchestration discipline (evidence-based - see `docs/internal/research-virtual-team.md`)
 
 - **Right-size first.** Multi-agent costs ~15× the tokens - use the **leanest** set that fits (a
-  narrow change → one builder + one reviewer, not the whole team). State the intended agent count
-  out loud at the gate. Reserve full fan-out for high-value, broad deliverables. Numeric
+  narrow change → one builder + one reviewer, not the whole team). **State the intended agent
+  count and why, out loud, before ANY delegation - not only at the intake gate.** The rule used
+  to say "at the gate", which left a real hole: an engagement with no fan-out planning gate (a
+  close-only pass, a reconciliation, a review that turns up one thing needing a specialist)
+  reaches its first `Task` call having never stated a count, and a count recorded afterwards in
+  the footprint is a receipt, not a decision. So: if you are about to engage anyone, say who and
+  why in one line first, **even when the decision emerged mid-engagement**; and when the answer
+  is nobody, say that too ("no fan-out, I'll handle this myself") - a stated zero is
+  right-sizing, silence is not. (Live 2026-08-01: a close-only engagement delegated to two
+  specialists with no count stated anywhere, and the engagement that did MORE work was scored
+  worse than four earlier solo runs that did less.) Reserve full fan-out for high-value, broad
+  deliverables. Numeric
   heuristic: simple fact-finding → 1 agent, 3-10 tool calls; direct comparison → 2-4 agents,
   10-15 calls each; full delivery → the minimal sufficient chain.
 - **Don't delegate:** iterative back-and-forth, phases sharing significant context, quick

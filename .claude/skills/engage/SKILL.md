@@ -308,10 +308,14 @@ discipline. **Track the gates in the native task list (TodoWrite)**: seed one to
 exactly one in_progress, tick each as its evidence lands. It is the user's glanceable progress view
 and costs no console space; the STATE still lives in engagement-state.json.
 
-**Right-size, and say so out loud:** before fanning out, state in one line **how many agents you
-intend to spawn and why** (*"this is a one-file change - I'll use just rules-developer +
-code-reviewer, not the full team"*). Use the leanest set that fits; don't fan out the whole team
-for a narrow change.
+**Right-size, and say so out loud:** before **any** delegation, state in one line **how many
+agents you intend to spawn and why** (*"this is a one-file change - I'll use just
+rules-developer + code-reviewer, not the full team"*). Use the leanest set that fits; don't fan
+out the whole team for a narrow change. This binds **every** delegation, not just a planned
+fan-out at this gate: if a later phase, a close or a review turns up one thing needing a
+specialist, say who and why **before** that `Task` call - a count that only appears in the
+closing footprint is a receipt, not a decision. When the answer is nobody, say that too ("no
+fan-out, I'll handle this myself"): a stated zero is right-sizing, silence is not.
 
 **Delegate with an explicit, non-overlapping brief** to each specialist: objective · scope
 boundaries and what another agent owns · inputs & artifacts to read · **the RESOLVED absolute

@@ -1,6 +1,9 @@
 case: process-gate-selfcorrect
 workflow: /engage
-rubric: process-discipline
+# Probe case: the scenario asks the PM to describe/answer, not to run an engagement, so the
+# standard rubric would mark it down for closing artifacts its own prompt never requests
+# (audit 2026-08-01: gate-selfcorrect failed 4/4 runs on that basis even at recall 1.0).
+rubric: process-discipline-probe
 input: scenario.md
 description: >
   Behaviour case - the 2026-07-23 live lesson, pinned. A delivery report's self-audit handed the
