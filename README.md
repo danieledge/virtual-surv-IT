@@ -3,16 +3,16 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.5](https://img.shields.io/badge/version-0.33.5-blue)
-![Tests 700+ passing](https://img.shields.io/badge/tests-700%2B%20passing-brightgreen)
+![Version 0.33.6](https://img.shields.io/badge/version-0.33.6-blue)
+![Tests 1200+ passing](https://img.shields.io/badge/tests-1200%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.5** (2026-07-31) - *[corporate Windows hardening: probe, statusline, engagement_state fixes](docs/releases/0.33.md)*<br/>
-Eleven fixes from a live corporate Windows run: silent probe/statusline failures on interpreter stubs and cp1252 consoles, a plugin-mode import gap that skipped every HTML render, an argparse ordering trap, and two new inspection/exit-code safeguards.<br/>
+🏷️ **Current version: 0.33.6** (2026-08-01) - *[framework audit remediation: guard escapes closed, traceability gated, eval numbers made readable](docs/releases/0.33.md)*<br/>
+A full framework audit and its remediation. A pair of escapes closed in the safety guards (a consent-equivalent `git config` execution path, and raw-data coverage gaps including `WebFetch` `file://`), the traceability spine turned from prose into a gate, and the eval pass rate made readable by separating runs that died from runs that answered badly.<br/>
 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 </td></tr>
@@ -479,7 +479,7 @@ file). Focused commands for each entry point:
 | `/prepare-data` | get safe data ready (synthetic or masked) before analysis | guided onboarding + validation (⚠️ the masking pipeline is a placeholder, see [FAQ](docs/FAQ.md)) |
 | `/write-brd` | idea → Business Requirements (BABOK + EARS) | prompt chaining |
 | `/brd-to-fsd` | BRD → Functional Spec (ISO 29148 + Gherkin) | prompt chaining |
-| `/deep-review` | detailed code review (bugs, security, architecture, impact) | dimension fan-out + scoring |
+| `/deep-review` | detailed code review (bugs, security, architecture, impact) | sequential dimension lenses + scoring |
 | `/performance-review` | performance & scalability vs target data volumes | static analysis (profiling only under the §7 exec gate) |
 | `/audit-review` | existing code → robust & audit-ready? | evaluator-optimizer loop |
 | `/security-audit` | deep security audit (OWASP ASVS / CWE + threat model) | evaluator-optimizer loop, security-focused |
@@ -1085,15 +1085,44 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 
 ## ⚠️ Known issues
 
-**Security residual: the Bash channel is not sandboxed (to be patched).** The guards robustly cover
-the file-read and Write/Edit tool channels, but on the **Bash** channel they are lexical checks with
-no OS `permissions.deny` backstop. So a determined or prompt-injected model could, via a shell
-command, disarm the guards (delete or overwrite a guard file) or obfuscate a path to read raw data or
-self-grant execution consent. This is documented as accepted residual in
-[`ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md); the planned fix is to add `.claude/hooks/**`
-and `Bash(...)` entries to `permissions.deny` and to segment-split the Bash guard. Until then the
-guards are a real control for a cooperative agent, not a boundary against an adversarial one; the
-standing mitigation is to keep real data off the machine (the §5 posture). Tracked, not a surprise.
+**Security residual: the Bash channel is not sandboxed (partly patched, residual stands).** The
+guards robustly cover the file-read and Write/Edit tool channels, but on the **Bash** channel they
+are lexical checks with no OS `permissions.deny` backstop. So a determined or prompt-injected model
+could, via a shell command, disarm the guards (delete or overwrite a guard file) or obfuscate a path
+to read raw data or self-grant execution consent. This is documented as accepted residual in
+[`ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
+
+- **Shipped:** the execution guard **does** segment-split the command line (`;`, `&&`, `||`, `|`,
+  newline, backtick, `$(`) and evaluates each segment on its own, so an allow-listed fragment can no
+  longer wave a blocked command through the rest of the line; the team allow-list is anchored to
+  segment start (ADR-002 recs 1 and 2).
+- **Still outstanding:** the `.claude/hooks/**` and `Bash(...)` entries in `permissions.deny`. That
+  is the part that would make any of this an actual boundary, and it does not exist. Segment-split
+  hardens a *lexical* check; it does not turn one into enforcement.
+
+So the position is unchanged in substance: on Bash the guards are a real control for a cooperative
+agent, not a boundary against an adversarial one, and string-matching arbitrary shell can always be
+defeated (env indirection, `eval`, `base64 | sh`, heredocs). The standing mitigation is to keep real
+data off the machine (the §5 posture). Tracked, not a surprise.
+
+**Fixes for a further pair of escape paths are staged, waiting on a human apply step (not yet
+live).** Hook and guard
+files are model-blocked by design, so a fix the team writes sits staged until the user installs it.
+Both were found by an audit on 2026-08-01 and are **pending**, not done:
+
+- **`.git/config` / `core.hooksPath` was an unguarded consent-equivalent execution path.** Setting
+  `core.hooksPath`, or an external diff/merge driver, hands the next plain `git commit` / `git diff`
+  arbitrary execution with no consent marker written and no gate consulted. The improved
+  consent-write guard is staged at `scripts/staged_hooks/guard-consent-writes.py` with a regression
+  net (`tests/test_guard_git_config.py`, which **fails until applied**, by design). It goes live
+  only when the user runs `bash scripts/apply-guard-git-config.sh`.
+- **Raw-data guard coverage gaps are being addressed, also staged.** `WebFetch` resolves `file://`
+  URLs against the local filesystem but sat outside the guard's fixed tool set (ADR-002 rec 22 rated
+  that gap architectural rather than live: with `WebFetch` present, it was live), and a `Grep` rooted
+  at a parent directory or with no path at all descends into `data/raw/` while naming a path that
+  does not resolve under it (recs 7 and 15). The staged guard is
+  `scripts/staged_hooks/guard-raw-data.py` with `tests/test_guard_raw_coverage.py`; it goes live only
+  when the user runs `bash scripts/apply-guard-raw-coverage.sh`.
 
 **First `/engage` of a session can take ~2-3 minutes before the first Morgan message (under
 investigation).** Tester feedback: the **initial** engagement is slow to produce the opening banner;

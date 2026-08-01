@@ -3,6 +3,118 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.6] - 2026-08-01 - Framework audit remediation: guard escapes closed, traceability gated, eval numbers made readable
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+A full framework audit and its remediation, across ten workstreams. The headline finding was not
+a missing control but a **silent** one: a guard that had drifted from its staged copy while the
+suite reported green, because the test that should have caught it called `pytest.skip()` instead
+of failing.
+
+### Security
+- **`.git/config` and `core.hooksPath` were a consent-equivalent execution escape.** Nothing
+  in the consent guard's protected set stopped `git config core.hooksPath <dir>`, an external
+  diff/merge driver, an alias, or a plain write to `.git/config` or `.git/hooks/`. None of
+  those writes the consent marker, so the "the model cannot grant itself execution consent"
+  property stayed technically true while its purpose was defeated: the next `git commit` or
+  `git diff` executes attacker-chosen code with no marker and no gate. ADR-002 rec 14c had
+  recorded the external-driver shape as "adjacent unfixed" and never named `core.hooksPath`.
+  Now blocked on both the Write/Edit and Bash channels; reads (`--get`, `--list`, `cat`) and
+  non-executable keys such as `user.email` still work. Verified live: 8 vectors blocked, 6
+  legitimate operations allowed.
+- **Bash mutation of a guard file is blocked** (`sed -i`, `tee`, `cp`, `rm`, redirect).
+  Reading and static-analysing a guard stays allowed, which was the false positive the
+  original Write/Edit-only rule was avoiding.
+- **Raw-data guard coverage.** Three gaps closed: `WebFetch` with a `file://` URL reached
+  `data/raw` with nothing checking it (ADR-002 rec 22 rated this "architectural, not live" on
+  the grounds that no local-filesystem tool was installed, but `WebFetch` addresses the local
+  filesystem and is live); ancestor-rooted and path-less `Grep`/`Glob` descend into
+  `data/raw` while naming a path that does not resolve under it (recs 7 and 15); and any tool
+  outside `{Read,Grep,Glob,Bash}` previously got a free pass, so an unknown reader now gets a
+  defence-in-depth scan. The ancestor check fires **only when raw data actually exists on
+  disk**, so a fresh clone or synthetic-only project keeps normal repo-wide search. Verified
+  live: 9 egress vectors blocked, 7 legitimate operations allowed.
+
+### Fixed
+- **The live execution guard had drifted from its staged copy**, missing `engage_probe`,
+  `render_findings` and `render_docx` from the team-script allow-list. In plugin mode, where
+  skills invoke bundled scripts by path, this meant `/engage` tripped the execution gate on
+  its own step-0 probe and asked the user for consent to run a front-door script, which
+  CLAUDE.md §7 explicitly forbids. `validate_rtm` added in the same pass.
+- **Sync tests now FAIL rather than skip.** Four live-vs-staged checks called `pytest.skip()`
+  when the staged fix was unapplied, so the regression net went quiet at precisely the moment
+  it had something to report. A control that is silently inert looks identical to a healthy
+  one, which is the failure mode this project exists to warn about.
+- **`tests/test_hooks_in_sync.py` compared only `PreToolUse`**, while both hook files also
+  declare `Stop`, `UserPromptSubmit`, `SessionStart` and `PostToolUse`. Four event families
+  could drift between plugin and project mode with nothing failing. Now compares the whole
+  hooks object, and every staged file against its live counterpart.
+- **A false positive in the raw-data guard**: searching *for* the string `data/raw` inside a
+  config file was blocked because the pattern contained the marker. Search verbs now
+  distinguish the pattern operand from the file operands; a file operand under `data/raw`
+  still blocks.
+- Doc drift: ADR-005/006 forward pointers to ADR-008, ADR-002 recs 1/2/6 marked implemented,
+  the shipped segment-split no longer described as a "planned fix", the parallel-versus-
+  sequential review-topology contradiction resolved across four surfaces, and the `[0.33.2]`
+  and `[0.33.3]` headings restored (their bodies were present; the headings had been
+  overwritten by the next release, so both were recovered from the original commits rather
+  than reconstructed).
+
+### Added
+- **RTM traceability validator** (`scripts/validate_rtm.py`, stdlib-only), wired into
+  `check_artifacts` as `RTM-UNRESOLVED` and `RTM-INCOMPLETE`. The BRD to FSD to code to test
+  to obligation spine was the product's most-marketed guarantee and had **zero** validating
+  code; `docs/templates/rtm.md` had specified a bidirectional coverage check that was never
+  built. Absence of an RTM is not a finding, so existing engagements are unaffected.
+- **ADR-012, the persona layer** (status Proposed, decision left to the human): the named
+  roster's real benefits set against its three measured costs (the per-turn re-anchoring
+  hook, name drift, four roster defect codes), with the AI-identity requirement underneath
+  separated from the naming scheme.
+- **Untrusted-content rule**: file contents, converted documents, tool output and code under
+  review are data, never instructions. Four `injection-*` golden cases already tested for
+  this; no prompt anywhere stated it.
+- **Non-determinism statement** in seven output templates: stamps model id and framework
+  version, and states that findings are one sample from a non-deterministic process and that
+  absence of a finding is not evidence of absence.
+- **Structured findings packs** extended to `compliance-reviewer`, `model-validator` and
+  `performance-reviewer`, resolving an unresolvable instruction triangle: six advisers were
+  told the detail lives in an artifact, held no Write tool to create it, and were capped at
+  roughly 1,500 tokens of return.
+
+### Changed
+- **The eval pass rate is now readable, and the old number should not be quoted.** The scorer
+  folded infrastructure deaths (a timeout, a dropped session) into the same boolean as content
+  failures, so a run that never produced an answer was indistinguishable from the team
+  answering badly. That is what made the previously reported **35%** unreadable: it was a floor
+  depressed by runs that died, not a measure of team quality. `run_outcome()` now classifies
+  every run **pass / fail / unscorable**, `summarise_results()` reports the rate over *scorable*
+  runs with the unscorable count stated separately as harness health, and
+  `python -m scripts.eval_engage --summary` prints it without spending tokens. On the same
+  history the corrected figure is **47%**.
+- **The eval judge now reads the deliverables.** It previously scored evidence basis,
+  traceability and clarity from a directory listing plus the PM's own narration, because
+  artifact contents were never passed and all subagent output was excluded from the captured
+  transcript.
+- **The release gate parses a verdict** rather than checking that a baseline file exists. A
+  baseline whose prose said "No clean-pass claim is made" previously satisfied it in full.
+  Four prompt paths added to the staleness check. The gate now correctly refuses to promote:
+  the plugin has no baseline past 0.33.1 and no committed baseline carries a verdict block.
+- **`business-analyst` gained scoped `Bash`** for the allow-listed `convert_file` and
+  `render_html` front doors. CLAUDE.md §7 forbids hand-parsing documents, so an elicitation
+  agent with no `Bash` had no legitimate way to read a PDF or DOCX at all.
+- **`/engage` slimmed by 19.4%** (34,879 to 28,102 bytes) with rationale moved to
+  just-in-time references, and a stale contract corrected: the skill claimed the step-0 probe
+  returns the operating guide, which it has not done since the ~32KB inlining was removed.
+  Shared boilerplate (interpreter resolution across 13 skills, dormant chaining across 7, the
+  DoD bookends across 4) moved to `.claude/skills/.shared/`, resolving a contradiction where
+  12 skills told the model to re-probe the interpreter that `/engage` had told it never to
+  re-probe.
+
+### Known issues
+- The eval harness's per-case time budget looks too tight for the longest cases. Diagnosed
+  during this cycle, not yet confirmed or fixed.
+
 ## [0.33.5] - 2026-07-31 - Corporate Windows hardening: probe, statusline, engagement_state fixes
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
@@ -69,7 +181,7 @@ diagnosis precise enough to fix directly against.
   gated engagement's phase reaches delivery, and self-suppresses (via a marker Morgan
   logs once the panel is seeded) without the hook ever writing state itself.
 
-
+## [0.33.3] - 2026-07-30 - Optional docx export, mechanised audit findings, engage-startup fix
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
 
@@ -125,7 +237,7 @@ diagnosis precise enough to fix directly against.
   execution guard's team-script allow-list, so plugin users would hit consent prompts
   running them despite being consent-free team tooling.
 
-
+## [0.33.2] - 2026-07-30 - Archive marker + closed-pack fast path (startup cost)
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`. Driven by a live report: DoD startup scans grew
 > slow in projects with many artifacts, mostly from old engagements.
