@@ -70,3 +70,16 @@ Header `Data safety`, `multiSelect: false`:
 (→ `/prepare-data`) · **No data involved** (always offered, so it's one tap).
 
 Record the answers; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.**
+
+## Persist the answers the moment the workspace exists (engage step 4)
+
+The transcript is not the record: a compacted or resumed session must re-read these from disk and
+must never re-ask them. As soon as `engagement_state init` has run:
+
+- `set-decision data-attestation "<answer / no data involved>"`
+- `set-decision fix-cycle "<the review menu's Q3 answer>"`
+- `record-consent-outcome asked|declined` - a "No" or "unsure" records `declined`.
+
+The recorded outcome is **never a grant**: the grant stays the human-created marker only, and the
+state file cannot represent one (ADR-002). Repeat the execution- and data-responsibility notes in
+the final Delivery Report.

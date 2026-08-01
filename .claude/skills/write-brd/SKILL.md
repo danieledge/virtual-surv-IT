@@ -15,9 +15,7 @@ Under the PM (CLAUDE.md §6), turn this idea into a BRD: **$ARGUMENTS**
    per requirement (CLAUDE.md §2). **Retrieve any pinpoint regulatory citation from the register**
    (`config/regulatory-register.yaml`; `<python> -m scripts.check_citations --typology <x>`) - never
    invent an article/section/rule; mark unsupported pinpoints as to-verify (ADR-001).
-   (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
-   installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
-   "Run mode & the bundled scripts".)
+   (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 4. List open questions for the PM to raise with the user.
 5. Save `artifacts/<slug>/BRD-<slug>.md` (the engagement workspace, ADR-010) and render: `<python> -m scripts.render_html artifacts/<slug>/BRD-<slug>.md`.
 

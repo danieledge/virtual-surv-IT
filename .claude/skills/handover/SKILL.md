@@ -43,9 +43,7 @@ named below are the building blocks.
 6. Save under `artifacts/` and render to `.html` (`<python> -m scripts.render_html`). If the
    receiving team runs its own acceptance testing, include a **UAT plan**
    (`docs/templates/uat-plan.md`).
-   (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
-   installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
-   "Run mode & the bundled scripts".)
+   (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 7. **Engagement-summary email** (required closing artifact - Definition of Done): a short
    email-format cover note (`docs/templates/engagement-summary-email.md`) saved as a **`.txt` in
    `artifacts/`**, **signed off as Morgan** ("Hi," if you don't know the recipient's name). It's an

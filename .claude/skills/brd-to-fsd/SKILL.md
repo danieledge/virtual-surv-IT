@@ -17,9 +17,7 @@ Under the PM (CLAUDE.md §6), turn the BRD into an FSD: **$ARGUMENTS**
 3. Update the **Requirements Traceability Matrix** (`docs/templates/rtm.md`) linking
    BRD → FSD.
 4. Save `artifacts/<slug>/FSD-<slug>.md` (the engagement workspace, ADR-010) and render to `.html` (`<python> -m scripts.render_html`).
-   (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
-   installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
-   "Run mode & the bundled scripts".)
+   (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 
 **Close - don't dead-end (CLAUDE.md §6).** Summarise the FSD (functional requirements, the
 BRD→FSD traceability, any gaps), then offer the next step with a recommendation: proceed to the

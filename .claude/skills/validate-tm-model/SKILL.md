@@ -18,7 +18,7 @@ FFIEC BSA/AML). It is **independent** of whoever tuned/built the model.
 
 **Chained skills are dormant** - where a step invokes a component workflow (`/assess-coverage`,
 `/tune-thresholds`, `/prepare-data`), read `.claude/skills/<name>/SKILL.md` and follow it in this
-session; do not invoke it via the Skill tool (full rule + plugin-mode path: `/engage`).
+session, never the Skill tool (`.claude/skills/.shared/run-mode.md`).
 
 **1. Gather inputs - ask via the question tool, one question per axis; don't assume.** Ask as
 discrete, structured questions: which **scenario set / TM system**; where the **alert + outcome

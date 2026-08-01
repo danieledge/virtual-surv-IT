@@ -13,8 +13,8 @@ domain (TM, trade, or comms), and wait - don't invent a scenario from a bare `/n
 spec → SME → build → review). For a multi-unit deliverable built from a full requirements
 pack, use `/build-solution` (the full orchestrator-workers fan-out) instead. **Chained skills
 are dormant** - when this workflow routes to another (`/build-solution`, `/handover`,
-`/audit-review`), read `.claude/skills/<name>/SKILL.md` and follow it in this session; do not
-invoke it via the Skill tool (full rule + plugin-mode path: `/engage`).
+`/audit-review`), read `.claude/skills/<name>/SKILL.md` and follow it in this session, never the
+Skill tool (`.claude/skills/.shared/run-mode.md`).
 
 You are the orchestrator (CLAUDE.md §6). Do **not** write detection logic yourself - route
 each step to the right agent and chain them in this session:
@@ -28,7 +28,7 @@ each step to the right agent and chain them in this session:
    directly on the user's word, no consent gate on that file). When on, cite the
    obligation by RETRIEVING it from the regulatory register
    (`<python> -m scripts.check_citations --typology <x>` / `config/regulatory-register.yaml`)
-   (`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the bundled scripts")
+   (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
    - never invent a pinpoint article/section/rule; flag any
    citation not in the register as to-verify (ADR-001; `compliance-reviewer` runs the check).
    When off, skip citations entirely - but state it plainly in the spec
