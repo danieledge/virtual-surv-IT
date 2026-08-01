@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -866,6 +867,10 @@ async def run_case(
                 ["rsync", "-a", f"{fixtures}/", f"{sandbox}/"], check=True, capture_output=True
             )
     ensure_workspace_trust(sandbox)
+    # Snapshot what the HARNESS seeded, before the team can touch it. Persisted so --rescore
+    # over a saved run applies the same exclusion instead of silently re-admitting fixtures.
+    baseline = fixture_baseline(sandbox)
+    (out_dir / "fixture-baseline.json").write_text(json.dumps(baseline, indent=2), encoding="utf-8")
 
     sim_log = SimTranscript()
     cap = SessionCapture()
@@ -991,6 +996,8 @@ def gate_findings(out_dir: Path) -> list[dict]:
 _RAW_CHUNK_CHARS = 300
 _RAW_MAX_PER_SOURCE = 120
 _RAW_MAX_TOTAL = 600
+# Reserved slice for the PM's own prose, so an artifact-heavy run cannot crowd it out.
+_RAW_TRANSCRIPT_QUOTA = 200
 
 
 def _chunk_text(text: str) -> list[str]:
@@ -1015,7 +1022,29 @@ def _chunk_text(text: str) -> list[str]:
     return out
 
 
-def raw_evidence_findings(sandbox: Path, transcript: str) -> list[dict]:
+def fixture_baseline(sandbox: Path) -> dict[str, str]:
+    """Digest every file under sandbox/artifacts/ as seeded, BEFORE the team touches anything.
+
+    A case may seed a realistic drifted pack via `fixtures/`. Those files are the case's own
+    INPUT. Scoring them as evidence lets the harness match a planted must-find against text the
+    harness itself wrote, so a run that does literally nothing passes.
+    """
+    out: dict[str, str] = {}
+    artifacts = sandbox / "artifacts"
+    if not artifacts.is_dir():
+        return out
+    for path in sorted(artifacts.rglob("*")):
+        if path.is_file():
+            try:
+                out[str(path.relative_to(sandbox))] = hashlib.sha256(path.read_bytes()).hexdigest()
+            except Exception:
+                continue
+    return out
+
+
+def raw_evidence_findings(
+    sandbox: Path, transcript: str, baseline: dict[str, str] | None = None
+) -> list[dict]:
     """Feed the team's OWN words into the scored evidence: artifact bodies and PM prose.
 
     Until now the scorer matched against `findings.json` alone, whose titles are the
@@ -1034,27 +1063,39 @@ def raw_evidence_findings(sandbox: Path, transcript: str) -> list[dict]:
     fact, and facts belong in the evidence deterministically rather than via an LLM round trip.
     """
     findings: list[dict] = []
+    baseline = baseline or {}
 
     def _add(chunks: list[str], location: str) -> None:
         for chunk in chunks:
             if len(findings) >= _RAW_MAX_TOTAL:
                 return
             findings.append(
-                {"severity": "warning", "location": location, "title": chunk, "kind": "raw"}
+                # `location` is deliberately EMPTY on raw findings. eval_score._matches folds
+                # location into the keyword haystack, so carrying the path would let a spec
+                # match on a FILENAME the harness seeded rather than on content the team wrote.
+                {"severity": "warning", "location": "", "title": chunk, "kind": "raw"}
             )
+
+    # The PM's own prose goes in FIRST, with a reserved quota. Chunking it last under a shared
+    # cap meant an artifact-heavy run spent the entire budget on files and recorded ZERO
+    # transcript chunks, silently reintroducing the very blindness this function exists to fix.
+    _add(_chunk_text(transcript)[:_RAW_TRANSCRIPT_QUOTA], "")
 
     artifacts = sandbox / "artifacts"
     if artifacts.is_dir():
         for path in sorted(artifacts.rglob("*")):
             if not path.is_file() or path.suffix.lower() not in (".md", ".txt", ".json"):
                 continue
+            rel = str(path.relative_to(sandbox))
             try:
-                body = path.read_text(encoding="utf-8", errors="replace")
+                raw = path.read_bytes()
             except Exception:
                 continue
-            _add(_chunk_text(body), str(path.relative_to(sandbox)))
+            # Unchanged since seeding => the case's own INPUT, not the team's work. Skip it.
+            if baseline.get(rel) == hashlib.sha256(raw).hexdigest():
+                continue
+            _add(_chunk_text(raw.decode("utf-8", errors="replace")), rel)
 
-    _add(_chunk_text(transcript), "")
     return findings
 
 
@@ -1070,10 +1111,14 @@ async def score_run(
     """The scoring layers alone - also reachable via --rescore over a saved run dir."""
     listing = _artifact_listing(sandbox)
     print(f"  [{case_id}] scoring (probe + normalizer + judge)...")
+    try:
+        baseline = json.loads((out_dir / "fixture-baseline.json").read_text(encoding="utf-8"))
+    except Exception:
+        baseline = {}
     findings = (
         probe_artifacts(sandbox)
         + gate_findings(out_dir)
-        + raw_evidence_findings(sandbox, transcript)
+        + raw_evidence_findings(sandbox, transcript, baseline)
     )
     # One-shot helpers flake occasionally (observed: an empty findings list on a rich
     # transcript; a spurious max-turns error) - retry once before degrading. A non-trivial
@@ -1110,9 +1155,17 @@ async def score_run(
                 judge_result = {"error": f"{type(exc).__name__}: {exc}", "pass": False}  # nosec
                 print(f"  [{case_id}] judge attempt {attempt} failed: {exc}", file=sys.stderr)
 
+    # Fail CLOSED on the judge. Two holes, both of which passed work that should not have:
+    # `.get("pass", True)` meant a parseable reply that simply omitted the key was treated as a
+    # pass, and `auto_fail` was requested in the judge prompt but never read anywhere, so a
+    # self-contradicting reply ("auto_fail": true, "pass": true) passed. A skipped judge
+    # (--skip-judge) is the one legitimate absence and stays neutral.
+    judged = judge_result.get("skipped") or (
+        bool(judge_result.get("pass", False)) and not judge_result.get("auto_fail")
+    )
     return {
         "case": case_id,
-        "passed": bool(det.get("passed")) and bool(judge_result.get("pass", True)),
+        "passed": bool(det.get("passed")) and bool(judged),
         "deterministic": det,
         "judge": judge_result,
     }

@@ -531,8 +531,10 @@ def test_raw_evidence_carries_artifact_bodies_and_pm_prose(tmp_path):
     assert "authoritative" in blob
     assert "inferred" in blob  # PM prose reaches the evidence too
     assert all(f["kind"] == "raw" for f in out)
-    # Artifact chunks carry their path so a location-based spec can still match.
-    assert any("delivery-report.md" in (f["location"] or "") for f in out)
+    # Raw chunks deliberately carry NO location. eval_score folds location into the keyword
+    # haystack, so a path would let a spec match on a filename the harness seeded rather than
+    # on content the team wrote - a false-pass vector found in review on 2026-08-01.
+    assert all(f["location"] == "" for f in out)
 
 
 def test_raw_evidence_chunks_so_mention_guards_stay_local(tmp_path):
@@ -568,3 +570,64 @@ def test_raw_evidence_is_bounded_and_tolerant(tmp_path):
     # Separator-only and blank lines contribute nothing.
     (art / "rule.md").write_text("---\n\n| --- | --- |\n", encoding="utf-8")
     assert not any(set(f["title"]) <= {"-", "|", " "} for f in ee.raw_evidence_findings(tmp_path, ""))
+
+
+# --------------------------------------------------------------- false-pass guards
+
+
+def _seed(tmp_path):
+    art = tmp_path / "artifacts"
+    art.mkdir(parents=True)
+    (art / "delivery-report.md").write_text(
+        "Document control - Status `Final - pending human sign-off`\n"
+        "Fixed: C1, C2 reconciled to one authoritative set of numbers.\n",
+        encoding="utf-8",
+    )
+    return ee.fixture_baseline(tmp_path)
+
+
+def test_seeded_fixtures_are_not_scored_as_the_teams_work(tmp_path):
+    """THE false-pass hole. A case may seed a realistic drifted pack as its INPUT; scoring it
+    let the harness match a planted must-find against text the harness itself wrote.
+
+    Measured 2026-08-01: process-close-reconciliation with fixtures only and an EMPTY transcript
+    scored passed=True, recall 0.8, zero must-finds missed. A run that did literally nothing
+    passed. This is the direction that matters most: a harness which passes bad work is worse
+    than one which fails good work.
+    """
+    baseline = _seed(tmp_path)
+    assert baseline, "fixtures should have been baselined"
+    # Team does nothing: no new file, no prose.
+    assert ee.raw_evidence_findings(tmp_path, "", baseline) == []
+
+
+def test_team_written_and_team_modified_files_are_still_scored(tmp_path):
+    """The exclusion must not blind the scorer to real work (that was the ORIGINAL bug)."""
+    baseline = _seed(tmp_path)
+    # A brand-new artifact.
+    (tmp_path / "artifacts" / "summary.txt").write_text("authoritative set agreed\n", "utf-8")
+    blob = " ".join(f["title"] for f in ee.raw_evidence_findings(tmp_path, "", baseline)).lower()
+    assert "authoritative set agreed" in blob
+    # A seeded file the team EDITED is the team's work from that point on.
+    (tmp_path / "artifacts" / "delivery-report.md").write_text("now corrected\n", encoding="utf-8")
+    blob2 = " ".join(f["title"] for f in ee.raw_evidence_findings(tmp_path, "", baseline)).lower()
+    assert "now corrected" in blob2
+
+
+def test_raw_findings_carry_no_location(tmp_path):
+    """eval_score folds location into the keyword haystack, so a path would let a spec match on
+    a FILENAME the harness seeded rather than on content the team wrote."""
+    baseline = _seed(tmp_path)
+    (tmp_path / "artifacts" / "rtm.md").write_text("traceability row added\n", encoding="utf-8")
+    assert all(f["location"] == "" for f in ee.raw_evidence_findings(tmp_path, "x", baseline))
+
+
+def test_transcript_prose_is_never_crowded_out_by_artifacts(tmp_path):
+    """Chunking prose last under a shared cap meant an artifact-heavy run recorded ZERO
+    transcript chunks, silently reinstating the blindness this function exists to remove."""
+    art = tmp_path / "artifacts"
+    art.mkdir(parents=True)
+    for i in range(6):
+        (art / f"doc{i}.md").write_text("\n".join(f"artifact line {j}" for j in range(200)), "utf-8")
+    out = ee.raw_evidence_findings(tmp_path, "\n".join(f"pm prose {i}" for i in range(300)), {})
+    assert any("pm prose" in f["title"] for f in out), "PM prose was crowded out entirely"
