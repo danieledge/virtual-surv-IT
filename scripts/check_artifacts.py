@@ -43,7 +43,14 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      (`AGENT-HUMAN-COMBINED`) - roster names must never read as real people, and an agent
      never shares a sign-off line with the human approver (operating guide, "Voice, names
      & console");
- 10. in workspace mode, no file sits unchecked in the artifacts ROOT: a root file outside
+ 10. an RTM in the pack actually traces: every Code/Test cell resolves to a file on disk
+     (`RTM-UNRESOLVED`) and every requirement carries an obligation or a gap disposition,
+     in a table that parses (`RTM-INCOMPLETE`) - the BRD → FSD → code → test → obligation
+     spine is the audit "golden thread", and until this it was asserted by nobody.
+     Delegated to `scripts.validate_rtm`; a pack with no RTM raises nothing (most
+     engagements never author one), and that script's advisory orphan-obligation /
+     orphan-test sweeps stay out of the gate (scope-dependent, run them by hand).
+ 11. in workspace mode, no file sits unchecked in the artifacts ROOT: a root file outside
      every `artifacts/<slug>/` workspace is `ORPHAN-ARTIFACT` unless grandfathered in the
      snapshot allowlist `.dod-root-allowlist.json`, taken on the rule's first run (D2
      ruling 2026-07-29: pre-existing flat files are exempt, the layout applies to new
@@ -995,6 +1002,80 @@ def check_review_fingerprints(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+# RTM gate: `scripts/validate_rtm.py` reports six RTM-* codes; the DoD gate carries the two
+# that are unambiguous defects in ANY engagement. RTM-ORPHAN-OBLIGATION and RTM-ORPHAN-TEST are
+# deliberately NOT gated - the register is firm-wide and the test suite is project-wide, so both
+# are scope-dependent judgement calls (run validate_rtm directly at a review gate for those).
+_RTM_GATE_CODES = {
+    "RTM-CODE-MISSING": "RTM-UNRESOLVED",
+    "RTM-TEST-MISSING": "RTM-UNRESOLVED",
+    "RTM-NO-OBLIGATION": "RTM-INCOMPLETE",
+    "RTM-MALFORMED": "RTM-INCOMPLETE",
+}
+# How many per-row details a single aggregated finding prints before "+N more" - one line per
+# broken row would swamp the gate output on a large matrix.
+_RTM_DETAIL_CAP = 3
+
+
+def _load_validate_rtm_module():
+    """Import scripts.validate_rtm in BOTH run modes (package import, else a __file__-relative
+    load under direct-path plugin invocation). None = unavailable; the RTM check then skips
+    rather than bricking the gate - the same posture _load_engagement_state_module takes."""
+    try:
+        from scripts import validate_rtm
+
+        return validate_rtm
+    # Probe only; fall through to the file-relative loader.
+    except Exception:  # nosec B110
+        pass
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("validate_rtm.py")
+        spec = importlib.util.spec_from_file_location("validate_rtm", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
+def check_rtm(artifacts_dir: Path, project_root: Path | None = None) -> list[str]:
+    """Gate the traceability spine of any RTM in the pack (CLAUDE.md §8).
+
+    A missing RTM is NOT a finding - most engagements never author one, and absence is the
+    normal case. When one exists it is the audit golden thread, so a cell pointing at a file
+    that no longer exists (RTM-UNRESOLVED) or a requirement with neither an obligation nor a
+    gap disposition (RTM-INCOMPLETE) is a real defect. Findings are aggregated per file and
+    per code, and carry the command that reproduces the detail.
+    """
+    validate_rtm = _load_validate_rtm_module()
+    if validate_rtm is None:
+        return []
+    findings: list[str] = []
+    for rtm in sorted(artifacts_dir.rglob("*.md")):
+        if not rtm.stem.lower().startswith("rtm") or _under_archive(rtm, artifacts_dir):
+            continue
+        try:
+            result = validate_rtm.validate(rtm, project_root=project_root)
+        except OSError:
+            continue  # an unreadable artifact is not this gate's finding to make
+        grouped: dict[str, list[str]] = {}
+        for f in result["findings"]:
+            code = _RTM_GATE_CODES.get(f["code"])
+            if code is not None:
+                grouped.setdefault(code, []).append(f["detail"])
+        for code, details in sorted(grouped.items()):
+            extra = len(details) - _RTM_DETAIL_CAP
+            more = f" (+{extra} more)" if extra > 0 else ""
+            findings.append(
+                f"{code}: {rtm.name} - {'; '.join(details[:_RTM_DETAIL_CAP])}{more} - the "
+                "BRD → FSD → code → test → obligation trace must hold (run: python -m "
+                f"scripts.validate_rtm {rtm})"
+            )
+    return findings
+
+
 def check(artifacts_dir: Path) -> list[str]:
     """Return a list of finding strings; empty means the gate is satisfied."""
     findings: list[str] = []
@@ -1008,6 +1089,7 @@ def check(artifacts_dir: Path) -> list[str]:
     findings.extend(check_findings_render_freshness(artifacts_dir))
     findings.extend(check_state(artifacts_dir))
     findings.extend(check_review_fingerprints(artifacts_dir))
+    findings.extend(check_rtm(artifacts_dir))
     # artifacts/data/ holds machine-readable source (findings packs); the top-level artifacts/ is the
     # user-navigable set. Exclude the data/ subtree from the .md/.html-sibling and index scans.
     data_dir = artifacts_dir / "data"
