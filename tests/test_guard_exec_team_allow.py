@@ -15,6 +15,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 
 
@@ -31,6 +33,66 @@ LIVE = _load(REPO / ".claude" / "hooks" / "guard-code-execution.py")
 
 def _allowed(seg: str) -> bool:
     return STAGED._TEAM_ALLOW.match(seg) is not None
+
+
+# ------------------------------------------------------------------ maintenance rule
+
+
+# Front-door scripts the team invokes on the user's behalf. These MUST run consent-free in
+# plugin mode, where skills invoke the bundled copy BY PATH - CLAUDE.md §7: "never ask the user
+# for consent to run a front-door script". A basename missing from _TEAM_SCRIPT_NAMES means a
+# consent prompt for the team's own tooling.
+#
+# Deliberately NOT auto-derived from a glob over scripts/: that would let a genuinely new tool
+# silently allow-list itself, which is the opposite of the intent. The list is curated, and this
+# test is the reminder to curate it.
+_FRONT_DOOR_SCRIPTS = (
+    "render_html",
+    "render_findings",
+    "render_docx",
+    "convert_file",
+    "ingest",
+    "gen_synthetic",
+    "synthesise",
+    "validate_masking",
+    "validate_manifest",
+    "validate_rtm",
+    "check_citations",
+    "eval_score",
+    "calibrate_spoofing",
+    "check_artifacts",
+    "engagement_state",
+    "extensions",
+    "convert_sarif",
+    "engage_probe",
+)
+
+
+@pytest.mark.parametrize("name", _FRONT_DOOR_SCRIPTS)
+def test_front_door_script_runs_consent_free_by_path(name):
+    """Plugin mode invokes bundled scripts by absolute path, so the BASENAME must be
+    allow-listed. Regression for the 2026-08-01 audit finding: engage_probe, render_findings
+    and render_docx were missing, so plugin-mode /engage tripped the execution gate on its own
+    step-0 probe and asked the user to grant consent for the team's own tooling."""
+    assert _allowed(f"python3 /home/x/plugin/scripts/{name}.py"), (
+        f"{name}.py is not in _TEAM_SCRIPT_NAMES - plugin-mode users will be prompted for "
+        "execution consent to run a front-door script (CLAUDE.md §7 forbids this)"
+    )
+
+
+@pytest.mark.parametrize("name", _FRONT_DOOR_SCRIPTS)
+def test_front_door_script_exists_on_disk(name):
+    """The allow-list must not accumulate entries for scripts that no longer exist - a stale
+    basename is a lexical hole (any file with that name in a scripts/ dir would be accepted)."""
+    assert (REPO / "scripts" / f"{name}.py").is_file(), (
+        f"scripts/{name}.py is allow-listed but missing - remove the stale entry"
+    )
+
+
+def test_non_team_script_by_path_still_blocked():
+    """The allow-list must stay a list, not a pattern that waves through anything in scripts/."""
+    assert not _allowed("python3 /home/x/plugin/scripts/evil.py")
+    assert not _allowed("python3 /tmp/scripts/render_htmlx.py")
 
 
 # ------------------------------------------------------------------ new allowances
@@ -100,16 +162,25 @@ def test_exec_patterns_identical_to_live_guard():
 
 
 def test_live_guard_matches_staged_once_applied():
-    """After the human runs apply-guard-exec-allow.sh, live == staged; until then this
-    documents the pending state rather than failing CI."""
+    """HARD FAILURE, never a skip.
+
+    This test used to skip while the fix was unapplied, "documenting the pending state rather
+    than failing CI". On 2026-08-01 an audit found the consequence: the live guard was missing
+    engage_probe, render_findings and render_docx from its team-script allow-list, so plugin-mode
+    /engage was asking users for execution consent to run its own step-0 probe - something the
+    operating guide explicitly forbids. The suite was green throughout, because this test was
+    skipping precisely when it had something to say.
+
+    A control that is silently inert looks identical to a healthy one. Pending guard work now
+    fails the suite until the human applies it.
+    """
     live_text = (REPO / ".claude" / "hooks" / "guard-code-execution.py").read_text(encoding="utf-8")
     staged_text = (REPO / "scripts" / "staged_hooks" / "guard-code-execution.py").read_text(
         encoding="utf-8"
     )
-    if live_text != staged_text:
-        import pytest
-
-        pytest.skip("staged guard not yet applied (run scripts/apply-guard-exec-allow.sh)")
+    assert live_text == staged_text, (
+        "staged guard not yet applied - run: bash scripts/apply-guard-exec-allow.sh"
+    )
 
 
 # ------------------------------------------- 0.32 staged: company allowlist + new scripts

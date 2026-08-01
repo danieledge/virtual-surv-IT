@@ -124,10 +124,15 @@ _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 #     below, so `python /tmp/scripts/evil.py` stays blocked.
 #     (Lexical, like everything here: a hostile file *named* render_html.py in a scripts/ dir
 #     would pass - accepted residual, consistent with ADR-002's threat model.)
+#     MAINTENANCE RULE: every new scripts/ tool must be added here in the SAME change that
+#     creates it, or plugin-mode users get an execution-consent prompt for the team's own
+#     tooling - which CLAUDE.md §7 explicitly forbids. Found live on 2026-08-01: engage_probe
+#     was missing, so /engage step 0 tripped the gate on its own front door.
 _TEAM_SCRIPT_NAMES = (
-    r"(?:render_html|convert_file|ingest|gen_synthetic|synthesise|validate_masking|validate_manifest"
-    r"|check_citations|eval_score|calibrate_spoofing|check_artifacts|engagement_state"
-    r"|extensions|convert_sarif)\.py"
+    r"(?:render_html|render_findings|render_docx|convert_file|ingest|gen_synthetic|synthesise"
+    r"|validate_masking|validate_manifest|validate_rtm|check_citations|eval_score"
+    r"|calibrate_spoofing|check_artifacts|engagement_state|extensions|convert_sarif"
+    r"|engage_probe)\.py"
 )
 
 # 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in

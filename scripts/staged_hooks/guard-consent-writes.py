@@ -12,10 +12,14 @@ spontaneously. This guard closes the loop:
   targeting:
     * `.exec-consent` (the execution-consent marker), or
     * `.claude/settings.json` / `.claude/settings.local.json` (permissions + hook wiring), or
-    * `.pre-commit-config.yaml` (its hook entries execute via `git commit` - ADR-002 rec 14c).
+    * `.pre-commit-config.yaml` (its hook entries execute via `git commit` - ADR-002 rec 14c), or
+    * `.git/config` and `.git/hooks/` (audit 2026-08-01: CONSENT-EQUIVALENT execution config -
+      `core.hooksPath` or an external diff/merge driver hands the next `git commit`/`git diff`
+      arbitrary execution without ever writing the consent marker).
   Also BLOCK Write/Edit of the safety hooks themselves (`.claude/hooks/*`, `hooks/hooks.json`) -
-  a model that can edit a guard can neuter it. (Write/Edit channel only: Bash rules for hook
-  paths would false-positive on legitimate static analysis and are advisory anyway, ADR-002.)
+  a model that can edit a guard can neuter it - and, on Bash, MUTATION of those paths
+  (`sed -i`, `tee`, `cp`, `rm`, redirect); reads and static analysis of a hook stay allowed, which
+  was the false-positive concern behind the original Write/Edit-only rule.
 
   ALLOW deleting the marker (closing the gate is always fail-safe: `rm .claude/.exec-consent`),
   and read-only inspection (ls/stat/cat/test/grep/echo without a redirect into a protected file).
@@ -63,10 +67,65 @@ _SETTINGS_RE = re.compile(r"\.claude[/\\]settings(\.local)?\.json")
 _PRECOMMIT_RE = re.compile(r"\.pre-commit-config\.ya?ml\b")
 
 # The guards themselves + their wiring: a model that can edit these can neuter every gate.
-# Enforced on the precise Write/Edit channel only - Bash rules for these paths would false-
-# positive on legitimate static analysis (shellcheck/shfmt of the hooks) and stay advisory
-# anyway (ADR-002). Maintenance goes through CST_ALLOW_CONFIG_EDIT.
+# Enforced on the precise Write/Edit channel; the Bash channel checks MUTATION only (see
+# _HOOK_MUTATE) so legitimate static analysis (shellcheck/shfmt/ruff of the hooks) still runs.
+# Maintenance goes through CST_ALLOW_CONFIG_EDIT.
 _HOOK_PATH_RE = re.compile(r"(\.claude[/\\]hooks[/\\]|(^|[/\\])hooks[/\\]hooks\.json$)")
+
+# `.git/config` and `.git/hooks/` are CONSENT-EQUIVALENT execution config (audit 2026-08-01).
+# Nothing here writes the consent marker, so the "model cannot self-consent" property stayed
+# technically true while its PURPOSE was defeated: point `core.hooksPath` at a model-written
+# directory, or register an external diff/merge driver, and the next `git commit` / `git diff`
+# executes arbitrary code with no marker and no gate. ADR-002 rec 14c recorded the external-driver
+# shape as "adjacent unfixed" but left `.git/config` itself unprotected and never named
+# `core.hooksPath`. Reads stay allowed (they ride _SAFE_VERB / _SAFE_GIT).
+# Boundary is "not a word char, dot or hyphen" rather than "start or separator": the path can
+# appear mid-command as a bare argument (`cp /tmp/evil .git/config`), where a space precedes it.
+_GIT_CONFIG_RE = re.compile(r"(?:^|[^\w.-])\.git[/\\](?:config\b|hooks[/\\])")
+
+# `git config` writing a key whose VALUE git later EXECUTES. Blocked regardless of verb, because
+# the execution happens in a later git operation, not in this command - so the default-deny path
+# (which only fires on a protected FILE token) would never see it.
+# `config` must be the SUBCOMMAND, so only git's own global options may precede it. The first
+# cut allowed any tokens before `config` ((?:\s+\S+)*?), which meant a commit message merely
+# QUOTING the attack blocked the commit - `git commit -m "...git config core.hooksPath..."`.
+# That is the fourth instance of the prose/argument false-positive class ADR-002 has already
+# fixed three times (`make` in prose, `shellcheck a.sh b.sh`, the multi-.py launcher), and it
+# was caught live on 2026-08-01 by the guard blocking the very commit that introduced it.
+_GIT_CONFIG_CMD = re.compile(
+    r"^git(?:\s+(?:-C\s+\S+|-c\s+\S+|--\S+(?:=\S+)?|-[pP]))*\s+config\b",
+    re.IGNORECASE,
+)
+
+# `git -c <key>=<value> <any-subcommand>` applies config for ONE command, so it reaches the same
+# execution keys without ever running `git config`. Same consent-equivalent effect, different
+# spelling.
+_GIT_INLINE_EXEC_CONFIG = re.compile(
+    r"^git(?:\s+\S+)*?\s+-c\s+(?:core\.hookspath"
+    r"|core\.(?:pager|editor|sshcommand|fsmonitor)"
+    r"|[\w.-]*\.(?:external|textconv|command|driver|process|smudge|clean)"
+    r"|alias\.[\w-]+)=",
+    re.IGNORECASE,
+)
+_GIT_CONFIG_READ = re.compile(r"\s(?:--get(?:-all|-regexp|-urlmatch)?|--list|-l)\b", re.IGNORECASE)
+_GIT_EXEC_KEY = re.compile(
+    r"\b(?:core\.hookspath"
+    r"|core\.(?:pager|editor|sshcommand|fsmonitor)"
+    r"|[\w.-]*\.(?:external|textconv|command|driver|process|smudge|clean)"
+    r"|alias\.[\w-]+)\b",
+    re.IGNORECASE,
+)
+
+# A Bash write to a guard file neuters it (`sed -i 's/exit(2)/exit(0)/' .claude/hooks/...`).
+# MUTATION verbs and redirects only - reading and static-analysing a hook stays allowed, which is
+# the false-positive concern the Write/Edit-only rule was originally protecting. `rm` is included:
+# unlike deleting the consent marker (which CLOSES the gate, fail-safe), deleting a guard DISARMS
+# it.
+_HOOK_MUTATE = re.compile(
+    r">\s*\S*\.claude[/\\]hooks[/\\]"
+    r"|(?:^|[;&|\s])(?:sed\s+-i|tee|cp|mv|dd|install|ln|chmod|chown|truncate|rm)\b"
+    r"[^;&|]*\.claude[/\\]hooks[/\\]"
+)
 
 # Verbs that only read or delete the protected files - safe directions. Deleting the marker
 # CLOSES the gate; reading config leaks nothing the model didn't already load. echo/printf
@@ -100,7 +159,8 @@ _FIND_MUTATE = re.compile(r"^find\b.*\s-(?:exec(?:dir)?|delete)\b")
 # A redirect is only a write to a protected file if its TARGET is one - `ls x 2>/dev/null` is a
 # read with a harmless stderr redirect (a real false positive found in live use, 2026-07-01).
 _REDIRECT_INTO_PROTECTED = re.compile(
-    r">\s*\S*(\.exec-consent|\.claude[/\\]settings(\.local)?\.json|\.pre-commit-config\.ya?ml)"
+    r">\s*\S*(\.exec-consent|\.claude[/\\]settings(\.local)?\.json|\.pre-commit-config\.ya?ml"
+    r"|\.git[/\\]config\b)"
 )
 
 _WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
@@ -166,7 +226,12 @@ def _truthy(val: str | None) -> bool:
 
 def _protected(text: str) -> bool:
     norm = (text or "").replace("\\", "/")
-    return _MARKER in norm or bool(_SETTINGS_RE.search(norm)) or bool(_PRECOMMIT_RE.search(norm))
+    return (
+        _MARKER in norm
+        or bool(_SETTINGS_RE.search(norm))
+        or bool(_PRECOMMIT_RE.search(norm))
+        or bool(_GIT_CONFIG_RE.search(norm))
+    )
 
 
 def _block(what: str) -> None:
@@ -208,6 +273,29 @@ def main() -> None:
     if tool == "Bash":
         cmd = tool_input.get("command", "") or ""
         for seg in _segments(cmd):
+            stripped = _CTRL_PREFIX.sub("", seg)
+            # Consent-EQUIVALENT git execution config. Checked BEFORE the protected-token gate:
+            # `git config core.hooksPath /tmp/h` names no protected FILE, so the default-deny
+            # path below would never see it, yet it hands the next `git commit` arbitrary
+            # execution. Reads (--get/--list) are allowed.
+            if _GIT_INLINE_EXEC_CONFIG.match(stripped):
+                _block(
+                    "git one-shot execution config (`git -c <key>=<value>`) - git would execute "
+                    f"this value on the command that follows ({seg[:100]})"
+                )
+            if (
+                _GIT_CONFIG_CMD.match(stripped)
+                and not _GIT_CONFIG_READ.search(seg)
+                and _GIT_EXEC_KEY.search(seg)
+            ):
+                _block(
+                    "git execution config (core.hooksPath / external diff-merge driver / alias) "
+                    f"- git would execute this value on a later git command ({seg[:100]})"
+                )
+            # A Bash mutation of a guard file neuters the gate; reads/static analysis stay allowed.
+            if _HOOK_MUTATE.search(seg):
+                _block(f"the safety hooks themselves via Bash ({seg[:120]}) - editing a guard "
+                       "can neuter it")
             if not _protected(seg):
                 continue
             # A redirect can turn any verb into a write (`cat > marker`, `echo x >> settings`) -
