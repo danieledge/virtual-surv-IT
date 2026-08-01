@@ -124,7 +124,7 @@ cases_total: 7
 cases_passed_raw: 2
 cases_adjudicated_pass: 5
 unadjudicated_failures: 0
-runs: 20260729T225110Z, 20260730T010541Z
+runs: 20260729T225110Z, 20260730T010541Z, 20260730T015116Z
 ```
 ````
 
@@ -137,14 +137,38 @@ runs: 20260729T225110Z, 20260730T010541Z
   transcript, evidence why the raw FAIL is not a real failure, write it up in the record's
   table). A budget-killed or timed-out case is **unevidenced, not passed** - it stays an
   unadjudicated failure until it is re-run or adjudicated on evidence.
-- Blank lines and `#` comments inside the block are ignored; only the FIRST block counts.
+- Blank lines and `#` comments inside the block are ignored.
+
+**The numbers are corroborated, not taken on trust** (2026-08-01 review: until then every
+field was self-reported, so `cases_total: 1, cases_passed_raw: 1, verdict: pass` promoted a
+release on a single case):
+
+- **`runs:` is required** on a full baseline (a `Scope: deterministic-only` record is exempt,
+  having no live runs to cite). List **every** run the record stands on - the example above
+  cites all three 0.33.1 runs, whose rows in `results.jsonl` add up to the 7 cases and 2 raw
+  passes it declares.
+- The gate reads `evals/results.jsonl` for those run ids and requires that the **distinct
+  cases** recorded under them equal `cases_total`, and that the cases with at least one
+  passing row equal `cases_passed_raw`. A run id the log never saw is not evidence, and a
+  count that does not match the rows is a finding.
+- **Minimum slice: 6 distinct cases.** Below that the record is too narrow to mean anything;
+  a deliberately narrow run promotes with `python -m scripts.release_gate --min-cases N`,
+  which announces the lowered floor on the console.
+- **More than one `eval-verdict` block in a baseline is rejected outright.** Each run's
+  `report.md` tells you to paste its drafted block, so a leftover raw draft next to the
+  adjudicated one is an easy accident; rather than pick a block by position (and judge the
+  release on the wrong claim), the gate refuses until exactly one block remains.
 
 `scripts.eval_engage` drafts the raw block into each run's `report.md` - copy it into the
-baseline and move cases from `unadjudicated_failures` to `cases_adjudicated_pass` as you
-adjudicate them. The gate also ages a baseline against
-`docs/DEFINITION-OF-DONE.md`, `docs/house-rules.md`, `docs/WAYS-OF-WORKING.md` and
-`docs/code-review-method.md` alongside the agents/skills - those docs steer the team at run
-time exactly as a skill does.
+baseline, merge the `runs:` lines when a record stands on several runs, and move cases from
+`unadjudicated_failures` to `cases_adjudicated_pass` as you adjudicate them. The gate also
+ages a baseline against `docs/DEFINITION-OF-DONE.md`, `docs/house-rules.md`,
+`docs/WAYS-OF-WORKING.md`, `docs/code-review-method.md`, `docs/coding-standards.md`,
+`docs/scope-and-stack.md`, `docs/team-extensions.md`, `docs/templates/`, `.claude/hooks/`
+and `.claude/settings.json` alongside the agents/skills - all of them steer the team at run
+time exactly as a skill does. Ageing covers the **working tree** as well as the commit log:
+an uncommitted edit to any of those paths fails the gate, because the eval behind the
+baseline never exercised it.
 
 ## The tracked results log (`evals/results.jsonl`)
 
