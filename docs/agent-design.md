@@ -19,7 +19,13 @@
    (`data-analyst`, `tuning-analyst` and `qa-engineer` hold `Write` for their own
    scripts/evidence but **not** `Edit`, so they never alter live detection source;
    `business-analyst` is a build agent whose `Edit` grant covers spec/doc authoring - its
-   boundary is that it does not build detection code).
+   boundary is that it does not build detection code; since 2026-08-01 it also holds `Bash`,
+   scoped in-prompt to the allow-listed front doors it cannot do its job without
+   (`scripts.convert_file` for document input, `scripts.render_html` for its artifacts) and
+   never the deliverable under discussion. That grant closes a real gap rather than widening
+   one: CLAUDE.md §7 forbids hand-parsing documents, so an elicitation agent with no `Bash`
+   could not legitimately read a PDF or DOCX at all. `qa-engineer` is the precedent, same
+   Write-not-Edit posture and the same rendering need).
 3. **Match the model to the work (see §2).** Cheap tier for mechanical, top tier only where it
    changes outcomes.
 4. **Right-size every engagement.** Multi-agent costs ~15× the tokens; the PM uses the *leanest*
@@ -125,7 +131,7 @@ and this matrix are the guard against drift.*
 | **Scale effort to complexity**; state the number of agents | ✅ | PM states intended agent count + why at the gate (`engage` §5). |
 | Budget **~15× tokens**; reserve multi-agent for high value | ✅ | "~15× the tokens" cited verbatim (CLAUDE.md §6). |
 | **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 11 sonnet / 1 haiku. |
-| Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) + a **hard ≤~1,500-token / ~30-line return budget** stated in the delegation brief and each agent's return instruction (operating guide §Orchestration; an over-budget return is a stated defect to trim, aligned to Anthropic's 1-2k-token sub-agent return). Still 🟡: it is **prompt-level, not hook-enforced** - a subagent's final message still lands in the orchestrator's context if it ignores the budget. |
+| Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) + a **hard ≤~1,500-token / ~30-line return budget** stated in the delegation brief and each agent's return instruction (operating guide §Orchestration; an over-budget return is a stated defect to trim, aligned to Anthropic's 1-2k-token sub-agent return), **backstopped by a hook**: `scripts/subagent_return_budget.py` is a PostToolUse hook on the `Task` matcher (wired in `.claude/settings.json` + `hooks/hooks.json`) that measures the actual return and gives Morgan one nudge when it is clearly over budget (trigger: 2× the stated ceiling, so a borderline return is never flagged). Still 🟡, for two reasons stated plainly: the hook fires **after** the return has landed, so it prompts a trim rather than preventing the context cost; and the token count is a `chars / 4` estimate (a hook has no access to the model's tokenizer). It is advisory by design - fails open, silent outside a live engagement. |
 | **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no Write/Edit (Bash, where granted, is execution-gated, §7). |
 | Guard the failure modes (over-spawn · duplicate · runaway · premature stop) | ✅ | Right-size + state-count (over-spawn); non-overlapping briefs (duplicate); fix-loop stop conditions (runaway); never-dead-end (premature stop). |
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
@@ -140,8 +146,10 @@ and this matrix are the guard against drift.*
 deliberate fits to our *interactive, human-gated* model (vs Anthropic's long-running autonomous
 research agent), and some are genuine gaps stated plainly: structured **self-assessment** is a
 one-line convention, not an enforced loop (we lean on independent review instead); **condensed
-sub-agent returns** now carry a stated **hard ≤~1,500-token budget** in the brief (0.18.0) but
-remain prompt-level, not hook-enforced. The **LLM-judge eval harness** is shipped
+sub-agent returns** carry a stated **hard ≤~1,500-token budget** in the brief (0.18.0) and are now
+measured by a PostToolUse hook (`scripts/subagent_return_budget.py`, 0.33.3) that nudges once at 2×
+the ceiling, so the budget is no longer prompt-level alone - it stays 🟡 because the nudge is
+after-the-fact feedback on an estimated token count, not prevention. The **LLM-judge eval harness** is shipped
 (`evals/`, `/run-evals`); the **team-size / per-role marginal-value** question is
 acknowledged-unbenchmarked (see `docs/internal/research-virtual-team.md`), not claimed as proven.
 

@@ -58,7 +58,7 @@ flowchart LR
 | Tune a scenario / thresholds | `/tune-thresholds` | ATL-BTL + segmentation + volume↔coverage trade-off |
 | Periodic TM model check | `/validate-tm-model` | coverage / threshold / data-integrity / MI validation |
 | Are we monitoring everything? | `/assess-coverage` | typology→scenario→feed map + feed-health gaps (FCA MW79) |
-| Existing code (detailed review) | `/deep-review` | dimension fan-out + confidence scoring |
+| Existing code (detailed review) | `/deep-review` | sequential dimension lenses + confidence scoring ([topology](review/agent-router.md)) |
 | Performance / will-it-scale | `/performance-review` | static analysis vs target volume (profiling only under the §7 exec gate) |
 | Existing code (audit sign-off) | `/audit-review` | evaluator-optimizer review loop |
 | Legacy / poorly-built code | `/remediate` | assess → prioritise → fix loop → handover |

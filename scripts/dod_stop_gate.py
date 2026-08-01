@@ -36,8 +36,10 @@ Stdin: the Stop-hook JSON payload. Stdout: a single JSON `{"decision":"block","r
 the one nudge (which feeds the findings back to the PM to act on), else nothing. Exit code is
 always 0.
 
-Wire via `.claude/settings.json` -> `hooks.Stop` (human-applied - see
-`scripts/apply-dod-stop-hook.sh`; hook/config edits are human-only under ADR-002 rec 5).
+Wired in `.claude/settings.json` + `hooks/hooks.json` -> `hooks.Stop` (it ships wired; hook and
+config edits are human-only under ADR-002 rec 5). Patches to this file are staged at
+`scripts/staged_hooks/dod_stop_gate.py` and installed by the human via
+`bash scripts/apply-project-anchor.sh`.
 """
 
 from __future__ import annotations

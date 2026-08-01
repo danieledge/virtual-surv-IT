@@ -3,8 +3,8 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-002` · Version `0.6` · Status `Accepted (implemented)`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-06`
+> **Document control** · ID `ADR-002` · Version `0.6.1` · Status `Accepted (implemented)`
+> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-08-01`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
@@ -17,6 +17,7 @@
 > | 0.4.2 | 2026-07-05 | human-applied via `apply-guard-hardening.sh` | Recs 10-13 applied: anchored `pytest`/`unittest`, broader runner list (cargo/swift/bundle exec/jest/vitest/php/julia/lua), consent guard gains read-only `jq` + read-only `git` safe verbs and a `find -exec/-delete` block, raw guard gains a word-bounded case-insensitive marker (no-trailing-slash + case-fold), plugin-mode fail-open comments softened, `data/raw` write-protect + `python3 -m scripts.ingest` twin in settings, `pwsh` allow entry removed. Regression: `tests/test_guard_hardening.py`. |
 > | 0.5 | 2026-07-05 | evening setup review + truth audit (PREPARED 2026-07-05; human applies via `apply-guard-fixes.sh`) | Rec 14 recorded (four defects: multi-`.py` launcher false positive, unanchored `pwsh`/`powershell`, `pre-commit` consent-free execution path incl. `.pre-commit-config.yaml` write-protect, pytest allow-entry contradiction); Tier-2 backlog recs 15-16 added (parent-rooted/wildcard Grep vs `data/raw`; secrets deny-protected on `Read` only); staleness fixed (status to Accepted, Context three-hook present, rec 7/8/13 texts, test count 14 to 17, pin-cites, launcher trade-off extended to the consent-write gate). Regression: `tests/test_guard_fixes.py`. |
 > | 0.6 | 2026-07-06 | Fable 5 static red-team (analysis only; NOT fixed in this pass) | Backlog recs 17-22 added from an adversarial static pass on all three guards: exec-guard wrapper-prefix bypass of the segment-anchored runners (`timeout 5 pytest`), backslash line-continuation split (`python3 \`+newline+`evil.py`), absolute/tilde/`../` shebang-direct exec, `python < file` stdin redirect, novel launcher gaps (`deno test`/`bun test`/`node --test`/`xargs`), and the read-tool coverage gap for non-`{Read,Grep,Glob,Bash}` tools. Recs 15-16 (Grep/Glob vs `data/raw`; secrets Grep/Glob) re-confirmed with concrete PoCs; rec-5 remainder (model-authored `scripts/` file becomes `_TEAM_ALLOW`-runnable) re-confirmed. All fixes are human-apply-only (guard `.py`/`settings.json`/tests are model-blocked). No guard logic changed. |
+> | 0.6.1 | 2026-08-01 | documentation-drift audit (no guard change) | Backlog status corrected: recs 1, 2 and 6 shipped but were left unmarked. Each re-verified against the code before marking (`_SEGMENT_SPLIT`/`_segments` and the `^`-anchored `_TEAM_ALLOW` in `guard-code-execution.py`; the eight absolute-path `Grep`/`Glob` deny variants in `.claude/settings.json`), with the remaining residual stated on each. No guard logic, settings or test changed in this pass. |
 
 | | |
 |---|---|
@@ -93,9 +94,17 @@ Two structural facts dominate:
 1. **Segment-split Bash before matching (both hooks)** - split on `;`, `&&`, `||`, `|`, newlines;
    evaluate each segment independently so `_TEAM_ALLOW` exempts only the matching *segment*, not
    the whole line (kills the "allowed-substring-anywhere" bypass) and the raw guard inspects each
-   piped sub-command.
-2. **Anchor `_TEAM_ALLOW`** to segment start instead of `.search()` anywhere
-   (`guard-code-execution.py:78-81,116`).
+   piped sub-command. **Done** in the execution guard (verified 2026-08-01): `_SEGMENT_SPLIT` /
+   `_segments()` in `guard-code-execution.py` split on `;`, `&&`, `||`, `|`, newline, backtick and
+   `$(`, and `_EXEC_PATTERNS` / `_TEAM_ALLOW` are evaluated per segment. The raw-data guard does
+   **not** segment-split and does not need to: it substring-scans the whole Bash command string
+   for the `data/raw` markers, so a marker in any sub-command blocks the call (broader than
+   per-segment, and the same lexical residual as everything else here).
+2. **Anchor `_TEAM_ALLOW`** to segment start instead of `.search()` anywhere - **done** (verified
+   2026-08-01): `_TEAM_ALLOW` in `guard-code-execution.py` is compiled `^(?:…)` and matched
+   against each segment, so an allow-listed string later in the line no longer waves the segment
+   through. Residual unchanged: the allow-list is basename-lexical (ADR-002 0.4), so a hostile
+   file *named* like a team script in a `scripts/` dir still passes.
 3. **Block inline-code / stdin forms and drop the `-c` exemption** (`:72-73`): `python … -c`,
    `python … -` (stdin/heredoc), `bash -c`, `sh -c`, `zsh -c`, `node -e`, `ruby -e`, `perl -e`,
    `deno eval`, `php -r`.
@@ -108,7 +117,11 @@ Two structural facts dominate:
 
 **Tier 2 - the OS boundary (`permissions.deny`):**
 6. Add absolute-path `Grep`/`Glob` deny variants mirroring `Read`
-   (`/*/data/raw/**`, `/**/data/raw/**`).
+   (`/*/data/raw/**`, `/**/data/raw/**`) - **done** (verified 2026-08-01): all four `Grep` and
+   all four `Glob` variants (`./data/raw/**`, `data/raw/**`, `/*/data/raw/**`, `/**/data/raw/**`)
+   are committed in `.claude/settings.json`. Repo-as-project only: a plugin install ships no deny
+   list (rec 10), and the variants are literal-path patterns, so the parent-rooted / wildcard
+   spellings of rec 15 are still unaddressed.
 7. Treat path-less `Grep`/`Glob` as in-scope in the raw guard (search root defaults to cwd, which
    contains `data/raw`; broadened by rec 15), and check the real Grep `glob` param - **the `glob`
    half is done** (the hook reads both `glob` and the legacy `include` since 2026-06-29).

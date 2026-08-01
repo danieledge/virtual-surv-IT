@@ -3,13 +3,14 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-005` · Version `0.2` · Status `Accepted`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-24`
+> **Document control** · ID `ADR-005` · Version `0.3` · Status `Accepted`
+> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-08-01`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-23 | persona-decay discussion (user-reported) | Initial proposal: dormancy-aware UserPromptSubmit re-anchor hook |
 > | 0.2 | 2026-07-24 | best-practice review remediation | Accepted & implemented: `scripts/persona_anchor.py` (tested, ≤8-line anchor, live-engagement trigger); wiring by a one-shot human-run script, retired 2026-07-30 after its wiring was committed (re-wiring today: `bash scripts/apply-project-anchor.sh`) |
+> | 0.3 | 2026-08-01 | documentation-drift audit | Revision note: the flat `artifacts/START-HERE.md` path the engaged signal was written against is **superseded by [ADR-008](ADR-008-multi-engagement-workspaces.md)** (0.31, per-engagement workspaces `artifacts/<slug>/`) and by [ADR-006](ADR-006-machine-readable-engagement-state.md) (state leads, START-HERE renders). The decision itself (a dormancy-gated per-turn re-anchor) is unchanged; only the signal's location and shape moved. `scripts/persona_anchor.py` now scans every workspace pack under `artifacts/` plus the legacy flat pack, reading each pack's `engagement-state.json` first and falling back to that pack's `START-HERE.md` emoji. |
 
 | | |
 |---|---|
@@ -48,6 +49,11 @@ engaged** - via a **`UserPromptSubmit` hook** (`reanchor-persona.py`):
 - **Engaged signal (dormancy gate):** reuse existing state - an open engagement is
   `artifacts/START-HERE.md` present with status ⏳/⛔ (not ✅ closed). No new marker needed.
   When there is no open engagement, the hook is a **zero-token no-op**.
+  > **Superseded path (0.3):** as shipped, the signal is per engagement, not flat. ADR-006 made
+  > `engagement-state.json` authoritative with START-HERE as its render, and ADR-008 moved both
+  > into `artifacts/<slug>/`, so the hook scans every workspace pack (plus a legacy flat pack)
+  > and reads `<pack>/engagement-state.json` first, `<pack>/START-HERE.md` second. The
+  > zero-token no-op property is unchanged: no open pack, no output.
 - **The anchor (tiny):** when engaged, inject ~10-15 lines - "🎩 You are Morgan; mark every turn
   🎩; roster: Amara=`business-analyst`, Ravi=`code-reviewer`, Hassan=`tm-sme`, … (all 16 +
   Morgan); standing rules: question-tool, the fix-list gate, lifecycle discipline, data-safety
@@ -87,8 +93,9 @@ philosophy as ADR-004.
 
 ## Verification (before it lands)
 
-- **Dormancy test:** the hook is a strict no-op with no `artifacts/START-HERE.md` (or a ✅-closed
-  one) - zero output, negligible latency.
+- **Dormancy test:** the hook is a strict no-op with no open engagement pack (or a ✅-closed
+  one) - zero output, negligible latency. (Written against the flat `artifacts/START-HERE.md`;
+  per ADR-006/ADR-008 the test now covers per-engagement packs, see the 0.3 revision note.)
 - **Compaction-survival check:** a behavioural eval that simulates a long/compacted context and
   asserts the persona markers and correct specialist names are still present after the re-anchor.
 - **Sync test:** a docs-consistency test that the anchor's roster/rules match the operating guide.

@@ -3,13 +3,14 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-006` · Version `0.1` · Status `Accepted`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-07-26`
+> **Document control** · ID `ADR-006` · Version `0.3` · Status `Accepted`
+> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-08-01`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-26 | external-review discussion (user-driven) | Accepted & implemented: `scripts/engagement_state.py` (schema v1, validate/render/mutators), `check_artifacts` STATE-* gates, state-first lifecycle hooks with legacy fallback |
 > | 0.2 | 2026-07-26 | live-run artifact review remediation (same day) | Schema v2: `log` split from `outstanding` (+ blocked requires outstanding), structured `ratifications`; close-completeness validation (`set-team`/`finalise-artifacts` before close); gates `RATIFIED-CLAIM-PENDING` + `REVIEW-FINGERPRINT-GAP`; v1 upgrades in place on first mutation |
+> | 0.3 | 2026-08-01 | documentation-drift audit | Revision note: the flat paths below (`artifacts/engagement-state.json`, `artifacts/START-HERE.md`) are **superseded by [ADR-008](ADR-008-multi-engagement-workspaces.md)** (0.31): one state file and one rendered index **per engagement workspace**, `artifacts/<slug>/engagement-state.json` + `artifacts/<slug>/START-HERE.md`, with a derived registry (`artifacts/engagements.json` + rendered `ENGAGEMENTS.md`) and the session's ACTIVE slug recorded in `artifacts/.active-engagement.json`. The design in this ADR (state leads, START-HERE renders, mutators re-validate and re-render, the STATE-* gates, the consent exclusion) is unchanged and applies per workspace; a legacy flat pack is still read. Only the location moved. |
 
 | | |
 |---|---|
@@ -45,6 +46,10 @@ the one fact whose provenance the whole threat model protects.
    (schema v1) - status, phase, engagement metadata, team, verdict, footprint, outstanding
    items, artifact inventory, decisions of record. JSON, stdlib-parseable: the hooks and
    checker must work in foreign plugin installs with no pip.
+   > **Superseded path (0.3):** since [ADR-008](ADR-008-multi-engagement-workspaces.md) the
+   > file lives in the engagement's own workspace, `artifacts/<slug>/engagement-state.json`
+   > (a pre-0.31 flat pack is still read). "One per engagement" is unchanged; read every
+   > flat `artifacts/...` path in this ADR as `artifacts/<slug>/...`.
 2. **START-HERE.md is a rendered view, not a second source.** "The index leads reality"
    becomes "the state leads reality": `scripts/engagement_state.py` renders START-HERE.md
    (and its `.html` sibling) from the state, and every mutator subcommand (`init`,
