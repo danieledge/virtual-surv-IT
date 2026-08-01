@@ -86,7 +86,27 @@ _GIT_CONFIG_RE = re.compile(r"(?:^|[^\w.-])\.git[/\\](?:config\b|hooks[/\\])")
 # `git config` writing a key whose VALUE git later EXECUTES. Blocked regardless of verb, because
 # the execution happens in a later git operation, not in this command - so the default-deny path
 # (which only fires on a protected FILE token) would never see it.
-_GIT_CONFIG_CMD = re.compile(r"^git\b(?:\s+\S+)*?\s+config\b", re.IGNORECASE)
+# `config` must be the SUBCOMMAND, so only git's own global options may precede it. The first
+# cut allowed any tokens before `config` ((?:\s+\S+)*?), which meant a commit message merely
+# QUOTING the attack blocked the commit - `git commit -m "...git config core.hooksPath..."`.
+# That is the fourth instance of the prose/argument false-positive class ADR-002 has already
+# fixed three times (`make` in prose, `shellcheck a.sh b.sh`, the multi-.py launcher), and it
+# was caught live on 2026-08-01 by the guard blocking the very commit that introduced it.
+_GIT_CONFIG_CMD = re.compile(
+    r"^git(?:\s+(?:-C\s+\S+|-c\s+\S+|--\S+(?:=\S+)?|-[pP]))*\s+config\b",
+    re.IGNORECASE,
+)
+
+# `git -c <key>=<value> <any-subcommand>` applies config for ONE command, so it reaches the same
+# execution keys without ever running `git config`. Same consent-equivalent effect, different
+# spelling.
+_GIT_INLINE_EXEC_CONFIG = re.compile(
+    r"^git(?:\s+\S+)*?\s+-c\s+(?:core\.hookspath"
+    r"|core\.(?:pager|editor|sshcommand|fsmonitor)"
+    r"|[\w.-]*\.(?:external|textconv|command|driver|process|smudge|clean)"
+    r"|alias\.[\w-]+)=",
+    re.IGNORECASE,
+)
 _GIT_CONFIG_READ = re.compile(r"\s(?:--get(?:-all|-regexp|-urlmatch)?|--list|-l)\b", re.IGNORECASE)
 _GIT_EXEC_KEY = re.compile(
     r"\b(?:core\.hookspath"
@@ -258,6 +278,11 @@ def main() -> None:
             # `git config core.hooksPath /tmp/h` names no protected FILE, so the default-deny
             # path below would never see it, yet it hands the next `git commit` arbitrary
             # execution. Reads (--get/--list) are allowed.
+            if _GIT_INLINE_EXEC_CONFIG.match(stripped):
+                _block(
+                    "git one-shot execution config (`git -c <key>=<value>`) - git would execute "
+                    f"this value on the command that follows ({seg[:100]})"
+                )
             if (
                 _GIT_CONFIG_CMD.match(stripped)
                 and not _GIT_CONFIG_READ.search(seg)
