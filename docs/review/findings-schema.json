@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "findings-schema",
   "title": "Compliance-surveillance team - review findings pack",
-  "description": "The structured source of truth for a review/audit report. scripts/render_findings.py renders it to the canonical REVIEW-<slug>.md; scripts/validate_findings.py enforces this schema. The model supplies field VALUES; the renderer owns the FORMAT - so a finding can never drift (5C/C-word/inline). Narrative sections are string fields so the whole report renders from one pack.",
+  "description": "The structured source of truth for a review/audit report. scripts/render_findings.py renders it to the canonical REVIEW-<slug>.md; scripts/validate_findings.py enforces this schema. The model supplies field VALUES; the renderer owns the FORMAT - so a finding can never drift (5C/C-word/inline). Narrative sections are string fields so the whole report renders from one pack. ONE shared schema across every pack-emitting reviewer, distinguished by 'kind': code-reviewer (review, security-audit), performance-reviewer (performance), compliance-reviewer (compliance), model-validator (model-validation). Those four hold no Write, so the pack IS their detail transport: they return it, the PM writes it to artifacts/data/findings-<slug>.json, and check_artifacts --fix validates and renders it.",
   "type": "object",
   "required": ["slug", "scope", "mode", "verdict", "findings"],
   "additionalProperties": true,
@@ -10,8 +10,8 @@
     "slug": { "type": "string", "description": "kebab-case id; drives the artifact filename" },
     "kind": {
       "type": "string",
-      "enum": ["review", "security-audit", "performance"],
-      "description": "which review kind - drives the rendered artifact's prefix (REVIEW- / SECURITY-AUDIT- / PERF-) and title. Defaults to 'review' if omitted."
+      "enum": ["review", "security-audit", "performance", "compliance", "model-validation"],
+      "description": "which review kind - drives the rendered artifact's prefix (REVIEW- / SECURITY-AUDIT- / PERF-) and title. Defaults to 'review' if omitted. 'compliance' and 'model-validation' have no prefix mapping in render_findings/check_artifacts yet, so they fall back to REVIEW-<slug>.md: give those packs a slug prefixed 'compliance-' / 'model-validation-' so they cannot collide with a code-review pack of the same engagement."
     },
     "title": { "type": "string" },
     "scope": { "type": "string", "description": "files / commit range reviewed" },
@@ -24,6 +24,7 @@
     "executive_summary": { "type": "string" },
     "developer_guidance": { "type": "string", "description": "the mandatory 🔵 forward-looking section" },
     "limitations": { "type": "string", "description": "limitations & residual risk" },
+    "dod_status": { "type": "string", "description": "compliance packs: the Definition-of-Done verdict per applicable item (met / not met + the evidence relied on). Not yet emitted by render_findings - carried in the pack so the detail is retained and auditable" },
     "findings": {
       "type": "array",
       "items": {

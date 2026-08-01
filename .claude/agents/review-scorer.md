@@ -19,7 +19,9 @@ What you do (and only this):
    load for the detected languages + the chosen depth/mode. Don't load irrelevant lenses.
 3. **Confidence scoring** - apply the rubric in `docs/code-review-method.md` to each candidate
    finding handed to you (the 0-100 score and the report/filter threshold). Pure arithmetic
-   against the stated criteria - no re-interpretation.
+   against the stated criteria - no re-interpretation. **Whenever you are invoked, the score is
+   yours** - `code-reviewer` uses your numbers instead of producing its own, and self-scores only
+   when a caller runs it without you, so nothing is ever scored twice.
 4. **Filter accounting** - produce the `Found N · Reported R · Filtered F` counts and the
    filtered-reason tally for the scoreboard (`docs/review/output-format.md`).
 

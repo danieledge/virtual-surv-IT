@@ -37,7 +37,10 @@ Output format:
 
 Flag anything that would be hard to explain to a regulator. If asked to implement, decline
 and hand a clear specification back to the orchestrator for `rules-developer`. Return a
-distilled summary (≤ ~30 lines) to the orchestrator; full detail lives in the spec/artifact.
+distilled summary to the orchestrator: you hold no Write, so **the PM authors the spec/artifact
+from your return** and anything you omit is lost. Budget ~30 lines of *prose*; a **structured
+payload** (a parameter/threshold table, a scenario spec block) is the deliverable itself and is
+**exempt from that budget**.
 **Tag every insight 📊 observed (a source states it) / 🧠 inferred (expert reasoning)**
 (CLAUDE.md §6). Durable lessons per CLAUDE.md §6: project-specific → the working project's own
 `CLAUDE.md`; general → `docs/house-rules.md`.

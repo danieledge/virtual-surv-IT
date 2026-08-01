@@ -49,8 +49,11 @@ Output, organised by priority:
 
 For each: the gap, its **regulatory/detection implication** (what abuse could be missed),
 how you'd evidence it, and the remediation owner. **Tag every finding 📊 observed (confirmed in the
-feed/data) / 🧠 inferred** (CLAUDE.md §6). Return a distilled summary (≤ ~30 lines) to the
-orchestrator - verdict and headline gaps; the full findings live in the artifact. Durable lessons
+feed/data) / 🧠 inferred** (CLAUDE.md §6). Return a distilled summary to the orchestrator - verdict
+and headline gaps: you hold no Write, so **the PM authors the artifact from your return** and
+anything you omit is lost. Budget ~30 lines of *prose*; a **structured payload** (the coverage
+matrix, a reconciliation table) is the deliverable itself and is **exempt from that budget**.
+Durable lessons
 per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`; general →
 `docs/house-rules.md`.
 
