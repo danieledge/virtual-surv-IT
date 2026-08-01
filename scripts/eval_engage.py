@@ -94,11 +94,42 @@ SANDBOX_EXCLUDES = (
 
 # The sandbox session must stay hermetic: nothing it does may leave the box.
 _NET_BASH_RE = re.compile(
-    r"\b(git\s+push|git\s+fetch|git\s+pull|curl|wget|ssh|scp|gh\s|pip\s+install|npm\s+install)\b"
+    r"\b(git\s+push|git\s+fetch|git\s+pull|git\s+clone|git\s+remote\s+update|git\s+ls-remote"
+    r"|curl|wget|ssh|scp|sftp|rsync\s+[^|]*::|nc\b|ncat|netcat|telnet"
+    r"|gh\s|pip[23]?\s+(?:install|download)|npm\s+(?:install|ci|publish)|pnpm\s+(?:install|add)"
+    r"|yarn\s+(?:add|install)|uv\s+(?:pip|add)|poetry\s+(?:add|install)|cargo\s+(?:add|install)"
+    r"|apt(?:-get)?\s+install|brew\s+install"
+    # Interpreter one-liners are the obvious way around a verb list; catch the network modules
+    # rather than trying to enumerate every spelling of an interpreter invocation.
+    r"|urllib|requests\.(?:get|post)|httpx|socket\.(?:socket|create_connection)|aiohttp"
+    r"|http\.client|fetch\(|XMLHttpRequest"
+    r")\b"
 )
 _NET_TOOLS = {"WebFetch", "WebSearch"}
 
 _TRANSCRIPT_CAP = 80_000  # chars of transcript handed to the normalizer / judge
+
+def _cap_transcript(transcript: str, cap: int = _TRANSCRIPT_CAP) -> str:
+    """Keep BOTH ends of a long transcript, not just the tail.
+
+    A pure tail slice silently dropped the run's OPENING on long engagements, which is exactly
+    where the banner, the intake gate, the data attestation and the right-sizing statement live.
+    Several rubric dimensions score those, so a long run could be marked down for behaviour that
+    happened and was then truncated out of the judged slice (review 2026-08-01). Head and tail
+    are kept with the omission stated in-band so the judge knows the middle is missing rather
+    than inferring the work was never done.
+    """
+    if len(transcript) <= cap:
+        return transcript
+    head = cap // 3
+    tail = cap - head
+    dropped = len(transcript) - cap
+    return (
+        transcript[:head]
+        + f"\n\n[... {dropped} chars of the middle omitted to fit the judged slice ...]\n\n"
+        + transcript[-tail:]
+    )
+
 
 # Subagent output is the WORK; the PM's own messages are the narration of it. Capturing
 # only the PM (parent_tool_use_id is None) meant the normalizer and judge scored an
@@ -321,13 +352,23 @@ async def answer_questions(
         answers = {}
     for q in questions:
         q_text = q.get("question", "")
+        fell_back = False
         if q_text not in answers or not answers[q_text]:
             opts = q.get("options") or []
             answers[q_text] = opts[0]["label"] if opts else "Proceed"
+            fell_back = True
         sim_log.exchanges.append(
             {"question": q_text, "header": q.get("header"), "answer": answers[q_text]}
         )
-        _maybe_grant_consent(q, answers[q_text], sandbox, sim_log)
+        # Never let a FALLBACK grant execution consent. When the simulator's reply is
+        # unparseable we take the first option, which may happen to read "Yes, run it" - so an
+        # SDK hiccup, not the persona's intent, would open the §7 gate. Declining on fallback is
+        # the fail-safe direction: a withheld consent takes the documented static-only path,
+        # whereas a spurious grant silently changes what the run is allowed to do.
+        if fell_back:
+            sim_log.exchanges[-1]["answer_source"] = "harness-fallback"
+        else:
+            _maybe_grant_consent(q, answers[q_text], sandbox, sim_log)
     return answers
 
 
@@ -787,7 +828,7 @@ def _artifact_listing(
 
 async def normalize(transcript: str, listing: str, model: str) -> list[dict]:
     reply = await _one_shot(
-        f"{_NORMALIZER_PROMPT}\n## Artifact files\n{listing}\n\n## Transcript\n{transcript[-_TRANSCRIPT_CAP:]}",
+        f"{_NORMALIZER_PROMPT}\n## Artifact files\n{listing}\n\n## Transcript\n{_cap_transcript(transcript)}",
         model,
     )
     findings = [
@@ -809,7 +850,7 @@ async def normalize(transcript: str, listing: str, model: str) -> list[dict]:
 async def judge(transcript: str, listing: str, rubric: str, model: str) -> dict:
     reply = await _one_shot(
         f"{_JUDGE_PROMPT}\n## Rubric\n{rubric}\n\n## Artifact files\n{listing}\n\n"
-        f"## Transcript\n{transcript[-_TRANSCRIPT_CAP:]}",
+        f"## Transcript\n{_cap_transcript(transcript)}",
         model,
     )
     return _extract_json(reply)
@@ -1065,7 +1106,7 @@ def raw_evidence_findings(
     findings: list[dict] = []
     baseline = baseline or {}
 
-    def _add(chunks: list[str], location: str) -> None:
+    def _add(chunks: list[str], location: str, kind: str) -> None:
         for chunk in chunks:
             if len(findings) >= _RAW_MAX_TOTAL:
                 return
@@ -1073,13 +1114,16 @@ def raw_evidence_findings(
                 # `location` is deliberately EMPTY on raw findings. eval_score._matches folds
                 # location into the keyword haystack, so carrying the path would let a spec
                 # match on a FILENAME the harness seeded rather than on content the team wrote.
-                {"severity": "warning", "location": "", "title": chunk, "kind": "raw"}
+                # `kind` separates the team TALKING ("prose") from the team having DONE
+                # something ("artifact"), so the scorer can refuse to accept a promise as
+                # evidence and a manifest can demand artifact-backed proof via `sources:`.
+                {"severity": "warning", "location": "", "title": chunk, "kind": kind}
             )
 
     # The PM's own prose goes in FIRST, with a reserved quota. Chunking it last under a shared
     # cap meant an artifact-heavy run spent the entire budget on files and recorded ZERO
     # transcript chunks, silently reintroducing the very blindness this function exists to fix.
-    _add(_chunk_text(transcript)[:_RAW_TRANSCRIPT_QUOTA], "")
+    _add(_chunk_text(transcript)[:_RAW_TRANSCRIPT_QUOTA], "", "prose")
 
     artifacts = sandbox / "artifacts"
     if artifacts.is_dir():
@@ -1094,7 +1138,7 @@ def raw_evidence_findings(
             # Unchanged since seeding => the case's own INPUT, not the team's work. Skip it.
             if baseline.get(rel) == hashlib.sha256(raw).hexdigest():
                 continue
-            _add(_chunk_text(raw.decode("utf-8", errors="replace")), rel)
+            _add(_chunk_text(raw.decode("utf-8", errors="replace")), rel, "artifact")
 
     return findings
 
@@ -1563,7 +1607,9 @@ def main() -> int:
         transcript_file = out_dir / "transcript.md"
         if not transcript_file.is_file():
             ap.error(f"{out_dir} has no transcript.md - not a saved run dir")
-        manifest = _load_case(case_id)
+        # A --resume-run writes its output to "<case>-resume", which is not a case id. Strip the
+        # suffix so rescoring a resumed run loads the right manifest instead of crashing.
+        manifest = _load_case(case_id[: -len("-resume")] if case_id.endswith("-resume") else case_id)
         rubric = (RUBRICS_ROOT / f"{manifest['rubric']}.md").read_text(encoding="utf-8")
         result = asyncio.run(
             score_run(
@@ -1576,6 +1622,21 @@ def main() -> int:
                 args,
             )
         )
+        # Carry the ORIGINAL run's death flags forward. score_run only re-runs the scoring
+        # layers, so it knows nothing about whether the session timed out or died; without this
+        # a rescored dead run was recorded as a clean "pass" row in the trend log, quietly
+        # converting an unscorable run into evidence of quality (review 2026-08-01).
+        try:
+            original = json.loads((out_dir / "score.json").read_text(encoding="utf-8"))
+        except Exception:
+            original = {}
+        for flag in ("timed_out", "session_error", "error", "duration_s", "cost_usd", "num_turns"):
+            if flag in original and flag not in result:
+                result[flag] = original[flag]
+        result["passed"] = bool(result.get("passed")) and not (
+            result.get("timed_out") or result.get("session_error")
+        )
+        result["outcome"] = run_outcome(result)
         (out_dir / "score-rescore.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         append_result(result_record(result, out_dir.parent.name, mode="rescore"))
         det = result["deterministic"]

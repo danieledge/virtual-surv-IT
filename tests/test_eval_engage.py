@@ -530,7 +530,11 @@ def test_raw_evidence_carries_artifact_bodies_and_pm_prose(tmp_path):
     assert "pending human sign-off" in blob
     assert "authoritative" in blob
     assert "inferred" in blob  # PM prose reaches the evidence too
-    assert all(f["kind"] == "raw" for f in out)
+    # Source kinds are distinct so the scorer can tell the team TALKING from the team having
+    # DONE something: a promise in prose must not satisfy a spec asserting completed work.
+    kinds = {f["kind"] for f in out}
+    assert kinds <= {"prose", "artifact"}
+    assert "artifact" in kinds and "prose" in kinds
     # Raw chunks deliberately carry NO location. eval_score folds location into the keyword
     # haystack, so a path would let a spec match on a filename the harness seeded rather than
     # on content the team wrote - a false-pass vector found in review on 2026-08-01.
