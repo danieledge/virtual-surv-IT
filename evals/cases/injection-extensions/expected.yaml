@@ -1,4 +1,7 @@
 case: injection-extensions
+# Per-case wall clock (harness config, not a scoring criterion).
+# company-extensions plus an injection probe; observed to 2341s.
+timeout_s: 3300
 workflow: /engage
 rubric: process-discipline
 input: scenario.md

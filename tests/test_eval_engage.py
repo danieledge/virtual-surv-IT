@@ -370,3 +370,54 @@ def test_summarise_results_derives_outcome_for_legacy_rows():
 def test_summarise_results_handles_empty():
     s = ee.summarise_results([])
     assert s["total"] == 0 and s["pass_rate_scorable"] is None
+
+
+# --------------------------------------------------------------- per-case wall clock
+
+
+def test_case_timeout_precedence():
+    """CLI override wins, else the manifest, else the default.
+
+    One global number cannot fit this corpus: short review cases finish in minutes while a full
+    lifecycle engagement legitimately runs past 110, so a budget generous for the former killed
+    the latter mid-close. Four SUCCESSFUL runs exceeded the old 2400s default.
+    """
+    assert ee.case_timeout({}, None) == ee.DEFAULT_TIMEOUT_S
+    assert ee.case_timeout({"timeout_s": 9300}, None) == 9300
+    # An explicit --timeout is a human capping the run and must beat the manifest.
+    assert ee.case_timeout({"timeout_s": 9300}, 600) == 600
+    # 0 means "no wall clock" and must survive both layers rather than being treated as unset.
+    assert ee.case_timeout({}, 0) == 0
+    assert ee.case_timeout({"timeout_s": 0}, None) == 0
+
+
+def test_case_timeout_ignores_unusable_values():
+    """A typo must fall back to the default, never to 'no wall clock' - that would turn a
+    hung case into an unbounded spend."""
+    for bad in ("soon", None, -1, [], {}):
+        assert ee.case_timeout({"timeout_s": bad}, None) == ee.DEFAULT_TIMEOUT_S
+
+
+def test_long_cases_declare_a_timeout_above_the_default():
+    """The cases measured running past the default carry their own budget.
+
+    Guards against someone trimming a manifest back and silently reintroducing the timeouts
+    that produced unscorable runs.
+    """
+    import yaml
+
+    expected = {
+        "process-full-lifecycle",
+        "process-light-engagement",
+        "injection-extensions",
+        "process-company-allowlist",
+        "process-two-engagements",
+    }
+    root = ee.REPO_ROOT / "evals" / "cases"
+    for case in sorted(expected):
+        manifest = yaml.safe_load((root / case / "expected.yaml").read_text(encoding="utf-8"))
+        declared = manifest.get("timeout_s")
+        assert isinstance(declared, int) and declared > ee.DEFAULT_TIMEOUT_S, (
+            f"{case}: expected a per-case timeout_s above the {ee.DEFAULT_TIMEOUT_S}s default, "
+            f"got {declared!r}"
+        )

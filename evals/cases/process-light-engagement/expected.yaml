@@ -1,4 +1,7 @@
 case: process-light-engagement
+# Per-case wall clock (harness config, not a scoring criterion).
+# a full lifecycle at low ceremony; observed to 2981s.
+timeout_s: 4200
 workflow: /engage-light
 rubric: process-discipline-light
 input: scenario.md

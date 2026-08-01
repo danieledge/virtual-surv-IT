@@ -126,6 +126,17 @@ _ARTIFACT_BODY_SUFFIXES = (".md", ".txt")
 # two minutes of total silence means it will never speak (see the watchdog in run_case).
 STARTUP_TIMEOUT_S = 120
 
+# Per-case wall clock. One global number cannot fit this corpus: the short review cases finish
+# in 3-8 minutes while a full lifecycle engagement legitimately runs past 110, so a budget that
+# is generous for the former kills the latter mid-close. Measured over the 2026-07-25..30
+# history, four SUCCESSFUL runs exceeded the old 2400s default (the longest at 6763s), and five
+# of the thirteen runs that produced no gradeable output were timeouts with no API error in the
+# transcript - a budget set below what the case needs, not instability.
+#
+# A case declares `timeout_s:` in its manifest when it needs more than the default; an explicit
+# --timeout on the command line still wins over both, so a quick smoke run can cap everything.
+DEFAULT_TIMEOUT_S = 2400
+
 
 def _session_env() -> dict[str, str]:
     """Env overrides for every spawned CLI, fixing two observed fidelity breaks.
@@ -850,9 +861,12 @@ async def run_case(
     sim_log = SimTranscript()
     cap = SessionCapture()
     started = time.monotonic()
+    timeout_s = case_timeout(manifest, args.timeout)
+    budget_note = f", ${args.max_budget}" if args.max_budget else ""
+    clock_note = f", {timeout_s}s wall clock" if timeout_s > 0 else ", no wall clock"
     print(
-        f"  [{case_id}] running live /engage session (cap {args.max_turns} turns"
-        f"{f', ${args.max_budget}' if args.max_budget else ''})..."
+        f"  [{case_id}] running live /engage session "
+        f"(cap {args.max_turns} turns{budget_note}{clock_note})..."
     )
     try:
         await asyncio.wait_for(
@@ -869,14 +883,12 @@ async def run_case(
                 extra_env={str(k): str(v) for k, v in (manifest.get("session_env") or {}).items()},
                 include_subagents=not getattr(args, "exclude_subagent_output", False),
             ),
-            timeout=args.timeout
-            if args.timeout > 0
-            else None,  # 0 = no wall clock; budget is the stop
+            timeout=timeout_s if timeout_s > 0 else None,  # 0 = no wall clock; budget is the stop
         )
     except asyncio.TimeoutError:
         cap.timed_out = True
         print(
-            f"  [{case_id}] TIMED OUT after {args.timeout}s - scoring what exists", file=sys.stderr
+            f"  [{case_id}] TIMED OUT after {timeout_s}s - scoring what exists", file=sys.stderr
         )
     except Exception as exc:  # session died - score whatever it left behind, report the error
         cap.is_error = True
@@ -1027,6 +1039,26 @@ def _plugin_version(root: Path = REPO_ROOT) -> str:
         )
     except (OSError, KeyError, TypeError, json.JSONDecodeError):
         return "unknown"
+
+
+def case_timeout(manifest: dict, cli_timeout: int | None) -> int:
+    """Resolve the wall clock for one case: CLI override, else manifest, else the default.
+
+    Precedence is deliberate. An explicit --timeout is a human capping the run (a smoke pass, a
+    constrained machine) and must win over everything. Otherwise the case's own `timeout_s`
+    applies, because how long a case needs is a property of the case, not of the invocation.
+    0 means no wall clock at all, and is preserved through both layers.
+    """
+    if cli_timeout is not None:
+        return cli_timeout
+    declared = manifest.get("timeout_s")
+    if declared is None:
+        return DEFAULT_TIMEOUT_S
+    try:
+        value = int(declared)
+    except (TypeError, ValueError):
+        return DEFAULT_TIMEOUT_S
+    return value if value >= 0 else DEFAULT_TIMEOUT_S
 
 
 def run_outcome(result: dict) -> str:
@@ -1248,7 +1280,12 @@ def main() -> int:
     ap.add_argument("--list", action="store_true", help="list runnable cases and exit")
     ap.add_argument("--max-turns", type=int, default=100, help="session turn cap (default 100)")
     ap.add_argument(
-        "--timeout", type=int, default=2400, help="per-case wall clock seconds (default 2400)"
+        "--timeout",
+        type=int,
+        default=None,
+        help="override the per-case wall clock, in seconds, for EVERY case (0 = no wall clock). "
+        f"Omit to let each case use its manifest's timeout_s, falling back to "
+        f"{DEFAULT_TIMEOUT_S}s",
     )
     ap.add_argument(
         "--max-budget", type=float, default=None, help="per-case USD cap (SDK max_budget_usd)"
