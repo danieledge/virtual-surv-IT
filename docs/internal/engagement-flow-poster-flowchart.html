@@ -73,6 +73,37 @@
   :root{--evbg:#1c2029;--evbar:#252a35;--evline:#333a48;--evfg:#d7dbe4;--evmut:#8b93a5;
         --evmo:#e8c07a;--evu:#9ecbff;--evg:#c8a2e0;--evw:#e8a87c;--evo:#87d7a0;}
 
+
+  /* Progressive emphasis: the process is primary, the proof is one click away. */
+  details.eviq{border:1px solid var(--evline);border-radius:7px;background:var(--evbg);
+       margin:.7rem 0 .2rem;overflow:hidden;}
+  details.eviq > summary{cursor:pointer;list-style:none;}
+  details.eviq > summary::-webkit-details-marker{display:none}
+  details.eviq > summary::after{content:"show ▾";margin-left:auto;opacity:.75;
+       font-size:.92em;letter-spacing:.06em;}
+  details.eviq[open] > summary::after{content:"hide ▴"}
+  details.eviq > summary:focus-visible{outline:2px solid var(--p5);outline-offset:-2px}
+
+  /* One memorable sentence per phase, the reason the machinery is shaped this way. */
+  .pmnote{margin:.7rem 0 0;padding:.5rem 0 0;border-top:1px solid var(--line);
+       color:var(--muted);font-size:.8rem;line-height:1.55;font-style:italic;}
+  .pmnote b{font-style:normal;color:var(--ink);font-weight:700;
+       font-size:.62rem;letter-spacing:.13em;text-transform:uppercase;
+       display:block;margin-bottom:.2rem;}
+
+  /* The close IS a checklist, so let it read as one. */
+  .step.ck{position:relative;padding-left:1.5rem;border:none;background:none;
+       border-radius:0;border-bottom:1px solid var(--line);}
+  .step.ck::before{content:"\2713";position:absolute;left:.35rem;top:.5rem;
+       color:var(--p5);font-weight:700;font-size:.82rem;}
+
+  /* Fewer boxes. Whitespace and a single left rule carry the grouping instead. */
+  .node{border-top:none;border-right:none;border-bottom:none;border-radius:0;
+       background:none;padding-left:.7rem;}
+  .node.dec,.node.usr,.node.blkd{background:none;padding-left:.7rem;}
+  .node.term{border:1px dashed var(--sys);border-radius:20px;background:var(--syss);
+       padding-left:.75rem;}
+
   /* header */
   header.hd{display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:flex-start;
        border-bottom:4px solid var(--ink);padding-bottom:.9rem;}
@@ -295,7 +326,7 @@
         <ul><li>"Where is the code / input?"</li>
             <li>Never invent a target; the safety questions below need one first</li></ul></div>
       <div class="arr"><i>Yes</i> ↓ Phase 1</div>
-      <div class="eviq"><div class="evh">Recorded run · what you actually see</div><pre><span class="mo">🎩 Morgan (PM)</span> hi, I'm Morgan, your PM on the Compliance
+      <details class="eviq"><summary class="evh">Recorded run · what you actually see</summary><pre><span class="mo">🎩 Morgan (PM)</span> hi, I'm Morgan, your PM on the Compliance
    Surveillance Engineering team. We're on <span class="o">team v0.33.6</span>.
    Anytime you want the full roster, just type /meet-the-team.
 
@@ -304,7 +335,8 @@
 <span class="mo">🎩</span> <span class="o">Classification:</span> a clear build-from-spec, with defined inputs
    and testable rules. Routing it as a build engagement (spec,
    build, independent QA, code review, compliance review).
-   No open engagements to resume, so this starts fresh.</pre></div>
+   No open engagements to resume, so this starts fresh.</pre></details>
+      <p class="pmnote"><b>Why this phase exists</b> This phase exists so the team stays invisible until asked. Dormant by default is a cost decision and a safety one: nothing loads, nothing runs, nothing reads.</p>
     </div>
   </section>
 
@@ -348,7 +380,7 @@
           <div class="node"><b>Continue</b>
             <p>Attestation recorded; the responsibility is the user's.</p></div></div>
       </div>
-      <div class="eviq"><div class="evh">Recorded run · consent is handed back to you</div><pre><span class="mo">🎩</span> <span class="w">🛡️ DATA SAFETY.</span> 📡 Everything you point me at goes to the
+      <details class="eviq"><summary class="evh">Recorded run · consent is handed back to you</summary><pre><span class="mo">🎩</span> <span class="w">🛡️ DATA SAFETY.</span> 📡 Everything you point me at goes to the
    model provider. 🔴 Raw data is hard-blocked. 🤖 I can't verify
    your attestation for you.
 
@@ -357,7 +389,8 @@
 
 <span class="mo">🎩</span> Recorded, but <span class="w">intent alone unlocks nothing.</span> When you're
    ready, type this yourself: touch .claude/.exec-consent
-   <span class="w">No marker, no run, regardless of that answer.</span></pre></div>
+   <span class="w">No marker, no run, regardless of that answer.</span></pre></details>
+      <p class="pmnote"><b>Why this phase exists</b> This phase exists because consent cannot be inferred. Intent stated in chat is not a grant; only a human touching the marker is.</p>
     </div>
   </section>
 
@@ -390,6 +423,7 @@
             <p>Straight to plan &amp; gate.</p></div></div>
       </div>
       <p class="note">Phased engagements re-classify per phase: the moment any phase produces deliverable code, it runs under the full build chain (review + independent QA + the Definition of Done, the "done" checklist used at close), however the engagement started.</p>
+      <p class="pmnote"><b>Why this phase exists</b> This phase exists because the wrong route is expensive. A review dressed as a build wastes a fan-out; a build dressed as a review ships untested code.</p>
     </div>
   </section>
 
@@ -417,6 +451,7 @@
         <div class="lane"><span class="lab">Proceed</span>
           <div class="node hl"><b>Phase 4: delivery loop</b></div></div>
       </div>
+      <p class="pmnote"><b>Why this phase exists</b> This phase exists so cost and scope are agreed before spend, not explained after it.</p>
     </div>
   </section>
 
@@ -469,7 +504,7 @@
             <p>The only path to ✅.</p></div></div>
       </div>
       <p class="note">Naming discipline 📄: pre-close outputs use pass-scoped names (review-pass-N, qa-cycle-N, interim-*) and open with an interim banner. <code>delivery-report.md</code>, <code>final-*</code> and the summary email are close-only names. Iteration history is append-only evidence, never rewritten.</p>
-      <div class="eviq"><div class="evh">Recorded run · right-sizing, then a loop that earned itself</div><pre><span class="mo">🎩</span> Build's done, 12/12 of Kenji's own tests passed.
+      <details class="eviq"><summary class="evh">Recorded run · right-sizing, then a loop that earned itself</summary><pre><span class="mo">🎩</span> Build's done, 12/12 of Kenji's own tests passed.
    <span class="o">Right-sizing:</span> three specialists in parallel, each an
    independent lens on the same code. Linh (QA), Ravi (code
    review), Layla (compliance). <span class="o">No further fan-out.</span>
@@ -480,7 +515,8 @@
    tests locks that in as correct behaviour.</span>
 
 <span class="mo">🎩</span> <span class="w">This is not closed</span>, outstanding: two criticals to fix, plus
-   two business calls I will not guess at.</pre></div>
+   two business calls I will not guess at.</pre></details>
+      <p class="pmnote"><b>Why this phase exists</b> This phase exists because a reviewer who saw the builder's reasoning is not an independent reviewer.</p>
     </div>
   </section>
 
@@ -490,38 +526,38 @@
     <div class="flow">
       <p class="phase-sum">Eight ordered steps. START-HERE flips to ✅ last of all; sign-off stays human.</p>
       <div class="steps">
-        <div class="step"><b>Citations gate</b>
+        <div class="step ck"><b>Citations gate</b>
           <ul><li><code>check_citations</code> runs</li>
               <li>Unverified citations ship flagged, with resolved permalinks</li>
               <li>Never blocks the close</li></ul></div>
-        <div class="step"><b>Definition-of-Done gate ⟲</b>
+        <div class="step ck"><b>Definition-of-Done gate ⟲</b>
           <ul><li>The mechanical checker <code>check_artifacts --fix</code> runs, treated as a fix-list</li>
               <li>Deterministic findings auto-fixed; judgement calls escalated to the user</li>
               <li>Re-run until clean</li></ul></div>
-        <div class="step"><b>Reconciliation sweep</b>
+        <div class="step ck"><b>Reconciliation sweep</b>
           <ul><li>Every produced or touched doc, including README and docstrings</li>
               <li>One authoritative set of counts everywhere; stale references removed</li>
               <li>QA evidence retained on disk</li></ul></div>
-        <div class="step"><b>Codebase map update</b>
+        <div class="step ck"><b>Codebase map update</b>
           <ul><li>Durable architecture facts: 📊/🧠 tags, dates, SHA anchors</li>
               <li>History row appended</li>
               <li>Maps the code, never team activity</li></ul></div>
-        <div class="step"><b>Render everything</b>
+        <div class="step ck"><b>Render everything</b>
           <ul><li>Every <code>.md</code> artifact gets its <code>.html</code> sibling</li></ul></div>
-        <div class="step"><b>Delivery report + summary email</b>
+        <div class="step ck"><b>Delivery report + summary email</b>
           <ul><li>Report: close-only, consolidated by default</li>
               <li>Email: <code>.txt</code>, signed as Morgan, states the token/agent footprint</li>
               <li>Next steps are actions, never a call or meeting</li></ul></div>
-        <div class="step"><b>START-HERE finalised last</b>
+        <div class="step ck"><b>START-HERE finalised last</b>
           <ul><li>Status → ✅ CLOSED + date; verdict and footprint filled in</li>
               <li>Interim banners stripped</li>
               <li>The flip to ✅ is the final state change</li></ul></div>
-        <div class="step"><b>Close with next steps</b>
+        <div class="step ck"><b>Close with next steps</b>
           <ul><li>Short summary + concrete options with a recommendation</li>
               <li>A dead end is a PM failure</li>
               <li>Human sign-off is the one item only the user can perform</li></ul></div>
       </div>
-      <div class="eviq"><div class="evh">Recorded run · the close states the journey, not just the verdict</div><pre><span class="mo">🎩</span> <span class="o">✅ Closed, verdict: Ready.</span> 0 open findings. 26 builder tests
+      <details class="eviq"><summary class="evh">Recorded run · the close states the journey, not just the verdict</summary><pre><span class="mo">🎩</span> <span class="o">✅ Closed, verdict: Ready.</span> 0 open findings. 26 builder tests
    + 30 independent QA tests passing. Code review and compliance
    review both clear.
 
@@ -531,7 +567,8 @@
    calls only you could make, and a second round confirmed it held.
 
    One placeholder left on purpose: the threshold's business owner
-   needs a real name at your sign-off.</pre></div>
+   needs a real name at your sign-off.</pre></details>
+      <p class="pmnote"><b>Why this phase exists</b> This phase exists because 'done' claimed is not 'done' evidenced. The gate runs here, and refuses.</p>
     </div>
   </section>
 
