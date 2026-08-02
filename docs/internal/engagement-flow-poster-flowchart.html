@@ -1,49 +1,58 @@
-<title>Engagement Workflow v0.28.0</title>
+<title>Engagement Workflow v0.33.6</title>
 <style>
   :root{
-    --paper:#fafbfd; --panel:#ffffff; --ink:#1c2540; --muted:#5b6478; --line:#d7dce6;
-    --chipbg:#eef1f7; --codebg:#eef1f6; --code:#31405c;
-    --p0:#563d7c; --p1:#1f4e8c; --p2:#2e6b3f; --p3:#b26a0e; --p4:#2f5fa5; --p5:#0f6b66;
-    --p0s:#efeaf6; --p1s:#e7eef7; --p2s:#e8f1ea; --p3s:#f8efe0; --p4s:#e8eef7; --p5s:#e3f0ef;
+    --paper:#f2efe7; --panel:#fbfaf6; --ink:#16181c; --muted:#5f6570; --line:#ddd8cc;
+    --chipbg:#ece8dd; --codebg:#ece8dd; --code:#1f4a42;
+    --p0:#5c4a7d; --p1:#2a5578; --p2:#3a6b4a; --p3:#a06a20; --p4:#3d5f88; --p5:#1f4a42;
+    --p0s:#eeeaf3; --p1s:#e8eef3; --p2s:#e9f0ea; --p3s:#f5eddc; --p4s:#eaeef4; --p5s:#e8efec;
     --dec:#8a6d1d; --decs:#f7f1dd; --usr:#c25e12; --usrs:#faeee2;
     --blk:#a63434; --blks:#f8e8e6; --ok:#2e6b3f; --sys:#2b3355; --syss:#e9ebf4;
   }
   @media (prefers-color-scheme: dark){ :root{
-    --paper:#12161f; --panel:#1a2030; --ink:#e8eaf2; --muted:#98a1b5; --line:#333c50;
-    --chipbg:#232b3d; --codebg:#222a3c; --code:#c6d1e4;
+    --paper:#14161a; --panel:#1b1e24; --ink:#e9e7e1; --muted:#a2a8b3; --line:#31353d;
+    --chipbg:#252932; --codebg:#252932; --code:#6fbfae;
     --p0:#a78cd6; --p1:#7ba3dc; --p2:#7fbb8c; --p3:#dda44c; --p4:#7fa6dc; --p5:#5cb5ae;
     --p0s:#251f33; --p1s:#1a2436; --p2s:#1a2b1f; --p3s:#302518; --p4s:#1a2436; --p5s:#15302e;
     --dec:#cdaa4a; --decs:#2c2716; --usr:#e08b4e; --usrs:#33231a;
     --blk:#e08578; --blks:#341d1c; --ok:#7fbb8c; --sys:#9aa5d6; --syss:#20263c;
   }}
   :root[data-theme="dark"]{
-    --paper:#12161f; --panel:#1a2030; --ink:#e8eaf2; --muted:#98a1b5; --line:#333c50;
-    --chipbg:#232b3d; --codebg:#222a3c; --code:#c6d1e4;
+    --paper:#14161a; --panel:#1b1e24; --ink:#e9e7e1; --muted:#a2a8b3; --line:#31353d;
+    --chipbg:#252932; --codebg:#252932; --code:#6fbfae;
     --p0:#a78cd6; --p1:#7ba3dc; --p2:#7fbb8c; --p3:#dda44c; --p4:#7fa6dc; --p5:#5cb5ae;
     --p0s:#251f33; --p1s:#1a2436; --p2s:#1a2b1f; --p3s:#302518; --p4s:#1a2436; --p5s:#15302e;
     --dec:#cdaa4a; --decs:#2c2716; --usr:#e08b4e; --usrs:#33231a;
     --blk:#e08578; --blks:#341d1c; --ok:#7fbb8c; --sys:#9aa5d6; --syss:#20263c;
   }
   :root[data-theme="light"]{
-    --paper:#fafbfd; --panel:#ffffff; --ink:#1c2540; --muted:#5b6478; --line:#d7dce6;
-    --chipbg:#eef1f7; --codebg:#eef1f6; --code:#31405c;
-    --p0:#563d7c; --p1:#1f4e8c; --p2:#2e6b3f; --p3:#b26a0e; --p4:#2f5fa5; --p5:#0f6b66;
-    --p0s:#efeaf6; --p1s:#e7eef7; --p2s:#e8f1ea; --p3s:#f8efe0; --p4s:#e8eef7; --p5s:#e3f0ef;
+    --paper:#f2efe7; --panel:#fbfaf6; --ink:#16181c; --muted:#5f6570; --line:#ddd8cc;
+    --chipbg:#ece8dd; --codebg:#ece8dd; --code:#1f4a42;
+    --p0:#5c4a7d; --p1:#2a5578; --p2:#3a6b4a; --p3:#a06a20; --p4:#3d5f88; --p5:#1f4a42;
+    --p0s:#eeeaf3; --p1s:#e8eef3; --p2s:#e9f0ea; --p3s:#f5eddc; --p4s:#eaeef4; --p5s:#e8efec;
     --dec:#8a6d1d; --decs:#f7f1dd; --usr:#c25e12; --usrs:#faeee2;
     --blk:#a63434; --blks:#f8e8e6; --ok:#2e6b3f; --sys:#2b3355; --syss:#e9ebf4;
   }
   @media (prefers-reduced-motion: no-preference){ :root{scroll-behavior:smooth;} }
   body{background:var(--paper);color:var(--ink);margin:0;padding:1.3rem;
-       font:14px/1.5 system-ui,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;}
+       font:14px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;}
   @media (max-width:640px){ body{font-size:15px;padding:.8rem;} }
   code{font:.82em/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
        background:var(--codebg);color:var(--code);padding:.05em .3em;border-radius:3px;}
   .poster{max-width:1480px;margin:0 auto;}
 
+
+  /* filing tab + companion line - shared language with docs/quick-start.html */
+  .filetab{display:inline-block;background:var(--panel);border:1px solid var(--line);
+       border-bottom:none;border-radius:6px 6px 0 0;padding:.42rem .95rem;margin-bottom:-1px;
+       font:600 .63rem/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+       letter-spacing:.14em;text-transform:uppercase;color:var(--muted);}
+  .companion{font-size:.85rem;color:var(--muted);}
+  .companion a{color:var(--p5);}
+
   /* header */
   header.hd{display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:flex-start;
        border-bottom:4px solid var(--ink);padding-bottom:.9rem;}
-  .hd-title h1{margin:0;font-size:clamp(1.4rem,4vw,2.1rem);font-weight:800;
+  .hd-title h1{margin:0;font-size:clamp(1.5rem,4.2vw,2.3rem);font-weight:700;font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
        letter-spacing:.01em;text-wrap:balance;}
   .hd-title h1 .ver{font-size:1.05rem;font-weight:700;color:var(--muted);
        margin-left:.5rem;letter-spacing:0;}
@@ -188,10 +197,14 @@
 </style>
 
 <div class="poster">
+<div class="filetab">Case file · Technical reference</div>
 <header class="hd">
   <div class="hd-title">
-    <h1>ENGAGEMENT WORKFLOW <span class="ver">v0.28.0</span></h1>
-    <p>End-to-end flow from request to closed engagement · compliance surveillance engineering team</p>
+    <h1>ENGAGEMENT WORKFLOW <span class="ver">v0.33.6</span></h1>
+    <p>End-to-end flow from request to closed engagement · compliance surveillance engineering team<br>
+      <span class="companion">New here? Start with the
+      <a href="../quick-start.html">one-page quick-start reference</a>; this sheet is the
+      technical companion to it.</span></p>
   </div>
   <div class="keys">
     <div class="key"><h3>State</h3>
@@ -219,6 +232,8 @@
   <a href="#ph5" style="--jc:var(--p5);--js:var(--p5s)"><span class="dot"></span>5 Close</a>
   <a href="#guards"><span class="dot"></span>Guards</a>
   <a href="#memory"><span class="dot"></span>Memory</a>
+  <a href="#repochecks"><span class="dot"></span>Repo checks</a>
+  <a href="#evals"><span class="dot"></span>Evals</a>
   <a href="#legend"><span class="dot"></span>Legend</a>
 </nav>
 
@@ -454,20 +469,34 @@
     <summary>Layer 0 · Always-on guards
       <span class="sub">Every session, even when the team is dormant</span></summary>
     <div class="sbody">
-    <span class="chain-lab">PreToolUse chain, in order</span>
+    <span class="chain-lab">PreToolUse · one dispatcher, then the guards in order</span>
     <div class="g block"><b>Permission deny rules</b>
-      <p>Hard-deny read/write on <code>data/raw/**</code>; read deny on <code>.env*</code>, <code>secrets/**</code>, <code>*.pem</code>, <code>*.key</code>.</p></div>
+      <p>Hard-deny read/write on <code>data/raw/**</code>; read deny on <code>.env*</code>, <code>secrets/**</code>, <code>*.pem</code>, <code>*.key</code>. Repo-as-project only: a plugin install ships hooks but no deny list, so there the hooks are the sole file-tool control.</p></div>
+    <div class="g"><b><code>locked_menu_guard.py</code> · matcher <code>AskUserQuestion</code></b>
+      <p>Keeps the locked question menus (review depth, artifact packaging) to their exact wording and option sets, so a menu cannot silently drift.</p></div>
+    <div class="g"><b><code>bash_hook_dispatcher.py</code> · one process, five checks</b>
+      <p>The three safety guards below plus two input redirects used to be five separate hook processes per Bash call. They now run inside one dispatcher, first-block-wins, each keeping its OWN crash policy (safety guards fail CLOSED, redirects fail open).</p></div>
     <div class="g block"><b><code>guard-raw-data.py</code></b>
-      <p>Blocks any Read/Grep/Glob/Bash call touching <code>data/raw/</code>. Raw transaction and comms data never reaches the model.</p></div>
+      <p>Blocks Read/Grep/Glob/Bash touching <code>data/raw/</code>, plus <code>WebFetch</code> on a <code>file://</code> URL and any unknown read tool. A search rooted ABOVE the raw directory blocks too, but only when raw records actually exist, so a synthetic-only project keeps normal repo-wide search.</p></div>
     <div class="g"><b><code>guard-code-execution.py</code></b>
-      <p>Bash only. Team scripts run consent-free (<code>convert_file</code>, <code>render_html</code>, <code>check_artifacts</code>, <code>eval_score</code>, ...). Executing anything else needs the human-made <code>.claude/.exec-consent</code> marker or <code>CST_ALLOW_EXEC=1</code>, else it blocks. Static by default; consent is a human act.</p></div>
+      <p>Bash only. Team scripts run consent-free (<code>convert_file</code>, <code>render_html</code>, <code>check_artifacts</code>, <code>engagement_state</code>, <code>engage_probe</code>, <code>validate_rtm</code>, <code>validate_references</code>, <code>eval_score</code>, ...). Executing anything else needs the human-made <code>.claude/.exec-consent</code> marker or <code>CST_ALLOW_EXEC=1</code>, else it blocks. Static by default; consent is a human act.</p></div>
     <div class="g block"><b><code>guard-consent-writes.py</code></b>
-      <p>Blocks every model write to the consent marker, settings or hook files. The model can never grant itself consent or weaken a guard.</p></div>
+      <p>Blocks every model write to the consent marker, settings, hook files and <code>.git/config</code>. The model can never grant itself consent, weaken a guard, or reach the same effect by pointing git's hooks path at code of its own.</p></div>
+    <div class="g"><b>Input redirects</b>
+      <p><code>document_input_redirect.py</code> forces PDFs/DOCX/spreadsheets through <code>convert_file</code> instead of being hand-parsed; <code>module_form_redirect.py</code> normalises how team scripts are invoked.</p></div>
     <div class="g allow"><b>→ Tool runs</b></div>
     <div class="g"><b><code>persona_anchor.py</code> · every user turn</b>
-      <p>If a START-HERE is open (⏳/⛔): re-inject the 8-line Morgan persona + discipline anchor, so the team survives even when the chat history gets condensed. Otherwise silent.</p></div>
+      <p>While an engagement is live: re-inject a ~220-token Morgan persona and discipline anchor, so the team survives even when the chat history gets condensed. It points at the roster rather than inlining it. Otherwise silent.</p></div>
+    <div class="g"><b><code>post_edit_lint.py</code> · after every write</b>
+      <p>Lints Python the moment a builder writes it (syntax always, ruff when installed) and feeds problems straight back, instead of waiting for the review gate.</p></div>
+    <div class="g"><b><code>subagent_return_budget.py</code> · after a specialist returns</b>
+      <p>Advisory nudge when a subagent's reply is clearly over the ~1,500-token return budget, since an over-long return lands verbatim in the PM's context.</p></div>
+    <div class="g"><b><code>session_resume_brief.py</code> · on compact / resume</b>
+      <p>Re-briefs a resumed or compacted session: which engagement is active, and that answers already given live on disk and must not be re-asked (a consent "No" stays "No").</p></div>
     <div class="g"><b><code>dod_stop_gate.py</code> · when a turn tries to end</b>
-      <p>If a START-HERE is open: run the mechanical DoD check. Clean → silent. Defects → block the stop once with a fix-list: auto-fix the deterministic ones, escalate judgement calls, or end plainly saying NOT closed.</p></div>
+      <p>If an engagement is open: run the mechanical DoD check. Clean → silent. Defects → warn once with a fix-list: auto-fix the deterministic ones, escalate judgement calls, or end plainly saying NOT closed.</p></div>
+    <div class="g"><b><code>todo_panel_nudge.py</code> · when a turn tries to end</b>
+      <p>Reminds once if a delivery-phase engagement never seeded the native task list, a rule a live audit found was going unfollowed.</p></div>
     </div>
   </details>
 
@@ -476,10 +505,52 @@
     <div class="sbody">
       <div class="g"><b>The BLACKBOARD</b>
         <p>Specialists coordinate by reading and writing shared artifacts (the spec, the traceability matrix, the report), not by chatting. Each step's output is the next one's input.</p></div>
-      <div class="g"><b>START-HERE</b>
-        <p>The engagement's external memory: updated the moment anything is written; survives even when the chat history gets condensed; what a resumed session reads to pick up exactly where it left off.</p></div>
+      <div class="g"><b>The ENGAGEMENT STATE <span class="sub">source of truth</span></b>
+        <p>Each engagement owns a workspace <code>artifacts/&lt;slug&gt;/</code> holding <code>engagement-state.json</code>: status, phase, outstanding work, artifact inventory, decisions, gate answers, footprint. Mutated only through <code>scripts.engagement_state</code>, every mutator re-validating and re-rendering in the same command. Several engagements can coexist; one is active per session, recorded on disk. Execution consent is deliberately NOT representable here: it lives only in the human-made marker.</p></div>
+      <div class="g"><b>START-HERE <span class="sub">rendered, never hand-edited</span></b>
+        <p>The human-readable index, generated FROM the state with a content hash, so a hand-edit is itself a detected defect. It survives compaction, and is what a resumed session reads to pick up where it left off.</p></div>
       <div class="g"><b>The CODEBASE MAP</b>
         <p>The project's durable memory of its own code: architecture facts with dates and tags. Read at every open, updated at every close. Never a log of team activity.</p></div>
+    </div>
+  </details>
+
+  <details open id="repochecks">
+    <summary>Layer 1 · Checks before anything is committed
+      <span class="sub">Contributor machine, then CI. Nothing to do with a live engagement</span></summary>
+    <div class="sbody">
+      <div class="g"><b>Local, on <code>git commit</code> <span class="sub">pre-commit</span></b>
+        <p>gitleaks, a raw-data file block, whitespace and private-key checks, and <code>pytest</code> when <code>rules/</code>, <code>tests/</code> or <code>scripts/</code> changed. Optional but recommended: it is the layer in front of CI, not a replacement for it.</p></div>
+      <div class="g"><b>CI · every push to <code>main</code> and every PR</b>
+        <p>Four jobs in parallel; the test job fans out to three legs (Python 3.10 and 3.12 on ubuntu, 3.12 on windows-latest, because the guards and launcher have Windows-specific paths).</p></div>
+      <div class="g block"><b>Tests</b>
+        <p>The full <code>pytest</code> suite: rules, masking, the renderer, all three safety guards driven through their real JSON protocol, hook-config sync, the per-case eval contract, and the DoD artifact checker.</p></div>
+      <div class="g"><b>Content validators</b>
+        <p><code>validate_masking</code> (no original PII survives, and detection still fires on masked data) · <code>validate_manifest</code> (every declared agent, skill and hook resolves) · <code>validate_references</code> (below).</p></div>
+      <div class="g"><b>Lint &amp; security</b>
+        <p><code>ruff check</code> + <code>ruff format --check</code> · <code>bandit</code> (Python security) · <code>shellcheck</code> (Bash and the git hooks) · <code>gitleaks</code> over the FULL history, not just the diff · a job that fails if any data file is tracked.</p></div>
+      <div class="g"><b><code>validate_references.py</code> <span class="sub">the reference walker</span></b>
+        <p>A link checker pointed INWARDS. It walks the docs and prompt surface, extracts every path a document, skill or agent mentions, and fails on any that will not resolve. The repo's most common defect is a document citing something that moved or was renamed, and each instance used to be caught only by adding another bespoke assertion after it broke. Deliberately ignores three classes so it does not cry wolf: files the team creates at RUNTIME or that live in the USER's project, placeholders and globs, and a short known-absent list where every entry carries a written reason. <code>--orphans</code> also lists docs nothing references.</p></div>
+      <div class="g"><b>What CI deliberately cannot cover</b>
+        <p>Engagement deliverables (<code>artifacts/</code> is git-ignored; <code>check_artifacts</code> is the gate for those) and live team quality (that needs the eval harness below, which spends tokens). CI proves the harness CONTRACT, not the team's output.</p></div>
+    </div>
+  </details>
+
+  <details open id="evals">
+    <summary>Layer 2 · The eval harness &amp; release gate
+      <span class="sub">Does the team still behave? Milestone-only, spends real tokens</span></summary>
+    <div class="sbody">
+      <div class="g"><b>Golden cases <span class="sub">43, in <code>evals/cases/</code></span></b>
+        <p>Each carries a scenario or input the agent sees, plus an <code>expected.yaml</code> manifest naming the behaviours that must be surfaced (<code>planted</code>) and the false-positive traps that must NOT fire (<code>forbidden</code>). The answer key lives in <code>notes.md</code>, never in the agent-visible input, and a test enforces that.</p></div>
+      <div class="g"><b><code>eval_engage.py</code> · the driver</b>
+        <p>Runs a REAL headless <code>/engage</code> session per case through the Agent SDK, in a throwaway sandbox with <code>evals/</code> excluded so ground truth is structurally unreachable. The guard hooks stay live: they are under test too. An LLM stakeholder answers the gates. Wall clock is per-case, declared in the manifest.</p></div>
+      <div class="g block"><b><code>eval_score.py</code> · deterministic scorer</b>
+        <p>The regression backbone, and unit-tested. Matches the team's evidence against the manifest: recall on planted behaviours, must-find items, traps triggered. Evidence is what the team actually DID: artifacts it wrote, questions it asked, its own prose. Seeded fixtures are excluded, and a promise ("I'll fix that next") cannot satisfy a spec that asserts the work happened.</p></div>
+      <div class="g"><b>LLM judge <span class="sub">qualitative only</span></b>
+        <p>Scores rubric dimensions the deterministic layer cannot see, against a per-case rubric in <code>evals/rubrics/</code>, needing ≥ 0.75 and no auto-fail. One uncalibrated call, so it is a coarse signal: recall is the load-bearing number.</p></div>
+      <div class="g"><b>Outcome &amp; trend</b>
+        <p>Every run is classified <b>pass / fail / unscorable</b>, so a session killed by a timeout or an API error is never counted as the team answering badly. Rows append to the tracked <code>evals/results.jsonl</code>, making scores trendable across releases instead of re-narrated in prose.</p></div>
+      <div class="g"><b><code>release_gate.py</code> · promotion to <code>main</code></b>
+        <p>Checks version, badge and CHANGELOG agree; a baseline exists for the version; no prompt file was committed after it AND none is dirty in the working tree; and the baseline's machine-readable verdict block parses, reconciles arithmetically, covers enough distinct cases, reports zero unadjudicated failures, and matches the runs recorded in the results log. Adjudicating a failure to a pass is allowed but must be COUNTED, never absorbed into prose.</p></div>
     </div>
   </details>
 
@@ -500,7 +571,7 @@
 </aside>
 </div>
 
-<footer>Source of truth: <code>docs/internal/engagement-flow-spec.md</code> (v0.28.0) and <code>docs/internal/engagement-flow-diagram.md</code>. Edit this file and re-render; content is reconciled to the spec, not to any generated image.</footer>
+<footer>Source of truth: <code>docs/internal/engagement-flow-spec.md</code> (v0.33.6) and <code>docs/internal/engagement-flow-diagram.md</code>. Edit this file and re-render; content is reconciled to the spec, not to any generated image.</footer>
 </div>
 
 <script>

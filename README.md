@@ -199,6 +199,11 @@ What the team gives you today, each row tied to where the claim is enforced or d
 
 ## 🚀 Quick start
 
+> 🗂️ **[Open the one-page Quick-start reference →](docs/quick-start.html)** *(open it in a
+> browser)* - the whole mental model on a single sheet: how the orchestrator and its subagents
+> fit together, the four steps to your first engagement, every command with when to reach for
+> it, and the three always-on safety rules. Print it, or keep it open beside your first session.
+
 ### 🔌 Install: run the helper, then enable it **per project**
 
 Install once with the helper, then **enable the team only in the projects that use it**, a
@@ -1046,7 +1051,8 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 
 **Reading paths: the repo has 130+ doc files; start with the path that matches your goal:**
 
-- 🆕 **New here** → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
+- 🆕 **New here** → [`docs/quick-start.html`](docs/quick-start.html) (one page, the whole mental
+  model) → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
   this README → [`docs/demos/README.md`](docs/demos/README.md) (real transcripts, nothing to
   run) → type **`/demo`**.
 - 🔧 **Extending the team** (agents/skills/menus) → [`docs/agent-design.md`](docs/agent-design.md)
@@ -1063,6 +1069,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 
 | Guide | What it covers |
 |---|---|
+| [`docs/quick-start.html`](docs/quick-start.html) | **One-page quick-start reference** - the mental model, the four steps to a first engagement, and every command with when to use it (open in a browser) |
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Plain-English tour, start here if you're new to agents/LLMs |
 | [`docs/FAQ.md`](docs/FAQ.md) | The questions a newcomer actually asks: evidence tags, hallucination, consent, the artifacts folder, Morgan |
 | [`docs/demos/README.md`](docs/demos/README.md) | Real captured demo transcripts (build, review, data-safety) - see the team work without running anything |
