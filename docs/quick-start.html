@@ -6,22 +6,22 @@
 <title>Quick start - The Compliance Surveillance Engineering Team</title>
 <style>
   :root{
-    --paper:#f2efe7; --card:#fbfaf6; --ink:#16181c; --muted:#5f6570; --faint:#8b909b;
+    --paper:#f2efe7; --card:#fbfaf6; --ink:#16181c; --muted:#5f6570; --faint:#6b7079;
     --rule:#ddd8cc; --accent:#1f4a42; --accent-soft:#e8efec;
     --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
   }
   @media (prefers-color-scheme:dark){:root{
-    --paper:#14161a; --card:#1b1e24; --ink:#e9e7e1; --muted:#a2a8b3; --faint:#7b818c;
+    --paper:#14161a; --card:#1b1e24; --ink:#e9e7e1; --muted:#a2a8b3; --faint:#949aa6;
     --rule:#31353d; --accent:#6fbfae; --accent-soft:#1b2b28;
   }}
   :root[data-theme="dark"]{
-    --paper:#14161a; --card:#1b1e24; --ink:#e9e7e1; --muted:#a2a8b3; --faint:#7b818c;
+    --paper:#14161a; --card:#1b1e24; --ink:#e9e7e1; --muted:#a2a8b3; --faint:#949aa6;
     --rule:#31353d; --accent:#6fbfae; --accent-soft:#1b2b28;
   }
   :root[data-theme="light"]{
-    --paper:#f2efe7; --card:#fbfaf6; --ink:#16181c; --muted:#5f6570; --faint:#8b909b;
+    --paper:#f2efe7; --card:#fbfaf6; --ink:#16181c; --muted:#5f6570; --faint:#6b7079;
     --rule:#ddd8cc; --accent:#1f4a42; --accent-soft:#e8efec;
   }
   *{box-sizing:border-box}
@@ -46,12 +46,17 @@
         color:var(--muted);}
   .ver{margin-left:auto;font:.68rem/1 var(--mono);color:var(--faint);}
 
-  h1{font:700 clamp(1.75rem,4.4vw,2.6rem)/1.12 var(--serif);margin:.2rem 0 0;
-     max-width:14ch;letter-spacing:-.01em;}
+  h1{font:700 clamp(1.55rem,3.8vw,2.25rem)/1.14 var(--serif);margin:.2rem 0 0;
+     max-width:16ch;letter-spacing:-.01em;}
   .hr{width:54px;height:2px;background:var(--ink);opacity:.65;margin:1.05rem 0;}
   .lede{color:var(--muted);max-width:66ch;margin:0 0 1.25rem;font-size:.95rem;}
 
-  .always{display:flex;flex-wrap:wrap;gap:.5rem;}
+  .guarantees{border:1px solid var(--rule);border-radius:7px;padding:.75rem .85rem;
+       background:var(--paper);}
+  .guarantees .glbl{display:block;font:700 .6rem/1 var(--mono);letter-spacing:.14em;
+       text-transform:uppercase;color:var(--accent);margin-bottom:.6rem;}
+  .always{display:flex;flex-wrap:wrap;gap:.6rem;}
+  @media (max-width:620px){.always{gap:.55rem}.always span{width:100%}}
   .always span{border:1px solid var(--rule);border-radius:5px;background:var(--paper);
        padding:.4rem .65rem;font:.72rem/1.35 var(--mono);color:var(--muted);}
   .always b{color:var(--accent);font-weight:700;letter-spacing:.1em;}
@@ -66,8 +71,10 @@
   section{margin-top:1.1rem;background:var(--card);border:1px solid var(--rule);
           border-radius:8px;padding:1.3rem 1.5rem;}
   @media (max-width:720px){section{padding:1.1rem}}
-  h2{font:italic 600 1.15rem/1.3 var(--serif);margin:0 0 .55rem;
+  h2{font:italic 600 1.15rem/1.3 var(--serif);margin:0 0 .55rem;position:relative;
      border-bottom:1px solid var(--rule);padding-bottom:.55rem;}
+  h2::after{content:"";position:absolute;left:0;bottom:-1px;width:2.4rem;height:2px;
+       background:var(--accent);}
   .sub{color:var(--muted);font-size:.9rem;margin:0 0 1.1rem;}
 
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:.85rem;}
@@ -75,7 +82,7 @@
   @media (max-width:620px){.grid3{grid-template-columns:1fr}}
   .cell{border:1px solid var(--rule);border-radius:6px;padding:.85rem .95rem;
         background:var(--paper);}
-  .cell .n{font:.66rem/1 var(--mono);color:var(--faint);letter-spacing:.08em;}
+  .cell .n{font:700 .66rem/1 var(--mono);color:var(--accent);letter-spacing:.08em;}
   .cell h3{font:700 .97rem/1.35 var(--serif);margin:.45rem 0 .5rem;}
   .cell p{margin:0;color:var(--muted);font-size:.845rem;line-height:1.55;}
   .cell code{background:var(--card);border:1px solid var(--rule);border-radius:3px;
@@ -109,21 +116,24 @@
   .alpha{display:inline-block;vertical-align:.05em;border:1px solid var(--usr,#b4671f);
        color:var(--usr,#b4671f);border-radius:3px;padding:.06em .38em;margin-left:.3rem;
        font:700 .58rem/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;}
-  :root{--usr:#b4671f}
+  :root{--usr:#a25a17}
   @media (prefers-color-scheme:dark){:root{--usr:#e0a35e}}
   :root[data-theme="dark"]{--usr:#e0a35e}
-  :root[data-theme="light"]{--usr:#b4671f}
+  :root[data-theme="light"]{--usr:#a25a17}
 
 
 
   /* pre-1.0 notice, same substance as the README's */
-  .poc{border:1px solid var(--warn);background:var(--warns);color:var(--ink);
-       border-radius:7px;padding:.7rem .9rem;margin:0 0 .9rem;font-size:.83rem;line-height:1.55;}
+  .poc{border:1px solid var(--warn);border-left:5px solid var(--warn);
+       background:var(--warns);color:var(--ink);border-radius:7px;
+       padding:.8rem 1rem;margin:0 0 1rem;font-size:.83rem;line-height:1.6;}
+  .poc .lbl{display:block;font:700 .6rem/1 var(--mono);letter-spacing:.14em;
+       text-transform:uppercase;color:var(--warn);margin-bottom:.3rem;}
   .poc b{color:var(--ink)}
-  :root{--warn:#b4671f;--warns:#faf1e6}
+  :root{--warn:#a25a17;--warns:#faf1e6}
   @media (prefers-color-scheme:dark){:root{--warn:#e0a35e;--warns:#2b2117}}
   :root[data-theme="dark"]{--warn:#e0a35e;--warns:#2b2117}
-  :root[data-theme="light"]{--warn:#b4671f;--warns:#faf1e6}
+  :root[data-theme="light"]{--warn:#a25a17;--warns:#faf1e6}
   .ver a{color:var(--faint);text-decoration:none;border-bottom:1px dotted var(--rule)}
   .ver a:hover{color:var(--accent)}
 
@@ -189,6 +199,7 @@
 <div class="wrap">
 
   <div class="poc">
+    <span class="lbl">Standing advisory</span>
     <b>⚗️ Proof of concept, under active development.</b> An experiment, not production or
     regulatory tooling. It is <b>pre-1.0</b> and changes often; behaviour and interfaces may
     break between updates, and it can get things wrong.
@@ -201,8 +212,7 @@
     <div class="seal">Audit<br>ready<br>evidence</div>
     <div class="chiprow">
       <span class="chip">Quick-start · new users</span>
-      <span class="ver">▸ compliance-surveillance-team · v0.33.6 ·
-        <a href="https://github.com/danieledge/virtual-surv-IT">github.com/danieledge/virtual-surv-IT</a></span>
+      <span class="ver">▸ compliance-surveillance-team · v0.33.6</span>
     </div>
 
     <h1>The Compliance Surveillance Engineering Team</h1>
@@ -211,10 +221,13 @@
       comms-surveillance engineering. Morgan (the PM) coordinates 16 named specialists to build,
       test, review and hand over solutions, keeping the evidence for each step as it goes.</p>
 
-    <div class="always">
+    <div class="guarantees">
+      <span class="glbl">Runtime guarantees</span>
+      <div class="always">
       <span><b>Always on</b> · agents are blocked from reading <code>data/raw/</code></span>
       <span><b>Always on</b> · code under review is not run without your consent</span>
       <span><b>Always on</b> · all data is treated as PII/MNPI unless masked or synthetic</span>
+      </div>
     </div>
     <p style="margin:.85rem 0 0;font-size:.78rem;color:var(--faint);max-width:74ch">These <span class="term" tabindex="0" role="button">guards<span class="def"><b>hook · guard</b>Code that runs before a tool call and can refuse it. This is what makes the safety rules enforcement, rather than instructions the model could talk itself out of.</span></span> run before every <span class="term" tabindex="0" role="button">tool call<span class="def"><b>tool call</b>The model doing something rather than saying something: reading a file, running a command. Every one passes the guards first.</span></span>, engaged or dormant. They are a real control against mistakes and prompt injection, not a sandbox against a determined attacker: see <a href="safety-model.md">the safety model</a> for what each one does and does not guarantee.</p>
   </div>
@@ -470,6 +483,7 @@
   </section>
 
   <footer>
+    <a href="https://github.com/danieledge/virtual-surv-IT">github.com/danieledge/virtual-surv-IT</a><br>
     Deeper detail: <a href="OVERVIEW.md">docs/OVERVIEW.md</a> (plain English) ·
     <a href="team-operating-guide.md">the operating guide</a> (standing rules and routing) ·
     <a href="internal/engagement-flow-poster-flowchart.html">the engagement-flow poster</a>
