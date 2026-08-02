@@ -69,7 +69,13 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` · `EMAIL-NOT-MORGAN` / `EMAIL-AGENT-UNMARKED`
 > (the summary email is always FROM Morgan; every roster name in it carries a 🤖-marked
 > mention) · `RATIFIED-CLAIM-PENDING` ·
-> `REVIEW-FINGERPRINT-GAP` · `STATE-MISSING` / `STATE-INVALID` / `STATE-STALE-RENDER` ·
+> `REVIEW-FINGERPRINT-GAP` · `RTM-UNRESOLVED` / `RTM-INCOMPLETE` (a pack that HAS an
+> `rtm.md`: a Code/Test cell pointing at a file that does not exist on disk, or a
+> requirement with neither a cited obligation nor a gap disposition, or a table that does
+> not parse - the traceability spine checked by `python -m scripts.validate_rtm`, which
+> also reports the scope-dependent `RTM-ORPHAN-OBLIGATION` / `RTM-ORPHAN-TEST` sweeps this
+> gate deliberately leaves to the review gate; no RTM at all is never a finding) ·
+> `STATE-MISSING` / `STATE-INVALID` / `STATE-STALE-RENDER` ·
 > `REGISTRY-STALE` / `REGISTRY-HTML-STALE` (the registry's HTML mirror is written
 > best-effort, so its freshness is checked explicitly) · `STALE-FINDINGS-RENDER` /
 > `COUNT-MISMATCH` (audit finding #3, 2026-07-30 - the rendered `REVIEW-<slug>.md`'s

@@ -1,4 +1,7 @@
 case: process-full-lifecycle
+# Per-case wall clock (harness config, not a scoring criterion).
+# longest case in the corpus: open through close of a full engagement. Observed successful runs to 6763s, which is why four of them blew the old 2400s default.
+timeout_s: 9300
 workflow: /engage
 rubric: process-discipline
 input: scenario.md

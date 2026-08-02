@@ -29,16 +29,19 @@ When validating a detection model:
    will be **periodically re-validated** and that decay would actually be caught before it causes
    missed alerts. Flag the absence of drift monitoring as a finding in its own right.
 
-Output format:
-- **Validation summary** (Pass / Pass-with-conditions / Fail)
-- **Findings by severity** (Critical / High / Medium / Low)
-- **Evidence** for each finding
-- **Required remediation** (hand to ml-engineer via the orchestrator)
-- **Residual model risk**
-
-Return a distilled summary (≤ ~30 lines) to the orchestrator - verdict and headline findings;
-full detail lives in the artifact. **Tag every metric 📊 observed (from eval outputs you
-inspected) / 🧠 inferred** (CLAUDE.md §6).
+**Return the validation as the structured findings-pack JSON** (schema
+`docs/review/findings-schema.json`, `"kind": "model-validation"`, `slug` prefixed
+`model-validation-`): the Pass / Pass-with-conditions / Fail call goes in `verdict`, the method and
+data reviewed in `methodology`, residual model risk in `limitations`. Each finding takes `id`/
+`title`/`severity`/`location`/`basis`/`disposition` plus the five required fields (`standard` = the
+model-risk standard or metric, `problem` = the evidence, `likely_cause`, `impact`, `fix`{`diff`,
+`why`} = the required remediation for `ml-engineer` via the orchestrator). Use the **shared severity
+lanes** - critical · warning (your "High") · medium · style (your "Low") - never a private scale.
+**You author the DATA, never the report layout** - you hold no Write, so **the PM writes the pack to
+`artifacts/data/` and renders the report**; anything you leave out of the pack is lost. Keep the
+prose around it to a distilled summary (≤ ~30 lines: verdict and headline findings); **the JSON is
+the payload and does not count against that budget**. **Tag every metric 📊 observed (from eval
+outputs you inspected) / 🧠 inferred** (CLAUDE.md §6).
 
 Be sceptical and specific. You must be free to disagree with the model developer. Durable
 lessons per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`; general →

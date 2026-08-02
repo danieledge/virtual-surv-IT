@@ -900,6 +900,50 @@ def gather_update_preview(repo: Path, branch: str, local_version: Optional[str],
     return info
 
 
+def check_for_update_upfront(cfg: dict, style: Style, args) -> None:
+    """A quick glance at whether a newer version is on origin, shown right after the
+    banner and before the menu - so "there's an update" is visible no matter which
+    option the user ends up picking (previously it only surfaced deep inside a full
+    run's sync step, or the dedicated "check for updates" option - invisible to anyone
+    who picked statusline/enable/preferences/etc). Silent, not just soft-failing, on
+    anything short of "a newer version exists": no clone yet (first install - nothing
+    to compare), unreachable network, or already up to date all print nothing, so a
+    routine run stays exactly as quiet as before. A short fetch timeout keeps a slow or
+    dead network from delaying the menu itself."""
+    if args.repo:
+        repo = Path(args.repo).expanduser().resolve()
+    else:
+        configured = cfg.get("repo_path")
+        script_root = Path(__file__).resolve().parent
+        if isinstance(configured, str) and configured and looks_like_repo(Path(configured)):
+            repo = Path(configured)
+        elif looks_like_repo(script_root):
+            repo = script_root
+        else:
+            return  # no clone yet - nothing to compare on a first install
+    if not looks_like_repo(repo):
+        return
+    branch = cfg.get("branch")
+    branch = branch if branch in BRANCHES else "main"
+    try:
+        proc = run_cmd(["git", "-C", repo, "fetch", "origin", branch], timeout=8)
+    except (subprocess.TimeoutExpired, OSError):
+        return
+    if proc is None or proc.returncode != 0:
+        return
+    local_version = installed_version(repo)
+    preview = gather_update_preview(repo, branch, local_version)
+    remote = preview.get("remote_version")
+    if not remote or not local_version or remote == local_version:
+        return
+    print(style.yellow(f"📦 A newer version is available: {local_version} -> {remote}"))
+    headline = (preview.get("headlines") or [None])[0]
+    if headline:
+        print(f"   {headline}")
+    print(style.dim("   Pick option 1 to update, or 5 to preview first."))
+    print("")
+
+
 def decide_mode(explicit: Optional[str], cfg: dict) -> str:
     """install | update. Explicit wins; else update when the configured clone still exists."""
     if explicit:
@@ -1126,7 +1170,17 @@ class Installer:
                 )
                 return
         else:
-            default = self.cfg.get("repo_path", str(DEFAULT_CLONE_DIR))
+            # A new user who manually `git clone`d the repo and is running this script
+            # from inside that clone (the only copy they have - there's no separate
+            # distributed installer) had no configured repo_path yet, so "install" mode
+            # asked where to put a clone and defaulted to DEFAULT_CLONE_DIR, ignoring the
+            # perfectly good one it was already running from - the friendly path (accept
+            # the default) silently created a second, orphaned clone. Default to the
+            # script's own directory when that's a real clone instead.
+            script_root = Path(__file__).resolve().parent
+            default = self.cfg.get("repo_path") or (
+                str(script_root) if looks_like_repo(script_root) else str(DEFAULT_CLONE_DIR)
+            )
             candidate = (
                 Path(
                     ask(
@@ -1276,6 +1330,112 @@ class Installer:
             self.did(f"On {self.branch} at {commit}", f"Would be on {self.branch} at {commit}"),
             f"matches origin/{self.branch}",
         )
+        self._reexec_if_self_updated()
+
+    def _reexec_if_self_updated(self) -> None:
+        """If the sync above just pulled a NEW install_helper.py, the rest of THIS run
+        would otherwise keep executing the OLD in-memory logic - defeating the entire
+        point of shipping a fix at the installer level. Re-exec the freshly-checked-out
+        script with the same choices this run already made (repo location, branch) baked
+        in via argv, so nothing gets re-asked; the new process's own summary is the one
+        the user sees. Best-effort throughout: any failure just falls through to finish
+        THIS run on the old code, same philosophy as _relocate_if_running_inside_target_repo."""
+        if self.demo:
+            return  # never spawns a subprocess outside run_cmd's mocked demo path
+        new_script = self.repo / "install_helper.py"
+        try:
+            if not new_script.is_file():
+                return
+            running = Path(__file__).resolve().read_bytes()
+            fresh = new_script.read_bytes()
+            if running == fresh:
+                return
+            self.say(
+                self.style.yellow(
+                    "  install_helper.py itself was updated - restarting with the new version..."
+                )
+            )
+            child_argv = _argv_from_args(self.args, repo=self.repo, branch=self.branch)
+            proc = subprocess.run(  # fixed argv (sys.executable + freshly-pulled script), shell=False  # nosec B603
+                [sys.executable, str(new_script), *child_argv]
+            )
+        except OSError:
+            return
+        sys.exit(proc.returncode)
+
+    def prewarm_guard_cache(self) -> None:
+        """P1 (2026-07-31 corp report): the safety guards' interpreter cache
+        (.claude/.guard-interpreter, read by run-guard.sh) was previously written only
+        on a project's first real /engage - so every fresh install/update paid the full
+        cold-start probe cost (worst case on Windows: the python3 Store-stub hang,
+        repeated across five PreToolUse hooks) on its very next session. Writes the cache
+        once at install time instead - free for every project that later resolves to
+        this same plugin root (CLAUDE_PLUGIN_ROOT is one shared value per install, not
+        per-project).
+
+        Probes each candidate DIRECTLY (not by shelling out to run-guard.sh through sh +
+        exec): a live report (2026-07-31) showed that nested chain hanging for MINUTES on
+        a corporate Windows box even with a 30s subprocess timeout set - the timeout
+        killed the direct `sh` child, but the Store-stub `python3.exe` it had exec'd into
+        can survive as an orphaned process still holding the output pipe open, which
+        subprocess.run then blocks reading from regardless of the nominal timeout (a
+        known Windows child-process-tree gotcha). Probing python.exe directly makes it
+        the immediate child of THIS process, so a short, PER-CANDIDATE timeout reliably
+        bounds it (Windows' TerminateProcess is forceful, unlike POSIX SIGTERM). Same
+        Windows-aware order as P2's run-guard.sh fix, kept in sync by comment, not code -
+        this never invokes the launcher, so it cannot drift into calling it differently,
+        only into forgetting to update the order if run-guard.sh's ever changes again.
+
+        Best-effort throughout: a missing clone-side launcher (nothing to warm for) or no
+        interpreter found at all just skips - the guard still self-warms on first real
+        use exactly as before, this is a pure latency optimisation, never a hard
+        requirement, and it must never be the thing that makes an install look hung."""
+        self.step_intro(
+            "Priming the safety guards' interpreter cache so your first real /engage "
+            "doesn't pay that cost itself."
+        )
+        launcher = self.repo / ".claude" / "hooks" / "run-guard.sh"
+        if not launcher.is_file():
+            self.step_skip("Guard interpreter cache", "launcher not found in this clone")
+            return
+        cache = self.repo / ".claude" / ".guard-interpreter"
+        if self.demo:
+            self.step_ok(f"Would warm {cache}", "demo")
+            return
+        order = (
+            ("python", "py", "python3") if sys.platform == "win32" else ("python3", "python", "py")
+        )
+        self.say(self.style.dim("  probing... (tightly bounded - a few seconds at most)"))
+        sys.stdout.flush()
+        chosen = None
+        for name in order:
+            resolved = shutil.which(name)
+            if not resolved:
+                continue
+            try:
+                proc = run_cmd(
+                    [
+                        resolved,
+                        "-c",
+                        "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)",
+                    ],
+                    timeout=3,
+                )
+            except (subprocess.TimeoutExpired, OSError):
+                continue  # this candidate is the hung/broken one - move on, don't wait on it
+            if proc.returncode == 0:
+                chosen = resolved
+                break
+        if chosen is None:
+            self.step_skip("Guard interpreter cache", "no suitable interpreter found yet")
+            return
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(chosen, encoding="utf-8")
+        except OSError as exc:
+            self.step_skip("Guard interpreter cache", f"could not write cache ({exc})")
+            return
+        self.step_ok(f"Cached: {chosen}")
 
     def print_update_preview(self, preview: dict, branch: str, local_version) -> None:
         """Console rendering of gather_update_preview's result. Purely informational:
@@ -1841,6 +2001,7 @@ class Installer:
             return [
                 ("Preflight checks", self.preflight),
                 ("Locate existing clone", self.locate_clone_asis),
+                ("Guard interpreter cache", self.prewarm_guard_cache),
                 ("Claude Code marketplace", self.marketplace),
                 (
                     lambda: "Plugin " + ("update" if self.mode == "update" else "install"),
@@ -1873,6 +2034,7 @@ class Installer:
             ("Release channel", self.choose_branch),
             ("Local clone", self.resolve_repo),
             (lambda: f"Sync to origin/{self.branch}", self.sync_branch),
+            ("Guard interpreter cache", self.prewarm_guard_cache),
             ("Optional pip requirements", self.optional_pip),
             ("Claude Code marketplace", self.marketplace),
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
@@ -2111,6 +2273,27 @@ def parse_args(argv=None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _argv_from_args(args: argparse.Namespace, repo: Path, branch: str) -> list:
+    """Rebuild an equivalent CLI argv from a parsed Namespace, with repo/branch pinned to
+    what THIS run already resolved. Used only for the self-update re-exec
+    (Installer._reexec_if_self_updated) - --repo/--branch stop the restarted process from
+    re-asking choices already made; --enable-project/--permissions are deliberately
+    omitted since that scripting path exits _main() before an Installer ever runs."""
+    argv = []
+    if args.mode:
+        argv.append(args.mode)
+    argv += ["--branch", branch, "--repo", str(repo)]
+    if args.yes:
+        argv.append("--yes")
+    if args.pip:
+        argv.append("--pip")
+    if args.demo:
+        argv.append("--demo")
+    if args.statusline:
+        argv.append("--statusline")
+    return argv
+
+
 def _relocate_if_running_inside_target_repo(
     args: argparse.Namespace, argv: Optional[list] = None
 ) -> None:
@@ -2181,6 +2364,8 @@ def _main(argv=None) -> int:
     print_banner(style)
     subset = "full"
     if not args.demo and args.mode is None and not args.yes and sys.stdin.isatty():
+        cfg = load_config(config_path())
+        check_for_update_upfront(cfg, style, args)
         action = choose_action(style)
         if action == "quit":
             print("No problem - nothing changed. See you next time.")

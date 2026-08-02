@@ -40,7 +40,7 @@ plainly so the user chooses with eyes open, then proceed with their decision.
 
 ## 3. Synthetic path (automatable)
 - **Built-in generator:** `<python> -m scripts.gen_synthetic --kind <kind> --out data/synthetic/<name>.jsonl`
-  (`<python>`: resolve your interpreter - try python3, then python, then py - and in an installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide, "Run mode & the bundled scripts").
+  (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`).
   Check `--kind` choices first; if the user's scenario isn't covered, this is a small build
   task - route to **platform-engineer** / **data-analyst** to extend the generator, *then* run it.
 - **Fit-and-sample:** for data shaped like an existing non-raw corpus, use `scripts.synthesise`
@@ -86,4 +86,4 @@ with a recommendation - typically straight into the analysis the user wanted (`/
 `/new-scenario`, or `data-analyst`/`ml-engineer` for anomaly work) **pointed at the governed
 data**, never the raw file. Offer to carry it out and wait for the go-ahead. **Chained skills
 are dormant** - to run one yourself, read `.claude/skills/<name>/SKILL.md` and follow it in
-this session; do not invoke it via the Skill tool (full rule + plugin-mode path: `/engage`).
+this session, never the Skill tool (`.claude/skills/.shared/run-mode.md`).

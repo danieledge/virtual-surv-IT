@@ -86,6 +86,16 @@ became a measured one takes a before/after profile - only under the execution-co
 
 **Disposition tally:** ✅ _N_ Fixed/Answered · 🔴 _N_ Open · ⏭️ _N_ Deferred/Needs-input · ⚖️ _N_ Accepted - reconcile with the recommendation above (a non-pass makes the Open items explicit).
 
+> **Run provenance & non-determinism** *(standing statement - keep it in the rendered artifact)*
+> · Model `<model id>` · Framework `compliance-surveillance-team <version>` · Run `<YYYY-MM-DD>`
+>
+> The findings and conclusions in this document are **one sample from a non-deterministic
+> process**. The same inputs, run again by the same model, can yield a different set of findings,
+> in a different order, with different confidence scores. **Absence of a finding is not evidence
+> of absence:** this document evidences what *was* found on this run, never that nothing further
+> exists. Anything load-bearing for a control decision needs human verification; repeat runs
+> raise confidence but never make the result exhaustive.
+
 ## Sign-off
 > 🤖 = AI agent (Virtual Surveillance IT), not a human. Agent rows and human-approver rows stay separate - never combine an agent and a human on one line.
 

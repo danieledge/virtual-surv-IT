@@ -14,8 +14,8 @@ Run the **orchestrator-workers** pattern, agile and iterative:
 
 1. **Fill gaps flexibly.** If there's no BRD/FSD yet, run `/write-brd` then `/brd-to-fsd`
    first; skip whatever the user already provided. **Chained skills are dormant** - read
-   `.claude/skills/<name>/SKILL.md` and follow it in this session; do not invoke it via the
-   Skill tool (full rule + plugin-mode path: `/engage`). Same for `/handover` at step 7.
+   `.claude/skills/<name>/SKILL.md` and follow it in this session, never the Skill tool
+   (`.claude/skills/.shared/run-mode.md`). Same for `/handover` at step 7.
 2. **Decompose** the FSD into discrete, independently buildable units. **Route each unit to
    the right builder by type** (CLAUDE.md §6): detection logic → `rules-developer`; data
    pipeline / ETL / transformation or utility script / infra → `platform-engineer`; analytics

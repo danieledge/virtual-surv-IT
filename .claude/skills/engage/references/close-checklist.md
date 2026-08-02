@@ -87,6 +87,26 @@ comments), and verify each against the FINAL state:
   evidence is unfalsifiable. A 📊 measured tag needs a surviving artifact (output, log, cache) -
   downgrade to 🧠 inferred if nothing survives.
 
+## Finalise the state, in order (the close itself)
+
+The close window opens with `engagement_state set-status closing` (above). Everything else runs
+**last, in this order**:
+
+1. `set-team "Name (role)" ...` - the roster that actually delivered.
+2. `finalise-artifacts` - every artifact row interim → final.
+3. `set-footprint` - agents + tokens.
+4. `set-status closed --verdict "..."`.
+
+The close **refuses** while the team is empty or any artifact row is still interim, and it **runs
+the full mechanical DoD gate itself, refusing and rolling back on findings** (register R6). Fix
+what it lists (or run `check_artifacts --fix`) and re-run: never work around a refused close.
+
+Before it, remove the interim banners from artifacts that became final, and keep the 📊/🧠
+evidence tags on every data claim in the delivery report and the summary email as well as in the
+specialist artifacts. The mechanical gate verifies all of this: `MISSING-INDEX` /
+`INDEX-NO-STATUS` / `STALE-INDEX` / `STATE-STALE-RENDER` / `FINAL-BEFORE-CLOSE` /
+`SUMMARY-BEFORE-CLOSE`.
+
 ## Update the codebase map at close (ADR-003 - a DoD gate)
 
 Before the engagement closes, **update the working project's codebase map**

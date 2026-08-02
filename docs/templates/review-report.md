@@ -120,6 +120,16 @@ basis (nothing executed) and what that leaves unverified, analysers unavailable,
 made, residual risk accepted by relying on this review. This is the section a governance
 reviewer reads first - an empty one reads as overclaiming, not thoroughness.
 
+> **Run provenance & non-determinism** *(standing statement - keep it in the rendered artifact)*
+> · Model `<model id>` · Framework `compliance-surveillance-team <version>` · Run `<YYYY-MM-DD>`
+>
+> The findings and conclusions in this document are **one sample from a non-deterministic
+> process**. The same inputs, run again by the same model, can yield a different set of findings,
+> in a different order, with different confidence scores. **Absence of a finding is not evidence
+> of absence:** this document evidences what *was* found on this run, never that nothing further
+> exists. Anything load-bearing for a control decision needs human verification; repeat runs
+> raise confidence but never make the result exhaustive.
+
 <!-- Section 7a. The heading below is canonical and mechanically checked by the review skills
      (/deep-review, /audit-review) - keep it verbatim: no number, no extra annotation. -->
 ## 🔵 Developer guidance - improving future code

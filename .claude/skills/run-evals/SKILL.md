@@ -40,9 +40,7 @@ the workflow into the brief instead of asking the subagent to invoke it:
       never see `expected.yaml`'s keywords - that would leak the grade back in.
    c. **Deterministic score (you, the orchestrator):** write the findings JSON to a temp file and run
       `<python> -m scripts.eval_score --expected evals/cases/<case>/expected.yaml --findings <tmp>.json`
-      (`<python>`: resolve your interpreter - try python3, then python, then py - and in an
-      installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
-      "Run mode & the bundled scripts"). That returns recall, must-find-missed, and
+      (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`). That returns recall, must-find-missed, and
       false-positive-traps-triggered.
    d. **Qualitative judge** *(delegate to `compliance-reviewer`, acting as an
       independent LLM-judge - NOT the agent that produced the output):* score the rubric's qualitative

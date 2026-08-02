@@ -1,4 +1,7 @@
 case: process-company-allowlist
+# Per-case wall clock (harness config, not a scoring criterion).
+# extensions registry plus an allow-listed tool run; observed to 1949s.
+timeout_s: 2700
 workflow: /engage
 rubric: process-discipline
 input: scenario.md

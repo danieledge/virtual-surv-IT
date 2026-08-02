@@ -88,10 +88,13 @@ scored and filtered*. Don't restate the format here.
 ## Model tiering (wired)
 
 Scoring, filtering and context detection are **rote, mechanical** work, so they run on the cheap
-tier: the review skills delegate them to the **`review-scorer` (haiku)** agent. The dimension
-lenses run **within `code-reviewer` today** (running them as separate **sonnet** sub-agents is an
-optional next step); only `code-reviewer`'s judgement on findings + **Morgan's** challenge pass +
-the §4/§5 regulated calls pay **opus** (CLAUDE.md §8). See `docs/review/agent-router.md`.
+tier: the review skills delegate them to the **`review-scorer` (haiku)** agent. Only
+`code-reviewer`'s judgement on findings + **Morgan's** challenge pass + the §4/§5 regulated calls
+pay **opus** (CLAUDE.md §8).
+
+**How the lenses execute is not defined here.** `docs/review/agent-router.md` is canonical for the
+pipeline's shape (which lenses load, and whether they run sequentially or fanned out), and for the
+lens-file vs review-dimension vocabulary. This file leads on **scoring and filtering** only.
 
 ## Always filter out (noise)
 

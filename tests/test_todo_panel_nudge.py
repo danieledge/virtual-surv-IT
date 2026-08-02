@@ -150,13 +150,14 @@ def test_garbage_stdin_never_crashes(monkeypatch, capsys):
 
 
 def test_staged_and_live_match_when_installed():
+    """HARD FAILURE, never a skip - see tests/test_hooks_in_sync.py for why (audit 2026-08-01:
+    a skipping sync test hid a live guard that was missing three allow-list entries)."""
     from pathlib import Path
 
     repo = Path(__file__).resolve().parents[1]
     live = repo / "scripts" / "todo_panel_nudge.py"
     staged = repo / "scripts" / "staged_hooks" / "todo_panel_nudge.py"
-    if not live.is_file():
-        import pytest
-
-        pytest.skip("live hook not installed in this checkout")
-    assert live.read_bytes() == staged.read_bytes()
+    assert live.is_file(), f"live hook missing at {live} - it is not installed"
+    assert live.read_bytes() == staged.read_bytes(), (
+        "staged todo-panel nudge not yet applied - run: bash scripts/apply-todo-panel-nudge.sh"
+    )

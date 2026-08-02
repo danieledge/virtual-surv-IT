@@ -17,8 +17,8 @@ changing the user's code.** Don't blur in the handover pack - that's a **deliver
 from the artifact menu / at close, not mixed into this action question.
 
 **Chained skills are dormant** - where a step routes to another workflow (`/deep-review`), read
-`.claude/skills/<name>/SKILL.md` and follow it in this session; do not invoke it via the Skill
-tool (full rule + plugin-mode path: `/engage`).
+`.claude/skills/<name>/SKILL.md` and follow it in this session, never the Skill tool
+(`.claude/skills/.shared/run-mode.md`).
 
 Run an **evaluator-optimizer loop**:
 
@@ -73,9 +73,7 @@ narrative fields for the audit skeleton), then run **`<python> -m scripts.check_
 it validates the pack (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's
 `artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status
 closing` first). Don't hand-author or hand-edit the rendered report.
-(`<python>`: resolve your interpreter - try python3, then python, then py - and in an
-installed-plugin session invoke the bundled `scripts/` copy by path; see the operating guide,
-"Run mode & the bundled scripts".)
+(`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 
 **Close with a clear disposition - never leave it ambiguous.** State the verdict **and the
 disposition of every finding**: ✅ fixed (what changed) · 🔴 open · ⚖️ accepted (rationale) ·
@@ -89,16 +87,11 @@ pack. Which next?"* **Among the follow-ups, offer a dedicated deep security audi
 audit surfaced any security finding; it goes deeper on security (OWASP ASVS / CWE + a threat model)
 than this audit's security lens.
 
-**Standard open (Definition of Done - the opening bookend; do this before delivering the review
-above, and it applies even when this skill is invoked directly):** unless you arrived via
-`/engage` (which already wrote it), write a **proportionate Engagement Brief**
-(`docs/templates/engagement-brief.md`) as `.md` + `.html` in `artifacts/` - the target, the scope
-and decisions taken, assumptions, and the plan; **right-size it** (a few lines for a small review,
-not a full programme). The brief is the opening artifact of **every** engagement and the bookend to
-the summary email below. With the brief, **open the machine-readable engagement state** (`<python> -m scripts.engagement_state init`, ADR-006 - it renders the START-HERE living index, status ⏳), recording each artifact with `add-artifact` as it lands - **write the brief and its index row together in the same turn, before ending the turn; never leave the index trailing** (it is the external memory that survives compaction) - lifecycle discipline (operating guide): a pause on unanswered user input is ⛔ BLOCKED said out loud ("this engagement is NOT closed - outstanding: ..."), interim output takes pass-scoped names (`review-pass-N`, `interim-*`), and `delivery-report.md` + the summary email are written at ✅ close only.
-
-**Standard close (Definition of Done - applies even when this skill is invoked directly):**
-write the **engagement-summary email** (`docs/templates/engagement-summary-email.md`) as a
-`.txt` in `artifacts/`, **signed off as Morgan**, then run the mechanical gate -
-`<python> -m scripts.check_artifacts --fix` (the `--fix` mode auto-renders missing `.html` siblings and renames a mis-typed summary email to `.txt`), then act on anything it still flags (missing `.html` siblings or
-a missing email) before handing back. Detail: `docs/team-operating-guide.md`.
+**The standard open and close apply (Definition of Done), even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it: before delivering
+the review above, the proportionate **Engagement Brief** (`.md` + `.html`, right-sized) written
+together with its index row via `<python> -m scripts.engagement_state init` + `add-artifact`
+(unless `/engage` already wrote them); at the end, the **engagement-summary email** as a `.txt`
+signed off as Morgan, then `<python> -m scripts.check_artifacts --fix` and act on whatever it
+still flags. A pause on unanswered user input is ⛔ BLOCKED said out loud, interim output takes
+pass-scoped names, and `delivery-report.md` + the summary email are written at ✅ close only.

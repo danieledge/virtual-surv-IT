@@ -50,13 +50,13 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-08-01</span></header>
 <h1 id="adr-002-safety-hook-threat-model-and-additive-hardening">ADR-002: Safety-hook threat model and additive hardening</h1>
 <blockquote>
 <p>Architecture Decision Record (Nygard format). One file per significant decision, so the
 <em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
-<p><strong>Document control</strong> · ID <code>ADR-002</code> · Version <code>0.6</code> · Status <code>Accepted (implemented)</code>
-· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-06</code></p>
+<p><strong>Document control</strong> · ID <code>ADR-002</code> · Version <code>0.6.1</code> · Status <code>Accepted (implemented)</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-08-01</code></p>
 <table>
 <thead>
 <tr>
@@ -120,6 +120,12 @@ a { color: #0969da; }
 <td>2026-07-06</td>
 <td>Fable 5 static red-team (analysis only; NOT fixed in this pass)</td>
 <td>Backlog recs 17-22 added from an adversarial static pass on all three guards: exec-guard wrapper-prefix bypass of the segment-anchored runners (<code>timeout 5 pytest</code>), backslash line-continuation split (<code>python3 \</code>+newline+<code>evil.py</code>), absolute/tilde/<code>../</code> shebang-direct exec, <code>python &lt; file</code> stdin redirect, novel launcher gaps (<code>deno test</code>/<code>bun test</code>/<code>node --test</code>/<code>xargs</code>), and the read-tool coverage gap for non-<code>{Read,Grep,Glob,Bash}</code> tools. Recs 15-16 (Grep/Glob vs <code>data/raw</code>; secrets Grep/Glob) re-confirmed with concrete PoCs; rec-5 remainder (model-authored <code>scripts/</code> file becomes <code>_TEAM_ALLOW</code>-runnable) re-confirmed. All fixes are human-apply-only (guard <code>.py</code>/<code>settings.json</code>/tests are model-blocked). No guard logic changed.</td>
+</tr>
+<tr>
+<td>0.6.1</td>
+<td>2026-08-01</td>
+<td>documentation-drift audit (no guard change)</td>
+<td>Backlog status corrected: recs 1, 2 and 6 shipped but were left unmarked. Each re-verified against the code before marking (<code>_SEGMENT_SPLIT</code>/<code>_segments</code> and the <code>^</code>-anchored <code>_TEAM_ALLOW</code> in <code>guard-code-execution.py</code>; the eight absolute-path <code>Grep</code>/<code>Glob</code> deny variants in <code>.claude/settings.json</code>), with the remaining residual stated on each. No guard logic, settings or test changed in this pass.</td>
 </tr>
 </tbody>
 </table>
@@ -210,9 +216,17 @@ decision. Accepted residual: consent remains project-scoped and persists until t
 1. <strong>Segment-split Bash before matching (both hooks)</strong> - split on <code>;</code>, <code>&amp;&amp;</code>, <code>||</code>, <code>|</code>, newlines;
    evaluate each segment independently so <code>_TEAM_ALLOW</code> exempts only the matching <em>segment</em>, not
    the whole line (kills the "allowed-substring-anywhere" bypass) and the raw guard inspects each
-   piped sub-command.
-2. <strong>Anchor <code>_TEAM_ALLOW</code></strong> to segment start instead of <code>.search()</code> anywhere
-   (<code>guard-code-execution.py:78-81,116</code>).
+   piped sub-command. <strong>Done</strong> in the execution guard (verified 2026-08-01): <code>_SEGMENT_SPLIT</code> /
+   <code>_segments()</code> in <code>guard-code-execution.py</code> split on <code>;</code>, <code>&amp;&amp;</code>, <code>||</code>, <code>|</code>, newline, backtick and
+   <code>$(</code>, and <code>_EXEC_PATTERNS</code> / <code>_TEAM_ALLOW</code> are evaluated per segment. The raw-data guard does
+   <strong>not</strong> segment-split and does not need to: it substring-scans the whole Bash command string
+   for the <code>data/raw</code> markers, so a marker in any sub-command blocks the call (broader than
+   per-segment, and the same lexical residual as everything else here).
+2. <strong>Anchor <code>_TEAM_ALLOW</code></strong> to segment start instead of <code>.search()</code> anywhere - <strong>done</strong> (verified
+   2026-08-01): <code>_TEAM_ALLOW</code> in <code>guard-code-execution.py</code> is compiled <code>^(?:…)</code> and matched
+   against each segment, so an allow-listed string later in the line no longer waves the segment
+   through. Residual unchanged: the allow-list is basename-lexical (ADR-002 0.4), so a hostile
+   file <em>named</em> like a team script in a <code>scripts/</code> dir still passes.
 3. <strong>Block inline-code / stdin forms and drop the <code>-c</code> exemption</strong> (<code>:72-73</code>): <code>python … -c</code>,
    <code>python … -</code> (stdin/heredoc), <code>bash -c</code>, <code>sh -c</code>, <code>zsh -c</code>, <code>node -e</code>, <code>ruby -e</code>, <code>perl -e</code>,
    <code>deno eval</code>, <code>php -r</code>.
@@ -224,7 +238,11 @@ decision. Accepted residual: consent remains project-scoped and persists until t
    new files under <code>scripts/</code> (which <code>_TEAM_ALLOW</code> would then run).</p>
 <p><strong>Tier 2 - the OS boundary (<code>permissions.deny</code>):</strong>
 6. Add absolute-path <code>Grep</code>/<code>Glob</code> deny variants mirroring <code>Read</code>
-   (<code>/*/data/raw/**</code>, <code>/**/data/raw/**</code>).
+   (<code>/*/data/raw/**</code>, <code>/**/data/raw/**</code>) - <strong>done</strong> (verified 2026-08-01): all four <code>Grep</code> and
+   all four <code>Glob</code> variants (<code>./data/raw/**</code>, <code>data/raw/**</code>, <code>/*/data/raw/**</code>, <code>/**/data/raw/**</code>)
+   are committed in <code>.claude/settings.json</code>. Repo-as-project only: a plugin install ships no deny
+   list (rec 10), and the variants are literal-path patterns, so the parent-rooted / wildcard
+   spellings of rec 15 are still unaddressed.
 7. Treat path-less <code>Grep</code>/<code>Glob</code> as in-scope in the raw guard (search root defaults to cwd, which
    contains <code>data/raw</code>; broadened by rec 15), and check the real Grep <code>glob</code> param - <strong>the <code>glob</code>
    half is done</strong> (the hook reads both <code>glob</code> and the legacy <code>include</code> since 2026-06-29).
@@ -472,6 +490,6 @@ the accepted-residual-risk notes already in the hooks and <code>docs/house-rules
 </tr>
 </tbody>
 </table>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-002-safety-hook-threat-model.md &middot; 2026-07-30</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-002-safety-hook-threat-model.md &middot; 2026-08-01</div>
 </body>
 </html>

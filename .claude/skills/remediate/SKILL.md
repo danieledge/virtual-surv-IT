@@ -14,7 +14,7 @@ This is **audit mode** - pre-existing issues are in scope, not filtered out.
 
 **Chained skills are dormant** - where a step routes to another workflow (`/deep-review`,
 `/performance-review`, `/handover`), read `.claude/skills/<name>/SKILL.md` and follow it in this
-session; do not invoke it via the Skill tool (full rule + plugin-mode path: `/engage`).
+session, never the Skill tool (`.claude/skills/.shared/run-mode.md`).
 
 1. **Assess.** Run `/deep-review` and `/performance-review` over the code. Capture findings
    with confidence scores and evidence. (No real data - work on synthetic/masked, §5.) Legacy

@@ -80,8 +80,11 @@ When invoked:
 1. `git diff` (or the named target); group changed files by language; pick depth.
 2. Load the relevant lenses per `docs/review/agent-router.md` and run them as sequential
    focused passes, as described above; then merge and dedupe.
-3. Score every candidate finding; filter per the method. Tag each with its **evidence basis**
-   (📊 measured / 🧠 inferred - never present an inference as a measurement).
+3. Score every candidate finding; filter per the method. **Scoring is `review-scorer`'s whenever
+   the caller has it in the loop** (the `/deep-review` pipeline delegates it there); use its numbers
+   then rather than producing your own, and self-score against the same rubric only when you were
+   invoked without it. Judging whether a finding is *real* is yours either way. Tag each with its
+   **evidence basis** (📊 measured / 🧠 inferred - never present an inference as a measurement).
 4. Report in the shared `docs/review/output-format.md`: a clean **console scoreboard**, with the
    full findings written to the **clean artifact** (`artifacts/REVIEW-<slug>.md` → `.html`).
 5. **Write the `## 🔵 Developer guidance - improving future code` section - ALWAYS, no
@@ -98,8 +101,9 @@ When invoked:
 **Model tiering:** this agent runs on `opus` because the judgement on findings - correctness,
 security and audit impact in a regulated codebase - is the deep-reasoning work that justifies
 the top tier (CLAUDE.md §8). Spend that reasoning on the findings, not the mechanics: let the
-linters/analysers do the rote detection so your effort goes to confidence-scoring, filtering
-false positives, and the regulatory impact of what's left. If a caller needs a cheap,
+linters/analysers do the rote detection (and `review-scorer` the scoring arithmetic) so your effort
+goes to adjudicating the scored set, filtering false positives, and the regulatory impact of what's
+left. If a caller needs a cheap,
 mechanical-only pass (e.g. just run the analysers), that can be routed to a cheaper-tier agent
 rather than this one.
 

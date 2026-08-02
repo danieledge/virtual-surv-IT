@@ -222,8 +222,9 @@ def test_stage2_invented_option_flagged():
 
 
 def test_staged_and_live_match_when_installed():
-    if not LIVE_HOOK.is_file():
-        import pytest
-
-        pytest.skip("live hook not installed in this checkout")
-    assert LIVE_HOOK.read_bytes() == HOOK.read_bytes()
+    """HARD FAILURE, never a skip - see tests/test_hooks_in_sync.py for why (audit 2026-08-01:
+    a skipping sync test hid a live guard that was missing three allow-list entries)."""
+    assert LIVE_HOOK.is_file(), f"live hook missing at {LIVE_HOOK} - it is not installed"
+    assert LIVE_HOOK.read_bytes() == HOOK.read_bytes(), (
+        "staged locked-menu guard not yet applied - run: bash scripts/apply-locked-menu-guard.sh"
+    )

@@ -28,6 +28,20 @@
 # check EVERY time - "several minutes" for a single /engage turned out to be that stub hang
 # repeated dozens of times. `command -v` alone (existence, no execution) is cheap and safe
 # to redo every call; only the EXECUTION probe needs to happen once and be trusted after.
+
+# UTF-8 pin (2026-07-31 corporate report): the guards' stdin is the tool-call JSON payload,
+# which can carry non-ASCII (the Fix-cycle arrow "→" in locked_menu_guard.py's canonical
+# labels, curly quotes, section signs). Python 3 decodes stdin/stdout/stderr using the
+# platform's default text encoding unless told otherwise - on native Windows Python that's
+# the console codepage (e.g. cp1252), not UTF-8. Unlike a strict codec, cp1252 rarely raises
+# on decode; it silently mis-decodes multi-byte UTF-8 sequences into different-but-valid
+# characters, so a correctly-formed answer compares unequal to the guard's UTF-8 constant
+# and trips a false "drift" block instead of erroring loudly. Pin both interpreter env vars
+# before every exec path below (cache hit and full probe alike) so the guard always reads
+# and writes UTF-8 regardless of OS locale/console codepage.
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
+
 CACHE="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/.guard-interpreter"
 if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)
@@ -35,7 +49,18 @@ if [ -f "$CACHE" ]; then
 		exec "$cached" "$@"
 	fi
 fi
-for interpreter in python3 python py; do
+# Probe order (2026-07-31 corporate report, P2): the loop below still EXECUTES the first
+# name command -v resolves, to version-check it, before any cache exists - on Windows,
+# "python3" resolving to the Store stub means that first, uncached call pays the multi-
+# second stub hang even though `python`/`py` were sitting right behind it. $OS is set to
+# "Windows_NT" by the OS itself and inherited into Git Bash, so this is a real, not
+# heuristic, signal - try the real interpreters first there and leave the stub for last.
+if [ "${OS:-}" = "Windows_NT" ]; then
+	order="python py python3"
+else
+	order="python3 python py"
+fi
+for interpreter in $order; do
 	if command -v "$interpreter" >/dev/null 2>&1; then
 		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
 			mkdir -p "$(dirname "$CACHE")" 2>/dev/null

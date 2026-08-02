@@ -50,13 +50,13 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-26</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-08-01</span></header>
 <h1 id="adr-006-machine-readable-engagement-state-engagement-statejson-leads-start-here-renders-accepted">ADR-006: Machine-readable engagement state - <code>engagement-state.json</code> leads, START-HERE renders (accepted)</h1>
 <blockquote>
 <p>Architecture Decision Record (Nygard format). One file per significant decision, so the
 <em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
-<p><strong>Document control</strong> · ID <code>ADR-006</code> · Version <code>0.1</code> · Status <code>Accepted</code>
-· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-26</code></p>
+<p><strong>Document control</strong> · ID <code>ADR-006</code> · Version <code>0.3</code> · Status <code>Accepted</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-08-01</code></p>
 <table>
 <thead>
 <tr>
@@ -78,6 +78,12 @@ a { color: #0969da; }
 <td>2026-07-26</td>
 <td>live-run artifact review remediation (same day)</td>
 <td>Schema v2: <code>log</code> split from <code>outstanding</code> (+ blocked requires outstanding), structured <code>ratifications</code>; close-completeness validation (<code>set-team</code>/<code>finalise-artifacts</code> before close); gates <code>RATIFIED-CLAIM-PENDING</code> + <code>REVIEW-FINGERPRINT-GAP</code>; v1 upgrades in place on first mutation</td>
+</tr>
+<tr>
+<td>0.3</td>
+<td>2026-08-01</td>
+<td>documentation-drift audit</td>
+<td>Revision note: the flat paths below (<code>artifacts/engagement-state.json</code>, <code>artifacts/START-HERE.md</code>) are <strong>superseded by <a href="ADR-008-multi-engagement-workspaces.html">ADR-008</a></strong> (0.31): one state file and one rendered index <strong>per engagement workspace</strong>, <code>artifacts/&lt;slug&gt;/engagement-state.json</code> + <code>artifacts/&lt;slug&gt;/START-HERE.md</code>, with a derived registry (<code>artifacts/engagements.json</code> + rendered <code>ENGAGEMENTS.md</code>) and the session's ACTIVE slug recorded in <code>artifacts/.active-engagement.json</code>. The design in this ADR (state leads, START-HERE renders, mutators re-validate and re-render, the STATE-* gates, the consent exclusion) is unchanged and applies per workspace; a legacy flat pack is still read. Only the location moved.</td>
 </tr>
 </tbody>
 </table>
@@ -127,7 +133,13 @@ the one fact whose provenance the whole threat model protects.</p>
 <li><strong>One authoritative state file per engagement</strong>: <code>artifacts/engagement-state.json</code>
    (schema v1) - status, phase, engagement metadata, team, verdict, footprint, outstanding
    items, artifact inventory, decisions of record. JSON, stdlib-parseable: the hooks and
-   checker must work in foreign plugin installs with no pip.</li>
+   checker must work in foreign plugin installs with no pip.<blockquote>
+<p><strong>Superseded path (0.3):</strong> since <a href="ADR-008-multi-engagement-workspaces.html">ADR-008</a> the
+file lives in the engagement's own workspace, <code>artifacts/&lt;slug&gt;/engagement-state.json</code>
+(a pre-0.31 flat pack is still read). "One per engagement" is unchanged; read every
+flat <code>artifacts/...</code> path in this ADR as <code>artifacts/&lt;slug&gt;/...</code>.</p>
+</blockquote>
+</li>
 <li><strong>START-HERE.md is a rendered view, not a second source.</strong> "The index leads reality"
    becomes "the state leads reality": <code>scripts/engagement_state.py</code> renders START-HERE.md
    (and its <code>.html</code> sibling) from the state, and every mutator subcommand (<code>init</code>,
@@ -176,6 +188,6 @@ the one fact whose provenance the whole threat model protects.</p>
   makes the human document machine-owned territory and still needs a parser in every
   consumer; the sidecar with an embedded hash is simpler and stdlib-only.</li>
 </ul>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-006-machine-readable-engagement-state.md &middot; 2026-07-26</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-006-machine-readable-engagement-state.md &middot; 2026-08-01</div>
 </body>
 </html>

@@ -50,13 +50,13 @@ a { color: #0969da; }
 }</style>
 </head>
 <body>
-<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-07-30</span></header>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-08-01</span></header>
 <h1 id="adr-005-persona-re-anchoring-a-dormancy-aware-per-turn-hook-accepted">ADR-005: Persona re-anchoring - a dormancy-aware per-turn hook (accepted)</h1>
 <blockquote>
 <p>Architecture Decision Record (Nygard format). One file per significant decision, so the
 <em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
-<p><strong>Document control</strong> · ID <code>ADR-005</code> · Version <code>0.2</code> · Status <code>Accepted</code>
-· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-07-24</code></p>
+<p><strong>Document control</strong> · ID <code>ADR-005</code> · Version <code>0.3</code> · Status <code>Accepted</code>
+· Classification <code>Internal</code> · Owner <code>Morgan (PM)</code> · As-of <code>2026-08-01</code></p>
 <table>
 <thead>
 <tr>
@@ -78,6 +78,12 @@ a { color: #0969da; }
 <td>2026-07-24</td>
 <td>best-practice review remediation</td>
 <td>Accepted &amp; implemented: <code>scripts/persona_anchor.py</code> (tested, ≤8-line anchor, live-engagement trigger); wiring by a one-shot human-run script, retired 2026-07-30 after its wiring was committed (re-wiring today: <code>bash scripts/apply-project-anchor.sh</code>)</td>
+</tr>
+<tr>
+<td>0.3</td>
+<td>2026-08-01</td>
+<td>documentation-drift audit</td>
+<td>Revision note: the flat <code>artifacts/START-HERE.md</code> path the engaged signal was written against is <strong>superseded by <a href="ADR-008-multi-engagement-workspaces.html">ADR-008</a></strong> (0.31, per-engagement workspaces <code>artifacts/&lt;slug&gt;/</code>) and by <a href="ADR-006-machine-readable-engagement-state.html">ADR-006</a> (state leads, START-HERE renders). The decision itself (a dormancy-gated per-turn re-anchor) is unchanged; only the signal's location and shape moved. <code>scripts/persona_anchor.py</code> now scans every workspace pack under <code>artifacts/</code> plus the legacy flat pack, reading each pack's <code>engagement-state.json</code> first and falling back to that pack's <code>START-HERE.md</code> emoji.</td>
 </tr>
 </tbody>
 </table>
@@ -127,7 +133,14 @@ engaged</strong> - via a <strong><code>UserPromptSubmit</code> hook</strong> (<c
 <ul>
 <li><strong>Engaged signal (dormancy gate):</strong> reuse existing state - an open engagement is
   <code>artifacts/START-HERE.md</code> present with status ⏳/⛔ (not ✅ closed). No new marker needed.
-  When there is no open engagement, the hook is a <strong>zero-token no-op</strong>.</li>
+  When there is no open engagement, the hook is a <strong>zero-token no-op</strong>.<blockquote>
+<p><strong>Superseded path (0.3):</strong> as shipped, the signal is per engagement, not flat. ADR-006 made
+<code>engagement-state.json</code> authoritative with START-HERE as its render, and ADR-008 moved both
+into <code>artifacts/&lt;slug&gt;/</code>, so the hook scans every workspace pack (plus a legacy flat pack)
+and reads <code>&lt;pack&gt;/engagement-state.json</code> first, <code>&lt;pack&gt;/START-HERE.md</code> second. The
+zero-token no-op property is unchanged: no open pack, no output.</p>
+</blockquote>
+</li>
 <li><strong>The anchor (tiny):</strong> when engaged, inject ~10-15 lines - "🎩 You are Morgan; mark every turn
   🎩; roster: Amara=<code>business-analyst</code>, Ravi=<code>code-reviewer</code>, Hassan=<code>tm-sme</code>, … (all 16 +
   Morgan); standing rules: question-tool, the fix-list gate, lifecycle discipline, data-safety
@@ -162,8 +175,9 @@ philosophy as ADR-004.</p>
   reliably - the instruction to re-read decays with everything else.</p>
 <h2 id="verification-before-it-lands">Verification (before it lands)</h2>
 <ul>
-<li><strong>Dormancy test:</strong> the hook is a strict no-op with no <code>artifacts/START-HERE.md</code> (or a ✅-closed
-  one) - zero output, negligible latency.</li>
+<li><strong>Dormancy test:</strong> the hook is a strict no-op with no open engagement pack (or a ✅-closed
+  one) - zero output, negligible latency. (Written against the flat <code>artifacts/START-HERE.md</code>;
+  per ADR-006/ADR-008 the test now covers per-engagement packs, see the 0.3 revision note.)</li>
 <li><strong>Compaction-survival check:</strong> a behavioural eval that simulates a long/compacted context and
   asserts the persona markers and correct specialist names are still present after the re-anchor.</li>
 <li><strong>Sync test:</strong> a docs-consistency test that the anchor's roster/rules match the operating guide.</li>
@@ -174,6 +188,6 @@ philosophy as ADR-004.</p>
 both hook files). The hook script (<code>scripts/persona_anchor.py</code>), the engaged-signal check, the
 anchor content, the dormancy guard and the tests above all landed; re-wiring today is
 <code>bash scripts/apply-project-anchor.sh</code>.</p>
-<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-005-persona-reanchoring-hook.md &middot; 2026-07-30</div>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-005-persona-reanchoring-hook.md &middot; 2026-08-01</div>
 </body>
 </html>

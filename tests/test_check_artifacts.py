@@ -1322,3 +1322,105 @@ def test_non_review_artifact_without_findings_section_unaffected(tmp_path):
     _index(art, listed=["BRD-x.md"])
     findings = run_check(art)
     assert not any("FINDINGS-NO-DEV-GUIDANCE" in f for f in findings)
+
+
+# --------------------------------------------------------------- RTM traceability gate
+
+
+_RTM_HEADER = (
+    "| BRD | FSD | Design / ADR | Code (module / fn) | Test | Regulatory obligation "
+    "| Status | Gap / exception disposition |\n|---|---|---|---|---|---|---|---|\n"
+)
+
+
+def _rtm_pack(
+    tmp_path,
+    code,
+    test="`tests/test_spoofing.py::test_x`",
+    obligation="MAR Art.12(1)(a)",
+):
+    """An engagement pack carrying an RTM whose cells resolve against THIS repo (the working
+    project a check_artifacts run sees), so the gate's disk resolution is exercised for real."""
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    _touch(
+        art / "rtm.md",
+        "# RTM\n\n"
+        + _RTM_HEADER
+        + f"| BRD-001 | FSD-001 | ADR-001 | {code} | {test} | {obligation} | done | - |\n",
+    )
+    _touch(art / "rtm.html")
+    _index(art, status=STATUS_OPEN, listed=["rtm.md"])
+    return art
+
+
+def test_pack_without_an_rtm_raises_no_rtm_finding(tmp_path):
+    """Absence is the normal case - most engagements never author an RTM, and the gate must
+    stay silent for them (this is the check that keeps it non-blocking by default)."""
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md")
+    _touch(art / "review-pass-1.html")
+    _index(art, status=STATUS_OPEN, listed=["review-pass-1.md"])
+    assert not any(f.startswith("RTM-") for f in check(art))
+
+
+def test_rtm_that_traces_is_silent(tmp_path):
+    from scripts.check_artifacts import check_rtm
+
+    art = _rtm_pack(tmp_path, code="`rules/spoofing.py::detect_spoofing`")
+    assert check_rtm(art) == []
+
+
+def test_rtm_with_a_broken_code_path_is_unresolved(tmp_path):
+    art = _rtm_pack(tmp_path, code="`rules/renamed.py::detect_spoofing`")
+    findings = [f for f in check(art) if f.startswith("RTM-")]
+    assert len(findings) == 1
+    assert findings[0].startswith("RTM-UNRESOLVED: rtm.md")
+    assert "rules/renamed.py" in findings[0]
+    assert "scripts.validate_rtm" in findings[0]
+
+
+def test_rtm_with_a_broken_test_path_is_unresolved(tmp_path):
+    from scripts.check_artifacts import check_rtm
+
+    art = _rtm_pack(tmp_path, code="`rules/spoofing.py`", test="`tests/test_gone.py::test_x`")
+    findings = check_rtm(art)
+    assert len(findings) == 1 and findings[0].startswith("RTM-UNRESOLVED")
+
+
+def test_rtm_row_without_an_obligation_is_incomplete(tmp_path):
+    from scripts.check_artifacts import check_rtm
+
+    art = _rtm_pack(tmp_path, code="`rules/spoofing.py`", obligation="-")
+    findings = check_rtm(art)
+    assert len(findings) == 1
+    assert findings[0].startswith("RTM-INCOMPLETE: rtm.md")
+    assert "no regulatory/business obligation" in findings[0]
+
+
+def test_unparseable_rtm_is_incomplete(tmp_path):
+    from scripts.check_artifacts import check_rtm
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    _touch(art / "rtm.md", "# RTM\n\nThe matrix is coming.\n")
+    findings = check_rtm(art)
+    assert len(findings) == 1 and findings[0].startswith("RTM-INCOMPLETE")
+
+
+def test_orphan_sweeps_stay_out_of_the_gate(tmp_path):
+    """validate_rtm also reports RTM-ORPHAN-OBLIGATION / RTM-ORPHAN-TEST; both are
+    scope-dependent (a firm-wide register, a project-wide suite) and must not fire here -
+    an engagement RTM covering one scenario is not delinquent for the other 8 obligations."""
+    from scripts.check_artifacts import check_rtm
+
+    art = _rtm_pack(tmp_path, code="`rules/spoofing.py::detect_spoofing`")
+    assert not any("ORPHAN" in f for f in check_rtm(art))
+
+
+def test_archived_rtm_is_not_checked(tmp_path):
+    from scripts.check_artifacts import check_rtm
+
+    art = _rtm_pack(tmp_path, code="`rules/renamed.py`")
+    (art / ".archive").write_text("archived\n", encoding="utf-8")
+    assert check_rtm(art) == []

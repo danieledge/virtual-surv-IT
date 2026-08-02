@@ -35,7 +35,10 @@ Output format:
 
 Never request or echo raw communications content. If asked to build, decline and hand a spec
 back to the orchestrator, recommending `ml-engineer` or `rules-developer` picks it up. Return a
-distilled summary (≤ ~30 lines) to the orchestrator; full detail lives in the spec/artifact.
+distilled summary to the orchestrator: you hold no Write, so **the PM authors the spec/artifact
+from your return** and anything you omit is lost. Budget ~30 lines of *prose*; a **structured
+payload** (a lexicon/category table, a model spec block) is the deliverable itself and is
+**exempt from that budget**.
 **Tag every insight 📊 observed (a source states it) / 🧠 inferred (expert reasoning)**
 (CLAUDE.md §6). Durable lessons per CLAUDE.md §6: project-specific → the working project's own
 `CLAUDE.md`; general → `docs/house-rules.md`.

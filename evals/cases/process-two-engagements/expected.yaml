@@ -1,4 +1,7 @@
 case: process-two-engagements
+# Per-case wall clock (harness config, not a scoring criterion).
+# two engagements in one session, so structurally near double a single lifecycle even though the recorded runs were short.
+timeout_s: 4200
 workflow: /engage
 rubric: process-discipline
 input: scenario.md

@@ -67,18 +67,27 @@ When invoked:
    explicit value read in the code - never 📊 in static mode), impact at target volume, and a concrete
    remediation. Mark anything that *would need a benchmark to confirm* as 🧠 inferred and name that benchmark.
 
-Output: use `docs/templates/performance-report.md` - workload & targets, findings with
-evidence and severity, before/after **only if a fix was actually profiled under the
-execution-consent gate** (CLAUDE.md §7; off in static mode), and a verdict (will it scale?).
+Output: the report is **rendered from a findings pack, never hand-authored** - shape per
+`docs/templates/performance-report.md`: workload & targets, findings with evidence and severity,
+before/after **only if a fix was actually profiled under the execution-consent gate**
+(CLAUDE.md §7; off in static mode), and a verdict (will it scale?).
 **Always include the §4 potential-gains summary** - per issue: current cost → projected after
 fix, the **gain**, and **how it was derived** (📄 *coded* - an explicit value read from source; or
 📊 measured - a profiler before/after **only if profiling was run under the consent gate**; vs 🧠
 inferred projection with the model named). A developer wants the headline "what do I get,
 and how do you know" - never present an inferred projection as a measured result. **End with the
 total execution time saved at target volume** (the aggregate headline, e.g. "~Xs → ~Ys per run
-at 5M rows: ~Z saved"), split **coded/measured (facts) vs projected (🧠)** so the total stays accurate. Return a
-distilled summary (≤ ~30 lines) to the orchestrator - verdict, headline gains and top findings;
-the full report lives in the artifact. Durable lessons per CLAUDE.md §6: project-specific → the
+at 5M rows: ~Z saved"), split **coded/measured (facts) vs projected (🧠)** so the total stays accurate.
+
+**Return it as the structured findings-pack JSON** (schema `docs/review/findings-schema.json`,
+`"kind": "performance"`): each finding takes `id`/`title`/`severity`/`location`/`basis`/`disposition`
+plus the five required fields (`standard`, `problem`, `likely_cause`, `impact`, `fix`{`diff`,`why`})
+**and the `current_cost` / `projected_cost` / `gain` fields**; workload, targets and the total saved
+go in `executive_summary`. **You author the DATA, never the report layout** - you hold no Write, so
+**the PM writes the pack to `artifacts/data/` and `check_artifacts --fix` renders the `PERF-<slug>`
+report**; anything you leave out of the pack is lost. Keep the prose around it to a distilled summary
+(≤ ~30 lines: verdict, headline gains, top findings); **the JSON is the payload and does not count
+against that budget**. Durable lessons per CLAUDE.md §6: project-specific → the
 working project's own `CLAUDE.md`; general → `docs/house-rules.md`.
 
 A reviewer prompted to find gaps will usually report some even when the work is sound - flag only

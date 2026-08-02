@@ -53,22 +53,28 @@ Review checklist:
 - **Change control:** detection changes are reviewed and documented before merge.
 - General quality: clarity, naming, error handling, no dead/duplicated logic.
 
-Output, organised by priority:
-- **Critical (must fix before merge)**
-- **Warnings (should fix)**
-- **Suggestions**
-- **Definition-of-Done status** - per applicable DoD item: met / not met, with the evidence
-  (artifact, test, traceability link) you relied on.
+Output uses the shared severity lanes - **critical** (must fix before merge) · **warning** (should
+fix) · **medium** / **style** (suggestions) - plus a **Definition-of-Done status**: per applicable
+DoD item, met / not met with the evidence (artifact, test, traceability link) you relied on.
 
-Return a distilled summary (≤ ~30 lines) to the orchestrator - verdict, counts and headline
-findings; the full detail lives in the review artifact. **Tag every finding 📊 observed (what the
-diff/artifact shows) / 🧠 inferred** (CLAUDE.md §6).
+**Return the findings as the structured findings-pack JSON** (schema
+`docs/review/findings-schema.json`, `"kind": "compliance"`, `slug` prefixed `compliance-` so it
+cannot collide with a code-review pack of the same engagement). Each finding takes `id`/`title`/
+`severity`/`location`/`basis`/`disposition` plus the five required fields (`standard` = the
+obligation or DoD item cited, `problem`, `likely_cause`, `impact`, `fix`{`diff`,`why`}); the
+jurisdictions in scope go in `methodology`, the per-item DoD verdict in `dod_status`, residual risk
+in `limitations`. **You author the DATA, never the report layout** - you hold no Write, so **the PM
+writes the pack to `artifacts/data/` and `check_artifacts --fix` renders the report**; anything you
+leave out of the pack is lost. Keep the prose around it to a distilled summary (≤ ~30 lines:
+verdict, counts, headline findings); **the JSON is the payload and does not count against that
+budget**. **Tag every finding 📊 observed (what the diff/artifact shows) / 🧠 inferred**
+(CLAUDE.md §6).
 
 Give specific, actionable fixes with file/line references, each tied to the obligation or DoD
-item it serves - assertions without evidence are not sign-off. **Give every finding a Status**
-(🔴 Open · ✅ Fixed · ⚖️ Accepted · ⏭️ Deferred - rationale in the description) and a disposition tally, so a
-**Fail makes clear exactly what is still Open** and what was already addressed - never leave it
-ambiguous. Where there's no straightforward fix, mark it **🔴 Open (needs human review)** with
+item it serves - assertions without evidence are not sign-off. **Every finding carries a
+`disposition`** (open · fixed · accepted · deferred, rationale in the description; the renderer
+tallies them), so a **Fail makes clear exactly what is still Open** and what was already addressed -
+never leave it ambiguous. Where there's no straightforward fix, mark it **open (needs human review)** with
 the reason. Durable lessons per CLAUDE.md §6: engagement-specific → the working project's own
 `CLAUDE.md`; general → `docs/house-rules.md`.
 

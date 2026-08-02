@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -131,6 +132,52 @@ def test_decide_mode_update_when_configured_clone_exists(tmp_path):
 def test_decide_mode_install_when_no_valid_clone(tmp_path):
     assert decide_mode(None, {}) == "install"
     assert decide_mode(None, {"repo_path": str(tmp_path / "gone")}) == "install"
+
+
+def test_install_mode_offers_the_manual_clone_as_default(monkeypatch, tmp_path, capsys):
+    """A new user who manually `git clone`d the repo and runs install_helper.py from
+    inside it (no separate distributed installer exists) has no configured repo_path yet,
+    so decide_mode picks 'install' - which used to always default to DEFAULT_CLONE_DIR,
+    ignoring the perfectly good clone the script was already running from. Accepting
+    that friendly default silently created a second, orphaned clone. The default must
+    now be the script's own directory when that's already a real clone."""
+    import install_helper as ih
+
+    manual_clone = _fake_clone(tmp_path)
+    monkeypatch.setattr(ih, "__file__", str(manual_clone / "install_helper.py"))
+    _isolate_home(monkeypatch, tmp_path)  # no installer.json - "install" mode
+    calls = []
+
+    def runner(argv, cwd=None, timeout=300):
+        calls.append([str(a) for a in argv])
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    assert ih.decide_mode(None, inst.cfg) == "install"
+    inst.mode = "install"
+    inst.resolve_repo()
+    out = capsys.readouterr().out
+    assert inst.repo == manual_clone
+    assert "Using existing clone" in out
+    assert not any(len(c) >= 2 and c[0] == "git" and c[1] == "clone" for c in calls)
+
+
+def test_install_mode_still_defaults_to_default_clone_dir_when_not_a_clone(
+    monkeypatch, tmp_path, capsys
+):
+    """A genuinely fresh install (script run standalone, not from inside a clone) must
+    keep offering DEFAULT_CLONE_DIR - the manual-clone fix must not change this case."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    monkeypatch.setattr(ih, "DEFAULT_CLONE_DIR", tmp_path / "default-clone")
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0))
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.mode = "install"
+    inst.resolve_repo()
+    assert inst.repo == tmp_path / "default-clone"
 
 
 # ------------------------------------------------------------------ git state via mocked runner
@@ -689,11 +736,95 @@ def test_menu_setup_only_skips_sync_and_uses_clone_asis(monkeypatch, tmp_path, c
     rc = ih.main([])
     out = capsys.readouterr().out
     assert rc == 0
-    joined = [" ".join(c) for c in calls]
-    assert not any("fetch" in c or "checkout" in c or "clone" in c for c in joined)
-    assert "Step 2 of 6" in out  # truthful numbering for the shorter plan
+    # Whole-token membership, not a raw joined-string search - the fake clone's own path
+    # (".../clone") would otherwise false-positive a "clone" substring match.
+    git_calls = [c for c in calls if c and c[0] == "git"]
+    fetch_calls = [c for c in git_calls if "fetch" in c]
+    # The upfront update-check fetches once before the menu (any option); option 2's
+    # OWN plan must still never sync - no fetch of its own, no checkout, no clone.
+    assert len(fetch_calls) == 1
+    assert not any("checkout" in c or "clone" in c for c in git_calls)
+    assert "Step 2 of 7" in out  # truthful numbering for the shorter plan (+ guard cache step)
     assert "code not updated" in out and "Code not updated" in out
     assert "Summon the team" in out
+
+
+def test_upfront_update_check_prints_before_menu(monkeypatch, tmp_path, capsys):
+    """The new-version notice must appear no matter which option the user picks - so it
+    has to print BEFORE choose_action's menu, not buried inside a specific option."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)  # local version 9.9.9, per _fake_clone
+    _menu_session(monkeypatch, tmp_path, ["q"])
+    cfg_dir = tmp_path / "xdg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
+    )
+
+    def runner(argv, cwd=None, timeout=300):
+        joined = " ".join(str(a) for a in argv)
+        if "plugin.json" in joined:
+            return _FakeProc(0, stdout='{"version": "10.0.0"}')
+        if "CHANGELOG" in joined:
+            return _FakeProc(0, stdout="## [10.0.0] - d - Big new thing\n## [9.9.9] - d - Cur\n")
+        return _FakeProc(0, stdout="")
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "newer version is available: 9.9.9 -> 10.0.0" in out
+    assert "Big new thing" in out
+    assert out.index("newer version") < out.index("What can I do for you?")
+
+
+def test_upfront_update_check_silent_when_current(monkeypatch, tmp_path, capsys):
+    """No notice, no noise, when the local clone is already on the latest version -
+    routine runs must stay exactly as quiet as before this feature existed."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)  # local version 9.9.9
+    _menu_session(monkeypatch, tmp_path, ["q"])
+    cfg_dir = tmp_path / "xdg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        ih,
+        "run_cmd",
+        lambda argv, cwd=None, timeout=300: _FakeProc(
+            0, stdout='{"version": "9.9.9"}' if "plugin.json" in " ".join(map(str, argv)) else ""
+        ),
+    )
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "newer version" not in out
+
+
+def test_upfront_update_check_fails_soft_on_timeout(monkeypatch, tmp_path, capsys):
+    """A slow/dead network must never delay or crash the menu - just skip the notice."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    _menu_session(monkeypatch, tmp_path, ["q"])
+    cfg_dir = tmp_path / "xdg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
+    )
+
+    def runner(argv, cwd=None, timeout=300):
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=timeout)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Traceback" not in out
+    assert "newer version" not in out
 
 
 def test_menu_setup_only_without_clone_fails_cleanly(monkeypatch, tmp_path, capsys):
@@ -713,6 +844,9 @@ def test_menu_quit_runs_nothing(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
     _menu_session(monkeypatch, tmp_path, ["q"])
+    # No clone configured or found (the update-upfront check would otherwise find the
+    # real dev repo this test runs inside, via the script-root fallback).
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     calls = []
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: calls.append(a) or _FakeProc(0))
     rc = ih.main([])
@@ -742,6 +876,222 @@ def test_full_sync_step_fetches_and_checks_out(monkeypatch, tmp_path):
     joined = [" ".join(c) for c in calls]
     assert any("fetch origin main" in c for c in joined)
     assert any("checkout -B main origin/main" in c for c in joined)
+
+
+def test_sync_reexecs_when_install_helper_itself_changed(monkeypatch, tmp_path, capsys):
+    """A pulled update that changes install_helper.py itself must restart the run on
+    the new code - otherwise an installer-level fix never actually takes effect until
+    a second, separate invocation."""
+    import subprocess as sp
+
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    (clone / "install_helper.py").write_text("NEW VERSION", encoding="utf-8")
+    running_copy = tmp_path / "old_install_helper.py"
+    running_copy.write_text("OLD VERSION", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(running_copy))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0, stdout=""))
+    spawned = {}
+
+    def fake_run(argv, **kwargs):
+        spawned["argv"] = argv
+        return _FakeProc(7)
+
+    monkeypatch.setattr(sp, "run", fake_run)
+    inst = ih.Installer(_args(yes=True, branch="main"), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    with pytest.raises(SystemExit) as exc_info:
+        inst.sync_branch()
+    assert exc_info.value.code == 7
+    assert spawned["argv"][0] == sys.executable
+    assert spawned["argv"][1] == str(clone / "install_helper.py")
+    assert "--repo" in spawned["argv"] and str(clone) in spawned["argv"]
+    assert "--branch" in spawned["argv"] and "main" in spawned["argv"]
+    assert "--yes" in spawned["argv"]
+    out = capsys.readouterr().out
+    assert "restarting with the new version" in out
+
+
+def test_sync_does_not_reexec_when_install_helper_unchanged(monkeypatch, tmp_path):
+    """The common case (an update that doesn't touch install_helper.py, or no new
+    commits at all) must never spawn a second process."""
+    import subprocess as sp
+
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    content = "SAME VERSION"
+    (clone / "install_helper.py").write_text(content, encoding="utf-8")
+    running_copy = tmp_path / "running_install_helper.py"
+    running_copy.write_text(content, encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(running_copy))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0, stdout=""))
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not re-exec"))
+    )
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    inst.sync_branch()  # no SystemExit, no assertion error
+
+
+def test_sync_never_reexecs_in_demo_mode(monkeypatch, tmp_path):
+    """Demo mode must never spawn a subprocess, full stop - even if a coincidental
+    content mismatch would otherwise trigger the re-exec."""
+    import subprocess as sp
+
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    (clone / "install_helper.py").write_text("NEW", encoding="utf-8")
+    running_copy = tmp_path / "old.py"
+    running_copy.write_text("OLD", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(running_copy))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0, stdout=""))
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not re-exec"))
+    )
+    inst = ih.Installer(_args(yes=True, demo=True), ih.Style(False), ih.marks())
+    inst.demo = True
+    inst.repo = clone
+    inst.branch = "main"
+    inst.sync_branch()  # no SystemExit, no assertion error
+
+
+# --- guard-interpreter cache pre-warm (P1, 2026-07-31 corp report) ------------------------
+
+
+def _fake_clone_with_guard(tmp_path):
+    clone = _fake_clone(tmp_path)
+    hooks = clone / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    (hooks / "run-guard.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (hooks / "guard-raw-data.py").write_text("", encoding="utf-8")
+    return clone
+
+
+def test_prewarm_guard_cache_probes_directly_and_writes_the_cache(monkeypatch, tmp_path):
+    """The chosen interpreter is probed as a DIRECT child of this process (not through a
+    nested sh + exec chain) and the cache is written by this step itself."""
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(ih.sys, "platform", "linux")
+    monkeypatch.setattr(
+        ih.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "python3" else None
+    )
+    calls = []
+
+    def runner(argv, cwd=None, timeout=300):
+        calls.append(argv)
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert inst.tracker.steps[-1][1] == "ok"
+    assert "/usr/bin/python3" in inst.tracker.steps[-1][0]
+    assert calls == [["/usr/bin/python3", "-c", calls[0][2]]]
+    cache = clone / ".claude" / ".guard-interpreter"
+    assert cache.read_text(encoding="utf-8") == "/usr/bin/python3"
+
+
+def test_prewarm_guard_cache_windows_order_tries_python_before_python3(monkeypatch, tmp_path):
+    """P2's Windows-aware order, mirrored here: python/py before python3, since python3
+    is the likely Store-stub name there."""
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"C:\\{name}.exe")
+    tried = []
+
+    def runner(argv, cwd=None, timeout=300):
+        tried.append(argv[0])
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert tried[0] == "C:\\python.exe"  # first candidate tried, not python3
+
+
+def test_prewarm_guard_cache_skips_a_hanging_candidate_and_tries_the_next(monkeypatch, tmp_path):
+    """A per-candidate timeout (or any failure) must move on to the next candidate, not
+    give up or wait it out - this is the actual fix for the live report: the old design
+    (shelling out to run-guard.sh through sh + exec) could hang for MINUTES on Windows
+    because killing the direct `sh` child didn't reliably kill an orphaned, still-hung
+    python3.exe grandchild. Probing candidates directly makes each one this process's own
+    direct child, so a short timeout on a broken candidate reliably falls through."""
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(ih.sys, "platform", "linux")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    order = []
+
+    def runner(argv, cwd=None, timeout=300):
+        order.append(argv[0])
+        if argv[0] == "/usr/bin/python3":
+            raise subprocess.TimeoutExpired(cmd=argv, timeout=timeout)
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", runner)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert order[0] == "/usr/bin/python3"  # tried first, hung, moved on
+    assert inst.tracker.steps[-1][1] == "ok"
+    assert "/usr/bin/python" in inst.tracker.steps[-1][0]
+    assert "/usr/bin/python3" not in inst.tracker.steps[-1][0]
+
+
+def test_prewarm_guard_cache_skips_cleanly_when_nothing_works(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert inst.tracker.steps[-1][1] == "skip"
+    assert not (clone / ".claude" / ".guard-interpreter").exists()
+
+
+def test_prewarm_guard_cache_skips_cleanly_without_a_launcher(monkeypatch, tmp_path):
+    """A clone predating the guard launcher (or a custom layout without one) must skip,
+    not fail - the guard still self-warms on first real use exactly as before."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)  # no .claude/hooks/ at all
+    monkeypatch.setattr(
+        ih, "run_cmd", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run"))
+    )
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.prewarm_guard_cache()
+    assert inst.tracker.steps[-1][1] == "skip"
+
+
+def test_prewarm_guard_cache_never_runs_in_demo_mode(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    clone = _fake_clone_with_guard(tmp_path)
+    monkeypatch.setattr(
+        ih, "run_cmd", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run"))
+    )
+    inst = ih.Installer(_args(yes=True, demo=True), ih.Style(False), ih.marks())
+    inst.demo = True
+    inst.repo = clone
+    inst.prewarm_guard_cache()  # no assertion error - never reaches run_cmd
+    assert inst.tracker.steps[-1][1] == "ok"
 
 
 # --- statusline conflict detection refinement (2026-07-30) --------------------------------
@@ -926,6 +1276,9 @@ def test_keyboard_interrupt_at_menu_returns_130(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
     _menu_session(monkeypatch, tmp_path, [])
+    # No clone configured or found (the update-upfront check would otherwise reach
+    # real run_cmd, which isn't mocked in this test - it's about the Ctrl-C, not that).
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
 
     def interrupt(prompt=""):
         raise KeyboardInterrupt
