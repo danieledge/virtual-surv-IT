@@ -159,6 +159,22 @@
         --tmut:#8b93a5;--tin:#9ecbff;--tmo:#e8c07a;--tcm:#7fd6c2;--tq:#c8a2e0;
         --tsel:#87d7a0;--tok:#87d7a0;--twn:#e8a87c;}
 
+
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem;margin-top:1.1rem;
+       align-items:start;}
+  @media (max-width:860px){.cols2{grid-template-columns:1fr}}
+  ul.gets,ul.cannot{margin:0;padding:0;list-style:none;}
+  ul.gets li,ul.cannot li{padding:.45rem 0 .45rem 1.35rem;border-top:1px solid var(--rule);
+       position:relative;color:var(--muted);font-size:.845rem;line-height:1.5;}
+  ul.gets li:first-child,ul.cannot li:first-child{border-top:none}
+  ul.gets li b,ul.cannot li b{color:var(--ink);font-weight:600}
+  ul.gets li::before{content:"\2713";position:absolute;left:0;top:.45rem;color:var(--accent);
+       font-weight:700;font-size:.82rem;}
+  ul.cannot li::before{content:"\2715";position:absolute;left:0;top:.45rem;color:var(--warn);
+       font-weight:700;font-size:.8rem;}
+  .foot-note{margin:.8rem 0 0;padding-top:.6rem;border-top:1px solid var(--rule);
+       color:var(--faint);font-size:.76rem;line-height:1.5;}
+
   /* Inline glossary: a term the reader can tap or hover to unfold, so the vocabulary
      lives where it is used instead of in a list they have to hold in their head. */
   .term{position:relative;display:inline-block;border-bottom:1px dotted var(--accent);
@@ -399,6 +415,43 @@
             <p>hand real code to a real dev or ops team, with the QA evidence</p></div>
         </div>
       </div>
+    </section>
+  </div>
+
+  <div class="cols2">
+    <section style="margin-top:0">
+      <h2>What every engagement leaves behind</h2>
+      <p class="sub">The point of the ceremony. All of it on disk, in the engagement's own folder.</p>
+      <ul class="gets">
+        <li><b>Engagement brief</b> the plan, decisions taken, open questions, who was engaged</li>
+        <li><b>The work itself</b> code, specs, config, each with its own tests</li>
+        <li><b>QA handover</b> independent test evidence, every cycle kept including failed ones</li>
+        <li><b>Review findings</b> what was raised, and how each one was dispositioned</li>
+        <li><b>Delivery report</b> the consolidated record, in <code>.md</code> and <code>.html</code></li>
+        <li><b>Summary email</b> a short cover note stating the token and agent footprint</li>
+        <li><b>START-HERE index</b> a status page that is generated, never hand-written</li>
+      </ul>
+    </section>
+
+    <section style="margin-top:0">
+      <h2>What Morgan cannot do</h2>
+      <p class="sub">Worth knowing, because these are enforced in code rather than promised in a
+        prompt.</p>
+      <ul class="cannot">
+        <li><b>Grant permission to run your code.</b> The consent marker is yours to create; she
+          is blocked from writing it, and says so rather than asking you to work around it.</li>
+        <li><b>Edit her own guardrails.</b> Writes to the safety hooks and the harness config are
+          refused.</li>
+        <li><b>Sign off her own work.</b> Human sign-off is the one item on the Definition of Done
+          that only you can complete.</li>
+        <li><b>Close an engagement with findings open.</b> The close runs the mechanical gate and
+          refuses, rolling back, until it is clean.</li>
+        <li><b>Quietly leave something unfinished.</b> A turn that ends waiting on you is recorded
+          as blocked, with the outstanding list named.</li>
+      </ul>
+      <p class="foot-note">The read and execution guards are strong controls on the file tools and
+        a real deterrent on the shell, but they are lexical there rather than a sandbox. The
+        <a href="safety-model.md">safety model</a> states exactly what each one guarantees.</p>
     </section>
   </div>
 
