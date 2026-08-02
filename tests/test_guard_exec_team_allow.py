@@ -57,6 +57,7 @@ _FRONT_DOOR_SCRIPTS = (
     "validate_masking",
     "validate_manifest",
     "validate_rtm",
+    "validate_references",
     "check_citations",
     "eval_score",
     "calibrate_spoofing",

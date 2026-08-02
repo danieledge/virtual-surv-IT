@@ -44,7 +44,7 @@ put in hooks precisely so they survive this.
 ## Decision
 
 Re-assert the persona from **outside** the conversation, every turn, but **only while the team is
-engaged** - via a **`UserPromptSubmit` hook** (`reanchor-persona.py`):
+engaged** - via a **`UserPromptSubmit` hook** (`scripts/persona_anchor.py`):
 
 - **Engaged signal (dormancy gate):** reuse existing state - an open engagement is
   `artifacts/START-HERE.md` present with status ⏳/⛔ (not ✅ closed). No new marker needed.

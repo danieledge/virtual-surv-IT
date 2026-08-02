@@ -130,7 +130,7 @@ _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 #     was missing, so /engage step 0 tripped the gate on its own front door.
 _TEAM_SCRIPT_NAMES = (
     r"(?:render_html|render_findings|render_docx|convert_file|ingest|gen_synthetic|synthesise"
-    r"|validate_masking|validate_manifest|validate_rtm|check_citations|eval_score"
+    r"|validate_masking|validate_manifest|validate_rtm|validate_references|check_citations|eval_score"
     r"|calibrate_spoofing|check_artifacts|engagement_state|extensions|convert_sarif"
     r"|engage_probe)\.py"
 )

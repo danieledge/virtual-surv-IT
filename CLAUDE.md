@@ -114,7 +114,8 @@ signed as Morgan), and human sign-off.
   `guard-code-execution.py` (`_TEAM_ALLOW`) and run **consent-free**: `convert_file` (Excel / CSV /
   PDF / DOCX → data, deps vendored so no pip), `render_html`, `render_findings`, `render_docx`,
   `ingest`, `gen_synthetic`,
-  `synthesise`, `validate_masking`, `validate_manifest`, `check_citations`, `eval_score`,
+  `synthesise`, `validate_masking`, `validate_manifest`, `validate_rtm`, `validate_references`,
+  `check_citations`, `eval_score`,
   `calibrate_spoofing`, `check_artifacts`, `engagement_state`, `extensions`,
   `convert_sarif`, `engage_probe`. (Adding a new `scripts/` tool means adding its basename to the
   staged guard and having the human apply it - otherwise plugin-mode users get a consent prompt
