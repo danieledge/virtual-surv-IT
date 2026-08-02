@@ -261,10 +261,11 @@
 
           <div class="cat">Before any real data</div>
           <div class="cmd"><code>/prepare-data</code> <span class="alpha">Alpha</span>
-            <p>generates synthetic data, or makes a best-effort pass at masking. A lightweight
-            proof of concept, <b>not</b> a production anonymisation pipeline: prefer data already
-            anonymised by your organisation's approved tooling, or fully synthetic. Masked output
-            is still personal data.</p></div>
+            <p><b>Do not rely on this workflow.</b> It is alpha: a lightweight, best-effort
+            helper, <b>not</b> an anonymisation pipeline. Bring data your organisation has
+            already masked with approved tooling, or fully synthetic data. Its synthetic
+            generation is the part to trust; treat its masking as a rough first pass you still
+            verify. Masked output remains personal data.</p></div>
         </div>
         <div>
           <div class="cat" style="margin-top:0">The everyday work</div>
@@ -355,8 +356,9 @@
       </div>
       <div class="cell">
         <ul class="bp">
-          <li><b>Do not hand it unmasked data.</b> Use <code>/prepare-data</code>, or better, go
-            synthetic. Pseudonymised is not anonymous.</li>
+          <li><b>Do not hand it unmasked data.</b> Bring data already masked by your
+            organisation's approved tooling, or go fully synthetic. <code>/prepare-data</code> is
+            alpha and should not be relied on for it. Pseudonymised is not anonymous.</li>
           <li><b>It is a starting point.</b> A proof of concept whose output is for real engineers and
             reviewers to check, not a replacement for them.</li>
         </ul>

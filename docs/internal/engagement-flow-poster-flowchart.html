@@ -49,6 +49,11 @@
   .companion{font-size:.85rem;color:var(--muted);}
   .companion a{color:var(--p5);}
 
+  .alphatag{display:inline-block;vertical-align:.08em;border:1px solid var(--usr);
+       color:var(--usr);border-radius:3px;padding:.05em .36em;margin-left:.35rem;
+       font:700 .56rem/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+       letter-spacing:.1em;text-transform:uppercase;}
+
   /* header */
   header.hd{display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:flex-start;
        border-bottom:4px solid var(--ink);padding-bottom:.9rem;}
@@ -301,9 +306,13 @@
       <div class="node dec"><b>Data attestation: is the data safe to share?</b></div>
       <div class="branch b2">
         <div class="lane"><span class="lab">No / unsure</span>
-          <div class="node usr"><b><code>/prepare-data</code> first</b>
-            <ul><li>Mask it (schema + validation, key from <code>MASKING_KEY</code>)</li>
-                <li>Or better: generate fully synthetic data</li></ul></div></div>
+          <div class="node usr"><b><code>/prepare-data</code> first <span class="alphatag">Alpha</span></b>
+            <ul><li><b>Do not rely on it to anonymise.</b> Alpha, best-effort, not an
+                anonymisation pipeline: bring data already masked by approved tooling</li>
+                <li>Best use: generate fully synthetic data</li>
+                <li>Masking is a rough pass (schema + validation, key from
+                <code>MASKING_KEY</code>) that you still verify; masked output remains
+                personal data</li></ul></div></div>
         <div class="lane"><span class="lab">Clean, or no data</span>
           <div class="node"><b>Continue</b>
             <p>Attestation recorded; the responsibility is the user's.</p></div></div>
