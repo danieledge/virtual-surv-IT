@@ -3,12 +3,14 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-012` · Version `0.1` · Status `Proposed`
-> · Classification `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-08-01`
+> **Document control** · ID `ADR-012` · Version `0.3` · Status `Proposed`
+> · Classification `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-08-02`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-08-01 | 2026-08-01 framework audit, persona-layer finding | Initial proposal: the cost of the named roster stated in full, three options put to the human approver, no decision taken |
+> | 0.3 | 2026-08-02 | measurement correction | Option D's token-saving claim MEASURED and **retracted**: the shipped anchor is ~222 tokens and carries no name map, so D saves ~$0.04 across a $62.48 eval slice (0.07%). D's case is correctness and maintenance, not cost |
+> | 0.2 | 2026-08-02 | human approver (proposed in review) | **Option D added**: the model writes the ROLE and the display name is resolved mechanically. Dominates A-C by treating the name as derived presentation rather than authored content, the pattern ADR-006 already set for engagement state. Largely pre-built: `_ROLE_TO_NAME` and the render/auto-fix steps already exist |
 
 | | |
 |---|---|
@@ -79,7 +81,7 @@ from a closed set that already exists on disk.
 
 ## Decision
 
-**None taken.** This ADR states the trade-off and puts three options to the human approver. The
+**None taken.** This ADR states the trade-off and puts four options to the human approver. The
 constraint on all of them:
 
 > **Any option must preserve AI-identity marking in full.** An agent attribution stays
@@ -140,6 +142,68 @@ conversational names, so the per-turn cost stays. The mechanical check is cheap 
 appearing in an artifact is grep-detectable and auto-fixable), so the risk is manageable, but the
 rule is genuinely harder to explain than either A or B.
 
+### Option D - the model writes the ROLE, the name is resolved mechanically (human proposal, 2026-08-02)
+
+The model never types a specialist's name. It writes the **role**, which is the
+`subagent_type` slug it must already know in order to delegate at all, and a deterministic step
+resolves that to the display identity on the way out:
+
+    the model writes   ->   compliance-reviewer
+    the reader sees    ->   🤖 Layla, Compliance Review (Virtual Surveillance IT)
+
+**Why this dominates A, B and C.** The three options above all treat the name as something the
+model *authors* and the framework then *polices*. This treats the name as **presentation derived
+from a source of truth**, which is the pattern the framework already committed to elsewhere:
+ADR-006 made the engagement state machine-readable first and `START-HERE.md` a **render** of it
+that is never hand-edited, precisely because a hand-maintained copy of a fact rots. The roster is
+the same shape of problem and, until now, got the opposite treatment.
+
+- **Name drift stops being unlikely and becomes impossible.** The PM cannot invent "Isla" while
+  writing no names at all. Today the map is *remembered*; here it is *looked up*.
+- **The warmth survives.** Unlike Option B, the reader still gets "Layla, Compliance Review". The
+  cost B pays (clunky machine-register prose) is not paid here.
+- **A small anchor simplification, and only that.** *(Corrected 2026-08-02 after measurement:
+  an earlier draft of this option claimed the hook "loses its largest payload, the 16-entry
+  name-to-role map". That was wrong and is left recorded rather than quietly deleted.* The
+  shipped `_ANCHOR` is **887 chars / ~222 tokens and contains no specialist names at all** - it
+  says "name specialists by their roster names" and points at the operating guide. ADR-005
+  proposed inlining the map; the implementation never did.*) Option D would let the anchor drop
+  one clause, worth a handful of tokens. **Do not choose D for cost.**
+- **`ROSTER-UNKNOWN` and `ROSTER-ROLE-MISMATCH` change from validation to resolution.** An
+  unknown slug fails to resolve loudly at render time rather than reaching an artifact and being
+  caught downstream. The identity codes are unaffected and stay armed.
+
+**Most of it already exists.** `scripts/check_artifacts.py` carries `_ROSTER` (17 entries) *and*
+`_ROLE_TO_NAME`, its reverse map, already pinned to the operating guide's canonical roster line
+by `tests/test_docs_consistency.py::test_roster_gate_matches_operating_guide`. `render_html` and
+`render_findings` already process artifacts on the way out, and `check_artifacts --fix` already
+auto-corrects an off-roster name to the canonical one. The pieces are in place; what changes is
+their direction of use, from detect-and-correct to derive.
+
+**The genuine gap, and it is real.** The live TUI conversation is **not** rendered: Morgan's
+turns go straight to the user with no substitution step. So either conversational voice uses role
+labels (losing warmth exactly where Option C argues it matters most), or the anchor keeps a small
+name map for **voice only**, which preserves a reduced version of the per-turn cost and a reduced
+version of the drift risk. Note the asymmetry that makes this acceptable: a drifted name in
+conversation is a cosmetic slip in an ephemeral channel, while a drifted name in an artifact is a
+durable, forwardable, auditable defect. Option D makes the **artifact** side structurally correct
+and leaves only the cheap half of the problem.
+
+**What D is worth, measured.** Not tokens. Across the 12-case 0.33.6 eval slice the anchor
+accounted for ~14k input tokens in total, about **$0.04 against a $62.48 run (0.07%)**, and D
+barely touches it. The case for D is entirely **correctness and maintenance**: name drift becomes
+structurally impossible rather than caught after the fact, the name-to-role map stops being a
+fact duplicated across the guide, the gate and the anchor, and adding or renaming a specialist
+becomes a one-line change to a single source instead of a multi-file sweep. Any option argued on
+token cost here is being argued on noise.
+
+**Other costs.** Every artifact-producing path must go through resolution, so a deliverable
+written without it would ship raw slugs (grep-detectable, auto-fixable, and arguably a safer
+failure than a wrong name). A placeholder convention has to be chosen and taught. And the model
+may still type a name out of habit, so the existing roster check stays as a backstop rather than
+retiring, now enforcing "no raw roster name in an authored artifact" instead of "this name maps
+to the right role".
+
 ## Consequences (of this ADR itself)
 
 - **Deferring is a legitimate outcome**, and deferring is the current state: nothing in the
@@ -155,6 +219,7 @@ rule is genuinely harder to explain than either A or B.
 
 ## Status / next step
 
-**Proposed - awaiting the human approver's ruling** (A, B, C, or a variant). No implementation
+**Proposed - awaiting the human approver's ruling** (A, B, C, D, or a variant; D is the
+strongest on the evidence and the cheapest to build). No implementation
 work is queued behind it. If no ruling is made, Option A stands by default, which is a decision
 by inaction and is recorded as such here so it is at least a visible one.
