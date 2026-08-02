@@ -106,6 +106,13 @@
   .cmd code{font:600 .82rem/1.4 var(--mono);color:var(--ink);background:none;padding:0;}
   .cmd p{margin:.08rem 0 0;color:var(--muted);font-size:.8rem;line-height:1.45;}
 
+  .terms{display:grid;grid-template-columns:1fr 1fr;gap:.1rem 1.6rem;}
+  @media (max-width:760px){.terms{grid-template-columns:1fr}}
+  .terms div{padding:.42rem 0;border-top:1px solid var(--rule);}
+  .terms dt{font:600 .84rem/1.4 var(--mono);color:var(--ink);}
+  .terms dd{margin:.1rem 0 0;color:var(--muted);font-size:.82rem;line-height:1.5;}
+  .terms .said{color:var(--faint);font-style:italic;}
+
   ul.bp{margin:0;padding-left:1.05rem}
   ul.bp li{margin-bottom:.55rem;color:var(--muted);font-size:.86rem}
   ul.bp b{color:var(--ink)}
@@ -130,14 +137,15 @@
     <h1>The Compliance Surveillance Engineering Team</h1>
     <div class="hr"></div>
     <p class="lede">A virtual delivery team for transaction-monitoring, trade-surveillance and
-      comms-surveillance engineering — Morgan (the PM) orchestrates 16 named specialists to
-      build, test, review and hand over solutions with audit-ready evidence at every step.</p>
+      comms-surveillance engineering. Morgan (the PM) coordinates 16 named specialists to build,
+      test, review and hand over solutions, keeping the evidence for each step as it goes.</p>
 
     <div class="always">
-      <span><b>Always on</b> · <code>data/raw/</code> is blocked from every agent</span>
-      <span><b>Always on</b> · code under review is never executed without your consent</span>
+      <span><b>Always on</b> · agents are blocked from reading <code>data/raw/</code></span>
+      <span><b>Always on</b> · code under review is not run without your consent</span>
       <span><b>Always on</b> · all data is treated as PII/MNPI unless masked or synthetic</span>
     </div>
+    <p style="margin:.85rem 0 0;font-size:.78rem;color:var(--faint);max-width:74ch">These guards are armed in every session, engaged or dormant. They are a real control against mistakes and prompt injection, not a sandbox against a determined attacker: see <a href="safety-model.md">the safety model</a> for what each one does and does not guarantee.</p>
   </div>
 
   <section>
@@ -147,60 +155,92 @@
       <div class="cell"><div class="n">§1</div>
         <h3>An AI framework: one orchestrator, multiple subagents</h3>
         <p>Morgan orchestrates: planning, delegating. Mateo, Linh, Ravi and the rest are
-        subagents — each with its own prompt, toolset and isolated context, seeing only its
-        brief. That isolation is a feature: Ravi reviewing Mateo's code can't be talked into
-        agreeing with him — he never saw his reasoning.</p></div>
+        subagents, each with its own prompt, toolset and isolated context, seeing only its brief.
+        That isolation is a feature: because specialists cannot see one another's reasoning,
+        every review stays independent.</p></div>
 
       <div class="cell"><div class="n">§2</div>
-        <h3>Morgan manages the team; she doesn't do the work herself</h3>
-        <p>Morgan is the PM — she takes your request, decides which specialists the job actually
-        needs, briefs them precisely, checks what comes back, and reports to you. You only ever
-        deal with Morgan directly; the rest of the team works behind the scenes.</p></div>
+        <h3>Morgan coordinates the work rather than performing it herself</h3>
+        <p>Morgan is the PM. She takes your request, decides which specialists the job actually
+        needs, briefs them precisely, checks what comes back, and reports to you. You deal with
+        Morgan directly; the rest of the team works behind the scenes.</p></div>
 
       <div class="cell"><div class="n">§3</div>
         <h3>A loop is an iteration cycle, not a failure</h3>
-        <p>When a check comes back with findings, the work isn't scrapped — it goes back for a
-        fix, then gets re-checked. That cycle repeats until it passes or you call it. Same idea
-        as a PR review: flagged, fixed, re-reviewed. The AI term is <b>evaluator-optimizer</b>:
-        one pass produces the work, an independent pass checks it against a standard, and it only
-        ships once that pass clears.</p></div>
+        <p>A failed check does not stop the work, it becomes another iteration until the work meets
+        the standard. Same idea as a PR review: flagged, fixed, re-reviewed. The AI term is
+        <b>evaluator-optimizer</b>: one pass produces the work, an independent pass checks it
+        against a named standard, and it ships once that pass clears.</p></div>
 
       <div class="cell"><div class="n">§4</div>
         <h3>Talk to Morgan like you would a real PM</h3>
-        <p>There's no syntax to learn — describe the outcome you want, in your own words. Morgan
-        asks clarifying questions, flags anything unrealistic or risky, and checks in before
-        anything material happens. Hand her context exactly like you would a colleague — a
-        screenshot, a spec, an existing script — and she'll work from it.</p></div>
+        <p>There is no command language to learn. Describe the outcome you want, in your own words.
+        Morgan asks clarifying questions, flags anything unrealistic or risky, and checks in
+        before anything material happens. Hand her context exactly as you would a colleague (a
+        screenshot, a spec, an existing script) and she will work from it.</p></div>
 
       <div class="cell"><div class="n">§5</div>
-        <h3>📊 / 🧠 mark what's checked vs. what's reasoned</h3>
-        <p>📊 means someone actually looked — a test ran, a query executed, a metric came straight
-        from the data. 🧠 means reasoning beyond that — still useful, but flagged so it's never
-        mistaken for fact. (📄 shows up too: a fact read straight from source code, nothing run.)
-        Every report tags every claim this way, consistently.</p></div>
+        <h3>📊 and 🧠 separate what was checked from what was reasoned</h3>
+        <p>These are the tags you will see in every report, so they are worth knowing. 📊 marks
+        something verified directly: a test run, a query executed, a metric taken from the data.
+        🧠 marks reasoning that goes beyond the evidence, still useful, but flagged so it is not
+        read as fact. 📄 marks a value read straight from source code, with nothing run.</p></div>
 
       <div class="cell"><div class="n">§6</div>
         <h3>Every piece of work gets its own folder</h3>
-        <p>Each engagement lives in <code>artifacts/&lt;name&gt;/</code> — its brief, specs, code,
-        tests, and a living <code>START-HERE.md</code> status page that always shows exactly where
-        it stands. Several can sit in the same project at once, each independent; one root index
-        lists them all.</p></div>
+        <p>Each engagement lives in <code>artifacts/&lt;name&gt;/</code>: its brief, specs, code, tests,
+        and a living <code>START-HERE.md</code> status page showing where it stands. Several can
+        sit in the same project at once, each independent; one root index lists them all.</p></div>
     </div>
+  </section>
+
+  <section>
+    <h2>The words you will see</h2>
+    <p class="sub">Enough AI vocabulary to follow what is happening, and no more. You will meet
+      each of these in a normal engagement.</p>
+    <dl class="terms">
+      <div><dt>agent · subagent</dt>
+        <dd>A separate AI worker with its own instructions, tools and memory. Morgan is one;
+        each specialist is another. They cannot see each other's thinking, only what is
+        written down.</dd></div>
+      <div><dt>orchestrator</dt>
+        <dd>The agent that plans and delegates rather than doing the work. Here, that is
+        Morgan. <span class="said">Also called a lead or router.</span></dd></div>
+      <div><dt>context</dt>
+        <dd>Everything the model can currently see: your messages, files it has read, results
+        so far. It is finite, which is why each specialist gets a tight brief instead of the
+        whole history.</dd></div>
+      <div><dt>compaction</dt>
+        <dd>What happens when a long conversation is summarised to fit. Anything that matters
+        is written to disk precisely so it survives this.</dd></div>
+      <div><dt>tool call</dt>
+        <dd>The model doing something rather than saying something: reading a file, running a
+        command. Every one passes a safety check first.</dd></div>
+      <div><dt>hook · guard</dt>
+        <dd>Code that runs before a tool call and can refuse it. This is what makes the safety
+        rules enforcement rather than instructions the model could talk itself out of.</dd></div>
+      <div><dt>token</dt>
+        <dd>The unit models are billed and budgeted in, roughly a word-piece. Why the team uses
+        the smallest set of specialists that fits rather than all 16.</dd></div>
+      <div><dt>hallucination</dt>
+        <dd>Confident output that is not grounded in anything real. The 📊 and 🧠 tags exist to
+        make the difference visible instead of leaving you to guess.</dd></div>
+    </dl>
   </section>
 
   <div class="cols">
     <section style="margin-top:0">
       <h2>Getting started</h2>
-      <p class="sub">The team is dormant by default — nothing below happens until you ask for it.</p>
+      <p class="sub">The team is dormant by default. Nothing below happens until you ask for it.</p>
       <ol class="steps">
         <li><span class="big">/engage</span>
           <p>Type this to start anything. It's the one command to remember.</p></li>
-        <li><b>Describe the work</b> in plain English — a problem, a review, or something to build.
+        <li><b>Describe the work</b> in plain English: a problem, a review, or something to build.
           <div class="eg">e.g. "Build a wash-trading detection scenario for the equities desk."</div>
           <p>No need to name a specialist; Morgan routes it.</p></li>
-        <li><b>Answer the menus</b> Morgan opens (depth, scope, outcome) — pick an option, or just
-          tell Morgan what's needed.</li>
-        <li><b>Watch it work</b> — Morgan briefs the specialists and reports back at each gate.</li>
+        <li><b>Answer the menus</b> Morgan opens (depth, scope, outcome). Pick an option, or just
+          tell Morgan what is needed.</li>
+        <li><b>Watch it work.</b> Morgan briefs the specialists and reports back at each gate.</li>
       </ol>
     </section>
 
@@ -276,15 +316,15 @@
     <div class="grid3">
       <div class="cell">
         <ul class="bp">
-          <li><b>Mention your materials</b> — a screenshot, a spec, an existing script. Morgan
-            works from what you hand her, and guesses less when you hand her more.</li>
-          <li><b>Say what "done" means</b> — review only, or also fixed, or also handed over.
-            Agreed before work starts beats renegotiated after.</li>
+          <li><b>Mention your materials:</b> a screenshot, a spec, an existing script. Morgan works
+            from what you hand her, and guesses less when you hand her more.</li>
+          <li><b>Say what "done" means:</b> review only, or also fixed, or also handed over. Agreed
+            before work starts beats renegotiated after.</li>
         </ul>
       </div>
       <div class="cell">
         <ul class="bp">
-          <li><b>Push back.</b> Morgan is meant to be a sceptic, not a yes-man — and so are you.
+          <li><b>Push back.</b> Morgan is meant to be a sceptic rather than a yes-man, and so are you.
             If a finding looks thin, ask what the evidence actually was.</li>
           <li><b>Check the tags.</b> 📊 was measured, 🧠 was reasoned. If something important is
             🧠, that's your cue to verify it before relying on it.</li>
@@ -292,10 +332,10 @@
       </div>
       <div class="cell">
         <ul class="bp">
-          <li><b>Never hand it unmasked data.</b> Use <code>/prepare-data</code>, or better,
-            go synthetic. Pseudonymised is not anonymous.</li>
-          <li><b>It's a starting point.</b> A proof of concept whose output is for real engineers
-            and reviewers to check, not a replacement for them.</li>
+          <li><b>Do not hand it unmasked data.</b> Use <code>/prepare-data</code>, or better, go
+            synthetic. Pseudonymised is not anonymous.</li>
+          <li><b>It is a starting point.</b> A proof of concept whose output is for real engineers and
+            reviewers to check, not a replacement for them.</li>
         </ul>
       </div>
     </div>
