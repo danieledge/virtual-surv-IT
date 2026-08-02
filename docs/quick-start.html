@@ -106,6 +106,14 @@
   .cmd code{font:600 .82rem/1.4 var(--mono);color:var(--ink);background:none;padding:0;}
   .cmd p{margin:.08rem 0 0;color:var(--muted);font-size:.8rem;line-height:1.45;}
 
+  .alpha{display:inline-block;vertical-align:.05em;border:1px solid var(--usr,#b4671f);
+       color:var(--usr,#b4671f);border-radius:3px;padding:.06em .38em;margin-left:.3rem;
+       font:700 .58rem/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;}
+  :root{--usr:#b4671f}
+  @media (prefers-color-scheme:dark){:root{--usr:#e0a35e}}
+  :root[data-theme="dark"]{--usr:#e0a35e}
+  :root[data-theme="light"]{--usr:#b4671f}
+
   .terms{display:grid;grid-template-columns:1fr 1fr;gap:.1rem 1.6rem;}
   @media (max-width:760px){.terms{grid-template-columns:1fr}}
   .terms div{padding:.42rem 0;border-top:1px solid var(--rule);}
@@ -233,14 +241,22 @@
       <h2>Getting started</h2>
       <p class="sub">The team is dormant by default. Nothing below happens until you ask for it.</p>
       <ol class="steps">
-        <li><span class="big">/engage</span>
-          <p>Type this to start anything. It's the one command to remember.</p></li>
-        <li><b>Describe the work</b> in plain English: a problem, a review, or something to build.
+        <li><div>
+          <span class="big">/engage</span>
+          <p>Type this to start anything. It is the one command to remember.</p>
+        </div></li>
+        <li><div>
+          <b>Describe the work</b> in plain English: a problem, a review, or something to build.
           <div class="eg">e.g. "Build a wash-trading detection scenario for the equities desk."</div>
-          <p>No need to name a specialist; Morgan routes it.</p></li>
-        <li><b>Answer the menus</b> Morgan opens (depth, scope, outcome). Pick an option, or just
-          tell Morgan what is needed.</li>
-        <li><b>Watch it work.</b> Morgan briefs the specialists and reports back at each gate.</li>
+          <p>No need to name a specialist; Morgan routes it.</p>
+        </div></li>
+        <li><div>
+          <b>Answer the menus</b> Morgan opens (depth, scope, outcome). Pick an option, or just
+          tell Morgan what is needed.
+        </div></li>
+        <li><div>
+          <b>Watch it work.</b> Morgan briefs the specialists and reports back at each gate.
+        </div></li>
       </ol>
     </section>
 
@@ -259,8 +275,11 @@
             <p>who the 16 specialists are and what each one owns</p></div>
 
           <div class="cat">Before any real data</div>
-          <div class="cmd"><code>/prepare-data</code>
-            <p>mask it or generate synthetic. Never hand the team unmasked records</p></div>
+          <div class="cmd"><code>/prepare-data</code> <span class="alpha">Alpha</span>
+            <p>generates synthetic data, or makes a best-effort pass at masking. A lightweight
+            proof of concept, <b>not</b> a production anonymisation pipeline: prefer data already
+            anonymised by your organisation's approved tooling, or fully synthetic. Masked output
+            is still personal data.</p></div>
         </div>
         <div>
           <div class="cat" style="margin-top:0">The everyday work</div>
