@@ -114,6 +114,7 @@ Run what CI runs:
 pytest                                       # all unit tests must pass
 python -m scripts.validate_masking           # masking safety + detection fidelity
 python -m scripts.validate_manifest          # declared agents/skills resolve
+python -m scripts.validate_references        # internal doc/script references still resolve
 ruff check scripts/ .claude/hooks/ rules/ tests/
 ruff format --check scripts/ .claude/hooks/ rules/ tests/
 bandit -r scripts/ .claude/hooks/ -q
@@ -136,6 +137,7 @@ What each tool is and does (all of these run automatically in CI on every push/P
 | **shellcheck** | A linter for **Bash** scripts (catches shell bugs/quoting issues). Lint only - it does not reformat. | the `*.sh` + git-hook scripts |
 | **validate_masking** | Proves the masking config is both **safe** (no original PII survives) and **useful** (detection still fires on masked data). `--in <file>` scans your actual masked output. | `scripts/`, `config/masking-schema.yaml` |
 | **validate_manifest** | Checks the plugin manifest (`plugin.json`) matches the repo - every declared agent/skill/hook actually exists. | `.claude-plugin/` |
+| **validate_references** | A link checker pointed **inwards**: extracts every path a doc, skill or agent mentions and fails on any that will not resolve. The repo's most common defect is a document citing something that moved or was renamed, and each instance used to be caught by adding another bespoke assertion to `test_docs_consistency.py` *after* it broke. Deliberately ignores three classes so it does not cry wolf: files the team creates at **runtime** or that live in the **user's** project, **placeholders** and globs, and a short `_KNOWN_ABSENT` list where **every entry carries a written reason** (a retired script named in an ADR's revision history, a hypothetical attacker file in a threat model). A test asserts each excuse has a real reason, so the list cannot become a way to silence a break. `--orphans` also lists docs nothing references. | `docs/`, `.claude/`, `evals/`, the root `.md` files |
 | **convert_file** | The file-conversion front door: Excel/CSV/PDF/DOCX in, CSV/JSONL/MD out, lossless by default, schema-gated on request, JSON evidence report every run. Dependencies vendored in `vendor/` (no pip needed). | `scripts/convert_file.py`, `vendor/`, `config/feed-schema-example.yaml` |
 
 Two things worth knowing:

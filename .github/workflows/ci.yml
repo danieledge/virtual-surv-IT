@@ -33,6 +33,10 @@ jobs:
         run: python -m scripts.validate_masking
       - name: Validate plugin manifest (declared agents/skills resolve)
         run: python -m scripts.validate_manifest
+      # Also enforced via pytest, but run explicitly so a broken reference reports itself
+      # by name instead of surfacing as an assertion buried in the test output.
+      - name: Validate internal references (docs/skills/agents cite paths that exist)
+        run: python -m scripts.validate_references
       - name: Install helper demo smoke (full flow, dry run, both OSes)
         shell: bash
         run: python install_helper.py --demo < /dev/null
