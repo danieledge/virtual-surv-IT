@@ -9,8 +9,8 @@
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-08-01 | 2026-08-01 framework audit, persona-layer finding | Initial proposal: the cost of the named roster stated in full, three options put to the human approver, no decision taken |
-> | 0.3 | 2026-08-02 | measurement correction | Option D's token-saving claim MEASURED and **retracted**: the shipped anchor is ~222 tokens and carries no name map, so D saves ~$0.04 across a $62.48 eval slice (0.07%). D's case is correctness and maintenance, not cost |
 > | 0.2 | 2026-08-02 | human approver (proposed in review) | **Option D added**: the model writes the ROLE and the display name is resolved mechanically. Dominates A-C by treating the name as derived presentation rather than authored content, the pattern ADR-006 already set for engagement state. Largely pre-built: `_ROLE_TO_NAME` and the render/auto-fix steps already exist |
+> | 0.3 | 2026-08-02 | measurement correction | Option D's token-saving claim MEASURED and **retracted**: the shipped anchor is ~222 tokens and carries no name map, so D saves ~$0.04 across a $62.48 eval slice (0.07%). D's case is correctness and maintenance, not cost |
 
 | | |
 |---|---|
@@ -57,8 +57,10 @@ targets the `subagent_type` slug, never the name.
    engagement and a hook that fires in every session of every project the plugin is installed in.
 2. **Name drift is a tracked known issue.** The PM has been observed narrating off-roster names
    ("Isla", "Jordan") for a real specialist. The name-to-role map is exactly the sort of
-   low-salience lookup that fades first, which is why ADR-005 injects the full map rather than a
-   reminder to stay in character.
+   low-salience lookup that fades first. *(Accuracy note, measured 2026-08-02: ADR-005 PROPOSED
+   injecting the full name-to-role map every turn, but the shipped `_ANCHOR` does not - it is
+   ~222 tokens and simply points at the operating guide's roster line. The drift is therefore
+   managed by the gate and its auto-fix, not by injection.)*
 3. **A class of defect codes exists purely to police the persona.** `scripts/check_artifacts.py`
    carries four (plus an email-scoped variant):
    - `ROSTER-UNKNOWN` - an artifact attributes work to a name that is not on the roster;

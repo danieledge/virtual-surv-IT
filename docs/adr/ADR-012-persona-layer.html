@@ -74,16 +74,16 @@ a { color: #0969da; }
 <td>Initial proposal: the cost of the named roster stated in full, three options put to the human approver, no decision taken</td>
 </tr>
 <tr>
-<td>0.3</td>
-<td>2026-08-02</td>
-<td>measurement correction</td>
-<td>Option D's token-saving claim MEASURED and <strong>retracted</strong>: the shipped anchor is ~222 tokens and carries no name map, so D saves ~$0.04 across a $62.48 eval slice (0.07%). D's case is correctness and maintenance, not cost</td>
-</tr>
-<tr>
 <td>0.2</td>
 <td>2026-08-02</td>
 <td>human approver (proposed in review)</td>
 <td><strong>Option D added</strong>: the model writes the ROLE and the display name is resolved mechanically. Dominates A-C by treating the name as derived presentation rather than authored content, the pattern ADR-006 already set for engagement state. Largely pre-built: <code>_ROLE_TO_NAME</code> and the render/auto-fix steps already exist</td>
+</tr>
+<tr>
+<td>0.3</td>
+<td>2026-08-02</td>
+<td>measurement correction</td>
+<td>Option D's token-saving claim MEASURED and <strong>retracted</strong>: the shipped anchor is ~222 tokens and carries no name map, so D saves ~$0.04 across a $62.48 eval slice (0.07%). D's case is correctness and maintenance, not cost</td>
 </tr>
 </tbody>
 </table>
@@ -145,8 +145,10 @@ targets the <code>subagent_type</code> slug, never the name.</p>
    engagement and a hook that fires in every session of every project the plugin is installed in.</li>
 <li><strong>Name drift is a tracked known issue.</strong> The PM has been observed narrating off-roster names
    ("Isla", "Jordan") for a real specialist. The name-to-role map is exactly the sort of
-   low-salience lookup that fades first, which is why ADR-005 injects the full map rather than a
-   reminder to stay in character.</li>
+   low-salience lookup that fades first. <em>(Accuracy note, measured 2026-08-02: ADR-005 PROPOSED
+   injecting the full name-to-role map every turn, but the shipped <code>_ANCHOR</code> does not - it is
+   ~222 tokens and simply points at the operating guide's roster line. The drift is therefore
+   managed by the gate and its auto-fix, not by injection.)</em></li>
 <li><strong>A class of defect codes exists purely to police the persona.</strong> <code>scripts/check_artifacts.py</code>
    carries four (plus an email-scoped variant):
    - <code>ROSTER-UNKNOWN</code> - an artifact attributes work to a name that is not on the roster;
