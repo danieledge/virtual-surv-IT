@@ -999,6 +999,20 @@ agents now self-verify against their brief and flag gaps before returning; stand
   **parked**, to be revisited if a first-contact-on-large-codebase need materialises - the ADR
   records the decision and the evidence behind it.
 
+- **🚧 RTM as a graph, not a table** (`scripts/validate_rtm.py`). The validator checks each *cell*:
+  does this code path exist, does this row name an obligation. Every check is confined to one row.
+  But traceability defects are usually **connection** defects, a chain that breaks in the middle
+  while every individual cell resolves. Treating each item as a node and "traces to" as a directed
+  edge turns four things into queries a table cannot answer: **impact analysis** (all descendants of
+  a changed obligation, which `/reg-change-impact` currently reasons about by hand), **coverage as
+  reachability** (can every obligation reach a real test end to end, not just "does each row name
+  one"), **blast radius** (reverse traversal: which obligations does this changed file serve, useful
+  at review time), and **orphans** as uniform degree checks rather than three special cases.
+  *Why not yet:* absence of an RTM is deliberately not a finding, so most engagements have none, and
+  a graph over an empty matrix is worth nothing. Build it when the first populated real-project RTM
+  lands. *Cost:* row parsing and cell resolution already exist, so this is an adjacency structure
+  plus a traversal, stdlib only.
+
 **🚧 TODO: Automatic data-masking workflow** (detail in [`docs/internal/prepare-data-roadmap.md`](docs/internal/prepare-data-roadmap.md))
 
 > **The goal:** *"throw a dataset at it and it masks/anonymises it safely"*, so the team can take
@@ -1030,11 +1044,12 @@ agents now self-verify against their brief and flag gaps before returning; stand
 **Performance / startup** *(nice-to-have)*
 - ✅ **Trim routing metadata: SHIPPED (0.8.x)**. Skill descriptions no longer load at all
   (`disable-model-invocation: true`); agent descriptions trimmed to crisp routing lines.
-- **Merge the three PreToolUse guards into one interpreter call** per tool use. *Why:* the raw-data,
-  code-execution and consent-write guards each launch via `run-guard.sh` (which probes
-  `python3`/`python`/`py`), so a `Bash` call currently spawns the interpreter three times (matchers
-  overlap on `Bash`); collapsing them into a single dispatcher cuts per-call latency without
-  weakening any guard.
+- ✅ **Merge the Bash-matching PreToolUse guards into one interpreter call: SHIPPED (0.33.6)**.
+  The raw-data, code-execution and consent-write guards each launched via `run-guard.sh` (which
+  probes `python3`/`python`/`py`), so a single `Bash` call spawned the interpreter once per
+  matching guard. `scripts/bash_hook_dispatcher.py` now runs them in-process behind one launch,
+  first-block-wins, with a per-guard crash policy so a broken guard fails closed rather than
+  silently disabling the rest. Wired in both `hooks/hooks.json` and `.claude/settings.json`.
 
 </details>
 
