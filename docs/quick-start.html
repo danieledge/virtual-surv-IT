@@ -81,7 +81,7 @@
   .cell code{background:var(--card);border:1px solid var(--rule);border-radius:3px;
        padding:.03em .28em;font:.86em/1.3 var(--mono);color:var(--ink);}
 
-  .cols{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:1.1rem;
+  .cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:1.1rem;
         margin-top:1.1rem;align-items:start;}
   @media (max-width:900px){.cols{grid-template-columns:1fr}}
 
@@ -114,6 +114,40 @@
   :root[data-theme="dark"]{--usr:#e0a35e}
   :root[data-theme="light"]{--usr:#b4671f}
 
+
+
+  /* pre-1.0 notice, same substance as the README's */
+  .poc{border:1px solid var(--warn);background:var(--warns);color:var(--ink);
+       border-radius:7px;padding:.7rem .9rem;margin:0 0 .9rem;font-size:.83rem;line-height:1.55;}
+  .poc b{color:var(--ink)}
+  :root{--warn:#b4671f;--warns:#faf1e6}
+  @media (prefers-color-scheme:dark){:root{--warn:#e0a35e;--warns:#2b2117}}
+  :root[data-theme="dark"]{--warn:#e0a35e;--warns:#2b2117}
+  :root[data-theme="light"]{--warn:#b4671f;--warns:#faf1e6}
+  .ver a{color:var(--faint);text-decoration:none;border-bottom:1px dotted var(--rule)}
+  .ver a:hover{color:var(--accent)}
+
+  /* terminal mockups beside each step */
+  .term-win{margin:.6rem 0 .2rem;border:1px solid var(--tline);border-radius:7px;
+       overflow:hidden;background:var(--tbg);box-shadow:0 3px 12px rgba(0,0,0,.09);}
+  .tbar{display:flex;align-items:center;gap:.32rem;padding:.34rem .55rem;
+       background:var(--tbar);border-bottom:1px solid var(--tline);}
+  .tbar i{width:.5rem;height:.5rem;border-radius:50%;background:var(--tdot);display:block}
+  .tbar span{margin-left:.35rem;font:.6rem/1 var(--mono);color:var(--tmut);
+       letter-spacing:.1em;text-transform:uppercase}
+  .term-win pre{margin:0;padding:.6rem .7rem;overflow-x:auto;white-space:pre;
+       font:.72rem/1.55 var(--mono);color:var(--tfg);}
+  .term-win .pr{color:var(--tmut)}
+  .term-win .in{color:var(--tin)}
+  .term-win .mo{color:var(--tmo);font-weight:600}
+  .term-win .cm{color:var(--tcm)}
+  .term-win .q{color:var(--tq)}
+  .term-win .sel{color:var(--tsel);font-weight:600}
+  .term-win .ok{color:var(--tok)}
+  .term-win .wn{color:var(--twn)}
+  :root{--tbg:#1c2029;--tbar:#252a35;--tline:#333a48;--tdot:#4a5162;--tfg:#d7dbe4;
+        --tmut:#8b93a5;--tin:#9ecbff;--tmo:#e8c07a;--tcm:#7fd6c2;--tq:#c8a2e0;
+        --tsel:#87d7a0;--tok:#87d7a0;--twn:#e8a87c;}
 
   /* Inline glossary: a term the reader can tap or hover to unfold, so the vocabulary
      lives where it is used instead of in a list they have to hold in their head. */
@@ -154,13 +188,21 @@
 <body>
 <div class="wrap">
 
+  <div class="poc">
+    <b>⚗️ Proof of concept, under active development.</b> An experiment, not production or
+    regulatory tooling. It is <b>pre-1.0</b> and changes often; behaviour and interfaces may
+    break between updates, and it can get things wrong.
+    <b>Review everything it produces; never rely on it as a control or as regulatory advice.</b>
+  </div>
+
   <div class="tab">Case file · Quick-start reference</div>
 
   <div class="sheet">
     <div class="seal">Audit<br>ready<br>evidence</div>
     <div class="chiprow">
       <span class="chip">Quick-start · new users</span>
-      <span class="ver">▸ compliance-surveillance-team · v0.33.6</span>
+      <span class="ver">▸ compliance-surveillance-team · v0.33.6 ·
+        <a href="https://github.com/danieledge/virtual-surv-IT">github.com/danieledge/virtual-surv-IT</a></span>
     </div>
 
     <h1>The Compliance Surveillance Engineering Team</h1>
@@ -229,18 +271,65 @@
         <li><div>
           <span class="big">/engage</span>
           <p>Type this to start anything. It is the one command to remember.</p>
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="pr">&gt;</span> <span class="in">/engage</span>
+
+<span class="mo">🎩 Morgan (PM)</span> · Compliance Surveillance Engineering Team v0.33.6
+   Run mode: repo-as-project · python3 · 16 specialists available
+   New here? <span class="cm">/meet-the-team</span> introduces everyone.
+
+   What would you like to work on?</pre></div>
         </div></li>
+
         <li><div>
           <b>Describe the work</b> in plain English: a problem, a review, or something to build.
-          <div class="eg">e.g. "Build a wash-trading detection scenario for the equities desk."</div>
           <p>No need to name a specialist; Morgan routes it.</p>
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="pr">&gt;</span> <span class="in">Build a wash-trading detection scenario for the equities desk.</span>
+
+<span class="mo">🎩</span> A detection scenario, so this runs spec first, then build,
+   then independent review. Two safety questions before we start.</pre></div>
         </div></li>
+
         <li><div>
-          <b>Answer the menus</b> Morgan opens (depth, scope, outcome). Pick an option, or just
-          tell Morgan what is needed.
+          <b>Answer the safety gate</b> first. Two notices, then one batched set of questions.
+          Nothing runs until you have answered.
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="mo">🎩</span> <span class="wn">Data safety.</span> Everything you point me at goes to the
+   model provider. Raw data is hard-blocked; masked is not anonymous.
+
+   <span class="q">? Is the data safe to share</span>
+     <span class="sel">❯ Synthetic / already masked</span>
+       Real data, unsure      → routes to /prepare-data
+   <span class="q">? Execution consent</span>
+     <span class="sel">❯ Static only (no code run)</span>
+       Yes, I will grant it   → you create the marker, not me</pre></div>
         </div></li>
+
         <li><div>
-          <b>Watch it work.</b> Morgan briefs the specialists and reports back at each gate.
+          <b>Answer the menus</b> Morgan opens (depth, scope, outcome), then approve the plan at
+          the go-ahead gate.
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="mo">🎩</span> Right-sizing, out loud: <span class="ok">3 specialists, not the full roster.</span>
+   Amara specs it → Mateo builds → Camila (trade SME) reviews.
+
+   <span class="q">? Proceed as briefed</span>
+     <span class="sel">❯ Proceed</span>
+       Adjust something first
+       Stop here</pre></div>
+        </div></li>
+
+        <li><div>
+          <b>Watch it work.</b> Morgan briefs each specialist and reports back at every gate, so
+          you always know what is done and what is outstanding.
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="mo">🎩</span> Amara (BA) → spec drafted, 4 acceptance criteria.
+   Mateo (rules) → ts002_wash_trade.py + 11 tests.
+   Camila (trade SME) → <span class="wn">1 finding: self-match not excluded.</span>
+   ↻ Mateo re-worked it, Camila re-reviewed → clear.
+
+   <span class="ok">✅ Closed.</span> Report, tests and summary email in
+   <span class="cm">artifacts/wash-trade-equities/</span></pre></div>
         </div></li>
       </ol>
     </section>
