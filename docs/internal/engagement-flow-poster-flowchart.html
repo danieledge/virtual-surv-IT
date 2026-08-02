@@ -54,6 +54,25 @@
        font:700 .56rem/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
        letter-spacing:.1em;text-transform:uppercase;}
 
+
+  /* Real captured output, placed against the phase it evidences. The diagram says what the
+     machine is meant to do; these show it doing it, from a recorded run. */
+  .eviq{margin:.7rem 0 .2rem;border:1px solid var(--evline);border-radius:7px;overflow:hidden;
+       background:var(--evbg);}
+  .eviq .evh{display:flex;align-items:center;gap:.4rem;padding:.3rem .6rem;
+       background:var(--evbar);border-bottom:1px solid var(--evline);
+       font:600 .58rem/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+       letter-spacing:.11em;text-transform:uppercase;color:var(--evmut);}
+  .eviq pre{margin:0;padding:.55rem .68rem;overflow-x:auto;white-space:pre-wrap;
+       font:.71rem/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--evfg);}
+  .eviq .mo{color:var(--evmo);font-weight:600}
+  .eviq .u{color:var(--evu)}
+  .eviq .g{color:var(--evg)}
+  .eviq .w{color:var(--evw)}
+  .eviq .o{color:var(--evo)}
+  :root{--evbg:#1c2029;--evbar:#252a35;--evline:#333a48;--evfg:#d7dbe4;--evmut:#8b93a5;
+        --evmo:#e8c07a;--evu:#9ecbff;--evg:#c8a2e0;--evw:#e8a87c;--evo:#87d7a0;}
+
   /* header */
   header.hd{display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:flex-start;
        border-bottom:4px solid var(--ink);padding-bottom:.9rem;}
@@ -209,7 +228,9 @@
     <p>End-to-end flow from request to closed engagement · compliance surveillance engineering team<br>
       <span class="companion">New here? Start with the
       <a href="../quick-start.html">one-page quick-start reference</a>; this sheet is the
-      technical companion to it.</span></p>
+      technical companion to it. The dark panels are <b>real captured output</b> from a recorded
+      run (<a href="../demos/transcripts/eval-full-lifecycle-20260801.md">full transcript</a>),
+      placed against the phase they evidence.</span></p>
   </div>
   <div class="keys">
     <div class="key"><h3>State</h3>
@@ -274,6 +295,16 @@
         <ul><li>"Where is the code / input?"</li>
             <li>Never invent a target; the safety questions below need one first</li></ul></div>
       <div class="arr"><i>Yes</i> ↓ Phase 1</div>
+      <div class="eviq"><div class="evh">Recorded run · what you actually see</div><pre><span class="mo">🎩 Morgan (PM)</span> hi, I'm Morgan, your PM on the Compliance
+   Surveillance Engineering team. We're on <span class="o">team v0.33.6</span>.
+   Anytime you want the full roster, just type /meet-the-team.
+
+🆕 <span class="o">In the current release:</span> a framework-audit remediation pass.
+
+<span class="mo">🎩</span> <span class="o">Classification:</span> a clear build-from-spec, with defined inputs
+   and testable rules. Routing it as a build engagement (spec,
+   build, independent QA, code review, compliance review).
+   No open engagements to resume, so this starts fresh.</pre></div>
     </div>
   </section>
 
@@ -317,6 +348,16 @@
           <div class="node"><b>Continue</b>
             <p>Attestation recorded; the responsibility is the user's.</p></div></div>
       </div>
+      <div class="eviq"><div class="evh">Recorded run · consent is handed back to you</div><pre><span class="mo">🎩</span> <span class="w">🛡️ DATA SAFETY.</span> 📡 Everything you point me at goes to the
+   model provider. 🔴 Raw data is hard-blocked. 🤖 I can't verify
+   your attestation for you.
+
+<span class="g">[gate]</span> Execution: should the team run the test suite?
+<span class="u">[you ]</span> Yes, I'll grant consent
+
+<span class="mo">🎩</span> Recorded, but <span class="w">intent alone unlocks nothing.</span> When you're
+   ready, type this yourself: touch .claude/.exec-consent
+   <span class="w">No marker, no run, regardless of that answer.</span></pre></div>
     </div>
   </section>
 
@@ -428,6 +469,18 @@
             <p>The only path to ✅.</p></div></div>
       </div>
       <p class="note">Naming discipline 📄: pre-close outputs use pass-scoped names (review-pass-N, qa-cycle-N, interim-*) and open with an interim banner. <code>delivery-report.md</code>, <code>final-*</code> and the summary email are close-only names. Iteration history is append-only evidence, never rewritten.</p>
+      <div class="eviq"><div class="evh">Recorded run · right-sizing, then a loop that earned itself</div><pre><span class="mo">🎩</span> Build's done, 12/12 of Kenji's own tests passed.
+   <span class="o">Right-sizing:</span> three specialists in parallel, each an
+   independent lens on the same code. Linh (QA), Ravi (code
+   review), Layla (compliance). <span class="o">No further fan-out.</span>
+
+<span class="mo">🎩</span> <span class="w">Critical:</span> the drop logic only checks alert_id, never whether
+   the rows match. Two rows sharing an id but differing in risk
+   score: one is silently deleted. <span class="w">Worse, one of Kenji's own
+   tests locks that in as correct behaviour.</span>
+
+<span class="mo">🎩</span> <span class="w">This is not closed</span>, outstanding: two criticals to fix, plus
+   two business calls I will not guess at.</pre></div>
     </div>
   </section>
 
@@ -468,6 +521,17 @@
               <li>A dead end is a PM failure</li>
               <li>Human sign-off is the one item only the user can perform</li></ul></div>
       </div>
+      <div class="eviq"><div class="evh">Recorded run · the close states the journey, not just the verdict</div><pre><span class="mo">🎩</span> <span class="o">✅ Closed, verdict: Ready.</span> 0 open findings. 26 builder tests
+   + 30 independent QA tests passing. Code review and compliance
+   review both clear.
+
+   <span class="w">It wasn't clean on the first pass, and I want to be upfront
+   about that rather than smooth it over:</span> the first review round
+   caught a real problem, we fixed it, you made the two judgement
+   calls only you could make, and a second round confirmed it held.
+
+   One placeholder left on purpose: the threshold's business owner
+   needs a real name at your sign-off.</pre></div>
     </div>
   </section>
 

@@ -88,8 +88,14 @@ _KNOWN_ABSENT = {
 
 _SCAN_ROOTS = ("docs", ".claude", "evals")
 _SCAN_FILES = ("CLAUDE.md", "README.md", "CONTRIBUTING.md", "SECURITY.md")
-# Case fixtures and saved runs are inputs and outputs, not the prompt surface.
-_SKIP_PARTS = ("/runs/", "/cases/", "/node_modules/", "/__pycache__/")
+# Case fixtures and saved runs are inputs and outputs, not the prompt surface. Captured
+# transcripts are excluded for a different reason: they are a verbatim RECORD of a session, so
+# the paths inside them are things that existed in that run's sandbox, not claims this repo
+# makes about itself. Rewriting one to satisfy a link check would destroy the only property
+# that makes it worth keeping.
+_SKIP_PARTS = (
+    "/runs/", "/cases/", "/node_modules/", "/__pycache__/", "/demos/transcripts/",
+)
 
 
 def _scanned_files(root: Path) -> list[Path]:

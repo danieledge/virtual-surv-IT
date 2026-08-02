@@ -266,7 +266,7 @@
   <div class="cols">
     <section style="margin-top:0">
       <h2>Getting started</h2>
-      <p class="sub">The team is dormant by default. Nothing below happens until you ask for it.</p>
+      <p class="sub">The team is dormant by default. Nothing below happens until you ask for it. <span class="termhint">Terminal panels are condensed from a real recorded run.</span></p>
       <ol class="steps">
         <li><div>
           <span class="big">/engage</span>
@@ -274,62 +274,76 @@
           <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
             <pre><span class="pr">&gt;</span> <span class="in">/engage</span>
 
-<span class="mo">🎩 Morgan (PM)</span> · Compliance Surveillance Engineering Team v0.33.6
-   Run mode: repo-as-project · python3 · 16 specialists available
-   New here? <span class="cm">/meet-the-team</span> introduces everyone.
+<span class="mo">🎩 Morgan (PM)</span> hi, I'm Morgan, your PM on the Compliance
+   Surveillance Engineering team. We're on <span class="ok">team v0.33.6</span>.
+   Anytime you want the full roster, just type <span class="cm">/meet-the-team</span>.
 
-   What would you like to work on?</pre></div>
+🆕 <span class="ok">In the current release:</span> a framework-audit remediation
+   pass. (Full detail: CHANGELOG.md)</pre></div>
         </div></li>
 
         <li><div>
           <b>Describe the work</b> in plain English: a problem, a review, or something to build.
-          <p>No need to name a specialist; Morgan routes it.</p>
+          <p>No need to name a specialist. Morgan classifies it and routes it.</p>
           <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
-            <pre><span class="pr">&gt;</span> <span class="in">Build a wash-trading detection scenario for the equities desk.</span>
+            <pre><span class="pr">&gt;</span> <span class="in">A utility to de-duplicate our alert exports, with a
+  10-minute near-duplicate window. Samples are synthetic.</span>
 
-<span class="mo">🎩</span> A detection scenario, so this runs spec first, then build,
-   then independent review. Two safety questions before we start.</pre></div>
+<span class="mo">🎩</span> <span class="ok">Classification:</span> a clear build-from-spec, a small utility
+   with defined inputs and testable rules. Routing it as a build
+   engagement (spec, build, independent QA, code review,
+   compliance review), not a review.</pre></div>
         </div></li>
 
         <li><div>
-          <b>Answer the safety gate</b> first. Two notices, then one batched set of questions.
-          Nothing runs until you have answered.
+          <b>Answer the safety gate.</b> Two standing notices, then the questions batched into one
+          screen. Nothing proceeds until you answer.
           <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
-            <pre><span class="mo">🎩</span> <span class="wn">Data safety.</span> Everything you point me at goes to the
-   model provider. Raw data is hard-blocked; masked is not anonymous.
+            <pre><span class="mo">🎩</span> <span class="wn">🛡️ DATA SAFETY.</span> 📡 Everything you point me at goes to the
+   model provider. 🔴 Raw data is hard-blocked. 🟠 For anything
+   else you confirm it carries no PII/MNPI. 🤖 I can't verify
+   that for you. 🟢 Unsure? Go synthetic.
 
-   <span class="q">? Is the data safe to share</span>
-     <span class="sel">❯ Synthetic / already masked</span>
-       Real data, unsure      → routes to /prepare-data
-   <span class="q">? Execution consent</span>
-     <span class="sel">❯ Static only (no code run)</span>
-       Yes, I will grant it   → you create the marker, not me</pre></div>
+<span class="q">[gate]</span> Data safety: is the data involved safe to use?
+<span class="sel">[you ]</span> Yes, synthetic, no prohibited PII
+
+<span class="q">[gate]</span> Execution: should the team run the test suite?
+<span class="sel">[you ]</span> Yes, I'll grant consent
+
+<span class="mo">🎩</span> Recorded. Intent alone unlocks nothing. When you're ready,
+   type this yourself: <span class="cm">touch .claude/.exec-consent</span>
+   No marker, no run, regardless of that answer.</pre></div>
         </div></li>
 
         <li><div>
-          <b>Answer the menus</b> Morgan opens (depth, scope, outcome), then approve the plan at
-          the go-ahead gate.
+          <b>Watch the right-sizing.</b> Before any fan-out Morgan says how many specialists and
+          why, so the cost is a stated decision rather than a surprise.
           <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
-            <pre><span class="mo">🎩</span> Right-sizing, out loud: <span class="ok">3 specialists, not the full roster.</span>
-   Amara specs it → Mateo builds → Camila (trade SME) reviews.
+            <pre><span class="mo">🎩</span> Build's done, 12/12 of Kenji's own tests passed.
 
-   <span class="q">? Proceed as briefed</span>
-     <span class="sel">❯ Proceed</span>
-       Adjust something first
-       Stop here</pre></div>
+   <span class="ok">Right-sizing:</span> engaging three specialists in parallel, each
+   an independent lens on the same code. Linh (QA) for boundary
+   evidence, Ravi (code review) for correctness and security,
+   Layla (compliance) for auditability. <span class="ok">No further fan-out.</span></pre></div>
         </div></li>
 
         <li><div>
-          <b>Watch it work.</b> Morgan briefs each specialist and reports back at every gate, so
-          you always know what is done and what is outstanding.
+          <b>A loop is normal.</b> Findings go back for a fix and get re-reviewed. The team says
+          plainly when something is <i>not</i> finished.
           <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
-            <pre><span class="mo">🎩</span> Amara (BA) → spec drafted, 4 acceptance criteria.
-   Mateo (rules) → ts002_wash_trade.py + 11 tests.
-   Camila (trade SME) → <span class="wn">1 finding: self-match not excluded.</span>
-   ↻ Mateo re-worked it, Camila re-reviewed → clear.
+            <pre><span class="mo">🎩</span> <span class="wn">Critical:</span> the drop logic only checks <span class="cm">alert_id</span>, never
+   whether the rows match. Two rows sharing an id but differing
+   in risk score: one is silently deleted. <span class="wn">Worse, one of Kenji's
+   own tests locks that in as correct behaviour.</span>
 
-   <span class="ok">✅ Closed.</span> Report, tests and summary email in
-   <span class="cm">artifacts/wash-trade-equities/</span></pre></div>
+   <span class="wn">This is not closed</span>, outstanding: two criticals to fix, plus
+   two business calls I will not guess at.
+
+   ...fix pass, then the same three re-review...
+
+<span class="ok">🎩 ✅ Closed, verdict: Ready.</span> 0 open findings. 26 builder
+   tests + 30 independent QA tests passing. Everything in
+   <span class="cm">artifacts/alert-dedup-utility/</span></pre></div>
         </div></li>
       </ol>
     </section>
