@@ -114,6 +114,27 @@
   :root[data-theme="dark"]{--usr:#e0a35e}
   :root[data-theme="light"]{--usr:#b4671f}
 
+
+  /* Inline glossary: a term the reader can tap or hover to unfold, so the vocabulary
+     lives where it is used instead of in a list they have to hold in their head. */
+  .term{position:relative;display:inline-block;border-bottom:1px dotted var(--accent);
+       color:inherit;cursor:help;}
+  .term:focus{outline:none}
+  .term:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+  .term > .def{position:absolute;left:0;top:calc(100% + .5rem);z-index:30;
+       width:min(19rem,74vw);background:var(--card);border:1px solid var(--rule);
+       border-radius:7px;box-shadow:0 8px 26px rgba(0,0,0,.13);padding:.62rem .72rem;
+       font:.79rem/1.5 var(--sans);color:var(--muted);font-style:normal;font-weight:400;
+       letter-spacing:0;text-transform:none;text-align:left;
+       opacity:0;visibility:hidden;transform:translateY(-3px);
+       transition:opacity .14s ease,transform .14s ease;}
+  .term:hover > .def,.term:focus > .def{opacity:1;visibility:visible;transform:none}
+  .term > .def b{display:block;color:var(--ink);margin-bottom:.22rem;
+       font:600 .72rem/1.3 var(--mono);letter-spacing:.04em;text-transform:uppercase;}
+  .term.r > .def{left:auto;right:0}
+  @media (max-width:620px){.term > .def{width:min(17rem,80vw)}}
+  .termhint{color:var(--faint);font-size:.76rem;font-style:italic;}
+
   .terms{display:grid;grid-template-columns:1fr 1fr;gap:.1rem 1.6rem;}
   @media (max-width:760px){.terms{grid-template-columns:1fr}}
   .terms div{padding:.42rem 0;border-top:1px solid var(--rule);}
@@ -153,17 +174,17 @@
       <span><b>Always on</b> · code under review is not run without your consent</span>
       <span><b>Always on</b> · all data is treated as PII/MNPI unless masked or synthetic</span>
     </div>
-    <p style="margin:.85rem 0 0;font-size:.78rem;color:var(--faint);max-width:74ch">These guards are armed in every session, engaged or dormant. They are a real control against mistakes and prompt injection, not a sandbox against a determined attacker: see <a href="safety-model.md">the safety model</a> for what each one does and does not guarantee.</p>
+    <p style="margin:.85rem 0 0;font-size:.78rem;color:var(--faint);max-width:74ch">These <span class="term" tabindex="0" role="button">guards<span class="def"><b>hook · guard</b>Code that runs before a tool call and can refuse it. This is what makes the safety rules enforcement, rather than instructions the model could talk itself out of.</span></span> run before every <span class="term" tabindex="0" role="button">tool call<span class="def"><b>tool call</b>The model doing something rather than saying something: reading a file, running a command. Every one passes the guards first.</span></span>, engaged or dormant. They are a real control against mistakes and prompt injection, not a sandbox against a determined attacker: see <a href="safety-model.md">the safety model</a> for what each one does and does not guarantee.</p>
   </div>
 
   <section>
     <h2>How this actually works</h2>
-    <p class="sub">The whole mental model, no framework jargon required.</p>
+    <p class="sub">The whole mental model, no framework jargon required. <span class="termhint">Dotted terms unfold: tap or hover for a plain-English definition.</span></p>
     <div class="grid3">
       <div class="cell"><div class="n">§1</div>
-        <h3>An AI framework: one orchestrator, multiple subagents</h3>
+        <h3>An AI framework: one <span class="term" tabindex="0" role="button">orchestrator<span class="def"><b>orchestrator</b>The agent that plans and delegates rather than doing the work itself. Here, that is Morgan. Also called a lead or a router.</span></span>, multiple <span class="term r" tabindex="0" role="button">subagents<span class="def"><b>agent · subagent</b>A separate AI worker with its own instructions, tools and memory. Morgan is one; each specialist is another.</span></span></h3>
         <p>Morgan orchestrates: planning, delegating. Mateo, Linh, Ravi and the rest are
-        subagents, each with its own prompt, toolset and isolated context, seeing only its brief.
+        subagents, each with its own prompt, toolset and isolated <span class="term" tabindex="0" role="button">context<span class="def"><b>context</b>Everything the model can currently see: your messages, files it has read, results so far. It is finite, which is why each specialist gets a tight brief instead of the whole history.</span></span>, seeing only its brief.
         That isolation is a feature: because specialists cannot see one another's reasoning,
         every review stays independent.</p></div>
 
@@ -177,8 +198,7 @@
         <h3>A loop is an iteration cycle, not a failure</h3>
         <p>A failed check does not stop the work, it becomes another iteration until the work meets
         the standard. Same idea as a PR review: flagged, fixed, re-reviewed. The AI term is
-        <b>evaluator-optimizer</b>: one pass produces the work, an independent pass checks it
-        against a named standard, and it ships once that pass clears.</p></div>
+        <span class="term" tabindex="0" role="button">evaluator-optimizer<span class="def"><b>evaluator-optimizer</b>A two-role pattern: one pass produces the work, a separate pass judges it against a standard, and the work loops until it clears. The judging pass is deliberately not the author.</span></span>: one pass produces the work, an independent pass checks it against a named standard, and it ships once that pass clears.</p></div>
 
       <div class="cell"><div class="n">§4</div>
         <h3>Talk to Morgan like you would a real PM</h3>
@@ -191,49 +211,14 @@
         <h3>📊 and 🧠 separate what was checked from what was reasoned</h3>
         <p>These are the tags you will see in every report, so they are worth knowing. 📊 marks
         something verified directly: a test run, a query executed, a metric taken from the data.
-        🧠 marks reasoning that goes beyond the evidence, still useful, but flagged so it is not
-        read as fact. 📄 marks a value read straight from source code, with nothing run.</p></div>
+        🧠 marks reasoning that goes beyond the evidence, still useful, but flagged so it is not read as fact, which is the practical guard against <span class="term r" tabindex="0" role="button">hallucination<span class="def"><b>hallucination</b>Confident output that is not grounded in anything real. Tagging every claim by its basis makes the difference visible instead of leaving you to guess.</span></span>. 📄 marks a value read straight from source code, with nothing run.</p></div>
 
       <div class="cell"><div class="n">§6</div>
         <h3>Every piece of work gets its own folder</h3>
         <p>Each engagement lives in <code>artifacts/&lt;name&gt;/</code>: its brief, specs, code, tests,
-        and a living <code>START-HERE.md</code> status page showing where it stands. Several can
+        and a living <code>START-HERE.md</code> status page showing where it stands, written to disk precisely so it survives <span class="term" tabindex="0" role="button">compaction<span class="def"><b>compaction</b>What happens when a long conversation is summarised to fit. Anything that matters is kept on disk so it is not lost when this happens.</span></span>. Several can
         sit in the same project at once, each independent; one root index lists them all.</p></div>
     </div>
-  </section>
-
-  <section>
-    <h2>The words you will see</h2>
-    <p class="sub">Enough AI vocabulary to follow what is happening, and no more. You will meet
-      each of these in a normal engagement.</p>
-    <dl class="terms">
-      <div><dt>agent · subagent</dt>
-        <dd>A separate AI worker with its own instructions, tools and memory. Morgan is one;
-        each specialist is another. They cannot see each other's thinking, only what is
-        written down.</dd></div>
-      <div><dt>orchestrator</dt>
-        <dd>The agent that plans and delegates rather than doing the work. Here, that is
-        Morgan. <span class="said">Also called a lead or router.</span></dd></div>
-      <div><dt>context</dt>
-        <dd>Everything the model can currently see: your messages, files it has read, results
-        so far. It is finite, which is why each specialist gets a tight brief instead of the
-        whole history.</dd></div>
-      <div><dt>compaction</dt>
-        <dd>What happens when a long conversation is summarised to fit. Anything that matters
-        is written to disk precisely so it survives this.</dd></div>
-      <div><dt>tool call</dt>
-        <dd>The model doing something rather than saying something: reading a file, running a
-        command. Every one passes a safety check first.</dd></div>
-      <div><dt>hook · guard</dt>
-        <dd>Code that runs before a tool call and can refuse it. This is what makes the safety
-        rules enforcement rather than instructions the model could talk itself out of.</dd></div>
-      <div><dt>token</dt>
-        <dd>The unit models are billed and budgeted in, roughly a word-piece. Why the team uses
-        the smallest set of specialists that fits rather than all 16.</dd></div>
-      <div><dt>hallucination</dt>
-        <dd>Confident output that is not grounded in anything real. The 📊 and 🧠 tags exist to
-        make the difference visible instead of leaving you to guess.</dd></div>
-    </dl>
   </section>
 
   <div class="cols">
@@ -301,6 +286,52 @@
   </div>
 
   <section>
+    <h2>What people ask first</h2>
+    <p class="sub">The questions that come up before anyone trusts a team of agents with real work.</p>
+    <div class="grid3">
+      <div class="cell">
+        <h3>Will it change my code without asking?</h3>
+        <p>Builders write files; the reviewers and specialists who advise cannot edit anything,
+        by tool grant rather than by request. Work lands in the engagement's own folder unless
+        you ask for it in your source tree, nothing is committed or pushed for you, and each
+        phase stops at a gate for your answer.</p></div>
+
+      <div class="cell">
+        <h3>What does one engagement cost, and how long?</h3>
+        <p>Across the 12 engagements in our own most recent test run: <b>$0.53 to $16.82</b>
+        (median about $4) and <b>3 to 42 minutes</b> (median 13). Those were headless runs that
+        cannot reuse the specialists' prompt cache, so an interactive session should cost less.
+        Bigger scope means more specialists, and more specialists means more tokens.</p></div>
+
+      <div class="cell">
+        <h3>Where does my data go?</h3>
+        <p>Anything you point the team at is sent to the model provider as context, the same as
+        any other Claude session. The protected raw-data folder is blocked outright; everything
+        else is your judgement call, which is why the sheet keeps saying to mask or synthesise
+        first.</p></div>
+
+      <div class="cell">
+        <h3>Why a team, rather than just asking Claude?</h3>
+        <p>One assistant checking its own output is marking its own homework. Here the reviewer
+        never saw the builder's reasoning, so the second opinion is genuinely independent. That
+        separation is the entire point, and it is also why this costs more than a single
+        prompt.</p></div>
+
+      <div class="cell">
+        <h3>Will I get the same answer twice?</h3>
+        <p>No. Run the same review again and you may get a different set of findings, ordered
+        and worded differently. Every report records the model and version for that reason, and
+        states plainly that absence of a finding is not evidence of absence.</p></div>
+
+      <div class="cell">
+        <h3>Can I stop it half way?</h3>
+        <p>Yes, interrupt whenever you like. Anything already written stays on disk and the
+        engagement records itself as blocked rather than finished, so it never quietly looks
+        complete. A later session reads that state and picks up where it stopped.</p></div>
+    </div>
+  </section>
+
+  <section>
     <h2>Best practices</h2>
     <div class="grid3">
       <div class="cell">
@@ -313,7 +344,7 @@
       </div>
       <div class="cell">
         <ul class="bp">
-          <li><b>Push back.</b> Morgan is meant to be a sceptic rather than a yes-man, and so are you.
+          <li><b>Push back.</b> Morgan is meant to be a sceptic rather than a yes-man, and so are you. Multi-agent work costs roughly 15x the <span class="term" tabindex="0" role="button">tokens<span class="def"><b>token</b>The unit models are billed and budgeted in, roughly a word-piece. Why the team engages the smallest set of specialists that fits rather than all 16.</span></span> of a single pass, which is why the team stays lean.
             If a finding looks thin, ask what the evidence actually was.</li>
           <li><b>Check the tags.</b> 📊 was measured, 🧠 was reasoned. If something important is
             🧠, that's your cue to verify it before relying on it.</li>
