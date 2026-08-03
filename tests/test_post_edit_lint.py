@@ -58,6 +58,31 @@ def test_syntax_error_fed_back_during_engagement(tmp_path, monkeypatch, capsys):
     assert "post-edit lint" in err and "syntax" in err
 
 
+def test_py_compile_check_never_spawns_a_subprocess(tmp_path, monkeypatch, capsys):
+    """2026-08-03 perf audit: py_compile runs in-process now (py_compile.compile()), not
+    via `python -m py_compile` as a subprocess - every Write/Edit of a .py file during a
+    live engagement used to pay a full process-spawn cost for a syntax check alone. Forcing
+    subprocess.run to raise proves the syntax-error path truly never shells out - if it
+    still did, this test would fail with the forced exception instead of asserting cleanly."""
+    _live(tmp_path)
+    bad = tmp_path / "rule.py"
+    bad.write_text("def detect(:\n    pass\n", encoding="utf-8")
+
+    mod = _load()
+
+    def _boom(*a, **k):
+        raise AssertionError("subprocess.run must not be called for the py_compile check")
+
+    monkeypatch.setattr(mod.subprocess, "run", _boom)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(json.dumps(_edit(bad))))
+    monkeypatch.setattr(mod.shutil, "which", lambda _name: None)  # also skip ruff's subprocess
+    rc = mod.main()
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "syntax" in err
+
+
 def test_clean_file_stays_silent(tmp_path, monkeypatch, capsys):
     _live(tmp_path)
     ok = tmp_path / "rule.py"

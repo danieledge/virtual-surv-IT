@@ -25,8 +25,9 @@ from __future__ import annotations
 
 import json
 import os
+import py_compile
 import shutil
-import subprocess  # nosec B404 - fixed-argv lint invocations only
+import subprocess  # nosec B404 - fixed-argv lint invocations only (ruff only - py_compile is in-process)
 import sys
 from pathlib import Path
 
@@ -65,16 +66,16 @@ def _engagement_live(project_root: Path) -> bool:
 
 def _lint(path: Path) -> list[str]:
     problems: list[str] = []
+    # In-process, not a subprocess (2026-08-03 perf audit): py_compile.compile() does the
+    # identical syntax-only check `python -m py_compile` runs - compiling to bytecode,
+    # never executing the module - with zero process-spawn cost. str(PyCompileError) is
+    # byte-for-byte the same "File ... / caret / SyntaxError: ..." text the subprocess's
+    # stderr produced, so the tail-3-lines formatting below is unchanged.
     try:
-        result = subprocess.run(  # nosec B603 - fixed argv, our interpreter, one path arg
-            [sys.executable, "-m", "py_compile", str(path)],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        if result.returncode != 0:
-            tail = (result.stderr or result.stdout).strip().splitlines()[-3:]
-            problems.append("syntax (py_compile): " + " | ".join(tail))
+        py_compile.compile(str(path), doraise=True)
+    except py_compile.PyCompileError as exc:
+        tail = str(exc).strip().splitlines()[-3:]
+        problems.append("syntax (py_compile): " + " | ".join(tail))
     except Exception:  # nosec B110 - a broken linter never becomes a broken edit
         pass
     ruff = shutil.which("ruff")

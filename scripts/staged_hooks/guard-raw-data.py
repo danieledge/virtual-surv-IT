@@ -105,6 +105,21 @@ _FLAGS_WITH_VALUE = {
     "--type", "-t", "--type-not", "-T", "--max-depth",
 }
 
+# Compound-command segment splitter, mirroring guard-code-execution.py's _segments(): a
+# multi-statement Bash command (`grep ...; echo "..."`, `a && b`, `a | b`) was previously
+# shlex-split and judged as ONE invocation, so words from a LATER, unrelated statement
+# became "file operands" of an EARLIER search verb - a live false positive during the
+# 2026-08-03 token-usage audit itself (the audit's own multi-statement command got
+# blocked). Each segment is now judged independently.
+_SEGMENT_DELIMS = (";", "&&", "||", "|", "\n", "`", "$(")
+
+# `git commit`/`git tag -m <text>` (or --message=<text>): the message is prose the user
+# wrote, not a file read, so it must not trip the marker scan just for MENTIONING the
+# guard's own marker string (e.g. describing this very fix in a commit message) - the
+# fourth instance of the prose/argument false-positive class this project keeps hitting.
+# `-F <file>` (a message FILE) is deliberately NOT exempted here - that IS a real read.
+_GIT_MESSAGE_VERBS = ("commit", "tag")
+
 # ---------------------------------------------------------------------------
 # Canonical raw-data directory - the directory we protect.
 #
@@ -237,6 +252,84 @@ def _search_file_operands(command: str) -> list[str] | None:
     return operands
 
 
+def _segments(command: str) -> list[str]:
+    """Split a compound Bash command into independently-judged statements (mirrors
+    guard-code-execution.py's _segments()). Without this, `grep ...; echo "..."` was judged
+    as ONE search invocation, so words from the SECOND statement became "file operands" of
+    the FIRST'S search verb.
+
+    Quote-aware (2026-08-03, second fix): a purely lexical split chopped INSIDE a quoted
+    argument too - a log-note/commit message using ';' or '&&' as ordinary punctuation
+    ("...close as-is; no real source data exists...") became its own bogus mid-sentence
+    segment, live in an eval run. Delimiters are only boundaries OUTSIDE '...' / "..." -
+    still lexical, not a full shell parser (ADR-002's irreducible residual): an unclosed
+    quote just folds the remainder into one segment, the safe direction."""
+    segments: list[str] = []
+    current: list[str] = []
+    in_single = in_double = False
+    i, n = 0, len(command)
+    while i < n:
+        ch = command[i]
+        if ch == "\\" and not in_single and i + 1 < n:
+            if command[i + 1] == "\n":
+                # Line continuation: real bash ERASES both chars (one continued logical
+                # line), never keeps them as literal text - unlike every other escape.
+                i += 2
+                continue
+            current.append(command[i : i + 2])
+            i += 2
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            current.append(ch)
+            i += 1
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            current.append(ch)
+            i += 1
+            continue
+        if not in_single and not in_double:
+            hit = next((d for d in _SEGMENT_DELIMS if command.startswith(d, i)), None)
+            if hit is not None:
+                segments.append("".join(current))
+                current = []
+                i += len(hit)
+                continue
+        current.append(ch)
+        i += 1
+    segments.append("".join(current))
+    return [s.strip() for s in segments if s.strip()]
+
+
+def _git_message_operands(segment: str) -> list[str] | None:
+    """For a `git commit`/`git tag` segment, return every token EXCEPT the -m/--message
+    VALUE (prose, not a file read) - the flag itself and every other token (including a
+    `-F <file>` message-file argument, which IS a real read) are kept and still checked.
+    Returns None when the segment is not recognisably a git commit/tag invocation, in which
+    case the caller applies the ordinary whole-segment marker check."""
+    try:
+        tokens = shlex.split(segment)
+    except Exception:
+        return None
+    if len(tokens) < 2 or os.path.basename(tokens[0]) != "git" or tokens[1] not in _GIT_MESSAGE_VERBS:
+        return None
+    out: list[str] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        base = tok.split("=", 1)[0]
+        if base in ("-m", "--message"):
+            if "=" not in tok and i + 1 < len(tokens):
+                i += 2  # drop the flag AND its value
+                continue
+            i += 1  # inline --message=... form: drop just this one token
+            continue
+        out.append(tok)
+        i += 1
+    return out
+
+
 def _extract_path_candidates(tool: str, tool_input: dict) -> list[str]:
     """
     Return the list of string path tokens to check for a given tool.
@@ -335,14 +428,28 @@ def main() -> None:
     tool = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
 
-    # --- Search-tool pattern exemption (fix 3): judge the FILE operands, not the pattern.
+    # --- Bash: judge each statement of a compound command independently (segment fix),
+    # then apply the search-verb pattern exemption (fix 3) or the git-message exemption
+    # per segment - never the whole compound command as if it were one invocation.
     if tool == "Bash":
-        operands = _search_file_operands(tool_input.get("command") or "")
-        if operands is not None:
-            for operand in operands:
-                if _is_under_raw(operand) or _RAW_MARKER_RE.search(operand):
-                    _block(f"raw-data path in search operand - tool={tool}")
-            sys.exit(0)
+        for segment in _segments(tool_input.get("command") or ""):
+            operands = _search_file_operands(segment)
+            if operands is not None:
+                for operand in operands:
+                    if _is_under_raw(operand) or _RAW_MARKER_RE.search(operand):
+                        _block(f"raw-data path in search operand - tool={tool}")
+                continue
+            msg_operands = _git_message_operands(segment)
+            if msg_operands is not None:
+                residual = " ".join(msg_operands)
+                if any(marker in residual for marker in RAW_MARKERS) or _RAW_MARKER_RE.search(
+                    residual
+                ):
+                    _block(f"raw-data path in git commit/tag argument - tool={tool}")
+                continue
+            if any(marker in segment for marker in RAW_MARKERS) or _RAW_MARKER_RE.search(segment):
+                _block(f"raw-data marker in input - tool={tool}")
+        sys.exit(0)
 
     # --- Ancestor-rooted / path-less search (fix 2): only when raw data actually exists.
     if tool in ("Grep", "Glob"):

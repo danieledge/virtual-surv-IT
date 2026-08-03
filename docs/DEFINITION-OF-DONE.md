@@ -179,8 +179,11 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       assessed it against expected volumes. **Static by default** (🧠 inferred from code structure);
       📊 measured profiling evidence only when execution was consented (§7) - the verdict must state
       which basis it carries.
-- [ ] **Compliance-reviewed** - auditability, data safety (no secrets/PII/raw data, §5),
-      documented thresholds (§4).
+- [ ] **Compliance-reviewed** - **where the deliverable is detection logic, touches regulated
+      data, or documents thresholds (§4)**, `compliance-reviewer` ran the full auditability/§4/§5
+      pass (CLAUDE.md §4; not a default for every build - operating guide routing table says so
+      explicitly: "not every code review"). Every deliverable, regardless of type, still carries
+      the universal self-check: no secrets/PII/raw data in the repo (§5).
 - [ ] **Documented for handover** - a **developer handover** (`developer-handover.md`): how
       to build/run/test, design decisions (ADRs - architecture decision records), known
       limitations and tech debt. When

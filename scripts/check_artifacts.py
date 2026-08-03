@@ -566,6 +566,41 @@ def _commits_behind(sha: str, repo_dir: Path) -> int | None:
         return None
 
 
+def _batch_resolve_shas(shas: list[str], repo_dir: Path) -> dict[str, bool | None]:
+    """Resolve MANY commit SHAs in ONE git subprocess instead of one-per-sha (2026-08-03
+    perf audit): check_map()'s entry-anchor loop used to call _anchor_resolves once PER
+    MAP ENTRY, so a well-filled map (capped at 250 lines, plausibly 20-50 unique entry
+    SHAs) meant that many separate `git cat-file -e` process spawns on every gated Stop
+    event. `git cat-file --batch-check` accepts a newline-separated list of revision
+    specifiers on stdin and answers all of them in ONE process, in the SAME order. Same
+    per-sha semantics as _anchor_resolves: True = resolves as a commit, False = git
+    answered but it doesn't resolve (a real staleness finding), None = git/repo
+    unavailable entirely (skip that sha's check, never a false STALE finding)."""
+    if not shas:
+        return {}
+    stdin_text = "".join(f"{sha}^{{commit}}\n" for sha in shas)
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, regex-validated hex shas
+            ["git", "-C", str(repo_dir), "cat-file", "--batch-check=%(objectname) %(objecttype)"],
+            input=stdin_text,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return dict.fromkeys(shas)
+    if "not a git repository" in result.stderr.lower():
+        return dict.fromkeys(shas)
+    lines = result.stdout.splitlines()
+    # git answers one line per input line, in order - zip by position, never by string
+    # match (a RESOLVED line echoes the resolved objectname, not the "<sha>^{commit}"
+    # text we sent; only a MISSING line echoes the literal input back).
+    out: dict[str, bool | None] = dict(zip(shas, (ln.strip().endswith(" commit") for ln in lines)))
+    for sha in shas:
+        out.setdefault(sha, None)  # a git error mid-stream left this sha unanswered - skip it
+    return out
+
+
 def _split_cells(line: str) -> list[str]:
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
@@ -707,8 +742,9 @@ def check_map(map_path: Path) -> list[str]:
                     f"MAP-NO-BASIS: {map_path}:{lineno} map entry has no 📊 observed / 🧠 "
                     "inferred tag - every entry must state its evidence basis"
                 )
+    resolved = _batch_resolve_shas(list(entry_shas), map_path.parent)
     for sha, lineno in sorted(entry_shas.items(), key=lambda kv: kv[1]):
-        if _anchor_resolves(sha, map_path.parent) is False:
+        if resolved.get(sha) is False:
             findings.append(
                 f"MAP-STALE-ENTRY-ANCHOR: {map_path}:{lineno} entry anchor {sha} does not "
                 "resolve in this repository - re-verify the entry and refresh its anchor"
@@ -724,36 +760,64 @@ def check_map(map_path: Path) -> list[str]:
     return findings
 
 
+_VALIDATE_FINDINGS_MODULE_CACHE = None
+
+
+def _load_validate_findings_module():
+    """Import scripts.validate_findings in BOTH run modes - same dual-mode pattern and
+    memoization as _load_engagement_state_module / _load_validate_rtm_module above.
+
+    2026-08-03 perf audit: check_findings_packs() used to shell out to this script (one
+    subprocess PER PACK - a review with several passes/re-reviews means several packs, so
+    several process spawns on every gated Stop event) specifically to stay path-independent
+    in plugin mode. The __file__-relative fallback branch here gives the exact same
+    path-independence without a subprocess: it resolves the file next to this one, exactly
+    as the subprocess invocation did, just executed in-process."""
+    global _VALIDATE_FINDINGS_MODULE_CACHE
+    try:
+        from scripts import validate_findings  # normal `-m` / package mode
+
+        return validate_findings
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _VALIDATE_FINDINGS_MODULE_CACHE is not None:
+        return _VALIDATE_FINDINGS_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("validate_findings.py")
+        spec = importlib.util.spec_from_file_location("validate_findings", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _VALIDATE_FINDINGS_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
 def check_findings_packs(artifacts_dir: Path) -> list[str]:
-    """Validate any structured findings pack under artifacts/data/ against the schema. Shells out to
-    validate_findings (by path, NOT an import) so this stays path-independent - an installed plugin
-    invokes scripts by absolute path. A pack that fails is FINDINGS-INVALID: the model fixes the
-    DATA, not the rendered report. Inert until packs exist (fails open if the validator won't run).
-    Recursive over the data/ lane (2026-07-29 register P5: nested packs went unvalidated)."""
+    """Validate any structured findings pack under artifacts/data/ against the schema,
+    in-process (2026-08-03 perf audit - was one subprocess spawn per pack). A pack that
+    fails is FINDINGS-INVALID: the model fixes the DATA, not the rendered report. Inert
+    until packs exist (fails open if the validator module won't load). Recursive over the
+    data/ lane (2026-07-29 register P5: nested packs went unvalidated)."""
     findings: list[str] = []
     data_dir = artifacts_dir / "data"
     if not data_dir.is_dir():
         return findings
-    validator = Path(__file__).with_name("validate_findings.py")
+    vf = _load_validate_findings_module()
+    if vf is None:
+        return findings  # validator unavailable - fail open, same posture as before
     for pack in sorted(data_dir.rglob("findings-*.json")):
         try:
-            result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
-                [sys.executable, str(validator), str(pack)],
-                capture_output=True,
-                text=True,
-            )
-        except (OSError, ValueError):
-            continue  # a validator that won't launch shouldn't brick the gate (fail open)
-        if result.returncode != 0:
-            detail = (
-                "; ".join(
-                    ln.split("FINDINGS-INVALID:", 1)[1].strip()
-                    for ln in result.stdout.splitlines()
-                    if ln.startswith("FINDINGS-INVALID:")
-                )
-                or "schema validation failed"
-            )
-            findings.append(f"FINDINGS-INVALID: {pack.name} - {detail}")
+            errs = vf.load_and_validate(pack)
+        except (OSError, ValueError) as exc:
+            findings.append(f"FINDINGS-INVALID: {pack.name} - cannot read/parse {pack}: {exc}")
+            continue
+        except Exception:
+            continue  # an unexpected validator crash must not brick the gate (fail open)
+        if errs:
+            findings.append(f"FINDINGS-INVALID: {pack.name} - " + "; ".join(errs))
     return findings
 
 
@@ -831,10 +895,21 @@ def check_findings_render_freshness(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+_ENGAGEMENT_STATE_MODULE_CACHE = None
+
+
 def _load_engagement_state_module():
     """Import scripts.engagement_state in BOTH run modes (package import when available,
     __file__-relative load under direct-path plugin invocation). None = module unavailable;
-    the state checks then skip rather than brick the gate."""
+    the state checks then skip rather than brick the gate.
+
+    2026-08-03 perf audit: this is called 6+ times across one check_artifacts run (check_state,
+    check_registry, check_root_orphans, ...), and in plugin mode (no `scripts` package on
+    path, so the fast branch always fails) the fallback used to re-parse and re-exec this
+    file from scratch on every single call. Memoized in a module-level variable - not
+    sys.modules, so this cache can never collide with an unrelated `engagement_state` some
+    other import path might load."""
+    global _ENGAGEMENT_STATE_MODULE_CACHE
     try:
         from scripts import engagement_state  # normal `-m` / package mode
 
@@ -842,6 +917,8 @@ def _load_engagement_state_module():
     # Probe only; fall through to the file-relative loader.
     except Exception:  # nosec B110
         pass
+    if _ENGAGEMENT_STATE_MODULE_CACHE is not None:
+        return _ENGAGEMENT_STATE_MODULE_CACHE
     try:
         import importlib.util
 
@@ -849,17 +926,24 @@ def _load_engagement_state_module():
         spec = importlib.util.spec_from_file_location("engagement_state", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _ENGAGEMENT_STATE_MODULE_CACHE = module
         return module
     except Exception:
         return None
 
 
-def check_state(artifacts_dir: Path) -> list[str]:
+def check_state(artifacts_dir: Path, _all_md: list[Path] | None = None) -> list[str]:
     """Machine-readable engagement state (ADR-006): `engagement-state.json` is the
     authoritative lifecycle record and START-HERE.md is rendered from it. Advisory during
     migration: a legacy engagement with no state file raises nothing - but an index that
     CLAIMS state generation with the state file gone, an invalid state file, or a render
-    that no longer matches the state (by embedded state-hash) are real integrity findings."""
+    that no longer matches the state (by embedded state-hash) are real integrity findings.
+
+    `_all_md` (2026-08-03 perf audit): an optional pre-walked `sorted(artifacts_dir.rglob(
+    "*.md"))` that check() shares across its several .md-scanning sub-checks, so a gated
+    Stop event pays for ONE recursive walk instead of one per sub-check. None (the default,
+    and always the case for a direct/standalone call) means "walk it yourself" - behaviour
+    is identical either way, this only changes whether the walk is shared or fresh."""
     findings: list[str] = []
     es = _load_engagement_state_module()
     if es is None:
@@ -916,7 +1000,7 @@ def check_state(artifacts_dir: Path) -> list[str]:
                     "(--fix re-renders and backs the hand-edited file up)"
                 )
 
-    findings.extend(_check_ratified_claims(artifacts_dir, state))
+    findings.extend(_check_ratified_claims(artifacts_dir, state, _all_md=_all_md))
     return findings
 
 
@@ -932,10 +1016,15 @@ _RATIFIED_NEGATE_RE = re.compile(
 _RATIFY_STOPWORDS = {"ratification", "ratified", "decision", "close", "human"}
 
 
-def _check_ratified_claims(artifacts_dir: Path, state: dict) -> list[str]:
+def _check_ratified_claims(
+    artifacts_dir: Path, state: dict, _all_md: list[Path] | None = None
+) -> list[str]:
     """RATIFIED-CLAIM-PENDING (2026-07-26 live-run review, consolidated finding 2): the FSD
     asserted "ops-lead ratified" while the decision log said pending. When the state records
-    a ratification as pending, no artifact may assert it as given. Escalate, never auto-fix."""
+    a ratification as pending, no artifact may assert it as given. Escalate, never auto-fix.
+
+    `_all_md`: see check_state()'s docstring - an optional pre-walked file list, shared by
+    check() across its sub-checks; None walks fresh (identical result, just not shared)."""
     pending = [
         r
         for r in state.get("ratifications") or []
@@ -945,7 +1034,8 @@ def _check_ratified_claims(artifacts_dir: Path, state: dict) -> list[str]:
         return []
     findings: list[str] = []
     data_dir = artifacts_dir / "data"
-    for md in sorted(artifacts_dir.rglob("*.md")):
+    md_source = _all_md if _all_md is not None else sorted(artifacts_dir.rglob("*.md"))
+    for md in md_source:
         if md.name.upper() == "START-HERE.MD" or data_dir in md.parents:
             continue  # the index renders the pending list itself
         text = md.read_text(encoding="utf-8", errors="replace")
@@ -1023,10 +1113,15 @@ _RTM_GATE_CODES = {
 _RTM_DETAIL_CAP = 3
 
 
+_VALIDATE_RTM_MODULE_CACHE = None
+
+
 def _load_validate_rtm_module():
     """Import scripts.validate_rtm in BOTH run modes (package import, else a __file__-relative
     load under direct-path plugin invocation). None = unavailable; the RTM check then skips
-    rather than bricking the gate - the same posture _load_engagement_state_module takes."""
+    rather than bricking the gate - the same posture _load_engagement_state_module takes.
+    Memoized the same way, for the same reason (2026-08-03 perf audit)."""
+    global _VALIDATE_RTM_MODULE_CACHE
     try:
         from scripts import validate_rtm
 
@@ -1034,6 +1129,8 @@ def _load_validate_rtm_module():
     # Probe only; fall through to the file-relative loader.
     except Exception:  # nosec B110
         pass
+    if _VALIDATE_RTM_MODULE_CACHE is not None:
+        return _VALIDATE_RTM_MODULE_CACHE
     try:
         import importlib.util
 
@@ -1041,12 +1138,15 @@ def _load_validate_rtm_module():
         spec = importlib.util.spec_from_file_location("validate_rtm", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _VALIDATE_RTM_MODULE_CACHE = module
         return module
     except Exception:
         return None
 
 
-def check_rtm(artifacts_dir: Path, project_root: Path | None = None) -> list[str]:
+def check_rtm(
+    artifacts_dir: Path, project_root: Path | None = None, _all_md: list[Path] | None = None
+) -> list[str]:
     """Gate the traceability spine of any RTM in the pack (CLAUDE.md §8).
 
     A missing RTM is NOT a finding - most engagements never author one, and absence is the
@@ -1054,12 +1154,16 @@ def check_rtm(artifacts_dir: Path, project_root: Path | None = None) -> list[str
     that no longer exists (RTM-UNRESOLVED) or a requirement with neither an obligation nor a
     gap disposition (RTM-INCOMPLETE) is a real defect. Findings are aggregated per file and
     per code, and carry the command that reproduces the detail.
+
+    `_all_md`: see check_state()'s docstring - an optional pre-walked file list, shared by
+    check() across its sub-checks; None walks fresh (identical result, just not shared).
     """
     validate_rtm = _load_validate_rtm_module()
     if validate_rtm is None:
         return []
     findings: list[str] = []
-    for rtm in sorted(artifacts_dir.rglob("*.md")):
+    md_source = _all_md if _all_md is not None else sorted(artifacts_dir.rglob("*.md"))
+    for rtm in md_source:
         if not rtm.stem.lower().startswith("rtm") or _under_archive(rtm, artifacts_dir):
             continue
         try:
@@ -1091,17 +1195,25 @@ def check(artifacts_dir: Path) -> list[str]:
         # check is meaningful only once artifacts exist.)
         return findings
 
+    # ONE recursive walk for every .md-scanning sub-check below to share (2026-08-03 perf
+    # audit: check_state -> _check_ratified_claims and check_rtm each independently
+    # rglob("*.md")'d the same tree check() itself also scans a few lines down - a gated
+    # Stop event paid for that walk 3+ times over). Each sub-check still applies its OWN
+    # filter to this shared, UNfiltered list exactly as it did to its own fresh rglob() -
+    # only the walk is shared, no filtering logic changed.
+    all_md = sorted(artifacts_dir.rglob("*.md"))
+
     findings.extend(check_findings_packs(artifacts_dir))
     findings.extend(check_findings_render_freshness(artifacts_dir))
-    findings.extend(check_state(artifacts_dir))
+    findings.extend(check_state(artifacts_dir, _all_md=all_md))
     findings.extend(check_review_fingerprints(artifacts_dir))
-    findings.extend(check_rtm(artifacts_dir))
+    findings.extend(check_rtm(artifacts_dir, _all_md=all_md))
     # artifacts/data/ holds machine-readable source (findings packs); the top-level artifacts/ is the
     # user-navigable set. Exclude the data/ subtree from the .md/.html-sibling and index scans.
     data_dir = artifacts_dir / "data"
     md_files = [
         m
-        for m in sorted(artifacts_dir.rglob("*.md"))
+        for m in all_md
         if data_dir not in m.parents and not _under_archive(m, artifacts_dir)
     ]
     for md in md_files:

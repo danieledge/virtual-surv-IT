@@ -13,6 +13,12 @@ the very next Bash call, ~2 minutes total for just the open sequence, even with 
 individual hang already fixed. This dispatcher runs the SAME five checks - unmodified,
 imported by file path, not reimplemented - in ONE process instead of five.
 
+(2026-08-03: `guard_findings_pack_write` joined the registry below as a sixth check, added
+after this consolidation rather than migrated into it - the "five" above is the historical
+count from the original migration, not a ceiling. New checks register the same way: an entry
+in `_CHECKS` below, no dispatcher-wiring change needed since the matcher already covers every
+tool name any guard might need.)
+
 Design constraints, all deliberate:
   - Each guard's own main() is called directly, never re-executed via its own
     `if __name__ == "__main__":` block (that block is what wires each guard's exit
@@ -59,6 +65,12 @@ _CHECKS = (
         "guard_consent_writes",
         _HOOKS_DIR / "guard-consent-writes.py",
         {"Write", "Edit", "MultiEdit", "NotebookEdit", "Bash"},
+        True,
+    ),
+    (
+        "guard_findings_pack_write",
+        _HOOKS_DIR / "guard-findings-pack-write.py",
+        {"Write"},
         True,
     ),
     (

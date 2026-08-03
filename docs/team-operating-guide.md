@@ -563,4 +563,7 @@ the user informed and in charge, check before anything irreversible.
 - **Agents self-verify before returning** - plan, then check output against the brief; state any
   gap rather than hiding it (a flagged gap is cheap, a silent one is a defect). (Anthropic guidance;
   see `docs/agent-design.md`.)
-- **Run the orchestrator on opus** - routing, challenging findings and §4/§5 calls are deep work.
+- **The orchestrator defaults to sonnet** - testing to date has not yielded any better results
+  from opus for orchestration, so sonnet is the default; opus remains available per-project for
+  critical/high-stakes engagements (`install_helper.py`, menu option 8, or
+  `--model-project . --model opus`).

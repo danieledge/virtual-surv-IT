@@ -87,9 +87,14 @@ and the **deliverable → owner routing table** all live there.
 - **Tag data insights 📊 observed / 🧠 inferred** - never present an inference as observed fact;
   state the assumption. Applies to every agent and to the PM summarising their work.
 - **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `performance-reviewer`,
-  `compliance-reviewer`, `data-quality-reviewer`) hold **no Write/Edit** (six hold Bash for
-  analysers/diffs, execution-gated by §7); build agents implement.
-  **Route by deliverable type, not habit** (table in the operating guide).
+  `compliance-reviewer`, `data-quality-reviewer`) hold **no Edit** (six hold Bash for
+  analysers/diffs, execution-gated by §7); build agents implement. Four of the six
+  (`code-reviewer`, `compliance-reviewer`, `model-validator`, `performance-reviewer`) hold
+  **Write scoped to one path only** - their own findings-pack JSON
+  (`artifacts/<slug>/data/findings-*.json`), mechanically enforced by
+  `guard-findings-pack-write.py` so the grant can't widen in practice; they author that pack
+  directly instead of returning it through the PM. **Route by deliverable type, not habit**
+  (table in the operating guide).
 
 ## 6a. Definition of Done
 

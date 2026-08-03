@@ -239,10 +239,16 @@ def compute_fingerprint(pack: Path) -> str:
     return hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
 
 
-def scan_engagements(root: Path) -> list[dict]:
+def scan_engagements(root: Path, known: tuple[Path, dict] | None = None) -> list[dict]:
     """Registry rows derived from the packs on disk (flat pack first, then workspaces).
     Archived (`.archive`-marked) packs are excluded - the registry names them in its own
-    collapsed line via archived_slugs()."""
+    collapsed line via archived_slugs().
+
+    `known`, if given, is `(pack_dir, state)` for a pack whose state was JUST validated
+    and written to disk by the caller (_write_state) - reusing it in-memory avoids
+    reading the very file we just wrote back off disk. Every OTHER pack is still read
+    fresh, unconditionally: this is a one-row substitution, not a cache, so the registry
+    keeps its "always regenerated, never drifts" guarantee (2026-08-03 perf audit)."""
     rows: list[dict] = []
     candidates: list[tuple[str, Path]] = []
     if state_path(root).is_file():
@@ -250,9 +256,10 @@ def scan_engagements(root: Path) -> list[dict]:
     candidates.extend(
         (sp.parent.name, sp.parent) for sp in workspace_states(root) if not is_archived(sp.parent)
     )
+    known_pack, known_state = known if known is not None else (None, None)
     for slug, pack in candidates:
         try:
-            state = load_state(pack)
+            state = known_state if known is not None and pack == known_pack else load_state(pack)
         except Exception:
             rows.append(
                 {
@@ -280,18 +287,30 @@ def scan_engagements(root: Path) -> list[dict]:
     return rows
 
 
+_RENDER_HTML_MODULE_CACHE = None
+
+
 def _load_render_html_module():
     """Import scripts.render_html in BOTH run modes (package import when available,
     __file__-relative load under direct-path plugin invocation). None = module
     unavailable; callers then degrade to .md-only rather than raising ImportError
     ("No module named 'scripts.render_html'" - live corp report 2026-07-31, where
-    plugin-mode path invocation has no scripts.* package on sys.path)."""
+    plugin-mode path invocation has no scripts.* package on sys.path).
+
+    2026-08-03 perf audit: render_files() and render_registry() each call this
+    independently within ONE _write_state() call - in plugin mode (fast branch always
+    fails), that used to re-parse and re-exec render_html.py twice per mutation.
+    Memoized in a module-level variable, same reasoning as check_artifacts.py's own
+    loaders."""
+    global _RENDER_HTML_MODULE_CACHE
     try:
         from scripts import render_html  # normal `-m` / package mode
 
         return render_html
     except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
         pass
+    if _RENDER_HTML_MODULE_CACHE is not None:
+        return _RENDER_HTML_MODULE_CACHE
     try:
         import importlib.util
 
@@ -299,14 +318,17 @@ def _load_render_html_module():
         spec = importlib.util.spec_from_file_location("render_html", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _RENDER_HTML_MODULE_CACHE = module
         return module
     except Exception:
         return None
 
 
-def render_registry(root: Path) -> list[Path]:
-    """(Re)generate the derived root registry. Removes it when no packs remain."""
-    rows = scan_engagements(root)
+def render_registry(root: Path, known: tuple[Path, dict] | None = None) -> list[Path]:
+    """(Re)generate the derived root registry. Removes it when no packs remain.
+
+    `known` is threaded straight through to scan_engagements() - see its docstring."""
+    rows = scan_engagements(root, known=known)
     archived = archived_slugs(root)
     json_path = root / REGISTRY_JSON
     md_path = root / REGISTRY_MD
@@ -635,6 +657,11 @@ def render_markdown(state: dict) -> str:
     status_line = _STATUS_RENDER.get(status, status)
     if status == "closed" and closed_date:
         status_line = f"{_STATUS_RENDER['closed']} {closed_date}"
+    elif status == "in_progress":
+        # CSS-only pulse (render_html.py's own trusted _CSS, never bleach-sanitised model
+        # content) - an `id`, not `class`: bleach's attribute allow-list permits `id` on any
+        # tag but strips `class` from `span`, and START-HERE has exactly one status per page.
+        status_line = f'<span id="status-in-progress">{status_line}</span>'
 
     verdict = state.get("verdict") or (
         "none yet - engagement not closed, DoD not yet run"
@@ -816,9 +843,14 @@ def embedded_content_hash(index_text: str) -> str | None:
     return None
 
 
-def render_files(artifacts_dir: Path) -> list[Path]:
-    """Write START-HERE.md (+ .html when the renderer's deps exist) from the state file."""
-    state = load_state(artifacts_dir)
+def render_files(artifacts_dir: Path, known_state: dict | None = None) -> list[Path]:
+    """Write START-HERE.md (+ .html when the renderer's deps exist) from the state file.
+
+    `known_state`, if given, is used instead of re-reading `artifacts_dir`'s state off
+    disk - for _write_state(), which already holds the just-validated, just-written state
+    in memory (2026-08-03 perf audit). The standalone `render` command has no such state
+    in hand and always reads fresh, exactly as before."""
+    state = known_state if known_state is not None else load_state(artifacts_dir)
     problems = validate_state(state)
     if problems:
         raise ValueError("state invalid: " + "; ".join(problems))
@@ -862,11 +894,14 @@ def _write_state(artifacts_dir: Path, state: dict) -> None:
     tmp = target.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, target)
-    for path in render_files(artifacts_dir):
+    for path in render_files(artifacts_dir, known_state=state):
         print(f"wrote {path}")
     registry_root = _registry_root_for(artifacts_dir)
     if registry_root is not None:
-        render_registry(registry_root)
+        # The pack we just wrote is reused in-memory (known=) rather than re-read off
+        # disk; every other row in the registry is still scanned fresh, unconditionally
+        # (2026-08-03 perf audit) - see scan_engagements()'s docstring.
+        render_registry(registry_root, known=(artifacts_dir, state))
 
 
 # ---------------------------------------------------------------------------- commands
@@ -996,10 +1031,17 @@ def _mutate(args: argparse.Namespace, fn) -> int:
     return 0
 
 
+_CHECK_ARTIFACTS_MODULE_CACHE = None
+
+
 def _load_checker():
     """scripts.check_artifacts in BOTH run modes (package import, then __file__-relative -
     the same dual-mode pattern check_artifacts uses for THIS module). None = unavailable;
-    the close gate then degrades to closed-state validation only (noted on stderr)."""
+    the close gate then degrades to closed-state validation only (noted on stderr).
+    Memoized (2026-08-03 perf audit) - same reasoning as the other loaders in this file
+    and in check_artifacts.py: the fallback branch re-parses+re-execs a ~90KB file, and
+    only needs to happen once per process regardless of how many times this is called."""
+    global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
         from scripts import check_artifacts  # normal `-m` / package mode
 
@@ -1007,6 +1049,8 @@ def _load_checker():
     # Probe only; fall through to the file-relative loader.
     except Exception:  # nosec B110
         pass
+    if _CHECK_ARTIFACTS_MODULE_CACHE is not None:
+        return _CHECK_ARTIFACTS_MODULE_CACHE
     try:
         import importlib.util
 
@@ -1014,6 +1058,7 @@ def _load_checker():
         spec = importlib.util.spec_from_file_location("check_artifacts", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _CHECK_ARTIFACTS_MODULE_CACHE = module
         return module
     except Exception:
         return None

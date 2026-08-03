@@ -228,7 +228,9 @@ def test_every_applicable_check_sees_the_full_original_payload(monkeypatch):
     monkeypatch.setattr(bhd, "_load", fake_load)
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps(payload)))
     assert bhd.main() == 0
-    assert seen == [payload]  # only guard_consent_writes applies to a bare Write
+    # Two checks apply to a bare Write (guard_consent_writes, then guard_findings_pack_write,
+    # 2026-08-03) - each must see its own fresh, complete copy of the payload.
+    assert seen == [payload, payload]
 
 
 def test_missing_guard_file_skips_that_check_without_crashing(monkeypatch, tmp_path):

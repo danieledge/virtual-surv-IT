@@ -1,8 +1,21 @@
 # Code review method - confidence scoring, filtering & transparency
 
-How `code-reviewer` decides what's worth reporting. The goal is high signal: surface what a
-senior engineer (and an auditor) would flag, filter the noise, and **always show
-what was filtered** so the review is trustworthy and defensible.
+How the four pack-emitting reviewers (`code-reviewer`, `performance-reviewer`,
+`compliance-reviewer`, `model-validator` - `docs/review/findings-schema.json`'s own "kind" list)
+decide what's worth reporting. The goal is high signal: surface what a senior engineer (and an
+auditor) would flag, filter the noise, and **always show what was filtered** so the review is
+trustworthy and defensible.
+
+**Filtering vs conciseness - these are not the same lever, and only one applies per agent.**
+`code-reviewer` and `performance-reviewer` findings are scored and genuinely **filtered** below
+threshold (via `review-scorer`) - safe, because neither reviewer's findings are in the
+never-filter regulated list below. `compliance-reviewer` and `model-validator` findings are, by
+what those two agents exist to find, overwhelmingly **in** that list - so they are never routed
+through score-based filtering at all (§"Never filter" is not a rare exception for them, it is
+almost the whole output). Their size is bounded a different way: **conciseness and
+deduplication**, not dropping substance (§"Conciseness for the never-filtered reviewers" below).
+Confusing the two levers - filtering a compliance finding for brevity, or leaving a
+performance/code finding unfiltered "to be safe" - is the mistake this split exists to prevent.
 
 > Adapted from **turingmind-code-review** (MIT, © 2026 TuringMind) -
 > <https://github.com/turingmindai/turingmind-code-review>. The confidence-scoring and
@@ -88,9 +101,11 @@ scored and filtered*. Don't restate the format here.
 ## Model tiering (wired)
 
 Scoring, filtering and context detection are **rote, mechanical** work, so they run on the cheap
-tier: the review skills delegate them to the **`review-scorer` (haiku)** agent. Only
-`code-reviewer`'s judgement on findings + **Morgan's** challenge pass + the §4/§5 regulated calls
-pay **opus** (CLAUDE.md §8).
+tier: the review skills delegate them to the **`review-scorer` (haiku)** agent, for
+`code-reviewer` **and `performance-reviewer`** findings alike (score + filter below threshold). For
+`compliance-reviewer` and `model-validator`, Pip's role is the mechanical dedup/accounting pass
+above, never score-based filtering. Only `code-reviewer`'s judgement on findings + **Morgan's**
+challenge pass + the §4/§5 regulated calls pay **opus** (CLAUDE.md §8).
 
 **How the lenses execute is not defined here.** `docs/review/agent-router.md` is canonical for the
 pipeline's shape (which lenses load, and whether they run sequentially or fanned out), and for the
@@ -124,6 +139,32 @@ Even if pre-existing, silenced, or "minor", **always report**:
 
 These are regulatory findings, not style - a secret doesn't become acceptable because it
 predates the diff.
+
+## Conciseness for the never-filtered reviewers
+
+`compliance-reviewer` and `model-validator` hold no Write tool, so their return message **is**
+their detail - there is nowhere else for it to live, which is exactly why an earlier hard cap on
+that return (≤ ~30 lines, no exception) silently lost real findings past the limit. Removing that
+cap fixed the loss, but a cap that is simply gone reappears as unbounded size instead: no fewer
+tokens, just a different failure mode. So the return is uncapped in **count of distinct
+findings** (never drop one to fit a budget) but bounded in two other ways that do not cost
+completeness:
+
+- **Deduplicate.** The same underlying issue at five call sites is **one finding** whose
+  `location` field lists all five (`worker.py:40, worker.py:88, tasks.py:12, ...`), not five
+  near-identical findings repeating the same `problem`/`likely_cause`/`impact` prose. Distinct
+  issues stay distinct; repeats of the same issue do not.
+- **Keep each field concise.** `problem`, `likely_cause`, `impact` and `fix.why` are each a
+  sentence or two stating the fact and its evidence - not a paragraph restating context the
+  `standard`/`location` fields already give. Verbosity is not rigour: a shorter, well-evidenced
+  finding is not a smaller finding, it is a better-written one.
+
+This is a *conciseness* discipline, not a *filtering* one - `review-scorer`'s confidence-score
+threshold (above) never applies to these two agents' own findings, since almost everything they
+report is already in the never-filter list. Pip (`review-scorer`) may still run against their
+pack for the mechanical parts only: catching literal duplicate locations for the same issue and
+producing the `Found N · Reported R (· Deduplicated D)` accounting - never scoring a
+compliance/model-validation finding for filtering.
 
 ## Transparency (always)
 

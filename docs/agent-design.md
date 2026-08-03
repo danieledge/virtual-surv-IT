@@ -12,10 +12,10 @@
    `data-analyst` does exploratory/FP/MI work and **cedes threshold calibration to
    `tuning-analyst`**).
 2. **Least privilege, enforced by `tools:`.** Every agent declares its tools explicitly.
-   **Advisory/reviewer agents hold no `Write`/`Edit`** - that independence is a *tool grant*, not a
+   **Advisory/reviewer agents hold no `Edit`** - that independence is a *tool grant*, not a
    polite request. (Six also hold `Bash` for static analysers / `git diff`; execution of the *code
    under review* is gated by `guard-code-execution.py` (§7) - so the precise claim is "no
-   Write/Edit", not strictly "read-only".) Build agents get exactly what they need
+   Edit", not strictly "read-only".) Build agents get exactly what they need
    (`data-analyst`, `tuning-analyst` and `qa-engineer` hold `Write` for their own
    scripts/evidence but **not** `Edit`, so they never alter live detection source;
    `business-analyst` is a build agent whose `Edit` grant covers spec/doc authoring - its
@@ -26,6 +26,22 @@
    one: CLAUDE.md §7 forbids hand-parsing documents, so an elicitation agent with no `Bash`
    could not legitimately read a PDF or DOCX at all. `qa-engineer` is the precedent, same
    Write-not-Edit posture and the same rendering need).
+
+   **2026-08-03 token-usage audit: four advisory agents also gained `Write`, narrower still
+   than the build-agent grants above** - `code-reviewer`, `compliance-reviewer`,
+   `model-validator` and `performance-reviewer` each held no Write at all, so their full
+   structured findings-pack JSON had to transit the orchestrator's context TWICE (once as
+   the Task return, once again when the orchestrator re-emitted it as a Write) purely
+   because they had no way to persist their own output. Granting `Write` lets each author
+   its own pack directly, halving that cost - but a bare `Write` grant is a much bigger
+   blast radius than "author one JSON file", so unlike the build agents' project-wide Write
+   access, this grant is scoped to exactly one path pattern
+   (`artifacts/<slug>/data/findings-*.json`) and **mechanically enforced**, not just
+   prompted: `guard-findings-pack-write.py` (a PreToolUse hook keyed on the `agent_type`
+   field Claude Code provides for subagent tool calls) blocks any Write from these four
+   agents that doesn't match that shape. The tool-grant-as-independence principle above
+   still holds in full for `Edit` - none of these four gained the ability to alter the code
+   or model they're reviewing.
 3. **Match the model to the work (see §2).** Cheap tier for mechanical, top tier only where it
    changes outcomes.
 4. **Right-size every engagement.** Multi-agent costs ~15× the tokens; the PM uses the *leanest*
@@ -48,10 +64,17 @@
 
 ## 2. Model-tiering rationale
 
-**Principle.** The orchestrator (**Morgan**) runs on **opus** and independently re-scrutinises every
-agent's *findings* - so there's already a top-tier backstop at the synthesis layer. Therefore reserve
-opus for judgment that is **(a) the final, independent word with no downstream re-check**, **(b) deep/
-subtle enough that a miss is costly and hard to catch**, or **(c) genuinely novel design**. Everything
+**Principle.** The orchestrator (**Morgan**) defaults to **sonnet** - testing to date has not yielded
+any better results from opus for orchestration, and the orchestrator's own cost multiplies across
+every skill file, hook injection and subagent return that lands in its context, so the cheaper tier
+is the default; opus remains available per-project for critical/high-stakes engagements
+(`install_helper.py`, menu option 8). This means the specialist tiers below stand on their own
+footing, not on "Morgan backstops everything": a specialist whose findings ARE independently
+re-checked by another specialist or by the PM's own challenge pass can safely run sonnet regardless
+of the orchestrator's own tier; a specialist that is the **final, independent word with no
+downstream re-check** must be opus itself, since nothing else catches its mistakes. Reserve opus for
+judgment that is **(a) the final, independent word with no downstream re-check**, **(b) deep/subtle
+enough that a miss is costly and hard to catch**, or **(c) genuinely novel design**. Everything
 evidenced and re-checkable → **sonnet**. Purely mechanical → **haiku**.
 
 | Agent | Tier | Why this tier |
@@ -100,7 +123,7 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | Best-practice item | Status | How |
 |---|---|---|
 | Frontmatter complete (name·description·tools·model) | ✅ | All 16. |
-| `tools:` least-privilege; advisors hold no Write/Edit | ✅ | Verified - zero advisors hold Write/Edit. (6 hold `Bash` for analysers/diffs; code-under-review execution is hook-gated, §7 - "no Write/Edit", not strictly "read-only".) |
+| `tools:` least-privilege; advisors hold no Edit | ✅ | Verified - zero advisors hold Edit. (6 hold `Bash` for analysers/diffs, execution-gated §7; 4 hold `Write` scoped to their own findings-pack path only, mechanically enforced by `guard-findings-pack-write.py` - "no Edit, Write scoped", not strictly "read-only".) |
 | Description = clear when-to-use trigger | ✅ | Standardised "When the team is engaged, use for…"; overlaps removed. |
 | Model tiering (not all-one-tier; documented) | ✅ | §2 above; 4/11/1 split. |
 | Reasonable agent count / no routing collisions | ✅ | §4; one historical overlap fixed. |
@@ -132,7 +155,7 @@ and this matrix are the guard against drift.*
 | Budget **~15× tokens**; reserve multi-agent for high value | ✅ | "~15× the tokens" cited verbatim (CLAUDE.md §6). |
 | **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 11 sonnet / 1 haiku. |
 | Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) + a **hard ≤~1,500-token / ~30-line return budget** stated in the delegation brief and each agent's return instruction (operating guide §Orchestration; an over-budget return is a stated defect to trim, aligned to Anthropic's 1-2k-token sub-agent return), **backstopped by a hook**: `scripts/subagent_return_budget.py` is a PostToolUse hook on the `Task` matcher (wired in `.claude/settings.json` + `hooks/hooks.json`) that measures the actual return and gives Morgan one nudge when it is clearly over budget (trigger: 2× the stated ceiling, so a borderline return is never flagged). Still 🟡, for two reasons stated plainly: the hook fires **after** the return has landed, so it prompts a trim rather than preventing the context cost; and the token count is a `chars / 4` estimate (a hook has no access to the model's tokenizer). It is advisory by design - fails open, silent outside a live engagement. |
-| **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no Write/Edit (Bash, where granted, is execution-gated, §7). |
+| **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no Edit (Bash, where granted, is execution-gated §7; Write, where granted, is scoped to one findings-pack path and mechanically enforced). |
 | Guard the failure modes (over-spawn · duplicate · runaway · premature stop) | ✅ | Right-size + state-count (over-spawn); non-overlapping briefs (duplicate); fix-loop stop conditions (runaway); never-dead-end (premature stop). |
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
 | Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |

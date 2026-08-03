@@ -501,3 +501,247 @@ def test_render_exits_nonzero_when_html_sibling_skipped(tmp_path, monkeypatch):
     monkeypatch.setattr(es_module, "_load_render_html_module", lambda: None)
     assert _run_env(monkeypatch, tmp_path, "--slug", "t", "render") == 2
     assert (tmp_path / "artifacts" / "t" / "START-HERE.md").is_file()
+
+
+# ------------------------------------------------ module-loader memoization (2026-08-03 perf audit)
+#
+# _load_render_html_module / _load_checker are each called from more than one place within
+# ONE _write_state() / close flow (render_files() and render_registry() both load
+# render_html; the close path loads check_artifacts). The fast `from scripts import X`
+# branch is already cached by Python's own import machinery; the __file__-relative
+# FALLBACK (taken in plugin mode) used to re-parse and re-exec the whole file on every
+# call. These force the fallback via __import__ interception (poisoning sys.modules alone
+# is unreliable once a genuine prior import has cached the submodule as an attribute of
+# the `scripts` package) and prove the same module object comes back, exec_module invoked
+# only once.
+
+
+def _block_scripts_import(monkeypatch, blocked_name: str) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _guarded(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "scripts" and fromlist and blocked_name in fromlist:
+            raise ImportError(f"blocked for test: scripts.{blocked_name}")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _guarded)
+
+
+def _counting_spec_from_file_location(monkeypatch):
+    import importlib.util
+
+    exec_calls = []
+    orig = importlib.util.spec_from_file_location
+
+    def _counting(*a, **k):
+        spec = orig(*a, **k)
+        orig_exec = spec.loader.exec_module
+
+        def _counted_exec(module):
+            exec_calls.append(1)
+            return orig_exec(module)
+
+        spec.loader.exec_module = _counted_exec
+        return spec
+
+    monkeypatch.setattr(importlib.util, "spec_from_file_location", _counting)
+    return exec_calls
+
+
+def test_render_html_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.engagement_state as es_module
+
+    _block_scripts_import(monkeypatch, "render_html")
+    monkeypatch.setattr(es_module, "_RENDER_HTML_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = es_module._load_render_html_module()
+    second = es_module._load_render_html_module()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
+
+
+def test_check_artifacts_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.engagement_state as es_module
+
+    _block_scripts_import(monkeypatch, "check_artifacts")
+    monkeypatch.setattr(es_module, "_CHECK_ARTIFACTS_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = es_module._load_checker()
+    second = es_module._load_checker()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
+
+
+# ------------------------------------------------ registry known-pack reuse (2026-08-03 perf audit)
+#
+# Every mutation (add-artifact, set-status, log-note, ...) re-renders the WHOLE project
+# registry via render_registry() -> scan_engagements(), which re-reads and re-parses
+# EVERY open pack's engagement-state.json from disk, including the one _write_state()
+# just validated and wrote. scan_engagements()'s `known=(pack, state)` lets _write_state()
+# hand back that in-memory state instead of re-reading the file it just wrote - a
+# one-row substitution, not a cache: every OTHER row is still read fresh, unconditionally,
+# on every single call, so the registry's documented "always regenerated, never drifts"
+# guarantee (render_registry()'s own docstring/heading comment) is untouched. The
+# archive/unarchive/migrate call sites change which packs even exist, so they deliberately
+# do NOT pass `known` and keep the full rescan.
+
+
+def test_write_state_does_not_reread_the_pack_it_just_wrote(tmp_path, monkeypatch):
+    import scripts.engagement_state as es_module
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
+    art = tmp_path / "artifacts"
+    pack = art / "audit"
+
+    orig_load_state = es_module.load_state
+    read_packs = []
+
+    def _counting_load_state(artifacts_dir):
+        read_packs.append(artifacts_dir)
+        return orig_load_state(artifacts_dir)
+
+    monkeypatch.setattr(es_module, "load_state", _counting_load_state)
+
+    assert _run_env(monkeypatch, tmp_path, "--slug", "audit", "set-status", "blocked") == 0
+
+    # Read once to build the mutated state (every command's normal read-modify-write);
+    # NOT a second time for the registry render that follows the write.
+    assert read_packs.count(pack) == 1, "the just-written pack must not be re-read for the registry"
+
+
+def test_write_state_still_reads_every_other_pack_fresh(tmp_path, monkeypatch):
+    """No-drift guarantee: mutating one pack must not stop the registry from reflecting a
+    sibling pack that changed between renders (e.g. edited by a different session)."""
+    import scripts.engagement_state as es_module
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
+    _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
+    art = tmp_path / "artifacts"
+
+    # Simulate a sibling pack changing on disk without going through this process.
+    sibling_state = json.loads(state_path(art / "scoping").read_text(encoding="utf-8"))
+    sibling_state["status"] = "blocked"
+    state_path(art / "scoping").write_text(
+        json.dumps(sibling_state, indent=2) + "\n", encoding="utf-8"
+    )
+
+    assert _run_env(monkeypatch, tmp_path, "--slug", "audit", "log-note", "note") == 0
+
+    rows = {
+        r["slug"]: r["status"]
+        for r in json.loads((art / "engagements.json").read_text(encoding="utf-8"))["engagements"]
+    }
+    assert rows["scoping"] == "blocked"  # the sibling's edit is reflected, not stale
+    assert rows["audit"] == "in_progress"
+
+
+def test_known_pack_substitution_matches_full_rescan_output(tmp_path, monkeypatch):
+    """The substituted row must be byte-for-byte the same shape a full rescan would
+    produce - scan_engagements(root) vs scan_engagements(root, known=...) agree."""
+    import scripts.engagement_state as es_module
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
+    _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
+    art = tmp_path / "artifacts"
+    pack = art / "audit"
+    state = load_state(pack)
+
+    full_rescan = es_module.scan_engagements(art)
+    substituted = es_module.scan_engagements(art, known=(pack, state))
+
+    assert substituted == full_rescan
+
+
+def test_scan_engagements_known_ignored_when_pack_does_not_match(tmp_path, monkeypatch):
+    """A `known` pack that isn't among the candidates (e.g. a stale/mismatched path) must
+    never leak its state onto some other row - it's a no-op, not a silent substitution."""
+    import scripts.engagement_state as es_module
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
+    art = tmp_path / "artifacts"
+
+    rows = es_module.scan_engagements(art, known=(tmp_path / "nowhere", {"status": "bogus"}))
+    assert rows[0]["status"] == "in_progress"
+
+
+def test_render_files_reuses_known_state_instead_of_rereading(tmp_path, monkeypatch):
+    """render_files() had the identical redundant-read pattern one call up the chain -
+    _write_state() re-reads the pack it just wrote to render START-HERE.md/.html. Found
+    and fixed alongside the registry substitution (same file, same _write_state() call
+    chain, same root cause)."""
+    import scripts.engagement_state as es_module
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
+    art = tmp_path / "artifacts"
+    pack = art / "audit"
+
+    orig_load_state = es_module.load_state
+    read_packs = []
+
+    def _counting_load_state(artifacts_dir):
+        read_packs.append(artifacts_dir)
+        return orig_load_state(artifacts_dir)
+
+    monkeypatch.setattr(es_module, "load_state", _counting_load_state)
+
+    assert _run_env(monkeypatch, tmp_path, "--slug", "audit", "log-note", "hi") == 0
+
+    # log-note goes through _mutate(), which reads once to build the mutated state; that
+    # is the only read that should happen for this pack across the whole call.
+    assert read_packs.count(pack) == 1
+
+
+def test_standalone_render_command_still_reads_from_disk(tmp_path, monkeypatch):
+    """The `render` command has no in-memory state to reuse - it must keep reading fresh
+    (its whole purpose is regenerating the view FROM disk, e.g. after a hand-edit)."""
+    import scripts.engagement_state as es_module
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
+    art = tmp_path / "artifacts"
+    pack = art / "audit"
+
+    orig_load_state = es_module.load_state
+    read_packs = []
+
+    def _counting_load_state(artifacts_dir):
+        read_packs.append(artifacts_dir)
+        return orig_load_state(artifacts_dir)
+
+    monkeypatch.setattr(es_module, "load_state", _counting_load_state)
+
+    assert _run_env(monkeypatch, tmp_path, "--slug", "audit", "render") == 0
+
+    assert pack in read_packs
+
+
+def test_render_registry_with_no_known_reads_every_pack_fresh(tmp_path, monkeypatch):
+    """archive/unarchive/migrate change pack MEMBERSHIP itself, so they call
+    render_registry() with no `known` - proving render_registry(root) (its default,
+    known=None) unconditionally re-reads every candidate, exactly what those three call
+    sites rely on for correctness after membership changes."""
+    import scripts.engagement_state as es_module
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
+    art = tmp_path / "artifacts"
+    pack = art / "audit"
+
+    orig_load_state = es_module.load_state
+    read_packs = []
+
+    def _counting_load_state(artifacts_dir):
+        read_packs.append(artifacts_dir)
+        return orig_load_state(artifacts_dir)
+
+    monkeypatch.setattr(es_module, "load_state", _counting_load_state)
+
+    es_module.render_registry(art)
+
+    assert pack in read_packs

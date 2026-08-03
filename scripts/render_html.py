@@ -154,6 +154,12 @@ blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; c
 a { color: #0969da; }
 .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
   color: #595959; font-size: .8rem; }
+/* In-progress status pulse - CSS-only (no JS: bleach strips script elements from body content
+   by design, see _sanitise()'s docstring). #status-in-progress is set by engagement_state.py's
+   render_markdown() only while status == in_progress; never applied to blocked/closing/closed. */
+#status-in-progress { display: inline-block; animation: status-pulse 1.8s ease-in-out infinite; }
+@keyframes status-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { #status-in-progress { animation: none; } }
 @media (prefers-color-scheme: dark) {
   body { background: #0d1117; color: #e6edf3; }
   h1, h2 { border-color: #30363d; }

@@ -32,6 +32,19 @@ Deliberately low-noise and non-blocking:
     can never loop the model forever (warn-first, not hard-block);
   * **fails open** on any internal error - a verification backstop must never brick a stop.
 
+2026-08-03 cross-turn suppression (token-usage audit): the loop-safety above only ever
+covered ONE stop cycle. An engagement left open with an unaddressed, unchanging finding (a
+mid-delivery unrendered .html sibling, a stale map anchor, a user who chose not to fix
+something) re-fired this SAME nudge at every single stop, in every later session in that
+project, until the pack closed or archived - a per-turn tax that compounds with turn count
+and was never noticed because each individual nudge looked correct in isolation. Fixed the
+same way `todo_panel_nudge.py` already solves the analogous one-time-nudge problem: the
+findings are hashed, and the hash is compared against a `dod-nudged:<hash>` marker in the
+gating pack's own `log` (recorded by the model via `log-note`, since every hook in this repo
+stays read-only). Unchanged findings nudge once, then go silent; a NEW or DIFFERENT finding
+set changes the hash and nudges again - the backstop still catches drift, it just stops
+repeating itself.
+
 Stdin: the Stop-hook JSON payload. Stdout: a single JSON `{"decision":"block","reason":...}` for
 the one nudge (which feeds the findings back to the PM to act on), else nothing. Exit code is
 always 0.
@@ -44,10 +57,13 @@ config edits are human-only under ADR-002 rec 5). Patches to this file are stage
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
 from pathlib import Path
+
+_NUDGE_MARKER_PREFIX = "dod-nudged:"
 
 
 def _load_input() -> dict:
@@ -57,8 +73,35 @@ def _load_input() -> dict:
         return {}
 
 
-def _reason(findings: list[str]) -> str:
+def _findings_hash(findings: list[str]) -> str:
+    """Stable, order-independent fingerprint of the current finding set - so re-sorting or
+    re-ordering the checker's own output never spuriously looks like "something changed"."""
+    joined = "\n".join(sorted(findings))
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
+
+
+def _already_nudged(pack: Path, findings_hash: str) -> bool:
+    """True if this EXACT finding set was already nudged for this pack - read-only, mirrors
+    todo_panel_nudge.py's marker check. An unreadable or marker-less state file is "not yet
+    nudged", never a suppression (fail toward warning, not toward silence)."""
+    try:
+        state = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    log = state.get("log")
+    if not isinstance(log, list):
+        return False
+    marker = f"{_NUDGE_MARKER_PREFIX}{findings_hash}"
+    return any(marker in str(entry) for entry in log)
+
+
+def _reason(findings: list[str], slug: str | None, findings_hash: str) -> str:
     bullet = "\n- ".join(findings)
+    log_note = (
+        f'engagement_state --slug {slug} log-note "{_NUDGE_MARKER_PREFIX}{findings_hash}"'
+        if slug
+        else f'engagement_state log-note "{_NUDGE_MARKER_PREFIX}{findings_hash}"'
+    )
     return (
         "🎩 DoD backstop (Stop hook, warn-first): an engagement in this project is still "
         "OPEN and the mechanical DoD check flags:\n- "
@@ -71,8 +114,13 @@ def _reason(findings: list[str]) -> str:
         "artifacts, `check_artifacts --fix`, `set-status closed`); NEVER delete completed "
         "close deliverables to satisfy the gate. If the engagement is genuinely still "
         'blocked, end the turn saying so plainly ("NOT closed - outstanding: ...") rather '
-        "than stopping silently. (One-time nudge - it will not fire again this stop cycle.)"
+        "than stopping silently. (One-time nudge - it will not fire again this stop cycle, "
+        f"and once you record `{log_note}` it will not repeat for this SAME finding set in "
+        "any later turn or session either - only a new or changed finding re-arms it.)"
     )
+
+
+_CHECK_ARTIFACTS_MODULE_CACHE = None
 
 
 def _load_checker(project_root: Path):
@@ -82,7 +130,13 @@ def _load_checker(project_root: Path):
     __file__-relative load: a plugin install runs this hook by absolute path from the
     plugin dir against a foreign project, where no `scripts` package resolves - that was
     the silent no-op. The second candidate covers the staged copy's own location
-    (scripts/staged_hooks/ -> scripts/). None = unavailable (fail open)."""
+    (scripts/staged_hooks/ -> scripts/). None = unavailable (fail open).
+
+    2026-08-03 perf audit: memoized. Since stop_hook_dispatcher.py now runs this hook and
+    todo_panel_nudge.py (which carries the identical loader) in ONE process, each still
+    loading check_artifacts.py as its OWN separate module object - this cache at least
+    stops THIS hook's own repeated calls from re-parsing+re-executing it."""
+    global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
         sys.path.insert(0, str(project_root))
         from scripts import check_artifacts
@@ -91,6 +145,8 @@ def _load_checker(project_root: Path):
     # Probe only; fall through to the file-relative loader.
     except Exception:  # nosec B110
         pass
+    if _CHECK_ARTIFACTS_MODULE_CACHE is not None:
+        return _CHECK_ARTIFACTS_MODULE_CACHE
     import importlib.util
 
     here = Path(__file__).resolve()
@@ -103,6 +159,7 @@ def _load_checker(project_root: Path):
                 spec = importlib.util.spec_from_file_location("check_artifacts", candidate)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
+                _CHECK_ARTIFACTS_MODULE_CACHE = module
                 return module
         # A candidate that won't load must not stop the next one being tried.
         except Exception:  # nosec B112
@@ -173,7 +230,17 @@ def main() -> int:
     if not findings:
         return 0
 
-    print(json.dumps({"decision": "block", "reason": _reason(findings)}))
+    findings_hash = _findings_hash(findings)
+    # Marker home: prefer the flat pack when it's among the gated set (it's what most
+    # single-engagement projects have), else the first gated workspace. Which specific pack
+    # holds the marker is not semantically load-bearing - it is just a durable place to
+    # record "this exact finding set was already nudged", shared across every gated pack.
+    marker_name, marker_pack = next((g for g in gated if not g[0]), gated[0])
+    if _already_nudged(marker_pack, findings_hash):
+        return 0
+
+    slug = marker_name or None
+    print(json.dumps({"decision": "block", "reason": _reason(findings, slug, findings_hash)}))
     return 0
 
 

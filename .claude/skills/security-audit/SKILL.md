@@ -74,7 +74,8 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
    fixable work.** Loop until only human-decision items remain, marked **🔴 Open (needs human
    review)**, not "deferred".
 
-5. **Morgan's challenge pass (opus) - a spot-check, not a re-score** (the scorer already applied the
+5. **Morgan's challenge pass (the orchestrator's own tier - sonnet by default, opus if
+   configured for this engagement) - a spot-check, not a re-score** (the scorer already applied the
    rubric; re-scoring everything on opus pays twice). Challenge every 🔴 Critical, every §5/§4
    regulated finding, anything whose evidence basis looks thin (🧠 presented as 📊), and a sample of
    the rest; downgrade or drop what fails. Be a sceptic, not a relay - and not a second scorer.
@@ -90,9 +91,12 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
    artifact before presenting, don't rely on the gate).
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
-schema `docs/review/findings-schema.json`). Write the findings to
-`artifacts/data/findings-<slug>.json` with **`"kind": "security-audit"`** (each finding the five
-named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition), then run
+schema `docs/review/findings-schema.json`). Tell `code-reviewer` (step 2) to write its own pack
+directly to `artifacts/<slug>/data/findings-<slug>.json` with **`"kind": "security-audit"`** (each
+finding the five named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition -
+it holds a Write grant scoped to exactly this path, mechanically enforced); `compliance-reviewer`
+(step 3) writes its own alongside it (`findings-compliance-<slug>.json`). **Read both back and
+consolidate** - merge `compliance-reviewer`'s `findings[]` into the security pack - then run
 **`<python> -m scripts.check_artifacts --fix`** (allow-listed): it validates the pack
 (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `artifacts/<slug>/SECURITY-AUDIT-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first)
 (the `kind` drives the `SECURITY-AUDIT-` prefix). Don't hand-author or hand-edit the report.

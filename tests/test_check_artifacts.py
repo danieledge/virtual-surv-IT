@@ -659,6 +659,90 @@ def test_map_outside_git_skips_anchor_check(tmp_path):
     assert check_map(m) == []
 
 
+# ------------------------------------------------ entry-anchor resolution is batched (2026-08-03)
+#
+# check_map()'s per-entry loop used to call _anchor_resolves (one `git cat-file -e`
+# subprocess) PER ENTRY - a well-filled map could spawn 20-50 processes on every gated
+# Stop event. Now one `git cat-file --batch-check` call resolves them all. No prior test
+# covered MAP-STALE-ENTRY-ANCHOR at all (single-entry _good_map fixtures never exercised
+# more than one SHA), so these are new coverage, not just a refactor regression net.
+
+
+def test_multiple_entry_anchors_mixed_resolve_correctly(tmp_path):
+    """Several entries, some resolving and some not, in ONE real repo - proves the batch
+    call correctly attributes each result back to the right entry, not just a single-sha
+    happy path."""
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    bogus = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    _touch(
+        m,
+        _good_map(sha)
+        + f"| 2 | etl | good entry | 📊 seen | 2026-07-18 | `{sha[:9]}` |\n"
+        + f"| 3 | ml | stale entry | 📊 seen | 2026-07-18 | `{bogus[:9]}` |\n"
+        + f"| 4 | tuning | another stale one | 📊 seen | 2026-07-18 | `{bogus}` |\n",
+    )
+    findings = check_map(m)
+    stale = [f for f in findings if "MAP-STALE-ENTRY-ANCHOR" in f]
+    assert len(stale) == 2  # rows 3 and 4 only - rows 1 (header) and 2 both resolve fine
+    assert any(bogus[:9] in f for f in stale)  # the short-form bogus entry
+    assert any(bogus in f for f in stale)  # the full-length bogus entry
+    assert not any(sha[:9] in f for f in stale)  # the two genuinely-resolving entries are clean
+
+
+def test_batch_resolve_shas_handles_mix_in_one_call(tmp_path):
+    from scripts.check_artifacts import _batch_resolve_shas
+
+    repo, sha = _map_repo(tmp_path)
+    bogus = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    result = _batch_resolve_shas([sha, bogus], repo)
+    assert result[sha] is True
+    assert result[bogus] is False
+
+
+def test_batch_resolve_shas_empty_list_makes_no_subprocess_call(tmp_path, monkeypatch):
+    import scripts.check_artifacts as ca
+
+    def _boom(*a, **k):
+        raise AssertionError("subprocess.run must not be called for an empty sha list")
+
+    monkeypatch.setattr(ca.subprocess, "run", _boom)
+    assert ca._batch_resolve_shas([], tmp_path) == {}
+
+
+def test_batch_resolve_shas_outside_git_returns_none_for_every_sha(tmp_path):
+    from scripts.check_artifacts import _batch_resolve_shas
+
+    result = _batch_resolve_shas(["deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", "abc123"], tmp_path)
+    assert result == {"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef": None, "abc123": None}
+
+
+def test_many_entry_anchors_spawn_exactly_one_subprocess(tmp_path, monkeypatch):
+    """The actual performance property: N entries must cost ONE git process, not N."""
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    rows = "".join(
+        f"| {i} | area{i} | entry {i} | 📊 seen | 2026-07-18 | `{sha[:9]}` |\n" for i in range(2, 12)
+    )
+    _touch(m, _good_map(sha) + rows)
+
+    import scripts.check_artifacts as ca
+
+    calls = []
+    real_run = ca.subprocess.run
+
+    def _counting_run(cmd, *a, **k):
+        if isinstance(cmd, list) and "cat-file" in cmd:
+            calls.append(cmd)
+        return real_run(cmd, *a, **k)
+
+    monkeypatch.setattr(ca.subprocess, "run", _counting_run)
+    findings = check_map(m)
+    assert not any("MAP-STALE-ENTRY-ANCHOR" in f for f in findings)  # all 10 entries resolve
+    batch_calls = [c for c in calls if any(str(a).startswith("--batch-check") for a in c)]
+    assert len(batch_calls) == 1  # ten entries, one subprocess
+
+
 def test_map_novcs_anchor_accepted(tmp_path):
     # A working project with no git repo writes `Anchor no-vcs` - a valid anchor, not a
     # defect (surfaced by the 2026-07-22 end-to-end validation: two engagements in git-less
@@ -917,6 +1001,76 @@ def test_invalid_findings_pack_flagged(tmp_path):
     del bad["findings"][0]["likely_cause"]  # drop a required field
     _pack(art, bad)
     assert "FINDINGS-INVALID" in "\n".join(check(art))
+
+
+# ------------------------------------------------ findings-pack validation is in-process (2026-08-03)
+#
+# check_findings_packs() used to shell out to validate_findings.py as a SEPARATE subprocess
+# PER PACK - several review passes/re-reviews means several packs, so several process spawns
+# on every gated Stop event. Now calls validate_findings.load_and_validate() in-process.
+
+
+def test_findings_pack_validation_never_spawns_a_subprocess(tmp_path, monkeypatch):
+    from scripts.check_artifacts import check_findings_packs
+
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK)
+    bad = copy.deepcopy(_VALID_PACK)
+    del bad["findings"][0]["likely_cause"]
+    _pack(art, bad, name="findings-bad.json")
+
+    def _boom(*a, **k):
+        raise AssertionError("subprocess.run must not be called for findings-pack validation")
+
+    monkeypatch.setattr("scripts.check_artifacts.subprocess.run", _boom)
+    findings = check_findings_packs(art)
+    assert any("findings-bad.json" in f for f in findings)
+    assert not any("findings-t.json" in f for f in findings)  # the valid pack stays clean
+
+
+def test_findings_pack_validation_handles_multiple_packs(tmp_path):
+    from scripts.check_artifacts import check_findings_packs
+
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK, name="findings-a.json")
+    _pack(art, _VALID_PACK, name="findings-b.json")
+    bad = copy.deepcopy(_VALID_PACK)
+    del bad["findings"][0]["standard"]
+    _pack(art, bad, name="findings-c.json")
+
+    findings = check_findings_packs(art)
+    assert len(findings) == 1
+    assert "findings-c.json" in findings[0]
+
+
+def test_findings_pack_unreadable_json_reports_cannot_parse(tmp_path):
+    from scripts.check_artifacts import check_findings_packs
+
+    art = tmp_path / "artifacts"
+    d = art / "data"
+    d.mkdir(parents=True)
+    (d / "findings-broken.json").write_text("{not valid json", encoding="utf-8")
+
+    findings = check_findings_packs(art)
+    assert len(findings) == 1
+    assert "FINDINGS-INVALID" in findings[0]
+    assert "findings-broken.json" in findings[0]
+    assert "cannot read/parse" in findings[0]
+
+
+def test_findings_pack_validator_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "validate_findings")
+    monkeypatch.setattr(ca, "_VALIDATE_FINDINGS_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_validate_findings_module()
+    second = ca._load_validate_findings_module()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
 
 
 def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
@@ -1455,3 +1609,139 @@ def test_archived_rtm_is_not_checked(tmp_path):
     art = _rtm_pack(tmp_path, code="`rules/renamed.py`")
     (art / ".archive").write_text("archived\n", encoding="utf-8")
     assert check_rtm(art) == []
+
+
+# ------------------------------------------------ module-loader memoization (2026-08-03 perf audit)
+#
+# _load_engagement_state_module / _load_validate_rtm_module are called many times across one
+# check_artifacts run (check_state, check_registry, check_root_orphans, check_rtm, ...). The
+# fast `from scripts import X` branch is already cached by Python's own import machinery; the
+# __file__-relative FALLBACK (taken in plugin mode, where no `scripts` package resolves) used
+# to re-parse and re-exec the whole file on every call. These tests force the fallback branch
+# by intercepting __import__ itself for the exact `from scripts import X` call (poisoning
+# sys.modules alone is NOT reliable here: once a real prior test has genuinely imported
+# scripts.engagement_state, CPython caches it as an attribute on the `scripts` package
+# object too, and `from scripts import X` can resolve via that attribute without ever
+# consulting sys.modules again - order-dependent and exactly the kind of flake this test
+# must not have). Proves the SAME module object comes back on a second call, with
+# exec_module invoked only once.
+
+
+def _block_scripts_import(monkeypatch, blocked_name: str) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _guarded(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "scripts" and fromlist and blocked_name in fromlist:
+            raise ImportError(f"blocked for test: scripts.{blocked_name}")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _guarded)
+
+
+def _counting_spec_from_file_location(monkeypatch):
+    import importlib.util
+
+    exec_calls = []
+    orig = importlib.util.spec_from_file_location
+
+    def _counting(*a, **k):
+        spec = orig(*a, **k)
+        orig_exec = spec.loader.exec_module
+
+        def _counted_exec(module):
+            exec_calls.append(1)
+            return orig_exec(module)
+
+        spec.loader.exec_module = _counted_exec
+        return spec
+
+    monkeypatch.setattr(importlib.util, "spec_from_file_location", _counting)
+    return exec_calls
+
+
+def test_engagement_state_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "engagement_state")
+    monkeypatch.setattr(ca, "_ENGAGEMENT_STATE_MODULE_CACHE", None)  # start uncached
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_engagement_state_module()
+    second = ca._load_engagement_state_module()
+
+    assert first is not None
+    assert first is second  # same object, not two independent re-execs
+    assert len(exec_calls) == 1  # the file was only ever parsed+executed once
+
+
+def test_validate_rtm_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "validate_rtm")
+    monkeypatch.setattr(ca, "_VALIDATE_RTM_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_validate_rtm_module()
+    second = ca._load_validate_rtm_module()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
+
+
+# ------------------------------------------------ check() shares ONE *.md walk (2026-08-03 perf audit)
+#
+# check_state() -> _check_ratified_claims() and check_rtm() each used to independently
+# rglob("*.md") the same tree check() itself also scans - three (or more, with a pending
+# ratification in play) separate full walks per gated Stop event. check() now walks once
+# and passes the list down; each sub-check applies its OWN unchanged filter to it.
+
+
+def test_check_walks_for_md_files_exactly_once(tmp_path, monkeypatch):
+    """The decisive proof: build a pack that exercises check_state (with a pending
+    ratification, so _check_ratified_claims's OWN scan is reached) and check_rtm (a real
+    rtm.md) together, then count how many times Path.rglob("*.md") actually executes."""
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"]) == 0
+    state_path = art / "engagement-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["ratifications"] = [{"status": "pending", "text": "ops-lead sign-off pending review"}]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    _touch(art / "rtm.md", "# RTM\n\n| Req | Code | Test | Obligation |\n|---|---|---|---|\n")
+
+    real_rglob = Path.rglob
+    calls = []
+
+    def _counting_rglob(self, pattern, *a, **k):
+        if pattern == "*.md":
+            calls.append(self)
+        return real_rglob(self, pattern, *a, **k)
+
+    monkeypatch.setattr(Path, "rglob", _counting_rglob)
+    check(art)
+    md_walks_of_artifacts_dir = [c for c in calls if c == art]
+    assert len(md_walks_of_artifacts_dir) == 1, (
+        f"expected exactly one rglob('*.md') walk of {art}, got {len(md_walks_of_artifacts_dir)}"
+    )
+
+
+def test_check_state_standalone_call_still_works_without_shared_walk(tmp_path):
+    """A direct call (as many other tests in this file make) must behave identically to
+    going through check() - _all_md defaulting to None must walk fresh, not skip the scan."""
+    from scripts.check_artifacts import check_state
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"]) == 0
+    state_path = art / "engagement-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["ratifications"] = [{"status": "pending", "text": "ops-lead sign-off pending review"}]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    _touch(art / "fsd.md", "The change was already ratified by ops-lead sign-off.\n")
+
+    findings = check_state(art)  # no _all_md - must still find it via its own fresh walk
+    assert any("RATIFIED-CLAIM-PENDING" in f for f in findings)

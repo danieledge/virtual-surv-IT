@@ -52,7 +52,13 @@ how you'd evidence it, and the remediation owner. **Tag every finding 📊 obser
 feed/data) / 🧠 inferred** (CLAUDE.md §6). Return a distilled summary to the orchestrator - verdict
 and headline gaps: you hold no Write, so **the PM authors the artifact from your return** and
 anything you omit is lost. Budget ~30 lines of *prose*; a **structured payload** (the coverage
-matrix, a reconciliation table) is the deliverable itself and is **exempt from that budget**.
+matrix, a reconciliation table) is the deliverable itself and is **exempt from that budget - but
+uncapped means uncapped in COUNT of distinct gaps, not in verbosity per gap**
+(`docs/code-review-method.md` §Conciseness for the never-filtered reviewers - the same discipline,
+applied here even though your payload isn't a findings-pack JSON). Never drop a real gap to save
+space. Do: **consolidate** the same underlying gap found at several feeds/channels into ONE row
+citing them all, instead of repeating the same implication/evidence prose per site; keep each
+row's implication and evidence to a sentence or two, not a restated paragraph.
 Durable lessons
 per CLAUDE.md §6: project-specific → the working project's own `CLAUDE.md`; general →
 `docs/house-rules.md`.

@@ -14,10 +14,14 @@ it refuses**: detection rules / scenario logic / anything the handbook routes th
 compliance review (CLAUDE.md §4) - say so in one line and continue as a standard `/engage`
 (the profile upgrades, the engagement does not restart).
 
-**0. Open exactly as `/engage` step 0** - same compound probe, same run-mode/interpreter
-resolution - but the banner explains the profile in Morgan's voice so the user knows exactly
-what they chose and what they gave up. After the 🎩 intro + team version, include (adapt the
-wording, keep every fact):
+**0. Open via the shared front door, not the full `/engage` skill.** Read
+`.claude/skills/.shared/engage-open.md` (plugin mode:
+`$PLUGIN_ROOT/.claude/skills/.shared/engage-open.md`) and follow it exactly - the same compound
+probe, the same run-mode/interpreter resolution, every banner rule. **This is the ONLY thing
+shared with `/engage`: do not read `engage/SKILL.md` itself** - its BRD/FSD chain and
+artifact-menu machinery are standard-profile-only and light never needs them; reading that full
+file here would make the low-ceremony front door cost more than the standard one. After the 🎩
+intro + team version, include (adapt the wording, keep every fact):
 
 > **Light engagement.** Minimal ceremony for small, non-regulated work: one-page brief
 > instead of the BRD/FSD chain, a 2-3 person team, single review and QA cycles when code is
@@ -27,18 +31,20 @@ wording, keep every fact):
 > needing compliance review - that upgrades to a standard engagement (I'll say so if it
 > happens). Typical fit: a utility script, a quick review, an analysis, doc work.
 
-Read `.claude/skills/engage/SKILL.md` (or the `$PLUGIN_ROOT` copy) for the shared mechanics;
-this skill states only the deltas.
-
-**1. Safety gates - UNCHANGED, verbatim from `/engage`.** Both disclaimers, execution-consent
-intent (human-only grant), data attestation, one batched question call. No light shortcut
-touches §5/§7.
+**1. Safety gates - UNCHANGED, verbatim.** Read
+`.claude/skills/engage/references/safety-gates.md` (plugin mode:
+`$PLUGIN_ROOT/.claude/skills/engage/references/safety-gates.md`) directly and follow it exactly:
+both disclaimers, execution-consent intent (human-only grant), data attestation, one batched
+question call. No light shortcut touches §5/§7.
 
 **2. Scope in one exchange.** No BRD/FSD/RTM: requirements are a short bullet list captured
 directly in a ONE-PAGE brief (decisions, assumptions, the bullet requirements, routing).
 Open the state with the profile recorded (this creates the engagement's own workspace
-`artifacts/<slug>/`; if other engagements already exist, first offer resume-or-new exactly as
-`/engage` step 0b, and target yours with `--slug` thereafter):
+`artifacts/<slug>/`; if other engagements already exist, first run
+`<python> -m scripts.engagement_state list --menu` and, if `open` is non-empty, read
+`.claude/skills/engage/references/resume-menu.md` (plugin mode:
+`$PLUGIN_ROOT/.claude/skills/engage/references/resume-menu.md`) and follow it - one question via
+the question tool, resume-or-new - and target yours with `--slug` thereafter):
 `<python> -m scripts.engagement_state init --title "..." --slug <slug> --profile light`
 then `add-artifact engagement-brief.md --title "..."`. **Go-ahead gate stays** - one
 single-select question (Proceed / Adjust / Stop).

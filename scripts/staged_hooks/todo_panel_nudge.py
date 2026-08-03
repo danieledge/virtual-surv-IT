@@ -70,9 +70,14 @@ def _reason(slug: str | None, phase: str) -> str:
     )
 
 
+_CHECK_ARTIFACTS_MODULE_CACHE = None
+
+
 def _load_checker(project_root: Path):
     """Mirrors dod_stop_gate.py's loader exactly (G3 fix: package import first, then a
-    __file__-relative fallback for plugin mode against a foreign project)."""
+    __file__-relative fallback for plugin mode against a foreign project). Memoized the
+    same way, for the same reason (2026-08-03 perf audit)."""
+    global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
         sys.path.insert(0, str(project_root))
         from scripts import check_artifacts
@@ -80,6 +85,8 @@ def _load_checker(project_root: Path):
         return check_artifacts
     except Exception:  # nosec B110
         pass
+    if _CHECK_ARTIFACTS_MODULE_CACHE is not None:
+        return _CHECK_ARTIFACTS_MODULE_CACHE
     import importlib.util
 
     here = Path(__file__).resolve()
@@ -92,6 +99,7 @@ def _load_checker(project_root: Path):
                 spec = importlib.util.spec_from_file_location("check_artifacts", candidate)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
+                _CHECK_ARTIFACTS_MODULE_CACHE = module
                 return module
         except Exception:  # nosec B112
             continue

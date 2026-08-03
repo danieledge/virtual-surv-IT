@@ -182,11 +182,58 @@ _TEAM_ALLOW = re.compile(
 # Shell separators we split on so an allow-listed segment can't wave through a blocked one chained
 # after it. Splitting on `$(`/backtick is deliberately crude - it errs toward inspecting MORE,
 # which for a guard means failing safe. (Lexical only; see ADR-002 for the irreducible residual.)
-_SEGMENT_SPLIT = re.compile(r";|&&|\|\||\||\n|`|\$\(")
+_SEGMENT_DELIMS = (";", "&&", "||", "|", "\n", "`", "$(")
 
 
 def _segments(cmd: str) -> list[str]:
-    return [s.strip() for s in _SEGMENT_SPLIT.split(cmd) if s.strip()]
+    """Split a compound command into per-statement segments, quote-aware.
+
+    A purely lexical split (the old approach: regex over the raw string) chops INSIDE a
+    quoted argument - a log-note or commit message using ';' or '&&' as ordinary
+    punctuation ("...close as-is; no real source data exists...") got sliced into a bogus
+    mid-sentence fragment, which then spuriously matched an unrelated block pattern (live,
+    2026-08-03: a chained `engagement_state log-note "..."` call). Delimiters are only
+    boundaries OUTSIDE '...' / "..." - inside a quote they are just text. Still lexical,
+    not a full shell parser (ADR-002's irreducible residual): unclosed quotes just fold
+    the remainder into one segment, which is the safe direction (inspecting MORE as one
+    unit, never less).
+    """
+    segments: list[str] = []
+    current: list[str] = []
+    in_single = in_double = False
+    i, n = 0, len(cmd)
+    while i < n:
+        ch = cmd[i]
+        if ch == "\\" and not in_single and i + 1 < n:
+            if cmd[i + 1] == "\n":
+                # Line continuation: real bash ERASES both chars (one continued logical
+                # line), never keeps them as literal text - unlike every other escape.
+                i += 2
+                continue
+            current.append(cmd[i : i + 2])
+            i += 2
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            current.append(ch)
+            i += 1
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            current.append(ch)
+            i += 1
+            continue
+        if not in_single and not in_double:
+            hit = next((d for d in _SEGMENT_DELIMS if cmd.startswith(d, i)), None)
+            if hit is not None:
+                segments.append("".join(current))
+                current = []
+                i += len(hit)
+                continue
+        current.append(ch)
+        i += 1
+    segments.append("".join(current))
+    return [s.strip() for s in segments if s.strip()]
 
 
 def _block(cmd: str, segment: str | None = None) -> None:

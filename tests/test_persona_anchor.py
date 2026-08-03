@@ -51,10 +51,18 @@ def test_bad_stdin_fails_open(monkeypatch, capsys):
     assert capsys.readouterr().out == ""
 
 
-def test_anchor_stays_tiny():
-    # The design constraint: a per-turn injection must be pointers, not a rules reload.
-    assert len(pa._ANCHOR.splitlines()) <= 12
-    assert len(pa._ANCHOR) < 1200
+def test_short_anchor_stays_tiny():
+    # The design constraint: the STEADY-STATE per-turn injection (2026-08-03 shrink -
+    # _ANCHOR_SHORT fires on every prompt once seeded) must be pointers, not a rules reload.
+    assert len(pa._ANCHOR_SHORT.splitlines()) <= 8
+    assert len(pa._ANCHOR_SHORT) < 500
+
+
+def test_full_anchor_stays_bounded():
+    # _ANCHOR fires only ONCE per engagement (before the seeded marker downgrades later
+    # turns to the short form) - generous but still bounded, not an unchecked rules reload.
+    assert len(pa._ANCHOR.splitlines()) <= 20
+    assert len(pa._ANCHOR) < 1500
 
 
 # --------------------------------------------- machine-readable state first (ADR-006)

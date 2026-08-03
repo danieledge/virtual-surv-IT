@@ -36,149 +36,20 @@ Three standing rules apply from your very first line (full text in the operating
 
 The request: **$ARGUMENTS**
 
-**Read `docs/team-operating-guide.md` at the open (step 0)**: the standing rules (question-tool
-discipline, 🎩 voice, clean console, outcome discipline + the required engagement-summary email,
-memory scope, orchestration discipline & right-sizing), the **roster** and the **deliverable →
-owner routing table** live there, not in CLAUDE.md. An engagement run without it misses standing
-user preferences.
-
-**Chaining team workflows:** the team's skills are **not model-invocable** (dormant by default).
-When a step routes to another workflow (`/audit-review`, `/build-solution`, `/prepare-data`, …),
-**read `.claude/skills/<name>/SKILL.md` and follow it in this session** (plugin mode:
-`$PLUGIN_ROOT/.claude/skills/<name>/SKILL.md`), or offer the user the slash command to type. Never
-the Skill tool. (Shared rule: `.claude/skills/.shared/run-mode.md`.)
-
 Run the engagement like this:
 
-**0. Fast open - ONE probe call, then straight to the user.** Time-to-first-question is the
-user's first impression and every tool call is a full model round-trip, so gather EVERYTHING the
-open needs in **one compound Bash call**: never a probe-per-turn sequence, and **no narration
-turns between the probe and your opening banner**. Only the plugin-root bootstrap (locating THIS
-script in plugin mode) needs raw shell; everything downstream is one tested script
-(`scripts/engage_probe.py`):
-
-```
-PR=""; \
-if [ ! -f docs/team-operating-guide.md ]; then \
-  for d in $(grep -o '"installPath": *"[^"]*"' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null | cut -d'"' -f4); do \
-    grep -q 'compliance-surveillance-team' "$d/.claude-plugin/plugin.json" 2>/dev/null && PR="$d" && break; done; \
-  if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -maxdepth 6 -path '*/compliance-surveillance-team/*/docs/team-operating-guide.md' 2>/dev/null | sort -V | tail -1); \
-    [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; fi; \
-SCRIPT="${PR:+$PR/}scripts/engage_probe.py"; \
-CACHED=$(cat "${PR:-.}/.claude/.guard-interpreter" 2>/dev/null); \
-if [ -n "$CACHED" ] && command -v "$CACHED" >/dev/null 2>&1; then ORDER="$CACHED"; \
-elif [ "${OS:-}" = "Windows_NT" ]; then ORDER="python py python3"; \
-else ORDER="python3 python py"; fi; \
-OUT=""; \
-for I in $ORDER; do \
-  OUT=$(PYTHONIOENCODING=utf-8 "$I" "$SCRIPT" --plugin-root "$PR" --interpreter-name "$I" 2>/dev/null) && break; \
-  OUT=""; \
-done; \
-if [ -n "$OUT" ]; then echo "$OUT"; else \
-echo "PROBE_FAILED - run by hand to see why: PYTHONIOENCODING=utf-8 py \"$SCRIPT\" --plugin-root \"$PR\""; fi
-```
-
-Run it exactly as written: the interpreter order (warm cache first, then Windows-aware) and
-`PYTHONIOENCODING=utf-8` are load-bearing, not decoration. **On `PROBE_FAILED`**, run the printed
-command directly to see the real error (never guess, never retry the compound blindly) and read
-`references/probe-contract.md` - the probe's contract, the rationale for each part of the
-bootstrap, and the known failure modes. That file is for failures only; a healthy open never
-reads it.
-
-The script prints, in order: `INTERPRETER=` (the literal word - python3/python/py - that worked;
-this IS `<python>` for every later script call in this session: use it verbatim, **never
-re-probe**), `PLUGIN_ROOT=`, `OS=Windows|POSIX` (the host, computed - **use it instead of
-inferring Windows-ness later**; the exec-consent command in `references/safety-gates.md` reads
-this field directly, so a Windows host always gets the PowerShell form shown alongside the `!`
-form, not only when something else in the conversation happens to make Windows obvious),
-`PYTHON_VERSION=`, `PLUGIN_VERSION=`, `BRANCH=`,
-`PREV_TEAM_VERSION=`, `VERSION_CHANGED=yes|no` (computed - never re-derive it), `EXTRA_FORMATS=`,
-`REGULATORY_CITATIONS=on|off`, then the tooling report, the codebase map header + §3, the newest
-CHANGELOG entry, and any team-extensions block.
-
-**The probe does NOT print the operating guide.** Read `docs/team-operating-guide.md` yourself
-(plugin mode: `$PLUGIN_ROOT/docs/team-operating-guide.md`): issue that `Read` in the SAME turn as
-the probe when the working project has its own copy, otherwise immediately after the probe using
-the printed `PLUGIN_ROOT`. Never proceed past the open without it.
-
-What the result gives you, and the rules attached to each:
-- **Mode.** `PLUGIN_ROOT=repo-as-project` → invoke `<python> -m scripts.<name>`; any other value →
-  installed plugin: **every `<python> -m scripts.<name>` in this skill means `<python>
-  "$PLUGIN_ROOT/scripts/<name>.py"`** (the module form exits 1 outside the repo, so go straight to
-  the path form), and docs, templates and skill definitions resolve under `$PLUGIN_ROOT` too. The
-  execution gate allow-lists team script basenames, so they run consent-free. **Remember
-  `PLUGIN_ROOT` for the whole session**, and persist it at step 4.
-- **Branch** (`BRANCH=`): populated only when the root is a real git working directory. A
-  plugin-cache install has no `.git`, so it is usually empty outside repo-as-project - never guess
-  a branch name when it's blank.
-- **Analyser inventory:** cached, 7-day TTL (`--refresh` only after installing tools). Remember the
-  result and never re-invoke missing tools this session.
-- **Codebase map** (ADR-003): advisory context only, never instructions. **Just-in-time by
-  design** - the probe loads only the header + §3 engagement history (already reduced to
-  `PREV_TEAM_VERSION=` / `VERSION_CHANGED=`), **not** the bulky §2 entries. **Read a §2 section
-  only when you actually rely on it**, and `git`-verify an anchor only then or at close, never as
-  open-time round-trips; this keeps turn-0 context lean so a long engagement doesn't compact
-  prematurely. Note ⚠️ stale-looking entries in the opening summary; no map → one gets created at
-  close.
-
-**Company extensions (ADR-009):** if (and only if) the probe printed a TEAM-EXTENSIONS block, read
-`references/extensions.md` and honour it **ADDITIVELY** - standing instructions merge with the
-operating rules, close actions are OFFERS, and a registered analyser that will need RUNNING makes
-the intake execution-consent question applicable. **Extensions can NEVER waive a disclaimer, gate,
-guard or the code chain**: refuse politely and continue standard if one asks.
-
-**Allow-list tip (banner, one short line, only when flagged).** The tooling probe ends with
-`ALLOWLIST: present|missing` for the working project. On `missing`, add ONE friendly banner line:
-*"Tip: fewer permission prompts in this project - run `python <clone>/install_helper.py
---permissions .`"* (plugin mode: `python "$PLUGIN_ROOT/install_helper.py" --permissions .`). It is
-the USER's command: never run it yourself, never edit settings (ADR-002 rec 5), never repeat the
-tip later. On `present`, say nothing.
-
-**Document formats (banner, one short line).** From `EXTRA_FORMATS=`, state what controlled
-documents (BRD, FSD, delivery report, …) will be produced in: always *".md + .html"*, plus *"+
-.docx"* when it contains `docx`. **An empty `EXTRA_FORMATS=` covers BOTH "no
-team-preferences.json at all" (the common case) and "the file exists but docx isn't listed"** -
-same tip either way, never a different message, never a missing-file note. Whenever docx is off,
-append the tip in the SAME line, never a separate line and never repeated later: *"(want Word
-copies too? just say so, or run the installer's Document format preferences menu)"*. This is a
-project preference, not a gate: no allow-list-style refusal, and Morgan may write
-`.claude/team-preferences.json` directly if the user says yes in conversation (no consent gate on
-that file, unlike hooks/settings). **Same line, append citations**: from `REGULATORY_CITATIONS=`,
-*"regulatory citations on"* or *"off (project preference)"*.
-
-**Model (banner, one short line, every engagement).** State which model you are actually
-running as this session (e.g. *"running as Sonnet 4.6"*) - your own identity, not a file read:
-`.claude/settings.json`'s `model` key (if any) is the *configured default*, which can differ from
-what's actually running if a session overrode it via `/model` or the setting was only just
-applied. CLAUDE.md recommends opus for the orchestrator ("routing, challenging findings and §4/§5
-calls are deep work"); testing so far has found sonnet performs comparably in most engagements,
-prefer opus for critical/high-stakes work. State this every time, not only when asked - a live
-report (2026-08-03) found a user only discovered they were running sonnet from a provenance stamp
-buried in a signed-off email, well after the engagement had already run on it. If you don't know
-how to change it, say so: *"(change with `python install_helper.py`, menu option 8, or
-`--model-project . --model opus`)"*.
-
-**What's new (banner, one short line only).** Branch on the printed `VERSION_CHANGED=`; never
-re-derive it. The probe also prints the newest CHANGELOG release block - the **plugin's** (or the
-repo's own in repo-as-project), **not** the working project's, which is unrelated.
-- `yes` **and** `PREV_TEAM_VERSION=` non-empty → *"🆕 Since last time (vX → vY): "* + up to three
-  headline changes in plain words from that block, ending *"(full detail: CHANGELOG.md)"*.
-- `yes` **and** `PREV_TEAM_VERSION=` empty (first engagement, no prior record) → *"🆕 In the
-  current release (vY): ..."* - never guess what the user last saw.
-- `no` → show nothing. This must never become a wall of release notes and never delays the first
-  question.
-- Changelog block empty (broken/partial install) while `yes` → banner and version as normal, omit
-  the what's-new line; never surface probe mechanics to the user.
-
-Either populated form is **part of the opening banner itself, not optional**. The comparison is
-local files only (the map plus the bundled manifest and CHANGELOG), so it works identically for
-manually copied / air-gapped installs with no git or network.
+**0. Fast open.** Read `.claude/skills/.shared/engage-open.md` (plugin mode:
+`$PLUGIN_ROOT/.claude/skills/.shared/engage-open.md`) and follow it exactly: the operating-guide
+read, the chained-workflow rule, the one-compound-Bash-call probe, and every banner rule
+(allow-list tip, document formats, model, what's new). Shared verbatim with `/engage-light` - both
+front doors open identically.
 
 **Then your VERY NEXT output is the opening banner + disclaimers + the batched question below.**
 Target: the probe call (with the operating-guide `Read` alongside or immediately after it), then
-the ask - no other turns in between.
+the ask - no other turns in between. If no gated question applies and classification is
+unambiguous, there is nothing to ask: banner, then straight to the work.
 
-**Safety gates - two verbatim disclaimers + the consent-intent question (CLAUDE.md §5 + §7).**
+**0a. Safety gates - two verbatim disclaimers + the consent-intent question (CLAUDE.md §5 + §7).**
 When a target exists and code/data is involved, read `references/safety-gates.md` (this skill's
 folder) and follow it exactly: show the **execution-safety** and **data-safety** disclaimers as
 loud, can't-miss callouts (verbatim from the reference - never paraphrased or buried); ask the
@@ -225,6 +96,22 @@ recorded decisions, consent outcome and runtime are re-read, never re-asked. Nam
 in your banner line and target its workspace in every state command (`--slug <slug>`).
 
 **1. Classify the work.** Decide the entry point:
+- a *direct question or analysis ask, answerable now, with no build/review/multi-step work* →
+  **answer it in the chat and stop there - the rest of the engagement flow (steps 3-7: artifact
+  menu, workspace, delivery oversight, close checklist, summary email) does not run by
+  default.** Do not offer "commission further work" / "formalise as a Delivery Report" as menu
+  options the scenario itself never asked for - a token-usage audit (2026-08-03) traced a probe
+  case's cost 8x over its own baseline to exactly this: the PM's own follow-up question offered
+  formalisation, the offer was taken, and the full engagement machinery (workspace, three
+  artifacts, three renders, repeated DoD fix-verify passes, a close gate) ran for what was a
+  two-question chat answer. It is fine to ask "want this written up as a tracked artifact?" as a
+  single low-key option - never a menu of escalation paths. Only open a workspace (step 4) if the
+  user's own reply genuinely asks for one. **Known, accepted trade-off**: this path leaves no
+  persisted record - no `engagement-state.json`, no registry entry, nothing `ENGAGEMENTS.md`
+  would ever list. That is deliberate for a genuinely throwaway question (§4's traceability spine
+  governs *detection logic*, not every chat reply). If the answer is itself a substantive
+  finding worth an audit trail, that is exactly the "genuinely asks for one" case - open the
+  workspace;
 - a *problem / idea* → discovery → requirements → build (full SDLC);
 - a *review* → the audit-review loop (`/audit-review`). **When the work is a code review, offer a
   dedicated security audit up front** via the question tool (header `Security`, `multiSelect:
@@ -263,9 +150,9 @@ If the user just typed `/engage` (or `/engage test some code`) with no concrete 
 When the user asks for "a review" in plain English, read `references/review-menu.md` and present
 its **LOCKED** three-question construction (Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle`)
 **exactly as specified, in ONE `AskUserQuestion` call** - do not improvise, merge or reword the
-options. Q1 = None + Q2 = No → nothing to run: say so and return to the outcome question via the
-question tool. **Q3 (fix-cycle) captured here is the single source of truth - the review skill
-must NOT re-ask it.**
+options. Q1 = None + Q2 = No → nothing to run: say so, and ask via the question tool what the
+user wants instead. **Q3 (fix-cycle) captured here is the single source of truth - the review
+skill must NOT re-ask it.**
 
 **2. Clarify only if genuinely needed - no ceremony.** Don't ask a standalone "any other
 clarifications?" round by default. **Fold** any remaining material unknown (jurisdiction, success
@@ -286,8 +173,9 @@ single-select: **Apply the fixes** · **Show me the diff first** · **Don't chan
 *unless Q3 already authorised it* ("Apply fixes" / the fix→re-review loop) - don't double-ask what
 the user has already answered.
 
-**3. Offer the artifact menu - locked two-stage construction.** Default = **one consolidated
-Delivery Report** (`docs/templates/delivery-report.md`) holding every section. For the exact
+**3. Offer the artifact menu - locked two-stage construction.** (Skip this step for the direct-answer
+path in step 1 unless the user has genuinely asked for a tracked deliverable.) Default = **one
+consolidated Delivery Report** (`docs/templates/delivery-report.md`) holding every section. For the exact
 two-stage menu (packaging single-select, then grouped ≤4-option multi-selects) read
 `references/artifact-menu.md` and use it verbatim - never improvise a giant template list. The
 **handover pack is a deliverable and belongs here** (not in the findings/fix question). Every
@@ -325,22 +213,15 @@ discipline. **Track the gates in the native task list (TodoWrite)**: seed one to
 exactly one in_progress, tick each as its evidence lands. It is the user's glanceable progress view
 and costs no console space; the STATE still lives in engagement-state.json.
 
-**Right-size, and say so out loud:** before **any** delegation, state in one line **how many
-agents you intend to spawn and why, naming the specialist that matches the deliverable per the
-routing table above** - never a habitual default. `rules-developer` is for detection-rule/scenario
-logic specifically (*"this is a one-file rule tweak - I'll use just rules-developer +
-code-reviewer, not the full team"*). **Morgan is the orchestration layer - she delegates the build,
-she never writes the code herself**, so a generic script, utility or general application code with
-no surveillance-domain deliverable at all still routes to a builder: `platform-engineer`'s remit
-("transformation & utility scripts... tooling") covers it, paired with `code-reviewer` for the
-independent review - never reach for `rules-developer` just because it is the one that writes code
-when the deliverable isn't rule/scenario logic. Use the leanest set that fits; don't fan out the
-whole team for a narrow change. This binds **every** delegation, not just a planned fan-out at this
-gate: if a later phase, a close or a review turns up one thing needing a specialist, say who and
-why **before** that `Task` call - a count that only appears in the closing footprint is a receipt,
-not a decision. "No fan-out, I'll handle this myself" is reserved for PM-level work Morgan
-genuinely does herself (a summary, a reconciliation, running a check script) - **never** for
-writing or editing the deliverable's own code; a stated zero there is right-sizing, silence is not.
+**Right-size, and say so out loud** (full standing rule, including the "handle this myself"
+scope and why it binds every delegation not just a planned fan-out: operating guide,
+Orchestration discipline): before **any** delegation, state in one line **how many agents you
+intend to spawn and why, naming the specialist that matches the deliverable per the routing table
+in the operating guide** - never a habitual default. `rules-developer` is for detection-rule/scenario logic
+specifically (*"this is a one-file rule tweak - I'll use just rules-developer + code-reviewer, not
+the full team"*); a generic script or general application code with no surveillance-domain
+deliverable at all still routes to a builder - `platform-engineer` + `code-reviewer` - never
+`rules-developer` just because it is the one that writes code. Use the leanest set that fits.
 
 **Delegate with an explicit, non-overlapping brief** to each specialist: objective · scope
 boundaries and what another agent owns · inputs & artifacts to read · **the RESOLVED absolute
@@ -401,7 +282,9 @@ the requester only if you know their name, otherwise open with "Hi,". It's an em
 Specialists: `business-analyst`, `tm-sme` / `trade-surveillance-sme` / `comms-surveillance-sme`,
 `rules-developer`, `data-analyst`, `tuning-analyst`, `ml-engineer`, `platform-engineer`,
 `qa-engineer`, `code-reviewer`, `performance-reviewer`, `model-validator`, `compliance-reviewer`,
-`data-quality-reviewer`, `review-scorer`. Advisors hold no Write/Edit (where they hold Bash it is
-for analysers/diffs, execution-gated per CLAUDE.md §7).
+`data-quality-reviewer`, `review-scorer`. Advisors hold no Edit (where they hold Bash it is
+for analysers/diffs, execution-gated per CLAUDE.md §7); `code-reviewer`, `compliance-reviewer`,
+`model-validator` and `performance-reviewer` hold Write scoped to their own findings-pack JSON
+only, mechanically enforced (`guard-findings-pack-write.py`).
 
 Stop for human approval before anything that touches live systems.

@@ -73,7 +73,8 @@ and states what's applicable vs not.
    PII/raw data §5, undocumented thresholds / broken traceability §4) - those stay with
    `code-reviewer`/`compliance-reviewer`, not the scorer.
 5. For anything touching detection logic, hand to **compliance-reviewer** for the §4/§5 trail.
-6. **Morgan's challenge pass** *(opus)* - a **spot-check, not a re-score**: the scorer already
+6. **Morgan's challenge pass** *(the orchestrator's own tier - sonnet by default, opus if
+   configured for this engagement)* - a **spot-check, not a re-score**: the scorer already
    applied the rubric (step 4), and re-scoring everything on opus pays twice for the same
    judgement. Challenge the findings that *matter*: every 🔴 Critical, anything §4/§5-regulated,
    any finding whose evidence basis looks thin (🧠 presented as 📊), and a sample of the rest.
@@ -88,11 +89,13 @@ and states what's applicable vs not.
      reconciliation, unbounded loss) from an *intended limit* (documented, expected).
 
 **4. Present - findings pack → rendered report → scoreboard** (`docs/review/output-format.md`):
-   1. Assemble the **final (post-challenge) findings** into a **structured pack**
-      `artifacts/data/findings-<slug>.json` (schema `docs/review/findings-schema.json`, exemplar
-      `docs/review/gold-findings.json`) - `code-reviewer` already returns the findings in this JSON
-      shape; you write the pack (each finding's five fields + the narrative string fields
-      `executive_summary`, `developer_guidance`, `limitations`, `tooling_coverage`).
+   1. `code-reviewer` already **wrote** the structured pack itself, directly, to
+      `artifacts/<slug>/data/findings-<slug>.json` (schema `docs/review/findings-schema.json`,
+      exemplar `docs/review/gold-findings.json` - it holds a Write grant scoped to exactly this
+      path, mechanically enforced) - read it back for your challenge pass (step 6) rather than
+      re-authoring it. **Only if your challenge pass downgrades or drops something** do you edit
+      that same file to reflect the final (post-challenge) findings; otherwise leave it exactly as
+      written.
    2. Run **`<python> -m scripts.check_artifacts --fix`** (allow-listed - no consent needed): it
       **validates** the pack (a missing field is `FINDINGS-INVALID` → fix the pack and re-run) and
       **renders** the canonical `artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first). The renderer owns the layout,

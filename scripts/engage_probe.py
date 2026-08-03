@@ -67,12 +67,52 @@ def last_team_version(map_text: str) -> str:
     return real[-1] if real else ""
 
 
+def _bare_version(v: str) -> str:
+    """Strip a leading v/V - `plugin.json`'s "version" field is always bare ('0.33.7'), but
+    `docs/templates/codebase-map.md`'s own Team-ver placeholder is `<vX.Y.Z>`, WITH the
+    prefix. Without normalising, a same-release row written per the template's own
+    convention never string-equals plugin_version, so version_changed always says "yes" -
+    the what's-new banner (and the changelog print gated on it) would fire on literally
+    every single engagement, forever, never correctly detecting "no change" (found while
+    testing the changelog-gating fix, 2026-08-03)."""
+    return v[1:] if v[:1] in ("v", "V") else v
+
+
 def version_changed(plugin_version: str, prev_team_version: str) -> str:
     """'yes' | 'no'. No prior record (empty prev) counts as changed - "first engagement"
     per the skill's own rule, never silently treated as "no change"."""
     if not prev_team_version:
         return "yes"
-    return "yes" if plugin_version and plugin_version != prev_team_version else "no"
+    return (
+        "yes"
+        if plugin_version and _bare_version(plugin_version) != _bare_version(prev_team_version)
+        else "no"
+    )
+
+
+_SECTION3_MAX_ROWS = 5
+
+
+def _cap_section3_rows(section3: str, max_rows: int = _SECTION3_MAX_ROWS) -> str:
+    """Keep every non-table line plus the table's header/separator and only the LAST
+    max_rows data rows - one engagement close appends one row, forever, and the probe used
+    to print the whole thing every single open regardless of age. Only the last row ever
+    feeds the version-changed computation, so capping here never changes that result."""
+    lines = section3.splitlines()
+    table_idx = [i for i, ln in enumerate(lines) if ln.lstrip().startswith("|")]
+    if len(table_idx) <= 2 + max_rows:
+        return section3  # header + separator + <=max_rows data rows already
+    head = table_idx[:2]  # header row, separator row
+    tail = table_idx[-max_rows:]
+    omitted = len(table_idx) - len(head) - len(tail)
+    out: list[str] = []
+    kept = set(head) | set(tail)
+    for i, ln in enumerate(lines):
+        if i in kept or i not in table_idx:
+            out.append(ln)
+        elif i == min(t for t in table_idx if t not in kept):
+            out.append(f"*(… {omitted} earlier row(s) omitted - full history in the map itself)*")
+    return "\n".join(out)
 
 
 def read_map(project_dir: Path) -> tuple[str, str]:
@@ -84,7 +124,7 @@ def read_map(project_dir: Path) -> tuple[str, str]:
             text = p.read_text(encoding="utf-8", errors="replace")
             header = "\n".join(text.splitlines()[:20])
             m = re.search(r"(?ms)^## 3\..*?(?=^## 4\.|\Z)", text)
-            section3 = m.group(0).rstrip() if m else ""
+            section3 = _cap_section3_rows(m.group(0).rstrip()) if m else ""
             return header, section3
     return "", ""
 
@@ -265,7 +305,7 @@ def run_extensions_show(root: Path, project_dir: Path) -> str:
             text=True,
             timeout=30,
         )
-        return proc.stdout
+        return proc.stdout[:2000]  # same cap as the no-script fallback above
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -277,7 +317,9 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     map_header, map_section3 = read_map(project_dir)
     prev_ver = last_team_version(map_section3) if map_section3 else ""
     changed = version_changed(plugin_version, prev_ver)
-    changelog_entry = first_changelog_entry(root)
+    # The skill's own what's-new rule is "no -> show nothing" - so don't even print it: this
+    # used to land in the transcript on every open regardless of VERSION_CHANGED.
+    changelog_entry = first_changelog_entry(root) if changed == "yes" else ""
     prefs = read_team_preferences(project_dir)
     extra_formats = prefs.get("extra_formats") or []
     citations_on = prefs.get("regulatory_citations", True)

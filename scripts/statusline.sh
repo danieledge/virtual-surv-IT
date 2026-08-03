@@ -25,10 +25,31 @@ INPUT=$(cat 2>/dev/null || true)
 # failed, and every render fell to the static fallback (live corp report 2026-07-31 -
 # the 2026-07-30 fix above only addressed the encoding, not this stub-detection gap).
 # `--version` actually invokes the binary, so the stub's exit 49 correctly skips it.
+#
+# Cache the resolved interpreter (2026-08-03 perf audit), same file run-guard.sh already
+# writes: a statusline renders far more often than any single hook fires (every turn, often
+# every UI refresh), so re-EXECUTING each candidate's --version on every render repeats the
+# exact multi-second Windows Store-stub hang run-guard.sh's own cache exists to avoid.
+# `command -v` on the cached name is cheap and safe to redo every time; only the EXECUTION
+# probe below needs to happen once per session and be trusted after (same trust model as
+# run-guard.sh: a cache hit is never re-version-checked).
 PY_BIN=""
-for c in python3 python py; do
-  "$c" --version >/dev/null 2>&1 && PY_BIN="$c" && break
-done
+CACHE="${CLAUDE_PROJECT_DIR:-.}/.claude/.guard-interpreter"
+if [ -f "$CACHE" ]; then
+  cached=$(cat "$CACHE" 2>/dev/null)
+  if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
+    PY_BIN="$cached"
+  fi
+fi
+if [ -z "$PY_BIN" ]; then
+  for c in python3 python py; do
+    "$c" --version >/dev/null 2>&1 && PY_BIN="$c" && break
+  done
+  if [ -n "$PY_BIN" ]; then
+    mkdir -p "$(dirname "$CACHE")" 2>/dev/null
+    printf '%s' "$PY_BIN" >"$CACHE" 2>/dev/null
+  fi
+fi
 [ -z "$PY_BIN" ] && { printf '😴 Morgan dormant'; exit 0; }
 
 # PYTHONUTF8: on Windows, Python encodes piped stdout with the locale codepage

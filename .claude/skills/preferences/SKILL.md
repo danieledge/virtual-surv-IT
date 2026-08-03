@@ -20,9 +20,9 @@ is the common, valid default - not an error). Resolve the two known preferences:
 resolve its `model` key (absent = the account/CLI default, not necessarily opus).
 `settings.json` sits behind the consent-write gate (`guard-consent-writes.py`, ADR-002) -
 you can show this value, you can never write it, and the question tool in step 3 below
-never offers to change it. CLAUDE.md's own recommendation is opus for the orchestrator
-("routing, challenging findings and §4/§5 calls are deep work"); testing so far has found
-sonnet performs comparably in most engagements, prefer opus for critical/high-stakes work.
+never offers to change it. Sonnet is the documented default for the orchestrator - testing to
+date has not yielded any better results from opus for orchestration; opus remains available
+for critical/high-stakes engagements.
 
 **2. Show it plainly, 🎩 voice, no ceremony:**
 

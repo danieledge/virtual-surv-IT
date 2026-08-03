@@ -52,7 +52,7 @@ Usage:
   python install_helper.py --yes           # non-interactive full run, safe defaults
   python install_helper.py --yes --pip     # also install requirements-dev.txt
   python install_helper.py --model-project . --model opus     # pin Morgan to opus
-  python install_helper.py --model-project . --model default  # reset Morgan to opus
+  python install_helper.py --model-project . --model default  # reset Morgan to sonnet
   python install_helper.py --demo          # the real flow as a dry run, nothing executed
 """
 
@@ -1943,7 +1943,7 @@ class Installer:
             style=self.style,
         )
         picked = ask(
-            "  opus / sonnet / default (reset to opus)?",
+            "  opus / sonnet / default (reset to sonnet)?",
             "default",
             self.args.yes,
             style=self.style,
@@ -1954,8 +1954,8 @@ class Installer:
             model = picked
         else:
             return False, f"expected opus/sonnet/default, got {picked!r}"
-        if model == "sonnet":
-            self.say(self.style.yellow(f"    {ORCHESTRATOR_SONNET_NOTE}"))
+        if model == "opus":
+            self.say(self.style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
         if self.demo:
             scope = "the new-project default" if global_default else str(project)
             return True, f"would set -> {model or ORCHESTRATOR_MODEL_DEFAULT} ({scope})"
@@ -1970,10 +1970,10 @@ class Installer:
         `.claude/agents/*.md`, edited directly; that's a bigger, separate change this
         option doesn't attempt yet."""
         self.step_intro(
-            "Morgan's own model for this project - opus is the documented default "
-            "(routing, challenging findings and §4/§5 calls are deep work); sonnet has "
-            "tested comparably in most engagements so far (experimental - prefer opus "
-            "for critical/high-stakes work). Or reset back to opus."
+            "Morgan's own model for this project - sonnet is the documented default "
+            "(testing to date has not yielded any better results from opus for "
+            "orchestration); opus remains available for critical/high-stakes engagements "
+            "if you want the extra margin. Or reset back to sonnet."
         )
         raw = ask("  Which project directory?", ".", False, style=self.style)
         project = Path(raw).expanduser().resolve()
@@ -2062,8 +2062,9 @@ class Installer:
                     )
                 )
             if confirm(
-                "  Set Morgan's (the orchestrator's) model for this project too - opus is "
-                "the documented default, sonnet has tested comparably in most engagements?",
+                "  Set Morgan's (the orchestrator's) model for this project too - sonnet is "
+                "the documented default (testing to date hasn't shown opus outperforming it "
+                "for orchestration); want to set opus instead for this project?",
                 default=False,
                 assume_yes=False,
                 style=self.style,
@@ -2093,8 +2094,9 @@ class Installer:
                     regulatory_citations=self.cfg.get("default_regulatory_citations"),
                 )
             if confirm(
-                "  Set Morgan's (the orchestrator's) model for this project too - opus is "
-                "the documented default, sonnet has tested comparably in most engagements?",
+                "  Set Morgan's (the orchestrator's) model for this project too - sonnet is "
+                "the documented default (testing to date hasn't shown opus outperforming it "
+                "for orchestration); want to set opus instead for this project?",
                 default=False,
                 assume_yes=False,
                 style=self.style,
@@ -2281,8 +2283,8 @@ def run_orchestrator_model(project_dir: Path, model: Optional[str], style: Style
     if model is not None and model not in ORCHESTRATOR_MODELS:
         print(f"{fail} model must be one of {ORCHESTRATOR_MODELS} or omitted (reset), not {model!r}")
         return 1
-    if model == "sonnet":
-        print(style.yellow(f"    {ORCHESTRATOR_SONNET_NOTE}"))
+    if model == "opus":
+        print(style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
     success, message = write_orchestrator_model(project, model)
     if not success:
         print(f"{fail} {message}")
@@ -2298,8 +2300,8 @@ def run_orchestrator_model_default(model: Optional[str], style: Style, mark_map:
     if model is not None and model not in ORCHESTRATOR_MODELS:
         print(f"{fail} model must be one of {ORCHESTRATOR_MODELS} or omitted (clear), not {model!r}")
         return 1
-    if model == "sonnet":
-        print(style.yellow(f"    {ORCHESTRATOR_SONNET_NOTE}"))
+    if model == "opus":
+        print(style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
     success, message = write_orchestrator_model_default(model)
     if not success:
         print(f"{fail} {message}")
@@ -2338,16 +2340,17 @@ def write_team_preferences(
 
 
 ORCHESTRATOR_MODELS = ("opus", "sonnet")
-# CLAUDE.md's own recommendation: "Run the orchestrator on opus - routing, challenging
-# findings and §4/§5 calls are deep work." This is the value "reset to default" writes.
-ORCHESTRATOR_MODEL_DEFAULT = "opus"
-# Experimental, not a settled recommendation either way: in practice sonnet has performed
-# comparably to opus for orchestration in most engagements so far. Opus stays the
-# documented default specifically for critical/high-stakes engagements, where CLAUDE.md's
-# "routing, challenging findings and §4/§5 decisions are deep work" is the stronger claim.
-ORCHESTRATOR_SONNET_NOTE = (
-    "Experimental: in practice, sonnet has performed comparably to opus for orchestration "
-    "in most engagements. For critical or high-stakes engagements, prefer opus."
+# Testing to date has not yielded any better results from opus for orchestration than
+# sonnet, so sonnet is the default. This is the value "reset to default" writes.
+ORCHESTRATOR_MODEL_DEFAULT = "sonnet"
+# Shown when a human picks opus explicitly - it remains available, it just isn't the
+# default, since nothing observed so far justifies the extra cost for the orchestrator
+# role specifically (unlike the four specialist agents that keep their own opus tier on
+# independent grounds - docs/agent-design.md).
+ORCHESTRATOR_OPUS_NOTE = (
+    "Testing to date has not yielded any better results from opus for orchestration than "
+    "sonnet, which is why sonnet is the default. Opus remains available if you want the "
+    "extra margin for critical or high-stakes engagements."
 )
 
 
@@ -2405,7 +2408,7 @@ def write_orchestrator_model_default(model: Optional[str]) -> tuple[bool, str]:
     Claude Code itself layers project settings over user settings, so this is a genuine
     global default - any project without its own `model` override (write_orchestrator_model)
     inherits this one automatically, no extra plumbing needed on our side. Unlike the
-    per-project write, model=None here REMOVES the key rather than forcing opus: a human
+    per-project write, model=None here REMOVES the key rather than forcing sonnet: a human
     who never asked for a global override should get Claude Code's own default back, not
     have one silently imposed by a "reset" they didn't ask for at this scope."""
     target = user_settings_path()
@@ -2555,7 +2558,7 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--model",
         choices=[*ORCHESTRATOR_MODELS, "default"],
         help="with --model-project or --model-default: opus/sonnet, or 'default' to "
-        "reset to opus (CLAUDE.md's documented recommendation for the orchestrator) - "
+        "reset to sonnet (the documented default for the orchestrator) - "
         "or, with --model-default only, to clear the global default entirely",
     )
     return parser.parse_args(argv)

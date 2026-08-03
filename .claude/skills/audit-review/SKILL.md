@@ -42,7 +42,8 @@ Run an **evaluator-optimizer loop**:
    routing and re-review - operating guide, Outcome discipline 5); earlier pass verdicts are
    never rewritten. Loop until everything fixable is fixed; the only items left
    are those needing a **human decision** (mark 🔴 Open / needs human review, not "deferred").
-4. **Morgan's challenge pass (opus) - a spot-check, not a re-score** (the scorer already applied
+4. **Morgan's challenge pass (the orchestrator's own tier - sonnet by default, opus if
+   configured for this engagement) - a spot-check, not a re-score** (the scorer already applied
    the rubric; re-scoring everything on opus pays twice for the same judgement). Challenge every
    🔴 Critical, anything §4/§5-regulated, any finding whose **evidence basis** looks thin (🧠
    presented as 📊 - never let an inference reach the user as fact), and a sample of the rest;
@@ -67,12 +68,15 @@ Run an **evaluator-optimizer loop**:
    ✅. Right-sized: it reads the pack, it does not re-run the review.
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`).
-Step 1's `/deep-review` already wrote `artifacts/data/findings-<slug>.json`; **consolidate the
-compliance-reviewer findings from step 2 into the same pack** (append to `findings[]`; use the pack's
-narrative fields for the audit skeleton), then run **`<python> -m scripts.check_artifacts --fix`** -
-it validates the pack (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's
-`artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status
-closing` first). Don't hand-author or hand-edit the rendered report.
+Step 1's `/deep-review` already had `code-reviewer` write its own pack directly to
+`artifacts/<slug>/data/findings-<slug>.json`, and step 2's `compliance-reviewer` writes its own
+alongside it (`findings-compliance-<slug>.json`, both agents hold a Write grant scoped to exactly
+their own path, mechanically enforced) - **read both back and consolidate**: merge
+`compliance-reviewer`'s `findings[]` into the code-review pack (append; use its narrative fields
+for the audit skeleton), then run **`<python> -m scripts.check_artifacts --fix`** - it validates the
+pack (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `artifacts/<slug>/REVIEW-<slug>.md`
++ `.html` (render is CLOSE-only, ADR-010: `set-status closing` first). Don't hand-author or
+hand-edit the rendered report.
 (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 
 **Close with a clear disposition - never leave it ambiguous.** State the verdict **and the

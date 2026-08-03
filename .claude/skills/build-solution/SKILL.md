@@ -27,8 +27,10 @@ Run the **orchestrator-workers** pattern, agile and iterative:
    / data-quality / reconciliation / reporting → `data-analyst`; ML → `ml-engineer` +
    independent `model-validator`. **Give each unit an explicit, non-overlapping brief**
    (objective · scope boundaries / what other units own · inputs/artifacts to read · expected
-   output) so units don't duplicate or leave gaps. Then chain each through `code-reviewer` →
-   `compliance-reviewer`. Independent units can run in parallel.
+   output) so units don't duplicate or leave gaps. Then chain each through `code-reviewer`; add
+   `compliance-reviewer` when the unit is detection logic, touches regulated data, or documents
+   thresholds (§4) - **not a default for every unit** (CLAUDE.md §4; operating guide routing
+   table: "not every code review"). Independent units can run in parallel.
 3. **Test independently** - `qa-engineer` (not the builder) designs and runs tests
    appropriate to the deliverable: true-positive and false-positive cases for detection
    logic; input/output, schema and edge-case tests for pipelines/transforms; idempotency/
@@ -37,7 +39,9 @@ Run the **orchestrator-workers** pattern, agile and iterative:
    a Fail routes defects to the builder and the re-test is a **new pass row** - failed
    verdicts are never rewritten (operating guide, Outcome discipline 5).
 4. **Review** - `code-reviewer` (deep) and, where it processes data at volume,
-   `performance-reviewer`; then `compliance-reviewer`. Loop fixes until no Critical remains -
+   `performance-reviewer`; add `compliance-reviewer` where the deliverable is detection logic,
+   touches regulated data, or documents thresholds (§4) - **not a default for every build**.
+   Loop fixes until no Critical remains -
    **recording each pass/fix/re-review hand-off in the Delivery Report's iteration log (§1a)
    as it happens**, journey strip included.
 5. **Maintain the RTM** (`docs/templates/rtm.md`): every requirement → code → test →

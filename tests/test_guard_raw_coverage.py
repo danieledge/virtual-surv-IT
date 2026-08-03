@@ -218,6 +218,118 @@ def test_non_search_bash_commands_unchanged(project_with_raw, command):
     assert _blocks(project_with_raw, "Bash", {"command": command})
 
 
+# ------------------------------------------------ compound-command segment splitting
+# (2026-08-03 fable audit): a multi-statement command used to be shlex-split and judged as
+# ONE invocation, so words from a LATER, unrelated statement became "file operands" of an
+# EARLIER search verb - a live false positive during the audit's own session.
+
+
+def test_compound_command_segments_judged_independently(project_with_raw):
+    """A clean search in statement 1 must not be contaminated by statement 2's tokens."""
+    assert not _blocks(
+        project_with_raw, "Bash", {"command": 'grep -rn "commit" tests/test_guards.py; echo done'}
+    )
+    assert not _blocks(
+        project_with_raw,
+        "Bash",
+        {"command": 'grep -rn "commit" tests/test_guards.py && ls artifacts/'},
+    )
+
+
+def test_compound_command_first_segments_raw_operand_still_blocks(project_with_raw):
+    """The fix must not weaken detection - a REAL raw file operand in an early segment
+    still blocks, whatever comes after it."""
+    assert _blocks(
+        project_with_raw, "Bash", {"command": "grep -rn account data/raw/trades.csv; echo done"}
+    )
+
+
+def test_compound_command_second_segments_raw_operand_still_blocks(project_with_raw):
+    """A raw file operand in a LATER segment (not the first) must still block - segmenting
+    must not accidentally only check the first statement."""
+    assert _blocks(
+        project_with_raw, "Bash", {"command": "echo start; grep -rn account data/raw/trades.csv"}
+    )
+
+
+# ------------------------------------------------ quote-aware segment splitting
+# (2026-08-03, second fix): the naive split above chops INSIDE a quoted argument too - a
+# log message using ';' or '&&' as ordinary punctuation got sliced into a bogus fragment.
+# Live in an eval run: `engagement_state log-note "...close as-is; no real source data
+# exists..." && next-command` was split mid-sentence, right after the semicolon inside the
+# quotes, producing a garbage "segment" that spuriously matched an unrelated pattern.
+
+
+def test_semicolon_inside_quoted_argument_is_not_a_segment_boundary():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "graw", REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
+    )
+    graw = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(graw)
+    cmd = 'echo "close as-is; no real source data exists" && echo done'
+    segs = graw._segments(cmd)
+    assert segs == ['echo "close as-is; no real source data exists"', "echo done"]
+
+
+def test_ampersand_and_pipe_inside_quotes_are_not_boundaries():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "graw", REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
+    )
+    graw = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(graw)
+    assert graw._segments('echo "a && b | c"') == ['echo "a && b | c"']
+    assert graw._segments("echo 'a && b | c'") == ["echo 'a && b | c'"]
+
+
+def test_quoted_text_does_not_shield_a_genuine_later_boundary():
+    """The fix must not over-correct into treating the WHOLE command as unsplittable - a
+    real boundary after the closing quote still splits."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "graw", REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
+    )
+    graw = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(graw)
+    segs = graw._segments('echo "a; b" && echo "c; d"')
+    assert segs == ['echo "a; b"', 'echo "c; d"']
+
+
+# ------------------------------------------------ git commit/tag message exemption
+# (2026-08-03): `git commit -m "..."` is prose the user wrote, not a file read - it must not
+# trip the marker scan just for MENTIONING the guard's own marker string.
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'git commit -m "fix: reads of data/raw/ were unsafe, closed the gap"',
+        'git commit --message="mentions data/raw in passing"',
+        'git tag -m "release notes mention data/raw handling"',
+        "git commit --message=data/raw/mentioned/inline",  # same exemption, inline `=` form
+    ],
+)
+def test_git_commit_or_tag_message_mentioning_marker_allowed(project_with_raw, command):
+    assert not _blocks(project_with_raw, "Bash", {"command": command})
+
+
+def test_git_commit_message_file_argument_still_blocks(project_with_raw):
+    """The exemption covers the -m/--message VALUE only. `-F <file>` names an actual FILE to
+    read (the message comes FROM that file), so it stays covered."""
+    assert _blocks(project_with_raw, "Bash", {"command": "git commit -F data/raw/message.txt"})
+
+
+def test_git_subcommand_other_than_commit_or_tag_gets_no_message_exemption(project_with_raw):
+    """`-m` is used by several git subcommands for unrelated purposes (e.g. `git show -m`,
+    `git log -m`) - only `commit`/`tag` are message-authoring subcommands, so only those get
+    the exemption. A marker-shaped -m value elsewhere still trips the ordinary scan."""
+    assert _blocks(project_with_raw, "Bash", {"command": "git log -m data/raw/trades.csv"})
+
+
 # ------------------------------------------------ crash / payload semantics preserved
 
 

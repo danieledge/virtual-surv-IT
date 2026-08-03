@@ -159,7 +159,7 @@ def test_quote_smuggling_does_not_wave_through():
 def test_exec_patterns_identical_to_live_guard():
     """The fix loosens ONLY the team allow-list; the execution net must not drift."""
     assert STAGED._EXEC_PATTERNS == LIVE._EXEC_PATTERNS
-    assert STAGED._SEGMENT_SPLIT.pattern == LIVE._SEGMENT_SPLIT.pattern
+    assert STAGED._SEGMENT_DELIMS == LIVE._SEGMENT_DELIMS
 
 
 def test_live_guard_matches_staged_once_applied():
@@ -243,3 +243,49 @@ def test_company_allow_empty_env_changes_nothing(monkeypatch):
     g = _load_with_env(monkeypatch, "")
     assert g._COMPANY_ALLOW_PREFIXES == ()
     assert not g._company_allowed("python scripts/publish_pack.py")
+
+
+# ------------------------------------------------ quote-aware segment splitting
+# (2026-08-03, second fix): the old regex split chopped INSIDE a quoted argument - a
+# log-note/commit message using ';' or '&&' as ordinary punctuation got sliced into a
+# bogus fragment. Live: `engagement_state log-note "...close as-is; no real source data
+# exists..." && ...` was split mid-sentence right after the semicolon inside the quotes,
+# and the resulting garbage fragment spuriously tripped the execution-block pattern.
+
+
+def test_semicolon_inside_quoted_argument_is_not_a_segment_boundary():
+    cmd = 'echo "close as-is; no real source data exists" && echo done'
+    assert STAGED._segments(cmd) == [
+        'echo "close as-is; no real source data exists"',
+        "echo done",
+    ]
+
+
+def test_ampersand_and_pipe_inside_quotes_are_not_boundaries():
+    assert STAGED._segments('echo "a && b | c"') == ['echo "a && b | c"']
+    assert STAGED._segments("echo 'a && b | c'") == ["echo 'a && b | c'"]
+
+
+def test_quoted_text_does_not_shield_a_genuine_later_boundary():
+    """The fix must not over-correct into treating the WHOLE command as unsplittable - a
+    real boundary after the closing quote still splits."""
+    segs = STAGED._segments('echo "a; b" && echo "c; d"')
+    assert segs == ['echo "a; b"', 'echo "c; d"']
+
+
+def test_the_live_eval_regression_no_longer_false_positives(monkeypatch):
+    """Reconstructs the exact command that blocked live in the 2026-08-03 eval run and
+    confirms the log-note segment survives intact rather than being chopped into a
+    garbage mid-sentence fragment."""
+    cmd = (
+        'python3 -m scripts.engagement_state resolve-outstanding "does not exist" '
+        "--slug q2-alert-fp-summary 2>&1 | grep -v NoCssSanitizerWarning && \\\n"
+        'python3 -m scripts.engagement_state log-note "User chose to drop FP root-cause '
+        'commissioning and close as-is; no real source data exists for it (2026-08-03)" '
+        "--slug q2-alert-fp-summary 2>&1 | grep -v NoCssSanitizerWarning"
+    )
+    segs = STAGED._segments(cmd)
+    log_note_segs = [s for s in segs if "log-note" in s]
+    assert len(log_note_segs) == 1
+    assert "no real source data exists for it (2026-08-03)" in log_note_segs[0]
+    assert log_note_segs[0].strip().startswith("python3 -m scripts.engagement_state log-note")

@@ -381,13 +381,13 @@ def test_write_orchestrator_model_none_resets_to_documented_default(tmp_path):
 
     from install_helper import ORCHESTRATOR_MODEL_DEFAULT, write_orchestrator_model
 
-    ok, _ = write_orchestrator_model(tmp_path, "sonnet")
+    ok, _ = write_orchestrator_model(tmp_path, "opus")
     assert ok
     ok, msg = write_orchestrator_model(tmp_path, None)  # "reset"
     assert ok
     assert f"model -> {ORCHESTRATOR_MODEL_DEFAULT}" in msg
     written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    assert written["model"] == ORCHESTRATOR_MODEL_DEFAULT == "opus"
+    assert written["model"] == ORCHESTRATOR_MODEL_DEFAULT == "sonnet"
 
 
 def test_write_orchestrator_model_default_targets_user_settings(monkeypatch, tmp_path):
@@ -519,22 +519,30 @@ def test_run_orchestrator_model_success(tmp_path, capsys):
     assert "model -> opus" in capsys.readouterr().out
 
 
-def test_run_orchestrator_model_notes_sonnet_is_experimental(tmp_path, capsys):
+def test_run_orchestrator_model_notes_opus_has_no_tested_advantage(tmp_path, capsys):
+    from install_helper import Style, marks, run_orchestrator_model
+
+    rc = run_orchestrator_model(tmp_path, "opus", Style(False), marks())
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "testing to date" in out.lower()
+    assert "critical" in out.lower()  # opus remains available for critical/high-stakes work
+
+
+def test_run_orchestrator_model_sonnet_prints_no_opus_note(tmp_path, capsys):
     from install_helper import Style, marks, run_orchestrator_model
 
     rc = run_orchestrator_model(tmp_path, "sonnet", Style(False), marks())
     assert rc == 0
-    out = capsys.readouterr().out
-    assert "experimental" in out.lower()
-    assert "critical" in out.lower()  # prefer opus for critical/high-stakes engagements
+    assert "testing to date" not in capsys.readouterr().out.lower()
 
 
-def test_run_orchestrator_model_reset_prints_no_sonnet_note(tmp_path, capsys):
+def test_run_orchestrator_model_reset_prints_no_opus_note(tmp_path, capsys):
     from install_helper import Style, marks, run_orchestrator_model
 
     rc = run_orchestrator_model(tmp_path, None, Style(False), marks())
     assert rc == 0
-    assert "experimental" not in capsys.readouterr().out.lower()
+    assert "testing to date" not in capsys.readouterr().out.lower()
 
 
 def test_run_orchestrator_model_refuses_bad_directory(tmp_path, capsys):

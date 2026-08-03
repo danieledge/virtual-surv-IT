@@ -907,7 +907,7 @@ uses and how (audited 2026-07-29 against the current Claude Code docs):
 | Feature | How the team uses it |
 |---|---|
 | **Skills / slash commands** | All 24 workflows ship as skills, costing ~nothing until you type `/engage` (mechanism: [Token usage](#-token-usage--optimisation)). `argument-hint` on every command. |
-| **Subagents** | 16 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Write/Edit. |
+| **Subagents** | 16 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Edit; four hold Write scoped to their own findings-pack file only, mechanically enforced by a hook. |
 | **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), plus engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop, a `UserPromptSubmit` persona re-anchor that survives compaction, a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint. Hook and settings edits are human-only (ADR-002); hook changes ship staged, are applied by the maintainer via the `apply-*.sh` scripts, and releases ship with everything already wired - end users apply nothing. |
 | **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
 | **Permissions** | A curated `permissions.allow` block (fewer prompts on the team's own consent-free tooling) and `permissions.deny` as the hard floor under the raw-data wall. |
@@ -1184,7 +1184,7 @@ later turns are fast. The path is already optimised to a **single** step-0 probe
 and the tooling probe is cached after first use (`.claude/.tool-availability`, 7-day TTL) - so this
 is a **cold-start** cost that hits once per session: the prompt cache is cold (`docs/agent-design.md`
 §7), the tool probe isn't cached yet, and turn 0 loads a large payload (the ~490-line operating guide
-+ codebase-map + CHANGELOG) into the opus orchestrator before it emits a word. **Not yet confirmed**
++ codebase-map + CHANGELOG) into the orchestrator before it emits a word. **Not yet confirmed**
 is the split between (a) model inference over that cold, large turn-1 context - the likely dominant
 cost, since the probe script itself is only `command -v` checks - and (b) I/O, notably the
 plugin-mode `find` over `~/.claude/plugins/cache` / `marketplaces` (no `-maxdepth`) used to resolve
