@@ -390,6 +390,88 @@ def test_write_orchestrator_model_none_resets_to_documented_default(tmp_path):
     assert written["model"] == ORCHESTRATOR_MODEL_DEFAULT == "opus"
 
 
+def test_write_orchestrator_model_default_targets_user_settings(monkeypatch, tmp_path):
+    import json as _json
+
+    import install_helper as ih
+
+    fake_home_settings = tmp_path / "claude" / "settings.json"
+    monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
+    ok, msg = ih.write_orchestrator_model_default("sonnet")
+    assert ok
+    assert "model -> sonnet" in msg
+    written = _json.loads(fake_home_settings.read_text(encoding="utf-8"))
+    assert written["model"] == "sonnet"
+
+
+def test_write_orchestrator_model_default_none_clears_key_rather_than_forcing_opus(
+    monkeypatch, tmp_path
+):
+    """Unlike the per-project write, None at THIS scope means "no opinion", not "opus" -
+    a human who never asked for a global override should get Claude Code's own default
+    back, not have one silently imposed by a "reset" they didn't ask for at this scope."""
+    import json as _json
+
+    import install_helper as ih
+
+    fake_home_settings = tmp_path / "claude" / "settings.json"
+    monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
+    ih.write_orchestrator_model_default("opus")
+    ok, msg = ih.write_orchestrator_model_default(None)
+    assert ok
+    assert "cleared" in msg
+    written = _json.loads(fake_home_settings.read_text(encoding="utf-8"))
+    assert "model" not in written
+
+
+def test_write_orchestrator_model_default_none_on_already_absent_key_is_a_noop(
+    monkeypatch, tmp_path
+):
+    import install_helper as ih
+
+    fake_home_settings = tmp_path / "claude" / "settings.json"
+    monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
+    ok, msg = ih.write_orchestrator_model_default(None)
+    assert ok
+    assert "no default model was set" in msg
+
+
+def test_write_orchestrator_model_default_preserves_other_user_settings(monkeypatch, tmp_path):
+    import json as _json
+
+    import install_helper as ih
+
+    fake_home_settings = tmp_path / "claude" / "settings.json"
+    fake_home_settings.parent.mkdir(parents=True)
+    fake_home_settings.write_text(
+        '{"statusLine": {"type": "command"}}', encoding="utf-8"
+    )
+    monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
+    ok, _ = ih.write_orchestrator_model_default("opus")
+    assert ok
+    written = _json.loads(fake_home_settings.read_text(encoding="utf-8"))
+    assert written["model"] == "opus"
+    assert written["statusLine"] == {"type": "command"}  # preserved
+
+
+def test_run_orchestrator_model_default_success(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    fake_home_settings = tmp_path / "claude" / "settings.json"
+    monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
+    rc = ih.run_orchestrator_model_default("opus", ih.Style(False), ih.marks())
+    assert rc == 0
+    assert "model -> opus" in capsys.readouterr().out
+
+
+def test_run_orchestrator_model_default_refuses_bad_model_name(tmp_path, capsys):
+    from install_helper import Style, marks, run_orchestrator_model_default
+
+    rc = run_orchestrator_model_default("haiku", Style(False), marks())
+    assert rc == 1
+    assert "must be one of" in capsys.readouterr().out
+
+
 def test_write_orchestrator_model_merges_and_preserves_other_keys(tmp_path):
     import json as _json
 

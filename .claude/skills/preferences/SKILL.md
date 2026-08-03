@@ -16,11 +16,22 @@ is the common, valid default - not an error). Resolve the two known preferences:
 - `regulatory_citations` (bool, default `true` when the key is absent): whether
   detection-logic work cites the specific regulatory obligation it serves by default.
 
+**Also read your own model, read-only.** `Read .claude/settings.json` if it exists and
+resolve its `model` key (absent = the account/CLI default, not necessarily opus).
+`settings.json` sits behind the consent-write gate (`guard-consent-writes.py`, ADR-002) -
+you can show this value, you can never write it, and the question tool in step 3 below
+never offers to change it. CLAUDE.md's own recommendation is opus for the orchestrator
+("routing, challenging findings and §4/§5 calls are deep work"); testing so far has found
+sonnet performs comparably in most engagements, prefer opus for critical/high-stakes work.
+
 **2. Show it plainly, 🎩 voice, no ceremony:**
 
 > 🎩 Here's how this project is set up:
 > - Word (`.docx`) copies of controlled documents: **on/off**
 > - Regulatory citations by default: **on/off**
+> - My own model: **opus/sonnet/(account default)** - change this yourself, I can't write
+>   `settings.json`: `python install_helper.py --model-project . --model opus` (or `sonnet`
+>   / `default`), or the installer's interactive menu, option 8.
 
 **3. Offer to change something - one question tool call, both preferences, single-select
 per row (or skip entirely if the user just wanted to look):**

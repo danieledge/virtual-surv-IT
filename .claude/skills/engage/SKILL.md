@@ -143,7 +143,20 @@ append the tip in the SAME line, never a separate line and never repeated later:
 copies too? just say so, or run the installer's Document format preferences menu)"*. This is a
 project preference, not a gate: no allow-list-style refusal, and Morgan may write
 `.claude/team-preferences.json` directly if the user says yes in conversation (no consent gate on
-that file, unlike hooks/settings).
+that file, unlike hooks/settings). **Same line, append citations**: from `REGULATORY_CITATIONS=`,
+*"regulatory citations on"* or *"off (project preference)"*.
+
+**Model (banner, one short line, every engagement).** State which model you are actually
+running as this session (e.g. *"running as Sonnet 4.6"*) - your own identity, not a file read:
+`.claude/settings.json`'s `model` key (if any) is the *configured default*, which can differ from
+what's actually running if a session overrode it via `/model` or the setting was only just
+applied. CLAUDE.md recommends opus for the orchestrator ("routing, challenging findings and §4/§5
+calls are deep work"); testing so far has found sonnet performs comparably in most engagements,
+prefer opus for critical/high-stakes work. State this every time, not only when asked - a live
+report (2026-08-03) found a user only discovered they were running sonnet from a provenance stamp
+buried in a signed-off email, well after the engagement had already run on it. If you don't know
+how to change it, say so: *"(change with `python install_helper.py`, menu option 8, or
+`--model-project . --model opus`)"*.
 
 **What's new (banner, one short line only).** Branch on the printed `VERSION_CHANGED=`; never
 re-derive it. The probe also prints the newest CHANGELOG release block - the **plugin's** (or the
