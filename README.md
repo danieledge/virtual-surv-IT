@@ -7,13 +7,33 @@
 ![Tests 1200+ passing](https://img.shields.io/badge/tests-1200%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
+[![Quick start: one-page PDF](https://img.shields.io/badge/Quick%20start-one--page%20PDF-important)](docs/quick-start.pdf)
 
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.6** (2026-08-01) - *[framework audit remediation: guard escapes closed, traceability gated, eval numbers made readable](docs/releases/0.33.md)*<br/>
-A full framework audit and its remediation. A pair of escapes closed in the safety guards (a consent-equivalent `git config` execution path, and raw-data coverage gaps including `WebFetch` `file://`), the traceability spine turned from prose into a gate, and the eval pass rate made readable by separating runs that died from runs that answered badly.<br/>
-📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.6** (2026-08-01) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+
+**Biggest features this cycle (0.33.0 to 0.33.6):**
+- 🔒 **Closed a real consent bypass.** `git config core.hooksPath` (and a few relatives) could
+  execute attacker-chosen code with no consent marker and no gate. Now blocked, alongside 3 more
+  raw-data guard gaps closed the same pass.
+- ✅ **The traceability spine finally has a validator.** BRD to FSD to code to test to obligation
+  was the product's most-marketed guarantee, backed by zero validating code. `validate_rtm.py`
+  checks it now.
+- 💾 **Sessions survive compaction and crashes.** Engagement state lives on disk: a resumed
+  session never re-asks what you already told it, and a declined "run this code" can never be
+  silently upgraded to a yes.
+- 🪟 **Heavy corporate-Windows hardening.** Encoding crashes, a fake `python3` stub fooling the
+  interpreter probe, an unintuitive CLI flag order, and more, all fixed from a live corporate run.
+- 📊 **The eval pass rate is now honest.** Runs that crashed used to count the same as runs that
+  just answered badly. They're separated now, and the corrected number is published (47%, not the
+  old, unreadable 35%).
+
+**Also in this cycle:** optional `.docx` export · PDFs/DOCX now route through the proper converter
+automatically · closing an engagement runs a mechanical checklist that can refuse · one fixed
+folder per engagement · faster scans on projects with many old engagements · a native task-list
+progress panel.
 
 </td></tr>
 </table>
@@ -137,30 +157,13 @@ specialists and builds in **independent review**:
 - **Data-quality and coverage assurance**: the missing feed that means abuse goes undetected.
 - **Technical documentation**: handover a real developer can build, run and maintain from.
 
-It also maps the domain's own control expectations onto the AI itself:
-
-- **Segregation of duties.** Advisors and reviewers hold **no `Write`/`Edit` tools**, so they
-  can't alter the detection logic they assess; build, QA and validation stay independent by
-  running as separate agents with their own context. It is the maker-checker discipline
-  regulators expect of humans, applied to agents.
-- **An audit trail by construction.** Every deliverable arrives with the RTM
-  (obligation → requirement → code → test), thresholds with rationale and tuning date, and
-  **pinpoint citations retrieved from a source-verified register** (a mechanical gate flags
-  anything recalled from memory as *unverified* rather than letting it pass as fact; the register
-  is small today and grows entry by entry, with verified entries human-checked and unconfirmed
-  ones flagged; ADR-001). Findings are tagged
-  📊 measured vs 🧠 inferred, all behind an evidenced [Definition of Done](docs/DEFINITION-OF-DONE.md).
-  The silent-failure modes get their own specialist (coverage and feed assurance) instead of
-  being an afterthought.
-- **Data safety as architecture, not policy.** Raw data under `data/raw/` is **blocked from the
-  model's file-read tools** by a hook and OS permissions; the sanctioned path is keyed masking or
-  fully synthetic data; execution of handed-over code is human-consent gated. The AI works
-  *downstream* of the controls without being trusted *with* the data itself.
-- **The economics work.** The evidenced 80% (specs, tuning packs, QA evidence, handover docs,
-  MI) is produced in minutes for API-token cost, consistently formatted and traceable, while
-  **humans keep the judgement**: every gate returns to a person, and nothing touches a live
-  system without sign-off. Your scarce cross-disciplinary experts review and decide instead of
-  drafting and formatting.
+It also maps the domain's own control expectations onto the AI itself: segregation of duties
+(advisors and reviewers hold no edit tools, so they can't alter what they assess), an audit trail
+by construction (the RTM, source-verified citations, evidenced findings), data safety as
+architecture rather than policy (raw data blocked from the model, execution human-gated), and the
+economics of it (the evidenced work runs in minutes for API-token cost, while humans keep every
+judgement call). The full mechanics, one row per principle with what actually enforces
+it: [Core principles](#-core-principles).
 
 The result is an engineering workflow that produces more **consistent, auditable and
 maintainable** output than one generalist assistant, because the work is specialised,
@@ -199,10 +202,22 @@ What the team gives you today, each row tied to where the claim is enforced or d
 
 ## 🚀 Quick start
 
-> 🗂️ **[Open the one-page Quick-start reference →](docs/quick-start.html)** *(open it in a
-> browser)* - the whole mental model on a single sheet: how the orchestrator and its subagents
-> fit together, the four steps to your first engagement, every command with when to reach for
-> it, and the three always-on safety rules. Print it, or keep it open beside your first session.
+<table>
+<tr><td>
+
+### 🗂️ [Open the one-page Quick-start reference →](docs/quick-start.pdf)
+
+The whole mental model on a single sheet: how the orchestrator and its subagents fit together,
+the four steps to your first engagement, every command with when to reach for it, and the three
+always-on safety rules. **Renders directly on GitHub** (it's a PDF, opens in the file viewer, no
+extra click) - print it, or keep it open beside your first session.
+
+*Prefer the interactive HTML?* [Open it via htmlpreview](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/quick-start.html)
+(the [plain repo link](docs/quick-start.html) just shows source on GitHub; a local clone opens
+fine in any browser either way).
+
+</td></tr>
+</table>
 
 ### 🔌 Install: run the helper, then enable it **per project**
 
@@ -875,7 +890,7 @@ uses and how (audited 2026-07-29 against the current Claude Code docs):
 
 | Feature | How the team uses it |
 |---|---|
-| **Skills / slash commands** | All 24 workflows ship as skills with `disable-model-invocation: true` - the dormancy mechanism: their descriptions load into no ordinary session, so the team costs ~nothing until you type `/engage`. `argument-hint` on every command. |
+| **Skills / slash commands** | All 24 workflows ship as skills, costing ~nothing until you type `/engage` (mechanism: [Token usage](#-token-usage--optimisation)). `argument-hint` on every command. |
 | **Subagents** | 16 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Write/Edit. |
 | **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), plus engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop, a `UserPromptSubmit` persona re-anchor that survives compaction, a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint. Hook and settings edits are human-only (ADR-002); hook changes ship staged, are applied by the maintainer via the `apply-*.sh` scripts, and releases ship with everything already wired - end users apply nothing. |
 | **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
@@ -947,8 +962,9 @@ so ±15%); the rest are estimates with no run behind them yet:
 **Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
 - **Right-sizing**: the headline lever: a narrow change fires 2-3 agents, not 16; the PM states the
   agent count at the gate, so over-spawning is visible.
-- **Model tiering**: **4 opus / 11 sonnet / 1 haiku**; opus (~5× sonnet) reserved for the four
-  final-judgement/novel-design roles, haiku for the mechanical review bookkeeping.
+- **Model tiering**: opus (~5× sonnet) reserved for final-judgement/novel-design roles only, haiku
+  for the mechanical review bookkeeping (exact split and rationale: [Notes on the
+  config](#-notes-on-the-config)).
 - **Artifacts-as-blackboard**: agents return condensed results; big output goes to files, not back
   through the orchestrator's context.
 - **Clean console**: detail to artifacts, not the chat.
@@ -1066,8 +1082,8 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 
 **Reading paths: the repo has 130+ doc files; start with the path that matches your goal:**
 
-- 🆕 **New here** → [`docs/quick-start.html`](docs/quick-start.html) (one page, the whole mental
-  model) → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
+- 🆕 **New here** → [`docs/quick-start.pdf`](docs/quick-start.pdf)
+  (one page, the whole mental model, renders directly on GitHub) → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
   this README → [`docs/demos/README.md`](docs/demos/README.md) (real transcripts, nothing to
   run) → type **`/demo`**.
 - 🔧 **Extending the team** (agents/skills/menus) → [`docs/agent-design.md`](docs/agent-design.md)
@@ -1084,7 +1100,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 
 | Guide | What it covers |
 |---|---|
-| [`docs/quick-start.html`](docs/quick-start.html) | **One-page quick-start reference** - the mental model, the four steps to a first engagement, and every command with when to use it (open in a browser) |
+| [`docs/quick-start.pdf`](docs/quick-start.pdf) | **One-page quick-start reference** - the mental model, the four steps to a first engagement, and every command with when to use it (renders directly on GitHub; the [interactive HTML](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/quick-start.html) is also available) |
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Plain-English tour, start here if you're new to agents/LLMs |
 | [`docs/FAQ.md`](docs/FAQ.md) | The questions a newcomer actually asks: evidence tags, hallucination, consent, the artifacts folder, Morgan |
 | [`docs/demos/README.md`](docs/demos/README.md) | Real captured demo transcripts (build, review, data-safety) - see the team work without running anything |
@@ -1315,11 +1331,11 @@ validating all outputs before any production use.**
 
 ## 📄 License
 
-**GNU AGPL-3.0-only** — Copyright © 2026 Daniel Edge. Full text in [`LICENSE`](LICENSE).
+**GNU AGPL-3.0-only.** Copyright © 2026 Daniel Edge. Full text in [`LICENSE`](LICENSE).
 
 In plain English (the [`LICENSE`](LICENSE) text governs):
 
-- ✅ **Use it freely, including inside a company and for commercial work** — running, modifying and
+- ✅ **Use it freely, including inside a company and for commercial work.** Running, modifying and
   using it internally carries no obligation. Internal use is not "distribution".
 - 🔁 **If you distribute it, or offer it to others as a network/hosted service**, you must make your
   **complete corresponding source** (including your modifications) available to those users under
@@ -1327,11 +1343,11 @@ In plain English (the [`LICENSE`](LICENSE) text governs):
   resold or hosted as a proprietary product.
 - 🚫 **No warranty** (provided "as is").
 - 💼 **Want it without the AGPL source-sharing obligation** (e.g. to embed it in a proprietary
-  product)? A separate **commercial licence** can be arranged — contact the author. (The author is
+  product)? A separate **commercial licence** can be arranged: contact the author. (The author is
   the sole copyright holder and can dual-license; external contributions would be taken under a
-  contributor agreement so that stays possible — see [`CONTRIBUTING.md`](CONTRIBUTING.md).)
+  contributor agreement so that stays possible, see [`CONTRIBUTING.md`](CONTRIBUTING.md).)
 
-The project bundles and adapts permissively-licensed third-party components (MIT / BSD-3 / PSF) —
-those keep their own licences; their notices are in
+The project bundles and adapts permissively-licensed third-party components (MIT / BSD-3 / PSF).
+Those keep their own licences; their notices are in
 [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md). Permissive licences may be included in an
 AGPL-licensed work, so there is no conflict.
