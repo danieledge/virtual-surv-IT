@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Claude Code statusLine for the compliance-surveillance team (0.33.1).
+# Claude Code statusLine for the compliance-surveillance team (0.33.7).
 #
-# Shows the team's state at ZERO context cost (a statusline is a shell render, not a model
-# turn): dormant sessions show the model + cost as usual; while an engagement is live it
-# names the ACTIVE slug, its status and phase. Reads the statusLine stdin JSON (model,
-# cost, workspace) plus the on-disk engagement state; never talks to the model.
+# Shows Morgan's state at ZERO context cost (a statusline is a shell render, not a model
+# turn): dormant sessions show that plainly; while an engagement is live it names the
+# ACTIVE slug, its status and phase. Every render also shows the project's docx/citations/
+# model preferences (same three /preferences and /engage's banner show), so they're visible
+# without asking. Reads the statusLine stdin JSON (model, cost, workspace) plus the on-disk
+# engagement state and team-preferences.json/settings.json; never talks to the model.
 #
 # Wire (HUMAN-run - settings edits are human-only, ADR-002 rec 5):
 #   bash scripts/apply-statusline.sh
@@ -27,12 +29,12 @@ PY_BIN=""
 for c in python3 python py; do
   "$c" --version >/dev/null 2>&1 && PY_BIN="$c" && break
 done
-[ -z "$PY_BIN" ] && { printf '😴 virt-surv-IT'; exit 0; }
+[ -z "$PY_BIN" ] && { printf '😴 Morgan dormant'; exit 0; }
 
 # PYTHONUTF8: on Windows, Python encodes piped stdout with the locale codepage
 # (cp1252), so printing the emoji marks raised UnicodeEncodeError and every render
 # fell to the static fallback - glasses, no stats (live report 2026-07-30).
-PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY_BIN" - "$INPUT" 2>/dev/null <<'PY' || printf '😴 virt-surv-IT'
+PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY_BIN" - "$INPUT" 2>/dev/null <<'PY' || printf '😴 Morgan dormant'
 import json, sys
 from pathlib import Path
 
@@ -79,9 +81,27 @@ if art.is_dir():
         name, status, phase = pick
         label = "" if name == "(flat)" else f"{name} "
         more = f" +{len(rows) - 1}" if len(rows) > 1 else ""
-        live = f"🎩 {label}{MARKS.get(status, status)} {status}·{phase}{more}"
+        live = f"🎩 Morgan active - {label}{MARKS.get(status, status)} {status}·{phase}{more}"
 
-bits.append(live if live else "😴 team dormant")
+bits.append(live if live else "😴 Morgan dormant")
+
+# Preferences (project-wide; independent of whether an engagement is currently open -
+# same three settings /preferences and /engage's banner show).
+prefs = {}
+try:
+    prefs = json.loads((Path(cwd) / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
+except Exception:
+    pass
+docx_on = "docx" in (prefs.get("extra_formats") or [])
+citations_on = prefs.get("regulatory_citations", True)
+morgan_model = ""
+try:
+    settings = json.loads((Path(cwd) / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    morgan_model = settings.get("model") or ""
+except Exception:
+    pass
+bits.append(f"docx:{'on' if docx_on else 'off'} cite:{'on' if citations_on else 'off'} morgan:{morgan_model or 'default'}")
+
 if model:
     bits.append(model)
 if isinstance(cost, (int, float)) and cost > 0:

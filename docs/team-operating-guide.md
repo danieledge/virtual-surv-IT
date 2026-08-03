@@ -27,7 +27,9 @@ Route by **deliverable type**, not habit:
 | TM model validation | `tuning-analyst` (data work) + `model-validator` (independent verdict) - see `/validate-tm-model` |
 | ML / AI component (then independent `model-validator`) | `ml-engineer` |
 | Independent testing & QA evidence | `qa-engineer` |
-| Code review · performance review · audit/compliance review | `code-reviewer` · `performance-reviewer` · `compliance-reviewer` |
+| Code review (bugs, security, maintainability) | `code-reviewer` |
+| Performance / scalability review | `performance-reviewer` |
+| Audit / compliance review (detection logic, regulated data, §4/§5 trail only - not every code review) | `compliance-reviewer` |
 | Security audit / threat model (OWASP ASVS / CWE) - `/security-audit` | `code-reviewer` (security lens; no separate SecOps agent by design - see `docs/agent-design.md` §4) |
 | Data-quality / feed-completeness / surveillance-coverage assurance | `data-quality-reviewer` (independent; no Write/Edit - Bash for analysers/diffs, execution-gated per CLAUDE.md §7) |
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
@@ -515,7 +517,11 @@ the user informed and in charge, check before anything irreversible.
   the footprint is a receipt, not a decision. So: if you are about to engage anyone, say who and
   why in one line first, **even when the decision emerged mid-engagement**; and when the answer
   is nobody, say that too ("no fan-out, I'll handle this myself") - a stated zero is
-  right-sizing, silence is not. (Live 2026-08-01: a close-only engagement delegated to two
+  right-sizing, silence is not. **"Handle this myself" is Morgan's own PM-level work** (a
+  reconciliation, a summary, running a check script) - **never writing or editing the
+  deliverable's own code**, even when nothing in the roster is a domain-specific fit (route
+  generic code to `platform-engineer` + `code-reviewer` instead - see the routing table above).
+  (Live 2026-08-01: a close-only engagement delegated to two
   specialists with no count stated anywhere, and the engagement that did MORE work was scored
   worse than four earlier solo runs that did less.) Reserve full fan-out for high-value, broad
   deliverables. Numeric
