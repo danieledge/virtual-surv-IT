@@ -87,7 +87,11 @@ reads it.
 
 The script prints, in order: `INTERPRETER=` (the literal word - python3/python/py - that worked;
 this IS `<python>` for every later script call in this session: use it verbatim, **never
-re-probe**), `PLUGIN_ROOT=`, `PYTHON_VERSION=`, `PLUGIN_VERSION=`, `BRANCH=`,
+re-probe**), `PLUGIN_ROOT=`, `OS=Windows|POSIX` (the host, computed - **use it instead of
+inferring Windows-ness later**; the exec-consent command in `references/safety-gates.md` reads
+this field directly, so a Windows host always gets the PowerShell form shown alongside the `!`
+form, not only when something else in the conversation happens to make Windows obvious),
+`PYTHON_VERSION=`, `PLUGIN_VERSION=`, `BRANCH=`,
 `PREV_TEAM_VERSION=`, `VERSION_CHANGED=yes|no` (computed - never re-derive it), `EXTRA_FORMATS=`,
 `REGULATORY_CITATIONS=on|off`, then the tooling report, the codebase map header + §3, the newest
 CHANGELOG entry, and any team-extensions block.

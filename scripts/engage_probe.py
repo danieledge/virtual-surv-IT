@@ -286,6 +286,7 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
 
     lines = [
         f"PLUGIN_ROOT={pr_display}",
+        f"OS={'Windows' if sys.platform == 'win32' else 'POSIX'}",
         f"PYTHON_VERSION={sys.version.split()[0]}",
         f"PLUGIN_VERSION={plugin_version}",
         f"BRANCH={branch}",

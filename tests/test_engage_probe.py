@@ -128,6 +128,25 @@ def test_build_report_emits_all_fields_repo_as_project(tmp_path):
     assert "REGULATORY_CITATIONS=on" in out  # default when no preferences file
 
 
+def test_build_report_emits_os_windows(monkeypatch, tmp_path):
+    # Live report 2026-08-03: the exec-consent command was given as the `!` form alone on
+    # a Windows host, because nothing put "this is Windows" in front of the model as a
+    # fact - it had to infer it from context. OS= exists so it never has to.
+    import scripts.engage_probe as ep
+
+    monkeypatch.setattr(ep.sys, "platform", "win32")
+    out = build_report("", tmp_path)
+    assert "OS=Windows" in out
+
+
+def test_build_report_emits_os_posix(monkeypatch, tmp_path):
+    import scripts.engage_probe as ep
+
+    monkeypatch.setattr(ep.sys, "platform", "linux")
+    out = build_report("", tmp_path)
+    assert "OS=POSIX" in out
+
+
 def test_build_report_never_raises_on_totally_empty_project(tmp_path):
     out = build_report("", tmp_path)
     assert "PLUGIN_ROOT=repo-as-project" in out

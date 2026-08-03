@@ -767,6 +767,37 @@ def test_stale_docstatus_in_review_flagged_when_closed(tmp_path):
     assert "STALE-DOCSTATUS" in "\n".join(check(art))
 
 
+def test_stale_docstatus_pending_flagged_when_closed(tmp_path):
+    # Live report 2026-08-03: a closed delivery-report.md and its .html both still read
+    # `Status `Pending`` - no template's placeholder uses this word, so it was scaffolding
+    # text the author never went back to fill in. The regex used to only check for
+    # draft/in review/in progress and silently missed this class of leftover entirely.
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_CLOSED, listed=["delivery-report.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "delivery-report.md",
+        "# Report\n\n> **Document control** · ID `DLVR-001` · Version `1.0` · Status `Pending`\n",
+    )
+    _touch(art / "delivery-report.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "STALE-DOCSTATUS" in "\n".join(check(art))
+
+
+def test_stale_docstatus_bare_pending_human_signoff_passes(tmp_path):
+    # Symmetric with the Draft/In review case: `pending` immediately followed by `human
+    # sign-off` is the same legitimate terminal state, even with no preceding status word.
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_CLOSED, listed=["delivery-report.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "delivery-report.md",
+        "# Report\n\n> **Document control** · ID `DLVR-001` · Version `1.0` · "
+        "Status `Pending human sign-off`\n",
+    )
+    _touch(art / "delivery-report.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "STALE-DOCSTATUS" not in "\n".join(check(art))
+
+
 def test_stale_docstatus_pending_human_signoff_passes(tmp_path):
     # The one legitimate open state under a closed index: the human act is the only gap,
     # and the Status value says so explicitly.

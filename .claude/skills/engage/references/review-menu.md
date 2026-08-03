@@ -10,6 +10,10 @@
 - **Ask Q1, Q2 and Q3 in ONE `AskUserQuestion` call** (one screen, not three round-trips). They
   remain **three distinct questions**, each `multiSelect: false`; batching the *call* is not
   merging the *lists*.
+- **This call is SEPARATE from the intake gate's batch** (`Work type` / `Execution` /
+  `Data safety`, `engage` step 0a) - that batch already ran earlier in this engagement, before the
+  work was even classified as a review. Never carry `Execution` or `Data safety` into this call:
+  by step 1b they are already answered and recorded, not still pending.
 - **Headers:** Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle` (locked, like the option wording).
 - **Q1 (depth) is single-select** - exactly one depth; Quick ⊂ Deep ⊂ Audit.
 - **Q2 (performance) is a SEPARATE question** (yes/no) - never merged into the depth list.

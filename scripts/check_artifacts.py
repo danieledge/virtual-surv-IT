@@ -345,12 +345,18 @@ _STALE_STATUS_RE = re.compile(
 # Document-control Status fields must be closed out once START-HERE is ✅ CLOSED: a doc still
 # declaring `Status `Draft`` / `In review` under a closed index is the status machinery
 # contradicting the index (independent review 2026-07-25: 5 of 7 "final" docs read Draft).
+# `pending` alone is the same defect under a different word: no template's placeholder uses it
+# (they all say `Draft | In review | Approved`), so a report reading bare `Status `Pending``
+# is scaffolding text an author wrote and never went back to update (live report, 2026-08-03:
+# a closed delivery-report.md and its .html both still read Pending) - not caught before
+# because this pattern only checked for draft/in review/in progress, never pending itself.
 # Judgement item, never auto-fixed - only the PM knows closed vs "pending human sign-off"
 # (the latter, stated in the Status value itself, passes this check).
 _STALE_DOCSTATUS_RE = re.compile(
     r"(?im)^>.*\bStatus\b[ `'·:]*(?:draft\b(?![^`\n]*pending human sign-off)"
     r"|in review\b(?![^`\n]*pending human sign-off)"
-    r"|in progress\b(?![^`\n]*pending human sign-off))"
+    r"|in progress\b(?![^`\n]*pending human sign-off)"
+    r"|pending\b(?!\s+human sign-off))"
 )
 
 
