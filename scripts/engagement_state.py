@@ -1197,14 +1197,28 @@ def _cmd_set_team(args: argparse.Namespace) -> int:
     return _mutate(args, lambda s: s.__setitem__("team", list(args.members)))
 
 
+def _resolve_slug_arg(args: argparse.Namespace) -> str | None:
+    """set-active/archive/unarchive take their slug positionally, unlike every other
+    resolvable subcommand's `--slug TARGET_SLUG` - a live report (2026-08-03) found
+    `archive --slug X` exits 2 with no hint that the flag isn't accepted there, because
+    the positional (`args.slug`) and the mirrored flag (`args.target_slug`, from `common`)
+    are different attributes and only the positional was ever read. Accept either; the
+    positional wins if both are somehow given."""
+    return getattr(args, "slug", None) or getattr(args, "target_slug", None)
+
+
 def _cmd_set_active(args: argparse.Namespace) -> int:
     root = args.dir or _default_artifacts_dir()
-    target = root / args.slug
+    slug = _resolve_slug_arg(args)
+    if not slug:
+        print("set-active: give a <slug> or --slug", file=sys.stderr)
+        return 2
+    target = root / slug
     if not ((target / STATE_FILENAME).is_file() or (target / INDEX_FILENAME).is_file()):
         print(f"no engagement workspace at {target} - nothing to mark ACTIVE", file=sys.stderr)
         return 2
-    write_active(root, args.slug)
-    print(f"ACTIVE engagement: {args.slug} ({ACTIVE_MARKER})")
+    write_active(root, slug)
+    print(f"ACTIVE engagement: {slug} ({ACTIVE_MARKER})")
     return 0
 
 
@@ -1223,10 +1237,11 @@ def _cmd_archive(args: argparse.Namespace) -> int:
     if args.all_closed:
         targets = [sp.parent for sp in workspace_states(root) if not is_archived(sp.parent)]
     else:
-        if not args.slug:
-            print("archive: give a <slug> or --all-closed", file=sys.stderr)
+        slug = _resolve_slug_arg(args)
+        if not slug:
+            print("archive: give a <slug> (or --slug), or --all-closed", file=sys.stderr)
             return 2
-        targets = [root / args.slug]
+        targets = [root / slug]
     archived_now = 0
     for pack in targets:
         if not state_path(pack).is_file():
@@ -1300,7 +1315,11 @@ def _cmd_archive(args: argparse.Namespace) -> int:
 
 def _cmd_unarchive(args: argparse.Namespace) -> int:
     root = args.dir or _default_artifacts_dir()
-    pack = root / args.slug
+    slug = _resolve_slug_arg(args)
+    if not slug:
+        print("unarchive: give a <slug> or --slug", file=sys.stderr)
+        return 2
+    pack = root / slug
     marker = pack / ARCHIVE_MARKER
     if not marker.is_file():
         print(f"{pack.name} is not archived (no {ARCHIVE_MARKER})", file=sys.stderr)
@@ -1582,9 +1601,11 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_set_team)
 
     p = sub.add_parser(
-        "set-active", help="record the session's ACTIVE engagement on disk (R1 marker)"
+        "set-active",
+        parents=[common],
+        help="record the session's ACTIVE engagement on disk (R1 marker)",
     )
-    p.add_argument("slug")
+    p.add_argument("slug", nargs="?", help="or use --slug, like every other subcommand")
     p.set_defaults(fn=_cmd_set_active)
 
     p = sub.add_parser("clear-active", help="remove the ACTIVE-engagement marker")
@@ -1592,9 +1613,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "archive",
+        parents=[common],
         help="mark a closed pack .archive - excluded from every scan (in-place, no move)",
     )
-    p.add_argument("slug", nargs="?", help="workspace directory name under artifacts/")
+    p.add_argument(
+        "slug", nargs="?", help="workspace directory name under artifacts/, or use --slug"
+    )
     p.add_argument(
         "--all-closed", action="store_true", help="archive every closed, unarchived pack"
     )
@@ -1606,8 +1630,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.set_defaults(fn=_cmd_archive)
 
-    p = sub.add_parser("unarchive", help="remove the .archive marker (back in scan scope)")
-    p.add_argument("slug")
+    p = sub.add_parser(
+        "unarchive", parents=[common], help="remove the .archive marker (back in scan scope)"
+    )
+    p.add_argument("slug", nargs="?", help="or use --slug, like every other subcommand")
     p.set_defaults(fn=_cmd_unarchive)
 
     p = sub.add_parser(

@@ -51,6 +51,8 @@ Usage:
   python install_helper.py --branch dev    # pick the channel up front
   python install_helper.py --yes           # non-interactive full run, safe defaults
   python install_helper.py --yes --pip     # also install requirements-dev.txt
+  python install_helper.py --model-project . --model opus     # pin Morgan to opus
+  python install_helper.py --model-project . --model default  # reset Morgan to opus
   python install_helper.py --demo          # the real flow as a dry run, nothing executed
 """
 
@@ -999,6 +1001,7 @@ MENU_ACTIONS = {
     "5": "check",
     "6": "formats",
     "7": "demo",
+    "8": "model",
     "q": "quit",
 }
 
@@ -1017,6 +1020,7 @@ def choose_action(style: Style) -> str:
         ("5", "Check for updates (read-only - shows what an update would bring)"),
         ("6", "Project preferences (docx export, regulatory citations)"),
         ("7", "Demo - watch the whole run, nothing executed or written"),
+        ("8", "Morgan's model (opus/sonnet, or reset to default)"),
         ("q", "Quit"),
     )
     for key, text in options:
@@ -1030,7 +1034,7 @@ def choose_action(style: Style) -> str:
             return "full"
         if answer in MENU_ACTIONS:
             return MENU_ACTIONS[answer]
-        print("  1-7 or q, please.")
+        print("  1-8 or q, please.")
 
 
 # ------------------------------------------------------------------ the installer
@@ -1906,6 +1910,55 @@ class Installer:
             f"citations -> {'on' if citations_wanted else 'off'} ({prefs_path})",
         )
 
+    def _ask_and_set_model(self, project: Path) -> tuple[bool, str]:
+        """Ask opus/sonnet/default and apply it to project's settings.json (or report what
+        a demo run would do). Shared by model_step (standalone menu option 8) and
+        enable_step (folded into the full install) so the question and the disclaimer
+        stay in exactly one place rather than drifting between two copies."""
+        picked = ask(
+            "  opus / sonnet / default (reset to opus)?",
+            "default",
+            self.args.yes,
+            style=self.style,
+        ).strip().lower()
+        if picked in ("default", "reset", ""):
+            model: Optional[str] = None
+        elif picked in ORCHESTRATOR_MODELS:
+            model = picked
+        else:
+            return False, f"expected opus/sonnet/default, got {picked!r}"
+        if model == "sonnet":
+            self.say(self.style.yellow(f"    {ORCHESTRATOR_SONNET_NOTE}"))
+        if self.demo:
+            return True, f"would set -> {model or ORCHESTRATOR_MODEL_DEFAULT}"
+        return write_orchestrator_model(project, model)
+
+    def model_step(self) -> None:
+        """Standalone, easily re-runnable (menu option 8): change or reset Morgan's (the
+        orchestrator's) own model for one project. Only Morgan is exposed here - the 16
+        specialist subagents each have their own `model:` frontmatter in
+        `.claude/agents/*.md`, edited directly; that's a bigger, separate change this
+        option doesn't attempt yet."""
+        self.step_intro(
+            "Morgan's own model for this project - opus is the documented default "
+            "(routing, challenging findings and §4/§5 calls are deep work); sonnet has "
+            "tested comparably in most engagements so far (experimental - prefer opus "
+            "for critical/high-stakes work). Or reset back to opus."
+        )
+        raw = ask("  Which project directory?", ".", False, style=self.style)
+        project = Path(raw).expanduser().resolve()
+        if not project.is_dir():
+            self.step_fail("Morgan's model", f"not a directory: {project}")
+            return
+        settings_path = project / ".claude" / "settings.json"
+        current = _read_json_dict(settings_path).get("model") or "(unset - account default)"
+        self.say(self.style.dim(f"    currently: {current}"))
+        ok, message = self._ask_and_set_model(project)
+        if not ok:
+            self.step_fail("Morgan's model", message)
+            return
+        self.step_ok("Morgan's model", message)
+
     def enable_step(self) -> None:
         """Optional: enable the team for a project right now, and offer the recommended
         permission allow-list for the same project. Interactive only - non-interactive
@@ -1959,6 +2012,15 @@ class Installer:
                         f"    would write {project / '.claude' / 'team-preferences.json'}"
                     )
                 )
+            if confirm(
+                "  Set Morgan's (the orchestrator's) model for this project too - opus is "
+                "the documented default, sonnet has tested comparably in most engagements?",
+                default=False,
+                assume_yes=False,
+                style=self.style,
+            ):
+                _, message = self._ask_and_set_model(project)
+                self.say(self.style.dim(f"    {message}"))
             return
         if run_enable_project(target, self.style, self.marks) == 0:
             self.step_ok("Project enablement", str(target.expanduser().resolve()))
@@ -1977,6 +2039,18 @@ class Installer:
                 style=self.style,
             ):
                 write_team_preferences(target.expanduser().resolve(), extra_formats=["docx"])
+            if confirm(
+                "  Set Morgan's (the orchestrator's) model for this project too - opus is "
+                "the documented default, sonnet has tested comparably in most engagements?",
+                default=False,
+                assume_yes=False,
+                style=self.style,
+            ):
+                ok, message = self._ask_and_set_model(target.expanduser().resolve())
+                if ok:
+                    self.say(self.style.dim(f"    {message}"))
+                else:
+                    self.say(self.style.yellow(f"    {message}"))
         else:
             self.step_fail("Project enablement", "see message above", fatal=False)
 
@@ -2037,6 +2111,10 @@ class Installer:
         if self.subset == "formats":
             return [
                 ("Project preferences", self.format_preferences_step),
+            ]
+        if self.subset == "model":
+            return [
+                ("Morgan's model", self.model_step),
             ]
         return [
             ("Preflight checks", self.preflight),
@@ -2138,6 +2216,28 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     return 0
 
 
+def run_orchestrator_model(project_dir: Path, model: Optional[str], style: Style, mark_map: dict) -> int:
+    """Standalone opt-in step: set or reset Morgan's model for one project. Human-run by
+    definition (this script is a terminal tool) - Claude Code itself blocks the model from
+    writing settings.json (ADR-002)."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    project = project_dir.expanduser().resolve()
+    if not project.is_dir():
+        print(f"{fail} not a directory: {project}")
+        return 1
+    if model is not None and model not in ORCHESTRATOR_MODELS:
+        print(f"{fail} model must be one of {ORCHESTRATOR_MODELS} or omitted (reset), not {model!r}")
+        return 1
+    if model == "sonnet":
+        print(style.yellow(f"    {ORCHESTRATOR_SONNET_NOTE}"))
+    success, message = write_orchestrator_model(project, model)
+    if not success:
+        print(f"{fail} {message}")
+        return 1
+    print(f"{ok} {message}")
+    return 0
+
+
 def write_team_preferences(
     project: Path, extra_formats: Optional[list] = None, regulatory_citations: Optional[bool] = None
 ) -> bool:
@@ -2165,6 +2265,61 @@ def write_team_preferences(
         return True
     except OSError:
         return False
+
+
+ORCHESTRATOR_MODELS = ("opus", "sonnet")
+# CLAUDE.md's own recommendation: "Run the orchestrator on opus - routing, challenging
+# findings and §4/§5 calls are deep work." This is the value "reset to default" writes.
+ORCHESTRATOR_MODEL_DEFAULT = "opus"
+# Experimental, not a settled recommendation either way: in practice sonnet has performed
+# comparably to opus for orchestration in most engagements so far. Opus stays the
+# documented default specifically for critical/high-stakes engagements, where CLAUDE.md's
+# "routing, challenging findings and §4/§5 decisions are deep work" is the stronger claim.
+ORCHESTRATOR_SONNET_NOTE = (
+    "Experimental: in practice, sonnet has performed comparably to opus for orchestration "
+    "in most engagements. For critical or high-stakes engagements, prefer opus."
+)
+
+
+def write_orchestrator_model(project: Path, model: Optional[str]) -> tuple[bool, str]:
+    """Set Morgan's (the orchestrator's) model in <project>/.claude/settings.json's
+    top-level `model` key - the Claude Code setting that fixes a project's default
+    session model, overridable per-session via /model.
+
+    model=None resets to ORCHESTRATOR_MODEL_DEFAULT explicitly, rather than deleting the
+    key: an absent key falls back to Claude Code's own account/CLI default, which may not
+    be opus at all - that would silently reintroduce the exact quality risk this option
+    exists to let a human accept knowingly, under a label ("reset") that reads as safe.
+
+    Only the 16 named specialist subagents have their own `model:` frontmatter
+    (`.claude/agents/*.md`, edited directly); Morgan is the top-level session itself, so
+    this is the only lever for the orchestrator's own tier.
+
+    Merge-only (every other settings.json key preserved) and REFUSES on unparseable JSON
+    rather than risk clobbering hooks/permissions already wired there - same safety bar as
+    run_permissions, since this touches the same shared, higher-stakes file (unlike the
+    looser team-preferences.json helper above). Returns (ok, message)."""
+    if model is not None and model not in ORCHESTRATOR_MODELS:
+        raise ValueError(f"model must be one of {ORCHESTRATOR_MODELS} or None, not {model!r}")
+    target = project / ".claude" / "settings.json"
+    settings: dict = {}
+    if target.is_file():
+        try:
+            settings = json.loads(target.read_text(encoding="utf-8-sig"))
+            if not isinstance(settings, dict):
+                raise ValueError("settings root is not an object")
+        except (OSError, ValueError) as exc:
+            return False, f"{target} is not readable JSON ({exc}) - refusing to touch it"
+    settings["model"] = model or ORCHESTRATOR_MODEL_DEFAULT
+    try:
+        if target.is_file():
+            backup = target.with_suffix(target.suffix + ".bak")
+            backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    except OSError as exc:
+        return False, f"could not write {target} ({exc})"
+    return True, f"{target}: model -> {settings['model']}"
 
 
 def write_guard_interpreter_cache(project: Path) -> None:
@@ -2283,6 +2438,18 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="standalone: merge the README's recommended permissions.allow entries into "
         "PROJECT_DIR/.claude/settings.json (add-only, backs the file up first) and exit",
     )
+    parser.add_argument(
+        "--model-project",
+        metavar="PROJECT_DIR",
+        help="standalone, combine with --model: set or reset Morgan's model for "
+        "PROJECT_DIR and exit",
+    )
+    parser.add_argument(
+        "--model",
+        choices=[*ORCHESTRATOR_MODELS, "default"],
+        help="with --model-project: opus/sonnet, or 'default' to reset to opus "
+        "(CLAUDE.md's documented recommendation for the orchestrator)",
+    )
     return parser.parse_args(argv)
 
 
@@ -2362,13 +2529,16 @@ def _main(argv=None) -> int:
     global run_cmd
     args = parse_args(argv)
     style = Style(supports_color())
-    if args.enable_project or args.permissions:
+    if args.enable_project or args.permissions or args.model_project:
         # Scripting path: no banner, no menu.
         rc = 0
         for target in args.enable_project or []:
             rc = max(rc, run_enable_project(Path(target), style, marks()))
         if args.permissions:
             rc = max(rc, run_permissions(Path(args.permissions), style, marks()))
+        if args.model_project:
+            wanted = None if (args.model or "default") == "default" else args.model
+            rc = max(rc, run_orchestrator_model(Path(args.model_project), wanted, style, marks()))
         return rc
 
     if not args.demo:

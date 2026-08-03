@@ -98,6 +98,71 @@ def test_unarchive_round_trip(tmp_path):
     assert archived_slugs(root) == []
 
 
+# --- --slug accepted as an alias on archive/unarchive/set-active (2026-08-03) -------------
+# Live report: every other resolvable subcommand accepts `--slug TARGET_SLUG`, but these
+# three took their slug positionally with no --slug alias at all - `archive --slug X`
+# exited 2 with no hint that the flag wasn't accepted there.
+
+
+def test_archive_accepts_slug_flag_like_every_other_subcommand(tmp_path):
+    root = tmp_path / "artifacts"
+    pack = _closed_pack(root, "old-review")
+    assert es_main(["--dir", str(root), "archive", "--slug", "old-review"]) == 0
+    assert is_archived(pack)
+
+
+def test_unarchive_accepts_slug_flag(tmp_path):
+    root = tmp_path / "artifacts"
+    pack = _closed_pack(root, "old")
+    es_main(["--dir", str(root), "archive", "old"])
+    assert es_main(["--dir", str(root), "unarchive", "--slug", "old"]) == 0
+    assert not is_archived(pack)
+
+
+def test_set_active_accepts_slug_flag(tmp_path):
+    from scripts.engagement_state import read_active
+
+    root = tmp_path / "artifacts"
+    _closed_pack(root, "engagement-a")
+    assert es_main(["--dir", str(root), "set-active", "--slug", "engagement-a"]) == 0
+    assert read_active(root) == "engagement-a"
+
+
+def test_archive_slug_flag_works_after_the_subcommand_too(tmp_path):
+    # The positional already worked in this position; --slug previously did not (it was
+    # simply never declared on archive's own subparser).
+    root = tmp_path / "artifacts"
+    pack = _closed_pack(root, "old-review")
+    assert es_main(["--dir", str(root), "archive", "--slug", "old-review"]) == 0
+    assert is_archived(pack)
+
+
+def test_archive_still_refuses_with_neither_slug_nor_all_closed(tmp_path, capsys):
+    root = tmp_path / "artifacts"
+    assert es_main(["--dir", str(root), "archive"]) == 2
+    assert "give a" in capsys.readouterr().err
+
+
+def test_unarchive_still_refuses_with_no_slug(tmp_path, capsys):
+    root = tmp_path / "artifacts"
+    assert es_main(["--dir", str(root), "unarchive"]) == 2
+    assert "give a" in capsys.readouterr().err
+
+
+def test_set_active_still_refuses_with_no_slug(tmp_path, capsys):
+    root = tmp_path / "artifacts"
+    assert es_main(["--dir", str(root), "set-active"]) == 2
+    assert "give a" in capsys.readouterr().err
+
+
+def test_archive_positional_still_works_unchanged(tmp_path):
+    """Backward compatibility: the pre-existing positional form is untouched."""
+    root = tmp_path / "artifacts"
+    pack = _closed_pack(root, "old-review")
+    assert es_main(["--dir", str(root), "archive", "old-review"]) == 0
+    assert is_archived(pack)
+
+
 # ------------------------------------------------------------------ scan exclusion
 
 

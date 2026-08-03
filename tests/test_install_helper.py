@@ -361,6 +361,116 @@ def test_run_permissions_refuses_unparseable_settings(tmp_path, capsys):
     assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched
 
 
+# --- Morgan's model, settings.json write + CLI wrapper (2026-08-03) ----------------------
+
+
+def test_write_orchestrator_model_creates_settings_when_absent(tmp_path):
+    import json as _json
+
+    from install_helper import write_orchestrator_model
+
+    ok, msg = write_orchestrator_model(tmp_path, "opus")
+    assert ok
+    assert "model -> opus" in msg
+    written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert written["model"] == "opus"
+
+
+def test_write_orchestrator_model_none_resets_to_documented_default(tmp_path):
+    import json as _json
+
+    from install_helper import ORCHESTRATOR_MODEL_DEFAULT, write_orchestrator_model
+
+    ok, _ = write_orchestrator_model(tmp_path, "sonnet")
+    assert ok
+    ok, msg = write_orchestrator_model(tmp_path, None)  # "reset"
+    assert ok
+    assert f"model -> {ORCHESTRATOR_MODEL_DEFAULT}" in msg
+    written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert written["model"] == ORCHESTRATOR_MODEL_DEFAULT == "opus"
+
+
+def test_write_orchestrator_model_merges_and_preserves_other_keys(tmp_path):
+    import json as _json
+
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "settings.json").write_text(
+        '{"permissions": {"deny": ["Read(x)"]}, "statusLine": {"type": "command"}}',
+        encoding="utf-8",
+    )
+    from install_helper import write_orchestrator_model
+
+    ok, _ = write_orchestrator_model(tmp_path, "sonnet")
+    assert ok
+    written = _json.loads((claude / "settings.json").read_text(encoding="utf-8"))
+    assert written["model"] == "sonnet"
+    assert written["permissions"]["deny"] == ["Read(x)"]  # preserved
+    assert written["statusLine"] == {"type": "command"}  # preserved
+    assert (claude / "settings.json.bak").is_file()  # backed up
+
+
+def test_write_orchestrator_model_refuses_unparseable_settings(tmp_path):
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "settings.json").write_text("{broken", encoding="utf-8")
+    from install_helper import write_orchestrator_model
+
+    ok, msg = write_orchestrator_model(tmp_path, "opus")
+    assert not ok
+    assert "refusing" in msg
+    assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched
+
+
+def test_write_orchestrator_model_rejects_invalid_model_name(tmp_path):
+    from install_helper import write_orchestrator_model
+
+    with pytest.raises(ValueError):
+        write_orchestrator_model(tmp_path, "haiku")  # not offered for Morgan (yet)
+
+
+def test_run_orchestrator_model_success(tmp_path, capsys):
+    from install_helper import Style, marks, run_orchestrator_model
+
+    rc = run_orchestrator_model(tmp_path, "opus", Style(False), marks())
+    assert rc == 0
+    assert "model -> opus" in capsys.readouterr().out
+
+
+def test_run_orchestrator_model_notes_sonnet_is_experimental(tmp_path, capsys):
+    from install_helper import Style, marks, run_orchestrator_model
+
+    rc = run_orchestrator_model(tmp_path, "sonnet", Style(False), marks())
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "experimental" in out.lower()
+    assert "critical" in out.lower()  # prefer opus for critical/high-stakes engagements
+
+
+def test_run_orchestrator_model_reset_prints_no_sonnet_note(tmp_path, capsys):
+    from install_helper import Style, marks, run_orchestrator_model
+
+    rc = run_orchestrator_model(tmp_path, None, Style(False), marks())
+    assert rc == 0
+    assert "experimental" not in capsys.readouterr().out.lower()
+
+
+def test_run_orchestrator_model_refuses_bad_directory(tmp_path, capsys):
+    from install_helper import Style, marks, run_orchestrator_model
+
+    rc = run_orchestrator_model(tmp_path / "nope", "opus", Style(False), marks())
+    assert rc == 1
+    assert "not a directory" in capsys.readouterr().out
+
+
+def test_run_orchestrator_model_refuses_bad_model_name(tmp_path, capsys):
+    from install_helper import Style, marks, run_orchestrator_model
+
+    rc = run_orchestrator_model(tmp_path, "haiku", Style(False), marks())
+    assert rc == 1
+    assert "must be one of" in capsys.readouterr().out
+
+
 # --- Windows .cmd shim launch (2026-07-30) ------------------------------------------------
 
 
