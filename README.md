@@ -3,8 +3,8 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.6](https://img.shields.io/badge/version-0.33.6-blue)
-![Tests 1200+ passing](https://img.shields.io/badge/tests-1200%2B%20passing-brightgreen)
+![Version 0.33.7](https://img.shields.io/badge/version-0.33.7-blue)
+![Tests 1300+ passing](https://img.shields.io/badge/tests-1300%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 [![Quick start: one-page PDF](https://img.shields.io/badge/Quick%20start-one--page%20PDF-important)](docs/quick-start.pdf)
@@ -12,28 +12,27 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.6** (2026-08-01) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.7** (2026-08-03) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
-**Biggest features this cycle (0.33.0 to 0.33.6):**
-- 🔒 **Closed a real consent bypass.** `git config core.hooksPath` (and a few relatives) could
-  execute attacker-chosen code with no consent marker and no gate. Now blocked, alongside 3 more
-  raw-data guard gaps closed the same pass.
-- ✅ **The traceability spine can now be checked mechanically, not just documented.** BRD to FSD
-  to code to test to obligation is validated by `validate_rtm.py`, wired into the same gate that
-  checks everything else at close.
-- 💾 **Sessions survive compaction and crashes.** Engagement state lives on disk: a resumed
-  session never re-asks what you already told it, and a declined "run this code" can never be
-  silently upgraded to a yes.
-- 🪟 **Heavy corporate-Windows hardening.** Encoding crashes, a fake `python3` stub fooling the
-  interpreter probe, an unintuitive CLI flag order, and more, all fixed from a live corporate run.
-- 📊 **The eval pass rate now separates real failures from harness noise.** A run that crashed
-  used to count the same as a run that answered badly; the scorer now classifies pass / fail /
-  unscorable separately, so the reported rate reflects answer quality, not infrastructure hiccups.
+**Biggest features this cycle:**
+- 🪟 **The step-0 probe now tells the model whether it's on Windows.** Instead of inferring
+  Windows-ness from context at the moment it matters, `engage_probe.py` reports `OS=` as a fact -
+  same reasoning as why `INTERPRETER=` already exists. Closes a live miss where the PowerShell
+  exec-consent command was left out on a real Windows host.
+- ✅ **A mechanical gate gap closed.** A closed delivery report could still read `Status
+  \`Pending\`` with the DoD gate silent, because the check only ever looked for draft/in review/in
+  progress, never "pending" itself.
+- 🗂️ **A one-page quick-start reference, as a PDF.** Renders directly in GitHub's file viewer
+  (GitHub never renders `.html` inline); the whole mental model, the four steps to a first
+  engagement, and every command with when to reach for it.
+- 🚧 **The installer now defaults to `dev`, not `main`.** During this fast-moving PoC phase,
+  promoting to `main` is eval-gated and costs real API tokens, so `main` can lag `dev` noticeably -
+  a banner on `main` and the installer's own default both point new users at `dev` instead.
 
-**Also in this cycle:** optional `.docx` export · PDFs/DOCX now route through the proper converter
-automatically · closing an engagement runs a mechanical checklist that can refuse · one fixed
-folder per engagement · faster scans on projects with many old engagements · a native task-list
-progress panel.
+**Also in this cycle:** a "what Morgan cannot do" section stating the boundaries as plainly as
+the capabilities · the locked review-menu construction disambiguated from the intake gate's own
+batch · the engagement-flow poster's stale caption fixed and converted to PDF · three README
+redundancies trimmed.
 
 </td></tr>
 </table>

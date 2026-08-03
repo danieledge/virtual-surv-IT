@@ -3,6 +3,68 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.7] - 2026-08-03 - Windows-detection, a missed status word, and a docs pass from a live session
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+Three defects found by watching a real corporate-Windows session hit friction, plus a docs pass
+on the README and the quick-start reference.
+
+### Fixed
+- **The step-0 probe now reports `OS=Windows|POSIX`.** `safety-gates.md` already said to show the
+  PowerShell exec-consent command alongside the `!` form on Windows, but nothing put "this is
+  Windows" in front of the model as a fact at the moment it needed it - it had to infer that from
+  soft context, and on a live Windows host it gave the `!` form alone, which doesn't work in a
+  Windows terminal. `engage_probe.py` now emits `OS=` the same way `INTERPRETER=` already exists:
+  don't make the model infer something it can just be told. `safety-gates.md` and `SKILL.md`
+  updated to read the field instead of an unprompted "on Windows" clause.
+- **`check_artifacts.py`'s `_STALE_DOCSTATUS_RE` never checked for "pending".** A closed
+  `delivery-report.md` and its `.html` both still read `Status \`Pending\`` and the mechanical
+  gate stayed silent, because the regex only ever matched draft/in review/in progress. No
+  template's Status placeholder uses "pending" (they all say `Draft | In review | Approved`), so
+  it was always author-written scaffolding text, never a template artifact. Added the missing
+  alternative, symmetric with the existing "pending human sign-off" exception.
+- **`review-menu.md` now disambiguates from the intake gate's batch.** The locked review-type
+  call (`Depth`/`Performance`/`Fix-cycle`) and the separate intake-gate batch (`Work type`/
+  `Execution`/`Data safety`) used near-identical "batch these in one screen" phrasing with no
+  statement that they're different calls at different points in the flow, so a live session
+  carried `Execution` into the review-menu call. `locked_menu_guard.py` caught it and the model
+  recovered in the same turn, but the friction was real; the ambiguity is now closed at the
+  source.
+- **The engagement-flow poster's README caption was stale, not the poster.** It read "point-in-time
+  render at v0.28.0 - predates workspaces and the closing window" for a file that had actually
+  been updated the day before and was titled v0.33.6, already covering workspaces. Fixed the
+  caption and converted the poster to a PDF (renders directly on GitHub, same reasoning as the
+  quick-start reference) instead of a third-party proxy hardcoded to `main`.
+
+### Added
+- **`docs/quick-start.pdf`**, generated from `docs/quick-start.html`: GitHub never renders `.html`
+  files inline for security, so the file always showed as source. A PDF renders natively in
+  GitHub's own file viewer. All README references updated to lead with it.
+- **A "What Morgan cannot do" section** in README's Using-them, stating the boundaries as plainly
+  as the capabilities: execution consent, the raw-data directory, hook/settings edits, close
+  authority, advisory-agent write access, and QA gating are all things Morgan cannot do, each
+  citing the gate that actually enforces it.
+- **A banner on `main` pointing to `dev`**: during this fast-moving PoC phase, promoting `dev` to
+  `main` is eval-gated and costs real API tokens, so `main` can lag `dev` by weeks of real work.
+  Pushed directly to `main` (docs-only, no eval gate needed per `CONTRIBUTING.md`'s "small, safe
+  fixes" carve-out).
+- **The installer now defaults to the `dev` channel**, not `main`, with the same rationale as the
+  banner above - instance default, config fallback, interactive prompt wording and `--branch`
+  help text all updated; `main` stays a fully valid, explicit choice.
+
+### Changed
+- **README's top release-summary box restructured** from one dense paragraph into scannable
+  headline features plus a short "also in this cycle" line. Two bullets that read as admitting
+  the project had previously overclaimed ("most-marketed guarantee, backed by zero validating
+  code"; raw eval percentages) reworded to describe the mechanism added, not a correction of a
+  prior falsehood.
+- **Three README redundancies trimmed**: the "why a specialist team" bullets fully re-explained
+  what the Core Principles table already covers (condensed to a paragraph + link); the dormancy
+  mechanism was explained in full in two places (one now cross-references the other); the
+  model-tier split (opus/sonnet/haiku counts) was stated with rationale twice, a real drift risk
+  the project's own conventions already warn about (one now cites the other).
+
 ## [0.33.6] - 2026-08-01 - Framework audit remediation: guard escapes closed, traceability gated, eval numbers made readable
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
