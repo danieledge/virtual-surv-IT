@@ -18,17 +18,17 @@
 - 🔒 **Closed a real consent bypass.** `git config core.hooksPath` (and a few relatives) could
   execute attacker-chosen code with no consent marker and no gate. Now blocked, alongside 3 more
   raw-data guard gaps closed the same pass.
-- ✅ **The traceability spine finally has a validator.** BRD to FSD to code to test to obligation
-  was the product's most-marketed guarantee, backed by zero validating code. `validate_rtm.py`
-  checks it now.
+- ✅ **The traceability spine can now be checked mechanically, not just documented.** BRD to FSD
+  to code to test to obligation is validated by `validate_rtm.py`, wired into the same gate that
+  checks everything else at close.
 - 💾 **Sessions survive compaction and crashes.** Engagement state lives on disk: a resumed
   session never re-asks what you already told it, and a declined "run this code" can never be
   silently upgraded to a yes.
 - 🪟 **Heavy corporate-Windows hardening.** Encoding crashes, a fake `python3` stub fooling the
   interpreter probe, an unintuitive CLI flag order, and more, all fixed from a live corporate run.
-- 📊 **The eval pass rate is now honest.** Runs that crashed used to count the same as runs that
-  just answered badly. They're separated now, and the corrected number is published (47%, not the
-  old, unreadable 35%).
+- 📊 **The eval pass rate now separates real failures from harness noise.** A run that crashed
+  used to count the same as a run that answered badly; the scorer now classifies pass / fail /
+  unscorable separately, so the reported rate reflects answer quality, not infrastructure hiccups.
 
 **Also in this cycle:** optional `.docx` export · PDFs/DOCX now route through the proper converter
 automatically · closing an engagement runs a mechanical checklist that can refuse · one fixed
@@ -477,6 +477,23 @@ the specialists.
 > `/engage` (or another team command).
 > 🛡️ **Data safety always on**: raw data under `data/raw/` is **hard-blocked** from the model;
 > anything else carries **your attestation** it's masked or synthetic ([details](#-handling-real-data)).
+
+**What Morgan cannot do**, stated as plainly as the capabilities above:
+
+- **Cannot grant execution consent.** That marker exists only if a human creates it; Morgan hands
+  over the exact command to run, never writes it (CLAUDE.md §7).
+- **Cannot read `data/raw/`.** The read-guard hook blocks any read, search or command that
+  resolves into that folder, regardless of what the task seems to need.
+- **Cannot edit the safety hooks, `settings.json`, or its own consent marker.** The consent-write
+  gate blocks those writes on both the Write/Edit and Bash channels.
+- **Cannot declare an engagement done.** The Definition-of-Done gate runs a mechanical checklist
+  at close and refuses on any finding; "done" is what the tooling verifies, not what Morgan says.
+- **Cannot let an advisory agent touch code.** Reviewers, SMEs and the model validator hold no
+  Write/Edit tools by design; a finding routes back through Morgan to a builder.
+- **Cannot ship code without independent QA.** If execution consent is withheld, the close stays
+  marked partial and says so; it is never silently upgraded to a pass.
+
+Full detail: [The safety hooks](#-the-safety-hooks) · [Handling real data](#-handling-real-data).
 
 The PM **asks clarifying questions** (and waits for your answers, it won't guess scope,
 jurisdiction, data or success criteria), offers a **menu of documentary artifacts** to choose from
