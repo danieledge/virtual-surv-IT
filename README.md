@@ -8,6 +8,12 @@
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 
+> 🚧 **You're viewing `main`, the stable line - during this fast-moving proof-of-concept phase it
+> can lag noticeably behind `dev`.** Promoting `dev` to `main` is eval-gated (`CONTRIBUTING.md`):
+> it costs real API tokens to run, so it happens once there's enough accumulated work to justify
+> it, not on every commit. **For the latest features, fixes and docs, use the [`dev`
+> branch](https://github.com/danieledge/virtual-surv-IT/tree/dev) instead.**
+
 <table>
 <tr><td>
 
