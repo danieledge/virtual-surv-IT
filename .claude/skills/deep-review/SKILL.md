@@ -17,7 +17,7 @@ question** ("Other" is added automatically) - the constructions below are sized 
 un-bundle them back into a 7-option list:
 - **Dimensions** (header `Dimensions`, **`multiSelect: false`** - four locked bundles; a bespoke
   mix goes through "Other", e.g. *"bugs + docs only"*):
-  - **Full review (recommended)** - all seven dimensions: bugs & logic · security · architecture ·
+  - **Full review** - all seven dimensions: bugs & logic · security · architecture ·
     language-specific · docs/comments · style & form · compliance/audit.
   - **Core** - 🐛 bugs & logic + 🔐 security + 🧰 language-specific. *For a plain utility script.*
   - **Core + quality** - Core plus 📐 architecture + 📝 docs/comments + 🔵 style & form.
@@ -25,6 +25,13 @@ un-bundle them back into a 7-option list:
   Run only what was picked - don't force a dimension the user didn't choose. (A *dimension* is one
   of these seven scope axes; a *lens* is one of the files in `docs/review/lenses/`. The mapping is
   not 1:1 - the router owns it.)
+  - **Which to recommend is conditional, never a fixed default.** `compliance-reviewer` and
+    regulatory-citation retrieval cost real tokens for a check that only matters when there is a
+    §4/§5 trail to assess - don't spend them on general-purpose code by habit. **Recommend "Core +
+    quality"** unless the target plausibly touches detection logic, regulated data, or the
+    engagement is otherwise compliance-sensitive (ask if genuinely unclear from the target alone) -
+    **then recommend "Full review"** instead. Right-sizing applies to dimensions the same way it
+    applies to agent headcount.
 - **Breadth** (header `Breadth`, **`multiSelect: false`**, exactly one): the working diff ·
   named files/glob · whole module · whole repo.
 - **Mode** (header `Mode`, **`multiSelect: false`**): change review (filter pre-existing) **or**
