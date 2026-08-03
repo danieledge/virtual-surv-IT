@@ -14,6 +14,11 @@ axis is mutually exclusive) and waits - never invent scope, stakeholders or thre
 
 > If the need is already clear and you just need the BRD, use `/write-brd`.
 
+**The standard open applies before elicitation begins, even when this skill is invoked directly.**
+Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement Brief and
+`engagement_state init` (unless `/engage` already wrote them) before step 1, the closing bookend
+at the end.
+
 1. **Stakeholder analysis** - who's affected / consulted / decides (RACI), and their needs and
    concerns (`docs/templates/stakeholder-analysis.md`).
 2. **Elicit** - from the obligation/problem and any documents provided: interviews/workshop

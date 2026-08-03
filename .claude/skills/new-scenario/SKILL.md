@@ -16,6 +16,11 @@ are dormant** - when this workflow routes to another (`/build-solution`, `/hando
 `/audit-review`), read `.claude/skills/<name>/SKILL.md` and follow it in this session, never the
 Skill tool (`.claude/skills/.shared/run-mode.md`).
 
+**The standard open applies before any agent is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement
+Brief and `engagement_state init` (unless `/engage` already wrote them) before step 1, the closing
+bookend at the end.
+
 You are the orchestrator (CLAUDE.md §6). Do **not** write detection logic yourself - route
 each step to the right agent and chain them in this session:
 

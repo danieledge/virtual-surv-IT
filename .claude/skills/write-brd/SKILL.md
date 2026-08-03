@@ -6,6 +6,11 @@ disable-model-invocation: true
 
 Under the PM (CLAUDE.md §6), turn this idea into a BRD: **$ARGUMENTS**
 
+**The standard open applies before drafting begins, even when this skill is invoked directly.**
+Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement Brief and
+`engagement_state init` (unless `/engage` already wrote them) before step 1, the closing bookend
+at the end.
+
 1. Clarify first - **ask via the question tool, one question per axis** (scope, jurisdiction,
    success metrics); make any mutually-exclusive axis **single-select**; don't guess material
    decisions. If scope/stakeholders are unclear, start with `/elicit-requirements`.

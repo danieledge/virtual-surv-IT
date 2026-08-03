@@ -1,6 +1,8 @@
 # Shared: the standard open and close (Definition of Done)
 
-> Shared by the review/audit skills. Repo path:
+> Shared by any skill directly invocable outside `/engage` (review/audit skills and
+> `/remediate` alike - anything with its own slash command in the routing table needs the same
+> bookends). Repo path:
 > `.claude/skills/.shared/engagement-bookends.md`; installed plugin:
 > `$PLUGIN_ROOT/.claude/skills/.shared/engagement-bookends.md`. `<python>` and plugin-mode paths:
 > `.claude/skills/.shared/run-mode.md`. Full detail: `docs/team-operating-guide.md`.

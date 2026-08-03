@@ -20,6 +20,11 @@ FFIEC BSA/AML). It is **independent** of whoever tuned/built the model.
 `/tune-thresholds`, `/prepare-data`), read `.claude/skills/<name>/SKILL.md` and follow it in this
 session, never the Skill tool (`.claude/skills/.shared/run-mode.md`).
 
+**The standard open applies before any agent is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement
+Brief and `engagement_state init` (unless `/engage` already wrote them) before step 1, the closing
+bookend at the end.
+
 **1. Gather inputs - ask via the question tool, one question per axis; don't assume.** Ask as
 discrete, structured questions: which **scenario set / TM system**; where the **alert + outcome
 data** is (synthetic, masked, or data **attested safe** - at intake, or **confirm now if you

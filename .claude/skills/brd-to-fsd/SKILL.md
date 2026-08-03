@@ -6,6 +6,11 @@ disable-model-invocation: true
 
 Under the PM (CLAUDE.md §6), turn the BRD into an FSD: **$ARGUMENTS**
 
+**The standard open applies before drafting begins, even when this skill is invoked directly.**
+Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement Brief and
+`engagement_state init` (unless `/engage` already wrote them) before step 1, the closing bookend
+at the end.
+
 1. Route to **business-analyst** to draft using `docs/templates/fsd.md` (plugin mode:
    `$PLUGIN_ROOT/docs/templates/fsd.md` - pass the RESOLVED absolute path in the brief; the
    template missing from the WORKING repo is never a blocker, it ships in the plugin); have the

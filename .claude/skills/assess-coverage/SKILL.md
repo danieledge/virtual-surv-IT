@@ -28,6 +28,11 @@ directly** rather than via `/engage` - check via the question tool that any data
 synthetic/masked or carries no prohibited PII/MNPI (§5); on a no/unsure answer, prefer
 `/prepare-data` (`data/raw/` is hard-blocked either way).
 
+**The standard open applies before any agent is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement
+Brief and `engagement_state init` (unless `/engage` already wrote them) before step 1, the closing
+bookend at the end.
+
 1. **Map the scope** - in-scope risks / typologies / products / venues / desks / comms channels
    (from the obligation; the SME confirms what *should* be surveilled).
 2. **Map scenario coverage** - each typology → the detection scenario(s) that cover it. **Flag any

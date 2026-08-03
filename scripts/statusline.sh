@@ -27,12 +27,12 @@ PY_BIN=""
 for c in python3 python py; do
   "$c" --version >/dev/null 2>&1 && PY_BIN="$c" && break
 done
-[ -z "$PY_BIN" ] && { printf '🕶 virt-surv-IT'; exit 0; }
+[ -z "$PY_BIN" ] && { printf '😴 virt-surv-IT'; exit 0; }
 
 # PYTHONUTF8: on Windows, Python encodes piped stdout with the locale codepage
 # (cp1252), so printing the emoji marks raised UnicodeEncodeError and every render
 # fell to the static fallback - glasses, no stats (live report 2026-07-30).
-PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY_BIN" - "$INPUT" 2>/dev/null <<'PY' || printf '🕶 virt-surv-IT'
+PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY_BIN" - "$INPUT" 2>/dev/null <<'PY' || printf '😴 virt-surv-IT'
 import json, sys
 from pathlib import Path
 
@@ -81,7 +81,7 @@ if art.is_dir():
         more = f" +{len(rows) - 1}" if len(rows) > 1 else ""
         live = f"🎩 {label}{MARKS.get(status, status)} {status}·{phase}{more}"
 
-bits.append(live if live else "🕶 team dormant")
+bits.append(live if live else "😴 team dormant")
 if model:
     bits.append(model)
 if isinstance(cost, (int, float)) and cost > 0:

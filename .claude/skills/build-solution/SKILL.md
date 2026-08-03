@@ -10,6 +10,11 @@ Under the PM (CLAUDE.md §6), deliver end to end from the requirements: **$ARGUM
 deliverable built from a requirements pack. For a *single* detection scenario (one rule,
 spec → SME → build → review), use `/new-scenario` - the lean path - instead.
 
+**The standard open applies before any unit is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement
+Brief and `engagement_state init` (unless `/engage` already wrote them) before step 1, the closing
+bookend at the end.
+
 Run the **orchestrator-workers** pattern, agile and iterative:
 
 1. **Fill gaps flexibly.** If there's no BRD/FSD yet, run `/write-brd` then `/brd-to-fsd`

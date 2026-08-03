@@ -17,6 +17,11 @@ sections below as headings - not separate files. Ask if the user instead wants s
 artifacts (e.g. a separate change request to attach to a ticket); the standalone templates
 named below are the building blocks.
 
+**The standard open applies before any agent is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow its opening bookend
+(unless `/engage` already wrote it) before step 1 - this skill produces its own closing artifacts
+below, so only the open half of the shared file applies here.
+
 1. **QA evidence (independent).** Route to **qa-engineer**: run the tests, capture exact
    commands, results and counts; assess coverage and **what is NOT covered**; list residual
    risk, defects, and items the QA team should re-verify. → *QA* section (or `qa-handover.md`).

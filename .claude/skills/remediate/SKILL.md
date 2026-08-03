@@ -12,6 +12,15 @@ paste it) and wait - don't assume a target.
 PM oversees an agile remediation loop (CLAUDE.md §6; gate: `docs/DEFINITION-OF-DONE.md`).
 This is **audit mode** - pre-existing issues are in scope, not filtered out.
 
+**The standard open applies before any agent is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow the opening bookend -
+the Engagement Brief and `<python> -m scripts.engagement_state init` (unless `/engage` already
+wrote them) - **before** step 1 below, not once a user question prompts it. A characterisation-test
+or fix-pass agent running with no engagement state open means nothing on disk records the work as
+live, which is exactly the gap a live report (2026-08-03) found: four specialists running in the
+background while the state file still said what `init` had never set. The standard close applies
+too, at the end.
+
 **Chained skills are dormant** - where a step routes to another workflow (`/deep-review`,
 `/performance-review`, `/handover`), read `.claude/skills/<name>/SKILL.md` and follow it in this
 session, never the Skill tool (`.claude/skills/.shared/run-mode.md`).
