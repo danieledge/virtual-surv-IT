@@ -10,6 +10,11 @@ a closing summary of the actions that stay manual (per-project enablement, a ses
 restart - the hooks ship pre-wired; apply-*.sh scripts are maintainer tools, not user
 steps).
 
+Default channel is currently **dev**, not main: this is a fast-moving proof-of-concept
+phase, and promoting dev to main is eval-gated (CONTRIBUTING.md) - it costs real API
+tokens to run, so it happens once there's enough accumulated work to justify it, not on
+every dev commit. main can lag dev by weeks of real fixes and docs during this phase.
+
 Run with no arguments on a terminal and a menu offers the subsets: full run, environment
 setup only (no code pull), status line only, per-project enablement, or a demo. The CLI
 flags remain the non-interactive equivalents for scripts and CI.
@@ -924,7 +929,7 @@ def check_for_update_upfront(cfg: dict, style: Style, args) -> None:
     if not looks_like_repo(repo):
         return
     branch = cfg.get("branch")
-    branch = branch if branch in BRANCHES else "main"
+    branch = branch if branch in BRANCHES else "dev"
     try:
         proc = run_cmd(["git", "-C", repo, "fetch", "origin", branch], timeout=8)
     except (subprocess.TimeoutExpired, OSError):
@@ -1045,7 +1050,7 @@ class Installer:
         self.cfg_path = config_path()
         self.cfg = load_config(self.cfg_path)
         self.repo: Optional[Path] = None
-        self.branch = "main"
+        self.branch = "dev"
         self.mode = "install"
         self.stashed = False
         self.code_stale = False  # user declined the update: clone used as-is
@@ -1131,8 +1136,12 @@ class Installer:
             self.step_skip("GitHub remote", "check timed out - clone/fetch may fail")
 
     def choose_branch(self) -> None:
-        default = self.args.branch or self.cfg.get("branch", "main")
-        self.step_intro("Picking your release channel - main is stable, dev is the latest work.")
+        default = self.args.branch or self.cfg.get("branch", "dev")
+        self.step_intro(
+            "Picking your release channel - dev is the recommended default right now: this is"
+            " a fast-moving proof-of-concept phase, and promoting dev to main is eval-gated"
+            " (it costs real API tokens to run), so main can lag noticeably behind."
+        )
         while True:
             picked = ask(
                 "  Which channel shall I track for you (main/dev)?",
@@ -1489,7 +1498,7 @@ class Installer:
                 )
                 return
         branch = self.cfg.get("branch")
-        branch = branch if branch in BRANCHES else "main"
+        branch = branch if branch in BRANCHES else "dev"
         proc = run_cmd(["git", "-C", repo, "fetch", "origin", branch], timeout=300)
         if proc.returncode != 0:
             self.step_fail(
@@ -2236,7 +2245,11 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="install = fresh clone + plugin install; update = sync an existing clone; "
         "default shows the menu on a terminal, else auto-detects from the saved config",
     )
-    parser.add_argument("--branch", choices=list(BRANCHES), help="release channel (main = stable)")
+    parser.add_argument(
+        "--branch",
+        choices=list(BRANCHES),
+        help="release channel (dev = recommended default during this PoC phase, main = stable but can lag)",
+    )
     parser.add_argument("--repo", help="path to the clone (overrides the saved location)")
     parser.add_argument("--yes", action="store_true", help="non-interactive, safe defaults")
     parser.add_argument(
