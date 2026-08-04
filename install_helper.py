@@ -1078,9 +1078,13 @@ def choose_action(style: Style) -> str:
                 "Diagnostics",
                 (
                     ("1", "Check for updates (read-only - shows what an update would bring)"),
-                    ("2", "Check analyser output cleanliness"),
-                    ("3", "Comprehensive environment check"),
-                    ("4", "Self-test (a throwaway synthetic 'review this code' engagement)"),
+                    ("2", "Quick: analyser output cleanliness only"),
+                    (
+                        "3",
+                        "Comprehensive: everything in Quick, plus interpreters/guard hooks/"
+                        "repo syntax/the synthetic engagement",
+                    ),
+                    ("4", "Self-test only (just the synthetic 'review this code' engagement)"),
                     ("b", "Back"),
                 ),
                 _DIAGNOSTICS_ACTIONS,
@@ -1438,7 +1442,7 @@ class Installer:
                     "  install_helper.py itself was updated - restarting with the new version..."
                 )
             )
-            child_argv = _argv_from_args(self.args, repo=self.repo, branch=self.branch)
+            child_argv = _argv_from_args(self.args, repo=self.repo, branch=self.branch, mode=self.mode)
             proc = subprocess.run(  # fixed argv (sys.executable + freshly-pulled script), shell=False  # nosec B603
                 [sys.executable, str(new_script), *child_argv]
             )
@@ -3137,6 +3141,45 @@ def _resolve_repo_root(repo_hint: Optional[str] = None) -> Optional[Path]:
     return fallback if looks_like_repo(fallback) else None
 
 
+def _verify_alias_line(label: str, rc_path: Path, line: str) -> tuple:
+    """Runs the JUST-WRITTEN alias/function definition in isolation - not the whole rc
+    file, whose unrelated content is out of scope and risky to execute - and confirms
+    'virt-surv' actually resolves. Catches a syntax/quoting mistake (or, on Windows, an
+    execution-policy block) immediately instead of only when the user opens a new
+    terminal and it silently doesn't work (2026-08-04 user request: "harden the alias
+    creation ... include test of the alias"). Best-effort: if the shell needed to verify
+    isn't itself available, that's reported as a note, not a failure - the line was
+    still written correctly as far as this process can tell."""
+    if rc_path.suffix == ".ps1":
+        exe = "powershell.exe" if "5.1" in label else "pwsh.exe"
+        found = shutil.which(exe)
+        if not found:
+            return (True, f"{exe} not on PATH here - could not verify, but the line was written")
+        cmd = [
+            found,
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            f"{line}; Get-Command {_ALIAS_MARKER} -ErrorAction Stop | Out-Null",
+        ]
+    else:
+        bash = find_bash()
+        if not bash:
+            return (True, "bash not found - could not verify, but the line was written")
+        # expand_aliases is OFF by default in non-interactive bash (bash -c), so a plain
+        # `alias virt-surv=...; type virt-surv` would falsely report "not found" even for
+        # a perfectly correct alias line - must be enabled explicitly first.
+        cmd = [bash, "-c", f"shopt -s expand_aliases\n{line}\ntype {_ALIAS_MARKER} >/dev/null"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return (False, f"verification failed to run: {exc}")
+    if proc.returncode == 0:
+        return (True, "resolves cleanly")
+    detail = (proc.stderr or proc.stdout or "").strip()[:150]
+    return (False, f"was written but does not resolve cleanly: {detail}")
+
+
 def run_setup_alias(
     style: Style,
     mark_map: dict,
@@ -3209,12 +3252,21 @@ def run_setup_alias(
         except OSError as exc:
             print(f"{fail} could not write {rc_path}: {exc}")
             had_error = True
+            continue
+        verified, note = _verify_alias_line(label, rc_path, line)
+        if verified:
+            print(f"  {ok} verified: {note}")
+        else:
+            print(f"  {fail} verification failed: {note}")
+            had_error = True
     if wrote_any:
         print(
             style.dim(
-                "\nOpen a new terminal (or re-source your shell config) for it to take "
-                "effect. Then: cd into any project and run 'virt-surv configure', "
-                "'virt-surv archive', or 'virt-surv list-engagements'."
+                "\nA new terminal picks this up automatically. To use it in THIS "
+                "session instead: POSIX shells - `source` your rc file (e.g. `source "
+                "~/.bashrc`); PowerShell - `. $PROFILE` (PowerShell does not auto-reload "
+                "its profile mid-session). Then: cd into any project and run 'virt-surv "
+                "configure', 'virt-surv archive', or 'virt-surv list-engagements'."
             )
         )
     return 1 if had_error else 0
@@ -4066,27 +4118,29 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--check-tools",
         action="store_true",
-        help="standalone: verify code-reviewer's analysers (gitleaks, bandit, mypy, "
-        "ruff - semgrep/pip-audit deliberately excluded) actually produce clean output "
-        "with their recommended flags on THIS machine, and exit - environment/terminal "
-        "detection for suppressing color and progress spinners is not guaranteed uniform "
-        "across platforms",
+        help="standalone, QUICK: verify code-reviewer's analysers (gitleaks, bandit, "
+        "mypy, ruff - semgrep/pip-audit deliberately excluded) actually produce clean "
+        "output with their recommended flags on THIS machine, and exit - use this for a "
+        "fast recheck after installing/removing an analyser; --check-env below runs this "
+        "PLUS a lot more, so use --check-tools when you specifically only want this",
     )
     parser.add_argument(
         "--check-env",
         action="store_true",
-        help="standalone: comprehensive environment report - interpreter resolution, "
-        "guard hooks, encoding round-trip, the plugin-root bootstrap, bash, and analyser "
-        "output cleanliness - and exit; the broader diagnostic --check-tools' own section "
-        "is folded into",
+        help="standalone, COMPREHENSIVE (includes --check-tools' own check plus "
+        "everything else): interpreter resolution, git/claude CLI, guard hooks, "
+        "encoding round-trip, the plugin-root bootstrap, every repo .py file's syntax, "
+        "analyser output cleanliness, AND the --selftest synthetic engagement - one full "
+        "report ending in a pass/fail summary, and exit. The slower, complete diagnostic "
+        "- reach for this first when reporting an environment issue",
     )
     parser.add_argument(
         "--selftest",
         action="store_true",
-        help="standalone: a throwaway synthetic 'review this code' engagement exercising "
-        "guard hooks, real analyser detection and the full engagement-state lifecycle - "
-        "no LLM/Claude Code invocation, no network - and exit; writes a debug bundle on "
-        "any failure",
+        help="standalone: just the synthetic 'review this code' engagement (planted-"
+        "issue detection + the full engagement-state lifecycle) that --check-env also "
+        "runs as its final section - no LLM/Claude Code invocation, no network - and "
+        "exit; writes a debug bundle on any failure",
     )
     parser.add_argument(
         "--configure",
@@ -4124,15 +4178,26 @@ def parse_args(argv=None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _argv_from_args(args: argparse.Namespace, repo: Path, branch: str) -> list:
+def _argv_from_args(args: argparse.Namespace, repo: Path, branch: str, mode: Optional[str] = None) -> list:
     """Rebuild an equivalent CLI argv from a parsed Namespace, with repo/branch pinned to
     what THIS run already resolved. Used only for the self-update re-exec
     (Installer._reexec_if_self_updated) - --repo/--branch stop the restarted process from
     re-asking choices already made; --enable-project/--permissions are deliberately
-    omitted since that scripting path exits _main() before an Installer ever runs."""
+    omitted since that scripting path exits _main() before an Installer ever runs.
+
+    `mode`: the RESOLVED install/update mode (self.mode, always concrete by the time a
+    self-update relaunch can fire) - NOT args.mode, which is often still None (the user
+    picked "1) Install or update" from the menu rather than passing a positional arg).
+    Without this, the relaunched child's args.mode would be None too, so it would land
+    back on the interactive menu instead of continuing straight through - live-caught,
+    2026-08-04: after a self-update relaunch, "it's not clear to the user that they may
+    still have to [pick] a full install again to see the new options" - jumping straight
+    into the full flow (matching what the user was already mid-way through doing) is the
+    fix, not re-showing a menu they already got past once this run."""
     argv = []
-    if args.mode:
-        argv.append(args.mode)
+    resolved_mode = mode or args.mode
+    if resolved_mode:
+        argv.append(resolved_mode)
     argv += ["--branch", branch, "--repo", str(repo)]
     if args.yes:
         argv.append("--yes")

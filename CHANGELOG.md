@@ -3,6 +3,34 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.15] - 2026-08-04 - Alias verification, a self-update relaunch fix, clearer diagnostic naming
+
+### Added
+- The alias/function line is now VERIFIED immediately after being written, not just
+  written: the exact line is evaluated in isolation (POSIX via `bash -c`, PowerShell via
+  `powershell.exe`/`pwsh.exe -Command`) and `virt-surv` must actually resolve, catching a
+  quoting/syntax mistake immediately rather than only when a user opens a new terminal
+  and it silently doesn't work. Failed verification now surfaces as a real failure
+  (non-zero exit), not a silent false "added".
+- The post-write guidance is now specific per shell: PowerShell needs `. $PROFILE`
+  (PowerShell does not auto-reload its profile mid-session) rather than a generic
+  "re-source your shell config" line that read as POSIX-only.
+
+### Fixed
+- The self-update relaunch (mid-install, when the sync step pulls a newer
+  `install_helper.py`) passed `args.mode` to the restarted child, which is often still
+  `None` (the user picked "1) Install or update" from the menu rather than a positional
+  CLI arg) - so the relaunched child landed back on the interactive menu instead of
+  continuing straight through, with nothing explaining that new menu options need a full
+  install to actually appear. Now passes the RESOLVED mode explicitly, so the relaunch
+  jumps straight into the full flow the user was already mid-way through.
+
+### Changed
+- `--check-tools`/`--check-env`/`--selftest` help text and the Diagnostics submenu labels
+  now state the relationship explicitly (Quick vs Comprehensive-includes-Quick-plus-more
+  vs the synthetic-engagement-only piece), instead of three similarly-worded options with
+  no stated relationship between them.
+
 ## [0.33.14] - 2026-08-04 - PowerShell profile detection fixed for folder redirection; diagnostics folded together
 
 ### Fixed

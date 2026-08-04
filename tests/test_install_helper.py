@@ -1128,6 +1128,45 @@ def test_sync_reexecs_when_install_helper_itself_changed(monkeypatch, tmp_path, 
     assert "restarting with the new version" in out
 
 
+def test_sync_reexec_passes_resolved_mode_not_args_mode(monkeypatch, tmp_path):
+    """Live-caught, 2026-08-04: a user who picks "1) Install or update" from the menu
+    (rather than passing a positional install/update arg) has args.mode == None even
+    though self.mode was already resolved to a concrete value earlier in run(). The
+    OLD code passed args.mode straight through, so the relaunched child ALSO saw
+    args.mode=None and landed back on the interactive menu instead of continuing
+    straight through the full flow the user was already mid-way through - confusing,
+    since nothing on screen explains that new menu options need a full install first.
+    The fix threads self.mode (always concrete by the time a re-exec can fire) through
+    explicitly."""
+    import subprocess as sp
+
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    (clone / "install_helper.py").write_text("NEW VERSION", encoding="utf-8")
+    running_copy = tmp_path / "old_install_helper.py"
+    running_copy.write_text("OLD VERSION", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(running_copy))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0, stdout=""))
+    spawned = {}
+    monkeypatch.setattr(sp, "run", lambda argv, **k: spawned.setdefault("argv", argv) and _FakeProc(7))
+    # mode=None (as parse_args gives when the user picked from the menu, not a CLI arg) -
+    # but self.mode gets resolved to "update" by run() before sync_branch ever executes,
+    # exactly as it would on a real menu-driven run.
+    inst = ih.Installer(_args(yes=True, branch="main", mode=None), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.branch = "main"
+    inst.mode = "update"
+    with pytest.raises(SystemExit):
+        inst.sync_branch()
+    assert "update" in spawned["argv"]
+    # The child must therefore skip the interactive menu (args.mode is no longer None)
+    # and jump straight into the full flow - proven at the parse_args level:
+    reparsed = ih.parse_args(spawned["argv"][2:])
+    assert reparsed.mode == "update"
+
+
 def test_sync_does_not_reexec_when_install_helper_unchanged(monkeypatch, tmp_path):
     """The common case (an update that doesn't touch install_helper.py, or no new
     commits at all) must never spawn a second process."""
@@ -3362,6 +3401,55 @@ def test_setup_alias_write_error_is_reported(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "open", boom_open)
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 1
+
+
+# --- alias verification (2026-08-04 user request: "harden ... include test of the alias") -----
+
+
+def test_verify_alias_line_posix_success():
+    import install_helper as ih
+
+    ok, note = ih._verify_alias_line(
+        "bash", Path("/fake/.bashrc"), f"alias {ih._ALIAS_MARKER}='echo hi'"
+    )
+    assert ok is True
+    assert "resolves cleanly" in note
+
+
+def test_verify_alias_line_posix_catches_bad_syntax():
+    """expand_aliases quirk aside, a genuinely broken line (unbalanced quote) must be
+    caught, not silently reported as working."""
+    import install_helper as ih
+
+    ok, note = ih._verify_alias_line(
+        "bash", Path("/fake/.bashrc"), f"alias {ih._ALIAS_MARKER}='echo \"unbalanced"
+    )
+    assert ok is False
+    assert "does not resolve cleanly" in note
+
+
+def test_verify_alias_line_missing_shell_is_not_a_failure(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "find_bash", lambda: None)
+    ok, note = ih._verify_alias_line("bash", Path("/fake/.bashrc"), "alias x='y'")
+    assert ok is True
+    assert "could not verify" in note
+
+
+def test_setup_alias_write_error_from_verification_sets_had_error(tmp_path, monkeypatch):
+    """A write that succeeds but verifies as broken must still surface as rc=1 - the
+    whole point of hardening is not silently claiming success on a non-working alias."""
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    monkeypatch.setattr(ih, "_verify_alias_line", lambda label, rc_path, line: (False, "simulated broken alias"))
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 1
+    # The file write itself still succeeded - verification failing doesn't undo it.
+    assert "alias virt-surv=" in (home / ".bashrc").read_text(encoding="utf-8")
 
 
 def test_powershell_profile_candidates_windows_only(tmp_path, monkeypatch):
