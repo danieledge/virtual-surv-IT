@@ -3512,7 +3512,13 @@ def test_top_level_menu_actions_are_the_expected_six():
 def test_diagnostics_submenu_full_mapping():
     from install_helper import _DIAGNOSTICS_ACTIONS
 
-    assert _DIAGNOSTICS_ACTIONS == {"1": "check", "2": "toolcheck", "3": "envcheck", "b": "back"}
+    assert _DIAGNOSTICS_ACTIONS == {
+        "1": "check",
+        "2": "toolcheck",
+        "3": "envcheck",
+        "4": "selftest",
+        "b": "back",
+    }
 
 
 def test_advanced_submenu_full_mapping():
@@ -3956,3 +3962,147 @@ def test_format_preferences_step_review_tools_save_as_default(tmp_path, monkeypa
     inst.format_preferences_step()
     saved = json.loads((cfg_home / "virt-surv-it" / "installer.json").read_text())
     assert saved["default_review_tools"] == {"gitleaks": "off"}
+
+
+# --- --selftest: mechanical smoke test of a "review this code" engagement ---------------------
+
+
+def test_selftest_findings_pack_is_schema_valid(tmp_path):
+    """The synthetic pack must actually satisfy docs/review/findings-schema.json - proves
+    render_findings.py's real validate-then-render path, not a shortcut."""
+    from scripts.validate_findings import load_and_validate
+    import install_helper as ih
+
+    pack = ih._selftest_findings_pack("selftest-demo")
+    pack_path = tmp_path / "pack.json"
+    pack_path.write_text(json.dumps(pack), encoding="utf-8")
+    assert load_and_validate(pack_path) == []
+
+
+def test_diagnostics_menu_includes_selftest():
+    from install_helper import _DIAGNOSTICS_ACTIONS
+
+    assert _DIAGNOSTICS_ACTIONS["4"] == "selftest"
+
+
+def test_build_plan_selftest_subset():
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="selftest")
+    plan = inst.build_plan()
+    assert len(plan) == 1
+    assert plan[0][0] == "Self-test"
+    assert plan[0][1] == inst.selftest_step
+
+
+def test_selftest_cli_flag_dispatches(monkeypatch):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(
+        ih, "run_selftest", lambda style, mm, repo_hint=None: called.append(repo_hint) or 0
+    )
+    rc = ih._main(["--selftest", "--repo", "/some/repo"])
+    assert rc == 0
+    assert called == ["/some/repo"]
+
+
+def test_selftest_step_passes_repo_hint(monkeypatch):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(
+        ih, "run_selftest", lambda style, mm, repo_hint=None: called.append(repo_hint) or 0
+    )
+    inst = ih.Installer(_args(yes=True, repo="/hinted/repo"), ih.Style(False), ih.marks())
+    inst.selftest_step()
+    assert called == ["/hinted/repo"]
+
+
+def test_run_selftest_all_ok_returns_zero_and_writes_no_bundle(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [("guard", "OK", "clean")])
+    monkeypatch.setattr(ih, "_check_repo_py_syntax", lambda interp, root: [("syntax", "OK", "clean")])
+    monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found")])
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)  # bandit -> SKIP
+
+    def fake_run(argv, cwd=None, capture_output=True, text=True, timeout=None):
+        if "set-status" in argv and "closed" in argv:
+            return _proc(1, stdout="", stderr="CLOSE-REFUSED: simulated")
+        return _proc(0, stdout="", stderr="")
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    rc = ih.run_selftest(ih.Style(False), ih.marks())
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Self-test passed" in out
+    assert not list(tmp_path.glob("virt-surv-selftest-*.txt"))
+
+
+def test_run_selftest_failure_writes_debug_bundle(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    monkeypatch.setattr(
+        ih,
+        "_check_guard_hooks",
+        lambda interp, root, tmp: [("Bash (guard test)", "ERROR", "simulated failure")],
+    )
+    monkeypatch.setattr(ih, "_check_repo_py_syntax", lambda interp, root: [("syntax", "OK", "clean")])
+    monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found")])
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+
+    def fake_run(argv, cwd=None, capture_output=True, text=True, timeout=None):
+        if "set-status" in argv and "closed" in argv:
+            return _proc(1, stdout="", stderr="CLOSE-REFUSED: simulated")
+        return _proc(0, stdout="", stderr="")
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    rc = ih.run_selftest(ih.Style(False), ih.marks())
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "issue(s) found" in out
+    bundles = list(tmp_path.glob("virt-surv-selftest-*.txt"))
+    assert len(bundles) == 1
+    content = bundles[0].read_text(encoding="utf-8")
+    assert "simulated failure" in content
+    assert "Bash (guard test)" in content
+    assert "Python:" in content and "Platform:" in content
+
+
+def test_run_selftest_close_gate_error_when_not_refused(monkeypatch, tmp_path, capsys):
+    """If set-status closed unexpectedly SUCCEEDS (or fails for a different reason), that
+    is itself a failure - the whole point is proving the gate has real teeth."""
+    import install_helper as ih
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [])
+    monkeypatch.setattr(ih, "_check_repo_py_syntax", lambda interp, root: [])
+    monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [])
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: _proc(0, stdout="", stderr=""))
+    rc = ih.run_selftest(ih.Style(False), ih.marks())
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "expected a CLOSE-REFUSED block" in out
+
+
+def test_selftest_end_to_end_real_scripts(tmp_path, monkeypatch):
+    """No mocking of engagement_state.py/render_findings.py/bandit - the real thing,
+    against this actual repo clone. The strongest proof the mechanism works, matching
+    how it will actually run for a user hitting --selftest for real."""
+    import shutil as _shutil
+
+    import install_helper as ih
+
+    if _shutil.which("bandit") is None:
+        pytest.skip("bandit not installed in this environment")
+    monkeypatch.chdir(tmp_path)
+    rc = ih.run_selftest(ih.Style(False), ih.marks())
+    assert rc == 0
+    assert not list(tmp_path.glob("virt-surv-selftest-*.txt"))

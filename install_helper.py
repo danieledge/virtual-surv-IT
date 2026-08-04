@@ -1008,6 +1008,7 @@ _DIAGNOSTICS_ACTIONS = {
     "1": "check",
     "2": "toolcheck",
     "3": "envcheck",
+    "4": "selftest",
     "b": "back",
 }
 _ADVANCED_ACTIONS = {
@@ -1079,6 +1080,7 @@ def choose_action(style: Style) -> str:
                     ("1", "Check for updates (read-only - shows what an update would bring)"),
                     ("2", "Check analyser output cleanliness"),
                     ("3", "Comprehensive environment check"),
+                    ("4", "Self-test (a throwaway synthetic 'review this code' engagement)"),
                     ("b", "Back"),
                 ),
                 _DIAGNOSTICS_ACTIONS,
@@ -2118,6 +2120,25 @@ class Installer:
                 fatal=False,
             )
 
+    def selftest_step(self) -> None:
+        """Standalone, easily re-runnable (menu option 11): a throwaway synthetic
+        'review this code' engagement - guard hooks, real analyser detection, and the
+        engagement-state lifecycle end to end. No LLM involved; see run_selftest's own
+        docstring for the full rationale."""
+        self.step_intro(
+            "A throwaway synthetic engagement: guard hooks, real analyser detection on "
+            "a planted issue, and the engagement-state lifecycle (init/findings/render/"
+            "close-gate/archive) end to end - no LLM invocation, no network."
+        )
+        if run_selftest(self.style, self.marks, self.args.repo) == 0:
+            self.step_ok("Self-test", "the engagement substrate works on this machine")
+        else:
+            self.step_fail(
+                "Self-test",
+                "see detail above and the debug bundle - informational, not a blocker",
+                fatal=False,
+            )
+
     def enable_step(self) -> None:
         """Optional: enable the team for a project right now, and offer the recommended
         permission allow-list for the same project. Interactive only - non-interactive
@@ -2309,6 +2330,10 @@ class Installer:
         if self.subset == "envcheck":
             return [
                 ("Comprehensive environment check", self.env_check_step),
+            ]
+        if self.subset == "selftest":
+            return [
+                ("Self-test", self.selftest_step),
             ]
         return [
             ("Preflight checks", self.preflight),
@@ -3687,6 +3712,202 @@ def run_env_check(style: Style, mark_map: dict, repo_hint: Optional[str] = None)
     return 0
 
 
+# ------------------------------------------------------------------ self-test (mechanical smoke test)
+#
+# 2026-08-04 user request: a lightweight but MEANINGFUL validation of a "review this code"
+# engagement's real mechanical substrate - not another presence probe, but proof the pieces
+# actually work together on this machine, with full debug detail captured to a file on any
+# failure (so a report can be one attachment instead of a screenshot). Deliberately does NOT
+# invoke Claude Code/an LLM - that needs the Agent SDK, a venv, real API tokens and network
+# (scripts/eval_engage.py already exists for that heavier, opt-in-at-milestones purpose).
+
+_SELFTEST_PLANTED_ISSUE_PY = 'password = "hunter2"\n'  # bandit B105 - reliably flagged
+
+
+def _selftest_findings_pack(slug: str) -> dict:
+    """A minimal but schema-valid findings pack (docs/review/findings-schema.json) - proves
+    render_findings.py's full validate-then-render path, not just that the file parses."""
+    return {
+        "slug": slug,
+        "kind": "review",
+        "scope": "selftest_target.py",
+        "mode": "change",
+        "verdict": "conditional",
+        "findings": [
+            {
+                "id": "SEC-1",
+                "title": "Hardcoded credential (planted for selftest - not a real finding)",
+                "severity": "critical",
+                "location": "selftest_target.py:1",
+                "basis": "measured",
+                "standard": "CWE-259",
+                "problem": "planted for selftest - not a real finding",
+                "likely_cause": "n/a (synthetic)",
+                "impact": "n/a (synthetic)",
+                "fix": {"diff": "n/a (synthetic)", "why": "n/a (synthetic)"},
+                "disposition": "open",
+            }
+        ],
+    }
+
+
+def run_selftest(style: Style, mark_map: dict, repo_hint: Optional[str] = None) -> int:
+    """Standalone diagnostic (--selftest / Diagnostics menu): a throwaway synthetic
+    "review this code" engagement, exercising the REAL guard hooks, the REAL analyser
+    pipeline (proves DETECTION on a planted issue, not just silence on clean input), and
+    the REAL engagement-state lifecycle (init -> findings -> render -> the close-gate
+    correctly REFUSING an incomplete close -> archive) end to end. No mocking, no LLM.
+
+    On any failure, writes a full debug bundle (every step's complete stdout/stderr, plus
+    Python/platform/interpreter/repo-root) to virt-surv-selftest-<timestamp>.txt in the
+    CURRENT directory - meant to be attached/pasted whole, replacing a screenshot."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    repo_root = _resolve_repo_root(repo_hint) or Path(__file__).resolve().parent
+    order = ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
+    _, interpreter = _check_interpreters(order)
+
+    rows = []
+    bundle = []
+
+    def record(label: str, status: str, detail: str, full: Optional[str] = None) -> None:
+        rows.append((label, status, detail))
+        bundle.append(f"--- {label} [{status}] ---\n{full if full is not None else detail}\n")
+        mark = {"OK": ok, "SKIP": style.dim("-"), "WARN": style.yellow("!")}.get(status, fail)
+        print(f"  {mark} {label}: {detail}", flush=True)
+
+    print(style.bold("Self-test: a mechanical smoke test of a 'review this code' engagement"))
+    print(style.dim("  No LLM/Claude Code invocation - stdlib + the team's own scripts, no network."))
+
+    print(style.dim("\n  Guard hooks:"))
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-selftest-guard-") as gtmp:
+        for label, status, detail in _check_guard_hooks(interpreter, repo_root, Path(gtmp)):
+            record(label, status, detail)
+
+    print(style.dim("\n  Repo script syntax:"))
+    for label, status, detail in _check_repo_py_syntax(interpreter, repo_root):
+        record(label, status, detail)
+
+    print(style.dim("\n  Runtime dependencies:"))
+    for label, status, detail in _check_runtime_dependencies():
+        record(label, status, detail)
+
+    print(style.dim("\n  Analyser detects a planted issue (not just stays quiet on clean input):"))
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-selftest-analyser-") as atmp:
+        target = Path(atmp) / "selftest_target.py"
+        target.write_text(_SELFTEST_PLANTED_ISSUE_PY, encoding="utf-8")
+        if not shutil.which("bandit"):
+            record("bandit (planted issue)", "SKIP", "bandit not installed")
+        else:
+            try:
+                proc = subprocess.run(
+                    ["bandit", "-q", str(target)], capture_output=True, text=True, timeout=20
+                )
+                combined = (proc.stdout or "") + (proc.stderr or "")
+                found = "hardcoded_password" in combined
+                record(
+                    "bandit (planted issue)",
+                    "OK" if found else "ERROR",
+                    "planted issue detected" if found else "planted issue NOT detected - bandit may be misconfigured",
+                    full=combined,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                record("bandit (planted issue)", "ERROR", f"failed to run: {exc}")
+
+    print(
+        style.dim(
+            "\n  Engagement-state lifecycle (init -> findings -> render -> close-gate -> archive):"
+        )
+    )
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-selftest-lifecycle-") as ltmp:
+        project = Path(ltmp)
+        slug = "selftest-demo"
+        engagement_state = repo_root / "scripts" / "engagement_state.py"
+        render_findings = repo_root / "scripts" / "render_findings.py"
+
+        def run_step(label, argv, extra_check=None):
+            try:
+                proc = subprocess.run(argv, cwd=project, capture_output=True, text=True, timeout=30)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                record(label, "ERROR", f"failed to run: {exc}")
+                return None
+            combined = (proc.stdout or "") + (proc.stderr or "")
+            if extra_check:
+                passed, note = extra_check(proc, combined)
+            else:
+                passed, note = proc.returncode == 0, ("clean" if proc.returncode == 0 else f"exit {proc.returncode}")
+            record(label, "OK" if passed else "ERROR", note, full=combined)
+            return proc
+
+        if not (engagement_state.is_file() and render_findings.is_file()):
+            record(
+                "engagement-state lifecycle",
+                "SKIP",
+                _bootstrap_only_hint(repo_root) or "scripts not found",
+            )
+        else:
+            py = interpreter or sys.executable
+            run_step(
+                "init",
+                [
+                    py,
+                    str(engagement_state),
+                    "init",
+                    "--title",
+                    "Selftest demo",
+                    "--slug",
+                    slug,
+                    "--team-version",
+                    installed_version(repo_root) or "0.0.0",
+                ],
+            )
+            data_dir = project / "artifacts" / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            pack_path = data_dir / f"findings-{slug}.json"
+            pack_path.write_text(
+                json.dumps(_selftest_findings_pack(slug), indent=2), encoding="utf-8"
+            )
+            run_step("render findings", [py, str(render_findings), str(pack_path), "--html"])
+            run_step("set-team", [py, str(engagement_state), "set-team", "Selftest (synthetic)"])
+            # The close-gate SHOULD refuse an incomplete close (no AI marker, no summary
+            # email) - that refusal IS the pass condition, proving the gate has real teeth
+            # rather than assuming it does because a trivially-easy synthetic pack closed.
+            run_step(
+                "close-gate (expect refusal - proves an incomplete close is blocked)",
+                [py, str(engagement_state), "set-status", "closed"],
+                extra_check=lambda proc, combined: (
+                    proc.returncode != 0 and "CLOSE-REFUSED" in combined,
+                    "correctly refused an incomplete close"
+                    if "CLOSE-REFUSED" in combined
+                    else f"expected a CLOSE-REFUSED block, got exit {proc.returncode}",
+                ),
+            )
+            run_step("set-status closing", [py, str(engagement_state), "set-status", "closing"])
+            run_step("archive", [py, str(engagement_state), "archive", slug, "--force"])
+
+    bad = [r for r in rows if r[1] not in ("OK", "SKIP", "WARN")]
+    print("")
+    if bad:
+        ts = datetime.now().strftime("%Y%m%dT%H%M%S")
+        bundle_path = Path.cwd() / f"virt-surv-selftest-{ts}.txt"
+        header = (
+            "virt-surv-it self-test debug bundle\n"
+            f"Python: {sys.version}\nPlatform: {sys.platform}\nInterpreter: {interpreter}\n"
+            f"Repo root: {repo_root}\n\n"
+        )
+        try:
+            bundle_path.write_text(header + "\n".join(bundle), encoding="utf-8")
+            print(
+                style.yellow(
+                    f"{len(bad)} issue(s) found. Full debug bundle written to: {bundle_path}"
+                )
+            )
+        except OSError as exc:
+            print(style.yellow(f"{len(bad)} issue(s) found, and the debug bundle could not be written: {exc}"))
+        return 1
+    print(style.dim("Self-test passed - the engagement substrate works on this machine."))
+    return 0
+
+
 # ------------------------------------------------------------------ CLI
 
 
@@ -3777,6 +3998,14 @@ def parse_args(argv=None) -> argparse.Namespace:
         "guard hooks, encoding round-trip, the plugin-root bootstrap, bash, and analyser "
         "output cleanliness - and exit; the broader diagnostic --check-tools' own section "
         "is folded into",
+    )
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help="standalone: a throwaway synthetic 'review this code' engagement exercising "
+        "guard hooks, real analyser detection and the full engagement-state lifecycle - "
+        "no LLM/Claude Code invocation, no network - and exit; writes a debug bundle on "
+        "any failure",
     )
     parser.add_argument(
         "--configure",
@@ -3938,6 +4167,7 @@ def _main(argv=None) -> int:
         or args.model_default
         or args.check_tools
         or args.check_env
+        or args.selftest
         or args.configure
         or args.archive
         or args.list_engagements
@@ -3959,6 +4189,8 @@ def _main(argv=None) -> int:
             rc = max(rc, run_tool_check(style, marks()))
         if args.check_env:
             rc = max(rc, run_env_check(style, marks(), args.repo))
+        if args.selftest:
+            rc = max(rc, run_selftest(style, marks(), args.repo))
         if args.configure:
             rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
         if args.archive:

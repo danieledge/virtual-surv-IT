@@ -3,6 +3,22 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.13] - 2026-08-04 - `--selftest`: a mechanical smoke test of a real engagement
+
+### Added
+- `install_helper.py --selftest` (also reachable via Diagnostics → "Self-test" in the
+  interactive menu): a throwaway synthetic "review this code" engagement exercising the real
+  substrate an engagement depends on - guard hooks, an analyser proven to *detect* a planted
+  issue (not just stay quiet on clean input), and the full engagement-state lifecycle (init →
+  findings → render → the close-gate correctly refusing an incomplete close → archive). No
+  LLM/Claude Code invocation, no network, no new dependencies - stdlib and the team's own
+  bundled scripts only (a real orchestrated engagement eval already exists via
+  `scripts/eval_engage.py`, which needs the Agent SDK, a venv, real tokens and network - wrong
+  tool for a lightweight diagnostic).
+- On any failure, writes one debug bundle file (`virt-surv-selftest-<timestamp>.txt`, current
+  directory) with full stdout/stderr/traceback per step plus Python/platform/interpreter/repo
+  info - meant to be pasted or attached whole in place of a screenshot.
+
 ## [0.33.12] - 2026-08-04 - Alias offered in the full install; a relocated-session diagnostics bug fixed
 
 ### Added
