@@ -1957,8 +1957,17 @@ class Installer:
             assume_yes=False,
             style=self.style,
         )
+        review_tools_current = existing.get("review_tools") or {}
+        review_tools_wanted = _ask_review_tool_overrides(self.style, False, review_tools_current)
+        # Read-only against a throwaway synthetic file - runs even in demo mode, same as
+        # run_configure's identical check, so a hanging/network-blocked tool (the
+        # semgrep/pip-audit shape) is caught before it's ever written as "on".
+        review_tools_wanted = _apply_forced_on_validation(
+            self.style, self.marks, review_tools_wanted, review_tools_current
+        )
         save_as_default = confirm(
-            "  Also save docx/citations as your default for new/unconfigured projects?",
+            "  Also save docx/citations/review-tools as your default for new/unconfigured "
+            "projects?",
             default=False,
             assume_yes=False,
             style=self.style,
@@ -1967,15 +1976,21 @@ class Installer:
             self.step_ok(
                 "Project preferences",
                 f"would set docx -> {'on' if docx_wanted else 'off'}, "
-                f"citations -> {'on' if citations_wanted else 'off'}"
+                f"citations -> {'on' if citations_wanted else 'off'}, "
+                f"review-tools -> {review_tools_wanted or '(all auto)'}"
                 + (" (and save as new-project default)" if save_as_default else ""),
             )
             return
         if save_as_default:
             self.cfg["default_docx"] = docx_wanted
             self.cfg["default_regulatory_citations"] = citations_wanted
+            self.cfg["default_review_tools"] = review_tools_wanted
             save_config(self.cfg_path, self.cfg)
-        if docx_wanted == docx_current and citations_wanted == citations_current:
+        if (
+            docx_wanted == docx_current
+            and citations_wanted == citations_current
+            and review_tools_wanted == review_tools_current
+        ):
             self.step_ok(
                 "Project preferences",
                 "unchanged" + (" (new-project default saved)" if save_as_default else ""),
@@ -1985,11 +2000,13 @@ class Installer:
             project,
             extra_formats=["docx"] if docx_wanted else [],
             regulatory_citations=citations_wanted,
+            review_tools=review_tools_wanted,
         )
         self.step_ok(
             "Project preferences",
             f"docx -> {'on' if docx_wanted else 'off'}, "
-            f"citations -> {'on' if citations_wanted else 'off'} ({prefs_path})"
+            f"citations -> {'on' if citations_wanted else 'off'}, "
+            f"review-tools -> {review_tools_wanted or '(all auto)'} ({prefs_path})"
             + (", saved as new-project default" if save_as_default else ""),
         )
 
@@ -2390,11 +2407,105 @@ def run_orchestrator_model_default(model: Optional[str], style: Style, mark_map:
     return 0
 
 
+# The officially supported, individually configurable code-review analysers (2026-08-04) -
+# every other analyser scripts/check-review-tools.sh probes stays best-effort/presence-only;
+# these seven are the ones a human can force on/off per project, because these seven have
+# ALSO been proven (via _TOOL_OUTPUT_CHECKS further below) to run single-file, dependency-
+# free and network-free - the same bar semgrep/pip-audit failed. Keep in sync with
+# _TOOL_OUTPUT_CHECKS and scripts/check-review-tools.sh's own REVIEW_TOOLS array (a test
+# enforces all three match).
+_REVIEW_TOOLS = ("ruff", "mypy", "bandit", "gitleaks", "sqlfluff", "black", "shfmt")
+_REVIEW_TOOL_STATES = ("auto", "on", "off")
+
+
+def _parse_review_tool_overrides(raw: str) -> dict:
+    """'ruff=off, mypy=on' -> {"ruff": "off", "mypy": "on"}. Unknown tool names, unknown
+    states and blank/malformed chunks are silently skipped - a typo in this one-line prompt
+    should never crash a preferences flow; the caller shows the tool the resulting state
+    was applied to, so a skipped typo is visible, not silently lost."""
+    overrides = {}
+    for chunk in raw.split(","):
+        name, _, state = chunk.strip().partition("=")
+        name, state = name.strip().lower(), state.strip().lower()
+        if name in _REVIEW_TOOLS and state in _REVIEW_TOOL_STATES:
+            overrides[name] = state
+    return overrides
+
+
+def _ask_review_tool_overrides(style: Style, assume_yes: bool, current: dict) -> dict:
+    """One compact prompt for the seven-tool on/off/auto overrides instead of seven
+    separate confirm()s - most sessions change zero or one tool, not all seven. Returns
+    the full resulting {tool: state} dict (existing overrides plus this prompt's changes,
+    with any tool explicitly reset to "auto" removed) - callers write the return value
+    straight back via write_team_preferences(review_tools=...)."""
+    shown = ", ".join(f"{t}={current.get(t, 'auto')}" for t in _REVIEW_TOOLS)
+    raw = ask(
+        f"  Review-tool overrides (currently: {shown}) - e.g. 'mypy=off,black=on', "
+        "blank for no change",
+        "",
+        assume_yes,
+        style=style,
+    )
+    merged = dict(current)
+    for name, state in _parse_review_tool_overrides(raw).items():
+        if state == "auto":
+            merged.pop(name, None)
+        else:
+            merged[name] = state
+    return merged
+
+
+def _apply_forced_on_validation(style: Style, mark_map: dict, wanted: dict, current: dict) -> dict:
+    """Wraps _validate_forced_on_tools for the two call sites (run_configure,
+    format_preferences_step): finds tools newly set to "on" this pass (not already "on"
+    before), live-validates just those, and REMOVES the ones that failed validation from
+    `wanted` - a plain dict.update() with the validator's result would be a no-op for the
+    failures, since removed keys aren't present in the update source to overwrite anything
+    with."""
+    newly_forced_on = {t: s for t, s in wanted.items() if s == "on" and current.get(t) != "on"}
+    if not newly_forced_on:
+        return wanted
+    validated = _validate_forced_on_tools(style, mark_map, newly_forced_on)
+    for tool in newly_forced_on:
+        if tool not in validated:
+            wanted.pop(tool, None)
+    return wanted
+
+
+def _validate_forced_on_tools(style: Style, mark_map: dict, overrides: dict) -> dict:
+    """Before accepting an "on" override, live-probes that ONE tool the same way
+    --check-tools does - the exact check that would have caught semgrep/pip-audit's
+    corp-proxy hang before either was ever relied on for real. A tool whose probe comes
+    back NOISY or ERROR (including a timeout - the network-blocked shape) is downgraded
+    back to "auto" instead of silently honoured, with a clear warning; SKIP (not
+    installed yet) is left as "on" untouched - that is a real choice the human just
+    made, no different from any other tool being missing under "auto"."""
+    forced_on = [t for t, state in overrides.items() if state == "on"]
+    if not forced_on:
+        return overrides
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    validated = dict(overrides)
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-toolcheck-") as tmp:
+        for name, status, detail in probe_analyser_output(Path(tmp), only=set(forced_on)):
+            if status in ("NOISY", "ERROR"):
+                print(
+                    style.yellow(
+                        f"  {fail} {name}: {status} - {detail} - not forcing 'on', "
+                        "leaving at auto instead"
+                    )
+                )
+                validated.pop(name, None)
+            elif status == "OK":
+                print(style.dim(f"    {ok} {name}: verified clean, forcing 'on'"))
+    return validated
+
+
 def write_team_preferences(
     project: Path,
     extra_formats: Optional[list] = None,
     regulatory_citations: Optional[bool] = None,
     large_context_review_split: Optional[bool] = None,
+    review_tools: Optional[dict] = None,
 ) -> bool:
     """Project-scoped preferences (`.claude/team-preferences.json`), merge-only (a
     pre-existing file's other keys, and any key not passed here, are preserved) and
@@ -2410,6 +2521,9 @@ def write_team_preferences(
       component from the start instead of discovering the need for it from a failed
       review call (docs/team-operating-guide.md's orchestration-discipline section).
       Defaults to False (off) whenever the key is absent.
+    - review_tools: {tool: "on"|"off"} overrides for the _REVIEW_TOOLS set; "auto" (the
+      implicit default for any tool not listed) means "use it if present, skip silently
+      if not" - never stored literally, so the file only ever records actual overrides.
 
     Pass only the preference(s) you want to change; omitted arguments leave the
     corresponding key untouched (or unset, which reads as the default)."""
@@ -2422,6 +2536,12 @@ def write_team_preferences(
             prefs["regulatory_citations"] = bool(regulatory_citations)
         if large_context_review_split is not None:
             prefs["large_context_review_split"] = bool(large_context_review_split)
+        if review_tools is not None:
+            cleaned = {k: v for k, v in review_tools.items() if v != "auto"}
+            if cleaned:
+                prefs["review_tools"] = dict(sorted(cleaned.items()))
+            else:
+                prefs.pop("review_tools", None)
         _write_json_backup(target, prefs)
         return True
     except OSError:
@@ -2705,10 +2825,20 @@ def run_configure(
         assume_yes=assume_yes,
         style=style,
     )
+    review_tools_current = existing.get("review_tools") or {}
+    review_tools_wanted = _ask_review_tool_overrides(style, assume_yes, review_tools_current)
+    # Live-validates every newly forced-"on" tool even in demo mode - read-only against a
+    # throwaway synthetic file, nothing project-related is touched, and the whole point is
+    # to catch a hanging/network-blocked tool (the semgrep/pip-audit shape) BEFORE it is
+    # ever written as "on", which matters just as much during a demo walkthrough.
+    review_tools_wanted = _apply_forced_on_validation(
+        style, mark_map, review_tools_wanted, review_tools_current
+    )
     summary = (
         f"docx={'on' if docx_wanted else 'off'}, "
         f"citations={'on' if citations_wanted else 'off'}, "
-        f"review-split={'on' if split_wanted else 'off'}"
+        f"review-split={'on' if split_wanted else 'off'}, "
+        f"review-tools={review_tools_wanted or '(all auto)'}"
     )
     if demo:
         print(style.dim(f"    would write preferences: {summary}"))
@@ -2717,6 +2847,7 @@ def run_configure(
         extra_formats=["docx"] if docx_wanted else [],
         regulatory_citations=citations_wanted,
         large_context_review_split=split_wanted,
+        review_tools=review_tools_wanted,
     ):
         print(f"  {ok} preferences: {summary}")
     else:
@@ -2982,17 +3113,28 @@ def run_setup_alias(
 # longer names them, so they're never invoked even if installed.
 
 _TOOL_CHECK_CLEAN_PY = "def add(a: int, b: int) -> int:\n    return a + b\n"
+# Deliberately multi-line with each select target on its own line - sqlfluff's default
+# layout.select_targets rule (LT09) fails a single-line "SELECT id, name" even though
+# nothing is actually wrong with it, so a naive "obviously clean" fixture isn't (live-
+# tested 2026-08-04 against a real sqlfluff install before trusting this).
+_TOOL_CHECK_CLEAN_SQL = "SELECT\n    id,\n    name\nFROM users\nWHERE id = 1;\n"
+_TOOL_CHECK_CLEAN_SH = '#!/bin/sh\necho "hello"\n'
 
-# (binary, recommended-flags, needs a real target file/dir to run against, per-call timeout)
+# The officially supported, on/off/auto-configurable review-tool set (_REVIEW_TOOLS below)
+# - every name here MUST also appear in _REVIEW_TOOLS, and vice versa, enforced by a test.
+# (binary, recommended-flags, fixture kind, per-call timeout)
 _TOOL_OUTPUT_CHECKS = (
-    ("ruff", ["check", "--quiet"], "file", 20),
-    ("mypy", ["--no-color-output", "--no-error-summary"], "file", 20),
-    ("bandit", ["-q"], "file", 20),
+    ("ruff", ["check", "--quiet"], "py-file", 20),
+    ("mypy", ["--no-color-output", "--no-error-summary"], "py-file", 20),
+    ("bandit", ["-q"], "py-file", 20),
+    ("black", ["--check", "--quiet"], "py-file", 20),
+    ("sqlfluff", ["lint", "--dialect", "ansi"], "sql-file", 20),
+    ("shfmt", ["-d"], "sh-file", 20),
     ("gitleaks", ["detect", "--no-git", "--no-banner", "--log-level", "error", "--source"], "dir", 20),
 )
 
 
-def probe_analyser_output(tmpdir: Path, runner=None):
+def probe_analyser_output(tmpdir: Path, runner=None, only=None):
     """Runs each known-noisy analyser, with its recommended suppression flags, against a
     trivial clean throwaway file - a run with zero real findings should come back empty or
     near-empty. A GENERATOR, not a batch return: yields (name, status, detail) as each tool
@@ -3001,16 +3143,30 @@ def probe_analyser_output(tmpdir: Path, runner=None):
     looked exactly like a hang (live report, 2026-08-04). Status is one of SKIP (not
     installed), OK (clean), NOISY (leaked decoration - an escape code, or unexpectedly
     large output for a trivial clean file), ERROR (crashed, timed out, or a flag wasn't
-    recognised - a version-pin mismatch is exactly this shape)."""
+    recognised - a version-pin mismatch is exactly this shape; a timeout specifically means
+    "network-blocked", the exact semgrep/pip-audit failure shape this now exists to catch
+    before a tool is ever forced 'on').
+
+    `only`, if given, restricts the run to those tool names - used to live-validate a
+    single tool at config time (see _ask_review_tool_overrides) without re-running the
+    other six."""
     runner = runner or subprocess.run
-    target = tmpdir / "probe.py"
-    target.write_text(_TOOL_CHECK_CLEAN_PY, encoding="utf-8")
+    targets = {
+        "py-file": tmpdir / "probe.py",
+        "sql-file": tmpdir / "probe.sql",
+        "sh-file": tmpdir / "probe.sh",
+    }
+    targets["py-file"].write_text(_TOOL_CHECK_CLEAN_PY, encoding="utf-8")
+    targets["sql-file"].write_text(_TOOL_CHECK_CLEAN_SQL, encoding="utf-8")
+    targets["sh-file"].write_text(_TOOL_CHECK_CLEAN_SH, encoding="utf-8")
 
     for name, flags, target_kind, per_call_timeout in _TOOL_OUTPUT_CHECKS:
+        if only is not None and name not in only:
+            continue
         if not shutil.which(name):
             yield (name, "SKIP", "not installed")
             continue
-        arg_target = {"file": str(target), "dir": str(tmpdir)}[target_kind]
+        arg_target = str(tmpdir) if target_kind == "dir" else str(targets[target_kind])
         argv = [name, *flags, arg_target]
         try:
             proc = runner(argv, capture_output=True, text=True, cwd=tmpdir, timeout=per_call_timeout)

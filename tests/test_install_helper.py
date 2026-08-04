@@ -2863,8 +2863,9 @@ def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkey
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     monkeypatch.setattr(sys, "stdin", _TtyStdin())  # see test_ask_and_set_model_rejects_bad_input
     # "no" to the permissions question, "" (accept defaults) to the three preference
-    # prompts, "" to the model prompt (declines - default for that one is False).
-    answers = iter(["n", "", "", "", ""])
+    # prompts, "" (no change) to the review-tools override prompt, "" to the model prompt
+    # (declines - default for that one is False).
+    answers = iter(["n", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -3427,3 +3428,191 @@ def test_demo_menu_selection_is_one_shot_not_sticky(monkeypatch, tmp_path):
     # must not have left args.demo stuck true.
     assert called_demo_values == [False]
     assert ih.run_cmd is not sentinel_runner  # restored after the one-shot preview
+
+
+# --- review-tool on/off/auto config (2026-08-04) ----------------------------------------------
+
+
+def test_review_tools_matches_tool_output_checks():
+    """_REVIEW_TOOLS and _TOOL_OUTPUT_CHECKS must name exactly the same seven tools -
+    check-review-tools.sh's own REVIEW_TOOLS array is checked separately (bash, not
+    importable here) but documents the same invariant."""
+    import install_helper as ih
+
+    checked_names = {name for name, *_ in ih._TOOL_OUTPUT_CHECKS}
+    assert set(ih._REVIEW_TOOLS) == checked_names
+
+
+def test_parse_review_tool_overrides_basic():
+    import install_helper as ih
+
+    assert ih._parse_review_tool_overrides("mypy=off,black=on") == {
+        "mypy": "off",
+        "black": "on",
+    }
+
+
+def test_parse_review_tool_overrides_ignores_unknown_tool_and_state():
+    import install_helper as ih
+
+    assert ih._parse_review_tool_overrides("notarealtool=off, mypy=maybe, black=on") == {
+        "black": "on"
+    }
+
+
+def test_parse_review_tool_overrides_blank_is_empty():
+    import install_helper as ih
+
+    assert ih._parse_review_tool_overrides("") == {}
+    assert ih._parse_review_tool_overrides("   ") == {}
+
+
+def test_write_team_preferences_review_tools_stores_only_non_auto(tmp_path):
+    from install_helper import write_team_preferences
+
+    write_team_preferences(tmp_path, review_tools={"mypy": "off", "ruff": "auto", "black": "on"})
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["review_tools"] == {"black": "on", "mypy": "off"}  # "auto" never stored
+
+
+def test_write_team_preferences_review_tools_empty_removes_key(tmp_path):
+    from install_helper import write_team_preferences
+
+    write_team_preferences(tmp_path, review_tools={"mypy": "off"})
+    write_team_preferences(tmp_path, review_tools={})
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert "review_tools" not in prefs
+
+
+def test_write_team_preferences_review_tools_merge_only(tmp_path):
+    """review_tools passed as None (the default) leaves an existing override untouched -
+    same merge-only contract as extra_formats/regulatory_citations."""
+    from install_helper import write_team_preferences
+
+    write_team_preferences(tmp_path, review_tools={"mypy": "off"})
+    write_team_preferences(tmp_path, regulatory_citations=False)
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["review_tools"] == {"mypy": "off"}
+    assert prefs["regulatory_citations"] is False
+
+
+def test_ask_review_tool_overrides_merges_onto_current(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    monkeypatch.setattr("builtins.input", lambda prompt="": "mypy=off,ruff=auto")
+    result = ih._ask_review_tool_overrides(
+        ih.Style(False), False, {"ruff": "off", "gitleaks": "on"}
+    )
+    # mypy=off added, ruff=auto CLEARS the existing "off" override, gitleaks untouched.
+    assert result == {"gitleaks": "on", "mypy": "off"}
+
+
+def test_ask_review_tool_overrides_blank_leaves_current_unchanged(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    result = ih._ask_review_tool_overrides(ih.Style(False), False, {"black": "on"})
+    assert result == {"black": "on"}
+
+
+def test_validate_forced_on_tools_downgrades_noisy_and_error(monkeypatch):
+    """The core safety mechanism: a tool whose live probe comes back NOISY or ERROR
+    (including a timeout - the exact semgrep/pip-audit shape) is downgraded back to
+    "auto" instead of silently honoured as "on"."""
+    import install_helper as ih
+
+    def fake_probe(tmpdir, runner=None, only=None):
+        yield ("ruff", "OK", "clean")
+        yield ("mypy", "NOISY", "leaked ANSI")
+        yield ("bandit", "ERROR", "timed out (20s) - likely blocked network access")
+
+    monkeypatch.setattr(ih, "probe_analyser_output", fake_probe)
+    result = ih._validate_forced_on_tools(
+        ih.Style(False), ih.marks(), {"ruff": "on", "mypy": "on", "bandit": "on"}
+    )
+    assert result == {"ruff": "on"}  # mypy/bandit downgraded (removed -> falls back to auto)
+
+
+def test_validate_forced_on_tools_leaves_skip_as_on(monkeypatch):
+    """SKIP (not installed yet) is a real choice the human just made - no different from
+    any other tool being missing under "auto" - so it stays "on", not silently reset."""
+    import install_helper as ih
+
+    def fake_probe(tmpdir, runner=None, only=None):
+        yield ("sqlfluff", "SKIP", "not installed")
+
+    monkeypatch.setattr(ih, "probe_analyser_output", fake_probe)
+    result = ih._validate_forced_on_tools(ih.Style(False), ih.marks(), {"sqlfluff": "on"})
+    assert result == {"sqlfluff": "on"}
+
+
+def test_validate_forced_on_tools_ignores_tools_not_forced_on():
+    import install_helper as ih
+
+    result = ih._validate_forced_on_tools(
+        ih.Style(False), ih.marks(), {"ruff": "off", "mypy": "auto"}
+    )
+    assert result == {"ruff": "off", "mypy": "auto"}
+
+
+def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    # "" enable-permissions default(Y), "" docx, "" citations, "" split,
+    # "mypy=off" review-tools override, "" model.
+    answers = iter(["", "", "", "", "mypy=off", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
+    assert rc == 0
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["review_tools"] == {"mypy": "off"}
+
+
+def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+
+    def fake_probe(tmpdir, runner=None, only=None):
+        yield ("mypy", "ERROR", "timed out (20s) - likely blocked network access")
+
+    monkeypatch.setattr(ih, "probe_analyser_output", fake_probe)
+    answers = iter(["", "", "", "", "mypy=on", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
+    assert rc == 0
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    # mypy=on was downgraded by the failed live probe - never written as "on".
+    assert prefs.get("review_tools", {}).get("mypy") != "on"
+
+
+def test_format_preferences_step_review_tools_save_as_default(tmp_path, monkeypatch):
+    """save_as_default now also persists review_tools to the installer-wide config, same
+    mechanism as default_docx/default_regulatory_citations."""
+    import install_helper as ih
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": True}))
+    monkeypatch.setattr(ih, "_ask_review_tool_overrides", lambda *a, **k: {"gitleaks": "off"})
+    cfg_home = tmp_path / "xdg"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg_home))
+
+    def _fake_confirm_save_default(prompt, default, assume_yes, style=None):
+        if "save" in prompt.lower():
+            return True
+        return _confirm_by_prompt({"docx": False, "citations": True})(
+            prompt, default, assume_yes, style
+        )
+
+    monkeypatch.setattr(ih, "confirm", _fake_confirm_save_default)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
+    inst.format_preferences_step()
+    saved = json.loads((cfg_home / "virt-surv-it" / "installer.json").read_text())
+    assert saved["default_review_tools"] == {"gitleaks": "off"}

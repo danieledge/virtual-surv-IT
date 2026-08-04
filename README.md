@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.9](https://img.shields.io/badge/version-0.33.9-blue)
+![Version 0.33.10](https://img.shields.io/badge/version-0.33.10-blue)
 ![Tests 1300+ passing](https://img.shields.io/badge/tests-1300%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.9** (2026-08-04) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.10** (2026-08-04) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle:**
 - 🪟 **The step-0 probe now tells the model whether it's on Windows.** Instead of inferring
@@ -635,25 +635,48 @@ says what couldn't run).
 <details>
 <summary>🔍 <b>Analyser install per language</b> (optional; sharpens <code>code-reviewer</code>)</summary>
 
-The Python ones are in `requirements-review.txt` (kept separate so the core test install stays
-lean). The rest install via the OS / build tooling:
+**Seven tools are officially supported and individually configurable** - each proven to run
+single-file, dependency-free and network-free (the same bar `semgrep`/`pip-audit` failed and were
+removed for):
 
-| Language | Install |
-|---|---|
-| Python | `pip install -r requirements-review.txt` (ruff, black, mypy, bandit) |
-| Bash | `apt install shellcheck` · `go install mvdan.cc/sh/v3/cmd/shfmt@latest` |
-| PowerShell | `pwsh -c 'Install-Module PSScriptAnalyzer -Scope CurrentUser'` |
-| Java | `checkstyle`, `pmd`, `spotbugs` via your build tool (Maven/Gradle) or `brew`/`apt` |
-| Scala | `scalafmt`, `scapegoat`/`wartremover` via sbt plugins |
-| Any | Semgrep (`pip`) for multi-language; gitleaks for secrets |
+| Tool | Language / role | Install |
+|---|---|---|
+| `ruff`, `mypy`, `bandit`, `black` | Python lint/types/security/format | `pip install -r requirements-review.txt` |
+| `sqlfluff` | SQL lint | `pip install -r requirements-review.txt` |
+| `gitleaks` | secret scan (any language) | `apt`/`brew install gitleaks` |
+| `shfmt` | Bash format | `apt`/`brew install shfmt`, or `go install mvdan.cc/sh/v3/cmd/shfmt@latest` |
+
+Turn any of the seven `on`/`off` per project (`install_helper.py`'s "Project preferences" step,
+or `.claude/team-preferences.json`'s `review_tools` key directly), or set a default for every
+project on this machine (same step, "save as default" → `~/.config/virt-surv-it/installer.json`'s
+`default_review_tools`). `auto` (the default) means "use it if present, skip silently if not". A
+security team can disable all seven centrally with the env var `CST_NO_EXTERNAL_TOOLS=1`.
+`install_helper.py --check-tools` (or the interactive menu's Diagnostics → "Check analyser output
+cleanliness") live-tests each one against a throwaway synthetic file before you rely on it -
+catching a hanging/network-blocked tool the same way this caught semgrep/pip-audit.
+
+**The rest are best-effort, presence-only, not individually configurable:**
+
+| Language | Install | Caveat |
+|---|---|---|
+| TypeScript | `npm install -g eslint typescript` | needs `node_modules` populated, or skipped |
+| Java | `checkstyle`, `pmd` via `brew`/`apt` | standalone CLI only - **never** via Maven/Gradle or raw `java -jar` (both blocked as code execution) |
+| Scala | `scalafmt` via `coursier`/sbt | format-only; semantic `scalafix` rules need a prior compile, not driven |
+| PowerShell | `pwsh -c 'Install-Module PSScriptAnalyzer -Scope CurrentUser'` | effectively dead today - see note below |
+
+Not driven at all (removed 2026-08-04, alongside semgrep/pip-audit): Java's `error-prone` and
+`spotbugs`+`find-sec-bugs`, Scala's `scalac -Xlint` and `wartremover` - all need a full compiled
+build via `mvn`/`gradle`/`sbt`, which both reaches the network and is blocked by the
+code-execution guard. Java/Scala deep static analysis is 🧠 inferred-only until a network-free
+alternative exists.
 
 > **PowerShell note:** the execution gate treats any `pwsh` invocation as code execution, so
 > `Invoke-ScriptAnalyzer` only runs once a human has opened the CLAUDE.md §7 consent gate; the
 > settings allow-list entry for it was removed for exactly this reason. Before consent, PowerShell
 > review stays static (🧠).
 
-The agent runs whatever is present and reports which analysers were unavailable; nothing is
-silently skipped.
+The agent runs whatever is present and enabled, and reports which analysers were unavailable or
+disabled; nothing is silently skipped.
 
 </details>
 

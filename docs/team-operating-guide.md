@@ -521,6 +521,12 @@ the user informed and in charge, check before anything irreversible.
   reconciliation, a summary, running a check script) - **never writing or editing the
   deliverable's own code**, even when nothing in the roster is a domain-specific fit (route
   generic code to `platform-engineer` + `code-reviewer` instead - see the routing table above).
+  If "running a check script" means driving one of the seven configurable analysers yourself
+  for a direct-answer quick look (CLAUDE.md §6's classify-and-answer path, `engage/SKILL.md`
+  step 1) rather than delegating to `code-reviewer`, the same on/off/auto config and
+  `CST_NO_EXTERNAL_TOOLS` kill switch bind you too - `.claude/agents/code-reviewer.md`'s tool
+  table is the single source of truth for which seven, their flags, and the config mechanism;
+  don't duplicate or improvise a different list.
   (Live 2026-08-01: a close-only engagement delegated to two
   specialists with no count stated anywhere, and the engagement that did MORE work was scored
   worse than four earlier solo runs that did less.) Reserve full fan-out for high-value, broad

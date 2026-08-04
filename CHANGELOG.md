@@ -3,6 +3,41 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.10] - 2026-08-04 - Seven code-review analysers made individually configurable, with a live safety check
+
+Live audit of the full code-review tool list against the bar `semgrep`/`pip-audit` failed
+(single-file, dependency-free, network-free). Seven tools cleared it and are now the officially
+supported, individually configurable set: `ruff`, `mypy`, `bandit`, `black`, `sqlfluff`,
+`shfmt`, `gitleaks`.
+
+### Added
+- On/off/auto config for the seven supported analysers: project-level
+  (`.claude/team-preferences.json`'s `review_tools`), machine-level default
+  (`~/.config/virt-surv-it/installer.json`'s `default_review_tools`, applies to every project
+  unless a project overrides it), and a global kill switch (`CST_NO_EXTERNAL_TOOLS=1`) that
+  disables all seven regardless of either config. `off` is enforced before the tool is ever
+  probed - a disabled tool never shows as available even if it's sitting on PATH.
+- A live safety check before any tool can be forced `on`: `install_helper.py`'s "Project
+  preferences" step runs the same throwaway-file probe `--check-tools` uses against just that
+  tool, and downgrades it back to `auto` with a clear warning if the probe comes back noisy,
+  errored, or times out - the exact failure shape that made semgrep/pip-audit unsafe, now
+  caught at configuration time instead of discovered mid-review.
+- `--check-tools`/`--check-env` extended from four to all seven supported analysers (was
+  ruff/mypy/bandit/gitleaks only).
+- `sqlfluff` added to `requirements-review.txt` (previously undocumented as pip-installable).
+
+### Changed
+- `error-prone`, `spotbugs`+`find-sec-bugs` (Java) and `scalac -Xlint`, `wartremover` (Scala) are
+  no longer driven at all - each needs a full compiled build via `mvn`/`gradle`/`sbt`, which both
+  reaches the network for dependencies and is blocked outright by the code-execution guard.
+  Java/Scala deep static analysis is 🧠 inferred-only until a network-free alternative exists.
+- `checkstyle`/`pmd`'s install guidance corrected: standalone CLI binary (brew/apt) only - never
+  via Maven/Gradle or raw `java -jar` (both blocked as code execution).
+- `code-reviewer.md`'s tool table and rationale rewritten to reflect current reality (was still
+  listing `semgrep` as an active analyser, and Java's Maven-based install path as safe).
+- The seven-tool config binds Morgan too, not just the `code-reviewer` agent, whenever she runs
+  an analyser herself for a direct-answer quick look instead of delegating.
+
 ## [0.33.9] - 2026-08-04 - `install_helper.py` UX overhaul: fewer menu options, an alias, folder-scoped commands
 
 The installer's interactive menu had grown to 10 flat numbered options and felt clunky, with

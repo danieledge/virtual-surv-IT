@@ -2,13 +2,16 @@
 # required to use the team or run tests). Install with:
 #   pip install -r requirements-review.txt
 #
-# Non-Python analysers (ShellCheck/shfmt for Bash, PSScriptAnalyzer for PowerShell,
-# Checkstyle/PMD/SpotBugs for Java, scalafmt/scapegoat for Scala) install via the OS
-# package manager or the relevant build tool - see the README "Code-review tooling" table.
+# Non-Python analysers install via the OS package manager - see the README "Code-review
+# tooling" table. Of the seven officially supported, configurable tools (code-reviewer.md),
+# gitleaks and shfmt are the two non-Python ones and are NOT here for that reason (apt/brew,
+# not pip). ShellCheck/PSScriptAnalyzer/Checkstyle/PMD/SpotBugs/scalafmt are best-effort,
+# not individually configurable - same README table.
 ruff>=0.5
 black>=24.0
 mypy>=1.10
 bandit>=1.7
+sqlfluff>=3.0
 # pip-audit and semgrep deliberately NOT listed here (2026-08-04): both make unconditional
 # network calls (pip-audit's vulnerability-index refresh, semgrep's version-check ping and,
 # with --config auto, its per-run ruleset fetch) with no reliable offline mode found - live
