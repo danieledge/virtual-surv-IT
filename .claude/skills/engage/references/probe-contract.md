@@ -12,8 +12,13 @@ model generates one short invocation instead of ~18 lines of bash it has to repr
 (audit findings #5/#6/#8). The `VERSION_CHANGED` decision is **computed there**, not derived by
 the model from prose logic, and `PLUGIN_ROOT` is printed in a form `set-runtime` can persist.
 
-Only the plugin-root bootstrap stays in raw shell: locating the script itself in an installed
-plugin is the bootstrapping problem the probe exists to solve.
+The plugin-root bootstrap - locating the script itself in an installed plugin, the one part of
+this that can't simply call a bundled script by path, since locating it IS the problem - is a
+Python heredoc, not hand-assembled bash. `scripts/find_plugin_root.py` is the canonical, tested
+implementation of the same discovery algorithm (`tests/test_find_plugin_root.py`); the heredoc
+embedded in `.claude/skills/.shared/engage-open.md` is a condensed twin of it that CANNOT `import` the real module for
+the same bootstrapping reason, so `tests/test_engage_open_bootstrap.py` mechanically checks the
+two never drift apart (same role `test_hooks_in_sync.py` plays for staged-vs-live guard files).
 
 ## What it prints
 
@@ -31,12 +36,17 @@ this). Read the guide as a separate `Read`, alongside the probe call or immediat
 
 ## Why the interpreter order is what it is
 
-The bootstrap reads the cached interpreter word from `.claude/.guard-interpreter`, warmed by the
-safety-guard hooks that run for this very Bash call (or by the installer's pre-warm), before
-trying anything. A corporate report traced multi-minute opens to the previous behaviour: an
-unconditional `python3` attempt first, hitting the Microsoft Store execution-alias stub on every
-open. On a cache miss the order is Windows-aware (`python py python3` when `OS=Windows_NT`,
-`python3 python py` otherwise), never a hardcoded python3-first list.
+The bootstrap reads the cached interpreter word from `${CLAUDE_PROJECT_DIR:-.}/.claude/.guard-
+interpreter`, warmed by the safety-guard hooks that run for this very Bash call (or by the
+installer's pre-warm), before trying anything. `CLAUDE_PROJECT_DIR`-scoped rather than
+plugin-root-scoped deliberately (2026-08-04 redesign) - the plugin root isn't known yet at this
+point, and this matches what the guard hooks' own cache falls back to anyway in plugin mode, since
+`CLAUDE_PLUGIN_ROOT` is the same unreliable env var described below. Worst case on a mismatch is
+one extra interpreter probe, never a correctness issue. A corporate report traced multi-minute
+opens to the previous behaviour: an unconditional `python3` attempt first, hitting the Microsoft
+Store execution-alias stub on every open. On a cache miss the order is Windows-aware (`python py
+python3` when `OS=Windows_NT`, `python3 python py` otherwise), never a hardcoded python3-first
+list.
 
 The word that worked is echoed back as `INTERPRETER=` and **is** `<python>` for the rest of the
 session. Never re-probe it: the printed word is the answer, in this skill and in every skill or
@@ -68,13 +78,21 @@ correct, harmless default and other paths in this bootstrap may still emit non-A
 
 Env vars such as `$CLAUDE_SKILL_DIR` / `$CLAUDE_PLUGIN_ROOT` are not reliably expanded in the
 Bash tool's subshell (a live plugin-mode run paid recovery turns for assuming they were).
-Resolution order:
+Resolution order (same two methods as before the 2026-08-04 redesign, now Python instead of
+hand-typed bash - see `scripts/find_plugin_root.py`'s own docstring for the full rationale):
 
-1. the install registry (`~/.claude/plugins/installed_plugins.json`, each `installPath` verified
-   by the manifest name): authoritative for every install source, GitHub marketplace, git URL, or
-   a locally cloned directory added as a marketplace;
-2. a `find` over the cache/marketplace directories, `sort -V` picking the newest versioned copy,
-   for registries predating the current schema.
+1. the install registry (`~/.claude/plugins/installed_plugins.json`): authoritative for every
+   install source, GitHub marketplace, git URL, or a locally cloned directory added as a
+   marketplace - `install_helper.py`'s own default clone dir, `~/virtual-surv-IT`, has no
+   "compliance-surveillance-team" path segment, so method 2 alone can never find it. Schema-
+   agnostic: recursively scans the parsed JSON for any `installPath` key at any nesting depth
+   rather than assuming today's shape (`plugins.<key>[].installPath`) is a stable contract, then
+   confirms the match by checking the candidate's `plugin.json` contains the team's name
+   (substring match, not a parsed field - same crude-but-proven check the old `grep -q` did);
+2. a filesystem search under the cache/marketplace directories for this plugin's own marker file,
+   version-sorted to the newest-looking match, for registries predating the current schema. Only
+   a fallback: it requires a literal `compliance-surveillance-team` path segment, which method 1's
+   own motivating case (a locally cloned directory) does not have.
 
 `PLUGIN_ROOT=repo-as-project` means the working directory **is** the team repo: use the local
 `scripts/` and `.claude/skills/` paths. Any other value is the base for every bundled-script
@@ -84,10 +102,13 @@ invocation and skill-definition read (`$PLUGIN_ROOT/scripts/...`,
 
 ## On `PROBE_FAILED`
 
-Run the printed command directly and read the real error rather than retrying the compound
-blindly. The usual causes, in order of likelihood: no interpreter on PATH under any of the three
-names; the encoding failure above (only when `PYTHONIOENCODING` was dropped); a plugin root that
-resolved to a partial or half-updated install (the manifest or `scripts/` missing). A branch of
-`BRANCH=` coming back empty is **not** a failure: a plugin install is usually a plain file copy
-with no `.git` at all, and a detached HEAD is reported as unknown rather than as a branch name
-that does not exist.
+Retry the exact same compound block once by hand with your working interpreter, and read the real
+error rather than retrying blindly again. The usual causes, in order of likelihood: no interpreter
+on PATH under any of the three names; a plugin root that resolved to a partial or half-updated
+install (the manifest or `scripts/engage_probe.py` missing - the heredoc exits non-zero and moves
+to the next interpreter in that case, so a total failure across all three usually means this); a
+genuine Python syntax/runtime error inside the heredoc itself, which - unlike the old bash - fails
+as an ordinary Python traceback on stderr, not a hung or garbled shell parse. A branch of `BRANCH=`
+coming back empty is **not** a failure: a plugin install is usually a plain file copy with no
+`.git` at all, and a detached HEAD is reported as unknown rather than as a branch name that does
+not exist.

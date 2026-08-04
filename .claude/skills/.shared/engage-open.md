@@ -24,34 +24,104 @@ the Skill tool. (Shared rule: `.claude/skills/.shared/run-mode.md`.)
 **0. Fast open - ONE probe call, then straight to the user.** Time-to-first-question is the
 user's first impression and every tool call is a full model round-trip, so gather EVERYTHING the
 open needs in **one compound Bash call**: never a probe-per-turn sequence, and **no narration
-turns between the probe and your opening banner**. Only the plugin-root bootstrap (locating THIS
-script in plugin mode) needs raw shell; everything downstream is one tested script
-(`scripts/engage_probe.py`):
+turns between the probe and your opening banner**.
+
+2026-08-04: the plugin-root bootstrap used to be ~10 lines of hand-typed bash mixing single- and
+double-quoted fragments to hand-parse JSON (`grep -o '"installPath": *"[^"]*"' ... | cut -d'"'
+-f4`) - a live corp Windows report hit `unexpected EOF while looking for matching '"'`
+reproducing it verbatim, self-corrected, but the real defect was the design: untested, hand-typed,
+quote-nested prose reproduced from scratch on every single `/engage` open, the exact class of risk
+the rest of the probe was already collapsed into a tested script to eliminate. The bootstrap now
+embeds a Python heredoc instead: `<<'PY' ... PY` is treated as fully literal by the shell (no
+expansion, no escaping, nothing to get wrong at the bash level), and the Python inside uses **only
+double quotes, never single** - so it stays safely embeddable with zero quote-collision risk
+either way. The discovery logic itself is a tested twin of `scripts/find_plugin_root.py`
+(`tests/test_find_plugin_root.py` covers the algorithm; `tests/test_engage_open_bootstrap.py`
+mechanically pins that this embedded copy and that module never drift apart - it can't `import`
+the module directly, since locating it is exactly the problem this solves). Run it exactly as
+written:
 
 ```
-PR=""; \
-if [ ! -f docs/team-operating-guide.md ]; then \
-  for d in $(grep -o '"installPath": *"[^"]*"' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null | cut -d'"' -f4); do \
-    grep -q 'compliance-surveillance-team' "$d/.claude-plugin/plugin.json" 2>/dev/null && PR="$d" && break; done; \
-  if [ -z "$PR" ]; then GP=$(find "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins/marketplaces" -maxdepth 6 -path '*/compliance-surveillance-team/*/docs/team-operating-guide.md' 2>/dev/null | sort -V | tail -1); \
-    [ -n "$GP" ] && PR=$(dirname "$(dirname "$GP")"); fi; fi; \
-SCRIPT="${PR:+$PR/}scripts/engage_probe.py"; \
-CACHED=$(cat "${PR:-.}/.claude/.guard-interpreter" 2>/dev/null); \
+CACHED=$(cat "${CLAUDE_PROJECT_DIR:-.}/.claude/.guard-interpreter" 2>/dev/null); \
 if [ -n "$CACHED" ] && command -v "$CACHED" >/dev/null 2>&1; then ORDER="$CACHED"; \
 elif [ "${OS:-}" = "Windows_NT" ]; then ORDER="python py python3"; \
 else ORDER="python3 python py"; fi; \
 OUT=""; \
 for I in $ORDER; do \
-  OUT=$(PYTHONIOENCODING=utf-8 "$I" "$SCRIPT" --plugin-root "$PR" --interpreter-name "$I" 2>/dev/null) && break; \
+  OUT=$(PYTHONIOENCODING=utf-8 "$I" - "$I" <<'PY'
+import sys, json, re, subprocess
+from pathlib import Path
+
+interp = sys.argv[1]
+home = Path.home()
+cwd = Path.cwd()
+
+def install_paths(obj):
+    out = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == "installPath" and isinstance(v, str):
+                out.append(v)
+            else:
+                out += install_paths(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            out += install_paths(item)
+    return out
+
+def from_registry():
+    try:
+        data = json.loads((home / ".claude/plugins/installed_plugins.json").read_text(encoding="utf-8-sig"))
+    except Exception:
+        return ""
+    for path in install_paths(data):
+        manifest = Path(path) / ".claude-plugin/plugin.json"
+        try:
+            text = manifest.read_text(encoding="utf-8-sig")
+        except Exception:
+            continue
+        if "compliance-surveillance-team" in text:
+            return path
+    return ""
+
+def from_filesystem():
+    hits = []
+    for base in (home / ".claude/plugins/cache", home / ".claude/plugins/marketplaces"):
+        if base.is_dir():
+            for marker in base.rglob("docs/team-operating-guide.md"):
+                if "compliance-surveillance-team" in marker.parts:
+                    hits.append(marker)
+    if not hits:
+        return ""
+    def key(p):
+        return [(int(d), "") if d else (-1, s) for d, s in re.findall(r"(\d+)|(\D+)", str(p))]
+    return str(max(hits, key=key).parent.parent)
+
+root = "" if (cwd / "docs/team-operating-guide.md").is_file() else (from_registry() or from_filesystem())
+script = Path(root, "scripts", "engage_probe.py") if root else Path("scripts/engage_probe.py")
+if not script.is_file():
+    sys.exit(1)
+proc = subprocess.run(
+    [interp, str(script), "--plugin-root", root, "--interpreter-name", interp],
+    capture_output=True, text=True, encoding="utf-8",
+)
+sys.stdout.write(proc.stdout)
+sys.exit(0 if proc.returncode == 0 and proc.stdout else 1)
+PY
+) && break; \
   OUT=""; \
 done; \
 if [ -n "$OUT" ]; then echo "$OUT"; else \
-echo "PROBE_FAILED - run by hand to see why: PYTHONIOENCODING=utf-8 py \"$SCRIPT\" --plugin-root \"$PR\""; fi
+echo "PROBE_FAILED - retry this exact block once by hand with your working interpreter to see the real error"; fi
 ```
 
-Run it exactly as written: the interpreter order (warm cache first, then Windows-aware) and
-`PYTHONIOENCODING=utf-8` are load-bearing, not decoration. **On `PROBE_FAILED`**, run the printed
-command directly to see the real error (never guess, never retry the compound blindly) and read
+The interpreter order (warm cache first, then Windows-aware) and `PYTHONIOENCODING=utf-8` are
+still load-bearing, not decoration - the cache key is now `CLAUDE_PROJECT_DIR`-scoped rather than
+plugin-root-scoped (it has to be resolvable before the plugin root is known; this matches what the
+safety-guard hooks' own cache already falls back to in plugin mode, since `CLAUDE_PLUGIN_ROOT`
+itself is the unreliable-env-var problem described below - worst case on a mismatch is one extra
+interpreter probe, never a correctness issue). **On `PROBE_FAILED`**, retry the block once by hand
+(never guess, never silently give up) and read
 `.claude/skills/engage/references/probe-contract.md` (plugin mode:
 `$PLUGIN_ROOT/.claude/skills/engage/references/probe-contract.md`) - the probe's contract, the
 rationale for each part of the bootstrap, and the known failure modes. That file is for failures
