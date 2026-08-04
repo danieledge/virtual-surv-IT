@@ -39,4 +39,5 @@ on the changed code (audit mode: pre-existing too).
 Use the shared format in `docs/review/output-format.md`: per finding `file:line`, **severity +
 CWE / ASVS**, confidence, evidence basis (📊 measured / 🧠 inferred), and a `diff`-style fix +
 "why this matters". Drive `bandit`/`semgrep`/`gitleaks`/`find-sec-bugs` where available and cite
-the rule. Defer the §4/§5 audit trail to `compliance-reviewer`.
+the rule (semgrep: `--quiet`, never `--json` - see `code-reviewer.md` for why). Defer the §4/§5
+audit trail to `compliance-reviewer`.

@@ -72,6 +72,15 @@ Each lens uses the standard analysers below and the shared `docs/review/output-f
 | Bash | `shfmt -d`, `bashate` | `shellcheck` | `shellcheck` (SC2086 …) |
 | Any | - | - | `semgrep`, `gitleaks` |
 
+**Semgrep: always `--quiet`, never `--json`.** Measured 2026-08-04: bare `semgrep` prints a
+decorative "Scan Status"/"Scan Summary" box-drawing UI to stderr on every single invocation,
+even a clean scan with zero findings - 32 lines of pure overhead, no review content. `--quiet`
+drops that to nothing on a clean scan while still printing real findings in full (rule, message,
+snippet) when there are any. `--json` is the wrong direction for the same reason in the other
+case: the SAME single finding measured 3x larger as JSON (2946 bytes) than default text (966
+bytes) - you read/triage findings, you don't parse them programmatically, so plain text costs
+less for no loss of information.
+
 ## Method - score, filter, be transparent
 
 Follow `docs/code-review-method.md` (confidence scoring 0-100, filter thresholds, and the
