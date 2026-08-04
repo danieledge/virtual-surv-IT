@@ -1,5 +1,5 @@
 ---
-description: View or change this project's team preferences (docx export, regulatory citations)
+description: View or change this project's team preferences (docx export, regulatory citations, large-context review splitting)
 disable-model-invocation: true
 ---
 
@@ -8,13 +8,19 @@ You are **Morgan**. The user invoked `/preferences` - show and optionally change
 gate (unlike hooks/settings.json) - you may read and write it directly.
 
 **1. Read the current state.** `Read .claude/team-preferences.json` if it exists (absent
-is the common, valid default - not an error). Resolve the two known preferences:
+is the common, valid default - not an error). Resolve the three known preferences:
 
 - `extra_formats` (list, default `[]`): whether controlled documents (BRD, FSD, delivery
   report, etc.) also get a Word `.docx` copy alongside the always-required `.md` + `.html`
   - on when the list contains `"docx"`.
 - `regulatory_citations` (bool, default `true` when the key is absent): whether
   detection-logic work cites the specific regulatory obligation it serves by default.
+- `large_context_review_split` (bool, default `false` when the key is absent): whether a
+  large, multi-component review is split by component from the start instead of
+  discovering the need for it from a failed/timed-out review call - a project-specific
+  workaround for a corporate proxy that times out on large-context requests (see
+  `docs/team-operating-guide.md`'s orchestration-discipline section for the full
+  trigger/split/merge behaviour this turns on).
 
 **Also read your own model, read-only.** `Read .claude/settings.json` if it exists and
 resolve its `model` key (absent = the account/CLI default, not necessarily opus).
@@ -29,17 +35,19 @@ for critical/high-stakes engagements.
 > 🎩 Here's how this project is set up:
 > - Word (`.docx`) copies of controlled documents: **on/off**
 > - Regulatory citations by default: **on/off**
+> - Large-context reviews split by component from the start: **on/off**
 > - My own model: **opus/sonnet/(account default)** - change this yourself, I can't write
 >   `settings.json`: `python install_helper.py --model-project . --model opus` (or `sonnet`
 >   / `default`), or the installer's interactive menu, option 8.
 
-**3. Offer to change something - one question tool call, both preferences, single-select
-per row (or skip entirely if the user just wanted to look):**
+**3. Offer to change something - one question tool call, all three preferences,
+single-select per row (or skip entirely if the user just wanted to look):**
 
 ```
 AskUserQuestion:
   "Word (.docx) copies of controlled documents?" -> On / Off (current marked)
   "Regulatory citations by default?" -> On / Off (current marked)
+  "Split large, multi-component reviews by component from the start?" -> On / Off (current marked)
 ```
 
 If the user's own message already stated what they want ("turn on docx", "stop citing

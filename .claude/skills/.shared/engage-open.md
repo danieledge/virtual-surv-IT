@@ -135,7 +135,10 @@ inferring Windows-ness later**; the exec-consent command in
 always gets the PowerShell form shown alongside the `!` form, not only when something else in the
 conversation happens to make Windows obvious), `PYTHON_VERSION=`, `PLUGIN_VERSION=`, `BRANCH=`,
 `PREV_TEAM_VERSION=`, `VERSION_CHANGED=yes|no` (computed - never re-derive it), `EXTRA_FORMATS=`,
-`REGULATORY_CITATIONS=on|off`, then the tooling report, the codebase map header + §3, the newest
+`REGULATORY_CITATIONS=on|off`, `LARGE_CONTEXT_REVIEW_SPLIT=on|off` (project preference - `on`
+means split a large, multi-component review by component from the start rather than waiting to
+discover the need for it from a failed call; see the orchestration-discipline section of
+`docs/team-operating-guide.md`), then the tooling report, the codebase map header + §3, the newest
 CHANGELOG entry, and any team-extensions block.
 
 **The probe does NOT print the operating guide.** Read `docs/team-operating-guide.md` yourself

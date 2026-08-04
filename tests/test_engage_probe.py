@@ -248,6 +248,17 @@ def test_build_report_emits_all_fields_repo_as_project(tmp_path):
     assert "PLUGIN_VERSION=9.9.9" in out
     assert "VERSION_CHANGED=yes" in out  # no map at all - first engagement
     assert "REGULATORY_CITATIONS=on" in out  # default when no preferences file
+    assert "LARGE_CONTEXT_REVIEW_SPLIT=off" in out  # default when no preferences file
+
+
+def test_build_report_emits_large_context_review_split_on_when_set(tmp_path):
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "team-preferences.json").write_text(
+        json.dumps({"large_context_review_split": True}), encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "LARGE_CONTEXT_REVIEW_SPLIT=on" in out
 
 
 def test_build_report_emits_os_windows(monkeypatch, tmp_path):

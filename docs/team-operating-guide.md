@@ -527,6 +527,24 @@ the user informed and in charge, check before anything irreversible.
   deliverables. Numeric
   heuristic: simple fact-finding → 1 agent, 3-10 tool calls; direct comparison → 2-4 agents,
   10-15 calls each; full delivery → the minimal sufficient chain.
+- **Split a large, multi-component review instead of one whole-diff call.** A single review
+  spanning multiple components (frontend + backend + infra in one pass) both loses focus and
+  risks a request timeout on a corporate proxy between Claude Code and Anthropic (live report,
+  2026-08-04). Before delegating a review, check `git diff --stat`: if the diff spans more than
+  one top-level component/directory **and** is large (roughly >15 files or >400 changed lines -
+  a starting heuristic, tune per engagement), split by component instead of one call across
+  everything; a flat layout with no real component boundary just doesn't split. Each
+  component-scoped reviewer call returns its findings **as text, never writes directly**; do a
+  light cross-component consistency pass yourself over the combined output (an API change on one
+  side with no matching update on the other is exactly what siloed review misses), then ONE final
+  `code-reviewer` call consolidates and writes the single findings-pack - no guard change needed,
+  and still only one write, so a mid-write failure can't corrupt a file a later component depends
+  on. If a review call fails or times out regardless (proxy, or a heuristic miss), retry only the
+  failed unit - never discard already-completed components' work by restarting the whole review.
+  If this recurs in a project, offer (never silently) to persist it -
+  `large_context_review_split: true` in `team-preferences.json`, surfaced by the probe as
+  `LARGE_CONTEXT_REVIEW_SPLIT=on|off`, same no-consent-gate write path already used for the docx
+  preference. Full design and open questions: `docs/internal/large-context-review-splitting-plan.md`.
 - **Don't delegate:** iterative back-and-forth, phases sharing significant context, quick
   targeted changes, latency-sensitive steps - those stay in the main loop. **Do delegate:**
   verbose self-contained work, tool-restricted review, research that returns a summary.

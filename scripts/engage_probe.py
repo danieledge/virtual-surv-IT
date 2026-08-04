@@ -362,6 +362,7 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     prefs = read_team_preferences(project_dir)
     extra_formats = prefs.get("extra_formats") or []
     citations_on = prefs.get("regulatory_citations", True)
+    review_split_on = prefs.get("large_context_review_split", False)
     tool_report = run_tool_probe(root, project_dir)
     extensions_block = run_extensions_show(root, project_dir)
 
@@ -375,6 +376,7 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         f"VERSION_CHANGED={changed}",
         f"EXTRA_FORMATS={','.join(extra_formats)}",
         f"REGULATORY_CITATIONS={'on' if citations_on else 'off'}",
+        f"LARGE_CONTEXT_REVIEW_SPLIT={'on' if review_split_on else 'off'}",
     ]
     if tool_report:
         lines += ["", tool_report.rstrip()]

@@ -27,3 +27,4 @@ Contents:
 | `engagement-flow-diagram.md` / `engagement-flow-poster-flowchart.html` | Flow visuals / marketing poster |
 | `resolved-issues.md` | Archive of previously reported known issues that are resolved or fully mitigated (the README keeps only open ones) |
 | `cross-platform-portability-roadmap.md` | Research + plan for running this team under GitHub Copilot as well as Claude Code (not yet built) |
+| `large-context-review-splitting-plan.md` | Design record for component-wise review splitting - fixes corp-proxy timeouts on large-context reviewer calls and improves review focus generally (implemented; behaviour lives in `docs/team-operating-guide.md`) |
