@@ -9,5 +9,8 @@ ruff>=0.5
 black>=24.0
 mypy>=1.10
 bandit>=1.7
-pip-audit>=2.7
-semgrep>=1.75
+# pip-audit and semgrep deliberately NOT listed here (2026-08-04): both make unconditional
+# network calls (pip-audit's vulnerability-index refresh, semgrep's version-check ping and,
+# with --config auto, its per-run ruleset fetch) with no reliable offline mode found - live
+# corp-proxy reports showed them hanging rather than failing fast. See code-reviewer.md and
+# scripts/check-review-tools.sh for the full removal rationale.

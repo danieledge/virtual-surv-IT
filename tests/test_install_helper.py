@@ -2544,71 +2544,19 @@ def test_probe_analyser_output_times_out_gracefully(tmp_path, monkeypatch):
     assert all("timed out" in detail for _, _, detail in results)
 
 
-def test_probe_analyser_output_writes_an_empty_requirements_fixture(tmp_path, monkeypatch):
-    """Real live bug in the probe's own first draft (2026-08-04): pinning
-    requests==2.32.3 as the "clean" pip-audit fixture picked up two genuine CVEs and got
-    (correctly, if confusingly) reported as NOISY - a moving target, since any pinned
-    real package can accrue a CVE later. Fixed to an empty requirements.txt so this check
-    tests only the suppression flags, never a live vulnerability feed."""
+def test_probe_analyser_output_no_longer_names_semgrep_or_pip_audit():
+    """Both removed entirely (2026-08-04): repeated live corp-proxy hangs from network
+    calls neither could reliably avoid, even after their own suppression-flag fixes (a
+    local semgrep rule file, a bounded pip-audit --timeout) - see code-reviewer.md for
+    the full removal rationale. Neither name should appear in the checks list at all, so
+    neither is ever invoked even if installed."""
     import install_helper as ih
 
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    list(ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout="")))
-    assert (tmp_path / "probe-requirements.txt").read_text(encoding="utf-8") == ""
+    checked_names = {name for name, *_ in ih._TOOL_OUTPUT_CHECKS}
+    assert "semgrep" not in checked_names
+    assert "pip-audit" not in checked_names
 
 
-def test_probe_analyser_output_writes_an_offline_semgrep_rule_fixture(tmp_path, monkeypatch):
-    """semgrep --config=auto fetches a ruleset over the network on every run - measured
-    ~20s with working network, and it does not fail fast when that network is blocked
-    (live report, 2026-08-04). Switched to a local rule file so this check has zero
-    network dependency, matching the whole point of a diagnostic for corp-proxy users."""
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    list(ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout="")))
-    assert (tmp_path / "rule.yml").is_file()
-    assert "rules:" in (tmp_path / "rule.yml").read_text(encoding="utf-8")
-
-
-def test_probe_analyser_output_disables_semgrep_version_check(tmp_path, monkeypatch):
-    """Local --config alone was NOT enough (live report, 2026-08-04, found AFTER the
-    fixture fix above shipped): semgrep does an unconditional version-check network call
-    on every invocation regardless of --config, confirmed via `semgrep --help`
-    (SEMGREP_ENABLE_VERSION_CHECK) and reproduced live - a local-config run still hung
-    under a genuinely blocked proxy until --disable-version-check --metrics=off were
-    added, which returned clean in ~3.7s under the same blocked-network condition."""
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    calls = []
-
-    def runner(argv, **kw):
-        calls.append(argv)
-        return _proc(0, stdout="")
-
-    list(ih.probe_analyser_output(tmp_path, runner=runner))
-    semgrep_call = next(c for c in calls if c[0] == "semgrep")
-    assert "--disable-version-check" in semgrep_call
-    assert "--metrics=off" in semgrep_call
-
-
-def test_probe_analyser_output_bounds_pip_audit_with_its_own_timeout_flag(tmp_path, monkeypatch):
-    """pip-audit hung 15s+ even with zero packages to check, and did not fail fast at all
-    under a blocked proxy (live-tested, 2026-08-04) - its own --timeout flag bounds that,
-    tighter than the outer subprocess timeout so it fails predictably first."""
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    calls = []
-
-    def runner(argv, **kw):
-        calls.append(argv)
-        return _proc(0, stdout="")
-
-    list(ih.probe_analyser_output(tmp_path, runner=runner))
-    pip_audit_call = next(c for c in calls if c[0] == "pip-audit")
-    assert "--timeout" in pip_audit_call
-    assert pip_audit_call[pip_audit_call.index("--timeout") + 1] == "5"
 
 
 def test_run_tool_check_reports_ok_when_all_clean(capsys, monkeypatch):

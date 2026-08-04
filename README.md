@@ -631,7 +631,7 @@ lean). The rest install via the OS / build tooling:
 
 | Language | Install |
 |---|---|
-| Python | `pip install -r requirements-review.txt` (ruff, black, mypy, bandit, pip-audit, semgrep) |
+| Python | `pip install -r requirements-review.txt` (ruff, black, mypy, bandit) |
 | Bash | `apt install shellcheck` · `go install mvdan.cc/sh/v3/cmd/shfmt@latest` |
 | PowerShell | `pwsh -c 'Install-Module PSScriptAnalyzer -Scope CurrentUser'` |
 | Java | `checkstyle`, `pmd`, `spotbugs` via your build tool (Maven/Gradle) or `brew`/`apt` |

@@ -63,37 +63,28 @@ Each lens uses the standard analysers below and the shared `docs/review/output-f
 
 | Language | Lint / style | Types / bugs | Security |
 |---|---|---|---|
-| Python | `ruff`, `black --check` | `mypy` | `bandit`, `pip-audit` |
-| TypeScript | `eslint` | `tsc --noEmit` | `eslint` + `semgrep` |
-| SQL | `sqlfluff lint` | - | `semgrep` |
+| Python | `ruff`, `black --check` | `mypy` | `bandit` |
+| TypeScript | `eslint` | `tsc --noEmit` | `eslint` |
+| SQL | `sqlfluff lint` | - | - |
 | Scala | `scalafmt --test`, `scalafix` | `scalac -Xlint`, `wartremover` | `scapegoat` |
 | Java | `checkstyle`, `pmd` | `error-prone`, `spotbugs` | SpotBugs + `find-sec-bugs` |
 | PowerShell | `Invoke-ScriptAnalyzer` | - | PSScriptAnalyzer security rules |
 | Bash | `shfmt -d`, `bashate` | `shellcheck` | `shellcheck` (SC2086 …) |
-| Any | - | - | `semgrep`, `gitleaks` |
+| Any | - | - | `gitleaks` |
 
-**Semgrep: always `--quiet`, never `--json`.** Measured 2026-08-04: bare `semgrep` prints a
-decorative "Scan Status"/"Scan Summary" box-drawing UI to stderr on every single invocation,
-even a clean scan with zero findings - 32 lines of pure overhead, no review content. `--quiet`
-drops that to nothing on a clean scan while still printing real findings in full (rule, message,
-snippet) when there are any. `--json` is the wrong direction for the same reason in the other
-case: the SAME single finding measured 3x larger as JSON (2946 bytes) than default text (966
-bytes) - you read/triage findings, you don't parse them programmatically, so plain text costs
-less for no loss of information.
-
-**Semgrep: also always `--disable-version-check --metrics=off`.** Separate from `--quiet` and
-NOT fixed by it: semgrep makes an unconditional "check for a newer version" network call on
-every invocation, completely independent of `--config` - confirmed via `semgrep --help`
-(`SEMGREP_ENABLE_VERSION_CHECK`) and reproduced live, 2026-08-04: a run that used a fully local
-`--config` still hung under a genuinely blocked corporate proxy until these two flags were
-added, which returned clean in ~3.7s under the identical blocked-network condition. `--config
-auto` (or any registry-backed `--config`) has a SEPARATE, NOT-yet-solved network dependency of
-its own - it re-fetches its ruleset over the network on every single run, with no local caching
-observed - so a corp-proxy environment can still hang or fail on the ruleset fetch itself even
-with these flags. If semgrep hangs or errors here, treat it the same as "tool missing" (§ above,
-"Run whatever is installed... never silently skip a language" + the step-0 tool-availability
-skip): don't keep retrying, note the gap, and mark the affected findings 🧠 inferred for the
-rest of the session.
+**`semgrep` and `pip-audit` are deliberately NOT used, even if installed** (removed
+2026-08-04, after `--quiet`/`--disable-version-check`/`--metrics=off` fixes still weren't
+enough - see git history for the measurements). Both make network calls with no reliable
+offline mode found: `pip-audit` refreshes its vulnerability index on every run even
+against zero packages and doesn't fail fast when that network is blocked; `semgrep` makes
+an unconditional version-check ping regardless of `--config`, and `--config auto`
+additionally re-fetches its ruleset over the network on every single run with no local
+caching observed. Both caused repeated live corp-proxy hangs. Neither is listed in
+`scripts/check-review-tools.sh`'s probe, so neither ever shows as "available" - **do not
+invoke them even if you notice they happen to be on PATH.** Python security coverage is
+`bandit` only for now; SQL and the language-agnostic "Any" row lose dedicated
+security-analyser coverage entirely until a network-safe replacement is found - flag this
+explicitly as 🧠 inferred-only coverage for those, same as any other missing tool.
 
 ## Method - score, filter, be transparent
 

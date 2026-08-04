@@ -44,7 +44,7 @@ asserts YOU trust its binary.*
       "command": "cxcli scan --format sarif -o {workspace}/data/cx.sarif {target}",
       "probe": "cxcli",
       "lenses": ["security"],
-      "replaces": ["bandit", "semgrep"],
+      "replaces": ["bandit"],
       "output": "sarif",
       "severity_map": {"error": "critical", "warning": "warning", "note": "style"}
     }

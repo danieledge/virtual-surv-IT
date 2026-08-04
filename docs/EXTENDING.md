@@ -49,7 +49,7 @@ Or one non-interactive command:
 ```bash
 python3 -m scripts.extensions add-tool --name cx \
   --command "cxcli scan --format sarif -o {workspace}/data/cx.sarif {target}" \
-  --lenses security --replaces bandit,semgrep --output sarif \
+  --lenses security --replaces bandit --output sarif \
   --severity-map error=critical,warning=warning
 ```
 
@@ -63,7 +63,7 @@ whether the binary resolves on PATH. Or hand-edit the same thing into
 ```json
 {"analysers": [
   {"name": "cx", "command": "cxcli scan --format sarif -o {workspace}/data/cx.sarif {target}",
-   "probe": "cxcli", "lenses": ["security"], "replaces": ["bandit", "semgrep"],
+   "probe": "cxcli", "lenses": ["security"], "replaces": ["bandit"],
    "output": "sarif", "severity_map": {"error": "critical", "warning": "warning"}}
 ]}
 ```
@@ -87,7 +87,7 @@ Commands must be plain argv: any `; | & $ >` refuses the entry (you'll see
 `EXTENSIONS-INVALID` - that's the smuggling defence working).
 
 During reviews the team now runs your tool for the security lens, and `replaces` means
-findings are NOT degraded because bandit/semgrep are absent. SARIF output flows through:
+findings are NOT degraded because bandit is absent. SARIF output flows through:
 
 ```bash
 python3 -m scripts.convert_sarif artifacts/<ws>/data/cx.sarif --slug <slug> --scope "src/"

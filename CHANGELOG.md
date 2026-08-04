@@ -30,6 +30,10 @@ didn't cover.
   `DEFINITION-OF-DONE.md` and `/build-solution` now match the routing table's own rule
   (detection logic / regulated data / §4 thresholds only, not every code review).
 
+### Removed
+- Temporarily removed `semgrep` and `pip-audit` from code-review tooling, pending further
+  research into token usage and compatibility issues reported with the framework.
+
 ## [0.33.7] - 2026-08-03 - Windows-detection, a missed status word, and a docs pass from a live session
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.

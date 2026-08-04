@@ -54,9 +54,13 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
 
 2. **Deep security review** (`code-reviewer` in **audit** mode - pre-existing issues stay in scope).
    Load the **security + per-language + architecture** lenses via `docs/review/agent-router.md`, and
-   drive the **security analysers** where available: `bandit`, `semgrep`, `gitleaks` / secret-scan,
+   drive the **security analysers** where available: `bandit`, `gitleaks` / secret-scan,
    `find-sec-bugs` (JVM), `ShellCheck`, `PSScriptAnalyzer` security rules, plus a **dependency /
-   supply-chain** scan (`pip-audit`, `npm audit`, `osv-scanner`) for known-vulnerable dependencies.
+   supply-chain** scan (`npm audit`, `osv-scanner`) for known-vulnerable dependencies. (`semgrep`
+   and `pip-audit` deliberately excluded - both made unconditional network calls with no reliable
+   offline mode found, causing repeated live corp-proxy hangs; see `code-reviewer.md` for the
+   measurements. Python dependency-CVE coverage has no dedicated tool for now until a
+   network-safe replacement is found - flag as 🧠 inferred-only.)
    Cite **OWASP ASVS / CWE / SEI CERT** per finding, with confidence scoring, evidence basis
    (📊 measured / 🧠 inferred - never let an inference read as fact), and filter transparency
    (`docs/code-review-method.md`). Cover, at depth: injection (CWE-78/89/22), deserialisation /

@@ -41,13 +41,16 @@ if [ "$REFRESH" -eq 0 ] && [ -f "$CACHE" ] && [ -n "$(find "$CACHE" -mtime "-${T
 fi
 
 # tool | language/role | install hint
+# pip-audit and semgrep deliberately NOT probed (2026-08-04): both make unconditional
+# network calls with no reliable offline mode found - live corp-proxy reports showed them
+# hanging rather than failing fast, both in real reviews and in this probe itself. Not
+# listed here at all so they never show as "available" and never get invoked, even if
+# installed. See code-reviewer.md for the full removal rationale.
 TOOLS=(
   "ruff|Python lint/style|pip install -r requirements-review.txt"
   "mypy|Python types|pip install -r requirements-review.txt"
   "bandit|Python security|pip install -r requirements-review.txt"
   "black|Python format|pip install -r requirements-review.txt"
-  "pip-audit|Python deps CVEs|pip install -r requirements-review.txt"
-  "semgrep|multi-lang security|pip install -r requirements-review.txt"
   "gitleaks|secret scan|apt/brew install gitleaks"
   "shellcheck|Bash lint|apt install shellcheck"
   "shfmt|Bash format|go install mvdan.cc/sh/v3/cmd/shfmt@latest"

@@ -86,7 +86,6 @@ RECOMMENDED_ALLOW = (
     "Bash(ruff *)",
     "Bash(mypy *)",
     "Bash(bandit *)",
-    "Bash(semgrep *)",
     "Bash(shellcheck *)",
     "Bash(python -m scripts.*)",
     "Bash(python3 -m scripts.*)",
@@ -2000,9 +1999,10 @@ class Installer:
         a documentation claim (terminal/color detection is not guaranteed uniform,
         especially on Git Bash/Windows)."""
         self.step_intro(
-            "Runs each installed analyser (semgrep, gitleaks, bandit, mypy, pip-audit) "
-            "against a trivial clean file with the flags code-reviewer is told to use, "
-            "and checks whether the output actually comes back clean here."
+            "Runs each installed analyser (gitleaks, bandit, mypy, ruff) against a "
+            "trivial clean file with the flags code-reviewer is told to use, and checks "
+            "whether the output actually comes back clean here. (semgrep and pip-audit "
+            "are deliberately excluded - see code-reviewer.md for why.)"
         )
         if run_tool_check(self.style, self.marks) == 0:
             self.step_ok("Analyser output cleanliness", "all installed analysers clean")
@@ -2553,58 +2553,35 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
 
 # ------------------------------------------------------------------ analyser output check
 #
-# 2026-08-04: code-reviewer's own analysers (semgrep, gitleaks, bandit, mypy, pip-audit)
-# were found to leak decorative overhead into their captured output by default - some of
-# it (semgrep's scan-status box, gitleaks' banner) is unconditional, some of it (mypy's
-# ANSI color, bandit's animated progress spinner) turned out to depend on the environment's
-# FORCE_COLOR/terminal-detection state, which live research showed is NOT reliably uniform
-# across platforms: rich (bandit's spinner library) has a documented, unresolved detection
-# mismatch specifically on Git Bash/mintty - the terminal Claude Code actually uses on
-# Windows - since mintty doesn't present as a native Win32 console the way rich/colorama's
-# detection expects. Rather than assert the fix works everywhere, this makes it checkable:
-# runs each analyser with its recommended flags against a trivial, clean throwaway file and
-# reports whether the captured output actually came back clean IN THIS environment.
+# 2026-08-04: code-reviewer's own analysers (gitleaks, bandit, mypy) were found to leak
+# decorative overhead into their captured output by default - some of it (gitleaks'
+# banner) is unconditional, some of it (mypy's ANSI color, bandit's animated progress
+# spinner) turned out to depend on the environment's FORCE_COLOR/terminal-detection state,
+# which live research showed is NOT reliably uniform across platforms: rich (bandit's
+# spinner library) has a documented, unresolved detection mismatch specifically on Git
+# Bash/mintty - the terminal Claude Code actually uses on Windows - since mintty doesn't
+# present as a native Win32 console the way rich/colorama's detection expects. Rather than
+# assert the fix works everywhere, this makes it checkable: runs each analyser with its
+# recommended flags against a trivial, clean throwaway file and reports whether the
+# captured output actually came back clean IN THIS environment.
+#
+# semgrep and pip-audit are deliberately NOT checked here at all (removed 2026-08-04,
+# after their own suppression-flag fixes still weren't enough): both make network calls
+# with no reliable offline mode found - pip-audit refreshes its vulnerability index on
+# every run even against zero packages and doesn't fail fast when that network is blocked;
+# semgrep makes an unconditional version-check ping regardless of --config, and --config
+# auto additionally re-fetches its ruleset over the network on every run with no local
+# caching observed. Both caused repeated live corp-proxy hangs, in this check and in real
+# reviews. See code-reviewer.md for the full removal rationale - this probe simply no
+# longer names them, so they're never invoked even if installed.
 
 _TOOL_CHECK_CLEAN_PY = "def add(a: int, b: int) -> int:\n    return a + b\n"
 
-# A local, offline rule file - NOT --config=auto. auto fetches a ruleset from semgrep's
-# registry over the network on every run (measured ~20s even with working network; under a
-# corp-restricted proxy - exactly this feature's target environment - it can hang far past
-# that with no clean failure). The pattern here can never match anything, so this always
-# comes back a clean 0-finding run, in ~3.5s, with zero network dependency either way.
-#
-# --disable-version-check --metrics=off matter EVEN WITH a local --config (live report,
-# 2026-08-04: this check itself timed out under real corp-proxy conditions, despite the
-# local-rule-file fix above): semgrep does an unconditional "check for a newer version"
-# network call on every invocation, completely independent of --config - confirmed via
-# `semgrep --help` ("SEMGREP_ENABLE_VERSION_CHECK... checks Semgrep servers"), and
-# reproduced live (a local-config run under a genuinely blocked proxy still hung; the same
-# run with these two flags added returned clean in ~3.7s). --metrics=off is defense in
-# depth for the same class of call (metrics default to "auto", off only when --config
-# pulls from the server or the user is logged in - which a local file shouldn't trigger,
-# but an explicit off costs nothing and removes the ambiguity).
-_SEMGREP_OFFLINE_RULE = (
-    "rules:\n"
-    "  - id: probe-noop-rule\n"
-    "    languages: [python]\n"
-    "    message: unreachable\n"
-    "    severity: INFO\n"
-    "    pattern: __PROBE_UNREACHABLE_PATTERN__()\n"
-)
-
 # (binary, recommended-flags, needs a real target file/dir to run against, per-call timeout)
-# pip-audit gets its OWN short --timeout on top of the outer one: even with an empty
-# requirements file (zero packages, so nothing to actually look up) it still tries to
-# refresh its vulnerability index over the network - measured ~15s with working network,
-# and it does not fail fast at all when that network is blocked (simulated: still hadn't
-# returned after 15s). --timeout bounds pip-audit's OWN socket attempts; the outer timeout
-# below is just the last-resort backstop if that's somehow not honoured.
 _TOOL_OUTPUT_CHECKS = (
     ("ruff", ["check", "--quiet"], "file", 20),
     ("mypy", ["--no-color-output", "--no-error-summary"], "file", 20),
     ("bandit", ["-q"], "file", 20),
-    ("pip-audit", ["--progress-spinner", "off", "--timeout", "5", "-r"], "requirements", 15),
-    ("semgrep", ["--config", "rule.yml", "--quiet", "--disable-version-check", "--metrics=off"], "file", 20),
     ("gitleaks", ["detect", "--no-git", "--no-banner", "--log-level", "error", "--source"], "dir", 20),
 )
 
@@ -2613,31 +2590,21 @@ def probe_analyser_output(tmpdir: Path, runner=None):
     """Runs each known-noisy analyser, with its recommended suppression flags, against a
     trivial clean throwaway file - a run with zero real findings should come back empty or
     near-empty. A GENERATOR, not a batch return: yields (name, status, detail) as each tool
-    finishes, specifically so a caller can print progress live - the previous batched
-    version ran all six tools before printing anything, which on a slow or network-blocked
-    tool (pip-audit, formerly semgrep too) looked exactly like a hang (live report,
-    2026-08-04). Status is one of SKIP (not installed), OK (clean), NOISY (leaked
-    decoration - an escape code, or unexpectedly large output for a trivial clean file),
-    ERROR (crashed, timed out, or a flag wasn't recognised - a version-pin mismatch is
-    exactly this shape)."""
+    finishes, specifically so a caller can print progress live - an earlier batched version
+    ran every tool before printing anything, which on a slow or network-blocked tool
+    looked exactly like a hang (live report, 2026-08-04). Status is one of SKIP (not
+    installed), OK (clean), NOISY (leaked decoration - an escape code, or unexpectedly
+    large output for a trivial clean file), ERROR (crashed, timed out, or a flag wasn't
+    recognised - a version-pin mismatch is exactly this shape)."""
     runner = runner or subprocess.run
     target = tmpdir / "probe.py"
     target.write_text(_TOOL_CHECK_CLEAN_PY, encoding="utf-8")
-    # Empty on purpose: a real pinned package can accrue a genuine CVE over time (found
-    # live, 2026-08-04 - requests==2.32.3 legitimately has two), which isn't decoration
-    # and would make this probe flag a real finding as noise. Zero packages means zero
-    # findings possible, so this tests only the suppression flags, not a moving CVE feed.
-    req = tmpdir / "probe-requirements.txt"
-    req.write_text("", encoding="utf-8")
-    (tmpdir / "rule.yml").write_text(_SEMGREP_OFFLINE_RULE, encoding="utf-8")
 
     for name, flags, target_kind, per_call_timeout in _TOOL_OUTPUT_CHECKS:
         if not shutil.which(name):
             yield (name, "SKIP", "not installed")
             continue
-        arg_target = {"file": str(target), "requirements": str(req), "dir": str(tmpdir)}[
-            target_kind
-        ]
+        arg_target = {"file": str(target), "dir": str(tmpdir)}[target_kind]
         argv = [name, *flags, arg_target]
         try:
             proc = runner(argv, capture_output=True, text=True, cwd=tmpdir, timeout=per_call_timeout)
@@ -3025,10 +2992,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--check-tools",
         action="store_true",
-        help="standalone: verify code-reviewer's analysers (semgrep, gitleaks, bandit, "
-        "mypy, pip-audit) actually produce clean output with their recommended flags on "
-        "THIS machine, and exit - environment/terminal detection for suppressing color "
-        "and progress spinners is not guaranteed uniform across platforms",
+        help="standalone: verify code-reviewer's analysers (gitleaks, bandit, mypy, "
+        "ruff - semgrep/pip-audit deliberately excluded) actually produce clean output "
+        "with their recommended flags on THIS machine, and exit - environment/terminal "
+        "detection for suppressing color and progress spinners is not guaranteed uniform "
+        "across platforms",
     )
     parser.add_argument(
         "--check-env",
