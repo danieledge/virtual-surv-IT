@@ -2464,12 +2464,25 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
         if proc.returncode == 0:
             print(f"{ok} enabled for {project}")
             return 0
-        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
-        last = detail[-1] if detail else "unknown error"
-        if "group policy" not in last.lower() and "blocked" not in last.lower():
-            print(f"{fail} enable failed for {project}: {last}")
+        stderr = (proc.stderr or "").strip()
+        stdout = (proc.stdout or "").strip()
+        combined = stderr or stdout
+        if "group policy" not in combined.lower() and "blocked" not in combined.lower():
+            if combined:
+                print(f"{fail} enable failed for {project} (exit {proc.returncode}): {combined}")
+            else:
+                # Both streams empty - the previous message here was just "unknown error",
+                # which is the exact "the only error is 'failed'" complaint (live report,
+                # 2026-08-04): nothing to debug from. Print the one fact we DO have (the exit
+                # code) and the exact command to re-run by hand, matching the "retry by hand"
+                # pattern used elsewhere in this repo (e.g. the step-0 probe's PROBE_FAILED).
+                print(
+                    f"{fail} enable failed for {project} (exit {proc.returncode}, no output "
+                    "on stdout or stderr) - run this by hand to see the real error: "
+                    f"claude plugin enable --scope project {PLUGIN_ID}"
+                )
             return 1
-        blocked = last
+        blocked = combined
     # The CLI is only writing enabledPlugins into the project settings - do it directly.
     try:
         target = project / ".claude" / "settings.json"
