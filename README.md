@@ -14,20 +14,24 @@
 
 🏷️ **Current version: 0.33.18** (2026-08-04) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
-**Biggest features this cycle:**
-- 🪟 **The step-0 probe now tells the model whether it's on Windows.** Instead of inferring
-  Windows-ness from context at the moment it matters, `engage_probe.py` reports `OS=` as a fact -
-  same reasoning as why `INTERPRETER=` already exists. Closes a live miss where the PowerShell
-  exec-consent command was left out on a real Windows host.
-- ✅ **A mechanical gate gap closed.** A closed delivery report could still read `Status
-  \`Pending\`` with the DoD gate silent, because the check only ever looked for draft/in review/in
-  progress, never "pending" itself.
-- 🗂️ **A one-page quick-start reference, as a PDF.** Renders directly in GitHub's file viewer
-  (GitHub never renders `.html` inline); the whole mental model, the four steps to a first
-  engagement, and every command with when to reach for it.
-- 🚧 **The installer now defaults to `dev`, not `main`.** During this fast-moving PoC phase,
-  promoting to `main` is eval-gated and costs real API tokens, so `main` can lag `dev` noticeably -
-  a banner on `main` and the installer's own default both point new users at `dev` instead.
+**Biggest features this cycle: `install_helper.py` rebuilt end-to-end.**
+- 🧭 **The menu reorganized and hardened.** A flat 10-option list became 6 top-level items plus
+  Diagnostics/Advanced submenus; every setting-writing item now states its scope ("this machine"
+  vs "per project"); invalid input no longer redraws the whole menu; `--demo` now covers the
+  entire session instead of one fixed preview.
+- 🔧 **Seven code-review analysers made individually configurable** (ruff, mypy, bandit, black,
+  sqlfluff, shfmt, gitleaks) - on/off/auto per project or machine-wide, with a live safety check
+  that catches a hanging or misconfigured tool *before* it's ever forced "on", the same failure
+  shape that made semgrep/pip-audit unsafe, caught at config time instead of mid-review.
+- 🩺 **A real diagnostic suite.** `--check-tools`/`--check-env`/`--selftest`: the comprehensive
+  check now runs a throwaway synthetic "review this code" engagement end to end - guard hooks,
+  real analyser *detection* (not just clean-output checking), the full engagement-state
+  lifecycle - and every diagnostic ends with a pass/fail summary, not a scrollback hunt.
+- 🖥️ **Run it from anywhere, and see this machine's defaults directly.** A `virt-surv` shell
+  alias (verified after writing, not just written) with folder-scoped `configure`/`archive`/
+  `list-engagements`; a one-click "use the recommended settings?" fast path; and a dedicated view/
+  edit for this machine's own defaults (docx, citations, review tools, Morgan's model), with real
+  project-overrides-machine precedence enforced everywhere it's read, not just at setup time.
 
 **Also in this cycle:** a "what Morgan cannot do" section stating the boundaries as plainly as
 the capabilities · the locked review-menu construction disambiguated from the intake gate's own
