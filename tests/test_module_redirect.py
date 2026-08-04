@@ -1,7 +1,10 @@
 """The module-form redirect hook (scripts/module_form_redirect.py, 2026-07-30):
-`-m scripts.<name>` in plugin mode exits 1 before the script loads; the hook catches
-it pre-run and hands the model the bundled path-form command. Convenience redirect,
-fail-open by design - it must never block anything it cannot improve."""
+`-m scripts.<name>` in plugin mode exits 1 before the script loads. When every matched
+name resolves to a bundled copy, the hook rewrites the command transparently
+(`updatedInput` + `permissionDecision: allow`, 2026-08-04) so it just runs, no block. A
+partial match (some names resolve, some don't) falls back to blocking with a corrective
+message. Convenience redirect, fail-open by design - it must never block anything it
+cannot improve."""
 
 from __future__ import annotations
 
@@ -40,13 +43,39 @@ def test_staged_and_live_are_byte_synced():
     assert HOOK.read_bytes() == STAGED.read_bytes()
 
 
-def test_plugin_mode_redirects_with_exact_path(tmp_path):
+def test_plugin_mode_rewrites_transparently_no_block(tmp_path):
     root = tmp_path / "plugin"
     (root / "scripts").mkdir(parents=True)
     (root / "scripts" / "engagement_state.py").write_text("", encoding="utf-8")
     project = tmp_path / "project"
     project.mkdir()
     proc = _run(_bash("py -m scripts.engagement_state list", project), plugin_root=str(root))
+    assert proc.returncode == 0
+    assert proc.stderr == ""
+    payload = json.loads(proc.stdout)
+    out = payload["hookSpecificOutput"]
+    assert out["hookEventName"] == "PreToolUse"
+    assert out["permissionDecision"] == "allow"
+    updated = out["updatedInput"]["command"]
+    assert str(root / "scripts" / "engagement_state.py") in updated
+    assert "list" in updated
+    assert "-m scripts.engagement_state" not in updated
+
+
+def test_plugin_mode_partial_match_falls_back_to_block(tmp_path):
+    root = tmp_path / "plugin"
+    (root / "scripts").mkdir(parents=True)
+    (root / "scripts" / "engagement_state.py").write_text("", encoding="utf-8")
+    # no bundled copy for "missing_script" - a silent rewrite would leave that half broken
+    project = tmp_path / "project"
+    project.mkdir()
+    proc = _run(
+        _bash(
+            "py -m scripts.engagement_state list && py -m scripts.missing_script run",
+            project,
+        ),
+        plugin_root=str(root),
+    )
     assert proc.returncode == 2
     assert str(root / "scripts" / "engagement_state.py") in proc.stderr
     assert "keep the same interpreter" in proc.stderr

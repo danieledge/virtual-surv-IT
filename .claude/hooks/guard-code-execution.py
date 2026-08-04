@@ -162,8 +162,16 @@ def _company_allowed(segment: str) -> bool:
 #     immediately after `.py`, so the quoted argument IS the script path - same basename
 #     trust as the unquoted form (lexical residual per ADR-002; a quoted path containing a
 #     segment separator splits in _segments and fails safe to the exec check).
+#
+# 2026-08-04: a leading `VAR=value ` env-var prefix (e.g. `PYTHONIOENCODING=utf-8 python
+# ".../engage_probe.py"`, needed on Windows cp1252 terminals) broke the anchor - the segment
+# no longer STARTS with the python token, so this pattern failed to match while the unanchored
+# _EXEC_RE still caught "python ... .py" further into the string, blocking the team's own
+# allow-listed script. `_EXEC_PATTERNS` already carries this exact `(?:\w+=\S+\s+)*` prefix for
+# pytest/unittest/pre-commit/powershell for the same reason - applied here too, zero or more
+# repetitions so chained env vars (`A=1 B=2 python ...`) also pass.
 _TEAM_ALLOW = re.compile(
-    rf"^(?:{_PY}\s+-m\s+scripts\."
+    rf"^(?:\w+=\S+\s+)*(?:{_PY}\s+-m\s+scripts\."
     rf"|{_PY}\s+scripts{_SEP}"
     rf"|{_PY}\s+\"[^\"]*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}\""
     rf"|{_PY}\s+'[^']*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}'"

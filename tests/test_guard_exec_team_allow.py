@@ -162,6 +162,44 @@ def test_exec_patterns_identical_to_live_guard():
     assert STAGED._SEGMENT_DELIMS == LIVE._SEGMENT_DELIMS
 
 
+# ------------------------------------------------ env-var prefix before the interpreter
+# (2026-08-04): a compound command like `OUT=$(PYTHONIOENCODING=utf-8 python ".../x.py")`
+# splits (on `$(`) into a segment starting with `PYTHONIOENCODING=utf-8 python ...`, not
+# with the python token itself - the old anchor required the interpreter literally at
+# segment start, so team-allowed scripts got blocked whenever a Windows cp1252 workaround
+# prefixed an env var. Live report: engage_probe.py blocked this way during /engage step 0.
+
+
+def test_env_var_prefixed_team_script_allowed():
+    for cmd in (
+        'PYTHONIOENCODING=utf-8 python "/plugin/scripts/engage_probe.py" --probe',
+        "PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python -m scripts.engagement_state list",
+        'FOO=1 BAR=baz python "/x/scripts/render_html.py" a.md',
+    ):
+        assert _allowed(cmd), cmd
+
+
+def test_the_live_compound_command_regression_no_longer_false_positives():
+    """Reconstructs the exact live failure: `$(` segment-splitting leaves the env-var
+    prefix attached to the inner segment, which must still resolve to team-allowed."""
+    cmd = 'OUT=$(PYTHONIOENCODING=utf-8 python "/plugin/scripts/engage_probe.py" --probe)'
+    segs = STAGED._segments(cmd)
+    inner = [s for s in segs if "engage_probe" in s]
+    assert len(inner) == 1
+    assert _allowed(inner[0]), inner[0]
+
+
+def test_env_var_prefix_does_not_loosen_non_team_scripts():
+    """The fix widens WHAT CAN PRECEDE an allowed form, not WHAT COUNTS as allowed - an
+    env-var prefix in front of a non-team script must still be blocked."""
+    for cmd in (
+        "FOO=1 python /tmp/evil.py",
+        "PYTHONIOENCODING=utf-8 python /tmp/scripts/evil.py",
+    ):
+        assert not _allowed(cmd), cmd
+        assert STAGED._EXEC_RE.search(cmd), cmd
+
+
 def test_live_guard_matches_staged_once_applied():
     """HARD FAILURE, never a skip.
 
