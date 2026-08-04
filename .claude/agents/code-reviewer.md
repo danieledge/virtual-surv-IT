@@ -81,6 +81,20 @@ case: the SAME single finding measured 3x larger as JSON (2946 bytes) than defau
 bytes) - you read/triage findings, you don't parse them programmatically, so plain text costs
 less for no loss of information.
 
+**Semgrep: also always `--disable-version-check --metrics=off`.** Separate from `--quiet` and
+NOT fixed by it: semgrep makes an unconditional "check for a newer version" network call on
+every invocation, completely independent of `--config` - confirmed via `semgrep --help`
+(`SEMGREP_ENABLE_VERSION_CHECK`) and reproduced live, 2026-08-04: a run that used a fully local
+`--config` still hung under a genuinely blocked corporate proxy until these two flags were
+added, which returned clean in ~3.7s under the identical blocked-network condition. `--config
+auto` (or any registry-backed `--config`) has a SEPARATE, NOT-yet-solved network dependency of
+its own - it re-fetches its ruleset over the network on every single run, with no local caching
+observed - so a corp-proxy environment can still hang or fail on the ruleset fetch itself even
+with these flags. If semgrep hangs or errors here, treat it the same as "tool missing" (§ above,
+"Run whatever is installed... never silently skip a language" + the step-0 tool-availability
+skip): don't keep retrying, note the gap, and mark the affected findings 🧠 inferred for the
+rest of the session.
+
 ## Method - score, filter, be transparent
 
 Follow `docs/code-review-method.md` (confidence scoring 0-100, filter thresholds, and the

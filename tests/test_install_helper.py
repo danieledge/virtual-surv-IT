@@ -2570,6 +2570,28 @@ def test_probe_analyser_output_writes_an_offline_semgrep_rule_fixture(tmp_path, 
     assert "rules:" in (tmp_path / "rule.yml").read_text(encoding="utf-8")
 
 
+def test_probe_analyser_output_disables_semgrep_version_check(tmp_path, monkeypatch):
+    """Local --config alone was NOT enough (live report, 2026-08-04, found AFTER the
+    fixture fix above shipped): semgrep does an unconditional version-check network call
+    on every invocation regardless of --config, confirmed via `semgrep --help`
+    (SEMGREP_ENABLE_VERSION_CHECK) and reproduced live - a local-config run still hung
+    under a genuinely blocked proxy until --disable-version-check --metrics=off were
+    added, which returned clean in ~3.7s under the same blocked-network condition."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    calls = []
+
+    def runner(argv, **kw):
+        calls.append(argv)
+        return _proc(0, stdout="")
+
+    list(ih.probe_analyser_output(tmp_path, runner=runner))
+    semgrep_call = next(c for c in calls if c[0] == "semgrep")
+    assert "--disable-version-check" in semgrep_call
+    assert "--metrics=off" in semgrep_call
+
+
 def test_probe_analyser_output_bounds_pip_audit_with_its_own_timeout_flag(tmp_path, monkeypatch):
     """pip-audit hung 15s+ even with zero packages to check, and did not fail fast at all
     under a blocked proxy (live-tested, 2026-08-04) - its own --timeout flag bounds that,

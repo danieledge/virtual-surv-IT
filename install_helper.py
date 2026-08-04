@@ -2572,6 +2572,17 @@ _TOOL_CHECK_CLEAN_PY = "def add(a: int, b: int) -> int:\n    return a + b\n"
 # corp-restricted proxy - exactly this feature's target environment - it can hang far past
 # that with no clean failure). The pattern here can never match anything, so this always
 # comes back a clean 0-finding run, in ~3.5s, with zero network dependency either way.
+#
+# --disable-version-check --metrics=off matter EVEN WITH a local --config (live report,
+# 2026-08-04: this check itself timed out under real corp-proxy conditions, despite the
+# local-rule-file fix above): semgrep does an unconditional "check for a newer version"
+# network call on every invocation, completely independent of --config - confirmed via
+# `semgrep --help` ("SEMGREP_ENABLE_VERSION_CHECK... checks Semgrep servers"), and
+# reproduced live (a local-config run under a genuinely blocked proxy still hung; the same
+# run with these two flags added returned clean in ~3.7s). --metrics=off is defense in
+# depth for the same class of call (metrics default to "auto", off only when --config
+# pulls from the server or the user is logged in - which a local file shouldn't trigger,
+# but an explicit off costs nothing and removes the ambiguity).
 _SEMGREP_OFFLINE_RULE = (
     "rules:\n"
     "  - id: probe-noop-rule\n"
@@ -2593,7 +2604,7 @@ _TOOL_OUTPUT_CHECKS = (
     ("mypy", ["--no-color-output", "--no-error-summary"], "file", 20),
     ("bandit", ["-q"], "file", 20),
     ("pip-audit", ["--progress-spinner", "off", "--timeout", "5", "-r"], "requirements", 15),
-    ("semgrep", ["--config", "rule.yml", "--quiet"], "file", 20),
+    ("semgrep", ["--config", "rule.yml", "--quiet", "--disable-version-check", "--metrics=off"], "file", 20),
     ("gitleaks", ["detect", "--no-git", "--no-banner", "--log-level", "error", "--source"], "dir", 20),
 )
 
