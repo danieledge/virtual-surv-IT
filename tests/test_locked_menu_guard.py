@@ -184,6 +184,53 @@ def test_stage2_subset_of_canonical_options_is_legal():
     assert proc.returncode == 0
 
 
+# ------------------------------------------- (Recommended) marker (2026-08-04 live report)
+# The AskUserQuestion tool's own guidance: "make that the first option in the list and add
+# '(Recommended)' at the end of the label" - a canonical option carrying that marker must
+# still pass, on both locked menus.
+
+
+def test_recommended_marker_on_review_menu_option_passes():
+    good = [
+        _q("Depth", ["Quick (Recommended)", "Deep", "Audit", "None"]),
+        _q("Performance", ["Yes", "No"]),
+        _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
+    ]
+    proc = _run(good)
+    assert proc.returncode == 0
+    assert proc.stderr == ""
+
+
+def test_recommended_marker_on_multiple_options_passes():
+    good = [
+        _q("Depth", ["Quick", "Deep", "Audit", "None"]),
+        _q("Performance", ["Yes (Recommended)", "No"]),
+        _q("Fix-cycle", ["Report only", "Apply fixes (Recommended)", "Fix → re-review loop"]),
+    ]
+    proc = _run(good)
+    assert proc.returncode == 0
+
+
+def test_recommended_marker_on_artifact_menu_stage1_passes():
+    good = [_q("Artifacts", ["Consolidated Delivery Report (Recommended)", "Separate artifacts", "Both"])]
+    proc = _run(good)
+    assert proc.returncode == 0
+
+
+def test_recommended_marker_on_artifact_menu_stage2_passes():
+    good = [_q("Reviews", ["Code & Compliance Review (Recommended)", "Performance Review"], multi=True)]
+    proc = _run(good)
+    assert proc.returncode == 0
+
+
+def test_recommended_marker_does_not_mask_a_genuinely_invented_option():
+    """The suffix strip must not become a bypass - a bogus label plus the marker is
+    still bogus once the marker is removed."""
+    bad = [_q("Artifacts", ["Consolidated Delivery Report", "Neither (Recommended)"])]
+    proc = _run(bad)
+    assert proc.returncode == 2
+
+
 # ------------------------------------------------------------------ artifact-menu: drift
 
 
