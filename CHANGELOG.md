@@ -3,6 +3,39 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.9] - 2026-08-04 - `install_helper.py` UX overhaul: fewer menu options, an alias, folder-scoped commands
+
+The installer's interactive menu had grown to 10 flat numbered options and felt clunky, with
+thin diagnostics on error. This is a from-scratch UX pass on the same stdlib-only, Python-3.9+,
+run-from-a-bare-clone constraints - no new dependencies.
+
+### Added
+- `install_helper.py setup-alias` installs a `virt-surv` shell alias (bash/zsh `alias`, or a
+  PowerShell `function` - both PS 5.1 and PS 7+ profile paths, since they differ) so the
+  installer is reachable from any folder, not just the clone.
+- `virt-surv configure [DIR]`, `virt-surv archive [DIR]` and `virt-surv list-engagements [DIR]`
+  run scoped to a project folder (defaulting to the current directory) without needing `cd` into
+  the plugin clone first.
+- `--check-tools`/`--check-env` comprehensive diagnostics (interpreters, encoding round-trip,
+  plugin-root bootstrap, guard hooks, analyser output cleanliness) for debugging install issues
+  on corporate/Windows environments, added earlier this cycle and now reachable from the
+  Diagnostics submenu.
+
+### Changed
+- Reorganised the top-level interactive menu from 10 flat options down to 6 (plus a persistent
+  Diagnostics and an Advanced/one-off-settings submenu) - one-off settings and diagnostics moved
+  one level down instead of competing with the everyday choices.
+- The menu now loops back to the top level after every action instead of exiting the process -
+  running Configure then Diagnostics then Manage no longer means relaunching the installer three
+  times.
+- `--demo` now covers the entire interactive session, not just a fixed one-shot preview: it
+  threads through every menu action (Configure, Manage, alias setup, every Advanced/Diagnostics
+  choice) for as long as the session runs, so the whole menu system can be explored risk-free.
+  Picking "Demo" from the Advanced submenu is itself a one-shot full-flow preview and does not
+  leave later, real actions in the same session running in demo mode.
+- `install_helper.py configure DIR` consolidates enable + permissions + project preferences +
+  Morgan's model into one guided flow, reachable both as a CLI flag and from the menu.
+
 ## [0.33.8] - 2026-08-04 - Token-usage and CPU-latency audit, plus eval-found routing fixes
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.

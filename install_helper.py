@@ -946,7 +946,7 @@ def check_for_update_upfront(cfg: dict, style: Style, args) -> None:
     headline = (preview.get("headlines") or [None])[0]
     if headline:
         print(f"   {headline}")
-    print(style.dim("   Pick option 1 to update, or 5 to preview first."))
+    print(style.dim("   Pick option 1 to update, or Diagnostics (5) -> 1 to preview first."))
     print("")
 
 
@@ -994,50 +994,115 @@ def confirm(prompt: str, default: bool, assume_yes: bool, style: Optional[Style]
 
 MENU_ACTIONS = {
     "1": "full",
-    "2": "setup",
-    "3": "statusline",
-    "4": "enable",
-    "5": "check",
-    "6": "formats",
-    "7": "demo",
-    "8": "model",
-    "9": "toolcheck",
-    "10": "envcheck",
+    "2": "configure",
+    "3": "manage",
+    "4": "alias",
+    "5": "diagnostics",
+    "6": "advanced",
     "q": "quit",
 }
+
+# Submenus (2026-08-04 reorganisation - the top-level menu had grown to 10 flat numbered
+# options and felt clunky; diagnostics/one-off settings now live one level down).
+_DIAGNOSTICS_ACTIONS = {
+    "1": "check",
+    "2": "toolcheck",
+    "3": "envcheck",
+    "b": "back",
+}
+_ADVANCED_ACTIONS = {
+    "1": "setup",
+    "2": "statusline",
+    "3": "formats",
+    "4": "model",
+    "5": "demo",
+    "b": "back",
+}
+
+
+def _choose_submenu(style: Style, title: str, options: tuple, actions: dict) -> Optional[str]:
+    """Shared submenu loop: prints options, returns the resolved action string, or None
+    if the user chose 'back' (caller should redraw the top-level menu)."""
+    s = style
+    print("")
+    print(s.bold(title))
+    for key, text in options:
+        print(f"  {s.cyan(key + ')')} {text}")
+    while True:
+        try:
+            answer = input(f"{s.cyan('  Which one?')} {s.bold('[b]')}: ").strip().lower()
+        except EOFError:
+            return None
+        if not answer or answer == "b":
+            return None
+        if answer in actions:
+            resolved = actions[answer]
+            return None if resolved == "back" else resolved
+        print(f"  1-{len(options) - 1} or b, please.")
 
 
 def choose_action(style: Style) -> str:
     """The interactive front door: pick which subset to run. Callers gate on a tty;
-    a closed stdin or empty answer takes the full run."""
+    a closed stdin or empty answer takes the full run. 'diagnostics'/'advanced' open a
+    submenu and loop back to this top-level menu on 'back' rather than returning
+    directly - the caller only ever sees a final, concrete action."""
     s = style
-    print("")
-    print(s.bold("What can I do for you?"))
-    options = (
-        ("1", "Install or update the team (full run - recommended)"),
-        ("2", "Environment setup only (marketplace + plugin + extras; does not pull latest code)"),
-        ("3", "Status line only"),
-        ("4", "Enable the team for a project (+ optional permission allow-list)"),
-        ("5", "Check for updates (read-only - shows what an update would bring)"),
-        ("6", "Project preferences (docx export, regulatory citations)"),
-        ("7", "Demo - watch the whole run, nothing executed or written"),
-        ("8", "Morgan's model (opus/sonnet, or reset to default)"),
-        ("9", "Check analyser output cleanliness (debug)"),
-        ("10", "Comprehensive environment check (debug)"),
-        ("q", "Quit"),
-    )
-    for key, text in options:
-        print(f"  {s.cyan(key + ')')} {text}")
     while True:
+        print("")
+        print(s.bold("What can I do for you?"))
+        options = (
+            ("1", "Install or update the team (full run - recommended)"),
+            ("2", "Configure a project (enable + permissions + preferences + model, guided)"),
+            ("3", "Manage engagements (list / archive closed)"),
+            ("4", "Set up the 'virt-surv' alias - run this from any folder"),
+            ("5", "Diagnostics..."),
+            ("6", "Advanced / one-off settings..."),
+            ("q", "Quit"),
+        )
+        for key, text in options:
+            print(f"  {s.cyan(key + ')')} {text}")
         try:
             answer = input(f"{s.cyan('  What shall it be?')} {s.bold('[1]')}: ").strip().lower()
         except EOFError:
             return "full"
         if not answer:
             return "full"
-        if answer in MENU_ACTIONS:
-            return MENU_ACTIONS[answer]
-        print("  1-8 or q, please.")
+        if answer not in MENU_ACTIONS:
+            print("  1-6 or q, please.")
+            continue
+        action = MENU_ACTIONS[answer]
+        if action == "diagnostics":
+            resolved = _choose_submenu(
+                style,
+                "Diagnostics",
+                (
+                    ("1", "Check for updates (read-only - shows what an update would bring)"),
+                    ("2", "Check analyser output cleanliness"),
+                    ("3", "Comprehensive environment check"),
+                    ("b", "Back"),
+                ),
+                _DIAGNOSTICS_ACTIONS,
+            )
+        elif action == "advanced":
+            resolved = _choose_submenu(
+                style,
+                "Advanced / one-off settings",
+                (
+                    ("1", "Environment setup only (marketplace + plugin + extras; no code pull)"),
+                    ("2", "Status line only"),
+                    ("3", "Project preferences (docx export, regulatory citations - with the "
+                          "'save as new-project default' option Configure doesn't offer)"),
+                    ("4", "Morgan's model only (opus/sonnet, or reset to default)"),
+                    ("5", "Demo - watch the whole run, nothing executed or written"),
+                    ("b", "Back"),
+                ),
+                _ADVANCED_ACTIONS,
+            )
+        else:
+            return action
+        if resolved is not None:
+            return resolved
+        # 'back' was chosen - loop and redraw the top-level menu.
 
 
 # ------------------------------------------------------------------ the installer
@@ -1928,44 +1993,6 @@ class Installer:
             + (", saved as new-project default" if save_as_default else ""),
         )
 
-    def _ask_and_set_model(self, project: Path) -> tuple[bool, str]:
-        """Ask scope, then opus/sonnet/default, and apply it (or report what a demo run
-        would do). Shared by model_step (standalone menu option 8) and enable_step (folded
-        into the full install) so the questions and the disclaimer stay in exactly one
-        place rather than drifting between copies.
-
-        Scope is asked first: THIS project (write_orchestrator_model) or the DEFAULT for
-        every new/unconfigured project (write_orchestrator_model_default, user-level
-        ~/.claude/settings.json - Claude Code layers project settings over user settings,
-        so this is a genuine global default, not something this script has to re-apply
-        per project)."""
-        global_default = confirm(
-            "  Also make this the default for new/unconfigured projects, not just this one?",
-            default=False,
-            assume_yes=self.args.yes,
-            style=self.style,
-        )
-        picked = ask(
-            "  opus / sonnet / default (reset to sonnet)?",
-            "default",
-            self.args.yes,
-            style=self.style,
-        ).strip().lower()
-        if picked in ("default", "reset", ""):
-            model: Optional[str] = None
-        elif picked in ORCHESTRATOR_MODELS:
-            model = picked
-        else:
-            return False, f"expected opus/sonnet/default, got {picked!r}"
-        if model == "opus":
-            self.say(self.style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
-        if self.demo:
-            scope = "the new-project default" if global_default else str(project)
-            return True, f"would set -> {model or ORCHESTRATOR_MODEL_DEFAULT} ({scope})"
-        if global_default:
-            return write_orchestrator_model_default(model)
-        return write_orchestrator_model(project, model)
-
     def model_step(self) -> None:
         """Standalone, easily re-runnable (menu option 8): change or reset Morgan's (the
         orchestrator's) own model for one project. Only Morgan is exposed here - the 16
@@ -1986,7 +2013,7 @@ class Installer:
         settings_path = project / ".claude" / "settings.json"
         current = _read_json_dict(settings_path).get("model") or "(unset - account default)"
         self.say(self.style.dim(f"    currently: {current}"))
-        ok, message = self._ask_and_set_model(project)
+        ok, message = ask_and_set_model(project, self.style, self.args.yes, self.demo)
         if not ok:
             self.step_fail("Morgan's model", message)
             return
@@ -2072,7 +2099,7 @@ class Installer:
                     if not project.is_dir():
                         self.say(self.style.dim(f"    not a directory: {project}"))
                     else:
-                        ok, message = self._ask_and_set_model(project)
+                        ok, message = ask_and_set_model(project, self.style, self.args.yes, self.demo)
                         style_fn = self.style.dim if ok else self.style.yellow
                         self.say(style_fn(f"    {message}"))
                 return
@@ -2112,7 +2139,7 @@ class Installer:
                 assume_yes=False,
                 style=self.style,
             ):
-                _, message = self._ask_and_set_model(project)
+                _, message = ask_and_set_model(project, self.style, self.args.yes, self.demo)
                 self.say(self.style.dim(f"    {message}"))
             return
         if run_enable_project(target, self.style, self.marks) == 0:
@@ -2144,7 +2171,9 @@ class Installer:
                 assume_yes=False,
                 style=self.style,
             ):
-                ok, message = self._ask_and_set_model(target.expanduser().resolve())
+                ok, message = ask_and_set_model(
+                    target.expanduser().resolve(), self.style, self.args.yes, self.demo
+                )
                 if ok:
                     self.say(self.style.dim(f"    {message}"))
                 else:
@@ -2362,7 +2391,10 @@ def run_orchestrator_model_default(model: Optional[str], style: Style, mark_map:
 
 
 def write_team_preferences(
-    project: Path, extra_formats: Optional[list] = None, regulatory_citations: Optional[bool] = None
+    project: Path,
+    extra_formats: Optional[list] = None,
+    regulatory_citations: Optional[bool] = None,
+    large_context_review_split: Optional[bool] = None,
 ) -> bool:
     """Project-scoped preferences (`.claude/team-preferences.json`), merge-only (a
     pre-existing file's other keys, and any key not passed here, are preserved) and
@@ -2374,6 +2406,10 @@ def write_team_preferences(
     - regulatory_citations: whether detection-logic work cites the specific regulatory
       obligation it serves (CLAUDE.md §2 / ADR-001). Defaults to True (on) whenever the
       key is absent - only an explicit False turns it off project-wide.
+    - large_context_review_split: whether a large, multi-component review is split by
+      component from the start instead of discovering the need for it from a failed
+      review call (docs/team-operating-guide.md's orchestration-discipline section).
+      Defaults to False (off) whenever the key is absent.
 
     Pass only the preference(s) you want to change; omitted arguments leave the
     corresponding key untouched (or unset, which reads as the default)."""
@@ -2384,6 +2420,8 @@ def write_team_preferences(
             prefs["extra_formats"] = sorted(set(extra_formats))
         if regulatory_citations is not None:
             prefs["regulatory_citations"] = bool(regulatory_citations)
+        if large_context_review_split is not None:
+            prefs["large_context_review_split"] = bool(large_context_review_split)
         _write_json_backup(target, prefs)
         return True
     except OSError:
@@ -2433,6 +2471,52 @@ def _write_model_to_settings_file(target: Path, model: Optional[str]) -> tuple[b
     except OSError as exc:
         return False, f"could not write {target} ({exc})"
     return True, f"{target}: model -> {settings['model']}"
+
+
+def ask_and_set_model(
+    project: Path, style: Style, assume_yes: bool, demo: bool = False
+) -> tuple[bool, str]:
+    """Ask scope, then opus/sonnet/default, and apply it (or report what a demo run
+    would do). Free function (extracted 2026-08-04 from the Installer method of the same
+    name, for reuse by run_configure - a standalone scripting-path flow with no Installer
+    instance) so the questions and the disclaimer stay in exactly one place rather than
+    drifting between copies.
+
+    Scope is asked first: THIS project (write_orchestrator_model) or the DEFAULT for
+    every new/unconfigured project (write_orchestrator_model_default, user-level
+    ~/.claude/settings.json - Claude Code layers project settings over user settings,
+    so this is a genuine global default, not something this script has to re-apply
+    per project)."""
+    global_default = confirm(
+        "  Also make this the default for new/unconfigured projects, not just this one?",
+        default=False,
+        assume_yes=assume_yes,
+        style=style,
+    )
+    picked = (
+        ask(
+            "  opus / sonnet / default (reset to sonnet)?",
+            "default",
+            assume_yes,
+            style=style,
+        )
+        .strip()
+        .lower()
+    )
+    if picked in ("default", "reset", ""):
+        model: Optional[str] = None
+    elif picked in ORCHESTRATOR_MODELS:
+        model = picked
+    else:
+        return False, f"expected opus/sonnet/default, got {picked!r}"
+    if model == "opus":
+        print(style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
+    if demo:
+        scope = "the new-project default" if global_default else str(project)
+        return True, f"would set -> {model or ORCHESTRATOR_MODEL_DEFAULT} ({scope})"
+    if global_default:
+        return write_orchestrator_model_default(model)
+    return write_orchestrator_model(project, model)
 
 
 def write_orchestrator_model(project: Path, model: Optional[str]) -> tuple[bool, str]:
@@ -2549,6 +2633,328 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
     except OSError as exc:
         print(f"{fail} enable failed for {project}: {exc}")
         return 1
+
+
+def run_configure(
+    target: Path, style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
+) -> int:
+    """Standalone, one-shot project setup (--configure [DIR], or `virt-surv configure` via
+    the alias from run_setup_alias): enable + permissions + preferences + model, scoped to
+    ONE folder, in one guided pass. 2026-08-04 user request: "navigate to a project folder,
+    run one command, answer a few questions" instead of hunting through several separate
+    menu options for the same first-time setup. Interactive by design (each step confirm()s)
+    unless assume_yes forces safe defaults, matching --yes semantics used elsewhere here.
+
+    demo=True previews every step and writes NOTHING - live-tested gap, 2026-08-04: this
+    function originally had no demo support at all, so `--demo` combined with configure
+    silently wrote real files. Each step below is therefore branched explicitly rather
+    than relying on a run_cmd swap (the existing Installer demo pattern) - run_permissions/
+    write_team_preferences do direct file I/O with no subprocess involved at all, so
+    swapping run_cmd alone would not have protected them either.
+
+    Deliberately does NOT include the "save as default for new projects" nuance
+    format_preferences_step offers (that needs the Installer's own persisted CLI config,
+    self.cfg/self.cfg_path) - this is the fast common path; that finer option stays
+    reachable via the interactive menu for whoever wants it."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    project = target.expanduser().resolve()
+    if not project.is_dir():
+        print(f"{fail} not a directory: {project}")
+        return 1
+    print(style.bold(f"Configuring {project}" + (" (DEMO - nothing will be written)" if demo else "")))
+    rc = 0
+
+    print(style.dim("\n  Enable the plugin:"))
+    if demo:
+        print(style.dim(f"    would enable for {project}"))
+    else:
+        rc = max(rc, run_enable_project(project, style, mark_map))
+
+    if confirm(
+        "\n  Add the recommended permission allow-list (fewer prompts)?",
+        default=True,
+        assume_yes=assume_yes,
+        style=style,
+    ):
+        if demo:
+            print(style.dim(f"    would add up to {len(RECOMMENDED_ALLOW)} allow entries"))
+        else:
+            rc = max(rc, run_permissions(project, style, mark_map))
+
+    print(style.dim("\n  Project preferences:"))
+    existing = _read_json_dict(project / ".claude" / "team-preferences.json")
+    docx_current = "docx" in (existing.get("extra_formats") or [])
+    citations_current = existing.get("regulatory_citations", True)
+    split_current = existing.get("large_context_review_split", False)
+    docx_wanted = confirm(
+        "  Produce .docx by default for controlled documents?",
+        default=docx_current,
+        assume_yes=assume_yes,
+        style=style,
+    )
+    citations_wanted = confirm(
+        "  Cite regulatory obligations by default?",
+        default=citations_current,
+        assume_yes=assume_yes,
+        style=style,
+    )
+    split_wanted = confirm(
+        "  Split large, multi-component reviews by component from the start (useful "
+        "behind a corporate proxy that times out on large requests)?",
+        default=split_current,
+        assume_yes=assume_yes,
+        style=style,
+    )
+    summary = (
+        f"docx={'on' if docx_wanted else 'off'}, "
+        f"citations={'on' if citations_wanted else 'off'}, "
+        f"review-split={'on' if split_wanted else 'off'}"
+    )
+    if demo:
+        print(style.dim(f"    would write preferences: {summary}"))
+    elif write_team_preferences(
+        project,
+        extra_formats=["docx"] if docx_wanted else [],
+        regulatory_citations=citations_wanted,
+        large_context_review_split=split_wanted,
+    ):
+        print(f"  {ok} preferences: {summary}")
+    else:
+        print(f"  {fail} could not write team-preferences.json")
+        rc = 1
+
+    if confirm(
+        "\n  Set Morgan's model for this project (default: sonnet)?",
+        default=False,
+        assume_yes=assume_yes,
+        style=style,
+    ):
+        ok_model, message = ask_and_set_model(project, style, assume_yes, demo=demo)
+        print(f"  {ok if ok_model else fail} {message}")
+        rc = max(rc, 0 if ok_model else 1)
+
+    print("")
+    if rc == 0:
+        print(style.dim(f"Configuration complete for {project}."))
+    else:
+        print(style.yellow("Configuration finished with issues - see above."))
+    return rc
+
+
+def _engagement_state_script() -> Optional[Path]:
+    """Locates scripts/engagement_state.py relative to THIS clone - install_helper.py
+    always sits at the clone's own repo root, next to scripts/, so no plugin-root
+    discovery is needed here (unlike find_plugin_root.py's problem, which is specifically
+    about locating things from an ARBITRARY foreign project directory)."""
+    candidate = Path(__file__).resolve().parent / "scripts" / "engagement_state.py"
+    return candidate if candidate.is_file() else None
+
+
+def run_archive_engagements(target: Path, style: Style, mark_map: dict, demo: bool = False) -> int:
+    """Standalone (--archive [DIR]): archives every closed, unarchived engagement under
+    DIR/artifacts - bridges to `engagement_state.py archive --all-closed`, run with its
+    cwd set to DIR so it resolves artifacts/ relative to the TARGET project, not this
+    clone (engagement_state.py's own workspace resolution defaults to Path.cwd() when no
+    --dir is given, confirmed via its source - so setting cwd is sufficient, no extra
+    flag needed). demo=True skips the real call entirely - engagement_state.py has no
+    dry-run flag of its own, and run_manage_engagements' preceding list step already
+    shows what's there before this would be offered."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    project = target.expanduser().resolve()
+    if not project.is_dir():
+        print(f"{fail} not a directory: {project}")
+        return 1
+    if demo:
+        print(style.dim(f"    would archive every closed engagement under {project / 'artifacts'}"))
+        return 0
+    script = _engagement_state_script()
+    if script is None:
+        print(f"{fail} scripts/engagement_state.py not found next to this clone")
+        return 1
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script), "archive", "--all-closed"],
+            cwd=project,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"{fail} archive failed: {exc}")
+        return 1
+    if proc.stdout.strip():
+        print(proc.stdout.strip())
+    if proc.returncode != 0:
+        print(f"{fail} archive exited {proc.returncode}: {(proc.stderr or '').strip()[:300]}")
+        return 1
+    print(f"{ok} archived every closed engagement under {project / 'artifacts'}")
+    return 0
+
+
+def run_list_engagements(target: Path, style: Style, mark_map: dict) -> int:
+    """Standalone (--list-engagements [DIR]): lists DIR's engagements - bridges to
+    `engagement_state.py list`, cwd set to DIR (same resolution note as
+    run_archive_engagements above)."""
+    fail = mark_map["fail"]
+    project = target.expanduser().resolve()
+    if not project.is_dir():
+        print(f"{fail} not a directory: {project}")
+        return 1
+    script = _engagement_state_script()
+    if script is None:
+        print(f"{fail} scripts/engagement_state.py not found next to this clone")
+        return 1
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script), "list"],
+            cwd=project,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"{fail} list failed: {exc}")
+        return 1
+    print(proc.stdout.strip() or "(no engagements found)")
+    if proc.returncode != 0:
+        print(f"{fail} list exited {proc.returncode}: {(proc.stderr or '').strip()[:300]}")
+        return 1
+    return 0
+
+
+def run_manage_engagements(
+    target: Path, style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
+) -> int:
+    """Interactive combined flow (menu: 'Manage engagements'): list, then offer to
+    archive closed ones - one guided step instead of a third menu level for what's really
+    a single "let me see what's here, and tidy it up" task. list is already read-only, so
+    demo mode only changes the archive half."""
+    project = target.expanduser().resolve()
+    rc = run_list_engagements(project, style, mark_map)
+    if rc != 0:
+        return rc
+    if confirm(
+        "\n  Archive every closed engagement (excludes them from future scans)?",
+        default=False,
+        assume_yes=assume_yes,
+        style=style,
+    ):
+        return run_archive_engagements(project, style, mark_map, demo=demo)
+    print(f"{style.dim('-')} nothing archived")
+    return 0
+
+
+# ------------------------------------------------------------------ shell alias setup
+#
+# 2026-08-04 user request: run this clone from any folder via a short alias, so
+# "cd my-project && virt-surv configure" works without remembering a full path. Opt-in,
+# confirm-gated, add-only (never overwrites or removes anything already in a shell rc
+# file), and idempotent (checks for an existing "virt-surv" line first).
+
+_ALIAS_MARKER = "virt-surv"
+
+
+def _posix_shell_rc_candidates() -> list:
+    """(label, path) for POSIX shell rc files that already EXIST - doesn't guess which
+    shell is "the" shell (a corp Windows user may have both Git Bash and PowerShell), it
+    just offers whatever's actually there."""
+    home = Path.home()
+    candidates = []
+    for label, name in (("bash", ".bashrc"), ("zsh", ".zshrc")):
+        path = home / name
+        if path.is_file():
+            candidates.append((label, path))
+    return candidates
+
+
+def _powershell_profile_candidates() -> list:
+    """Both standard PowerShell profile paths - they are NOT the same file and this
+    matters: Windows PowerShell 5.1 (the version built into every Windows machine,
+    verified live 2026-08-04) uses Documents/WindowsPowerShell/..., while PowerShell 7+
+    (a separate, opt-in install) uses Documents/PowerShell/... - "changes you make to
+    $PROFILE in a Windows PowerShell session only affect that host" per Microsoft's own
+    docs. Offering only the 7+ path would silently miss most corp Windows machines, which
+    typically only have the built-in 5.1. Not queried via `$PROFILE` itself - that needs
+    spawning powershell.exe, an extra process and failure mode for paths that have a
+    well-documented, stable default. Only returned if the parent Documents dir exists (a
+    real Windows user profile), so this doesn't offer to create a profile out of thin air
+    on a non-Windows-shaped home directory."""
+    if sys.platform != "win32":
+        return []
+    docs = Path.home() / "Documents"
+    if not docs.is_dir():
+        return []
+    return [
+        ("PowerShell 5.1", docs / "WindowsPowerShell" / "Microsoft.PowerShell_profile.ps1"),
+        ("PowerShell 7+", docs / "PowerShell" / "Microsoft.PowerShell_profile.ps1"),
+    ]
+
+
+def run_setup_alias(
+    style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
+) -> int:
+    """Standalone (--setup-alias / menu): offers to add a 'virt-surv' alias/function to
+    whichever shell rc file(s) actually exist on this machine, pointing at THIS clone.
+    Never silent - previews the exact line before writing, confirm-gated per file, skips
+    (not duplicates) a file that already has one. demo=True previews everything and
+    writes nothing (2026-08-04: demo mode must cover every menu option, not just the
+    main install flow)."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    rows, interpreter = _check_interpreters(
+        ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
+    )
+    if not interpreter:
+        print(f"{fail} no working Python interpreter found - cannot set up the alias")
+        for name, status, detail in rows:
+            print(f"    {name}: {status} - {detail}")
+        return 1
+    script_path = Path(__file__).resolve()
+    targets = list(_posix_shell_rc_candidates()) + _powershell_profile_candidates()
+    if not targets:
+        print(
+            f"{fail} no shell config file found (~/.bashrc, ~/.zshrc, or a PowerShell "
+            "profile) - nothing to add the alias to"
+        )
+        return 1
+    wrote_any = False
+    had_error = False
+    for label, rc_path in targets:
+        if rc_path.suffix == ".ps1":
+            line = f'function {_ALIAS_MARKER} {{ {interpreter} "{script_path}" @args }}'
+        else:
+            line = f'alias {_ALIAS_MARKER}=\'{interpreter} "{script_path}"\''
+        existing = rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
+        if _ALIAS_MARKER in existing:
+            print(f"{style.dim('-')} {label} ({rc_path}): a '{_ALIAS_MARKER}' entry already exists, skipped")
+            continue
+        print(f"  Would add to {label} ({rc_path}):")
+        print(style.dim(f"    {line}"))
+        if demo:
+            print(style.dim("    (demo mode - nothing written)"))
+            continue
+        if not confirm("  Add it?", default=True, assume_yes=assume_yes, style=style):
+            print(f"{style.dim('-')} {label}: skipped")
+            continue
+        try:
+            rc_path.parent.mkdir(parents=True, exist_ok=True)
+            with rc_path.open("a", encoding="utf-8") as fh:
+                if existing and not existing.endswith("\n"):
+                    fh.write("\n")
+                fh.write(f"\n# Added by install_helper.py --setup-alias (2026-08-04)\n{line}\n")
+            print(f"{ok} added to {rc_path}")
+            wrote_any = True
+        except OSError as exc:
+            print(f"{fail} could not write {rc_path}: {exc}")
+            had_error = True
+    if wrote_any:
+        print(
+            style.dim(
+                "\nOpen a new terminal (or re-source your shell config) for it to take "
+                "effect. Then: cd into any project and run 'virt-surv configure', "
+                "'virt-surv archive', or 'virt-surv list-engagements'."
+            )
+        )
+    return 1 if had_error else 0
 
 
 # ------------------------------------------------------------------ analyser output check
@@ -3006,6 +3412,39 @@ def parse_args(argv=None) -> argparse.Namespace:
         "output cleanliness - and exit; the broader diagnostic --check-tools' own section "
         "is folded into",
     )
+    parser.add_argument(
+        "--configure",
+        metavar="DIR",
+        nargs="?",
+        const=".",
+        help="standalone: one-shot project setup for DIR (default: current directory) - "
+        "enable + permissions + preferences + model in one guided pass, and exit. This "
+        "is what the 'virt-surv' alias (--setup-alias) runs when you type "
+        "'virt-surv configure' from inside a project folder",
+    )
+    parser.add_argument(
+        "--archive",
+        metavar="DIR",
+        nargs="?",
+        const=".",
+        help="standalone: archive every closed engagement under DIR/artifacts (default: "
+        "current directory) and exit - bridges to scripts/engagement_state.py archive "
+        "--all-closed, scoped to DIR",
+    )
+    parser.add_argument(
+        "--list-engagements",
+        metavar="DIR",
+        nargs="?",
+        const=".",
+        help="standalone: list DIR's engagements (default: current directory) and exit - "
+        "bridges to scripts/engagement_state.py list",
+    )
+    parser.add_argument(
+        "--setup-alias",
+        action="store_true",
+        help="standalone: offer to add a 'virt-surv' shell alias/function pointing at "
+        "this clone, so it's runnable from any folder - and exit",
+    )
     return parser.parse_args(argv)
 
 
@@ -3070,10 +3509,51 @@ def _relocate_if_running_inside_target_repo(
         pass
 
 
+_FOLDER_SUBCOMMANDS = ("configure", "archive", "list-engagements", "setup-alias")
+
+
+def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
+    """Handles the 'virt-surv <subcommand> [dir] [--demo] [--yes]' positional form
+    directly, bypassing parse_args() entirely for these four words. Deliberately NOT
+    folded into the main `mode` positional (install/update) - argparse `choices` there
+    drives decide_mode() and the self-update re-exec helper, both already battle-tested;
+    adding unrelated subcommands to that same positional risked touching either for no
+    real benefit, given these four need nothing parse_args already provides beyond an
+    optional trailing path and the two flags handled explicitly below.
+
+    --demo/--yes are scanned for anywhere in the remaining args (not assumed to be in a
+    fixed position) - live-tested gap, 2026-08-04: bypassing parse_args() entirely meant
+    a trailing '--demo' was previously silently dropped instead of either being honoured
+    or erroring, which is exactly the kind of silent-wrong-behaviour this repo's own
+    culture treats as a real defect.
+
+    Returns an exit code if argv[0] matched one of these, else None (not a match - fall
+    through to the normal parse_args flow)."""
+    if not argv or argv[0] not in _FOLDER_SUBCOMMANDS:
+        return None
+    subcommand = argv[0]
+    rest = argv[1:]
+    demo = "--demo" in rest
+    assume_yes = "--yes" in rest
+    paths = [a for a in rest if a not in ("--demo", "--yes")]
+    style = Style(supports_color())
+    if subcommand == "setup-alias":
+        return run_setup_alias(style, marks(), assume_yes, demo)
+    target = Path(paths[0]) if paths else Path(".")
+    if subcommand == "configure":
+        return run_configure(target, style, marks(), assume_yes, demo)
+    if subcommand == "archive":
+        return run_archive_engagements(target, style, marks(), demo)
+    return run_list_engagements(target, style, marks())
+
+
 def main(argv=None) -> int:
     """Entry point: _main plus the last-resort Ctrl-C net (menu, banner, prompts that
     sit outside an Installer run). Exit code 130 mirrors the shell convention."""
     try:
+        dispatched = _dispatch_folder_subcommand(argv if argv is not None else sys.argv[1:])
+        if dispatched is not None:
+            return dispatched
         return _main(argv)
     except KeyboardInterrupt:
         print("")
@@ -3092,6 +3572,10 @@ def _main(argv=None) -> int:
         or args.model_default
         or args.check_tools
         or args.check_env
+        or args.configure
+        or args.archive
+        or args.list_engagements
+        or args.setup_alias
     ):
         # Scripting path: no banner, no menu.
         rc = 0
@@ -3109,25 +3593,84 @@ def _main(argv=None) -> int:
             rc = max(rc, run_tool_check(style, marks()))
         if args.check_env:
             rc = max(rc, run_env_check(style, marks()))
+        if args.configure:
+            rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
+        if args.archive:
+            rc = max(rc, run_archive_engagements(Path(args.archive), style, marks(), args.demo))
+        if args.list_engagements:
+            rc = max(rc, run_list_engagements(Path(args.list_engagements), style, marks()))
+        if args.setup_alias:
+            rc = max(rc, run_setup_alias(style, marks(), args.yes, args.demo))
         return rc
 
     if not args.demo:
         _relocate_if_running_inside_target_repo(args, argv)
 
     print_banner(style)
-    subset = "full"
-    if not args.demo and args.mode is None and not args.yes and sys.stdin.isatty():
+    # Deliberately NOT gated on `not args.demo` (2026-08-04 fix, live-tested gap: --demo
+    # used to skip straight to a fixed full-flow preview, never showing the menu at all -
+    # so none of the newer options, including "Configure", could be previewed. Demo mode
+    # now stays a property that flows THROUGH whichever menu choice is made, rather than
+    # a separate mode that bypasses the menu entirely.
+    if args.mode is None and not args.yes and sys.stdin.isatty():
         cfg = load_config(config_path())
         check_for_update_upfront(cfg, style, args)
-        action = choose_action(style)
-        if action == "quit":
-            print("No problem - nothing changed. See you next time.")
-            return 0
-        if action == "demo":
-            args.demo = True
-        elif action != "full":
-            subset = action
+        # Loops back to the top-level menu after EVERY action instead of exiting (user
+        # request, 2026-08-04: "don't just quit, always return to main menu") - a real
+        # terminal's input() blocks until the user types something, so this never spins;
+        # see _menu_session's own docstring for why a SCRIPTED test fixture needs to feed
+        # "q" once exhausted rather than an infinite "".
+        while True:
+            action = choose_action(style)
+            if action == "quit":
+                print("No problem - nothing changed. See you next time.")
+                return 0
+            if action in ("configure", "manage"):
+                # Free-function flows with no need for Installer's clone-management
+                # state - handled directly here rather than added as Installer subsets.
+                raw = ask("  Which project directory?", ".", False, style=style)
+                target = Path(raw)
+                if action == "configure":
+                    run_configure(target, style, marks(), args.yes, args.demo)
+                else:
+                    run_manage_engagements(target, style, marks(), args.yes, args.demo)
+            elif action == "alias":
+                run_setup_alias(style, marks(), args.yes, args.demo)
+            elif action == "demo":
+                # A one-shot preview of the full flow, not a persistent toggle - restored
+                # afterward so picking "Demo" once doesn't silently keep every LATER menu
+                # choice in demo mode too, which would be a confusing sticky side effect.
+                print(
+                    style.yellow(
+                        "DEMO MODE - the full interactive run; nothing is executed or written."
+                    )
+                )
+                saved_demo, args.demo = args.demo, True
+                saved_run_cmd = run_cmd
+                run_cmd = make_demo_runner(style)
+                try:
+                    Installer(args, style, marks(), subset="full").run()
+                finally:
+                    run_cmd = saved_run_cmd
+                    args.demo = saved_demo
+            else:
+                subset = "full" if action == "full" else action
+                if args.demo:
+                    print(
+                        style.yellow(
+                            "DEMO MODE - the full interactive run; nothing is executed or written."
+                        )
+                    )
+                    saved_run_cmd = run_cmd
+                    run_cmd = make_demo_runner(style)
+                    try:
+                        Installer(args, style, marks(), subset=subset).run()
+                    finally:
+                        run_cmd = saved_run_cmd
+                else:
+                    Installer(args, style, marks(), subset=subset).run()
 
+    subset = "full"
     if args.demo:
         print(style.yellow("DEMO MODE - the full interactive run; nothing is executed or written."))
         saved = run_cmd

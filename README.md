@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.8](https://img.shields.io/badge/version-0.33.8-blue)
+![Version 0.33.9](https://img.shields.io/badge/version-0.33.9-blue)
 ![Tests 1300+ passing](https://img.shields.io/badge/tests-1300%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.8** (2026-08-04) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.9** (2026-08-04) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle:**
 - 🪟 **The step-0 probe now tells the model whether it's on Windows.** Instead of inferring
@@ -265,6 +265,15 @@ for you: `python install_helper.py --permissions <project-dir>` - opt-in, add-on
 backs up the settings file first. (`/permissions` shows every rule and which file it came
 from. Permission rules are Claude Code's prompting layer; the team's execution *gate* is
 separate and stays human-consent-only.)
+
+**Run it from anywhere (optional).** `python install_helper.py setup-alias` offers to add a
+`virt-surv` alias/function to whichever shell config actually exists on your machine
+(`~/.bashrc`, `~/.zshrc`, or a PowerShell profile on Windows) - opt-in, previewed before
+writing, never duplicated on a re-run. Once set up, `cd` into any project and run
+`virt-surv configure` (enable + permissions + preferences + Morgan's model, one guided pass)
+or `virt-surv archive` / `virt-surv list-engagements` (bridges to
+`scripts/engagement_state.py`, scoped to that folder) - no need to remember the clone's full
+path or hunt through the menu for first-time setup.
 
 **3. Restart Claude Code. From an enabled project, summon the team** (commands are namespaced):
 ```

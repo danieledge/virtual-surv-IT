@@ -906,12 +906,18 @@ def _fake_clone(tmp_path):
 
 
 def _menu_session(monkeypatch, tmp_path, answers):
-    """Fake a tty with scripted answers; exhausted answers return the default."""
+    """Fake a tty with scripted answers. Exhausted answers feed "q" (quit), not "" -
+    2026-08-04: the top-level menu now loops back after every action instead of exiting
+    (user request), so a real terminal's input() blocking-until-typed behaviour is safe,
+    but a test fixture that ran out of scripted answers and got "" (a real, repeatable
+    default choice on every call, since "" isn't consumed like a real answer would be)
+    would loop forever. "q" makes an exhausted fixture behave like a user who's done,
+    matching what every EXISTING test's finite answer list already implicitly meant."""
     import sys as _sys
 
     feed = iter(answers)
     monkeypatch.setattr(_sys, "stdin", _TtyStdin())
-    monkeypatch.setattr("builtins.input", lambda prompt="": next(feed, ""))
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(feed, "q"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
@@ -921,7 +927,8 @@ def test_menu_setup_only_skips_sync_and_uses_clone_asis(monkeypatch, tmp_path, c
     import install_helper as ih
 
     clone = _fake_clone(tmp_path)
-    _menu_session(monkeypatch, tmp_path, ["2", "", ""])  # option 2, then prompt defaults
+    # Advanced submenu (6) -> Environment setup only (1), then prompt defaults
+    _menu_session(monkeypatch, tmp_path, ["6", "1", "", ""])
     (tmp_path / "xdg" / "virt-surv-it").mkdir(parents=True)
     (tmp_path / "xdg" / "virt-surv-it" / "installer.json").write_text(
         json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
@@ -1030,13 +1037,19 @@ def test_upfront_update_check_fails_soft_on_timeout(monkeypatch, tmp_path, capsy
 def test_menu_setup_only_without_clone_fails_cleanly(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
-    _menu_session(monkeypatch, tmp_path, ["2"])
+    # "6","1" runs the failing action, then the scripted answers are exhausted -
+    # _menu_session feeds "q" from there (2026-08-04: the menu now loops back after
+    # every action instead of exiting), so the SESSION still ends via an explicit quit.
+    # rc reflects "did the session end cleanly", not "did the last action succeed" - the
+    # human already saw the on-screen error; a scripting/CI caller uses the separate
+    # --enable-project/--configure flag paths instead, which still propagate their own rc.
+    _menu_session(monkeypatch, tmp_path, ["6", "1"])  # Advanced -> Environment setup only
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     # The script-root fallback would find the dev repo itself; point it nowhere.
     monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     rc = ih.main([])
     out = capsys.readouterr().out
-    assert rc == 1
+    assert rc == 0
     assert "run a full install first" in out
 
 
@@ -1730,7 +1743,7 @@ def test_menu_check_for_updates_is_read_only(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
     clone = _fake_clone(tmp_path)
-    _menu_session(monkeypatch, tmp_path, ["5"])
+    _menu_session(monkeypatch, tmp_path, ["5", "1"])  # Diagnostics -> Check for updates
     cfg_dir = tmp_path / "xdg" / "virt-surv-it"
     cfg_dir.mkdir(parents=True)
     (cfg_dir / "installer.json").write_text(
@@ -1765,7 +1778,7 @@ def test_menu_check_for_updates_fetch_failure_fails_soft(monkeypatch, tmp_path, 
     import install_helper as ih
 
     clone = _fake_clone(tmp_path)
-    _menu_session(monkeypatch, tmp_path, ["5"])
+    _menu_session(monkeypatch, tmp_path, ["5", "1"])  # Diagnostics -> Check for updates
     cfg_dir = tmp_path / "xdg" / "virt-surv-it"
     cfg_dir.mkdir(parents=True)
     (cfg_dir / "installer.json").write_text(
@@ -1789,7 +1802,7 @@ def test_menu_check_for_updates_fetch_failure_fails_soft(monkeypatch, tmp_path, 
 def test_menu_check_for_updates_without_clone_fails_soft(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
-    _menu_session(monkeypatch, tmp_path, ["5"])
+    _menu_session(monkeypatch, tmp_path, ["5", "1"])  # Diagnostics -> Check for updates
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0, stdout=""))
     monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     rc = ih.main([])
@@ -2440,11 +2453,12 @@ def test_format_preferences_step_demo_never_writes(tmp_path, monkeypatch):
     assert not (project / ".claude" / "team-preferences.json").exists()
 
 
-def test_menu_option_6_maps_to_formats():
-    from install_helper import MENU_ACTIONS
+def test_menu_option_6_maps_to_advanced_submenu():
+    from install_helper import _ADVANCED_ACTIONS, MENU_ACTIONS
 
-    assert MENU_ACTIONS["6"] == "formats"
-    assert MENU_ACTIONS["7"] == "demo"
+    assert MENU_ACTIONS["6"] == "advanced"
+    assert _ADVANCED_ACTIONS["3"] == "formats"
+    assert _ADVANCED_ACTIONS["5"] == "demo"
 
 
 def test_write_team_preferences_regulatory_citations_flag(tmp_path):
@@ -2469,10 +2483,10 @@ def test_write_team_preferences_omitted_args_preserve_existing(tmp_path):
 # --- analyser output cleanliness check (2026-08-04) ---------------------------------------
 
 
-def test_menu_option_9_maps_to_toolcheck():
-    from install_helper import MENU_ACTIONS
+def test_diagnostics_submenu_option_2_maps_to_toolcheck():
+    from install_helper import _DIAGNOSTICS_ACTIONS
 
-    assert MENU_ACTIONS["9"] == "toolcheck"
+    assert _DIAGNOSTICS_ACTIONS["2"] == "toolcheck"
 
 
 def test_probe_analyser_output_skips_missing_tools(tmp_path, monkeypatch):
@@ -2605,10 +2619,10 @@ def test_check_tools_cli_flag_dispatches(monkeypatch):
 # --- comprehensive environment check (2026-08-04) ------------------------------------------
 
 
-def test_menu_option_10_maps_to_envcheck():
-    from install_helper import MENU_ACTIONS
+def test_diagnostics_submenu_option_3_maps_to_envcheck():
+    from install_helper import _DIAGNOSTICS_ACTIONS
 
-    assert MENU_ACTIONS["10"] == "envcheck"
+    assert _DIAGNOSTICS_ACTIONS["3"] == "envcheck"
 
 
 def test_check_env_cli_flag_dispatches(monkeypatch):
@@ -2767,3 +2781,649 @@ def test_run_env_check_aggregates_and_reports_issues(capsys, monkeypatch):
     out = capsys.readouterr().out
     assert rc == 1
     assert "1 issue(s) found" in out
+
+
+# ============================================================================================
+# install_helper UX overhaul (2026-08-04 user request): --configure, archive/list bridge,
+# the 'virt-surv' alias, and the reorganised grouped menu.
+# ============================================================================================
+
+# --- ask_and_set_model (extracted from the Installer method of the same name) --------------
+
+
+def test_ask_and_set_model_project_scope(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")  # scope=project, model=default
+    ok, message = ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False)
+    assert ok
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+    assert settings["model"] == ih.ORCHESTRATOR_MODEL_DEFAULT
+
+
+def test_ask_and_set_model_rejects_bad_input(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())  # confirm()/ask() short-circuit to
+    # their own default when stdin isn't a real tty - needed for scripted input() to
+    # actually be consumed rather than silently ignored.
+    answers = iter(["", "not-a-model"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    ok, message = ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False)
+    assert not ok
+    assert "expected opus/sonnet/default" in message
+
+
+def test_ask_and_set_model_demo_mode_writes_nothing(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    ok, message = ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False, demo=True)
+    assert ok
+    assert "would set" in message
+    assert not (tmp_path / ".claude").exists()
+
+
+# --- run_configure ---------------------------------------------------------------------------
+
+
+def test_run_configure_happy_path_yes(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    # run_enable_project's exit-0 path assumes the (mocked) claude CLI did its own job -
+    # it only writes enabledPlugins directly in the CLI-blocked fallback path (see
+    # test_run_enable_project_invokes_claude_in_project_cwd, which checks the same
+    # printed confirmation rather than settings.json content for this exact scenario).
+    assert "enabled for" in out
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+    assert "permissions" in settings  # --yes defaults the permissions confirm to True
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs == {
+        "extra_formats": [],
+        "regulatory_citations": True,
+        "large_context_review_split": False,
+    }
+    assert "Configuration complete" in out
+
+
+def test_run_configure_not_a_directory():
+    import install_helper as ih
+
+    rc = ih.run_configure(Path("/no/such/dir"), ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 1
+
+
+def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())  # see test_ask_and_set_model_rejects_bad_input
+    # "no" to the permissions question, "" (accept defaults) to the three preference
+    # prompts, "" to the model prompt (declines - default for that one is False).
+    answers = iter(["n", "", "", "", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
+    assert rc == 0
+    # The mocked exit-0 "claude plugin enable" doesn't itself write settings.json (that's
+    # only the CLI-blocked fallback path) - permissions declined means nothing ever
+    # creates the file at all here, which is itself the point being verified.
+    settings_path = tmp_path / ".claude" / "settings.json"
+    if settings_path.is_file():
+        assert "permissions" not in json.loads(settings_path.read_text())
+
+
+# --- archive / list-engagements bridge -------------------------------------------------------
+
+
+def test_run_list_engagements_bridges_with_cwd_scoped_to_target(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    calls = []
+
+    def fake_run(argv, cwd=None, **kw):
+        calls.append((argv, cwd))
+        return _proc(0, stdout="no engagements found")
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    rc = ih.run_list_engagements(tmp_path, ih.Style(False), ih.marks())
+    assert rc == 0
+    (argv, cwd) = calls[0]
+    assert argv[1:] == [str(Path(ih.__file__).resolve().parent / "scripts" / "engagement_state.py"), "list"]
+    assert cwd == tmp_path.resolve()
+
+
+def test_run_list_engagements_not_a_directory():
+    import install_helper as ih
+
+    assert ih.run_list_engagements(Path("/no/such/dir"), ih.Style(False), ih.marks()) == 1
+
+
+def test_run_archive_engagements_uses_all_closed_flag(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    calls = []
+
+    def fake_run(argv, cwd=None, **kw):
+        calls.append(argv)
+        return _proc(0, stdout="nothing to archive")
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    rc = ih.run_archive_engagements(tmp_path, ih.Style(False), ih.marks())
+    assert rc == 0
+    assert "archive" in calls[0] and "--all-closed" in calls[0]
+
+
+def test_run_archive_engagements_surfaces_nonzero_exit(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: _proc(1, stderr="boom"))
+    rc = ih.run_archive_engagements(tmp_path, ih.Style(False), ih.marks())
+    assert rc == 1
+
+
+def test_run_manage_engagements_lists_then_declines_archive(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: _proc(0, stdout="ok"))
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    rc = ih.run_manage_engagements(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
+    assert rc == 0
+
+
+def test_run_manage_engagements_stops_early_if_list_fails(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: _proc(1, stderr="boom"))
+    rc = ih.run_manage_engagements(tmp_path, ih.Style(False), ih.marks())
+    assert rc == 1  # never reaches the archive confirm
+
+
+# --- alias setup -------------------------------------------------------------------------------
+
+
+def _isolate_home_for_alias(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    return home
+
+
+def test_setup_alias_writes_bashrc(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert "alias virt-surv=" in content
+    assert "python3" in content
+
+
+def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("alias virt-surv='already here'\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "already exists, skipped" in out
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert content.count("virt-surv") == 1  # not duplicated
+
+
+def test_setup_alias_no_interpreter_found(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    _isolate_home_for_alias(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([("python3", "SKIP", "not on PATH")], ""))
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 1
+
+
+def test_setup_alias_no_shell_config_found(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    _isolate_home_for_alias(monkeypatch, tmp_path)  # no .bashrc/.zshrc created
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    monkeypatch.setattr(ih.sys, "platform", "linux")
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 1
+
+
+def test_setup_alias_declined_is_not_an_error(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())  # see test_ask_and_set_model_rejects_bad_input
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=False)  # confirm() -> declined
+    assert rc == 0  # declining is a choice, not a failure
+    assert "virt-surv" not in (home / ".bashrc").read_text(encoding="utf-8")
+
+
+def test_setup_alias_write_error_is_reported(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+
+    real_open = Path.open
+
+    def boom_open(self, mode="r", *a, **kw):
+        if "a" in mode:
+            raise OSError("disk full")
+        return real_open(self, mode, *a, **kw)
+
+    monkeypatch.setattr(Path, "open", boom_open)
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 1
+
+
+def test_powershell_profile_candidates_windows_only(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.sys, "platform", "linux")
+    assert ih._powershell_profile_candidates() == []
+
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    home = tmp_path / "winhome"
+    (home / "Documents").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    candidates = ih._powershell_profile_candidates()
+    # BOTH versions offered (live-verified 2026-08-04): Windows PowerShell 5.1 (built into
+    # every Windows machine) and PowerShell 7+ (separate install) use DIFFERENT profile
+    # paths - offering only one would silently miss whichever version a user actually has.
+    assert len(candidates) == 2
+    labels = {label for label, _ in candidates}
+    assert labels == {"PowerShell 5.1", "PowerShell 7+"}
+    paths = {p for _, p in candidates}
+    assert any("WindowsPowerShell" in p.parts for p in paths)
+    assert any(p.parent.name == "PowerShell" for p in paths)  # not WindowsPowerShell
+    for p in paths:
+        assert p.name == "Microsoft.PowerShell_profile.ps1"
+
+
+def test_setup_alias_writes_both_powershell_profiles(tmp_path, monkeypatch):
+    """Both PS 5.1 and PS7+ profiles get offered and written - see
+    test_powershell_profile_candidates_windows_only for why both matter."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    home = tmp_path / "winhome"
+    (home / "Documents").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "py"))
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    for sub in ("WindowsPowerShell", "PowerShell"):
+        profile = home / "Documents" / sub / "Microsoft.PowerShell_profile.ps1"
+        content = profile.read_text(encoding="utf-8")
+        assert "function virt-surv" in content
+        assert "@args" in content
+
+
+# --- folder-subcommand dispatch ('virt-surv configure', etc.) -------------------------------
+
+
+def test_dispatch_folder_subcommand_not_a_match_returns_none():
+    import install_helper as ih
+
+    assert ih._dispatch_folder_subcommand([]) is None
+    assert ih._dispatch_folder_subcommand(["install"]) is None
+    assert ih._dispatch_folder_subcommand(["--configure"]) is None
+
+
+def test_dispatch_folder_subcommand_configure_routes_correctly(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: called.append(target) or 0,
+    )
+    rc = ih._dispatch_folder_subcommand(["configure", str(tmp_path)])
+    assert rc == 0
+    assert called == [Path(tmp_path)]
+
+
+def test_dispatch_folder_subcommand_configure_defaults_to_cwd(monkeypatch):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: called.append(target) or 0,
+    )
+    ih._dispatch_folder_subcommand(["configure"])
+    assert called == [Path(".")]
+
+
+def test_dispatch_folder_subcommand_parses_demo_and_yes_flags(monkeypatch, tmp_path):
+    """Live-tested gap, 2026-08-04: this dispatcher bypasses parse_args() entirely, so a
+    trailing --demo was previously silently dropped instead of honoured or erroring."""
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: calls.append(
+            (target, assume_yes, demo)
+        )
+        or 0,
+    )
+    ih._dispatch_folder_subcommand(["configure", str(tmp_path), "--demo", "--yes"])
+    assert calls == [(Path(tmp_path), True, True)]
+    # flag order shouldn't matter, and the path can come before or after the flags
+    calls.clear()
+    ih._dispatch_folder_subcommand(["configure", "--demo", str(tmp_path)])
+    assert calls == [(Path(tmp_path), False, True)]
+
+
+def test_dispatch_folder_subcommand_archive_and_list(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_archive_engagements", lambda target, style, mm, demo=False: 0)
+    monkeypatch.setattr(ih, "run_list_engagements", lambda target, style, mm: 0)
+    assert ih._dispatch_folder_subcommand(["archive", str(tmp_path)]) == 0
+    assert ih._dispatch_folder_subcommand(["list-engagements", str(tmp_path)]) == 0
+
+
+def test_dispatch_folder_subcommand_setup_alias(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_setup_alias", lambda style, mm, assume_yes=False, demo=False: 0)
+    assert ih._dispatch_folder_subcommand(["setup-alias"]) == 0
+
+
+def test_main_dispatches_folder_subcommand_before_argparse(monkeypatch):
+    """Confirms main() checks the folder-subcommand form BEFORE falling through to the
+    normal parse_args()-based flow, which would reject 'configure' as an invalid mode."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: 0)
+    assert ih.main(["configure"]) == 0
+
+
+# --- reorganised menu / submenus --------------------------------------------------------------
+
+
+def test_top_level_menu_actions_are_the_expected_six():
+    from install_helper import MENU_ACTIONS
+
+    assert MENU_ACTIONS == {
+        "1": "full",
+        "2": "configure",
+        "3": "manage",
+        "4": "alias",
+        "5": "diagnostics",
+        "6": "advanced",
+        "q": "quit",
+    }
+
+
+def test_diagnostics_submenu_full_mapping():
+    from install_helper import _DIAGNOSTICS_ACTIONS
+
+    assert _DIAGNOSTICS_ACTIONS == {"1": "check", "2": "toolcheck", "3": "envcheck", "b": "back"}
+
+
+def test_advanced_submenu_full_mapping():
+    from install_helper import _ADVANCED_ACTIONS
+
+    assert _ADVANCED_ACTIONS == {
+        "1": "setup",
+        "2": "statusline",
+        "3": "formats",
+        "4": "model",
+        "5": "demo",
+        "b": "back",
+    }
+
+
+def test_choose_action_diagnostics_then_back_redraws_top_menu(monkeypatch):
+    """'b' at the submenu must return to the top-level menu, not exit choose_action -
+    verified by picking Diagnostics, backing out, then picking a real top-level action."""
+    import install_helper as ih
+
+    answers = iter(["5", "b", "1"])  # Diagnostics -> back -> Install/update (full)
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    assert ih.choose_action(ih.Style(False)) == "full"
+
+
+def test_choose_action_resolves_through_diagnostics_submenu(monkeypatch):
+    import install_helper as ih
+
+    answers = iter(["5", "2"])  # Diagnostics -> Check analyser output cleanliness
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    assert ih.choose_action(ih.Style(False)) == "toolcheck"
+
+
+def test_choose_action_resolves_through_advanced_submenu(monkeypatch):
+    import install_helper as ih
+
+    answers = iter(["6", "4"])  # Advanced -> Morgan's model only
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    assert ih.choose_action(ih.Style(False)) == "model"
+
+
+def test_choose_action_configure_and_alias_returned_directly(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": "2")
+    assert ih.choose_action(ih.Style(False)) == "configure"
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": "4")
+    assert ih.choose_action(ih.Style(False)) == "alias"
+
+
+# --- demo mode must cover every new command (live report, 2026-08-04) -----------------------
+# The original run_configure/run_setup_alias/run_archive_engagements had NO demo support at
+# all - `install_helper.py configure /dir --demo --yes` silently wrote real files to disk,
+# and `--demo` on its own skipped the interactive menu entirely (so none of these newer
+# options could even be reached in a preview). Both fixed; pinned here so they can't regress.
+
+
+def test_run_configure_demo_writes_nothing(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True, demo=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "DEMO" in out
+    assert "would" in out
+    # The actual guarantee: nothing on disk at all, not even the directories.
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_run_setup_alias_demo_writes_nothing(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
+    assert rc == 0
+    assert (home / ".bashrc").read_text(encoding="utf-8") == ""  # untouched
+
+
+def test_run_archive_engagements_demo_skips_real_call(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    def boom(*a, **k):
+        raise AssertionError("demo mode must never actually invoke engagement_state.py")
+
+    monkeypatch.setattr(ih.subprocess, "run", boom)
+    rc = ih.run_archive_engagements(tmp_path, ih.Style(False), ih.marks(), demo=True)
+    assert rc == 0
+
+
+def test_run_manage_engagements_demo_threads_through_to_archive(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: _proc(0, stdout="ok"))
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")  # accept default (declines)
+    called = []
+    monkeypatch.setattr(
+        ih,
+        "run_archive_engagements",
+        lambda target, style, mm, demo=False: called.append(demo) or 0,
+    )
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    ih.run_manage_engagements(tmp_path, ih.Style(False), ih.marks(), assume_yes=False, demo=True)
+    assert called == [True]
+
+
+def test_demo_flag_still_shows_interactive_menu(monkeypatch, tmp_path, capsys):
+    """The core UX fix: --demo used to skip choose_action() entirely and jump straight to
+    a fixed full-flow preview - none of the menu options (including the newer ones) could
+    be reached at all. Now the menu shows regardless, and demo stays true throughout."""
+    import install_helper as ih
+
+    _menu_session(monkeypatch, tmp_path, ["2", str(tmp_path)])  # Configure -> this dir
+    monkeypatch.setattr(ih, "_relocate_if_running_inside_target_repo", lambda *a, **k: None)
+    rc = ih.main(["--demo"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "DEMO" in out
+    assert not (tmp_path / ".claude").exists()  # nothing written
+
+
+def test_dispatch_folder_subcommand_configure_demo_flag_writes_nothing(tmp_path, monkeypatch):
+    """End-to-end through the REAL positional-subcommand path, not a mocked run_configure -
+    the exact live-reported scenario (2026-08-04)."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    rc = ih._dispatch_folder_subcommand(["configure", str(tmp_path), "--demo", "--yes"])
+    assert rc == 0
+    assert not (tmp_path / ".claude").exists()
+
+
+# --- menu loops back after every action instead of exiting (user request, 2026-08-04) --------
+
+
+def test_menu_loops_back_and_runs_a_second_action_before_quit(monkeypatch, tmp_path, capsys):
+    """The core UX fix: run TWO different actions in one session, not just the first."""
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(ih, "run_setup_alias", lambda style, mm, assume_yes=False, demo=False: calls.append("alias") or 0)
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: calls.append("configure") or 0,
+    )
+    # 4 = Set up the alias, then loop back, 2 = Configure, answer the directory prompt,
+    # loop back again, then exhausted answers feed "q" to end the session.
+    _menu_session(monkeypatch, tmp_path, ["4", "2", str(tmp_path)])
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    rc = ih.main([])
+    assert rc == 0
+    assert calls == ["alias", "configure"]  # BOTH ran, in order, in one session
+
+
+def test_menu_shows_again_after_an_action_completes(monkeypatch, tmp_path, capsys):
+    """Direct evidence the menu re-renders: 'What can I do for you?' appears more than
+    once in one session's output."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_setup_alias", lambda style, mm, assume_yes=False, demo=False: 0)
+    _menu_session(monkeypatch, tmp_path, ["4"])  # alias, then exhausted -> "q"
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    ih.main([])
+    out = capsys.readouterr().out
+    assert out.count("What can I do for you?") == 2  # once before "4", once before "q"
+
+
+# --- --demo must cover the WHOLE menu session, every action, not just one path ---------------
+
+
+def test_demo_flag_protects_every_action_in_one_session(monkeypatch, tmp_path, capsys):
+    """User request, 2026-08-04: "I should be able to run the entire menu system in demo
+    mode" - --demo must stay true for EVERY action picked in the session, not just the
+    first one or a hardcoded subset. Runs two DIFFERENT kinds of actions (the free-
+    function 'configure' path, and an Installer-subset path) in one --demo session and
+    checks demo threaded through both, including the run_cmd swap around the Installer
+    path. Fakes Installer itself rather than answering its interior confirm() prompts -
+    that wiring is already covered by the dedicated Installer/format_preferences_step
+    tests; this test is only about the menu loop's own demo plumbing."""
+    import install_helper as ih
+
+    sentinel_runner = lambda *a, **k: _FakeProc(0)
+    monkeypatch.setattr(ih, "make_demo_runner", lambda style: sentinel_runner)
+    installer_calls = []
+
+    class _FakeInstaller:
+        def __init__(self, args, style, mm, subset="full"):
+            installer_calls.append((subset, args.demo, ih.run_cmd is sentinel_runner))
+
+        def run(self):
+            return 0
+
+    monkeypatch.setattr(ih, "Installer", _FakeInstaller)
+    configure_calls = []
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: configure_calls.append(demo) or 0,
+    )
+    # "2" = Configure (free-function path), directory prompt, loop back,
+    # "6","3" = Advanced -> Project preferences (Installer subset "formats"), loop back, "q".
+    _menu_session(monkeypatch, tmp_path, ["2", str(tmp_path), "6", "3", "q"])
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    rc = ih.main(["--demo"])
+    assert rc == 0
+    assert configure_calls == [True]  # demo threaded to the free-function path
+    # demo threaded to the Installer path, AND run_cmd was swapped to the demo runner
+    # for the duration of that construction+run.
+    assert installer_calls == [("formats", True, True)]
+
+
+def test_demo_menu_selection_is_one_shot_not_sticky(monkeypatch, tmp_path):
+    """Picking "Demo" from the Advanced submenu previews the full flow ONCE - it must
+    NOT leave args.demo permanently true for whatever the user picks next in the same
+    session (that would be a confusing silent side effect)."""
+    import install_helper as ih
+
+    sentinel_runner = lambda *a, **k: _FakeProc(0)
+    monkeypatch.setattr(ih, "make_demo_runner", lambda style: sentinel_runner)
+
+    class _FakeInstaller:
+        def __init__(self, args, style, mm, subset="full"):
+            pass
+
+        def run(self):
+            return 0
+
+    monkeypatch.setattr(ih, "Installer", _FakeInstaller)
+    called_demo_values = []
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: called_demo_values.append(demo) or 0,
+    )
+    # 6,5 = Advanced -> Demo (one-shot full-flow preview via the FakeInstaller), loop
+    # back, 2 = Configure, directory prompt, loop back, then exhausted -> "q".
+    _menu_session(monkeypatch, tmp_path, ["6", "5", "2", str(tmp_path)])
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    ih.main([])
+    # run_configure must have been called with demo=False - the earlier "Demo" menu pick
+    # must not have left args.demo stuck true.
+    assert called_demo_values == [False]
+    assert ih.run_cmd is not sentinel_runner  # restored after the one-shot preview
