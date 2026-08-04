@@ -1918,6 +1918,39 @@ class Installer:
         target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
         self.step_ok("Status line", f"wired in {target} (restart to see it)")
 
+    def alias_step(self) -> None:
+        """Optional, last step of a full install: offers the 'virt-surv' shell alias so
+        the installer is reachable from any folder afterward, same outer-confirm pattern
+        as statusline_step (2026-08-04 user request: "should be added on selecting a full
+        install like other steps such as the statusline"). Defaults to False, unlike
+        statusline's True - this one edits the user's OWN shell rc file(s)
+        (~/.bashrc/~/.zshrc/a PowerShell profile), a bigger surprise than writing into
+        Claude settings, so it stays opt-in-by-default even inside the full flow.
+        run_setup_alias does its own per-file preview + confirm; this is only the outer
+        "do you want this at all" gate."""
+        self.step_intro(
+            "Optional: the 'virt-surv' alias lets you launch this installer from any "
+            "folder and run 'virt-surv configure'/'archive'/'list-engagements' scoped to "
+            "wherever you are."
+        )
+        if self.args.yes:
+            wanted = False  # opt-in only - never touch shell rc files on an unattended run
+        else:
+            wanted = confirm(
+                "  Shall I also set up the 'virt-surv' alias?",
+                default=False,
+                assume_yes=False,
+                style=self.style,
+            )
+        if not wanted:
+            self.step_skip("Alias setup", "skipped - python install_helper.py --setup-alias any time")
+            return
+        rc = run_setup_alias(self.style, self.marks, self.args.yes, self.demo)
+        if rc == 0:
+            self.step_ok("Alias setup", "see above for what was added")
+        else:
+            self.step_fail("Alias setup", "see above for detail", fatal=False)
+
     def format_preferences_step(self) -> None:
         """Standalone, easily re-runnable: change a project's preferences any time (menu
         option 6) - most users install once and never re-run the full flow, so these
@@ -2279,6 +2312,7 @@ class Installer:
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
             ("Status line (optional)", self.statusline_step),
             ("Enable for a project (optional)", self.enable_step),
+            ("Alias setup (optional)", self.alias_step),
         ]
 
     def run(self) -> int:
@@ -3040,6 +3074,29 @@ def run_setup_alias(
             print(f"    {name}: {status} - {detail}")
         return 1
     script_path = Path(__file__).resolve()
+    if not looks_like_repo(script_path.parent):
+        # __file__ points at wherever THIS invocation's copy of install_helper.py sits -
+        # normally the clone, but the curl-bootstrap flow briefly runs a single-file copy
+        # from a temp extraction dir first. Baking that temp path into the alias breaks
+        # it the moment the temp dir is cleaned up - live report, 2026-08-04: re-running
+        # --setup-alias from the bootstrap stage clobbered a previously-correct alias
+        # with one pointing at a since-deleted AppData\Local\Temp\...\install_helper.py.
+        # Prefer the CONFIGURED clone (installer.json's repo_path) when __file__'s own
+        # parent isn't a real repo.
+        configured = load_config(config_path()).get("repo_path")
+        if isinstance(configured, str) and configured:
+            candidate = Path(configured).expanduser().resolve() / "install_helper.py"
+            if candidate.is_file() and looks_like_repo(candidate.parent):
+                script_path = candidate
+        if not looks_like_repo(script_path.parent):
+            print(
+                style.yellow(
+                    f"  ! no real clone found - the alias would point at {script_path}, "
+                    "which may be temporary and stop working once it's cleaned up. Run a "
+                    "full install (menu option 1) first, then re-run --setup-alias from "
+                    "inside the clone."
+                )
+            )
     targets = list(_posix_shell_rc_candidates()) + _powershell_profile_candidates()
     if not targets:
         print(
@@ -3156,9 +3213,17 @@ def probe_analyser_output(tmpdir: Path, runner=None, only=None):
         "sql-file": tmpdir / "probe.sql",
         "sh-file": tmpdir / "probe.sh",
     }
-    targets["py-file"].write_text(_TOOL_CHECK_CLEAN_PY, encoding="utf-8")
-    targets["sql-file"].write_text(_TOOL_CHECK_CLEAN_SQL, encoding="utf-8")
-    targets["sh-file"].write_text(_TOOL_CHECK_CLEAN_SH, encoding="utf-8")
+    # newline="\n" (not write_text's default universal-newline translation) forces LF
+    # regardless of platform - on Windows, write_text's default would turn every \n into
+    # \r\n, and shfmt -d's diff is byte-sensitive enough to report that as "the whole file
+    # would change" (live report, 2026-08-04: shfmt NOISY on this exact trivial fixture).
+    for kind, content in (
+        ("py-file", _TOOL_CHECK_CLEAN_PY),
+        ("sql-file", _TOOL_CHECK_CLEAN_SQL),
+        ("sh-file", _TOOL_CHECK_CLEAN_SH),
+    ):
+        with open(targets[kind], "w", encoding="utf-8", newline="\n") as f:
+            f.write(content)
 
     for name, flags, target_kind, per_call_timeout in _TOOL_OUTPUT_CHECKS:
         if only is not None and name not in only:
@@ -3315,10 +3380,114 @@ def _check_encoding_roundtrip(interpreter: str) -> tuple:
     return ("OK", "UTF-8 (including emoji) round-trips cleanly through this interpreter")
 
 
+def _check_runtime_dependencies() -> list:
+    """git and the claude CLI - checked in the full install's preflight, but NOT
+    previously in --check-env, so a missing/broken one there was invisible to someone
+    running the diagnostic on its own (2026-08-04 user request: "if it won't work in
+    Claude Code CLI it should show" here too, not just in the full install path)."""
+    rows = []
+    if shutil.which("git"):
+        rows.append(("git", "OK", "found"))
+    else:
+        rows.append(("git", "ERROR", "not found - required for cloning/updating the team"))
+    claude_path, how = find_claude(refresh=True)
+    if how == "path":
+        rows.append(("claude CLI", "OK", "found on PATH"))
+    elif claude_path:
+        rows.append(
+            (
+                "claude CLI",
+                "WARN",
+                f"found at {claude_path}, not on this terminal's PATH - a new terminal "
+                "will see it by name",
+            )
+        )
+    else:
+        rows.append(("claude CLI", "ERROR", f"not found - install it first: {CLAUDE_DOCS_URL}"))
+    return rows
+
+
+def _check_repo_py_syntax(interpreter: str, repo_root: Path) -> list:
+    """Compiles every .py file under scripts/ and .claude/hooks/, plus install_helper.py
+    itself, with the RESOLVED interpreter (2026-08-04 user request: "every single .py
+    file... should be tested"). Catches a syntax/version mismatch - e.g. a 3.10+ feature
+    landing on this project's documented 3.9 floor, or a file corrupted by a bad
+    encoding/line-ending transform on this specific machine - before Claude Code hits it
+    live in a real hook or skill invocation, not just "the file exists on disk"."""
+    if not interpreter:
+        return [("repo script syntax", "SKIP", "no working interpreter found")]
+    bootstrap_hint = _bootstrap_only_hint(repo_root)
+    if bootstrap_hint:
+        return [("repo script syntax", "SKIP", bootstrap_hint)]
+    targets = sorted(repo_root.glob("scripts/*.py")) + sorted(repo_root.glob(".claude/hooks/*.py"))
+    if (repo_root / "install_helper.py").is_file():
+        targets.append(repo_root / "install_helper.py")
+    if not targets:
+        return [("repo script syntax", "SKIP", "no .py files found to check")]
+    checker = (
+        "import py_compile, sys, json\n"
+        "bad = []\n"
+        "for path in sys.argv[1:]:\n"
+        "    try:\n"
+        "        py_compile.compile(path, doraise=True)\n"
+        "    except Exception as exc:\n"
+        "        bad.append([path, str(exc)])\n"
+        "print(json.dumps(bad))\n"
+    )
+    try:
+        proc = subprocess.run(
+            [interpreter, "-c", checker, *[str(t) for t in targets]],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return [("repo script syntax", "ERROR", f"failed to run the checker: {exc}")]
+    if proc.returncode != 0:
+        return [
+            (
+                "repo script syntax",
+                "ERROR",
+                f"checker crashed (exit {proc.returncode}): {(proc.stderr or '').strip()[:200]}",
+            )
+        ]
+    try:
+        bad = json.loads(proc.stdout.strip() or "[]")
+    except ValueError:
+        return [("repo script syntax", "ERROR", f"could not parse checker output: {proc.stdout[:200]}")]
+    if not bad:
+        return [("repo script syntax", "OK", f"{len(targets)} file(s) compile cleanly")]
+    rows = [
+        ("repo script syntax", "ERROR", f"{len(bad)}/{len(targets)} file(s) fail to compile")
+    ]
+    for path, err in bad[:8]:  # capped - the count above is the honest total, this is detail
+        rows.append((f"    {Path(path).name}", "ERROR", err[:150]))
+    return rows
+
+
+def _bootstrap_only_hint(repo_root: Path) -> Optional[str]:
+    """True (as a ready-to-print reason) when install_helper.py is running from a bare
+    single-file bootstrap copy rather than a full clone - live report, 2026-08-04: a
+    Windows user ran --check-env from exactly this state (the curl-bootstrap temp dir,
+    before the full clone existed) and got a confusing raw ImportError/path-not-found
+    instead of a clear "not installed yet" - both checks below are expected to come back
+    SKIP here, this just makes the *reason* legible instead of technical."""
+    if (repo_root / "scripts").is_dir():
+        return None
+    return (
+        "not installed yet - this looks like the single-file bootstrap download, not the "
+        "full clone (no scripts/ next to install_helper.py here). Run the full install "
+        "(menu option 1, or --full) first, then re-run this check from inside the clone."
+    )
+
+
 def _check_plugin_root_bootstrap(repo_root: Path) -> tuple:
     """Runs the SAME find_plugin_root() the engage-open.md heredoc embeds a twin of
     (2026-08-04) - imported directly here since install_helper.py already sits at the repo
     root next to scripts/, no subprocess needed for this one."""
+    bootstrap_hint = _bootstrap_only_hint(repo_root)
+    if bootstrap_hint:
+        return ("SKIP", bootstrap_hint)
     try:
         sys.path.insert(0, str(repo_root))
         from scripts.find_plugin_root import find_plugin_root
@@ -3349,6 +3518,9 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
     unexpectedly" in stderr, distinguished here from a genuine (wrong) block."""
     if not interpreter:
         return [("guard hooks", "SKIP", "no working interpreter found")]
+    bootstrap_hint = _bootstrap_only_hint(repo_root)
+    if bootstrap_hint:
+        return [("guard hooks", "SKIP", bootstrap_hint)]
     dispatcher = repo_root / "scripts" / "bash_hook_dispatcher.py"
     if not dispatcher.is_file():
         return [("guard hooks", "SKIP", f"dispatcher not found at {dispatcher}")]
@@ -3417,9 +3589,12 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
 
 def run_env_check(style: Style, mark_map: dict) -> int:
     """Standalone diagnostic (--check-env / menu option 10): a comprehensive environment
-    report - interpreter resolution, guard hooks, encoding, the plugin-root bootstrap, bash
-    availability, and analyser output cleanliness - in one pass. Never blocks anything;
-    informational, matching check-review-tools.sh's own "report, not a gate" convention."""
+    report - interpreter resolution, bash and git/claude-CLI availability, encoding, the
+    plugin-root bootstrap, every repo .py file's syntax under the resolved interpreter,
+    guard hooks, and analyser output cleanliness - in one pass. Never blocks anything;
+    informational, matching check-review-tools.sh's own "report, not a gate" convention.
+    Goal (2026-08-04 user framing): if it won't work when Claude Code actually invokes it,
+    this should show it - not just "the file/binary exists"."""
     ok, fail = mark_map["ok"], mark_map["fail"]
     repo_root = Path(__file__).resolve().parent
     bad = 0
@@ -3451,6 +3626,10 @@ def run_env_check(style: Style, mark_map: dict) -> int:
     else:
         emit("bash", "WARN", "not found (only matters for the review-tools probe script)")
 
+    print(style.dim("\n  Runtime dependencies (git, claude CLI):"))
+    for label, status, detail in _check_runtime_dependencies():
+        emit(label, status, detail)
+
     print(style.dim("\n  Encoding round-trip:"))
     status, detail = _check_encoding_roundtrip(interpreter)
     emit("UTF-8/emoji", status, detail)
@@ -3458,6 +3637,10 @@ def run_env_check(style: Style, mark_map: dict) -> int:
     print(style.dim("\n  Plugin-root bootstrap:"))
     status, detail = _check_plugin_root_bootstrap(repo_root)
     emit("find_plugin_root", status, detail)
+
+    print(style.dim("\n  Repo script syntax (every .py file the team runs, this interpreter):"))
+    for label, status, detail in _check_repo_py_syntax(interpreter, repo_root):
+        emit(label, status, detail)
 
     print(style.dim("\n  Guard hooks (harmless payloads, real production dispatch path):"))
     with tempfile.TemporaryDirectory(prefix="virt-surv-it-envcheck-") as tmp:

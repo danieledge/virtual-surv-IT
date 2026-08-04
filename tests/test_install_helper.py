@@ -1430,6 +1430,58 @@ def test_statusline_step_skips_without_bash_on_windows(monkeypatch, tmp_path, ca
     assert any(status == "skip" for _n, status, _d in inst.tracker.steps)
 
 
+def test_full_plan_includes_alias_setup_as_last_step():
+    """2026-08-04 user request: the alias should be offered as part of a full install,
+    the same way statusline already is - not only reachable as its own menu item."""
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    plan = inst.build_plan()
+    titles = [t() if callable(t) else t for t, _ in plan]
+    assert "Alias setup (optional)" in titles
+    assert titles[-1] == "Alias setup (optional)"  # after project enablement
+
+
+def test_alias_step_skipped_by_default_on_yes_run(monkeypatch, tmp_path, capsys):
+    """--yes must never touch the user's shell rc files unattended - opt-in only, even
+    inside the full flow."""
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: calls.append(a) or 0)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.alias_step()
+    out = capsys.readouterr().out
+    assert calls == []
+    assert "skipped" in out
+
+
+def test_alias_step_declines_when_not_confirmed(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: calls.append(a) or 0)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.alias_step()
+    assert calls == []
+
+
+def test_alias_step_runs_setup_alias_when_confirmed(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(
+        ih,
+        "run_setup_alias",
+        lambda style, mm, assume_yes=False, demo=False: calls.append((assume_yes, demo)) or 0,
+    )
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
+    inst.alias_step()
+    assert calls == [(False, True)]
+
+
 def test_looks_like_repo_accepts_worktree_git_file(tmp_path):
     from install_helper import looks_like_repo
 
@@ -2520,6 +2572,23 @@ def test_probe_analyser_output_clean_run(tmp_path, monkeypatch):
     assert all(status == "OK" for _, status, _ in results)
 
 
+def test_probe_analyser_output_fixtures_are_lf_only(tmp_path, monkeypatch):
+    """Live report, 2026-08-04: shfmt came back NOISY (393 bytes) on the trivial fixture
+    on a real Windows box. Root cause: Path.write_text's default newline translation
+    turns every \\n into \\r\\n on Windows, and shfmt -d's diff is byte-sensitive enough to
+    report that as "the whole file would change". Reading the fixtures back in BINARY
+    mode (no newline translation on read) proves the bytes on disk are LF-only regardless
+    of what platform this test itself runs on - the fix forces newline="\\n" on write."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)  # SKIP every tool - just
+    list(ih.probe_analyser_output(tmp_path))  # need the fixture-writing side effect
+    for name in ("probe.py", "probe.sql", "probe.sh"):
+        raw = (tmp_path / name).read_bytes()
+        assert b"\r\n" not in raw, f"{name} contains CRLF - would break shfmt -d on Windows"
+        assert b"\n" in raw
+
+
 def test_probe_analyser_output_detects_leaked_ansi(tmp_path, monkeypatch):
     import install_helper as ih
 
@@ -2718,6 +2787,102 @@ def test_check_plugin_root_bootstrap_warns_when_nothing_found(tmp_path, monkeypa
     monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path / "empty-home"))
     status, detail = ih._check_plugin_root_bootstrap(Path(__file__).resolve().parents[1])
     assert status == "WARN"
+
+
+# --- bootstrap-only hint, repo script syntax, runtime deps (2026-08-04 live reports) ----------
+
+
+def test_bootstrap_only_hint_present_for_full_clone():
+    from install_helper import _bootstrap_only_hint
+
+    assert _bootstrap_only_hint(Path(__file__).resolve().parents[1]) is None
+
+
+def test_bootstrap_only_hint_explains_missing_scripts_dir(tmp_path):
+    from install_helper import _bootstrap_only_hint
+
+    hint = _bootstrap_only_hint(tmp_path)
+    assert hint is not None
+    assert "not installed yet" in hint
+    assert "bootstrap" in hint
+
+
+def test_check_plugin_root_bootstrap_uses_clear_hint_not_raw_importerror(tmp_path):
+    """Live report, 2026-08-04: a Windows user ran --check-env from the curl-bootstrap
+    temp dir (no scripts/ yet) and got a raw 'No module named scripts.find_plugin_root'
+    ImportError instead of a legible reason."""
+    from install_helper import _check_plugin_root_bootstrap
+
+    status, detail = _check_plugin_root_bootstrap(tmp_path)
+    assert status == "SKIP"
+    assert "not installed yet" in detail
+    assert "ImportError" not in detail
+    assert "No module named" not in detail
+
+
+def test_check_guard_hooks_uses_clear_hint_for_bootstrap_only_copy(tmp_path):
+    from install_helper import _check_guard_hooks
+
+    rows = _check_guard_hooks("python3", tmp_path, tmp_path)
+    assert len(rows) == 1
+    assert rows[0][1] == "SKIP"
+    assert "not installed yet" in rows[0][2]
+
+
+def test_check_repo_py_syntax_clean_on_real_repo():
+    from install_helper import _check_repo_py_syntax
+
+    rows = _check_repo_py_syntax("python3", Path(__file__).resolve().parents[1])
+    assert len(rows) == 1
+    assert rows[0][1] == "OK"
+    assert "compile cleanly" in rows[0][2]
+
+
+def test_check_repo_py_syntax_reports_a_broken_file(tmp_path):
+    from install_helper import _check_repo_py_syntax
+
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "broken.py").write_text("def f(:\n    pass\n", encoding="utf-8")
+    (tmp_path / "scripts" / "fine.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    rows = _check_repo_py_syntax("python3", tmp_path)
+    assert rows[0] == ("repo script syntax", "ERROR", "1/2 file(s) fail to compile")
+    assert any("broken.py" in label for label, *_ in rows[1:])
+
+
+def test_check_repo_py_syntax_skips_without_interpreter(tmp_path):
+    from install_helper import _check_repo_py_syntax
+
+    rows = _check_repo_py_syntax("", tmp_path)
+    assert rows == [("repo script syntax", "SKIP", "no working interpreter found")]
+
+
+def test_check_repo_py_syntax_skips_bootstrap_only_copy(tmp_path):
+    from install_helper import _check_repo_py_syntax
+
+    rows = _check_repo_py_syntax("python3", tmp_path)
+    assert len(rows) == 1
+    assert rows[0][1] == "SKIP"
+    assert "not installed yet" in rows[0][2]
+
+
+def test_check_runtime_dependencies_reports_git_and_claude(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "git" else None)
+    monkeypatch.setattr(ih, "find_claude", lambda refresh=True: ("/usr/local/bin/claude", "path"))
+    rows = ih._check_runtime_dependencies()
+    assert ("git", "OK", "found") in rows
+    assert any(label == "claude CLI" and status == "OK" for label, status, _ in rows)
+
+
+def test_check_runtime_dependencies_errors_when_git_missing(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "find_claude", lambda refresh=True: (None, None))
+    rows = ih._check_runtime_dependencies()
+    assert any(label == "git" and status == "ERROR" for label, status, _ in rows)
+    assert any(label == "claude CLI" and status == "ERROR" for label, status, _ in rows)
 
 
 def test_check_guard_hooks_skips_without_interpreter(tmp_path):
@@ -2964,6 +3129,67 @@ def test_setup_alias_writes_bashrc(tmp_path, monkeypatch):
     content = (home / ".bashrc").read_text(encoding="utf-8")
     assert "alias virt-surv=" in content
     assert "python3" in content
+
+
+def test_setup_alias_uses_configured_clone_not_bootstrap_temp_path(tmp_path, monkeypatch):
+    """Live report, 2026-08-04: --setup-alias run from the curl-bootstrap temp extraction
+    (before the full clone exists) baked that TEMP path into the alias, breaking it the
+    moment the temp dir was cleaned up - and clobbered a previously-correct alias on
+    re-run. Fix: prefer installer.json's repo_path when __file__'s own parent isn't a
+    real repo."""
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("", encoding="utf-8")
+
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    (clone / ".git").mkdir()
+    (clone / ".claude-plugin").mkdir()
+    (clone / ".claude-plugin" / "plugin.json").write_text("{}", encoding="utf-8")
+    (clone / "install_helper.py").write_text("# real clone copy\n", encoding="utf-8")
+
+    xdg = tmp_path / "xdg"
+    (xdg / "virt-surv-it").mkdir(parents=True)
+    (xdg / "virt-surv-it" / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone)}), encoding="utf-8"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+
+    boot_copy = tmp_path / "boot" / "install_helper.py"
+    boot_copy.parent.mkdir()
+    boot_copy.write_text("# bootstrap temp copy\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(boot_copy))
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert str(clone) in content
+    assert "boot" not in content  # the temp path must never land in the alias
+
+
+def test_setup_alias_warns_when_no_real_clone_found_anywhere(tmp_path, monkeypatch, capsys):
+    """No installer.json, no configured repo_path, __file__ itself isn't a real repo -
+    the alias still gets written (best effort against the only path we have) but with a
+    clear warning, not silently."""
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("", encoding="utf-8")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "no-such-xdg"))
+
+    boot_copy = tmp_path / "boot" / "install_helper.py"
+    boot_copy.parent.mkdir()
+    boot_copy.write_text("# bootstrap temp copy\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(boot_copy))
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "no real clone found" in out
+    assert str(boot_copy) in out
 
 
 def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):

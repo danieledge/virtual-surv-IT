@@ -3,6 +3,37 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.11] - 2026-08-04 - Live-reported Windows fixes: a broken alias, a false-positive shfmt check, clearer diagnostics
+
+A batch of fixes from live testing on a real corporate Windows box during the same session
+that shipped [0.33.10]'s tool-config work.
+
+### Fixed
+- `--setup-alias` could write a **broken alias**: it used `Path(__file__).resolve()` for the
+  script path, but when run from the curl-bootstrap temp extraction (before the full clone
+  exists), that resolves to a temp directory that gets cleaned up - breaking the alias, and
+  clobbering a previously-correct one on re-run. Now prefers the configured clone
+  (`installer.json`'s `repo_path`) whenever `__file__`'s own parent isn't a real repo, and
+  warns clearly if no real clone can be found at all.
+- `shfmt` could come back `NOISY` on a trivial, genuinely clean fixture file:
+  `Path.write_text()`'s default newline translation turns `\n` into `\r\n` on Windows, and
+  `shfmt -d`'s diff is byte-sensitive enough to report that as "the whole file would change".
+  All three `--check-tools` fixture files now write with an explicit `newline="\n"`.
+- `--check-env`'s plugin-root-bootstrap and guard-hook checks showed confusing raw errors
+  (`No module named 'scripts.find_plugin_root'`, a temp-dir path for the missing dispatcher)
+  when run from the same bootstrap-only state - now a clear "not installed yet, run the full
+  install first" message.
+
+### Added
+- `--check-env` now also checks: every `.py` file under `scripts/` and `.claude/hooks/` (plus
+  `install_helper.py` itself) compiles cleanly under the resolved interpreter, and `git`/the
+  `claude` CLI are present - previously only checked in the full install's own preflight, not
+  in the standalone diagnostic.
+- The full install flow now offers the `virt-surv` alias as its own optional step (mirroring
+  the existing status-line step), not only reachable as a separate menu item. Opt-in by
+  default (unlike status line) since it edits the user's own shell rc file(s); never offered
+  on an unattended `--yes` run.
+
 ## [0.33.10] - 2026-08-04 - Seven code-review analysers made individually configurable, with a live safety check
 
 Live audit of the full code-review tool list against the bar `semgrep`/`pip-audit` failed
