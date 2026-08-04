@@ -3,6 +3,20 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.16] - 2026-08-04 - Menu UX polish: no redraw-on-typo, plugin-vs-project scope labelled
+
+### Changed
+- The top-level interactive menu no longer redraws its full six-line option list on every
+  invalid keystroke - a mistyped entry now gets a short error and a re-ask, matching how
+  the Diagnostics/Advanced submenus already behaved.
+- Every top-level and Advanced-submenu item that writes a setting now states its scope
+  explicitly - "this machine" (installer-wide: the alias, status line, environment setup)
+  vs "per project" (Configure, Manage engagements, Morgan's model) vs "per project; can
+  also set this machine's default" (Project preferences) - previously unlabelled, which
+  made it unclear which settings applied where.
+- Diagnostics/Advanced submenu option text tightened - the Comprehensive/Project-
+  preferences entries had grown into unwrapped, 100+ character lines.
+
 ## [0.33.15] - 2026-08-04 - Alias verification, a self-update relaunch fix, clearer diagnostic naming
 
 ### Added

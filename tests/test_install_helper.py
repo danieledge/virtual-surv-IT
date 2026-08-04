@@ -3843,6 +3843,20 @@ def test_menu_shows_again_after_an_action_completes(monkeypatch, tmp_path, capsy
     assert out.count("What can I do for you?") == 2  # once before "4", once before "q"
 
 
+def test_invalid_menu_choice_reprompts_without_redrawing_menu(monkeypatch, tmp_path, capsys):
+    """2026-08-04 user request: "don't reprint entire menu, just the item that the user
+    is on" - a fat-fingered entry must get a short error + re-ask, not the whole
+    six-line option list again."""
+    import install_helper as ih
+
+    _menu_session(monkeypatch, tmp_path, ["9", "x", "q"])
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    ih.main([])
+    out = capsys.readouterr().out
+    assert out.count("What can I do for you?") == 1  # drawn once, not once per bad keystroke
+    assert out.count("1-6 or q, please.") == 2  # one error per invalid attempt
+
+
 # --- --demo must cover the WHOLE menu session, every action, not just one path ---------------
 
 

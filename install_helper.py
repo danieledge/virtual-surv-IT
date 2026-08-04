@@ -1052,39 +1052,40 @@ def choose_action(style: Style) -> str:
         print("")
         print(s.bold("What can I do for you?"))
         options = (
-            ("1", "Install or update the team (full run - recommended)"),
-            ("2", "Configure a project (enable + permissions + preferences + model, guided)"),
-            ("3", "Manage engagements (list / archive closed)"),
-            ("4", "Set up the 'virt-surv' alias - run this from any folder"),
+            ("1", "Install or update the team (this machine - full run, recommended)"),
+            ("2", "Configure a project (per project - enable/permissions/preferences/model)"),
+            ("3", "Manage engagements (per project - list / archive closed)"),
+            ("4", "Set up the 'virt-surv' alias (this machine - run from any folder)"),
             ("5", "Diagnostics..."),
             ("6", "Advanced / one-off settings..."),
             ("q", "Quit"),
         )
         for key, text in options:
             print(f"  {s.cyan(key + ')')} {text}")
-        try:
-            answer = input(f"{s.cyan('  What shall it be?')} {s.bold('[1]')}: ").strip().lower()
-        except EOFError:
-            return "full"
-        if not answer:
-            return "full"
-        if answer not in MENU_ACTIONS:
+        # Redraws the menu on entering/re-entering this loop (fresh session, or back from
+        # a submenu) but NOT on a simple invalid keystroke - an inner retry loop just
+        # re-asks (2026-08-04 user request: "don't reprint entire menu, just the item
+        # that the user is on"), matching how _choose_submenu already behaved.
+        while True:
+            try:
+                answer = input(f"{s.cyan('  What shall it be?')} {s.bold('[1]')}: ").strip().lower()
+            except EOFError:
+                return "full"
+            if not answer:
+                return "full"
+            if answer in MENU_ACTIONS:
+                break
             print("  1-6 or q, please.")
-            continue
         action = MENU_ACTIONS[answer]
         if action == "diagnostics":
             resolved = _choose_submenu(
                 style,
                 "Diagnostics",
                 (
-                    ("1", "Check for updates (read-only - shows what an update would bring)"),
+                    ("1", "Check for updates (read-only)"),
                     ("2", "Quick: analyser output cleanliness only"),
-                    (
-                        "3",
-                        "Comprehensive: everything in Quick, plus interpreters/guard hooks/"
-                        "repo syntax/the synthetic engagement",
-                    ),
-                    ("4", "Self-test only (just the synthetic 'review this code' engagement)"),
+                    ("3", "Comprehensive: the full environment + synthetic-engagement report"),
+                    ("4", "Self-test only: just the synthetic engagement"),
                     ("b", "Back"),
                 ),
                 _DIAGNOSTICS_ACTIONS,
@@ -1094,11 +1095,10 @@ def choose_action(style: Style) -> str:
                 style,
                 "Advanced / one-off settings",
                 (
-                    ("1", "Environment setup only (marketplace + plugin + extras; no code pull)"),
-                    ("2", "Status line only"),
-                    ("3", "Project preferences (docx export, regulatory citations - with the "
-                          "'save as new-project default' option Configure doesn't offer)"),
-                    ("4", "Morgan's model only (opus/sonnet, or reset to default)"),
+                    ("1", "Environment setup only (this machine - no code pull)"),
+                    ("2", "Status line (this machine - shown in every project)"),
+                    ("3", "Project preferences (per project; can also set this machine's default)"),
+                    ("4", "Morgan's model (per project only)"),
                     ("5", "Demo - watch the whole run, nothing executed or written"),
                     ("b", "Back"),
                 ),
