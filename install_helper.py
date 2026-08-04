@@ -1922,12 +1922,16 @@ class Installer:
         """Optional, last step of a full install: offers the 'virt-surv' shell alias so
         the installer is reachable from any folder afterward, same outer-confirm pattern
         as statusline_step (2026-08-04 user request: "should be added on selecting a full
-        install like other steps such as the statusline"). Defaults to False, unlike
-        statusline's True - this one edits the user's OWN shell rc file(s)
-        (~/.bashrc/~/.zshrc/a PowerShell profile), a bigger surprise than writing into
-        Claude settings, so it stays opt-in-by-default even inside the full flow.
-        run_setup_alias does its own per-file preview + confirm; this is only the outer
-        "do you want this at all" gate."""
+        install like other steps such as the statusline"). The INTERACTIVE default is
+        True (2026-08-04 user feedback) - recommended, matching statusline's own default.
+        An unattended `--yes` run still skips it (False) rather than inheriting that
+        recommendation, same established pattern as docx/citations/split elsewhere in
+        this file: a human physically present to see the per-file preview gets the
+        inviting default, a silent/CI run gets the conservative one, since this edits the
+        user's OWN shell rc file(s) (~/.bashrc/~/.zshrc/a PowerShell profile) - a bigger
+        surprise than writing into Claude settings if nobody's watching. run_setup_alias
+        does its own per-file preview + confirm regardless; this is only the outer "do
+        you want this at all" gate."""
         self.step_intro(
             "Optional: the 'virt-surv' alias lets you launch this installer from any "
             "folder and run 'virt-surv configure'/'archive'/'list-engagements' scoped to "
@@ -1936,16 +1940,21 @@ class Installer:
         if self.args.yes:
             wanted = False  # opt-in only - never touch shell rc files on an unattended run
         else:
+            # sys.stdin.isatty() check mirrors statusline_step exactly: a REAL live
+            # terminal gets the inviting True default; a non-tty, non-`--yes` run (piped
+            # input, a script) gets False regardless - confirm() itself would otherwise
+            # silently take the True default with no human actually there to see it
+            # (live-caught by test_demo_mode_executes_nothing_and_writes_nothing, 2026-08-04).
             wanted = confirm(
                 "  Shall I also set up the 'virt-surv' alias?",
-                default=False,
+                default=True if sys.stdin.isatty() else False,
                 assume_yes=False,
                 style=self.style,
             )
         if not wanted:
             self.step_skip("Alias setup", "skipped - python install_helper.py --setup-alias any time")
             return
-        rc = run_setup_alias(self.style, self.marks, self.args.yes, self.demo)
+        rc = run_setup_alias(self.style, self.marks, self.args.yes, self.demo, self.args.repo)
         if rc == 0:
             self.step_ok("Alias setup", "see above for what was added")
         else:
@@ -2100,7 +2109,7 @@ class Installer:
             "plugin-root bootstrap, bash availability and analyser output cleanliness - "
             "one report instead of debugging blind from a bare hook error."
         )
-        if run_env_check(self.style, self.marks) == 0:
+        if run_env_check(self.style, self.marks, self.args.repo) == 0:
             self.step_ok("Comprehensive environment check", "environment looks clean")
         else:
             self.step_fail(
@@ -3055,15 +3064,44 @@ def _powershell_profile_candidates() -> list:
     ]
 
 
+def _resolve_repo_root(repo_hint: Optional[str] = None) -> Optional[Path]:
+    """Best-known real clone root, tried in order: an explicit hint (almost always
+    args.repo), THIS machine's installer-wide config (installer.json's repo_path), then
+    __file__'s own parent. Returns None if nothing looks like a real repo.
+
+    The hint matters because __file__ alone is unreliable in two DIFFERENT ways found
+    live, 2026-08-04: (1) the curl-bootstrap flow briefly runs a single-file copy from a
+    temp extraction dir before the real clone exists, and (2)
+    _relocate_if_running_inside_target_repo re-execs from ANOTHER temp copy (to let git
+    checkout safely overwrite the running .py file) for the rest of that session's
+    life - it passes the real clone through as --repo precisely so callers don't have to
+    trust __file__ after that point. A diagnostic or alias-setup step run later in that
+    SAME relocated session was misreporting "not installed yet" before args.repo was
+    threaded through as this hint."""
+    for candidate in (repo_hint, load_config(config_path()).get("repo_path")):
+        if isinstance(candidate, str) and candidate:
+            path = Path(candidate).expanduser().resolve()
+            if looks_like_repo(path):
+                return path
+    fallback = Path(__file__).resolve().parent
+    return fallback if looks_like_repo(fallback) else None
+
+
 def run_setup_alias(
-    style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
+    style: Style,
+    mark_map: dict,
+    assume_yes: bool = False,
+    demo: bool = False,
+    repo_hint: Optional[str] = None,
 ) -> int:
     """Standalone (--setup-alias / menu): offers to add a 'virt-surv' alias/function to
     whichever shell rc file(s) actually exist on this machine, pointing at THIS clone.
     Never silent - previews the exact line before writing, confirm-gated per file, skips
     (not duplicates) a file that already has one. demo=True previews everything and
     writes nothing (2026-08-04: demo mode must cover every menu option, not just the
-    main install flow)."""
+    main install flow). repo_hint: see _resolve_repo_root - pass args.repo when calling
+    from anywhere that might run post-relocation (the interactive menu, the full-install
+    alias_step)."""
     ok, fail = mark_map["ok"], mark_map["fail"]
     rows, interpreter = _check_interpreters(
         ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
@@ -3073,30 +3111,17 @@ def run_setup_alias(
         for name, status, detail in rows:
             print(f"    {name}: {status} - {detail}")
         return 1
-    script_path = Path(__file__).resolve()
-    if not looks_like_repo(script_path.parent):
-        # __file__ points at wherever THIS invocation's copy of install_helper.py sits -
-        # normally the clone, but the curl-bootstrap flow briefly runs a single-file copy
-        # from a temp extraction dir first. Baking that temp path into the alias breaks
-        # it the moment the temp dir is cleaned up - live report, 2026-08-04: re-running
-        # --setup-alias from the bootstrap stage clobbered a previously-correct alias
-        # with one pointing at a since-deleted AppData\Local\Temp\...\install_helper.py.
-        # Prefer the CONFIGURED clone (installer.json's repo_path) when __file__'s own
-        # parent isn't a real repo.
-        configured = load_config(config_path()).get("repo_path")
-        if isinstance(configured, str) and configured:
-            candidate = Path(configured).expanduser().resolve() / "install_helper.py"
-            if candidate.is_file() and looks_like_repo(candidate.parent):
-                script_path = candidate
-        if not looks_like_repo(script_path.parent):
-            print(
-                style.yellow(
-                    f"  ! no real clone found - the alias would point at {script_path}, "
-                    "which may be temporary and stop working once it's cleaned up. Run a "
-                    "full install (menu option 1) first, then re-run --setup-alias from "
-                    "inside the clone."
-                )
+    resolved = _resolve_repo_root(repo_hint)
+    script_path = (resolved / "install_helper.py") if resolved else Path(__file__).resolve()
+    if not resolved:
+        print(
+            style.yellow(
+                f"  ! no real clone found - the alias would point at {script_path}, "
+                "which may be temporary and stop working once it's cleaned up. Run a "
+                "full install (menu option 1) first, then re-run --setup-alias from "
+                "inside the clone."
             )
+        )
     targets = list(_posix_shell_rc_candidates()) + _powershell_profile_candidates()
     if not targets:
         print(
@@ -3587,16 +3612,18 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
     return rows
 
 
-def run_env_check(style: Style, mark_map: dict) -> int:
+def run_env_check(style: Style, mark_map: dict, repo_hint: Optional[str] = None) -> int:
     """Standalone diagnostic (--check-env / menu option 10): a comprehensive environment
     report - interpreter resolution, bash and git/claude-CLI availability, encoding, the
     plugin-root bootstrap, every repo .py file's syntax under the resolved interpreter,
     guard hooks, and analyser output cleanliness - in one pass. Never blocks anything;
     informational, matching check-review-tools.sh's own "report, not a gate" convention.
     Goal (2026-08-04 user framing): if it won't work when Claude Code actually invokes it,
-    this should show it - not just "the file/binary exists"."""
+    this should show it - not just "the file/binary exists". repo_hint: see
+    _resolve_repo_root - pass args.repo when calling from anywhere that might run
+    post-relocation (the interactive menu's envcheck action)."""
     ok, fail = mark_map["ok"], mark_map["fail"]
-    repo_root = Path(__file__).resolve().parent
+    repo_root = _resolve_repo_root(repo_hint) or Path(__file__).resolve().parent
     bad = 0
 
     def emit(label: str, status: str, detail: str) -> None:
@@ -3931,7 +3958,7 @@ def _main(argv=None) -> int:
         if args.check_tools:
             rc = max(rc, run_tool_check(style, marks()))
         if args.check_env:
-            rc = max(rc, run_env_check(style, marks()))
+            rc = max(rc, run_env_check(style, marks(), args.repo))
         if args.configure:
             rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
         if args.archive:
@@ -3939,7 +3966,7 @@ def _main(argv=None) -> int:
         if args.list_engagements:
             rc = max(rc, run_list_engagements(Path(args.list_engagements), style, marks()))
         if args.setup_alias:
-            rc = max(rc, run_setup_alias(style, marks(), args.yes, args.demo))
+            rc = max(rc, run_setup_alias(style, marks(), args.yes, args.demo, args.repo))
         return rc
 
     if not args.demo:
@@ -3974,7 +4001,7 @@ def _main(argv=None) -> int:
                 else:
                     run_manage_engagements(target, style, marks(), args.yes, args.demo)
             elif action == "alias":
-                run_setup_alias(style, marks(), args.yes, args.demo)
+                run_setup_alias(style, marks(), args.yes, args.demo, args.repo)
             elif action == "demo":
                 # A one-shot preview of the full flow, not a persistent toggle - restored
                 # afterward so picking "Demo" once doesn't silently keep every LATER menu

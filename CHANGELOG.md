@@ -3,6 +3,23 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.12] - 2026-08-04 - Alias offered in the full install; a relocated-session diagnostics bug fixed
+
+### Added
+- The full install flow now offers the `virt-surv` alias as its own optional step (mirroring
+  the existing status-line step), not only reachable as a separate menu item. Interactive
+  default is Yes on a real terminal (matching status line); an unattended run (`--yes`, or
+  non-interactive with no live tty) never touches the user's shell rc files.
+
+### Fixed
+- `--check-env` and `--setup-alias`, run from the interactive menu or the full install's own
+  alias step, could misreport "not installed yet" even mid-install: both used
+  `Path(__file__).resolve().parent` to find the clone, but
+  `_relocate_if_running_inside_target_repo` re-execs from a temp copy (so git can safely
+  overwrite the running script) for the rest of that session - `__file__` stays wrong even
+  though the real clone is available via `args.repo`, which the relocation logic already
+  passes through correctly. Both now prefer that hint before falling back to `__file__`.
+
 ## [0.33.11] - 2026-08-04 - Live-reported Windows fixes: a broken alias, a false-positive shfmt check, clearer diagnostics
 
 A batch of fixes from live testing on a real corporate Windows box during the same session

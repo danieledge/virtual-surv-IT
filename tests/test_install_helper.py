@@ -1474,7 +1474,10 @@ def test_alias_step_runs_setup_alias_when_confirmed(monkeypatch, tmp_path):
     monkeypatch.setattr(
         ih,
         "run_setup_alias",
-        lambda style, mm, assume_yes=False, demo=False: calls.append((assume_yes, demo)) or 0,
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append(
+            (assume_yes, demo)
+        )
+        or 0,
     )
     monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
     inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
@@ -2698,7 +2701,9 @@ def test_check_env_cli_flag_dispatches(monkeypatch):
     import install_helper as ih
 
     called = []
-    monkeypatch.setattr(ih, "run_env_check", lambda style, mm: called.append(1) or 0)
+    monkeypatch.setattr(
+        ih, "run_env_check", lambda style, mm, repo_hint=None: called.append(1) or 0
+    )
     rc = ih._main(["--check-env"])
     assert rc == 0
     assert called == [1]
@@ -2767,6 +2772,108 @@ def test_check_encoding_roundtrip_detects_bad_bytes(monkeypatch):
     status, detail = ih._check_encoding_roundtrip("python3")
     assert status == "ERROR"
     assert "not valid UTF-8" in detail
+
+
+# --- _resolve_repo_root (2026-08-04 live report: relocated-session diagnostics/alias) ---------
+
+
+def _fake_full_clone(root):
+    """Distinct from the module's OTHER _fake_full_clone(tmp_path) helper (line ~899) - this
+    one takes the target root directly (not tmp_path/"clone") and also creates scripts/,
+    needed for _bootstrap_only_hint's own real-clone signal."""
+    root.mkdir()
+    (root / ".git").mkdir()
+    (root / ".claude-plugin").mkdir()
+    (root / ".claude-plugin" / "plugin.json").write_text("{}", encoding="utf-8")
+    (root / "install_helper.py").write_text("# clone copy\n", encoding="utf-8")
+    (root / "scripts").mkdir()  # _bootstrap_only_hint's own signal of "a real clone"
+    return root
+
+
+def test_resolve_repo_root_prefers_hint_over_relocated_file(tmp_path, monkeypatch):
+    """_relocate_if_running_inside_target_repo re-execs from a temp copy and passes the
+    REAL clone through as --repo (args.repo) - __file__ itself is wrong for the rest of
+    that session. This is the exact bug: without the hint, a diagnostic run post-
+    relocation would misreport "not installed yet" even mid-install."""
+    import install_helper as ih
+
+    clone = _fake_full_clone(tmp_path / "clone")
+    relocated = tmp_path / "relocated-temp" / "install_helper.py"
+    relocated.parent.mkdir()
+    relocated.write_text("# relocated temp copy\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(relocated))
+    assert ih._resolve_repo_root(str(clone)) == clone.resolve()
+
+
+def test_resolve_repo_root_falls_back_to_installer_config(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    clone = _fake_full_clone(tmp_path / "clone")
+    relocated = tmp_path / "relocated-temp" / "install_helper.py"
+    relocated.parent.mkdir()
+    relocated.write_text("# relocated temp copy\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(relocated))
+    xdg = tmp_path / "xdg"
+    (xdg / "virt-surv-it").mkdir(parents=True)
+    (xdg / "virt-surv-it" / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone)}), encoding="utf-8"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    assert ih._resolve_repo_root(None) == clone.resolve()  # no hint - config still saves it
+
+
+def test_resolve_repo_root_none_when_nothing_looks_like_a_repo(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    relocated = tmp_path / "relocated-temp" / "install_helper.py"
+    relocated.parent.mkdir()
+    relocated.write_text("# relocated temp copy\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(relocated))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "no-such-xdg"))
+    assert ih._resolve_repo_root(None) is None
+    assert ih._resolve_repo_root(str(tmp_path / "not-a-repo-either")) is None
+
+
+def test_run_setup_alias_uses_repo_hint_over_relocated_file(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("", encoding="utf-8")
+    clone = _fake_full_clone(tmp_path / "clone")
+    relocated = tmp_path / "relocated-temp" / "install_helper.py"
+    relocated.parent.mkdir()
+    relocated.write_text("# relocated temp copy\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(relocated))
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True, repo_hint=str(clone))
+    assert rc == 0
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert str(clone) in content
+    assert "relocated-temp" not in content
+
+
+def test_run_env_check_uses_repo_hint_over_relocated_file(tmp_path, monkeypatch, capsys):
+    """End-to-end: run_env_check itself, not just the helper, must pass the hinted
+    (real clone) repo_root down to its sub-checks - not __file__'s relocated parent."""
+    import install_helper as ih
+
+    clone = _fake_full_clone(tmp_path / "clone")
+    relocated = tmp_path / "relocated-temp" / "install_helper.py"
+    relocated.parent.mkdir()
+    relocated.write_text("# relocated temp copy\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(relocated))
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], ""))
+    monkeypatch.setattr(ih, "find_bash", lambda: None)
+    monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [])
+    monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("SKIP", "no interpreter"))
+    monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [])
+    monkeypatch.setattr(ih, "probe_analyser_output", lambda tmp, runner=None: iter([]))
+    ih.run_env_check(ih.Style(False), ih.marks(), repo_hint=str(clone))
+    out = capsys.readouterr().out
+    # The real bug: without the hint this would print "not installed yet" (bootstrap-only
+    # SKIP) even though a real clone is right there via args.repo.
+    assert "not installed yet" not in out
 
 
 def test_check_plugin_root_bootstrap_repo_as_project(tmp_path, monkeypatch):
@@ -3550,7 +3657,12 @@ def test_menu_loops_back_and_runs_a_second_action_before_quit(monkeypatch, tmp_p
     import install_helper as ih
 
     calls = []
-    monkeypatch.setattr(ih, "run_setup_alias", lambda style, mm, assume_yes=False, demo=False: calls.append("alias") or 0)
+    monkeypatch.setattr(
+        ih,
+        "run_setup_alias",
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append("alias")
+        or 0,
+    )
     monkeypatch.setattr(
         ih,
         "run_configure",
@@ -3570,7 +3682,9 @@ def test_menu_shows_again_after_an_action_completes(monkeypatch, tmp_path, capsy
     once in one session's output."""
     import install_helper as ih
 
-    monkeypatch.setattr(ih, "run_setup_alias", lambda style, mm, assume_yes=False, demo=False: 0)
+    monkeypatch.setattr(
+        ih, "run_setup_alias", lambda style, mm, assume_yes=False, demo=False, repo_hint=None: 0
+    )
     _menu_session(monkeypatch, tmp_path, ["4"])  # alias, then exhausted -> "q"
     monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     ih.main([])
