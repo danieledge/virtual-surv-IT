@@ -2630,3 +2630,170 @@ def test_check_tools_cli_flag_dispatches(monkeypatch):
     rc = ih._main(["--check-tools"])
     assert rc == 0
     assert called == [1]
+
+
+# --- comprehensive environment check (2026-08-04) ------------------------------------------
+
+
+def test_menu_option_10_maps_to_envcheck():
+    from install_helper import MENU_ACTIONS
+
+    assert MENU_ACTIONS["10"] == "envcheck"
+
+
+def test_check_env_cli_flag_dispatches(monkeypatch):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(ih, "run_env_check", lambda style, mm: called.append(1) or 0)
+    rc = ih._main(["--check-env"])
+    assert rc == 0
+    assert called == [1]
+
+
+def test_check_interpreters_finds_the_first_working_one(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "python3" else None)
+    monkeypatch.setattr(
+        ih.subprocess, "run", lambda argv, **kw: _proc(0, stdout="3.12.3\n")
+    )
+    rows, winner = ih._check_interpreters(["python3", "python", "py"])
+    assert winner == "python3"
+    statuses = {name: status for name, status, _ in rows}
+    assert statuses == {"python3": "OK", "python": "SKIP", "py": "SKIP"}
+
+
+def test_check_interpreters_flags_a_version_below_the_floor(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0, stdout="3.7.0\n"))
+    rows, winner = ih._check_interpreters(["python3"])
+    assert winner == ""
+    assert rows[0][1] == "ERROR"
+    assert "below the 3.9 floor" in rows[0][2]
+
+
+def test_check_interpreters_handles_a_crash(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+    def boom(argv, **kw):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(ih.subprocess, "run", boom)
+    rows, winner = ih._check_interpreters(["python3"])
+    assert winner == ""
+    assert rows[0][1] == "ERROR"
+    assert "permission denied" in rows[0][2]
+
+
+def test_check_encoding_roundtrip_skips_without_an_interpreter():
+    from install_helper import _check_encoding_roundtrip
+
+    status, detail = _check_encoding_roundtrip("")
+    assert status == "SKIP"
+
+
+def test_check_encoding_roundtrip_ok(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(
+        ih.subprocess, "run", lambda argv, **kw: _proc(0, stdout="🎩 test ✓\n".encode("utf-8"))
+    )
+    status, detail = ih._check_encoding_roundtrip("python3")
+    assert status == "OK"
+
+
+def test_check_encoding_roundtrip_detects_bad_bytes(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0, stdout=b"\xff\xfe not utf-8"))
+    status, detail = ih._check_encoding_roundtrip("python3")
+    assert status == "ERROR"
+    assert "not valid UTF-8" in detail
+
+
+def test_check_plugin_root_bootstrap_repo_as_project(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "team-operating-guide.md").write_text("x", encoding="utf-8")
+    status, detail = ih._check_plugin_root_bootstrap(Path(__file__).resolve().parents[1])
+    assert status == "OK"
+    assert "repo-as-project" in detail
+
+
+def test_check_plugin_root_bootstrap_warns_when_nothing_found(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.chdir(tmp_path)  # no docs/team-operating-guide.md here
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path / "empty-home"))
+    status, detail = ih._check_plugin_root_bootstrap(Path(__file__).resolve().parents[1])
+    assert status == "WARN"
+
+
+def test_check_guard_hooks_skips_without_interpreter(tmp_path):
+    from install_helper import _check_guard_hooks
+
+    rows = _check_guard_hooks("", Path(__file__).resolve().parents[1], tmp_path)
+    assert len(rows) == 1
+    assert rows[0][1] == "SKIP"
+
+
+def test_check_guard_hooks_clean_passthrough(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
+    rows = ih._check_guard_hooks("python3", Path(__file__).resolve().parents[1], tmp_path)
+    assert rows
+    assert all(status == "OK" for _, status, _ in rows)
+
+
+def test_check_guard_hooks_distinguishes_crash_from_a_real_block(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(
+        ih.subprocess,
+        "run",
+        lambda argv, **kw: _proc(2, stderr="guard_raw_data crashed unexpectedly; failing closed."),
+    )
+    rows = ih._check_guard_hooks("python3", Path(__file__).resolve().parents[1], tmp_path)
+    dispatcher_rows = [r for r in rows if "locked-menu" not in r[0]]
+    assert all(status == "ERROR" for _, status, _ in dispatcher_rows)
+    assert all("crashed" in detail for _, _, detail in dispatcher_rows)
+
+
+def test_run_env_check_aggregates_and_reports_clean(capsys, monkeypatch):
+    import install_helper as ih
+    from install_helper import Style, marks, run_env_check
+
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([("python3", "OK", "Python 3.12")], "python3"))
+    monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+    monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("OK", "clean"))
+    monkeypatch.setattr(ih, "_check_plugin_root_bootstrap", lambda root: ("OK", "resolves"))
+    monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [("Bash", "OK", "clean")])
+    monkeypatch.setattr(ih, "probe_analyser_output", lambda tmp, runner=None: iter([("ruff", "OK", "clean")]))
+    rc = run_env_check(Style(False), marks())
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Environment looks clean." in out
+
+
+def test_run_env_check_aggregates_and_reports_issues(capsys, monkeypatch):
+    import install_helper as ih
+    from install_helper import Style, marks, run_env_check
+
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([("python3", "ERROR", "broken")], ""))
+    monkeypatch.setattr(ih, "find_bash", lambda: None)
+    monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("SKIP", "no interpreter"))
+    monkeypatch.setattr(ih, "_check_plugin_root_bootstrap", lambda root: ("WARN", "nothing found"))
+    monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [("Bash", "SKIP", "no interpreter")])
+    monkeypatch.setattr(ih, "probe_analyser_output", lambda tmp, runner=None: iter([]))
+    rc = run_env_check(Style(False), marks())
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "1 issue(s) found" in out

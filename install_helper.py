@@ -1003,6 +1003,7 @@ MENU_ACTIONS = {
     "7": "demo",
     "8": "model",
     "9": "toolcheck",
+    "10": "envcheck",
     "q": "quit",
 }
 
@@ -1023,6 +1024,7 @@ def choose_action(style: Style) -> str:
         ("7", "Demo - watch the whole run, nothing executed or written"),
         ("8", "Morgan's model (opus/sonnet, or reset to default)"),
         ("9", "Check analyser output cleanliness (debug)"),
+        ("10", "Comprehensive environment check (debug)"),
         ("q", "Quit"),
     )
     for key, text in options:
@@ -2011,6 +2013,25 @@ class Installer:
                 fatal=False,
             )
 
+    def env_check_step(self) -> None:
+        """Standalone, easily re-runnable (menu option 10): comprehensive environment
+        report - interpreter resolution, guard hooks, encoding, the plugin-root bootstrap,
+        bash, and analyser output cleanliness - covers the OTHER Windows-specific issues
+        this repo has independently hit, beyond analyser output alone (menu option 9)."""
+        self.step_intro(
+            "Runs interpreter resolution, guard hooks, an encoding round-trip, the "
+            "plugin-root bootstrap, bash availability and analyser output cleanliness - "
+            "one report instead of debugging blind from a bare hook error."
+        )
+        if run_env_check(self.style, self.marks) == 0:
+            self.step_ok("Comprehensive environment check", "environment looks clean")
+        else:
+            self.step_fail(
+                "Comprehensive environment check",
+                "see detail above - informational, not a blocker",
+                fatal=False,
+            )
+
     def enable_step(self) -> None:
         """Optional: enable the team for a project right now, and offer the recommended
         permission allow-list for the same project. Interactive only - non-interactive
@@ -2196,6 +2217,10 @@ class Installer:
         if self.subset == "toolcheck":
             return [
                 ("Analyser output cleanliness", self.tool_check_step),
+            ]
+        if self.subset == "envcheck":
+            return [
+                ("Comprehensive environment check", self.env_check_step),
             ]
         return [
             ("Preflight checks", self.preflight),
@@ -2669,6 +2694,249 @@ def run_tool_check(style: Style, mark_map: dict) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ comprehensive environment check
+#
+# 2026-08-04: --check-tools above covers analyser output only - this repo has independently
+# hit several OTHER Windows-specific environment issues over its history (interpreter
+# resolution hangs, guard hooks failing with no useful detail, cp1252 encoding crashes, the
+# plugin-root bootstrap). --check-env runs all of them in one pass - including --check-tools'
+# own analyser section - so a corp user debugging a failure gets one report instead of
+# guessing which of several unrelated systems is the actual cause. Explicitly NOT included
+# (out of scope per user direction, 2026-08-04): claude CLI reachability, GitHub remote
+# reachability - both already covered by the full install flow's own preflight checks.
+
+
+def _check_interpreters(order: list) -> tuple:
+    """Probes each candidate interpreter for real - not just presence on PATH, but that it
+    launches and meets the >=3.9 version floor the guards require (pathlib.Path.is_relative_to).
+    Returns (rows, winner) - winner is the first that actually works, "" if none do."""
+    rows = []
+    winner = ""
+    for name in order:
+        path = shutil.which(name)
+        if not path:
+            rows.append((name, "SKIP", "not on PATH"))
+            continue
+        try:
+            proc = subprocess.run(
+                [name, "-c", "import sys; print(sys.version.split()[0])"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            rows.append((name, "ERROR", f"failed to launch: {exc}"))
+            continue
+        if proc.returncode != 0:
+            rows.append((name, "ERROR", f"exit {proc.returncode}: {(proc.stderr or '').strip()[:100]}"))
+            continue
+        version = proc.stdout.strip()
+        try:
+            major, minor = (int(p) for p in version.split(".")[:2])
+        except ValueError:
+            rows.append((name, "ERROR", f"unparseable version output: {version!r}"))
+            continue
+        if (major, minor) < (3, 9):
+            rows.append((name, "ERROR", f"Python {version} - below the 3.9 floor the guards require"))
+            continue
+        rows.append((name, "OK", f"Python {version} at {path}"))
+        if not winner:
+            winner = name
+    return rows, winner
+
+
+def _check_encoding_roundtrip(interpreter: str) -> tuple:
+    """Writes UTF-8 (including an emoji) through the resolved interpreter with
+    PYTHONIOENCODING=utf-8 and decodes the RAW BYTES ourselves - deliberately not relying
+    on subprocess.run's own text=True, which decodes using the PARENT's locale-preferred
+    encoding (cp1252 on a plain Windows console) and could raise or silently mis-decode
+    right here in the checker, the exact class of bug fixed in engage_probe.py's
+    _ascii_safe() (2026-08-04)."""
+    if not interpreter:
+        return ("SKIP", "no working interpreter found")
+    marker = "🎩 test ✓"
+    try:
+        proc = subprocess.run(
+            [interpreter, "-c", f"print({marker!r})"],
+            capture_output=True,
+            timeout=10,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return ("ERROR", f"failed to launch: {exc}")
+    if proc.returncode != 0:
+        return ("ERROR", f"exit {proc.returncode}: {(proc.stderr or b'').decode('utf-8', 'replace')[:150]}")
+    try:
+        stdout_text = proc.stdout.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        return ("ERROR", f"child's stdout was not valid UTF-8: {exc}")
+    if marker not in stdout_text:
+        return ("ERROR", f"round-trip mismatch: got {stdout_text.strip()!r}")
+    return ("OK", "UTF-8 (including emoji) round-trips cleanly through this interpreter")
+
+
+def _check_plugin_root_bootstrap(repo_root: Path) -> tuple:
+    """Runs the SAME find_plugin_root() the engage-open.md heredoc embeds a twin of
+    (2026-08-04) - imported directly here since install_helper.py already sits at the repo
+    root next to scripts/, no subprocess needed for this one."""
+    try:
+        sys.path.insert(0, str(repo_root))
+        from scripts.find_plugin_root import find_plugin_root
+    except ImportError as exc:
+        return ("SKIP", f"could not import scripts.find_plugin_root: {exc}")
+    try:
+        result = find_plugin_root(Path.home(), Path.cwd())
+    except Exception as exc:  # noqa: BLE001 - reporting, not re-raising, is the whole point
+        return ("ERROR", f"crashed: {exc}")
+    if result:
+        return ("OK", f"resolves to: {result}")
+    if (Path.cwd() / "docs" / "team-operating-guide.md").is_file():
+        return ("OK", "repo-as-project (this directory IS the team repo)")
+    return (
+        "WARN",
+        "resolved to empty - no plugin install found from this directory/home (expected "
+        "if you haven't installed the plugin anywhere yet)",
+    )
+
+
+def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
+    """Feeds harmless, should-always-pass payloads through the REAL production dispatch
+    path (bash_hook_dispatcher.py, then locked_menu_guard.py separately - it's wired on
+    AskUserQuestion outside the consolidated dispatcher) and confirms a clean pass-through.
+    Catches crashes or false-positive blocks specific to THIS Python environment (a missing
+    dependency, an unexpected version quirk) that "the guard file exists" can't - a crash on
+    a fail-closed guard is itself reported by the dispatcher as blocked with "crashed
+    unexpectedly" in stderr, distinguished here from a genuine (wrong) block."""
+    if not interpreter:
+        return [("guard hooks", "SKIP", "no working interpreter found")]
+    dispatcher = repo_root / "scripts" / "bash_hook_dispatcher.py"
+    if not dispatcher.is_file():
+        return [("guard hooks", "SKIP", f"dispatcher not found at {dispatcher}")]
+    harmless = tmpdir / "env-check-harmless.txt"
+    harmless.write_text("harmless\n", encoding="utf-8")
+    payloads = (
+        ("Bash (raw-data/code-exec/redirects)", {"tool_name": "Bash", "tool_input": {"command": "echo hello"}, "cwd": str(tmpdir)}),
+        ("Write (consent-write/findings-pack)", {"tool_name": "Write", "tool_input": {"file_path": str(harmless), "content": "hello"}}),
+        ("Read (raw-data/document-redirect)", {"tool_name": "Read", "tool_input": {"file_path": str(harmless)}}),
+    )
+    rows = []
+    for label, payload in payloads:
+        try:
+            proc = subprocess.run(
+                [interpreter, str(dispatcher)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                timeout=15,
+                cwd=repo_root,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            rows.append((label, "ERROR", f"dispatcher failed to run: {exc}"))
+            continue
+        if proc.returncode == 0:
+            rows.append((label, "OK", "clean pass-through"))
+        elif "crashed unexpectedly" in (proc.stderr or ""):
+            rows.append((label, "ERROR", f"a guard crashed: {proc.stderr.strip()[:150]}"))
+        else:
+            rows.append(
+                (label, "ERROR", f"blocked a harmless action (exit {proc.returncode}): {(proc.stderr or '').strip()[:150]}")
+            )
+    locked_menu = repo_root / "scripts" / "locked_menu_guard.py"
+    if locked_menu.is_file():
+        payload = {
+            "tool_name": "AskUserQuestion",
+            "tool_input": {
+                "questions": [
+                    {
+                        "header": "Approach",
+                        "question": "Which?",
+                        "multiSelect": False,
+                        "options": [{"label": "A", "description": "A"}],
+                    }
+                ]
+            },
+        }
+        try:
+            proc = subprocess.run(
+                [interpreter, str(locked_menu)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if proc.returncode == 0:
+                rows.append(("AskUserQuestion (locked-menu guard)", "OK", "clean pass-through"))
+            else:
+                rows.append(
+                    ("AskUserQuestion (locked-menu guard)", "ERROR", (proc.stderr or "").strip()[:150])
+                )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            rows.append(("AskUserQuestion (locked-menu guard)", "ERROR", f"failed to run: {exc}"))
+    return rows
+
+
+def run_env_check(style: Style, mark_map: dict) -> int:
+    """Standalone diagnostic (--check-env / menu option 10): a comprehensive environment
+    report - interpreter resolution, guard hooks, encoding, the plugin-root bootstrap, bash
+    availability, and analyser output cleanliness - in one pass. Never blocks anything;
+    informational, matching check-review-tools.sh's own "report, not a gate" convention."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    repo_root = Path(__file__).resolve().parent
+    bad = 0
+
+    def emit(label: str, status: str, detail: str) -> None:
+        nonlocal bad
+        if status == "SKIP":
+            print(f"  {style.dim('-')} {label}: {detail}", flush=True)
+        elif status == "OK":
+            print(f"  {ok} {label}: {detail}", flush=True)
+        elif status == "WARN":
+            print(f"  {style.yellow('!')} {label}: {detail}", flush=True)
+        else:
+            bad += 1
+            print(f"  {fail} {label}: {status} - {detail}", flush=True)
+
+    print(style.bold("Environment check"))
+
+    print(style.dim("\n  Interpreters:"))
+    order = ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
+    rows, interpreter = _check_interpreters(order)
+    for name, status, detail in rows:
+        emit(name, status, detail)
+
+    print(style.dim("\n  Bash:"))
+    bash_path = find_bash()
+    if bash_path:
+        emit("bash", "OK", bash_path)
+    else:
+        emit("bash", "WARN", "not found (only matters for the review-tools probe script)")
+
+    print(style.dim("\n  Encoding round-trip:"))
+    status, detail = _check_encoding_roundtrip(interpreter)
+    emit("UTF-8/emoji", status, detail)
+
+    print(style.dim("\n  Plugin-root bootstrap:"))
+    status, detail = _check_plugin_root_bootstrap(repo_root)
+    emit("find_plugin_root", status, detail)
+
+    print(style.dim("\n  Guard hooks (harmless payloads, real production dispatch path):"))
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-envcheck-") as tmp:
+        for label, status, detail in _check_guard_hooks(interpreter, repo_root, Path(tmp)):
+            emit(label, status, detail)
+
+    print(style.dim("\n  Analyser output cleanliness:"))
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-envcheck-") as tmp:
+        for name, status, detail in probe_analyser_output(Path(tmp)):
+            emit(name, status, detail)
+
+    print("")
+    if bad:
+        print(style.yellow(f"{bad} issue(s) found - see the ERROR rows above for detail."))
+        return 1
+    print(style.dim("Environment looks clean."))
+    return 0
+
+
 # ------------------------------------------------------------------ CLI
 
 
@@ -2750,6 +3018,14 @@ def parse_args(argv=None) -> argparse.Namespace:
         "mypy, pip-audit) actually produce clean output with their recommended flags on "
         "THIS machine, and exit - environment/terminal detection for suppressing color "
         "and progress spinners is not guaranteed uniform across platforms",
+    )
+    parser.add_argument(
+        "--check-env",
+        action="store_true",
+        help="standalone: comprehensive environment report - interpreter resolution, "
+        "guard hooks, encoding round-trip, the plugin-root bootstrap, bash, and analyser "
+        "output cleanliness - and exit; the broader diagnostic --check-tools' own section "
+        "is folded into",
     )
     return parser.parse_args(argv)
 
@@ -2836,6 +3112,7 @@ def _main(argv=None) -> int:
         or args.model_project
         or args.model_default
         or args.check_tools
+        or args.check_env
     ):
         # Scripting path: no banner, no menu.
         rc = 0
@@ -2851,6 +3128,8 @@ def _main(argv=None) -> int:
             rc = max(rc, run_orchestrator_model_default(wanted, style, marks()))
         if args.check_tools:
             rc = max(rc, run_tool_check(style, marks()))
+        if args.check_env:
+            rc = max(rc, run_env_check(style, marks()))
         return rc
 
     if not args.demo:
