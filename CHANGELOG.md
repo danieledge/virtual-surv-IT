@@ -3,6 +3,25 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.14] - 2026-08-04 - PowerShell profile detection fixed for folder redirection; diagnostics folded together
+
+### Fixed
+- `_powershell_profile_candidates()` hardcoded `Path.home()/"Documents"` for the alias's
+  PowerShell profile path. On a corporate machine with folder redirection, "Documents"
+  resolves to a NETWORK path, so the local guess wrote somewhere PowerShell never actually
+  reads `$PROFILE` from - the alias silently didn't work. Now queries each PowerShell host's
+  own `$PROFILE` for real (`powershell.exe`/`pwsh.exe -NoProfile -Command "Write-Output
+  $PROFILE"`), falling back to the static guess only when that host isn't on PATH or the
+  query itself fails.
+
+### Changed
+- `--check-env` now also runs the same synthetic "review this code" engagement `--selftest`
+  does (planted-issue detection + the full engagement-state lifecycle), so the comprehensive
+  check is comprehensive rather than a parallel, separate diagnostic.
+- Both `--check-env` and `--selftest` now end with a compact pass/fail summary (grouped
+  Passed/Warnings/Skipped/Failed), instead of requiring a scrollback hunt through a
+  20+-row run to see what actually failed.
+
 ## [0.33.13] - 2026-08-04 - `--selftest`: a mechanical smoke test of a real engagement
 
 ### Added

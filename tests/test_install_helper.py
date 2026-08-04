@@ -3374,6 +3374,12 @@ def test_powershell_profile_candidates_windows_only(tmp_path, monkeypatch):
     home = tmp_path / "winhome"
     (home / "Documents").mkdir(parents=True)
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    # Neither binary "found" on this (real Linux) test host - exercises the static-guess
+    # FALLBACK path, not the live $PROFILE query (that needs a real Windows shutil.which,
+    # which crashes under a faked sys.platform on Linux - a test-harness limitation, not
+    # a product one; the query path itself is covered by
+    # test_powershell_profile_candidates_prefers_live_profile_query below).
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
     candidates = ih._powershell_profile_candidates()
     # BOTH versions offered (live-verified 2026-08-04): Windows PowerShell 5.1 (built into
     # every Windows machine) and PowerShell 7+ (separate install) use DIFFERENT profile
@@ -3388,6 +3394,56 @@ def test_powershell_profile_candidates_windows_only(tmp_path, monkeypatch):
         assert p.name == "Microsoft.PowerShell_profile.ps1"
 
 
+def test_powershell_profile_candidates_prefers_live_profile_query(tmp_path, monkeypatch):
+    """Live report, 2026-08-04: a corporate machine with folder redirection has
+    "Documents" resolve to a NETWORK path, so the static Documents-based guess writes
+    somewhere PowerShell never reads $PROFILE from. Querying each host's OWN $PROFILE
+    must win over the static guess whenever the query succeeds."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    home = tmp_path / "winhome"
+    (home / "Documents").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(
+        ih.shutil, "which", lambda name: f"C:\\{name}" if name.endswith(".exe") else None
+    )
+    redirected = r"\\corp-server\redirected\daniel\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1"
+
+    def fake_run(argv, capture_output=True, text=True, timeout=None):
+        # Both powershell.exe and pwsh.exe get queried - return the SAME redirected path
+        # for simplicity; the point under test is that the query result wins, not that
+        # the two hosts differ.
+        return _proc(0, stdout=redirected + "\n")
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+    candidates = ih._powershell_profile_candidates()
+    assert len(candidates) == 2
+    for _, path in candidates:
+        assert str(path) == redirected
+        # The static local-Documents guess must NOT be what got used.
+        assert "winhome" not in str(path)
+
+
+def test_powershell_profile_candidates_falls_back_when_query_fails(tmp_path, monkeypatch):
+    """The binary is found, but the query itself errors (timeout, non-zero exit, empty
+    output) - must fall back to the static guess, never drop the candidate outright."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    home = tmp_path / "winhome"
+    (home / "Documents").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(
+        ih.shutil, "which", lambda name: f"C:\\{name}" if name.endswith(".exe") else None
+    )
+    monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: _proc(1, stdout=""))
+    candidates = ih._powershell_profile_candidates()
+    assert len(candidates) == 2
+    for _, path in candidates:
+        assert "winhome" in str(path)  # fell back to the static Documents-based guess
+
+
 def test_setup_alias_writes_both_powershell_profiles(tmp_path, monkeypatch):
     """Both PS 5.1 and PS7+ profiles get offered and written - see
     test_powershell_profile_candidates_windows_only for why both matter."""
@@ -3397,6 +3453,7 @@ def test_setup_alias_writes_both_powershell_profiles(tmp_path, monkeypatch):
     home = tmp_path / "winhome"
     (home / "Documents").mkdir(parents=True)
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)  # see the sibling test above
     monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "py"))
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 0
@@ -4106,3 +4163,66 @@ def test_selftest_end_to_end_real_scripts(tmp_path, monkeypatch):
     rc = ih.run_selftest(ih.Style(False), ih.marks())
     assert rc == 0
     assert not list(tmp_path.glob("virt-surv-selftest-*.txt"))
+
+
+# --- comprehensive check folds in the synthetic engagement; a clean summary (2026-08-04) ------
+
+
+def test_print_diagnostic_summary_groups_by_status(capsys):
+    import install_helper as ih
+
+    rows = [
+        ("ruff", "OK", "clean"),
+        ("mypy", "OK", "clean"),
+        ("pwsh", "WARN", "not on PATH"),
+        ("sqlfluff", "SKIP", "not installed"),
+        ("bandit", "ERROR", "timed out"),
+    ]
+    ih._print_diagnostic_summary(ih.Style(False), ih.marks(), rows)
+    out = capsys.readouterr().out
+    assert "Passed (2)" in out
+    assert "Warnings (1)" in out
+    assert "Skipped (1)" in out
+    assert "Failed (1)" in out
+    # Order within a group is preserved, not resorted alphabetically.
+    passed_block = out.split("Passed (2)")[1].split("Warnings")[0]
+    assert passed_block.index("ruff") < passed_block.index("mypy")
+
+
+def test_print_diagnostic_summary_omits_empty_groups(capsys):
+    import install_helper as ih
+
+    ih._print_diagnostic_summary(ih.Style(False), ih.marks(), [("ruff", "OK", "clean")])
+    out = capsys.readouterr().out
+    assert "Passed (1)" in out
+    assert "Warnings" not in out
+    assert "Skipped" not in out
+    assert "Failed" not in out
+
+
+def test_run_env_check_folds_in_synthetic_engagement(monkeypatch, tmp_path, capsys):
+    """2026-08-04 user request: "the comprehensive test should execute the synthetic
+    test so it's really is comprehensive" - --check-env's own section must call the
+    SAME _selftest_engagement_probe --selftest uses, not a separate/lesser copy."""
+    import install_helper as ih
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    monkeypatch.setattr(ih, "find_bash", lambda: None)
+    monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [])
+    monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("SKIP", "no interpreter"))
+    monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [])
+    monkeypatch.setattr(ih, "probe_analyser_output", lambda tmp, runner=None: iter([]))
+    probed = []
+    monkeypatch.setattr(
+        ih,
+        "_selftest_engagement_probe",
+        lambda root, interp: iter([probed.append(1) or ("lifecycle probe", "OK", "clean", None)]),
+    )
+    rc = ih.run_env_check(ih.Style(False), ih.marks())
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert probed == [1]
+    assert "Synthetic engagement" in out
+    assert "lifecycle probe" in out
+    assert "Summary" in out  # the new scoreboard is present too

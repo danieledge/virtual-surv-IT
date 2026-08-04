@@ -3073,20 +3073,45 @@ def _powershell_profile_candidates() -> list:
     (a separate, opt-in install) uses Documents/PowerShell/... - "changes you make to
     $PROFILE in a Windows PowerShell session only affect that host" per Microsoft's own
     docs. Offering only the 7+ path would silently miss most corp Windows machines, which
-    typically only have the built-in 5.1. Not queried via `$PROFILE` itself - that needs
-    spawning powershell.exe, an extra process and failure mode for paths that have a
-    well-documented, stable default. Only returned if the parent Documents dir exists (a
-    real Windows user profile), so this doesn't offer to create a profile out of thin air
-    on a non-Windows-shaped home directory."""
+    typically only have the built-in 5.1.
+
+    Prefers actually QUERYING each host's own $PROFILE (one extra process per host found
+    on PATH, spent only when setting up the alias, not on every diagnostic run) over the
+    hardcoded Documents-based guess - live report, 2026-08-04: a corporate machine with
+    folder redirection has "Documents" resolve to a NETWORK path (\\\\server\\share\\...),
+    so the local Documents/WindowsPowerShell/... guess writes somewhere that host's
+    PowerShell never actually reads $PROFILE from. Falls back to the static guess (still
+    gated on the Documents parent existing) only when that host's binary isn't on PATH or
+    the query itself fails - never silently drops a candidate outright, since the
+    original static guess is still correct on the (common) machine with no redirection."""
     if sys.platform != "win32":
         return []
     docs = Path.home() / "Documents"
-    if not docs.is_dir():
-        return []
-    return [
-        ("PowerShell 5.1", docs / "WindowsPowerShell" / "Microsoft.PowerShell_profile.ps1"),
-        ("PowerShell 7+", docs / "PowerShell" / "Microsoft.PowerShell_profile.ps1"),
-    ]
+    candidates = []
+    for label, exe, subdir in (
+        ("PowerShell 5.1", "powershell.exe", "WindowsPowerShell"),
+        ("PowerShell 7+", "pwsh.exe", "PowerShell"),
+    ):
+        queried = None
+        found = shutil.which(exe)
+        if found:
+            try:
+                proc = subprocess.run(
+                    [found, "-NoProfile", "-NonInteractive", "-Command", "Write-Output $PROFILE"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                stdout = proc.stdout.strip() if proc.stdout else ""
+                if proc.returncode == 0 and stdout:
+                    queried = Path(stdout)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        if queried is not None:
+            candidates.append((label, queried))
+        elif docs.is_dir():
+            candidates.append((label, docs / subdir / "Microsoft.PowerShell_profile.ps1"))
+    return candidates
 
 
 def _resolve_repo_root(repo_hint: Optional[str] = None) -> Optional[Path]:
@@ -3637,22 +3662,52 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
     return rows
 
 
+def _print_diagnostic_summary(style: Style, mark_map: dict, rows: list) -> None:
+    """Compact 'what passed, what didn't' scoreboard, grouped by status - same shape as
+    the full install's own print_summary (Completed/Skipped/Failed). A long diagnostic
+    run (--check-env now folds in the synthetic engagement too - 20+ rows) needs one
+    legible list at the end, not a scrollback hunt through interleaved live output
+    (2026-08-04 user request). Labels only, no repeated detail text - that already
+    printed live as each check ran."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    groups = (
+        ("Passed", ("OK",), style.green, ok),
+        ("Warnings", ("WARN",), style.yellow, style.yellow("!")),
+        ("Skipped", ("SKIP",), style.dim, style.dim("-")),
+        ("Failed", ("ERROR",), style.red, fail),
+    )
+    print("")
+    print(style.bold("Summary"))
+    for title, statuses, paint, mark in groups:
+        labels = [label for label, status, _detail in rows if status in statuses]
+        if not labels:
+            continue
+        print(paint(f"  {title} ({len(labels)})"))
+        for label in labels:
+            print(f"    {mark} {label}")
+
+
 def run_env_check(style: Style, mark_map: dict, repo_hint: Optional[str] = None) -> int:
     """Standalone diagnostic (--check-env / menu option 10): a comprehensive environment
     report - interpreter resolution, bash and git/claude-CLI availability, encoding, the
     plugin-root bootstrap, every repo .py file's syntax under the resolved interpreter,
-    guard hooks, and analyser output cleanliness - in one pass. Never blocks anything;
-    informational, matching check-review-tools.sh's own "report, not a gate" convention.
-    Goal (2026-08-04 user framing): if it won't work when Claude Code actually invokes it,
-    this should show it - not just "the file/binary exists". repo_hint: see
-    _resolve_repo_root - pass args.repo when calling from anywhere that might run
-    post-relocation (the interactive menu's envcheck action)."""
+    guard hooks, analyser output cleanliness, AND (2026-08-04 user request: "the
+    comprehensive test should execute the synthetic test so it's really is
+    comprehensive") the same synthetic 'review this code' engagement --selftest runs
+    (planted-issue detection + the engagement-state lifecycle) - in one pass. Never
+    blocks anything; informational, matching check-review-tools.sh's own "report, not a
+    gate" convention. Goal (2026-08-04 user framing): if it won't work when Claude Code
+    actually invokes it, this should show it - not just "the file/binary exists".
+    repo_hint: see _resolve_repo_root - pass args.repo when calling from anywhere that
+    might run post-relocation (the interactive menu's envcheck action). Ends with a
+    compact pass/fail summary (_print_diagnostic_summary) - a run this size (20+ rows)
+    needs one legible scoreboard, not a scrollback hunt."""
     ok, fail = mark_map["ok"], mark_map["fail"]
     repo_root = _resolve_repo_root(repo_hint) or Path(__file__).resolve().parent
-    bad = 0
+    all_rows = []
 
     def emit(label: str, status: str, detail: str) -> None:
-        nonlocal bad
+        all_rows.append((label, status, detail))
         if status == "SKIP":
             print(f"  {style.dim('-')} {label}: {detail}", flush=True)
         elif status == "OK":
@@ -3660,15 +3715,14 @@ def run_env_check(style: Style, mark_map: dict, repo_hint: Optional[str] = None)
         elif status == "WARN":
             print(f"  {style.yellow('!')} {label}: {detail}", flush=True)
         else:
-            bad += 1
             print(f"  {fail} {label}: {status} - {detail}", flush=True)
 
     print(style.bold("Environment check"))
 
     print(style.dim("\n  Interpreters:"))
     order = ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
-    rows, interpreter = _check_interpreters(order)
-    for name, status, detail in rows:
+    interp_rows, interpreter = _check_interpreters(order)
+    for name, status, detail in interp_rows:
         emit(name, status, detail)
 
     print(style.dim("\n  Bash:"))
@@ -3704,6 +3758,17 @@ def run_env_check(style: Style, mark_map: dict, repo_hint: Optional[str] = None)
         for name, status, detail in probe_analyser_output(Path(tmp)):
             emit(name, status, detail)
 
+    print(
+        style.dim(
+            "\n  Synthetic engagement (planted-issue detection, then init -> findings -> "
+            "render -> close-gate -> archive):"
+        )
+    )
+    for label, status, detail, _full in _selftest_engagement_probe(repo_root, interpreter):
+        emit(label, status, detail)
+
+    _print_diagnostic_summary(style, mark_map, all_rows)
+    bad = sum(1 for _label, status, _detail in all_rows if status not in ("OK", "SKIP", "WARN"))
     print("")
     if bad:
         print(style.yellow(f"{bad} issue(s) found - see the ERROR rows above for detail."))
@@ -3751,12 +3816,111 @@ def _selftest_findings_pack(slug: str) -> dict:
     }
 
 
+def _selftest_engagement_probe(repo_root: Path, interpreter: str):
+    """Generator: yields (label, status, detail, full_detail) for the two parts of
+    --selftest NOT already covered by --check-env's own sections (guard hooks/repo
+    syntax/runtime deps) - the analyser DETECTING a planted issue, and the
+    engagement-state lifecycle end to end. Shared by run_selftest and run_env_check
+    (2026-08-04 user request: "the comprehensive [env] test should execute the
+    synthetic test so it's really is comprehensive") so neither duplicates the other's
+    checks - run_env_check folds this in as one more section instead of re-running
+    guard hooks etc a second time under a different heading."""
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-selftest-analyser-") as atmp:
+        target = Path(atmp) / "selftest_target.py"
+        target.write_text(_SELFTEST_PLANTED_ISSUE_PY, encoding="utf-8")
+        if not shutil.which("bandit"):
+            yield ("bandit (planted issue)", "SKIP", "bandit not installed", None)
+        else:
+            try:
+                proc = subprocess.run(
+                    ["bandit", "-q", str(target)], capture_output=True, text=True, timeout=20
+                )
+                combined = (proc.stdout or "") + (proc.stderr or "")
+                found = "hardcoded_password" in combined
+                yield (
+                    "bandit (planted issue)",
+                    "OK" if found else "ERROR",
+                    "planted issue detected"
+                    if found
+                    else "planted issue NOT detected - bandit may be misconfigured",
+                    combined,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                yield ("bandit (planted issue)", "ERROR", f"failed to run: {exc}", None)
+
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-selftest-lifecycle-") as ltmp:
+        project = Path(ltmp)
+        slug = "selftest-demo"
+        engagement_state = repo_root / "scripts" / "engagement_state.py"
+        render_findings = repo_root / "scripts" / "render_findings.py"
+
+        def run_step(label, argv, extra_check=None):
+            try:
+                proc = subprocess.run(argv, cwd=project, capture_output=True, text=True, timeout=30)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                return (label, "ERROR", f"failed to run: {exc}", None)
+            combined = (proc.stdout or "") + (proc.stderr or "")
+            if extra_check:
+                passed, note = extra_check(proc, combined)
+            else:
+                passed, note = proc.returncode == 0, (
+                    "clean" if proc.returncode == 0 else f"exit {proc.returncode}"
+                )
+            return (label, "OK" if passed else "ERROR", note, combined)
+
+        if not (engagement_state.is_file() and render_findings.is_file()):
+            yield (
+                "engagement-state lifecycle",
+                "SKIP",
+                _bootstrap_only_hint(repo_root) or "scripts not found",
+                None,
+            )
+            return
+        py = interpreter or sys.executable
+        yield run_step(
+            "init",
+            [
+                py,
+                str(engagement_state),
+                "init",
+                "--title",
+                "Selftest demo",
+                "--slug",
+                slug,
+                "--team-version",
+                installed_version(repo_root) or "0.0.0",
+            ],
+        )
+        data_dir = project / "artifacts" / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        pack_path = data_dir / f"findings-{slug}.json"
+        pack_path.write_text(json.dumps(_selftest_findings_pack(slug), indent=2), encoding="utf-8")
+        yield run_step("render findings", [py, str(render_findings), str(pack_path), "--html"])
+        yield run_step("set-team", [py, str(engagement_state), "set-team", "Selftest (synthetic)"])
+        # The close-gate SHOULD refuse an incomplete close (no AI marker, no summary
+        # email) - that refusal IS the pass condition, proving the gate has real teeth
+        # rather than assuming it does because a trivially-easy synthetic pack closed.
+        yield run_step(
+            "close-gate (expect refusal - proves an incomplete close is blocked)",
+            [py, str(engagement_state), "set-status", "closed"],
+            extra_check=lambda proc, combined: (
+                proc.returncode != 0 and "CLOSE-REFUSED" in combined,
+                "correctly refused an incomplete close"
+                if "CLOSE-REFUSED" in combined
+                else f"expected a CLOSE-REFUSED block, got exit {proc.returncode}",
+            ),
+        )
+        yield run_step("set-status closing", [py, str(engagement_state), "set-status", "closing"])
+        yield run_step("archive", [py, str(engagement_state), "archive", slug, "--force"])
+
+
 def run_selftest(style: Style, mark_map: dict, repo_hint: Optional[str] = None) -> int:
     """Standalone diagnostic (--selftest / Diagnostics menu): a throwaway synthetic
     "review this code" engagement, exercising the REAL guard hooks, the REAL analyser
     pipeline (proves DETECTION on a planted issue, not just silence on clean input), and
     the REAL engagement-state lifecycle (init -> findings -> render -> the close-gate
     correctly REFUSING an incomplete close -> archive) end to end. No mocking, no LLM.
+    Also folded into --check-env as its final section (see _selftest_engagement_probe).
 
     On any failure, writes a full debug bundle (every step's complete stdout/stderr, plus
     Python/platform/interpreter/repo-root) to virt-surv-selftest-<timestamp>.txt in the
@@ -3791,99 +3955,16 @@ def run_selftest(style: Style, mark_map: dict, repo_hint: Optional[str] = None) 
     for label, status, detail in _check_runtime_dependencies():
         record(label, status, detail)
 
-    print(style.dim("\n  Analyser detects a planted issue (not just stays quiet on clean input):"))
-    with tempfile.TemporaryDirectory(prefix="virt-surv-it-selftest-analyser-") as atmp:
-        target = Path(atmp) / "selftest_target.py"
-        target.write_text(_SELFTEST_PLANTED_ISSUE_PY, encoding="utf-8")
-        if not shutil.which("bandit"):
-            record("bandit (planted issue)", "SKIP", "bandit not installed")
-        else:
-            try:
-                proc = subprocess.run(
-                    ["bandit", "-q", str(target)], capture_output=True, text=True, timeout=20
-                )
-                combined = (proc.stdout or "") + (proc.stderr or "")
-                found = "hardcoded_password" in combined
-                record(
-                    "bandit (planted issue)",
-                    "OK" if found else "ERROR",
-                    "planted issue detected" if found else "planted issue NOT detected - bandit may be misconfigured",
-                    full=combined,
-                )
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                record("bandit (planted issue)", "ERROR", f"failed to run: {exc}")
-
     print(
         style.dim(
-            "\n  Engagement-state lifecycle (init -> findings -> render -> close-gate -> archive):"
+            "\n  Synthetic engagement (planted-issue detection, then init -> findings -> "
+            "render -> close-gate -> archive):"
         )
     )
-    with tempfile.TemporaryDirectory(prefix="virt-surv-it-selftest-lifecycle-") as ltmp:
-        project = Path(ltmp)
-        slug = "selftest-demo"
-        engagement_state = repo_root / "scripts" / "engagement_state.py"
-        render_findings = repo_root / "scripts" / "render_findings.py"
+    for label, status, detail, full in _selftest_engagement_probe(repo_root, interpreter):
+        record(label, status, detail, full)
 
-        def run_step(label, argv, extra_check=None):
-            try:
-                proc = subprocess.run(argv, cwd=project, capture_output=True, text=True, timeout=30)
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                record(label, "ERROR", f"failed to run: {exc}")
-                return None
-            combined = (proc.stdout or "") + (proc.stderr or "")
-            if extra_check:
-                passed, note = extra_check(proc, combined)
-            else:
-                passed, note = proc.returncode == 0, ("clean" if proc.returncode == 0 else f"exit {proc.returncode}")
-            record(label, "OK" if passed else "ERROR", note, full=combined)
-            return proc
-
-        if not (engagement_state.is_file() and render_findings.is_file()):
-            record(
-                "engagement-state lifecycle",
-                "SKIP",
-                _bootstrap_only_hint(repo_root) or "scripts not found",
-            )
-        else:
-            py = interpreter or sys.executable
-            run_step(
-                "init",
-                [
-                    py,
-                    str(engagement_state),
-                    "init",
-                    "--title",
-                    "Selftest demo",
-                    "--slug",
-                    slug,
-                    "--team-version",
-                    installed_version(repo_root) or "0.0.0",
-                ],
-            )
-            data_dir = project / "artifacts" / "data"
-            data_dir.mkdir(parents=True, exist_ok=True)
-            pack_path = data_dir / f"findings-{slug}.json"
-            pack_path.write_text(
-                json.dumps(_selftest_findings_pack(slug), indent=2), encoding="utf-8"
-            )
-            run_step("render findings", [py, str(render_findings), str(pack_path), "--html"])
-            run_step("set-team", [py, str(engagement_state), "set-team", "Selftest (synthetic)"])
-            # The close-gate SHOULD refuse an incomplete close (no AI marker, no summary
-            # email) - that refusal IS the pass condition, proving the gate has real teeth
-            # rather than assuming it does because a trivially-easy synthetic pack closed.
-            run_step(
-                "close-gate (expect refusal - proves an incomplete close is blocked)",
-                [py, str(engagement_state), "set-status", "closed"],
-                extra_check=lambda proc, combined: (
-                    proc.returncode != 0 and "CLOSE-REFUSED" in combined,
-                    "correctly refused an incomplete close"
-                    if "CLOSE-REFUSED" in combined
-                    else f"expected a CLOSE-REFUSED block, got exit {proc.returncode}",
-                ),
-            )
-            run_step("set-status closing", [py, str(engagement_state), "set-status", "closing"])
-            run_step("archive", [py, str(engagement_state), "archive", slug, "--force"])
-
+    _print_diagnostic_summary(style, mark_map, rows)
     bad = [r for r in rows if r[1] not in ("OK", "SKIP", "WARN")]
     print("")
     if bad:
