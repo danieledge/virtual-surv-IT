@@ -3,6 +3,41 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.18] - 2026-08-05 - Machine defaults (view/edit), a one-click recommended-settings path, real precedence
+
+### Added
+- Advanced menu -> "This machine's defaults": view and edit docx/citations/review-tools/
+  Morgan's default model directly, with no project needed - previously the ONLY way to
+  see or change these was as a side effect of configuring one specific project.
+- `virt-surv configure` / `--configure` opens with a one-click "use the recommended
+  settings?" question - accepting it applies enable + permission allow-list + this
+  machine's defaults with no further prompts, reusing the existing `--yes` machinery
+  rather than adding new logic. Declining walks through each choice as before.
+
+### Fixed
+- "Sensible defaults" now actually respect machine-level overrides: a tool disabled at
+  `--check-tools`/Machine-defaults level (e.g. ruff off) stayed disabled for a BRAND NEW
+  project's suggested defaults, instead of silently reverting to the built-in default -
+  `run_configure` and `format_preferences_step` previously only ever consulted the
+  project's own (possibly nonexistent) preferences file, never this machine's config. A
+  project that has ALREADY made its own explicit choice still always wins.
+- `engage_probe.py` (the real, live `/engage`-time reader of docx/citations) had the
+  exact same gap - a project that was enabled without ever running Configure/Project
+  preferences fell back to the hardcoded built-in default, never this machine's
+  configured one. Fixed with the identical project-overrides-machine-overrides-builtin
+  precedence, so what a human sees while configuring can never drift from what Morgan
+  actually applies at engagement time.
+- The full install flow asked "Still set Morgan's model for a project?" on EVERY run
+  after declining project enablement, even for an already-configured project - not
+  something the average user should be asked on every routine update. Removed; the
+  Advanced menu's "Morgan's model" and "Machine defaults" items are always directly
+  reachable instead.
+- A live pollution incident this session (an earlier test's confirm-prompt fake matched
+  the wrong question by substring, and the test didn't isolate HOME/XDG_CONFIG_HOME)
+  wrote to the real `~/.config/virt-surv-it/installer.json` on the dev machine. Root
+  cause fixed (precise prompt matching) and every test in this area now isolates HOME
+  explicitly as defense in depth.
+
 ## [0.33.17] - 2026-08-04 - Project-preferences flow: which target am I setting, made explicit
 
 ### Changed

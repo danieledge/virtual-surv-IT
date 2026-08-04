@@ -13,6 +13,7 @@ from scripts.engage_probe import (
     build_report,
     first_changelog_entry,
     last_team_version,
+    read_machine_defaults,
     read_map,
     read_plugin_version,
     read_team_preferences,
@@ -233,6 +234,84 @@ def test_read_team_preferences_reads_existing(tmp_path):
     prefs = read_team_preferences(tmp_path)
     assert prefs["extra_formats"] == ["docx"]
     assert prefs["regulatory_citations"] is False
+
+
+# --- machine-default fallback (2026-08-05 user request: "project should default to    ---------
+# --- machine default but can be overridden at project level") --------------------------------
+# Every test here isolates HOME/XDG_CONFIG_HOME first - a project's ABSENCE of an explicit
+# preference must fall back to a FAKE machine config, never the real one on the dev box (a
+# real, live pollution incident in install_helper.py's own tests this same session is the
+# reason this discipline is now non-negotiable).
+
+
+def _isolate_home_for_probe(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+
+
+def _write_machine_defaults(tmp_path, **kwargs):
+    cfg_dir = tmp_path / "xdg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(json.dumps(kwargs), encoding="utf-8")
+
+
+def test_read_machine_defaults_missing_file_is_empty_dict(tmp_path, monkeypatch):
+    _isolate_home_for_probe(monkeypatch, tmp_path)
+    assert read_machine_defaults() == {}
+
+
+def test_read_machine_defaults_reads_existing(tmp_path, monkeypatch):
+    _isolate_home_for_probe(monkeypatch, tmp_path)
+    _write_machine_defaults(tmp_path, default_docx=True, default_regulatory_citations=False)
+    defaults = read_machine_defaults()
+    assert defaults["default_docx"] is True
+    assert defaults["default_regulatory_citations"] is False
+
+
+def test_build_report_falls_back_to_machine_default_when_project_unset(tmp_path, monkeypatch):
+    """A project with NO team-preferences.json at all (never run Configure/Project
+    preferences) must inherit this machine's default, not the hardcoded built-in one."""
+    _isolate_home_for_probe(monkeypatch, tmp_path)
+    _write_machine_defaults(tmp_path, default_docx=True, default_regulatory_citations=False)
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "9.9.9"}), encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "EXTRA_FORMATS=docx" in out
+    assert "REGULATORY_CITATIONS=off" in out
+
+
+def test_build_report_project_setting_overrides_machine_default(tmp_path, monkeypatch):
+    """A project that HAS explicitly set its own preference (even matching the built-in
+    default) must win over this machine's default - project scope always overrides."""
+    _isolate_home_for_probe(monkeypatch, tmp_path)
+    _write_machine_defaults(tmp_path, default_docx=True, default_regulatory_citations=False)
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "9.9.9"}), encoding="utf-8"
+    )
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "team-preferences.json").write_text(
+        json.dumps({"extra_formats": [], "regulatory_citations": True}), encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "EXTRA_FORMATS=" in out and "EXTRA_FORMATS=docx" not in out
+    assert "REGULATORY_CITATIONS=on" in out
+
+
+def test_build_report_falls_back_to_builtin_default_when_no_machine_config_either(tmp_path, monkeypatch):
+    """No project preference AND no machine config at all - the original hardcoded
+    built-in default (docx off, citations on) still applies."""
+    _isolate_home_for_probe(monkeypatch, tmp_path)
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "9.9.9"}), encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "EXTRA_FORMATS=" in out and "EXTRA_FORMATS=docx" not in out
+    assert "REGULATORY_CITATIONS=on" in out
 
 
 def test_build_report_emits_all_fields_repo_as_project(tmp_path):

@@ -1017,6 +1017,7 @@ _ADVANCED_ACTIONS = {
     "3": "formats",
     "4": "model",
     "5": "demo",
+    "6": "machinedefaults",
     "b": "back",
 }
 
@@ -1100,6 +1101,10 @@ def choose_action(style: Style) -> str:
                     ("3", "Project preferences (docx, citations, review tools)"),
                     ("4", "Morgan's model (per project only)"),
                     ("5", "Demo - watch the whole run, nothing executed or written"),
+                    (
+                        "6",
+                        "This machine's defaults (view/edit - no project needed)",
+                    ),
                     ("b", "Back"),
                 ),
                 _ADVANCED_ACTIONS,
@@ -2000,8 +2005,9 @@ class Installer:
             return
         prefs_path = project / ".claude" / "team-preferences.json"
         existing = _read_json_dict(prefs_path)
-        docx_current = "docx" in (existing.get("extra_formats") or [])
-        citations_current = existing.get("regulatory_citations", True)  # unset = on
+        docx_current, citations_current, review_tools_current = _project_preference_defaults(
+            existing, self.cfg
+        )
         self.say(self.style.bold(f"\n  For {project.name}:"))
         self.say(
             self.style.dim(
@@ -2022,7 +2028,6 @@ class Installer:
             assume_yes=False,
             style=self.style,
         )
-        review_tools_current = existing.get("review_tools") or {}
         review_tools_wanted = _ask_review_tool_overrides(self.style, False, review_tools_current)
         # Read-only against a throwaway synthetic file - runs even in demo mode, same as
         # run_configure's identical check, so a hanging/network-blocked tool (the
@@ -2078,6 +2083,112 @@ class Installer:
             f"{summary} for {project.name} ({prefs_path})"
             + (" - also saved as this machine's new-project default" if save_as_default else ""),
         )
+
+    def machine_defaults_step(self) -> None:
+        """View/edit THIS MACHINE's defaults directly, no project needed (Advanced menu
+        option 6, 2026-08-04 user request: "let's just have a clearer view and edit of
+        the machine's defaults too" / "so these can be viewed and edited"). Previously
+        the ONLY way to see or change docx/citations/review-tools was as a side effect
+        of configuring one specific project (Project preferences' "also save as
+        default" question) - no direct view, and no way to change them without
+        touching a project. Writes the exact same installer.json keys that side effect
+        does (default_docx/default_regulatory_citations/default_review_tools), so the
+        two paths stay interchangeable - this is just the direct route.
+
+        Morgan's default model is included too (2026-08-05 user request: "Morgan's
+        model too should be machine default") - a DIFFERENT storage location
+        (~/.claude/settings.json, Claude Code's own user-level settings, which Claude
+        Code itself layers under any project's own `model` key with no extra plumbing
+        needed on our side) but shown/edited here alongside the installer.json-backed
+        settings since all four are "this machine's defaults" from the user's point of
+        view."""
+        self.step_intro(
+            "This machine's defaults - what any NEW/unconfigured project inherits until "
+            "it sets its own preferences. Does not touch any project's own settings - a "
+            "project's own choice (team-preferences.json, or its own settings.json "
+            "`model` key) always overrides these."
+        )
+        docx_current = bool(self.cfg.get("default_docx", False))
+        citations_current = bool(self.cfg.get("default_regulatory_citations", True))
+        review_tools_current = self.cfg.get("default_review_tools") or {}
+        model_current = _read_json_dict(user_settings_path()).get("model")
+        self.say(
+            self.style.dim(
+                f"    currently: docx by default = {'on' if docx_current else 'off'}, "
+                f"regulatory citations = {'on' if citations_current else 'off'}, "
+                f"review-tools = {review_tools_current or '(all auto)'}, "
+                f"Morgan's model = {model_current or f'(unset - {ORCHESTRATOR_MODEL_DEFAULT} applies)'}"
+            )
+        )
+        docx_wanted = confirm(
+            "  Produce .docx by default for new projects?",
+            default=docx_current,
+            assume_yes=False,
+            style=self.style,
+        )
+        citations_wanted = confirm(
+            "  New projects cite regulatory obligations by default - keep that on?",
+            default=citations_current,
+            assume_yes=False,
+            style=self.style,
+        )
+        review_tools_wanted = _ask_review_tool_overrides(self.style, False, review_tools_current)
+        # Read-only against a throwaway synthetic file - runs even in demo mode, same
+        # rationale as the identical check in format_preferences_step/run_configure.
+        review_tools_wanted = _apply_forced_on_validation(
+            self.style, self.marks, review_tools_wanted, review_tools_current
+        )
+        picked = (
+            ask(
+                "  Morgan's default model - opus / sonnet / default (clear), blank to "
+                "leave unchanged",
+                "",
+                False,
+                style=self.style,
+            )
+            .strip()
+            .lower()
+        )
+        model_changing = picked != ""
+        if picked in ("default", "reset", "clear"):
+            model_wanted: Optional[str] = None
+        elif picked in ORCHESTRATOR_MODELS:
+            model_wanted = picked
+        elif picked == "":
+            model_wanted = model_current
+        else:
+            self.say(self.style.yellow(f"    expected opus/sonnet/default, got {picked!r} - left unchanged"))
+            model_wanted = model_current
+            model_changing = False
+        if model_wanted == "opus":
+            self.say(self.style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
+        summary = (
+            f"docx={'on' if docx_wanted else 'off'}, "
+            f"citations={'on' if citations_wanted else 'off'}, "
+            f"review-tools={review_tools_wanted or '(all auto)'}, "
+            f"model={model_wanted or 'default'}"
+        )
+        if self.demo:
+            self.step_ok("Machine defaults", f"would set {summary}")
+            return
+        if model_changing:
+            model_ok, model_message = write_orchestrator_model_default(model_wanted)
+            if not model_ok:
+                self.step_fail("Machine defaults", model_message, fatal=False)
+                return
+        if (
+            docx_wanted == docx_current
+            and citations_wanted == citations_current
+            and review_tools_wanted == review_tools_current
+            and not model_changing
+        ):
+            self.step_ok("Machine defaults", "unchanged")
+            return
+        self.cfg["default_docx"] = docx_wanted
+        self.cfg["default_regulatory_citations"] = citations_wanted
+        self.cfg["default_review_tools"] = review_tools_wanted
+        save_config(self.cfg_path, self.cfg)
+        self.step_ok("Machine defaults", f"{summary} ({self.cfg_path})")
 
     def model_step(self) -> None:
         """Standalone, easily re-runnable (menu option 8): change or reset Morgan's (the
@@ -2184,29 +2295,18 @@ class Installer:
                 style=self.style,
             )
             if not wanted:
+                # No follow-up "still set Morgan's model?" question here (removed
+                # 2026-08-05 user report: it fired on EVERY full run/update, even for a
+                # project already enabled and already configured - not something the
+                # average user should be asked about on every routine update. It was
+                # added 2026-08-03 because there was no other way to reach the model
+                # question after declining enablement; that's no longer true - Advanced
+                # -> "Morgan's model" (per project) and Advanced -> "Machine defaults"
+                # (this machine's default) are both directly reachable any time.
                 self.step_skip(
                     "Project enablement",
                     "later: run /plugin inside Claude Code from the project",
                 )
-                # Morgan's model doesn't depend on enabling anything right now - a
-                # project already enabled from a previous run still benefits, and "No"
-                # here used to skip this question entirely with no way back to it short
-                # of the standalone menu option (live report 2026-08-03).
-                if confirm(
-                    "  Still set Morgan's (the orchestrator's) model for a project - "
-                    "e.g. one already enabled?",
-                    default=False,
-                    assume_yes=False,
-                    style=self.style,
-                ):
-                    raw = ask("  Which project directory?", ".", False, style=self.style)
-                    project = Path(raw).expanduser().resolve()
-                    if not project.is_dir():
-                        self.say(self.style.dim(f"    not a directory: {project}"))
-                    else:
-                        ok, message = ask_and_set_model(project, self.style, self.args.yes, self.demo)
-                        style_fn = self.style.dim if ok else self.style.yellow
-                        self.say(style_fn(f"    {message}"))
                 return
         raw = ask("  Which project directory?", ".", False, style=self.style)
         target = Path(raw)
@@ -2347,6 +2447,10 @@ class Installer:
         if self.subset == "model":
             return [
                 ("Morgan's model", self.model_step),
+            ]
+        if self.subset == "machinedefaults":
+            return [
+                ("Machine defaults", self.machine_defaults_step),
             ]
         if self.subset == "toolcheck":
             return [
@@ -2848,6 +2952,32 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
         return 1
 
 
+def _project_preference_defaults(existing: dict, machine_defaults: dict) -> tuple:
+    """(docx_current, citations_current, review_tools_current) - the project's own
+    explicit choice (the key is PRESENT in its team-preferences.json, even if falsy/
+    empty) always wins; otherwise falls back to THIS MACHINE's default; otherwise the
+    original built-in default (docx off, citations on, review-tools all auto). Shared
+    by run_configure and format_preferences_step so "what a human sees as the current/
+    suggested value while configuring" can never drift from what engage_probe.py
+    actually resolves at real /engage time (same precedence, mirrored deliberately).
+    2026-08-05 user request: a "sensible defaults" fast path must respect machine-level
+    overrides - e.g. ruff disabled at machine level must stay disabled by default for a
+    brand-new project, not silently re-enabled; a project's own prior choice always
+    overrides the machine default regardless."""
+    if "extra_formats" in existing:
+        docx_current = "docx" in (existing.get("extra_formats") or [])
+    else:
+        docx_current = bool(machine_defaults.get("default_docx", False))
+    citations_current = existing.get(
+        "regulatory_citations", machine_defaults.get("default_regulatory_citations", True)
+    )
+    if "review_tools" in existing:
+        review_tools_current = existing.get("review_tools") or {}
+    else:
+        review_tools_current = machine_defaults.get("default_review_tools") or {}
+    return docx_current, citations_current, review_tools_current
+
+
 def run_configure(
     target: Path, style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
 ) -> int:
@@ -2868,13 +2998,31 @@ def run_configure(
     Deliberately does NOT include the "save as default for new projects" nuance
     format_preferences_step offers (that needs the Installer's own persisted CLI config,
     self.cfg/self.cfg_path) - this is the fast common path; that finer option stays
-    reachable via the interactive menu for whoever wants it."""
+    reachable via the interactive menu for whoever wants it.
+
+    Opens with a one-click "use the recommended settings?" question (2026-08-05 user
+    request: "option to go with recommended settings as a one click option ... gets the
+    user quickly up and running") - answering yes reuses the EXISTING assume_yes
+    machinery for the rest of this call (every confirm()/ask() below already short-
+    circuits to its default under assume_yes), so this adds zero new per-question logic,
+    just skips the walk. The "recommended" defaults themselves respect this machine's
+    own configured defaults (_project_preference_defaults), not just the original
+    built-in ones - a tool disabled at machine level stays disabled for a new project."""
     ok, fail = mark_map["ok"], mark_map["fail"]
     project = target.expanduser().resolve()
     if not project.is_dir():
         print(f"{fail} not a directory: {project}")
         return 1
     print(style.bold(f"Configuring {project}" + (" (DEMO - nothing will be written)" if demo else "")))
+    if not assume_yes and confirm(
+        "  Use the recommended settings (enable + permission allow-list + this "
+        "machine's defaults) - the fastest way to get running? 'No' walks through each "
+        "choice instead.",
+        default=True,
+        assume_yes=False,
+        style=style,
+    ):
+        assume_yes = True
     rc = 0
 
     print(style.dim("\n  Enable the plugin:"))
@@ -2896,8 +3044,10 @@ def run_configure(
 
     print(style.dim("\n  Project preferences:"))
     existing = _read_json_dict(project / ".claude" / "team-preferences.json")
-    docx_current = "docx" in (existing.get("extra_formats") or [])
-    citations_current = existing.get("regulatory_citations", True)
+    machine_defaults = load_config(config_path())
+    docx_current, citations_current, review_tools_current = _project_preference_defaults(
+        existing, machine_defaults
+    )
     split_current = existing.get("large_context_review_split", False)
     docx_wanted = confirm(
         "  Produce .docx by default for controlled documents?",
@@ -2918,7 +3068,6 @@ def run_configure(
         assume_yes=assume_yes,
         style=style,
     )
-    review_tools_current = existing.get("review_tools") or {}
     review_tools_wanted = _ask_review_tool_overrides(style, assume_yes, review_tools_current)
     # Live-validates every newly forced-"on" tool even in demo mode - read-only against a
     # throwaway synthetic file, nothing project-related is touched, and the whole point is

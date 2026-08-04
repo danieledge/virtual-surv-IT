@@ -221,6 +221,25 @@ def read_team_preferences(project_dir: Path) -> dict:
         return {}
 
 
+def read_machine_defaults() -> dict:
+    """~/.config/virt-surv-it/installer.json (honouring XDG_CONFIG_HOME) - THIS
+    machine's defaults, written by install_helper.py's "Project preferences"/"Machine
+    defaults" steps. Mirrors install_helper.py's config_path()/load_config(), deliberately
+    re-derived here rather than imported (see _find_bash's comment) so this script stays
+    runnable standalone. Consulted by the docx/citations fallback below - 2026-08-05 user
+    request: "project should default to machine default but can be overridden at project
+    level" - previously this machine's default was only ever a one-time SEED value copied
+    into a project at configure-time, never a genuine runtime fallback for a project that
+    was enabled without ever running Configure/Project preferences at all."""
+    base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base) if base else Path.home() / ".config"
+    try:
+        data = json.loads((root / "virt-surv-it" / "installer.json").read_text(encoding="utf-8-sig"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
 def _find_bash() -> str:
     """bash for the tool probe, surviving Git for Windows' default PATH (installer adds
     Git\\cmd, not Git\\bin - `bash` misses even though Git is fully installed; see
@@ -360,8 +379,21 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     # used to land in the transcript on every open regardless of VERSION_CHANGED.
     changelog_entry = first_changelog_entry(root) if changed == "yes" else ""
     prefs = read_team_preferences(project_dir)
-    extra_formats = prefs.get("extra_formats") or []
-    citations_on = prefs.get("regulatory_citations", True)
+    # Project setting wins if this project has ever explicitly set it (even to "off" -
+    # write_team_preferences always records extra_formats/regulatory_citations once a
+    # human has been through Configure/Project preferences once, so key-PRESENCE, not
+    # truthiness, is the right test for "has this project made its own choice"). A
+    # project that was enabled without ever running either falls back to this machine's
+    # default, then finally the built-in default (docx off, citations on).
+    machine_defaults = read_machine_defaults()
+    if "extra_formats" in prefs:
+        extra_formats = prefs.get("extra_formats") or []
+    else:
+        extra_formats = ["docx"] if machine_defaults.get("default_docx") else []
+    if "regulatory_citations" in prefs:
+        citations_on = prefs["regulatory_citations"]
+    else:
+        citations_on = machine_defaults.get("default_regulatory_citations", True)
     review_split_on = prefs.get("large_context_review_split", False)
     tool_report = run_tool_probe(root, project_dir)
     extensions_block = run_extensions_show(root, project_dir)

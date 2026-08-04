@@ -2463,11 +2463,24 @@ def test_relocation_preserves_explicit_repo_flag(tmp_path, monkeypatch):
 
 def _confirm_by_prompt(answers: dict):
     """A fake `confirm` distinguishing the docx vs citations question by prompt text,
-    since format_preferences_step asks both in one pass."""
+    since format_preferences_step asks both in one pass. Matches each question's OWN
+    distinctive wording, not a bare "docx"/"citations" substring - live-caught,
+    2026-08-05: the save-as-default question's prompt now restates the resolved summary
+    (by design, for clarity - see machine_defaults_step/format_preferences_step), which
+    itself CONTAINS the substring "docx", so a naive substring match made
+    save_as_default accidentally evaluate True in every test using this fake - writing
+    to the REAL ~/.config/virt-surv-it/installer.json, since none of these tests isolate
+    HOME/XDG_CONFIG_HOME (fixed there too, defense in depth). Anything that isn't the
+    docx or citations question - including save-as-default - returns `default`
+    (declines), the safe fallback for a fake that doesn't know how to answer it."""
 
     def _fn(prompt, default, assume_yes, style=None):
-        key = "docx" if "docx" in prompt.lower() else "citations"
-        return answers.get(key, default)
+        lowered = prompt.lower()
+        if "produce .docx" in lowered:
+            return answers.get("docx", default)
+        if "cites regulatory obligations" in lowered:
+            return answers.get("citations", default)
+        return default
 
     return _fn
 
@@ -2477,6 +2490,7 @@ def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, mo
     preferences are project-wide (team-preferences.json), asked in one pass."""
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
@@ -2494,6 +2508,7 @@ def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, mo
 def test_format_preferences_step_can_turn_off_citations(tmp_path, monkeypatch, capsys):
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
@@ -2508,6 +2523,7 @@ def test_format_preferences_step_can_turn_off_citations(tmp_path, monkeypatch, c
 def test_format_preferences_step_no_write_when_unchanged(tmp_path, monkeypatch):
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
@@ -2522,6 +2538,7 @@ def test_format_preferences_step_can_turn_docx_off_again(tmp_path, monkeypatch):
     import install_helper as ih
     from install_helper import write_team_preferences
 
+    _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     write_team_preferences(project, extra_formats=["docx"])
@@ -2536,6 +2553,7 @@ def test_format_preferences_step_can_turn_docx_off_again(tmp_path, monkeypatch):
 def test_format_preferences_step_demo_never_writes(tmp_path, monkeypatch):
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
@@ -2545,6 +2563,103 @@ def test_format_preferences_step_demo_never_writes(tmp_path, monkeypatch):
     inst = ih.Installer(args, ih.Style(False), ih.marks(), subset="formats")
     inst.format_preferences_step()
     assert not (project / ".claude" / "team-preferences.json").exists()
+
+
+# --- machine_defaults_step: view/edit this machine's defaults directly, no project ------------
+# (2026-08-05 user request: "let's just have a clearer view and edit of the machine's
+# defaults too" / "Morgan's model too should be machine default"). EVERY test here isolates
+# HOME/XDG_CONFIG_HOME via _isolate_home FIRST, before touching anything - the exact
+# discipline that was missing from the format_preferences_step tests above and caused a
+# real, live pollution of ~/.config/virt-surv-it/installer.json on the dev machine.
+
+
+def _confirm_by_prompt_machine(answers: dict):
+    """Like _confirm_by_prompt, but for machine_defaults_step's OWN question wording -
+    a separate fake, not reused, so a match here can never accidentally leak into the
+    project-scoped format_preferences_step tests or vice versa."""
+
+    def _fn(prompt, default, assume_yes, style=None):
+        lowered = prompt.lower()
+        if "produce .docx by default for new projects" in lowered:
+            return answers.get("docx", default)
+        if "new projects cite regulatory obligations" in lowered:
+            return answers.get("citations", default)
+        return default
+
+    return _fn
+
+
+def test_machine_defaults_step_writes_on_change(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        ih, "confirm", _confirm_by_prompt_machine({"docx": True, "citations": True})
+    )
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "")  # blank = leave model unchanged
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    saved = json.loads((tmp_path / "xdg" / "virt-surv-it" / "installer.json").read_text())
+    assert saved["default_docx"] is True
+    assert saved["default_regulatory_citations"] is True
+    assert "docx=on" in capsys.readouterr().out
+
+
+def test_machine_defaults_step_unchanged_writes_nothing(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        ih, "confirm", _confirm_by_prompt_machine({"docx": False, "citations": True})
+    )
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "")
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    assert not (tmp_path / "xdg" / "virt-surv-it" / "installer.json").exists()
+
+
+def test_machine_defaults_step_demo_writes_nothing(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        ih, "confirm", _confirm_by_prompt_machine({"docx": True, "citations": True})
+    )
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "opus")
+    args = _args(yes=False)
+    args.demo = True
+    inst = ih.Installer(args, ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    assert not (tmp_path / "xdg").exists()
+    assert not (tmp_path / "home" / ".claude").exists()
+
+
+def test_machine_defaults_step_sets_model_default(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        ih, "confirm", _confirm_by_prompt_machine({"docx": False, "citations": True})
+    )
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "opus")
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    settings = json.loads((tmp_path / "home" / ".claude" / "settings.json").read_text())
+    assert settings["model"] == "opus"
+
+
+def test_machine_defaults_step_invalid_model_input_leaves_unchanged(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        ih, "confirm", _confirm_by_prompt_machine({"docx": False, "citations": True})
+    )
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "gibberish")
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    assert not (tmp_path / "home" / ".claude" / "settings.json").exists()
+    assert "expected opus/sonnet/default" in capsys.readouterr().out
 
 
 def test_menu_option_6_maps_to_advanced_submenu():
@@ -3141,6 +3256,7 @@ def test_ask_and_set_model_demo_mode_writes_nothing(tmp_path, monkeypatch):
 def test_run_configure_happy_path_yes(tmp_path, monkeypatch, capsys):
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
     out = capsys.readouterr().out
@@ -3168,15 +3284,98 @@ def test_run_configure_not_a_directory():
     assert rc == 1
 
 
+def test_run_configure_recommended_settings_is_a_one_click_fast_path(tmp_path, monkeypatch, capsys):
+    """2026-08-05 user request: "option to go with recommended settings as a one click
+    option ... gets the user quickly up and running". Accepting it (blank = the default,
+    Yes) must consume exactly ONE answer and apply every default without asking anything
+    else - functionally identical to assume_yes=True from here on."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    answers = iter([""])  # blank = Yes to "use recommended settings?" - nothing else asked
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Configuration complete" in out
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+    assert "permissions" in settings  # recommended settings includes the allow-list
+
+
+def test_run_configure_already_yes_skips_the_recommended_settings_question(tmp_path, monkeypatch):
+    """assume_yes=True (e.g. from --yes) must not ALSO ask "use recommended settings?"
+    - that would be asking a question nobody can see/answer on a scripted run."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    called = []
+    monkeypatch.setattr(
+        ih, "confirm", lambda prompt, *a, **k: called.append(prompt) or True
+    )
+    ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
+    assert not any("recommended settings" in p.lower() for p in called)
+
+
+def test_project_preference_defaults_falls_back_to_machine_default(tmp_path):
+    """2026-08-05 user request: "sensible defaults" must respect a machine-level
+    override - e.g. ruff disabled at machine level must stay disabled by default for a
+    brand-new project (empty `existing`), never silently re-enabled."""
+    from install_helper import _project_preference_defaults
+
+    machine_defaults = {
+        "default_docx": True,
+        "default_regulatory_citations": False,
+        "default_review_tools": {"ruff": "off"},
+    }
+    docx, citations, review_tools = _project_preference_defaults({}, machine_defaults)
+    assert docx is True
+    assert citations is False
+    assert review_tools == {"ruff": "off"}
+
+
+def test_project_preference_defaults_project_choice_overrides_machine(tmp_path):
+    """A project that has ALREADY made its own explicit choice (key present, even if it
+    happens to match the built-in default) always wins over the machine default -
+    "can be overridden in the project's settings"."""
+    from install_helper import _project_preference_defaults
+
+    existing = {"extra_formats": ["docx"], "regulatory_citations": True, "review_tools": {}}
+    machine_defaults = {
+        "default_docx": False,
+        "default_regulatory_citations": False,
+        "default_review_tools": {"ruff": "off"},
+    }
+    docx, citations, review_tools = _project_preference_defaults(existing, machine_defaults)
+    assert docx is True  # project's own "docx on" wins over machine's "off"
+    assert citations is True  # project's own "on" wins over machine's "off"
+    assert review_tools == {}  # project's own explicit "all auto" wins over machine's override
+
+
+def test_project_preference_defaults_no_machine_config_uses_builtin(tmp_path):
+    """No project setting AND no machine config at all - the original built-in default
+    (docx off, citations on, review-tools all auto) still applies."""
+    from install_helper import _project_preference_defaults
+
+    docx, citations, review_tools = _project_preference_defaults({}, {})
+    assert docx is False
+    assert citations is True
+    assert review_tools == {}
+
+
 def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkeypatch):
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     monkeypatch.setattr(sys, "stdin", _TtyStdin())  # see test_ask_and_set_model_rejects_bad_input
-    # "no" to the permissions question, "" (accept defaults) to the three preference
-    # prompts, "" (no change) to the review-tools override prompt, "" to the model prompt
-    # (declines - default for that one is False).
-    answers = iter(["n", "", "", "", "", ""])
+    # "n" to "use recommended settings?" (walk through each choice instead), "no" to the
+    # permissions question, "" (accept defaults) to the three preference prompts, ""
+    # (no change) to the review-tools override prompt, "" to the model prompt (declines
+    # - default for that one is False).
+    answers = iter(["n", "n", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -3675,6 +3874,7 @@ def test_advanced_submenu_full_mapping():
         "3": "formats",
         "4": "model",
         "5": "demo",
+        "6": "machinedefaults",
         "b": "back",
     }
 
@@ -3725,6 +3925,7 @@ def test_choose_action_configure_and_alias_returned_directly(monkeypatch):
 def test_run_configure_demo_writes_nothing(tmp_path, monkeypatch, capsys):
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True, demo=True)
     out = capsys.readouterr().out
@@ -4065,11 +4266,14 @@ def test_validate_forced_on_tools_ignores_tools_not_forced_on():
 def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
-    # "" enable-permissions default(Y), "" docx, "" citations, "" split,
-    # "mypy=off" review-tools override, "" model.
-    answers = iter(["", "", "", "", "mypy=off", ""])
+    # "n" to "use recommended settings?" (blank there would default to Yes and skip
+    # every prompt below via assume_yes, defeating this test), "" enable-permissions
+    # default(Y), "" docx, "" citations, "" split, "mypy=off" review-tools override, ""
+    # model.
+    answers = iter(["n", "", "", "", "", "mypy=off", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -4080,6 +4284,7 @@ def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
 def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch):
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
 
@@ -4087,7 +4292,9 @@ def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch)
         yield ("mypy", "ERROR", "timed out (20s) - likely blocked network access")
 
     monkeypatch.setattr(ih, "probe_analyser_output", fake_probe)
-    answers = iter(["", "", "", "", "mypy=on", ""])
+    # "n" to "use recommended settings?" first (blank there would default to Yes and
+    # skip every prompt below via assume_yes, defeating this test).
+    answers = iter(["n", "", "", "", "", "mypy=on", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
