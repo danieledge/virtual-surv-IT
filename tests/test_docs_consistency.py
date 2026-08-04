@@ -243,3 +243,46 @@ def test_eval_case_count_references_match_filesystem():
             assert int(found) == n, (
                 f"{rel}: says {found} golden cases but {n} eval-case dirs exist on disk"
             )
+
+
+# --- (j) compliance-reviewer conditionality: never unconditional in the operative docs -----
+# The 2026-08-04 eval trace found DEFINITION-OF-DONE.md's "Compliance-reviewed" checklist item
+# and build-solution/SKILL.md's review step both named compliance-reviewer with no conditional
+# qualifier - unlike performance-reviewer right next to it in both places, which correctly said
+# "where it processes data at volume". CLAUDE.md §4 and the operating guide's routing table both
+# scope compliance-reviewer to detection logic / regulated data / §4 thresholds ("not every code
+# review"); an unqualified restatement elsewhere is exactly how that drifted. Anchored on the
+# specific checklist bullet / review step, not every mention of the agent name - several OTHER
+# mentions in these same files (audit-depth synthesis read, handover-usability check, eval
+# attestation) are legitimately their own, differently-scoped conditions, not this one.
+
+_COMPLIANCE_CONDITION_MARKERS = (
+    "detection logic",
+    "regulated data",
+    "not every code review",
+    "not a default",
+)
+
+
+def _assert_conditional(rel: str, section: str, label: str) -> None:
+    assert any(marker in section for marker in _COMPLIANCE_CONDITION_MARKERS), (
+        f"{rel}: {label} names compliance-reviewer with no nearby conditional qualifier "
+        "(detection logic / regulated data / not every code review) - reads as unconditional, "
+        "the exact 2026-08-04 bug"
+    )
+
+
+def test_dod_compliance_reviewed_bullet_is_conditional():
+    text = _read("docs/DEFINITION-OF-DONE.md")
+    m = re.search(r"- \[ \] \*\*Compliance-reviewed\*\*.*?(?=\n- \[ \]|\Z)", text, re.S)
+    assert m, "DEFINITION-OF-DONE.md: 'Compliance-reviewed' checklist bullet not found"
+    _assert_conditional("docs/DEFINITION-OF-DONE.md", m.group(0), "the 'Compliance-reviewed' bullet")
+
+
+def test_build_solution_review_step_is_conditional():
+    text = _read(".claude/skills/build-solution/SKILL.md")
+    m = re.search(r"4\. \*\*Review\*\*.*?(?=\n5\.|\Z)", text, re.S)
+    assert m, "build-solution/SKILL.md: step 4 ('Review') not found"
+    _assert_conditional(
+        ".claude/skills/build-solution/SKILL.md", m.group(0), "step 4's review-chain sentence"
+    )

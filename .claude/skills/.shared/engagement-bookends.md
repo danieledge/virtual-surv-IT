@@ -30,8 +30,30 @@ close only.
 
 ## Standard close
 
-Write the **engagement-summary email** (`docs/templates/engagement-summary-email.md`) as a `.txt`
-in the workspace, **signed off as Morgan**, then run the mechanical gate: `<python> -m
-scripts.check_artifacts --fix` (the `--fix` mode auto-renders missing `.html` siblings and renames
-a mis-typed summary email to `.txt`). Act on anything it still flags (a missing `.html` sibling, a
-missing email) before handing back.
+**Author closing artifacts final-form, then gate ONCE, then close.** Write the summary email and
+delivery report complete on the first pass - final `Status:` lines (never a draft/interim word),
+every roster name carrying its 🤖 marker on first mention, no placeholder sections - **before**
+running the gate. `set-status closed` refuses on more than a plain `check_artifacts` run reports
+(unfinalised artifacts, draft statuses, missing agent markers), so a clean gate is not proof close
+will succeed, and topping up the artifacts a little at a time between gate runs turns the gate into
+a one-item-at-a-time discovery loop instead of a single check (2026-08-03 eval trace: content kept
+being added between checks - most often the summary email - so each re-run found genuinely new
+findings against the newly-added text, costing 8 gate executions and 4 close attempts to land one
+close). Write complete, run the gate once, fix everything it lists in one pass, close.
+
+The close sequence, in order (use these exact forms rather than guessing a flag and correcting
+after a usage error):
+
+```
+<python> -m scripts.engagement_state resolve-outstanding "<substring>" --slug <slug>
+<python> -m scripts.engagement_state set-team "Name (role)" "Name2 (role2)" --slug <slug>
+<python> -m scripts.engagement_state finalise-artifacts --slug <slug>
+<python> -m scripts.engagement_state set-footprint --agents N --tokens "<estimate>" --slug <slug>
+<python> -m scripts.check_artifacts --slug <slug> --fix
+<python> -m scripts.engagement_state set-status closed --slug <slug>
+```
+
+(the `--fix` mode auto-renders missing `.html` siblings and renames a mis-typed summary email to
+`.txt`). Write the **engagement-summary email**
+(`docs/templates/engagement-summary-email.md`) as a `.txt` in the workspace, **signed off as
+Morgan**, before this sequence. Act on anything the gate still flags before handing back.

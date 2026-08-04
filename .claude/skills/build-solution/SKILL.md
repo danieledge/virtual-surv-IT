@@ -41,8 +41,28 @@ Run the **orchestrator-workers** pattern, agile and iterative:
 4. **Review** - `code-reviewer` (deep) and, where it processes data at volume,
    `performance-reviewer`; add `compliance-reviewer` where the deliverable is detection logic,
    touches regulated data, or documents thresholds (§4) - **not a default for every build**.
-   Loop fixes until no Critical remains -
-   **recording each pass/fix/re-review hand-off in the Delivery Report's iteration log (§1a)
+   Loop fixes until no Critical remains - **brief the builder with EVERY currently-open finding
+   from a review pass in one fix call, not a severity-filtered subset with a follow-up call for
+   the rest.** Splitting one pass's findings into sequential same-severity-tier fix calls (fix
+   Criticals, then a separate call for the Mediums, with no re-review in between and no stated
+   reason for the gap) is pure overhead - each call re-spins a subagent and reloads context for
+   findings the builder could have fixed together (2026-08-04 eval trace: `process-full-lifecycle`
+   did exactly this). A NEW fix call is warranted when a **re-review** surfaces genuinely new
+   findings, not to stagger one review's own findings by severity. **A fix that changes
+   externally visible behaviour (a new failure mode, changed output, changed permissions)
+   includes updating the FSD/README/docstrings in the SAME fix call** - docs currency is a
+   standing coding-standards requirement, and a compliance reviewer will correctly bounce a
+   behaviour change whose docs still describe the old behaviour, costing a second builder spawn
+   just for the documentation half (2026-08-04 eval trace: `process-full-lifecycle`'s CMP-03
+   fix shipped undocumented and needed a follow-up call once compliance caught it). **A user
+   ruling that dispositions a finding is written into the findings pack BEFORE the next
+   downstream review reads that pack** - do not persist the decision to engagement state and
+   then hand a knowingly stale pack to the next reviewer, who must then flag the contradiction
+   as a finding of its own (same trace: a ratified file-permissions decision left one finding's
+   disposition stale, and compliance flagged the pack contradicting itself). If someone else
+   must make the pack update, brief them with the decision text verbatim, the pack path, and
+   the exact target value, so the call is a write, not a re-investigation.
+   **Record each pass/fix/re-review hand-off in the Delivery Report's iteration log (§1a)
    as it happens**, journey strip included.
 5. **Maintain the RTM** (`docs/templates/rtm.md`): every requirement → code → test →
    obligation. A gap is a blocker - surface it to the user. Record significant design decisions

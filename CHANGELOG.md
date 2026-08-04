@@ -3,6 +3,33 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.8] - 2026-08-04 - Token-usage and CPU-latency audit, plus eval-found routing fixes
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+Two audits (token usage, CPU/latency), then a live eval run surfaced two real bugs the audits
+didn't cover.
+
+### Changed
+- Scoped Write access for the four findings-pack reviewers (`code-reviewer`,
+  `compliance-reviewer`, `model-validator`, `performance-reviewer`) to their own JSON output,
+  mechanically enforced - cuts output-token cost on deep reviews.
+- Morgan's own orchestration tier now defaults to Sonnet; Opus stays available on request.
+- Consolidated the PreToolUse and Stop hooks into two dispatcher processes, memoized
+  repeatedly-reloaded modules, batched per-SHA git lookups, and cached the statusline's
+  interpreter probe.
+
+### Fixed
+- A simple, answerable-now question no longer gets formalised into a full engagement pack by
+  default - `/engage` classification gained a direct-answer path (eval-measured: cut one case's
+  cost 86%).
+- Fixed quote-blind compound-command segment splitting in the code-execution and raw-data
+  guards - a chained command's own punctuation (e.g. a semicolon in a log message) could get
+  sliced into a bogus fragment and falsely block.
+- `compliance-reviewer` is no longer effectively mandatory for every build.
+  `DEFINITION-OF-DONE.md` and `/build-solution` now match the routing table's own rule
+  (detection logic / regulated data / §4 thresholds only, not every code review).
+
 ## [0.33.7] - 2026-08-03 - Windows-detection, a missed status word, and a docs pass from a live session
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
