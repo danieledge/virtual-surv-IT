@@ -1097,7 +1097,7 @@ def choose_action(style: Style) -> str:
                 (
                     ("1", "Environment setup only (this machine - no code pull)"),
                     ("2", "Status line (this machine - shown in every project)"),
-                    ("3", "Project preferences (per project; can also set this machine's default)"),
+                    ("3", "Project preferences (docx, citations, review tools)"),
                     ("4", "Morgan's model (per project only)"),
                     ("5", "Demo - watch the whole run, nothing executed or written"),
                     ("b", "Back"),
@@ -1972,11 +1972,26 @@ class Installer:
         need a path that isn't buried inside first-time project enablement (2026-07-30
         user feedback). Both preferences here are PROJECT-WIDE (team-preferences.json),
         not per-engagement - a deliberate simplification over an earlier per-engagement
-        design for regulatory citations."""
+        design for regulatory citations.
+
+        TWO STAGES, kept visibly separate (2026-08-04 user feedback: "project settings
+        and can also set the machine's defaults is confusing wording and flow" /
+        "are we changing project or machine defaults" - the old flow answered several
+        questions that read as project-scoped, then bolted on an abstract "your default
+        for new/unconfigured projects" question at the end with no restated values).
+        Stage 1 sets ONE named project's preferences (this step's main purpose). Stage 2,
+        clearly announced and framed as optional/separate, offers to ALSO apply the SAME
+        already-chosen values as this machine's default for OTHER, future new projects -
+        restated concretely (not "your default") so it's unambiguous which target is
+        being changed at each moment."""
         self.step_intro(
-            "Two project-wide preferences: whether controlled documents (BRD, FSD, etc.) "
-            "also get a Word (.docx) copy, and whether detection-logic work cites "
-            "regulatory obligations by default."
+            "Sets ONE project's preferences: whether controlled documents (BRD, FSD, "
+            "etc.) also get a Word (.docx) copy, whether detection-logic work cites "
+            "regulatory obligations by default, and whether to turn any of the seven "
+            "supported analysers (ruff, mypy, bandit, black, sqlfluff, shfmt, gitleaks) "
+            "on or off for this project. At the end, a separate, clearly optional "
+            "question offers to also make these THIS MACHINE's default for other new "
+            "projects you configure later."
         )
         raw = ask("  Which project directory?", ".", False, style=self.style)
         project = Path(raw).expanduser().resolve()
@@ -1987,6 +2002,7 @@ class Installer:
         existing = _read_json_dict(prefs_path)
         docx_current = "docx" in (existing.get("extra_formats") or [])
         citations_current = existing.get("regulatory_citations", True)  # unset = on
+        self.say(self.style.bold(f"\n  For {project.name}:"))
         self.say(
             self.style.dim(
                 f"    currently: docx by default = {'on' if docx_current else 'off'}, "
@@ -2000,7 +2016,8 @@ class Installer:
             style=self.style,
         )
         citations_wanted = confirm(
-            "  Detection-logic work cites regulatory obligations by default - keep that on?",
+            "  Detection-logic work in this project cites regulatory obligations by "
+            "default - keep that on?",
             default=citations_current,
             assume_yes=False,
             style=self.style,
@@ -2013,9 +2030,16 @@ class Installer:
         review_tools_wanted = _apply_forced_on_validation(
             self.style, self.marks, review_tools_wanted, review_tools_current
         )
+        summary = (
+            f"docx={'on' if docx_wanted else 'off'}, "
+            f"citations={'on' if citations_wanted else 'off'}, "
+            f"review-tools={review_tools_wanted or '(all auto)'}"
+        )
+        self.say(self.style.bold("\n  Separately - this machine's default:"))
         save_as_default = confirm(
-            "  Also save docx/citations/review-tools as your default for new/unconfigured "
-            "projects?",
+            f"  You just set {summary} for {project.name}. Also make THESE SAME "
+            "choices this machine's default whenever you configure a DIFFERENT, new "
+            "project later (not this one, which is already set above)?",
             default=False,
             assume_yes=False,
             style=self.style,
@@ -2023,10 +2047,8 @@ class Installer:
         if self.demo:
             self.step_ok(
                 "Project preferences",
-                f"would set docx -> {'on' if docx_wanted else 'off'}, "
-                f"citations -> {'on' if citations_wanted else 'off'}, "
-                f"review-tools -> {review_tools_wanted or '(all auto)'}"
-                + (" (and save as new-project default)" if save_as_default else ""),
+                f"would set {summary} for {project.name}"
+                + (" (and save as this machine's new-project default)" if save_as_default else ""),
             )
             return
         if save_as_default:
@@ -2041,7 +2063,8 @@ class Installer:
         ):
             self.step_ok(
                 "Project preferences",
-                "unchanged" + (" (new-project default saved)" if save_as_default else ""),
+                f"{project.name} unchanged"
+                + (" (this machine's new-project default saved)" if save_as_default else ""),
             )
             return
         write_team_preferences(
@@ -2052,10 +2075,8 @@ class Installer:
         )
         self.step_ok(
             "Project preferences",
-            f"docx -> {'on' if docx_wanted else 'off'}, "
-            f"citations -> {'on' if citations_wanted else 'off'}, "
-            f"review-tools -> {review_tools_wanted or '(all auto)'} ({prefs_path})"
-            + (", saved as new-project default" if save_as_default else ""),
+            f"{summary} for {project.name} ({prefs_path})"
+            + (" - also saved as this machine's new-project default" if save_as_default else ""),
         )
 
     def model_step(self) -> None:

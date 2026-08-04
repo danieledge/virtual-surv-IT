@@ -3,6 +3,25 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.17] - 2026-08-04 - Project-preferences flow: which target am I setting, made explicit
+
+### Changed
+- "Project preferences" (Advanced menu / `format_preferences_step`) answered several
+  questions that read as project-scoped, then bolted on an abstract "save as your default
+  for new/unconfigured projects?" question at the end with no restated values - genuinely
+  unclear which target (the one project, or this whole machine) was being changed at each
+  step. Now: an explicit "For `<project>`:" header before the project-scoped questions, a
+  visually separated "Separately - this machine's default:" section before the optional
+  final question, and that question restates the concrete values just chosen ("You just
+  set docx=off, citations=on... for `<project>`. Also make THESE SAME choices this
+  machine's default...?") instead of an abstract "your default" phrase.
+- The step's intro now names the seven supported analysers (ruff, mypy, bandit, black,
+  sqlfluff, shfmt, gitleaks) explicitly, so "where do I turn ruff off" has an obvious
+  answer instead of the generic "review-tool overrides" wording.
+- Menu label simplified to "Project preferences (docx, citations, review tools)" - the
+  dual-scope nuance now lives in the step's own (much clearer) flow instead of a
+  hard-to-parse single menu line.
+
 ## [0.33.16] - 2026-08-04 - Menu UX polish: no redraw-on-typo, plugin-vs-project scope labelled
 
 ### Changed

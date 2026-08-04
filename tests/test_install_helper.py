@@ -2488,7 +2488,7 @@ def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, mo
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
     assert prefs["extra_formats"] == ["docx"]
     assert prefs["regulatory_citations"] is True
-    assert "docx -> on" in capsys.readouterr().out
+    assert "docx=on" in capsys.readouterr().out
 
 
 def test_format_preferences_step_can_turn_off_citations(tmp_path, monkeypatch, capsys):
@@ -2502,7 +2502,7 @@ def test_format_preferences_step_can_turn_off_citations(tmp_path, monkeypatch, c
     inst.format_preferences_step()
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
     assert prefs["regulatory_citations"] is False
-    assert "citations -> off" in capsys.readouterr().out
+    assert "citations=off" in capsys.readouterr().out
 
 
 def test_format_preferences_step_no_write_when_unchanged(tmp_path, monkeypatch):
@@ -4110,7 +4110,7 @@ def test_format_preferences_step_review_tools_save_as_default(tmp_path, monkeypa
     monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg_home))
 
     def _fake_confirm_save_default(prompt, default, assume_yes, style=None):
-        if "save" in prompt.lower():
+        if "this machine's default" in prompt.lower():
             return True
         return _confirm_by_prompt({"docx": False, "citations": True})(
             prompt, default, assume_yes, style
