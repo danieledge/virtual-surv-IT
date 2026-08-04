@@ -2464,3 +2464,107 @@ def test_write_team_preferences_omitted_args_preserve_existing(tmp_path):
     prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
     assert prefs["regulatory_citations"] is False  # untouched by the second call
     assert prefs["extra_formats"] == ["docx"]
+
+
+# --- analyser output cleanliness check (2026-08-04) ---------------------------------------
+
+
+def test_menu_option_9_maps_to_toolcheck():
+    from install_helper import MENU_ACTIONS
+
+    assert MENU_ACTIONS["9"] == "toolcheck"
+
+
+def test_probe_analyser_output_skips_missing_tools(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    results = ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0))
+    assert results
+    assert all(status == "SKIP" for _, status, _ in results)
+    assert all("not installed" in detail for _, _, detail in results)
+
+
+def test_probe_analyser_output_clean_run(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    results = ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout=""))
+    assert all(status == "OK" for _, status, _ in results)
+
+
+def test_probe_analyser_output_detects_leaked_ansi(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    results = ih.probe_analyser_output(
+        tmp_path, runner=lambda *a, **k: _proc(0, stdout="\x1b[31merror\x1b[0m")
+    )
+    assert all(status == "NOISY" for _, status, _ in results)
+    assert all("ANSI escape" in detail for _, _, detail in results)
+
+
+def test_probe_analyser_output_detects_verbose_clean_run(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    noisy_banner = "gitleaks\n" * 60  # well over the 200-byte threshold, no ANSI involved
+    results = ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout=noisy_banner))
+    assert all(status == "NOISY" for _, status, _ in results)
+    assert all("bytes on a trivial clean file" in detail for _, _, detail in results)
+
+
+def test_probe_analyser_output_writes_an_empty_requirements_fixture(tmp_path, monkeypatch):
+    """Real live bug in the probe's own first draft (2026-08-04): pinning
+    requests==2.32.3 as the "clean" pip-audit fixture picked up two genuine CVEs and got
+    (correctly, if confusingly) reported as NOISY - a moving target, since any pinned
+    real package can accrue a CVE later. Fixed to an empty requirements.txt so this check
+    tests only the suppression flags, never a live vulnerability feed."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout=""))
+    assert (tmp_path / "probe-requirements.txt").read_text(encoding="utf-8") == ""
+
+
+def test_run_tool_check_reports_ok_when_all_clean(capsys, monkeypatch):
+    import install_helper as ih
+    from install_helper import Style, marks, run_tool_check
+
+    monkeypatch.setattr(
+        ih,
+        "probe_analyser_output",
+        lambda tmpdir, runner=None: [("ruff", "OK", "clean"), ("bandit", "SKIP", "not installed")],
+    )
+    rc = run_tool_check(Style(False), marks())
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "ruff: clean" in out
+    assert "not installed" in out
+    assert "All installed analysers came back clean" in out
+
+
+def test_run_tool_check_reports_failure_when_something_noisy(capsys, monkeypatch):
+    import install_helper as ih
+    from install_helper import Style, marks, run_tool_check
+
+    monkeypatch.setattr(
+        ih,
+        "probe_analyser_output",
+        lambda tmpdir, runner=None: [("bandit", "NOISY", "ANSI escape codes leaked through the flags")],
+    )
+    rc = run_tool_check(Style(False), marks())
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "bandit: NOISY" in out
+    assert "did not come back clean" in out
+
+
+def test_check_tools_cli_flag_dispatches(monkeypatch):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(ih, "run_tool_check", lambda style, mm: called.append(1) or 0)
+    rc = ih._main(["--check-tools"])
+    assert rc == 0
+    assert called == [1]

@@ -1002,6 +1002,7 @@ MENU_ACTIONS = {
     "6": "formats",
     "7": "demo",
     "8": "model",
+    "9": "toolcheck",
     "q": "quit",
 }
 
@@ -1021,6 +1022,7 @@ def choose_action(style: Style) -> str:
         ("6", "Project preferences (docx export, regulatory citations)"),
         ("7", "Demo - watch the whole run, nothing executed or written"),
         ("8", "Morgan's model (opus/sonnet, or reset to default)"),
+        ("9", "Check analyser output cleanliness (debug)"),
         ("q", "Quit"),
     )
     for key, text in options:
@@ -1989,6 +1991,26 @@ class Installer:
             return
         self.step_ok("Morgan's model", message)
 
+    def tool_check_step(self) -> None:
+        """Standalone, easily re-runnable (menu option 9): verifies code-reviewer's
+        analysers actually produce clean, undecorated output on THIS machine - see the
+        module comment above run_tool_check for why this is a per-environment check, not
+        a documentation claim (terminal/color detection is not guaranteed uniform,
+        especially on Git Bash/Windows)."""
+        self.step_intro(
+            "Runs each installed analyser (semgrep, gitleaks, bandit, mypy, pip-audit) "
+            "against a trivial clean file with the flags code-reviewer is told to use, "
+            "and checks whether the output actually comes back clean here."
+        )
+        if run_tool_check(self.style, self.marks) == 0:
+            self.step_ok("Analyser output cleanliness", "all installed analysers clean")
+        else:
+            self.step_fail(
+                "Analyser output cleanliness",
+                "see detail above - informational, reviews still work",
+                fatal=False,
+            )
+
     def enable_step(self) -> None:
         """Optional: enable the team for a project right now, and offer the recommended
         permission allow-list for the same project. Interactive only - non-interactive
@@ -2170,6 +2192,10 @@ class Installer:
         if self.subset == "model":
             return [
                 ("Morgan's model", self.model_step),
+            ]
+        if self.subset == "toolcheck":
+            return [
+                ("Analyser output cleanliness", self.tool_check_step),
             ]
         return [
             ("Preflight checks", self.preflight),
@@ -2500,6 +2526,112 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
         return 1
 
 
+# ------------------------------------------------------------------ analyser output check
+#
+# 2026-08-04: code-reviewer's own analysers (semgrep, gitleaks, bandit, mypy, pip-audit)
+# were found to leak decorative overhead into their captured output by default - some of
+# it (semgrep's scan-status box, gitleaks' banner) is unconditional, some of it (mypy's
+# ANSI color, bandit's animated progress spinner) turned out to depend on the environment's
+# FORCE_COLOR/terminal-detection state, which live research showed is NOT reliably uniform
+# across platforms: rich (bandit's spinner library) has a documented, unresolved detection
+# mismatch specifically on Git Bash/mintty - the terminal Claude Code actually uses on
+# Windows - since mintty doesn't present as a native Win32 console the way rich/colorama's
+# detection expects. Rather than assert the fix works everywhere, this makes it checkable:
+# runs each analyser with its recommended flags against a trivial, clean throwaway file and
+# reports whether the captured output actually came back clean IN THIS environment.
+
+_TOOL_CHECK_CLEAN_PY = "def add(a: int, b: int) -> int:\n    return a + b\n"
+
+# (binary, recommended-flags, needs a real target file/dir to run against)
+_TOOL_OUTPUT_CHECKS = (
+    ("ruff", ["check", "--quiet"], "file"),
+    ("mypy", ["--no-color-output", "--no-error-summary"], "file"),
+    ("bandit", ["-q"], "file"),
+    ("pip-audit", ["--progress-spinner", "off", "-r"], "requirements"),
+    ("semgrep", ["--config=auto", "--quiet"], "file"),
+    ("gitleaks", ["detect", "--no-git", "--no-banner", "--log-level", "error", "--source"], "dir"),
+)
+
+
+def probe_analyser_output(tmpdir: Path, runner=None) -> list:
+    """Runs each known-noisy analyser, with its recommended suppression flags, against a
+    trivial clean throwaway file - a run with zero real findings should come back empty or
+    near-empty. Returns (name, status, detail) rows; status is one of SKIP (not installed),
+    OK (clean), NOISY (leaked decoration - an escape code, or unexpectedly large output for
+    a trivial clean file), ERROR (crashed or the flags weren't recognised - a version-pin
+    mismatch is exactly this shape, an unrecognised flag makes most CLIs exit non-zero
+    rather than just running noisily)."""
+    runner = runner or subprocess.run
+    target = tmpdir / "probe.py"
+    target.write_text(_TOOL_CHECK_CLEAN_PY, encoding="utf-8")
+    # Empty on purpose: a real pinned package can accrue a genuine CVE over time (found
+    # live, 2026-08-04 - requests==2.32.3 legitimately has two), which isn't decoration
+    # and would make this probe flag a real finding as noise. Zero packages means zero
+    # findings possible, so this tests only the suppression flags, not a moving CVE feed.
+    req = tmpdir / "probe-requirements.txt"
+    req.write_text("", encoding="utf-8")
+
+    results = []
+    for name, flags, target_kind in _TOOL_OUTPUT_CHECKS:
+        if not shutil.which(name):
+            results.append((name, "SKIP", "not installed"))
+            continue
+        arg_target = {"file": str(target), "requirements": str(req), "dir": str(tmpdir)}[
+            target_kind
+        ]
+        argv = [name, *flags, arg_target]
+        try:
+            proc = runner(argv, capture_output=True, text=True, timeout=90)
+        except subprocess.TimeoutExpired:
+            results.append((name, "ERROR", "timed out (90s) - possibly a network-dependent config"))
+            continue
+        except OSError as exc:
+            results.append((name, "ERROR", f"failed to launch: {exc}"))
+            continue
+        combined = (proc.stdout or "") + (proc.stderr or "")
+        if "\x1b[" in combined:
+            results.append((name, "NOISY", "ANSI escape codes leaked through the flags"))
+        elif len(combined.strip()) > 200:
+            preview = combined.strip().splitlines()[0][:80]
+            results.append(
+                (name, "NOISY", f"{len(combined)} bytes on a trivial clean file: {preview!r}...")
+            )
+        else:
+            results.append((name, "OK", "clean"))
+    return results
+
+
+def run_tool_check(style: Style, mark_map: dict) -> int:
+    """Standalone diagnostic (--check-tools / menu option 9): verifies, in THIS
+    environment, that the noise-suppression flags code-reviewer relies on actually work -
+    see the module comment above for why this can't just be asserted from documentation."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    print(style.bold("Checking analyser output cleanliness..."))
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-toolcheck-") as tmp:
+        results = probe_analyser_output(Path(tmp))
+    bad = 0
+    for name, status, detail in results:
+        if status == "SKIP":
+            print(f"  {style.dim('-')} {name}: not installed, skipped")
+        elif status == "OK":
+            print(f"  {ok} {name}: clean")
+        else:
+            bad += 1
+            print(f"  {fail} {name}: {status} - {detail}")
+    print("")
+    if bad:
+        print(
+            style.yellow(
+                f"{bad} tool(s) did not come back clean - code-reviewer's output for these "
+                "may still carry decoration on this machine. This is informational, not a "
+                "blocker: reviews still work, just with extra noise for the affected tools."
+            )
+        )
+        return 1
+    print(style.dim("All installed analysers came back clean."))
+    return 0
+
+
 # ------------------------------------------------------------------ CLI
 
 
@@ -2573,6 +2705,14 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="with --model-project or --model-default: opus/sonnet, or 'default' to "
         "reset to sonnet (the documented default for the orchestrator) - "
         "or, with --model-default only, to clear the global default entirely",
+    )
+    parser.add_argument(
+        "--check-tools",
+        action="store_true",
+        help="standalone: verify code-reviewer's analysers (semgrep, gitleaks, bandit, "
+        "mypy, pip-audit) actually produce clean output with their recommended flags on "
+        "THIS machine, and exit - environment/terminal detection for suppressing color "
+        "and progress spinners is not guaranteed uniform across platforms",
     )
     return parser.parse_args(argv)
 
@@ -2653,7 +2793,13 @@ def _main(argv=None) -> int:
     global run_cmd
     args = parse_args(argv)
     style = Style(supports_color())
-    if args.enable_project or args.permissions or args.model_project or args.model_default:
+    if (
+        args.enable_project
+        or args.permissions
+        or args.model_project
+        or args.model_default
+        or args.check_tools
+    ):
         # Scripting path: no banner, no menu.
         rc = 0
         for target in args.enable_project or []:
@@ -2666,6 +2812,8 @@ def _main(argv=None) -> int:
         if args.model_default:
             wanted = None if (args.model or "default") == "default" else args.model
             rc = max(rc, run_orchestrator_model_default(wanted, style, marks()))
+        if args.check_tools:
+            rc = max(rc, run_tool_check(style, marks()))
         return rc
 
     if not args.demo:
