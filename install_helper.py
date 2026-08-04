@@ -2542,25 +2542,48 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
 
 _TOOL_CHECK_CLEAN_PY = "def add(a: int, b: int) -> int:\n    return a + b\n"
 
-# (binary, recommended-flags, needs a real target file/dir to run against)
+# A local, offline rule file - NOT --config=auto. auto fetches a ruleset from semgrep's
+# registry over the network on every run (measured ~20s even with working network; under a
+# corp-restricted proxy - exactly this feature's target environment - it can hang far past
+# that with no clean failure). The pattern here can never match anything, so this always
+# comes back a clean 0-finding run, in ~3.5s, with zero network dependency either way.
+_SEMGREP_OFFLINE_RULE = (
+    "rules:\n"
+    "  - id: probe-noop-rule\n"
+    "    languages: [python]\n"
+    "    message: unreachable\n"
+    "    severity: INFO\n"
+    "    pattern: __PROBE_UNREACHABLE_PATTERN__()\n"
+)
+
+# (binary, recommended-flags, needs a real target file/dir to run against, per-call timeout)
+# pip-audit gets its OWN short --timeout on top of the outer one: even with an empty
+# requirements file (zero packages, so nothing to actually look up) it still tries to
+# refresh its vulnerability index over the network - measured ~15s with working network,
+# and it does not fail fast at all when that network is blocked (simulated: still hadn't
+# returned after 15s). --timeout bounds pip-audit's OWN socket attempts; the outer timeout
+# below is just the last-resort backstop if that's somehow not honoured.
 _TOOL_OUTPUT_CHECKS = (
-    ("ruff", ["check", "--quiet"], "file"),
-    ("mypy", ["--no-color-output", "--no-error-summary"], "file"),
-    ("bandit", ["-q"], "file"),
-    ("pip-audit", ["--progress-spinner", "off", "-r"], "requirements"),
-    ("semgrep", ["--config=auto", "--quiet"], "file"),
-    ("gitleaks", ["detect", "--no-git", "--no-banner", "--log-level", "error", "--source"], "dir"),
+    ("ruff", ["check", "--quiet"], "file", 20),
+    ("mypy", ["--no-color-output", "--no-error-summary"], "file", 20),
+    ("bandit", ["-q"], "file", 20),
+    ("pip-audit", ["--progress-spinner", "off", "--timeout", "5", "-r"], "requirements", 15),
+    ("semgrep", ["--config", "rule.yml", "--quiet"], "file", 20),
+    ("gitleaks", ["detect", "--no-git", "--no-banner", "--log-level", "error", "--source"], "dir", 20),
 )
 
 
-def probe_analyser_output(tmpdir: Path, runner=None) -> list:
+def probe_analyser_output(tmpdir: Path, runner=None):
     """Runs each known-noisy analyser, with its recommended suppression flags, against a
     trivial clean throwaway file - a run with zero real findings should come back empty or
-    near-empty. Returns (name, status, detail) rows; status is one of SKIP (not installed),
-    OK (clean), NOISY (leaked decoration - an escape code, or unexpectedly large output for
-    a trivial clean file), ERROR (crashed or the flags weren't recognised - a version-pin
-    mismatch is exactly this shape, an unrecognised flag makes most CLIs exit non-zero
-    rather than just running noisily)."""
+    near-empty. A GENERATOR, not a batch return: yields (name, status, detail) as each tool
+    finishes, specifically so a caller can print progress live - the previous batched
+    version ran all six tools before printing anything, which on a slow or network-blocked
+    tool (pip-audit, formerly semgrep too) looked exactly like a hang (live report,
+    2026-08-04). Status is one of SKIP (not installed), OK (clean), NOISY (leaked
+    decoration - an escape code, or unexpectedly large output for a trivial clean file),
+    ERROR (crashed, timed out, or a flag wasn't recognised - a version-pin mismatch is
+    exactly this shape)."""
     runner = runner or subprocess.run
     target = tmpdir / "probe.py"
     target.write_text(_TOOL_CHECK_CLEAN_PY, encoding="utf-8")
@@ -2570,54 +2593,68 @@ def probe_analyser_output(tmpdir: Path, runner=None) -> list:
     # findings possible, so this tests only the suppression flags, not a moving CVE feed.
     req = tmpdir / "probe-requirements.txt"
     req.write_text("", encoding="utf-8")
+    (tmpdir / "rule.yml").write_text(_SEMGREP_OFFLINE_RULE, encoding="utf-8")
 
-    results = []
-    for name, flags, target_kind in _TOOL_OUTPUT_CHECKS:
+    for name, flags, target_kind, per_call_timeout in _TOOL_OUTPUT_CHECKS:
         if not shutil.which(name):
-            results.append((name, "SKIP", "not installed"))
+            yield (name, "SKIP", "not installed")
             continue
         arg_target = {"file": str(target), "requirements": str(req), "dir": str(tmpdir)}[
             target_kind
         ]
         argv = [name, *flags, arg_target]
         try:
-            proc = runner(argv, capture_output=True, text=True, timeout=90)
+            proc = runner(argv, capture_output=True, text=True, cwd=tmpdir, timeout=per_call_timeout)
         except subprocess.TimeoutExpired:
-            results.append((name, "ERROR", "timed out (90s) - possibly a network-dependent config"))
+            yield (
+                name,
+                "ERROR",
+                f"timed out ({per_call_timeout}s) - likely blocked network access; "
+                "this analyser needs a config that doesn't require it",
+            )
             continue
         except OSError as exc:
-            results.append((name, "ERROR", f"failed to launch: {exc}"))
+            yield (name, "ERROR", f"failed to launch: {exc}")
             continue
         combined = (proc.stdout or "") + (proc.stderr or "")
         if "\x1b[" in combined:
-            results.append((name, "NOISY", "ANSI escape codes leaked through the flags"))
+            yield (name, "NOISY", "ANSI escape codes leaked through the flags")
         elif len(combined.strip()) > 200:
             preview = combined.strip().splitlines()[0][:80]
-            results.append(
-                (name, "NOISY", f"{len(combined)} bytes on a trivial clean file: {preview!r}...")
-            )
+            yield (name, "NOISY", f"{len(combined)} bytes on a trivial clean file: {preview!r}...")
         else:
-            results.append((name, "OK", "clean"))
-    return results
+            yield (name, "OK", "clean")
 
 
 def run_tool_check(style: Style, mark_map: dict) -> int:
     """Standalone diagnostic (--check-tools / menu option 9): verifies, in THIS
     environment, that the noise-suppression flags code-reviewer relies on actually work -
-    see the module comment above for why this can't just be asserted from documentation."""
+    see the module comment above for why this can't just be asserted from documentation.
+
+    Prints as it goes, never batched (live report, 2026-08-04: the previous version
+    collected all results before printing anything, which on a slow tool looked exactly
+    like a hang). probe_analyser_output is a generator for exactly this reason - each row
+    below prints the moment that tool's check actually finishes, with the full tool list
+    shown upfront so a wait between lines reads as "still working through the list", not
+    "frozen"."""
     ok, fail = mark_map["ok"], mark_map["fail"]
+    names = ", ".join(name for name, *_ in _TOOL_OUTPUT_CHECKS)
     print(style.bold("Checking analyser output cleanliness..."))
-    with tempfile.TemporaryDirectory(prefix="virt-surv-it-toolcheck-") as tmp:
-        results = probe_analyser_output(Path(tmp))
+    print(style.dim(f"  (checking: {names} - each line below prints as that tool finishes)"))
+    # flush=True on every line: stdout is fully buffered (not line-buffered) when it isn't
+    # a real tty - piped, redirected, or wrapped - so without this, ALL of these lines
+    # would still land in one delayed batch at the end, silently defeating the point.
+    sys.stdout.flush()
     bad = 0
-    for name, status, detail in results:
-        if status == "SKIP":
-            print(f"  {style.dim('-')} {name}: not installed, skipped")
-        elif status == "OK":
-            print(f"  {ok} {name}: clean")
-        else:
-            bad += 1
-            print(f"  {fail} {name}: {status} - {detail}")
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-toolcheck-") as tmp:
+        for name, status, detail in probe_analyser_output(Path(tmp)):
+            if status == "SKIP":
+                print(f"  {style.dim('-')} {name}: not installed, skipped", flush=True)
+            elif status == "OK":
+                print(f"  {ok} {name}: clean", flush=True)
+            else:
+                bad += 1
+                print(f"  {fail} {name}: {status} - {detail}", flush=True)
     print("")
     if bad:
         print(

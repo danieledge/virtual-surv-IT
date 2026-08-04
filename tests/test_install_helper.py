@@ -2479,17 +2479,30 @@ def test_probe_analyser_output_skips_missing_tools(tmp_path, monkeypatch):
     import install_helper as ih
 
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
-    results = ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0))
+    results = list(ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0)))
     assert results
     assert all(status == "SKIP" for _, status, _ in results)
     assert all("not installed" in detail for _, _, detail in results)
+
+
+def test_probe_analyser_output_is_a_generator_that_streams_results(tmp_path, monkeypatch):
+    """The whole point of this design (live report, 2026-08-04: batching all results
+    before printing anything looked exactly like a hang) - pin that it's actually lazy,
+    not just iterable."""
+    import inspect
+
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    gen = ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout=""))
+    assert inspect.isgenerator(gen)
 
 
 def test_probe_analyser_output_clean_run(tmp_path, monkeypatch):
     import install_helper as ih
 
     monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    results = ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout=""))
+    results = list(ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout="")))
     assert all(status == "OK" for _, status, _ in results)
 
 
@@ -2497,8 +2510,10 @@ def test_probe_analyser_output_detects_leaked_ansi(tmp_path, monkeypatch):
     import install_helper as ih
 
     monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    results = ih.probe_analyser_output(
-        tmp_path, runner=lambda *a, **k: _proc(0, stdout="\x1b[31merror\x1b[0m")
+    results = list(
+        ih.probe_analyser_output(
+            tmp_path, runner=lambda *a, **k: _proc(0, stdout="\x1b[31merror\x1b[0m")
+        )
     )
     assert all(status == "NOISY" for _, status, _ in results)
     assert all("ANSI escape" in detail for _, _, detail in results)
@@ -2509,9 +2524,24 @@ def test_probe_analyser_output_detects_verbose_clean_run(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
     noisy_banner = "gitleaks\n" * 60  # well over the 200-byte threshold, no ANSI involved
-    results = ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout=noisy_banner))
+    results = list(
+        ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout=noisy_banner))
+    )
     assert all(status == "NOISY" for _, status, _ in results)
     assert all("bytes on a trivial clean file" in detail for _, _, detail in results)
+
+
+def test_probe_analyser_output_times_out_gracefully(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+    def timeout_runner(argv, **kw):
+        raise subprocess.TimeoutExpired(argv, kw.get("timeout", 5))
+
+    results = list(ih.probe_analyser_output(tmp_path, runner=timeout_runner))
+    assert all(status == "ERROR" for _, status, _ in results)
+    assert all("timed out" in detail for _, _, detail in results)
 
 
 def test_probe_analyser_output_writes_an_empty_requirements_fixture(tmp_path, monkeypatch):
@@ -2523,8 +2553,40 @@ def test_probe_analyser_output_writes_an_empty_requirements_fixture(tmp_path, mo
     import install_helper as ih
 
     monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout=""))
+    list(ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout="")))
     assert (tmp_path / "probe-requirements.txt").read_text(encoding="utf-8") == ""
+
+
+def test_probe_analyser_output_writes_an_offline_semgrep_rule_fixture(tmp_path, monkeypatch):
+    """semgrep --config=auto fetches a ruleset over the network on every run - measured
+    ~20s with working network, and it does not fail fast when that network is blocked
+    (live report, 2026-08-04). Switched to a local rule file so this check has zero
+    network dependency, matching the whole point of a diagnostic for corp-proxy users."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    list(ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout="")))
+    assert (tmp_path / "rule.yml").is_file()
+    assert "rules:" in (tmp_path / "rule.yml").read_text(encoding="utf-8")
+
+
+def test_probe_analyser_output_bounds_pip_audit_with_its_own_timeout_flag(tmp_path, monkeypatch):
+    """pip-audit hung 15s+ even with zero packages to check, and did not fail fast at all
+    under a blocked proxy (live-tested, 2026-08-04) - its own --timeout flag bounds that,
+    tighter than the outer subprocess timeout so it fails predictably first."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    calls = []
+
+    def runner(argv, **kw):
+        calls.append(argv)
+        return _proc(0, stdout="")
+
+    list(ih.probe_analyser_output(tmp_path, runner=runner))
+    pip_audit_call = next(c for c in calls if c[0] == "pip-audit")
+    assert "--timeout" in pip_audit_call
+    assert pip_audit_call[pip_audit_call.index("--timeout") + 1] == "5"
 
 
 def test_run_tool_check_reports_ok_when_all_clean(capsys, monkeypatch):
