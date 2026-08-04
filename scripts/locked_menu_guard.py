@@ -50,11 +50,27 @@ _STAGE2_CANON = {
 }
 
 
+_RECOMMENDED_SUFFIX = " (Recommended)"
+
+
+def _strip_recommended(label: str) -> str:
+    """The AskUserQuestion tool's OWN guidance is to mark a recommended option by
+    appending exactly this suffix to its label - a canonical option carrying that
+    marker is still the same canonical option, not an invented one. Live report,
+    2026-08-04: 'Quick (Recommended)' on the locked Depth question was flagged as
+    drift, even though adding the marker is the tool's own recommended practice."""
+    return label[: -len(_RECOMMENDED_SUFFIX)] if label.endswith(_RECOMMENDED_SUFFIX) else label
+
+
 def _labels(q: dict) -> set:
     opts = q.get("options")
     if not isinstance(opts, list):
         return set()
-    return {o.get("label") for o in opts if isinstance(o, dict) and o.get("label")}
+    return {
+        _strip_recommended(o.get("label"))
+        for o in opts
+        if isinstance(o, dict) and o.get("label")
+    }
 
 
 def _header(q: dict) -> str:
