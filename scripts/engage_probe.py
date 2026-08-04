@@ -37,6 +37,45 @@ _TEAM_VER_ROW_RE = re.compile(
     r"^\|\s*(\d{4}-\d{2}-\d{2}|<[^|]*>)\s*\|[^|]*\|\s*([^|]+?)\s*\|", re.MULTILINE
 )
 
+# Known repo glyphs get a readable ASCII substitute rather than falling through to the
+# generic replace-with-'?' below.
+_ASCII_GLYPH_MAP = {
+    "🎩": "[Morgan]",
+    "📊": "[observed]",
+    "🧠": "[inferred]",
+    "→": "->",
+    "✓": "[x]",
+    "✗": "[ ]",
+    "…": "...",
+    "–": "-",
+    "—": "-",
+    "“": '"',
+    "”": '"',
+    "‘": "'",
+    "’": "'",
+}
+
+
+def _ascii_safe(text: str) -> str:
+    """Guarantee pure-ASCII stdout for the probe's report.
+
+    The report round-trips through a shell $(...) capture, then Claude Code's own
+    Bash-tool output pipe, before the model ever sees it. PYTHONIOENCODING=utf-8 (set
+    by the caller) only controls how THIS process encodes its own stdout - it says
+    nothing about how that downstream pipe decodes the bytes back into text. On a
+    Windows cp1252 console that decode step can raise UnicodeDecodeError outright for
+    specific UTF-8 byte sequences (some emoji land on cp1252's undefined single-byte
+    codepoints), even though this process wrote perfectly valid UTF-8 (live corp
+    report, 2026-08-04). The report is built from user-editable project files
+    (codebase-map.md, CHANGELOG.md, team-extensions.md) whose content isn't under this
+    script's control, so known repo glyphs get a readable substitute and everything
+    else falls back to a generic ascii-encode - the output is provably pure ASCII
+    regardless of what a project's own docs contain.
+    """
+    for glyph, sub in _ASCII_GLYPH_MAP.items():
+        text = text.replace(glyph, sub)
+    return text.encode("ascii", errors="replace").decode("ascii")
+
 
 def resolve_root(plugin_root: str, project_dir: Path) -> tuple[Path, str]:
     """(root_for_reading_plugin_files, PLUGIN_ROOT display string). Repo-as-project when
@@ -369,7 +408,7 @@ def main() -> int:
     report = build_report(args.plugin_root, Path(args.project_dir).resolve())
     if args.interpreter_name:
         report = f"INTERPRETER={args.interpreter_name}\n" + report
-    print(report)
+    print(_ascii_safe(report))
     return 0
 
 

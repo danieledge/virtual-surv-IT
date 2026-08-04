@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 
 from scripts.engage_probe import (
+    _ascii_safe,
     _cap_section3_rows,
     build_report,
     first_changelog_entry,
@@ -376,6 +377,58 @@ def test_no_interpreter_line_when_flag_omitted(tmp_path, capsys):
     finally:
         _sys.argv = old_argv
     assert "INTERPRETER=" not in capsys.readouterr().out
+
+
+# ------------------------------------------------ ASCII-safe stdout (2026-08-04)
+# Live corp report: a Windows cp1252 console raised UnicodeDecodeError capturing the
+# probe's stdout through Claude Code's Bash tool, even with PYTHONIOENCODING=utf-8 set
+# for this process - that env var controls how THIS process encodes ITS OWN stdout,
+# not how the downstream shell-capture pipe decodes the bytes back into text. Fix:
+# never let a non-ASCII byte leave the process at all.
+
+
+def test_ascii_safe_substitutes_known_repo_glyphs():
+    text = "🎩 Morgan: 📊 observed, 🧠 inferred, next → then, done ✓, missing ✗"
+    out = _ascii_safe(text)
+    assert out == "[Morgan] Morgan: [observed] observed, [inferred] inferred, next -> then, done [x], missing [ ]"
+    out.encode("ascii")  # must not raise
+
+
+def test_ascii_safe_falls_back_to_generic_replace_for_unknown_glyphs():
+    # An arbitrary unicode character from a user-edited project file, not in the
+    # known-glyph map - must still come out pure ASCII, not raise or pass through.
+    out = _ascii_safe("café 中文 \U0001F600")
+    out.encode("ascii")  # must not raise
+    assert "é" not in out and "中" not in out
+
+
+def test_build_report_output_is_always_pure_ascii(tmp_path, capsys):
+    """End-to-end: even with emoji-laden project files, main()'s actual stdout must be
+    encodable as plain ASCII - the exact property the Windows console needs."""
+    from scripts.engage_probe import main
+
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "codebase-map.md").write_text(
+        "# Codebase map\n\n📊 observed: this project uses 🧠 inferred logic\n\n"
+        "## 3. History\n\n| Date | Note | Team-ver |\n|---|---|---|\n"
+        "| 2026-08-04 | note | v1.0.0 |\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "CHANGELOG.md").write_text(
+        "## [1.0.0] - 2026-08-04 - release\n\n🎩 Morgan says hi →\n", encoding="utf-8"
+    )
+
+    import sys as _sys
+
+    old_argv = _sys.argv
+    try:
+        _sys.argv = ["engage_probe.py", "--project-dir", str(tmp_path)]
+        main()
+    finally:
+        _sys.argv = old_argv
+    out = capsys.readouterr().out
+    out.encode("ascii")  # the property the fix exists to guarantee - must not raise
 
 
 def test_find_bash_prefers_path(monkeypatch):

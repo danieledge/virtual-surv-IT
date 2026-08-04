@@ -92,10 +92,40 @@ def test_consent_write_block_matches_the_real_guard_exactly():
     assert dispatched.stderr.strip() == direct.stderr.strip()
 
 
-def test_module_form_redirect_matches_the_real_hook_exactly(tmp_path):
+def test_module_form_redirect_transparent_rewrite_matches_the_real_hook_exactly(tmp_path):
+    """2026-08-04: a full match now rewrites transparently (exit 0, JSON stdout with
+    updatedInput) instead of blocking - the dispatcher must forward that stdout exactly
+    like the standalone hook, not just the exit code. `print()` inside a guard's own
+    main() is never redirected by the dispatcher (only stdin is), so this also pins that
+    the JSON isn't lost or interleaved with anything else in _CHECKS."""
     payload = {
         "tool_name": "Bash",
         "tool_input": {"command": "python3 -m scripts.check_artifacts artifacts"},
+        "cwd": str(tmp_path),
+    }
+    env = {"CLAUDE_PLUGIN_ROOT": str(REPO_ROOT)}
+    dispatched = _run_dispatcher(payload, env=env)
+    direct = _run_guard(REPO_ROOT / "scripts" / "module_form_redirect.py", payload, env=env)
+    assert dispatched.returncode == direct.returncode == 0
+    assert dispatched.stdout == direct.stdout
+    assert dispatched.stderr == direct.stderr == ""
+    out = json.loads(dispatched.stdout)["hookSpecificOutput"]
+    assert out["permissionDecision"] == "allow"
+    assert "check_artifacts.py" in out["updatedInput"]["command"]
+
+
+def test_module_form_redirect_partial_match_block_matches_the_real_hook_exactly(tmp_path):
+    """The other branch: when only SOME matched names resolve to a bundled copy, the
+    hook still falls back to blocking - pinned separately from the transparent-rewrite
+    case above so a regression in either branch is caught."""
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": (
+                "python3 -m scripts.check_artifacts artifacts && "
+                "python3 -m scripts.totally_made_up_script run"
+            )
+        },
         "cwd": str(tmp_path),
     }
     env = {"CLAUDE_PLUGIN_ROOT": str(REPO_ROOT)}

@@ -44,10 +44,25 @@ agent that runs afterwards in this session.
 
 ## Why `PYTHONIOENCODING=utf-8` is mandatory
 
-The report contains emoji. On a cp1252 console (the Windows default) a bare `print()` of it
-raises `UnicodeEncodeError`, which exits non-zero for every one of python3/python/py, and the
-bootstrap's `2>/dev/null` then hides the traceback: the probe looks like it silently does
-nothing. Keep the assignment in every invocation, including the manual re-run.
+Historically the report could contain emoji pulled in verbatim from project files
+(codebase-map.md, CHANGELOG.md, team-extensions.md). On a cp1252 console (the Windows
+default) a bare `print()` of it raised `UnicodeEncodeError`, which exits non-zero for every
+one of python3/python/py, and the bootstrap's `2>/dev/null` then hid the traceback: the probe
+looked like it silently did nothing.
+
+2026-08-04: `engage_probe.py`'s `_ascii_safe()` now guarantees the report is pure ASCII before
+it ever reaches `print()` - known repo glyphs (📊/🧠 tags, the 🎩 marker, arrows) get a
+readable substitute, anything else falls back to a generic ascii-encode. This closes the
+`UnicodeEncodeError` above at the source, AND a second, separate failure the same corp report
+surfaced: even with the encoding fixed, capturing the probe's stdout through Claude Code's own
+Bash tool on a Windows cp1252 console could raise `UnicodeDecodeError` downstream, because
+`PYTHONIOENCODING` only controls how THIS process encodes its OWN stdout - it says nothing
+about how that separate shell-capture pipe decodes the bytes back into text. Ascii-only output
+sidesteps that decode step entirely, since ASCII round-trips correctly through any encoding.
+
+Keep the `PYTHONIOENCODING=utf-8` assignment in every invocation regardless - it's still a
+correct, harmless default and other paths in this bootstrap may still emit non-ASCII text
+(interpreter names, paths) that this belt-and-suspenders setting protects.
 
 ## Why the plugin root is found, not assumed
 
