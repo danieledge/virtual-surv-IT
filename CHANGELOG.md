@@ -3,6 +3,22 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.25] - 2026-08-05 - Mechanical backstop for the large-consolidation-write timeout
+
+### Added (staged - `bash scripts/apply-guard-findings-pack-write.sh`)
+- 0.33.24 fixed the large-consolidation-write timeout with prose guidance (Morgan chunks a
+  big merge herself instead of one giant Write) - a live follow-up report showed the same
+  timeout recurring, prose guidance under pressure isn't reliable enough on its own.
+  `guard-findings-pack-write.py` now has a second, opt-in half: when a project has set
+  `large_context_review_split: true` (off by default - no behaviour change for any project
+  that hasn't hit this), it mechanically blocks any Write to a findings-pack path - the four
+  scoped reviewer agents' calls **and the orchestrator's own** - that would write more than 8
+  findings in one call, with an explicit "write a small batch, then Edit to append the rest"
+  message. This can't intercept a timeout that kills the model's own generation before a tool
+  call ever forms (no hook fires on that), but it does catch an oversized Write the instant
+  generation succeeds, turning a heuristic Morgan might skip under pressure into a rule she's
+  told about mechanically, every time.
+
 ## [0.33.24] - 2026-08-05 - The large-review consolidation write can itself time out - now chunked
 
 ### Fixed

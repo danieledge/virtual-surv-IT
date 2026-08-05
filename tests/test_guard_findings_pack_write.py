@@ -142,6 +142,112 @@ def test_non_dict_tool_input_treated_as_empty():
     assert _blocks("Write", {}, "code-reviewer")  # missing tool_input -> empty path -> blocked
 
 
+# ------------------------ size limit (2026-08-05, opt-in via large_context_review_split)
+
+
+def _pack_content(n_findings: int) -> str:
+    finding = {
+        "id": "F1", "title": "t", "severity": "warning", "location": "a.py:1",
+        "basis": "coded", "standard": "s", "problem": "p", "likely_cause": "c",
+        "impact": "i", "fix": {"diff": "-x\n+y", "why": "w"}, "disposition": "open",
+    }
+    return json.dumps({"findings": [dict(finding, id=f"F{i}") for i in range(n_findings)]})
+
+
+def _run_with_project(payload: dict, project_dir: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(STAGED_PATH)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        env={"CLAUDE_PROJECT_DIR": str(project_dir)},
+    )
+
+
+def _write_prefs(project_dir: Path, split_on: bool | None) -> None:
+    claude_dir = project_dir / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    if split_on is None:
+        return  # no file at all - the common case
+    (claude_dir / "team-preferences.json").write_text(
+        json.dumps({"large_context_review_split": split_on}), encoding="utf-8"
+    )
+
+
+def test_size_limit_silent_when_split_off_by_default(tmp_path):
+    _write_prefs(tmp_path, None)  # no team-preferences.json at all
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(20)},
+    }
+    proc = _run_with_project(payload, tmp_path)
+    assert proc.returncode == 0
+
+
+def test_size_limit_silent_when_split_explicitly_off(tmp_path):
+    _write_prefs(tmp_path, False)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(20)},
+    }
+    proc = _run_with_project(payload, tmp_path)
+    assert proc.returncode == 0
+
+
+def test_size_limit_blocks_oversized_orchestrator_write_when_split_on(tmp_path):
+    _write_prefs(tmp_path, True)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(9)},
+    }
+    proc = _run_with_project(payload, tmp_path)
+    assert proc.returncode == 2
+    assert "findings-pack size limit" in proc.stderr
+    assert "Edit" in proc.stderr
+
+
+def test_size_limit_allows_write_at_the_threshold(tmp_path):
+    _write_prefs(tmp_path, True)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(8)},
+    }
+    proc = _run_with_project(payload, tmp_path)
+    assert proc.returncode == 0
+
+
+def test_size_limit_applies_to_scoped_agent_too_when_split_on(tmp_path):
+    _write_prefs(tmp_path, True)
+    payload = {
+        "tool_name": "Write",
+        "agent_type": "code-reviewer",
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(9)},
+    }
+    proc = _run_with_project(payload, tmp_path)
+    assert proc.returncode == 2
+    assert "findings-pack size limit" in proc.stderr
+
+
+def test_size_limit_ignored_when_content_not_valid_json(tmp_path):
+    _write_prefs(tmp_path, True)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": "not json"},
+    }
+    proc = _run_with_project(payload, tmp_path)
+    assert proc.returncode == 0
+
+
+def test_size_limit_ignored_when_path_is_not_a_findings_pack(tmp_path):
+    _write_prefs(tmp_path, True)
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": "artifacts/notes.md", "content": _pack_content(50)},
+    }
+    proc = _run_with_project(payload, tmp_path)
+    assert proc.returncode == 0
+
+
 # ------------------------------------------------ live/staged sync (fails until applied)
 
 
