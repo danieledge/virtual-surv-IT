@@ -5,6 +5,10 @@
 > orchestration guidance, there is no new mechanical enforcement, by design (see design point 4).
 > This doc is kept as the design record: the reasoning, the options considered, and the open
 > tuning question left for real-world calibration.
+>
+> **Update 2026-08-05:** a live corp report found the original design's single-write consolidation
+> step can itself hit the same proxy timeout once a merge is large enough - design point 4 below
+> now has a dated update covering the fix (chunked consolidation, above roughly 8 findings).
 
 ## The problem(s) - two, not one
 
@@ -59,19 +63,42 @@ own judgement rather than a mechanical check, which is an accepted tradeoff give
 alternative's cost.
 
 **4. Merging findings - resolves the sequential-write/parallel-speed tension AND the mid-write
-corruption risk at once.**
+corruption risk at once.** (Revised 2026-08-05 - the single-write assumption below held for
+corruption risk but not for timeout risk; see the update at the end of this section.)
 Original draft of this design had each component call read-merge-write the same findings-pack
 path sequentially - which is both a bottleneck (no real parallelism) and exactly the shape that
 can leave a corrupted file if one write is interrupted mid-way, breaking every later component's
 read. Superseded: **component-scoped reviewer calls never write at all** - they return their
 findings as text output, same as every other advisory-style agent call in this system. Morgan
-collects all of them, then ONE final `code-reviewer` call (cheap - no diff re-reading, just
-consolidating already-computed findings) does the single Write. This is no riskier than what
-already happens today (one `code-reviewer` call already does one Write) - splitting the *analysis*
-across multiple calls doesn't multiply the *write* risk, because there's still exactly one write.
-No guard change needed; no atomic-write primitive needed beyond what already exists, because the
-failure mode that motivated it (a mid-write timeout corrupting a file a later step depends on) no
-longer has multiple sequential writes to corrupt.
+collects all of them, then, for a small merged set, ONE final `code-reviewer` call (cheap - no
+diff re-reading, just consolidating already-computed findings) does the single Write. This is no
+riskier than what already happens today (one `code-reviewer` call already does one Write) -
+splitting the *analysis* across multiple calls doesn't multiply the *write* risk, because there's
+still exactly one write. No guard change needed; no atomic-write primitive needed beyond what
+already exists, because the failure mode that motivated this design (a mid-write timeout
+corrupting a file a later step depends on) no longer has multiple sequential writes to corrupt.
+
+**Update, 2026-08-05 (live corp report): the single write itself can be the timeout, once the
+merge is big enough.** A 13-finding merge (CRIT/WARN/BACK/CROSS across four components) hit
+`API Error: The operation timed out` on the SAME single-Write attempt twice in a row - the fix
+above solved corruption risk but implicitly assumed the merged pack's OUTPUT size was always
+small ("cheap... consolidating already-computed findings"), which holds for a handful of findings
+but not for a genuinely large merge. Retrying the identical giant write is not a retry that can
+succeed - it hits the same proxy limit every time, and the engagement makes zero progress while
+burning turns. Fix (now in `docs/team-operating-guide.md`'s orchestration-discipline bullet):
+above roughly 8 findings to merge, Morgan does the consolidation write **herself** instead of
+delegating to a final `code-reviewer` call, and builds the pack incrementally - one small `Write`
+(first batch + all required top-level fields), then several `Edit` calls appending the rest in
+bounded batches. This is available to her specifically because `guard-findings-pack-write.py`'s
+Write-scoping only fires for the four named reviewer agents' own calls (`agent_type` present),
+never for the orchestrator's own tool calls - no guard change needed here either. The tradeoff
+this reopens: incremental building reintroduces a *mid-sequence-interruption* risk (a
+partial-but-schema-valid pack that silently under-reports if the sequence never finishes) that
+the all-in-one-write design had specifically eliminated - mitigated, not eliminated, by tracking
+the batches as an explicit task list and checking the written `findings` array length against the
+count Morgan stated she intended to write before calling the consolidation done. Below the
+threshold, the original single-write design is unchanged and still preferred (fewer moving parts,
+no reintroduced interruption risk).
 
 **5. Failed component retry.** Since component calls only return text (no side effects until the
 final write), a failed/timed-out component is simply re-run - nothing to roll back, no partial

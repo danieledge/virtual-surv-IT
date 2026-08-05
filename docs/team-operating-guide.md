@@ -542,15 +542,30 @@ the user informed and in charge, check before anything irreversible.
   everything; a flat layout with no real component boundary just doesn't split. Each
   component-scoped reviewer call returns its findings **as text, never writes directly**; do a
   light cross-component consistency pass yourself over the combined output (an API change on one
-  side with no matching update on the other is exactly what siloed review misses), then ONE final
-  `code-reviewer` call consolidates and writes the single findings-pack - no guard change needed,
-  and still only one write, so a mid-write failure can't corrupt a file a later component depends
-  on. If a review call fails or times out regardless (proxy, or a heuristic miss), retry only the
-  failed unit - never discard already-completed components' work by restarting the whole review.
-  If this recurs in a project, offer (never silently) to persist it -
-  `large_context_review_split: true` in `team-preferences.json`, surfaced by the probe as
-  `LARGE_CONTEXT_REVIEW_SPLIT=on|off`, same no-consent-gate write path already used for the docx
-  preference. Full design and open questions: `docs/internal/large-context-review-splitting-plan.md`.
+  side with no matching update on the other is exactly what siloed review misses).
+  **Consolidating and writing the merged pack can ITSELF be the large-output timeout point**
+  (live report, 2026-08-05: a 13-finding merge timed out repeatedly on the same single-Write
+  attempt, making zero progress on retry) - the original design's "still only one write" avoided
+  mid-write corruption but didn't account for a big merge's OUTPUT size alone tripping the same
+  proxy timeout as a big diff's INPUT size. **Roughly >8 findings to merge** (starting heuristic,
+  same tuning status as the split trigger above): do the consolidation write **yourself**
+  (Morgan), not via a delegated final `code-reviewer` call - you carry no Write/Edit restriction
+  on the findings-pack path (that scoping guard only fires for the four named reviewer agents'
+  own calls), so you can build the file incrementally instead of emitting all findings in one
+  generation: **Write** a valid pack containing the first batch plus every required top-level
+  field, then **Edit** to append the remaining findings in bounded batches (roughly 4-6 at a
+  time) until the full merged set is in. Track this as an explicit multi-step task list so a mid-
+  sequence interruption is visibly incomplete, not silently missing findings; before calling it
+  done, state the finding count you intended to write and confirm the file's `findings` array
+  actually holds that many - a partial-but-valid pack passes schema validation same as a complete
+  one, so this count check is the only thing that would catch a dropped batch. Below the ~8-finding
+  threshold, the original design still applies (one delegated `code-reviewer` call, one write). If
+  a review call fails or times out regardless (proxy, or a heuristic miss), retry only the failed
+  unit - never discard already-completed components' work by restarting the whole review. If this
+  recurs in a project, offer (never silently) to persist it - `large_context_review_split: true`
+  in `team-preferences.json`, surfaced by the probe as `LARGE_CONTEXT_REVIEW_SPLIT=on|off`, same
+  no-consent-gate write path already used for the docx preference. Full design and open questions:
+  `docs/internal/large-context-review-splitting-plan.md`.
 - **Don't delegate:** iterative back-and-forth, phases sharing significant context, quick
   targeted changes, latency-sensitive steps - those stay in the main loop. **Do delegate:**
   verbose self-contained work, tool-restricted review, research that returns a summary.

@@ -3,6 +3,24 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.24] - 2026-08-05 - The large-review consolidation write can itself time out - now chunked
+
+### Fixed
+- The component-split review design's final step - one delegated `code-reviewer` call
+  consolidating all components' findings into a single Write - assumed that write was always
+  cheap. A live corp report found a 13-finding merge hitting `API Error: The operation timed
+  out` on that same single-Write attempt twice in a row, making zero progress on retry: the
+  merged pack's OUTPUT size alone can trip the same proxy timeout the original design only
+  accounted for on the diff-reading INPUT side. Fixed in `docs/team-operating-guide.md`'s
+  orchestration-discipline bullet: above roughly 8 findings to merge, Morgan now does the
+  consolidation write herself (not via a delegated `code-reviewer` call - she carries no
+  Write/Edit restriction on the findings-pack path, unlike the four scoped reviewer agents) and
+  builds the pack incrementally - one small `Write` for the first batch plus all required
+  top-level fields, then `Edit` calls appending the rest in bounded batches - rather than
+  emitting the whole merged set in one generation. Below the threshold, the original
+  single-write design is unchanged. Design record updated:
+  `docs/internal/large-context-review-splitting-plan.md`.
+
 ## [0.33.23] - 2026-08-05 - Tooling inventory now stated at open; stale semgrep/pip-audit allow-list entries
 
 ### Fixed
