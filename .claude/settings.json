@@ -71,7 +71,7 @@
         ]
       },
       {
-        "matcher": "Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "matcher": "Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit|NotebookRead|WebFetch|Bash",
         "hooks": [
           {
             "type": "command",
