@@ -31,6 +31,7 @@ import argparse
 import ast
 import json
 import os
+import re
 import shutil
 import subprocess  # nosec B404 - fixed-argv git/ctags calls only, never shell=True
 import sys
@@ -236,15 +237,207 @@ def extract_symbols(path: Path) -> tuple[list[str], str]:
     return _symbols_floor(path), _TIER_FLOOR
 
 
+# --------------------------------------------------------------------------- reference graph + rank
+
+
+def build_reference_graph(root: Path, files: list[str]) -> dict[str, set[str]]:
+    """Best-effort file-level def/ref graph. Python-only for this version - the ast tier is the
+    only one that gives real import statements without a heavier parser dependency; non-Python
+    files simply contribute no edges (uniform base rank, not an error). A future version can add
+    an import-graph builder per language without changing pagerank()/the ranking contract.
+    `files` are root-relative (as returned by inventory()) - resolved against `root` to read
+    each file, never against the current working directory."""
+    py_files = {f for f in files if f.endswith(_PY_EXT)}
+    module_index: dict[str, str] = {}
+    for f in py_files:
+        p = Path(f)
+        if p.name == "__init__.py":
+            dotted = ".".join(p.parent.parts)
+        else:
+            dotted = ".".join((*p.parent.parts, p.stem)) if p.parent.parts else p.stem
+        if dotted:
+            module_index[dotted] = f
+
+    graph: dict[str, set[str]] = {f: set() for f in files}
+    for f in sorted(py_files):
+        for mod in _python_import_modules(root / f):
+            target = module_index.get(mod)
+            if target is None and "." in mod:
+                # "from foo.bar import baz" where baz is a symbol, not a module - foo.bar
+                # itself is still the right file-level edge.
+                target = module_index.get(mod.rsplit(".", 1)[0])
+            if target and target != f:
+                graph[f].add(target)
+    return graph
+
+
+def _python_import_modules(path: Path) -> set[str]:
+    """Top-level (non-relative) import module names from one Python file - AST-only, never
+    executes the file. Relative imports (`from . import x`) are skipped: resolving them needs
+    the importing file's own package position, which is a real feature but not needed for a
+    first version whose absolute-import coverage already gives PageRank a real graph to rank
+    with on typical Python projects."""
+    try:
+        source = path.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(source, filename=str(path))
+    except (OSError, SyntaxError, ValueError):
+        return set()
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                modules.add(alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            modules.add(node.module)
+    return modules
+
+
+_DAMPING = 0.85
+_PAGERANK_ITERATIONS = 50
+_PAGERANK_TOL = 1e-6
+
+
+def pagerank(graph: dict[str, set[str]]) -> dict[str, float]:
+    """Minimal pure-stdlib power-iteration PageRank over a file-level def/ref graph - no
+    numpy/networkx (ADR-007's compiled-wheel constraint: neither can be vendored under this
+    repo's vendor/README.md convention). Uniform personalization - no engagement-aware
+    weighting (recently-edited-file boosts etc. are Phase 3 territory, ADR-007). Deterministic:
+    nodes are always iterated in sorted order, so floating-point summation order never varies
+    run to run on the same input graph."""
+    nodes = sorted({*graph} | {t for outs in graph.values() for t in outs})
+    if not nodes:
+        return {}
+    n = len(nodes)
+    base = 1.0 / n
+    scores = {node: base for node in nodes}
+    out_deg = {node: len(graph.get(node, ())) for node in nodes}
+    dangling = [node for node in nodes if out_deg[node] == 0]
+    for _ in range(_PAGERANK_ITERATIONS):
+        new_scores = {node: (1 - _DAMPING) * base for node in nodes}
+        leaked = _DAMPING * sum(scores[d] for d in dangling) * base
+        for node in nodes:
+            new_scores[node] += leaked
+        for src in nodes:
+            targets = graph.get(src) or set()
+            if not targets:
+                continue
+            share = _DAMPING * scores[src] / out_deg[src]
+            for dst in sorted(targets):
+                new_scores[dst] += share
+        delta = sum(abs(new_scores[k] - scores[k]) for k in nodes)
+        scores = new_scores
+        if delta < _PAGERANK_TOL:
+            break
+    return scores
+
+
+# --------------------------------------------------------------------------- Mermaid
+
+
+def _mermaid_node_id(rel_path: str) -> str:
+    return re.sub(r"[^0-9a-zA-Z_]", "_", rel_path)
+
+
+def render_mermaid(graph: dict[str, set[str]]) -> str:
+    """Deterministic `graph TD` Mermaid subset - the smallest useful one (labelled nodes,
+    `-->` edges, nothing else: no subgraphs, no classDef, no click handlers). Nodes sorted by
+    path, edges collected into a set then sorted before emission - dict/set iteration order is
+    not a determinism guarantee on its own, sorting before emission is the whole story. Only
+    files that actually have an edge (source or target) are drawn - an isolated file with no
+    import relationship to anything else adds no signal to a dependency diagram."""
+    edges: set[tuple[str, str]] = set()
+    for src, targets in graph.items():
+        for dst in targets:
+            edges.add((src, dst))
+    if not edges:
+        return "graph TD\n"
+    connected = sorted({n for pair in edges for n in pair})
+    lines = ["graph TD"]
+    for node in connected:
+        lines.append(f'    {_mermaid_node_id(node)}["{node}"]')
+    for src, dst in sorted(edges):
+        lines.append(f"    {_mermaid_node_id(src)} --> {_mermaid_node_id(dst)}")
+    return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------------------------------- churn
+
+
+def git_churn(root: Path, files: list[str]) -> dict[str, int] | None:
+    """Commit-count churn per file, ONE batched `git log` call - not one per file, same "one
+    subprocess, not N" discipline as scripts/check_artifacts.py's _batch_resolve_shas. None if
+    git is unavailable (caller falls back to mtime-based churn, tagged inferred, at that
+    point) - never raises."""
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+            ["git", "-C", str(root), "log", "--name-only", "--pretty=format:", "--no-renames"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    inventory_set = set(files)
+    counts: dict[str, int] = {}
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line in inventory_set:
+            counts[line] = counts.get(line, 0) + 1
+    return counts
+
+
+def mtime_churn(root: Path, files: list[str]) -> dict[str, float]:
+    """Fallback churn signal when there's no git repo to ask: raw mtime. Tagged 🧠 inferred
+    wherever displayed (never 📊 measured like the git-log figure) - it conflates recency with
+    actual change frequency, which git-log commit counts do not."""
+    out: dict[str, float] = {}
+    for f in files:
+        try:
+            out[f] = (root / f).stat().st_mtime
+        except OSError:
+            pass
+    return out
+
+
+def compute_ranks(root: Path, files: list[str]) -> dict[str, float]:
+    """PageRank over the best-effort reference graph - the single entry point main() calls to
+    wire real ranks into build_skeleton() (which otherwise defaults every file to rank 0, i.e.
+    path-only ordering)."""
+    return pagerank(build_reference_graph(root, files))
+
+
 # --------------------------------------------------------------------------- budgeted output
 
 
-def _file_block(rel_path: str, symbols: list[str], tier: str, *, compact: bool) -> str:
+def _churn_suffix(rel_path: str, churn: dict | None, churn_measured: bool) -> str:
+    if not churn or rel_path not in churn:
+        return ""
+    value = churn[rel_path]
+    if churn_measured:
+        return f", churn: {value} commits (\U0001f4ca measured)"
+    from datetime import datetime, timezone
+
+    dt = datetime.fromtimestamp(value, tz=timezone.utc).strftime("%Y-%m-%d")
+    return f", last modified {dt} (\U0001f9e0 inferred - no git history to measure churn)"
+
+
+def _file_block(
+    rel_path: str,
+    symbols: list[str],
+    tier: str,
+    *,
+    compact: bool,
+    churn: dict | None = None,
+    churn_measured: bool = False,
+) -> str:
+    suffix = _churn_suffix(rel_path, churn, churn_measured)
     if compact:
         head = ", ".join(symbols[:5])
         more = f" (+{len(symbols) - 5} more)" if len(symbols) > 5 else ""
-        return f"- {rel_path}: {head}{more}" if symbols else f"- {rel_path}"
-    lines = [f"## {rel_path}  [{tier}]"]
+        return f"- {rel_path}: {head}{more}{suffix}" if symbols else f"- {rel_path}{suffix}"
+    lines = [f"## {rel_path}  [{tier}]{suffix}"]
     if symbols:
         lines.extend(f"  - {s}" for s in symbols)
     else:
@@ -253,14 +446,25 @@ def _file_block(rel_path: str, symbols: list[str], tier: str, *, compact: bool) 
 
 
 def build_skeleton(
-    root: Path, budget_tokens: int = _DEFAULT_BUDGET_TOKENS, *, ranks: dict | None = None
+    root: Path,
+    budget_tokens: int = _DEFAULT_BUDGET_TOKENS,
+    *,
+    ranks: dict | None = None,
+    churn: dict | None = None,
+    churn_measured: bool = False,
+    mermaid_graph: dict | None = None,
+    files: list[str] | None = None,
 ) -> str:
-    """Walk `inventory(root)` ranked by `(-rank, path)` (rank defaults to 0 for every file -
-    Chunk B wires in real PageRank ranks here without changing this function's shape),
-    extracting symbols per file and emitting full detail until the running token estimate
-    would exceed `budget_tokens`, then switching remaining files to a compact one-liner tier,
-    then omitting the rest with an explicit count - never a silent truncation."""
-    files = inventory(root)
+    """Walk `inventory(root)` (or the pre-computed `files` list, if the caller already has one -
+    main() passes it to avoid a second `git ls-files` subprocess call for the same tree) ranked
+    by `(-rank, path)` (rank defaults to 0 for every file if `ranks` is omitted - path-only
+    ordering), extracting symbols per file and emitting full detail until the running token
+    estimate would exceed `budget_tokens`, then switching remaining files to a compact
+    one-liner tier, then omitting the rest with an explicit count - never a silent truncation.
+    `churn` (rel_path -> commit count or mtime, see compute_ranks()'s caller in main()) is
+    display-only, never a ranking input. `mermaid_graph`, if given, appends a rendered
+    dependency diagram after the file listing."""
+    files = inventory(root) if files is None else files
     ranks = ranks or {}
     ordered = sorted(files, key=lambda p: (-ranks.get(p, 0.0), p))
 
@@ -277,14 +481,18 @@ def build_skeleton(
     for i, rel_path in enumerate(ordered):
         symbols, tier = extract_symbols(root / rel_path)
         compact = compact_from is not None
-        block = _file_block(rel_path, symbols, tier, compact=compact)
+        block = _file_block(
+            rel_path, symbols, tier, compact=compact, churn=churn, churn_measured=churn_measured
+        )
         block_tokens = _estimate_tokens(block) + 1
         if used_tokens + block_tokens > budget_tokens:
             if compact_from is None:
                 # First file that doesn't fit at full detail - switch this and every
                 # remaining file to the compact tier instead of dropping it outright.
                 compact_from = i
-                block = _file_block(rel_path, symbols, tier, compact=True)
+                block = _file_block(
+                    rel_path, symbols, tier, compact=True, churn=churn, churn_measured=churn_measured
+                )
                 block_tokens = _estimate_tokens(block) + 1
                 if used_tokens + block_tokens > budget_tokens:
                     omitted += 1
@@ -301,7 +509,12 @@ def build_skeleton(
             "(--budget to raise, or run against a narrower path)."
         )
 
-    return "\n".join(header) + "\n".join(body) + "\n"
+    out = "\n".join(header) + "\n".join(body) + "\n"
+    if mermaid_graph is not None:
+        rendered = render_mermaid(mermaid_graph)
+        if rendered.strip() != "graph TD":
+            out += "\n## Dependency graph\n\n```mermaid\n" + rendered + "```\n"
+    return out
 
 
 # --------------------------------------------------------------------------- CLI
@@ -317,6 +530,20 @@ def main(argv: list[str]) -> int:
         "--budget", type=int, default=_DEFAULT_BUDGET_TOKENS, help="approx. token budget"
     )
     ap.add_argument("--out", type=Path, default=None, help="write to a file instead of stdout")
+    ap.add_argument(
+        "--no-rank",
+        action="store_true",
+        help="skip PageRank (path-only ordering) - useful on a huge non-Python tree where the "
+        "reference graph would be empty anyway",
+    )
+    ap.add_argument(
+        "--no-churn", action="store_true", help="skip git-log/mtime churn annotation per file"
+    )
+    ap.add_argument(
+        "--mermaid",
+        action="store_true",
+        help="append a Mermaid dependency graph section (only edges PageRank could resolve)",
+    )
     args = ap.parse_args(argv[1:])
 
     root = Path(args.path).expanduser().resolve()
@@ -324,7 +551,27 @@ def main(argv: list[str]) -> int:
         print(f"not a directory: {root}", file=sys.stderr)
         return 1
 
-    text = build_skeleton(root, args.budget)
+    files = inventory(root)
+    graph = None if (args.no_rank and not args.mermaid) else build_reference_graph(root, files)
+    ranks = {} if args.no_rank else pagerank(graph)
+
+    churn = None
+    churn_measured = False
+    if not args.no_churn:
+        churn = git_churn(root, files)
+        churn_measured = churn is not None
+        if churn is None:
+            churn = mtime_churn(root, files)
+
+    text = build_skeleton(
+        root,
+        args.budget,
+        ranks=ranks,
+        churn=churn,
+        churn_measured=churn_measured,
+        mermaid_graph=graph if args.mermaid else None,
+        files=files,
+    )
     if args.out:
         args.out.write_text(text, encoding="utf-8")
         print(f"Wrote skeleton -> {args.out}")

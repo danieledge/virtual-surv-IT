@@ -1,19 +1,27 @@
 """Tests for scripts/repo_skeleton.py - deterministic first-contact codebase orientation
 (ADR-007 Phase 1). Chunk A: inventory, tiered symbol extraction, token-budgeted output.
+Chunk B: PageRank, Mermaid, churn.
 """
 
 from __future__ import annotations
 
 import subprocess
+import time
 
 import pytest
 
 from scripts.repo_skeleton import (
+    build_reference_graph,
     build_skeleton,
     extract_symbols,
+    git_churn,
     inventory,
+    mtime_churn,
+    pagerank,
+    render_mermaid,
     _estimate_tokens,
     _os_walk_files,
+    _python_import_modules,
     _symbols_ast_python,
     _symbols_ctags,
     _symbols_floor,
@@ -238,3 +246,211 @@ def test_build_skeleton_ranks_drive_emission_order(tmp_path):
 
     out = build_skeleton(tmp_path, budget_tokens=6000, ranks={"high.py": 1.0, "low.py": 0.0})
     assert out.index("## high.py") < out.index("## low.py")
+
+
+# --------------------------------------------------------------------------- reference graph
+
+
+def test_python_import_modules_extracts_absolute_imports(tmp_path):
+    f = tmp_path / "m.py"
+    f.write_text("import os\nimport pkg.sub\nfrom pkg.other import thing\n", encoding="utf-8")
+    assert _python_import_modules(f) == {"os", "pkg.sub", "pkg.other"}
+
+
+def test_python_import_modules_skips_relative_imports(tmp_path):
+    f = tmp_path / "m.py"
+    f.write_text("from . import sibling\nfrom .pkg import thing\n", encoding="utf-8")
+    assert _python_import_modules(f) == set()
+
+
+def test_build_reference_graph_resolves_absolute_package_imports(tmp_path):
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "pkg" / "a.py").write_text("import pkg.b\n", encoding="utf-8")
+    (tmp_path / "pkg" / "b.py").write_text("x = 1\n", encoding="utf-8")
+
+    files = ["pkg/__init__.py", "pkg/a.py", "pkg/b.py"]
+    graph = build_reference_graph(tmp_path, files)
+    assert "pkg/b.py" in graph["pkg/a.py"]
+
+
+def test_build_reference_graph_resolves_from_import_of_a_symbol(tmp_path):
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "pkg" / "a.py").write_text("from pkg.b import thing\n", encoding="utf-8")
+    (tmp_path / "pkg" / "b.py").write_text("thing = 1\n", encoding="utf-8")
+
+    files = ["pkg/__init__.py", "pkg/a.py", "pkg/b.py"]
+    graph = build_reference_graph(tmp_path, files)
+    assert "pkg/b.py" in graph["pkg/a.py"]
+
+
+def test_build_reference_graph_non_python_files_have_no_edges(tmp_path):
+    (tmp_path / "notes.md").write_text("# hi\n", encoding="utf-8")
+    graph = build_reference_graph(tmp_path, ["notes.md"])
+    assert graph == {"notes.md": set()}
+
+
+# --------------------------------------------------------------------------- pagerank
+
+
+def test_pagerank_empty_graph_is_empty():
+    assert pagerank({}) == {}
+
+
+def test_pagerank_scores_sum_to_approximately_one():
+    graph = {"a.py": {"b.py"}, "b.py": {"c.py"}, "c.py": {"a.py"}}
+    scores = pagerank(graph)
+    assert scores.keys() == {"a.py", "b.py", "c.py"}
+    assert abs(sum(scores.values()) - 1.0) < 1e-6
+
+
+def test_pagerank_more_incoming_edges_ranks_higher():
+    # a.py and b.py both point at c.py; nothing points at a.py or b.py.
+    graph = {"a.py": {"c.py"}, "b.py": {"c.py"}, "c.py": set()}
+    scores = pagerank(graph)
+    assert scores["c.py"] > scores["a.py"]
+    assert scores["c.py"] > scores["b.py"]
+
+
+def test_pagerank_cyclic_graph_terminates_and_stays_bounded():
+    graph = {f"n{i}.py": {f"n{(i + 1) % 20}.py"} for i in range(20)}
+    started = time.monotonic()
+    scores = pagerank(graph)
+    assert time.monotonic() - started < 5  # doesn't hang
+    assert all(0 <= v <= 1 for v in scores.values())
+
+
+def test_pagerank_dangling_node_leaks_score_instead_of_vanishing():
+    # b.py has no outgoing edges (dangling) - its score must still be redistributed, not lost.
+    graph = {"a.py": {"b.py"}, "b.py": set()}
+    scores = pagerank(graph)
+    assert abs(sum(scores.values()) - 1.0) < 1e-6
+
+
+# --------------------------------------------------------------------------- mermaid
+
+
+def test_render_mermaid_empty_graph_has_no_nodes():
+    out = render_mermaid({})
+    assert out.strip() == "graph TD"
+
+
+def test_render_mermaid_isolated_node_is_not_drawn():
+    out = render_mermaid({"lonely.py": set()})
+    assert "lonely" not in out
+
+
+def test_render_mermaid_connected_nodes_and_edges():
+    out = render_mermaid({"a.py": {"b.py"}})
+    assert 'a_py["a.py"]' in out
+    assert 'b_py["b.py"]' in out
+    assert "a_py --> b_py" in out
+
+
+def test_render_mermaid_deterministic_across_dict_insertion_order_permutations():
+    graph_1 = {"a.py": {"b.py", "c.py"}, "b.py": {"c.py"}}
+    graph_2 = {"b.py": {"c.py"}, "a.py": {"c.py", "b.py"}}
+    assert render_mermaid(graph_1) == render_mermaid(graph_2)
+
+
+# --------------------------------------------------------------------------- churn
+
+
+def test_git_churn_counts_commits_per_file(tmp_path):
+    _init_repo(tmp_path)
+    f = tmp_path / "a.py"
+    f.write_text("v1\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "v1")
+    f.write_text("v2\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "v2")
+
+    churn = git_churn(tmp_path, ["a.py"])
+    assert churn == {"a.py": 2}
+
+
+def test_git_churn_none_when_no_git_repo(tmp_path):
+    assert git_churn(tmp_path, ["a.py"]) is None
+
+
+def test_git_churn_uses_one_batched_subprocess_call(tmp_path, monkeypatch):
+    import scripts.repo_skeleton as rs
+
+    _init_repo(tmp_path)
+    for name in ("a.py", "b.py", "c.py"):
+        (tmp_path / name).write_text("x\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "initial")
+
+    calls = []
+    real_run = rs.subprocess.run
+
+    def _counting_run(*a, **k):
+        calls.append(1)
+        return real_run(*a, **k)
+
+    monkeypatch.setattr(rs.subprocess, "run", _counting_run)
+    git_churn(tmp_path, ["a.py", "b.py", "c.py"])
+    assert len(calls) == 1
+
+
+def test_mtime_churn_falls_back_when_no_git(tmp_path):
+    f = tmp_path / "a.py"
+    f.write_text("x\n", encoding="utf-8")
+    churn = mtime_churn(tmp_path, ["a.py"])
+    assert "a.py" in churn
+    assert churn["a.py"] > 0
+
+
+def test_mtime_churn_skips_missing_files(tmp_path):
+    assert mtime_churn(tmp_path, ["missing.py"]) == {}
+
+
+# --------------------------------------------------------------------------- churn display
+
+
+def test_build_skeleton_shows_measured_churn(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "a.py").write_text("def x():\n    pass\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    out = build_skeleton(tmp_path, budget_tokens=6000, churn={"a.py": 3}, churn_measured=True)
+    assert "3 commits" in out
+    assert "measured" in out
+
+
+def test_build_skeleton_shows_inferred_mtime_churn(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "a.py").write_text("def x():\n    pass\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    out = build_skeleton(
+        tmp_path, budget_tokens=6000, churn={"a.py": time.time()}, churn_measured=False
+    )
+    assert "inferred" in out
+
+
+# --------------------------------------------------------------------------- mermaid in skeleton
+
+
+def test_build_skeleton_appends_mermaid_section_when_graph_has_edges(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    out = build_skeleton(
+        tmp_path, budget_tokens=6000, mermaid_graph={"a.py": {"b.py"}, "b.py": set()}
+    )
+    assert "## Dependency graph" in out
+    assert "```mermaid" in out
+
+
+def test_build_skeleton_omits_mermaid_section_when_graph_is_empty(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    out = build_skeleton(tmp_path, budget_tokens=6000, mermaid_graph={"a.py": set()})
+    assert "## Dependency graph" not in out
