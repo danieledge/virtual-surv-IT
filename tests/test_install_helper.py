@@ -40,6 +40,16 @@ def _proc(returncode: int = 0, stdout: str = "", stderr: str = "") -> SimpleName
     return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
 
 
+def _timeout_runner(argv, **kw):
+    raise subprocess.TimeoutExpired(argv, kw.get("timeout", 5))
+
+
+def _stub_interpreters(monkeypatch, ih, winner="python3"):
+    """Skip the real python3/python/py probe loop - always resolve to `winner` with no
+    rejected candidates. Duplicated inline 15x before this helper existed."""
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], winner))
+
+
 @pytest.fixture(autouse=True)
 def _no_real_relocation(monkeypatch):
     """install_helper.py itself lives inside a real git clone (this repo) - without this,
@@ -511,36 +521,22 @@ def test_write_orchestrator_model_rejects_invalid_model_name(tmp_path):
         write_orchestrator_model(tmp_path, "haiku")  # not offered for Morgan (yet)
 
 
-def test_run_orchestrator_model_success(tmp_path, capsys):
-    from install_helper import Style, marks, run_orchestrator_model
-
-    rc = run_orchestrator_model(tmp_path, "opus", Style(False), marks())
-    assert rc == 0
-    assert "model -> opus" in capsys.readouterr().out
-
-
-def test_run_orchestrator_model_notes_opus_has_no_tested_advantage(tmp_path, capsys):
+def test_run_orchestrator_model_success_notes_opus_has_no_tested_advantage(tmp_path, capsys):
     from install_helper import Style, marks, run_orchestrator_model
 
     rc = run_orchestrator_model(tmp_path, "opus", Style(False), marks())
     assert rc == 0
     out = capsys.readouterr().out
+    assert "model -> opus" in out
     assert "testing to date" in out.lower()
     assert "critical" in out.lower()  # opus remains available for critical/high-stakes work
 
 
-def test_run_orchestrator_model_sonnet_prints_no_opus_note(tmp_path, capsys):
+@pytest.mark.parametrize("model", ["sonnet", None], ids=["sonnet", "reset"])
+def test_run_orchestrator_model_prints_no_opus_note(tmp_path, capsys, model):
     from install_helper import Style, marks, run_orchestrator_model
 
-    rc = run_orchestrator_model(tmp_path, "sonnet", Style(False), marks())
-    assert rc == 0
-    assert "testing to date" not in capsys.readouterr().out.lower()
-
-
-def test_run_orchestrator_model_reset_prints_no_opus_note(tmp_path, capsys):
-    from install_helper import Style, marks, run_orchestrator_model
-
-    rc = run_orchestrator_model(tmp_path, None, Style(False), marks())
+    rc = run_orchestrator_model(tmp_path, model, Style(False), marks())
     assert rc == 0
     assert "testing to date" not in capsys.readouterr().out.lower()
 
@@ -912,9 +908,19 @@ def _menu_session(monkeypatch, tmp_path, answers):
     but a test fixture that ran out of scripted answers and got "" (a real, repeatable
     default choice on every call, since "" isn't consumed like a real answer would be)
     would loop forever. "q" makes an exhausted fixture behave like a user who's done,
-    matching what every EXISTING test's finite answer list already implicitly meant."""
+    matching what every EXISTING test's finite answer list already implicitly meant.
+
+    Also points ih.__file__ at a nonexistent "nowhere" directory: the script-root fallback
+    in resolve_repo()/decide_mode() would otherwise find the REAL dev clone this test suite
+    runs inside, since these tests execute from a real git checkout. Applying this
+    unconditionally is a no-op for a test whose menu path never reaches that fallback - it
+    used to be duplicated at 10 of 11 call sites by hand (a forgotten copy silently passed
+    by accident on ambient repo state instead of failing)."""
     import sys as _sys
 
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     feed = iter(answers)
     monkeypatch.setattr(_sys, "stdin", _TtyStdin())
     monkeypatch.setattr("builtins.input", lambda prompt="": next(feed, "q"))
@@ -1045,8 +1051,6 @@ def test_menu_setup_only_without_clone_fails_cleanly(monkeypatch, tmp_path, caps
     # --enable-project/--configure flag paths instead, which still propagate their own rc.
     _menu_session(monkeypatch, tmp_path, ["6", "1"])  # Advanced -> Environment setup only
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
-    # The script-root fallback would find the dev repo itself; point it nowhere.
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     rc = ih.main([])
     out = capsys.readouterr().out
     assert rc == 0
@@ -1057,9 +1061,6 @@ def test_menu_quit_runs_nothing(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
     _menu_session(monkeypatch, tmp_path, ["q"])
-    # No clone configured or found (the update-upfront check would otherwise find the
-    # real dev repo this test runs inside, via the script-root fallback).
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     calls = []
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: calls.append(a) or _FakeProc(0))
     rc = ih.main([])
@@ -1076,7 +1077,6 @@ def test_menu_quit_after_real_action_does_not_claim_nothing_changed(monkeypatch,
 
     monkeypatch.setattr(ih, "run_configure", lambda *a, **k: 0)
     _menu_session(monkeypatch, tmp_path, ["2", str(tmp_path)])  # Configure, then exhausted -> "q"
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     rc = ih.main([])
     out = capsys.readouterr().out
     assert rc == 0
@@ -1618,9 +1618,6 @@ def test_keyboard_interrupt_at_menu_returns_130(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
     _menu_session(monkeypatch, tmp_path, [])
-    # No clone configured or found (the update-upfront check would otherwise reach
-    # real run_cmd, which isn't mocked in this test - it's about the Ctrl-C, not that).
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
 
     def interrupt(prompt=""):
         raise KeyboardInterrupt
@@ -1933,7 +1930,6 @@ def test_menu_check_for_updates_without_clone_fails_soft(monkeypatch, tmp_path, 
 
     _menu_session(monkeypatch, tmp_path, ["5", "1"])  # Diagnostics -> Check for updates
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0, stdout=""))
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     rc = ih.main([])
     out = capsys.readouterr().out
     assert rc == 0
@@ -1943,26 +1939,30 @@ def test_menu_check_for_updates_without_clone_fails_soft(monkeypatch, tmp_path, 
 # ------------------------------------------------------ stale-PATH claude discovery
 
 
-def _clear_claude_cache():
+@pytest.fixture
+def _claude_cache_cleared():
+    """Clear ih._claude_cache before AND after the test, via yield - not a manual
+    end-of-test call, which skips on assertion failure and can leak into whichever test
+    runs next in the same process (test-order-dependent flakiness)."""
     import install_helper as ih
 
     ih._claude_cache = None
+    yield
+    ih._claude_cache = None
 
 
-def test_find_claude_prefers_live_path(monkeypatch):
+def test_find_claude_prefers_live_path(monkeypatch, _claude_cache_cleared):
     import install_helper as ih
 
-    _clear_claude_cache()
     monkeypatch.setattr(ih.shutil, "which", lambda n: "/usr/bin/claude")
     assert ih.find_claude(refresh=True) == ("/usr/bin/claude", "path")
 
 
-def test_find_claude_falls_back_to_known_location(monkeypatch, tmp_path):
+def test_find_claude_falls_back_to_known_location(monkeypatch, tmp_path, _claude_cache_cleared):
     """CLI installed to ~/.local/bin but the session PATH is stale: which() misses,
     the documented location is probed and wins."""
     import install_helper as ih
 
-    _clear_claude_cache()
     home = tmp_path / "home"
     binary = home / ".local" / "bin" / ("claude.exe" if ih.sys.platform == "win32" else "claude")
     binary.parent.mkdir(parents=True)
@@ -1972,15 +1972,15 @@ def test_find_claude_falls_back_to_known_location(monkeypatch, tmp_path):
     path, how = ih.find_claude(refresh=True)
     assert path == str(binary)
     assert how == "known-location"
-    _clear_claude_cache()
 
 
-def test_find_claude_windows_registry_catches_stale_session(monkeypatch, tmp_path):
+def test_find_claude_windows_registry_catches_stale_session(
+    monkeypatch, tmp_path, _claude_cache_cleared
+):
     """The corporate case: installed a minute ago, terminal opened an hour ago. The
     registry PATH (what a NEW shell would see) locates it."""
     import install_helper as ih
 
-    _clear_claude_cache()
     stale_dir = tmp_path / "fresh-path-dir"
     stale_dir.mkdir()
     (stale_dir / "claude.cmd").write_text("@echo off\n", encoding="utf-8")
@@ -1992,25 +1992,21 @@ def test_find_claude_windows_registry_catches_stale_session(monkeypatch, tmp_pat
     path, how = ih.find_claude(refresh=True)
     assert path == str(stale_dir / "claude.cmd")
     assert how == "registry"
-    _clear_claude_cache()
 
 
-def test_find_claude_not_found_never_raises(monkeypatch, tmp_path):
+def test_find_claude_not_found_never_raises(monkeypatch, tmp_path, _claude_cache_cleared):
     import install_helper as ih
 
-    _clear_claude_cache()
     monkeypatch.setattr(ih.shutil, "which", lambda n: None)
     monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path / "nohome"))
     monkeypatch.setattr(ih, "_windows_registry_path_dirs", lambda: ["Z:\\missing"])
     assert ih.find_claude(refresh=True) == (None, "")
-    _clear_claude_cache()
 
 
-def test_find_claude_memoises_registry_probe(monkeypatch, tmp_path):
+def test_find_claude_memoises_registry_probe(monkeypatch, tmp_path, _claude_cache_cleared):
     """Repeated launches (every run_cmd resolves argv[0]) must not re-read the registry."""
     import install_helper as ih
 
-    _clear_claude_cache()
     calls = []
     monkeypatch.setattr(ih.shutil, "which", lambda n: None)
     monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path / "nohome"))
@@ -2020,7 +2016,6 @@ def test_find_claude_memoises_registry_probe(monkeypatch, tmp_path):
     ih.find_claude()
     ih.find_claude()
     assert len(calls) == 1
-    _clear_claude_cache()
 
 
 def test_command_argv_uses_find_claude_fallback(monkeypatch):
@@ -2037,12 +2032,11 @@ def test_command_argv_uses_find_claude_fallback(monkeypatch):
     assert ih.command_argv("git") == ["git"]
 
 
-def test_find_claude_npm_package_bin_dir(monkeypatch, tmp_path):
+def test_find_claude_npm_package_bin_dir(monkeypatch, tmp_path, _claude_cache_cleared):
     """The reported corporate layout: no shims on PATH, the CLI living only in
     APPDATA\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin."""
     import install_helper as ih
 
-    _clear_claude_cache()
     appdata = tmp_path / "AppData" / "Roaming"
     pkg_bin = appdata / "npm" / "node_modules" / "@anthropic-ai" / "claude-code" / "bin"
     pkg_bin.mkdir(parents=True)
@@ -2054,7 +2048,6 @@ def test_find_claude_npm_package_bin_dir(monkeypatch, tmp_path):
     path, how = ih.find_claude(refresh=True)
     assert path == str(pkg_bin / "claude.exe")
     assert how == "known-location"
-    _clear_claude_cache()
 
 
 def test_run_cmd_decodes_utf8_with_replacement_not_console_codepage(monkeypatch):
@@ -2222,40 +2215,32 @@ def test_register_plugin_directly_from_empty_claude_dir(tmp_path):
     assert ip["plugins"][PLUGIN_ID][0]["version"] == "unknown"
 
 
-def test_run_enable_project_falls_back_to_direct_write_on_policy_block(tmp_path, capsys):
-    """AppLocker refuses the CLI launch (OSError) -> enabledPlugins written straight
-    into the project settings, exactly what the CLI would have done."""
+def _blocked_by_oserror(argv, **kw):
+    raise OSError("[WinError 1260] This program is blocked by group policy")
+
+
+def _blocked_by_policy_stderr(argv, **kw):
+    return _proc(returncode=1, stderr="This program is blocked by group policy\n")
+
+
+@pytest.mark.parametrize(
+    "runner", [_blocked_by_oserror, _blocked_by_policy_stderr], ids=["oserror", "stderr-text"]
+)
+def test_run_enable_project_falls_back_to_direct_write_on_policy_block(tmp_path, capsys, runner):
+    """Two distinct entry points into the same fallback: AppLocker refusing the CLI
+    launch outright (OSError) vs. the CLI running but reporting the block on stderr -
+    both must write enabledPlugins straight into the project settings, exactly what the
+    CLI would have done."""
     from install_helper import PLUGIN_ID, Style, run_enable_project
 
     project = tmp_path / "proj"
     project.mkdir()
-
-    def blocked_runner(argv, **kw):
-        raise OSError("[WinError 1260] This program is blocked by group policy")
-
-    rc = run_enable_project(
-        project, Style(enabled=False), {"ok": "OK", "fail": "X"}, runner=blocked_runner
-    )
-    assert rc == 0
-    settings = json.loads((project / ".claude" / "settings.json").read_text())
-    assert settings["enabledPlugins"][PLUGIN_ID] is True
-    out = capsys.readouterr().out
-    assert "written directly" in out
-
-
-def test_run_enable_project_policy_text_in_stderr_also_falls_back(tmp_path):
-    from install_helper import PLUGIN_ID, Style, run_enable_project
-
-    project = tmp_path / "proj"
-    project.mkdir()
-
-    def runner(argv, **kw):
-        return _proc(returncode=1, stderr="This program is blocked by group policy\n")
 
     rc = run_enable_project(project, Style(enabled=False), {"ok": "OK", "fail": "X"}, runner=runner)
     assert rc == 0
     settings = json.loads((project / ".claude" / "settings.json").read_text())
     assert settings["enabledPlugins"][PLUGIN_ID] is True
+    assert "written directly" in capsys.readouterr().out
 
 
 def test_run_enable_project_ordinary_failure_still_fails(tmp_path):
@@ -2756,31 +2741,6 @@ def test_probe_analyser_output_is_a_generator_that_streams_results(tmp_path, mon
     assert inspect.isgenerator(gen)
 
 
-def test_probe_analyser_output_clean_run(tmp_path, monkeypatch):
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    results = list(ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout="")))
-    assert all(status == "OK" for _, status, _ in results)
-
-
-def test_probe_analyser_output_detects_a_crash_not_clean(tmp_path, monkeypatch):
-    """Fable UX review, 2026-08-05: a tool that crashed at startup (a short traceback,
-    no ANSI, under the 200-byte NOISY threshold) used to be reported "OK: clean" - the
-    opposite of true. Every tool here is expected to exit 0 on a genuinely clean file;
-    nonzero is always anomalous, regardless of output length."""
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    results = list(
-        ih.probe_analyser_output(
-            tmp_path, runner=lambda *a, **k: _proc(1, stderr="ModuleNotFoundError: x")
-        )
-    )
-    assert all(status == "ERROR" for _, status, _ in results)
-    assert all("exit 1" in detail and "crashed" in detail for _, _, detail in results)
-
-
 def test_probe_analyser_output_fixtures_are_lf_only(tmp_path, monkeypatch):
     """Live report, 2026-08-04: shfmt came back NOISY (393 bytes) on the trivial fixture
     on a real Windows box. Root cause: Path.write_text's default newline translation
@@ -2798,42 +2758,46 @@ def test_probe_analyser_output_fixtures_are_lf_only(tmp_path, monkeypatch):
         assert b"\n" in raw
 
 
-def test_probe_analyser_output_detects_leaked_ansi(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "runner,expected_status,detail_substrings",
+    [
+        pytest.param(lambda *a, **k: _proc(0, stdout=""), "OK", (), id="clean"),
+        pytest.param(
+            # Fable UX review, 2026-08-05: a tool that crashed at startup (a short
+            # traceback, no ANSI, under the 200-byte NOISY threshold) used to be reported
+            # "OK: clean" - the opposite of true. Nonzero exit is always anomalous here,
+            # regardless of output length.
+            lambda *a, **k: _proc(1, stderr="ModuleNotFoundError: x"),
+            "ERROR",
+            ("exit 1", "crashed"),
+            id="crash",
+        ),
+        pytest.param(
+            lambda *a, **k: _proc(0, stdout="\x1b[31merror\x1b[0m"),
+            "NOISY",
+            ("ANSI escape",),
+            id="leaked-ansi",
+        ),
+        pytest.param(
+            # "gitleaks\n" * 60 - well over the 200-byte threshold, no ANSI involved.
+            lambda *a, **k: _proc(0, stdout="gitleaks\n" * 60),
+            "NOISY",
+            ("bytes on a trivial clean file",),
+            id="verbose-clean",
+        ),
+        pytest.param(_timeout_runner, "ERROR", ("timed out",), id="timeout"),
+    ],
+)
+def test_probe_analyser_output_statuses(
+    tmp_path, monkeypatch, runner, expected_status, detail_substrings
+):
     import install_helper as ih
 
     monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    results = list(
-        ih.probe_analyser_output(
-            tmp_path, runner=lambda *a, **k: _proc(0, stdout="\x1b[31merror\x1b[0m")
-        )
-    )
-    assert all(status == "NOISY" for _, status, _ in results)
-    assert all("ANSI escape" in detail for _, _, detail in results)
-
-
-def test_probe_analyser_output_detects_verbose_clean_run(tmp_path, monkeypatch):
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-    noisy_banner = "gitleaks\n" * 60  # well over the 200-byte threshold, no ANSI involved
-    results = list(
-        ih.probe_analyser_output(tmp_path, runner=lambda *a, **k: _proc(0, stdout=noisy_banner))
-    )
-    assert all(status == "NOISY" for _, status, _ in results)
-    assert all("bytes on a trivial clean file" in detail for _, _, detail in results)
-
-
-def test_probe_analyser_output_times_out_gracefully(tmp_path, monkeypatch):
-    import install_helper as ih
-
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
-
-    def timeout_runner(argv, **kw):
-        raise subprocess.TimeoutExpired(argv, kw.get("timeout", 5))
-
-    results = list(ih.probe_analyser_output(tmp_path, runner=timeout_runner))
-    assert all(status == "ERROR" for _, status, _ in results)
-    assert all("timed out" in detail for _, _, detail in results)
+    results = list(ih.probe_analyser_output(tmp_path, runner=runner))
+    assert all(status == expected_status for _, status, _ in results)
+    for substr in detail_substrings:
+        assert all(substr in detail for _, _, detail in results)
 
 
 def test_probe_analyser_output_no_longer_names_semgrep_or_pip_audit():
@@ -3049,9 +3013,9 @@ def test_check_encoding_roundtrip_detects_bad_bytes(monkeypatch):
 
 
 def _fake_full_clone(root):
-    """Distinct from the module's OTHER _fake_full_clone(tmp_path) helper (line ~899) - this
-    one takes the target root directly (not tmp_path/"clone") and also creates scripts/,
-    needed for _bootstrap_only_hint's own real-clone signal."""
+    """Distinct from _fake_clone(tmp_path) (line ~909) - this one takes the target root
+    directly (not tmp_path/"clone") and also creates scripts/, needed for
+    _bootstrap_only_hint's own real-clone signal."""
     root.mkdir()
     (root / ".git").mkdir()
     (root / ".claude-plugin").mkdir()
@@ -3108,14 +3072,13 @@ def test_resolve_repo_root_none_when_nothing_looks_like_a_repo(tmp_path, monkeyp
 def test_run_setup_alias_uses_repo_hint_over_relocated_file(tmp_path, monkeypatch):
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("", encoding="utf-8")
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
     clone = _fake_full_clone(tmp_path / "clone")
     relocated = tmp_path / "relocated-temp" / "install_helper.py"
     relocated.parent.mkdir()
     relocated.write_text("# relocated temp copy\n", encoding="utf-8")
     monkeypatch.setattr(ih, "__file__", str(relocated))
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    _stub_interpreters(monkeypatch, ih)
 
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True, repo_hint=str(clone))
     assert rc == 0
@@ -3612,19 +3575,22 @@ def test_run_manage_engagements_stops_early_if_list_fails(tmp_path, monkeypatch)
 # --- alias setup -------------------------------------------------------------------------------
 
 
-def _isolate_home_for_alias(monkeypatch, tmp_path):
+def _isolate_home_for_alias(monkeypatch, tmp_path, bashrc=None):
+    """bashrc=None (default): no .bashrc/.zshrc created at all. bashrc="<text>": write
+    that text to .bashrc - most callers just want an empty file (bashrc="")."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    if bashrc is not None:
+        (home / ".bashrc").write_text(bashrc, encoding="utf-8")
     return home
 
 
 def test_setup_alias_writes_bashrc(tmp_path, monkeypatch):
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("", encoding="utf-8")
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _stub_interpreters(monkeypatch, ih)
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 0
     content = (home / ".bashrc").read_text(encoding="utf-8")
@@ -3640,8 +3606,7 @@ def test_setup_alias_uses_configured_clone_not_bootstrap_temp_path(tmp_path, mon
     real repo."""
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("", encoding="utf-8")
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
 
     clone = tmp_path / "clone"
     clone.mkdir()
@@ -3661,7 +3626,7 @@ def test_setup_alias_uses_configured_clone_not_bootstrap_temp_path(tmp_path, mon
     boot_copy.parent.mkdir()
     boot_copy.write_text("# bootstrap temp copy\n", encoding="utf-8")
     monkeypatch.setattr(ih, "__file__", str(boot_copy))
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    _stub_interpreters(monkeypatch, ih)
 
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 0
@@ -3676,15 +3641,14 @@ def test_setup_alias_warns_when_no_real_clone_found_anywhere(tmp_path, monkeypat
     clear warning, not silently."""
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("", encoding="utf-8")
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "no-such-xdg"))
 
     boot_copy = tmp_path / "boot" / "install_helper.py"
     boot_copy.parent.mkdir()
     boot_copy.write_text("# bootstrap temp copy\n", encoding="utf-8")
     monkeypatch.setattr(ih, "__file__", str(boot_copy))
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    _stub_interpreters(monkeypatch, ih)
 
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     out = capsys.readouterr().out
@@ -3698,14 +3662,13 @@ def test_setup_alias_defaults_to_no_when_no_real_clone_found(tmp_path, monkeypat
     against. Blank input must now decline when no real clone was found."""
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("", encoding="utf-8")
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "no-such-xdg"))
     boot_copy = tmp_path / "boot" / "install_helper.py"
     boot_copy.parent.mkdir()
     boot_copy.write_text("# bootstrap temp copy\n", encoding="utf-8")
     monkeypatch.setattr(ih, "__file__", str(boot_copy))
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    _stub_interpreters(monkeypatch, ih)
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     monkeypatch.setattr("builtins.input", lambda prompt="": "")  # blank = the default
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=False)
@@ -3716,9 +3679,10 @@ def test_setup_alias_defaults_to_no_when_no_real_clone_found(tmp_path, monkeypat
 def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("alias virt-surv='already here'\n", encoding="utf-8")
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    home = _isolate_home_for_alias(
+        monkeypatch, tmp_path, bashrc="alias virt-surv='already here'\n"
+    )
+    _stub_interpreters(monkeypatch, ih)
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     out = capsys.readouterr().out
     assert rc == 0
@@ -3740,7 +3704,7 @@ def test_setup_alias_no_shell_config_found(tmp_path, monkeypatch):
     import install_helper as ih
 
     _isolate_home_for_alias(monkeypatch, tmp_path)  # no .bashrc/.zshrc created
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    _stub_interpreters(monkeypatch, ih)
     monkeypatch.setattr(ih.sys, "platform", "linux")
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 1
@@ -3749,9 +3713,8 @@ def test_setup_alias_no_shell_config_found(tmp_path, monkeypatch):
 def test_setup_alias_declined_is_not_an_error(tmp_path, monkeypatch):
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("", encoding="utf-8")
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _stub_interpreters(monkeypatch, ih)
     monkeypatch.setattr(sys, "stdin", _TtyStdin())  # see test_ask_and_set_model_rejects_bad_input
     monkeypatch.setattr("builtins.input", lambda prompt="": "n")
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=False)  # confirm() -> declined
@@ -3762,9 +3725,8 @@ def test_setup_alias_declined_is_not_an_error(tmp_path, monkeypatch):
 def test_setup_alias_write_error_is_reported(tmp_path, monkeypatch):
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("", encoding="utf-8")
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _stub_interpreters(monkeypatch, ih)
 
     real_open = Path.open
 
@@ -3817,9 +3779,8 @@ def test_setup_alias_write_error_from_verification_sets_had_error(tmp_path, monk
     whole point of hardening is not silently claiming success on a non-working alias."""
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("", encoding="utf-8")
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _stub_interpreters(monkeypatch, ih)
     monkeypatch.setattr(ih, "_verify_alias_line", lambda label, rc_path, line: (False, "simulated broken alias"))
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 1
@@ -4127,9 +4088,8 @@ def test_run_configure_demo_writes_nothing(tmp_path, monkeypatch, capsys):
 def test_run_setup_alias_demo_writes_nothing(tmp_path, monkeypatch):
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path)
-    (home / ".bashrc").write_text("", encoding="utf-8")
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _stub_interpreters(monkeypatch, ih)
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
     assert rc == 0
     assert (home / ".bashrc").read_text(encoding="utf-8") == ""  # untouched
@@ -4211,7 +4171,6 @@ def test_menu_loops_back_and_runs_a_second_action_before_quit(monkeypatch, tmp_p
     # 4 = Set up the alias, then loop back, 2 = Configure, answer the directory prompt,
     # loop back again, then exhausted answers feed "q" to end the session.
     _menu_session(monkeypatch, tmp_path, ["4", "2", str(tmp_path)])
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     rc = ih.main([])
     assert rc == 0
     assert calls == ["alias", "configure"]  # BOTH ran, in order, in one session
@@ -4226,7 +4185,6 @@ def test_menu_shows_again_after_an_action_completes(monkeypatch, tmp_path, capsy
         ih, "run_setup_alias", lambda style, mm, assume_yes=False, demo=False, repo_hint=None: 0
     )
     _menu_session(monkeypatch, tmp_path, ["4"])  # alias, then exhausted -> "q"
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     ih.main([])
     out = capsys.readouterr().out
     assert out.count("What can I do for you?") == 2  # once before "4", once before "q"
@@ -4239,7 +4197,6 @@ def test_invalid_menu_choice_reprompts_without_redrawing_menu(monkeypatch, tmp_p
     import install_helper as ih
 
     _menu_session(monkeypatch, tmp_path, ["9", "x", "q"])
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     ih.main([])
     out = capsys.readouterr().out
     assert out.count("What can I do for you?") == 1  # drawn once, not once per bad keystroke
@@ -4281,7 +4238,6 @@ def test_demo_flag_protects_every_action_in_one_session(monkeypatch, tmp_path, c
     # "2" = Configure (free-function path), directory prompt, loop back,
     # "6","3" = Advanced -> Project preferences (Installer subset "formats"), loop back, "q".
     _menu_session(monkeypatch, tmp_path, ["2", str(tmp_path), "6", "3", "q"])
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     rc = ih.main(["--demo"])
     assert rc == 0
     assert configure_calls == [True]  # demo threaded to the free-function path
@@ -4316,7 +4272,6 @@ def test_demo_menu_selection_is_one_shot_not_sticky(monkeypatch, tmp_path):
     # 6,5 = Advanced -> Demo (one-shot full-flow preview via the FakeInstaller), loop
     # back, 2 = Configure, directory prompt, loop back, then exhausted -> "q".
     _menu_session(monkeypatch, tmp_path, ["6", "5", "2", str(tmp_path)])
-    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
     ih.main([])
     # run_configure must have been called with demo=False - the earlier "Demo" menu pick
     # must not have left args.demo stuck true.
@@ -4633,7 +4588,7 @@ def test_run_selftest_all_ok_returns_zero_and_writes_no_bundle(monkeypatch, tmp_
     import install_helper as ih
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    _stub_interpreters(monkeypatch, ih)
     monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [("guard", "OK", "clean")])
     monkeypatch.setattr(ih, "_check_repo_py_syntax", lambda interp, root: [("syntax", "OK", "clean")])
     monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found")])
@@ -4656,7 +4611,7 @@ def test_run_selftest_failure_writes_debug_bundle(monkeypatch, tmp_path, capsys)
     import install_helper as ih
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    _stub_interpreters(monkeypatch, ih)
     monkeypatch.setattr(
         ih,
         "_check_guard_hooks",
@@ -4690,7 +4645,7 @@ def test_run_selftest_close_gate_error_when_not_refused(monkeypatch, tmp_path, c
     import install_helper as ih
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    _stub_interpreters(monkeypatch, ih)
     monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [])
     monkeypatch.setattr(ih, "_check_repo_py_syntax", lambda interp, root: [])
     monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [])
@@ -4760,7 +4715,7 @@ def test_run_env_check_folds_in_synthetic_engagement(monkeypatch, tmp_path, caps
     import install_helper as ih
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    _stub_interpreters(monkeypatch, ih)
     monkeypatch.setattr(ih, "find_bash", lambda: None)
     monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [])
     monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("SKIP", "no interpreter"))
