@@ -3,6 +3,51 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.19] - 2026-08-05 - Install helper: independent UX review, thirteen fixes
+
+An independent review pass of `install_helper.py` (asked to assess and implement, not just
+report) turned up several real bugs alongside UX polish. All fixed and covered by new tests.
+
+### Fixed
+- `--model opus|sonnet|default` on its own (no `--model-project`/`--model-default`) silently
+  fell through to a full install instead of doing nothing useful; `--model-project DIR` without
+  `--model` silently reset an existing project's model to sonnet. Both now fail fast with a
+  clear message instead of a silent, surprising write (or non-write).
+- `probe_analyser_output` and the self-test's bandit "planted issue" check classified a crashed
+  analyser (non-zero exit, short traceback) as "OK: clean" - now checks the exit code first, so
+  a crash is reported as a crash, not a false pass.
+- `_parse_review_tool_overrides` silently dropped unrecognised input (e.g. a typo'd tool name) -
+  now returns what it rejected and the prompt warns per rejected chunk. Its summary line also
+  prints in the same `tool=state` syntax the user types, not a raw Python dict repr.
+- Several backup-filename and log-message dates were hardcoded literal strings left over from
+  whenever that line was last written (`settings.json.bak-2026-07-30`, a stash message, the
+  persisted `last_run` field) - all now use the actual current date.
+- `run_setup_alias`'s "Add it?" confirm defaulted to yes even when the repo root couldn't be
+  confidently resolved (the "may be temporary" case) - default now follows the resolution
+  result instead of always assuming yes.
+- `Installer.model_step` (labelled "per project only") asked "make this the default for new
+  projects too?" regardless - contradicting its own label. It no longer asks; the Advanced
+  menu's "Machine defaults" is the one place for that.
+- `print_summary` referenced a stale "option 4" for configuring a project (now correctly
+  "option 2"), and the "Done, summon the team" sign-off could print even when a step had
+  failed or nothing was actually run - both fixed.
+- Quitting the interactive menu without taking any write action said "nothing changed" even
+  after `--model`/permissions/etc had actually been applied, and vice versa for read-only
+  diagnostic runs - now tracks whether anything was actually written.
+- `_bootstrap_only_hint` pointed at a `--full` flag that doesn't exist.
+- Unknown `-`-prefixed flags to a `virt-surv <subcommand>` (e.g. a typo) were silently treated
+  as the target directory path instead of being rejected.
+
+### Added
+- `--version` flag.
+- `install_helper.py` and `virt-surv <subcommand>` now open with a short line in Morgan's
+  voice, matching the interactive menu's existing banner.
+- The "Which project directory?" prompts (configure/manage/preferences/model) now show what
+  the default (`.`) actually resolves to, so accepting it isn't a guess.
+- `format_preferences_step` now says explicitly that the large-context review-split preference
+  is set via "Configure a project", not here - it was previously easy to look for it in the
+  wrong place.
+
 ## [0.33.18] - 2026-08-05 - Machine defaults (view/edit), a one-click recommended-settings path, real precedence
 
 ### Added

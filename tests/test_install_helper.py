@@ -1069,6 +1069,41 @@ def test_menu_quit_runs_nothing(monkeypatch, tmp_path, capsys):
     assert "nothing changed" in out
 
 
+def test_menu_quit_after_real_action_does_not_claim_nothing_changed(monkeypatch, tmp_path, capsys):
+    """Fable UX review, 2026-08-05: running Configure (a REAL write) then quitting
+    printed "nothing changed" - readable as "your configuration was discarded"."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: 0)
+    _menu_session(monkeypatch, tmp_path, ["2", str(tmp_path)])  # Configure, then exhausted -> "q"
+    monkeypatch.setattr(ih, "__file__", str(tmp_path / "nowhere" / "install_helper.py"))
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "nothing changed" not in out
+    assert "See you next time" in out
+
+
+def test_menu_quit_after_readonly_diagnostic_still_says_nothing_changed(monkeypatch, tmp_path, capsys):
+    """A read-only diagnostic (Diagnostics -> Check for updates) genuinely changes
+    nothing - the reassurance must still be accurate after running one."""
+    import install_helper as ih
+
+    clone = _fake_full_clone(tmp_path / "clone")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    cfg_dir = tmp_path / "xdg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(
+        json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
+    )
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0, stdout=""))
+    _menu_session(monkeypatch, tmp_path, ["5", "1"])  # Diagnostics -> Check for updates, then "q"
+    rc = ih.main([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "nothing changed" in out
+
+
 def test_full_sync_step_fetches_and_checks_out(monkeypatch, tmp_path):
     """The full plan still syncs - guards the setup subset against regressing the default."""
     import install_helper as ih
@@ -2729,6 +2764,23 @@ def test_probe_analyser_output_clean_run(tmp_path, monkeypatch):
     assert all(status == "OK" for _, status, _ in results)
 
 
+def test_probe_analyser_output_detects_a_crash_not_clean(tmp_path, monkeypatch):
+    """Fable UX review, 2026-08-05: a tool that crashed at startup (a short traceback,
+    no ANSI, under the 200-byte NOISY threshold) used to be reported "OK: clean" - the
+    opposite of true. Every tool here is expected to exit 0 on a genuinely clean file;
+    nonzero is always anomalous, regardless of output length."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    results = list(
+        ih.probe_analyser_output(
+            tmp_path, runner=lambda *a, **k: _proc(1, stderr="ModuleNotFoundError: x")
+        )
+    )
+    assert all(status == "ERROR" for _, status, _ in results)
+    assert all("exit 1" in detail and "crashed" in detail for _, _, detail in results)
+
+
 def test_probe_analyser_output_fixtures_are_lf_only(tmp_path, monkeypatch):
     """Live report, 2026-08-04: shfmt came back NOISY (393 bytes) on the trivial fixture
     on a real Windows box. Root cause: Path.write_text's default newline translation
@@ -2861,6 +2913,71 @@ def test_check_env_cli_flag_dispatches(monkeypatch):
     rc = ih._main(["--check-env"])
     assert rc == 0
     assert called == [1]
+
+
+def test_version_flag_prints_and_exits(capsys):
+    """Fable UX review, 2026-08-05: no --version existed at all."""
+    import install_helper as ih
+
+    with pytest.raises(SystemExit) as exc_info:
+        ih.parse_args(["--version"])
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "compliance-surveillance-team" in out
+
+
+# --- --model validation (fable UX review, 2026-08-05) ------------------------------------------
+
+
+def test_model_flag_alone_is_an_error_not_a_silent_full_install(monkeypatch):
+    """--model opus with neither --model-project nor --model-default used to be
+    silently discarded and fall through to a real full install."""
+    import install_helper as ih
+
+    def boom(*a, **k):
+        raise AssertionError("Installer must never be constructed - the flag is invalid")
+
+    monkeypatch.setattr(ih, "Installer", boom)
+    rc = ih._main(["--model", "opus"])
+    assert rc == 1
+
+
+def test_model_project_without_model_is_an_error_not_a_silent_reset(monkeypatch, tmp_path):
+    """--model-project DIR without --model used to silently write "sonnet" (the same
+    as an explicit --model default) - a real, unrequested reset of an existing choice."""
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(ih, "run_orchestrator_model", lambda *a, **k: called.append(1) or (True, "x"))
+    rc = ih._main(["--model-project", str(tmp_path)])
+    assert rc == 1
+    assert called == []
+
+
+def test_model_default_without_model_is_an_error(monkeypatch):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(
+        ih, "run_orchestrator_model_default", lambda *a, **k: called.append(1) or 0
+    )
+    rc = ih._main(["--model-default"])
+    assert rc == 1
+    assert called == []
+
+
+def test_model_project_with_model_still_works(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(
+        ih,
+        "run_orchestrator_model",
+        lambda project, wanted, style, mm: called.append(wanted) or 0,
+    )
+    rc = ih._main(["--model-project", str(tmp_path), "--model", "opus"])
+    assert rc == 0
+    assert called == ["opus"]
 
 
 def test_check_interpreters_finds_the_first_working_one(monkeypatch):
@@ -3247,6 +3364,45 @@ def test_ask_and_set_model_demo_mode_writes_nothing(tmp_path, monkeypatch):
     ok, message = ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False, demo=True)
     assert ok
     assert "would set" in message
+
+
+def test_ask_and_set_model_offer_global_scope_false_skips_that_question(tmp_path, monkeypatch):
+    """Fable UX review, 2026-08-05: Advanced menu's "Morgan's model (per project only)"
+    asked the global-scope question anyway, contradicting its own label. With
+    offer_global_scope=False the question must never even be asked (consumes only the
+    model-choice answer, never a global-scope answer) and must always write per-project."""
+    import install_helper as ih
+
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    answers = iter(["opus"])  # if the scope question were ALSO asked, this would be
+    # consumed by it instead and the model picker would hit StopIteration.
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    ok, message = ih.ask_and_set_model(
+        tmp_path, ih.Style(False), assume_yes=False, offer_global_scope=False
+    )
+    assert ok
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+    assert settings["model"] == "opus"  # written per-project, not to user-level settings
+
+
+def test_model_step_never_offers_global_scope(monkeypatch, tmp_path):
+    """Installer.model_step (Advanced -> "Morgan's model (per project only)") must call
+    ask_and_set_model with offer_global_scope=False - a coverage gap found while fixing
+    the fable UX review's finding #11 (no prior test exercised model_step at all)."""
+    import install_helper as ih
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    calls = []
+    monkeypatch.setattr(
+        ih,
+        "ask_and_set_model",
+        lambda proj, style, assume_yes, demo, **kw: calls.append(kw) or (True, "ok"),
+    )
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="model")
+    inst.model_step()
+    assert calls == [{"offer_global_scope": False}]
     assert not (tmp_path / ".claude").exists()
 
 
@@ -3534,7 +3690,27 @@ def test_setup_alias_warns_when_no_real_clone_found_anywhere(tmp_path, monkeypat
     out = capsys.readouterr().out
     assert rc == 0
     assert "no real clone found" in out
-    assert str(boot_copy) in out
+
+
+def test_setup_alias_defaults_to_no_when_no_real_clone_found(tmp_path, monkeypatch):
+    """Fable UX review, 2026-08-05: the "Add it?" confirm defaulted to Yes regardless -
+    pressing Enter after the "may be temporary" warning wrote exactly what it warned
+    against. Blank input must now decline when no real clone was found."""
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path)
+    (home / ".bashrc").write_text("", encoding="utf-8")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "no-such-xdg"))
+    boot_copy = tmp_path / "boot" / "install_helper.py"
+    boot_copy.parent.mkdir()
+    boot_copy.write_text("# bootstrap temp copy\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "__file__", str(boot_copy))
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], "python3"))
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")  # blank = the default
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=False)
+    assert rc == 0
+    assert (home / ".bashrc").read_text(encoding="utf-8") == ""  # declined, nothing written
 
 
 def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):
@@ -3760,6 +3936,18 @@ def test_dispatch_folder_subcommand_not_a_match_returns_none():
     assert ih._dispatch_folder_subcommand([]) is None
     assert ih._dispatch_folder_subcommand(["install"]) is None
     assert ih._dispatch_folder_subcommand(["--configure"]) is None
+
+
+def test_dispatch_folder_subcommand_rejects_unknown_flag(monkeypatch, capsys):
+    """Fable UX review, 2026-08-05: 'configure --branch dev' silently treated
+    '--branch' as the target directory ("not a directory: <cwd>/--branch")."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: 0)
+    rc = ih._dispatch_folder_subcommand(["configure", "--branch", "dev"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "unknown option '--branch'" in out
 
 
 def test_dispatch_folder_subcommand_configure_routes_correctly(tmp_path, monkeypatch):
@@ -4152,25 +4340,29 @@ def test_review_tools_matches_tool_output_checks():
 def test_parse_review_tool_overrides_basic():
     import install_helper as ih
 
-    assert ih._parse_review_tool_overrides("mypy=off,black=on") == {
-        "mypy": "off",
-        "black": "on",
-    }
+    overrides, rejected = ih._parse_review_tool_overrides("mypy=off,black=on")
+    assert overrides == {"mypy": "off", "black": "on"}
+    assert rejected == []
 
 
 def test_parse_review_tool_overrides_ignores_unknown_tool_and_state():
+    """Fable UX review, 2026-08-05: unknown/malformed chunks must be reported back
+    (`rejected`), not just quietly excluded from `overrides` - a typo or an
+    intentionally-unsupported name like 'semgrep' used to vanish with zero feedback."""
     import install_helper as ih
 
-    assert ih._parse_review_tool_overrides("notarealtool=off, mypy=maybe, black=on") == {
-        "black": "on"
-    }
+    overrides, rejected = ih._parse_review_tool_overrides(
+        "notarealtool=off, mypy=maybe, black=on"
+    )
+    assert overrides == {"black": "on"}
+    assert rejected == ["notarealtool=off", "mypy=maybe"]
 
 
 def test_parse_review_tool_overrides_blank_is_empty():
     import install_helper as ih
 
-    assert ih._parse_review_tool_overrides("") == {}
-    assert ih._parse_review_tool_overrides("   ") == {}
+    assert ih._parse_review_tool_overrides("") == ({}, [])
+    assert ih._parse_review_tool_overrides("   ") == ({}, [])
 
 
 def test_write_team_preferences_review_tools_stores_only_non_auto(tmp_path):
@@ -4212,6 +4404,30 @@ def test_ask_review_tool_overrides_merges_onto_current(monkeypatch):
     )
     # mypy=off added, ruff=auto CLEARS the existing "off" override, gitleaks untouched.
     assert result == {"gitleaks": "on", "mypy": "off"}
+
+
+def test_ask_review_tool_overrides_warns_on_rejected_chunk(monkeypatch, capsys):
+    """Fable UX review, 2026-08-05: 'mypy=off, semgrep=on' silently applied only
+    mypy=off with no mention of semgrep - readable as "I turned semgrep on"."""
+    import install_helper as ih
+
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    monkeypatch.setattr("builtins.input", lambda prompt="": "mypy=off,semgrep=on")
+    result = ih._ask_review_tool_overrides(ih.Style(False), False, {})
+    out = capsys.readouterr().out
+    assert result == {"mypy": "off"}
+    assert "semgrep=on" in out
+    assert "ignored" in out.lower()
+
+
+def test_format_review_tools_matches_input_syntax():
+    """Fable UX review, 2026-08-05: summary lines showed Python's dict repr
+    (review-tools={'mypy': 'off'}) instead of the same syntax the prompt accepts."""
+    from install_helper import _format_review_tools
+
+    assert _format_review_tools({}) == "(all auto)"
+    assert _format_review_tools({"mypy": "off"}) == "mypy=off"
+    assert _format_review_tools({"mypy": "off", "black": "on"}) == "mypy=off,black=on"
 
 
 def test_ask_review_tool_overrides_blank_leaves_current_unchanged(monkeypatch):
@@ -4383,6 +4599,34 @@ def test_selftest_step_passes_repo_hint(monkeypatch):
     inst = ih.Installer(_args(yes=True, repo="/hinted/repo"), ih.Style(False), ih.marks())
     inst.selftest_step()
     assert called == ["/hinted/repo"]
+
+
+def test_selftest_probe_bandit_crash_distinct_from_missed(monkeypatch, tmp_path):
+    """Fable UX review, 2026-08-05: bandit crashing (a nonzero exit that's neither of
+    its own two normal outcomes, 0=clean/1=issues-found) used to be reported
+    identically to bandit running fine and simply missing the planted issue."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/bandit" if name == "bandit" else None)
+    monkeypatch.setattr(
+        ih.subprocess, "run", lambda *a, **k: _proc(2, stderr="ModuleNotFoundError: no ast")
+    )
+    rows = [r for r in ih._selftest_engagement_probe(tmp_path, "python3") if r[0].startswith("bandit")]
+    assert rows[0][1] == "ERROR"
+    assert "crashed" in rows[0][2] and "exit 2" in rows[0][2]
+
+
+def test_selftest_probe_bandit_ran_but_missed_the_issue(monkeypatch, tmp_path):
+    """Exit 0 (bandit's own "clean" outcome) with the planted issue absent means bandit
+    genuinely ran and missed it - a real config problem, not a crash."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/bandit" if name == "bandit" else None)
+    monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: _proc(0, stdout="No issues identified."))
+    rows = [r for r in ih._selftest_engagement_probe(tmp_path, "python3") if r[0].startswith("bandit")]
+    assert rows[0][1] == "ERROR"
+    assert "may be off" in rows[0][2]
+    assert "crashed" not in rows[0][2]
 
 
 def test_run_selftest_all_ok_returns_zero_and_writes_no_bundle(monkeypatch, tmp_path, capsys):

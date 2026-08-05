@@ -1387,7 +1387,7 @@ class Installer:
                         "push",
                         "--include-untracked",
                         "-m",
-                        "install_helper 2026-07-29",
+                        f"install_helper {datetime.now().strftime('%Y-%m-%d')}",
                     ]
                 )
                 if proc.returncode != 0:
@@ -1730,7 +1730,11 @@ class Installer:
             self.say(self.style.dim(f"    would save settings to {self.cfg_path}"))
             return
         self.cfg.update(
-            {"repo_path": str(self.repo), "branch": self.branch, "last_run": "2026-07-30"}
+            {
+                "repo_path": str(self.repo),
+                "branch": self.branch,
+                "last_run": datetime.now().strftime("%Y-%m-%d"),
+            }
         )
         version = installed_version(self.repo) if self.repo else None
         if version:
@@ -1817,14 +1821,26 @@ class Installer:
             self.say("")
             self.say(s.bold("Over to you:"))
             self.say(
-                "  1. Enable more projects any time: run me again (option 4) "
-                "or /plugin inside Claude Code."
+                "  1. Enable more projects any time: run me again (option 2, Configure "
+                "a project) or /plugin inside Claude Code."
             )
             self.say("  2. Restart Claude Code to load the new version.")
         self.say("")
-        self.say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
-        hat = "🎩 " if _can_encode("🎩") else ""
-        self.say(f"{hat}I look forward to working with you. - Morgan")
+        # The celebratory "summon the team" close is only accurate for a full/setup run
+        # that actually finished clean - live-caught (fable UX review, 2026-08-05): a
+        # failed-but-non-fatal step (e.g. "no usable clone found" in a diagnostic) still
+        # left `aborted` False, so this printed regardless, inviting the user to summon
+        # a team that was just reported as not working. Diagnostics/one-off subsets get
+        # a plain close instead - they were never "installing the team" to begin with.
+        any_failed = any(status == "fail" for _name, status, _detail in self.tracker.steps)
+        if self.subset in ("full", "setup") and not any_failed:
+            self.say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
+            hat = "🎩 " if _can_encode("🎩") else ""
+            self.say(f"{hat}I look forward to working with you. - Morgan")
+        elif any_failed:
+            self.say(s.yellow("Finished with issues - see above."))
+        else:
+            self.say(s.dim("Nothing else to do - back to the menu."))
         self._demo_footer()
 
     def _demo_footer(self) -> None:
@@ -1919,11 +1935,12 @@ class Installer:
             self.step_ok("Status line", "demo - nothing written")
             return
         if target.is_file():
-            backup = target.with_name("settings.json.bak-2026-07-30")
+            today = datetime.now().strftime("%Y-%m-%d")
+            backup = target.with_name(f"settings.json.bak-{today}")
             n = 1
             while backup.exists():
                 n += 1
-                backup = target.with_name(f"settings.json.bak-2026-07-30.{n}")
+                backup = target.with_name(f"settings.json.bak-{today}.{n}")
             backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
@@ -1996,9 +2013,10 @@ class Installer:
             "supported analysers (ruff, mypy, bandit, black, sqlfluff, shfmt, gitleaks) "
             "on or off for this project. At the end, a separate, clearly optional "
             "question offers to also make these THIS MACHINE's default for other new "
-            "projects you configure later."
+            "projects you configure later. (The large-context review-split preference "
+            "isn't asked here - it's set via 'Configure a project' instead.)"
         )
-        raw = ask("  Which project directory?", ".", False, style=self.style)
+        raw = ask(f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style)
         project = Path(raw).expanduser().resolve()
         if not project.is_dir():
             self.step_fail("Project preferences", f"not a directory: {project}")
@@ -2038,7 +2056,7 @@ class Installer:
         summary = (
             f"docx={'on' if docx_wanted else 'off'}, "
             f"citations={'on' if citations_wanted else 'off'}, "
-            f"review-tools={review_tools_wanted or '(all auto)'}"
+            f"review-tools={_format_review_tools(review_tools_wanted)}"
         )
         self.say(self.style.bold("\n  Separately - this machine's default:"))
         save_as_default = confirm(
@@ -2165,7 +2183,7 @@ class Installer:
         summary = (
             f"docx={'on' if docx_wanted else 'off'}, "
             f"citations={'on' if citations_wanted else 'off'}, "
-            f"review-tools={review_tools_wanted or '(all auto)'}, "
+            f"review-tools={_format_review_tools(review_tools_wanted)}, "
             f"model={model_wanted or 'default'}"
         )
         if self.demo:
@@ -2192,17 +2210,21 @@ class Installer:
 
     def model_step(self) -> None:
         """Standalone, easily re-runnable (menu option 8): change or reset Morgan's (the
-        orchestrator's) own model for one project. Only Morgan is exposed here - the 16
-        specialist subagents each have their own `model:` frontmatter in
-        `.claude/agents/*.md`, edited directly; that's a bigger, separate change this
-        option doesn't attempt yet."""
+        orchestrator's) own model for one project - PER PROJECT ONLY, matching this
+        item's own menu label (fable UX review, 2026-08-05: the flow used to ALSO ask
+        "make this the default for new projects too?", contradicting that label - the
+        Advanced -> "Machine defaults" item is the direct, non-contradictory path for
+        the global default now). Only Morgan is exposed here - the 16 specialist
+        subagents each have their own `model:` frontmatter in `.claude/agents/*.md`,
+        edited directly; that's a bigger, separate change this option doesn't attempt yet."""
         self.step_intro(
             "Morgan's own model for this project - sonnet is the documented default "
             "(testing to date has not yielded any better results from opus for "
             "orchestration); opus remains available for critical/high-stakes engagements "
-            "if you want the extra margin. Or reset back to sonnet."
+            "if you want the extra margin. Or reset back to sonnet. (This machine's "
+            "own default model lives under Advanced -> Machine defaults instead.)"
         )
-        raw = ask("  Which project directory?", ".", False, style=self.style)
+        raw = ask(f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style)
         project = Path(raw).expanduser().resolve()
         if not project.is_dir():
             self.step_fail("Morgan's model", f"not a directory: {project}")
@@ -2210,7 +2232,9 @@ class Installer:
         settings_path = project / ".claude" / "settings.json"
         current = _read_json_dict(settings_path).get("model") or "(unset - account default)"
         self.say(self.style.dim(f"    currently: {current}"))
-        ok, message = ask_and_set_model(project, self.style, self.args.yes, self.demo)
+        ok, message = ask_and_set_model(
+            project, self.style, self.args.yes, self.demo, offer_global_scope=False
+        )
         if not ok:
             self.step_fail("Morgan's model", message)
             return
@@ -2308,7 +2332,7 @@ class Installer:
                     "later: run /plugin inside Claude Code from the project",
                 )
                 return
-        raw = ask("  Which project directory?", ".", False, style=self.style)
+        raw = ask(f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style)
         target = Path(raw)
         if self.demo:
             project = target.expanduser().resolve()
@@ -2549,11 +2573,12 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
         print(f"{ok} {target}: all {len(RECOMMENDED_ALLOW)} recommended entries already present")
         return 0
     if target.is_file():
-        backup = target.with_name("settings.json.bak-2026-07-30")
+        today = datetime.now().strftime("%Y-%m-%d")
+        backup = target.with_name(f"settings.json.bak-{today}")
         n = 1
         while backup.exists():
             n += 1
-            backup = target.with_name(f"settings.json.bak-2026-07-30.{n}")
+            backup = target.with_name(f"settings.json.bak-{today}.{n}")
         backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
         print(f"{ok} backed up existing settings to {backup.name}")
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -2615,18 +2640,27 @@ _REVIEW_TOOLS = ("ruff", "mypy", "bandit", "gitleaks", "sqlfluff", "black", "shf
 _REVIEW_TOOL_STATES = ("auto", "on", "off")
 
 
-def _parse_review_tool_overrides(raw: str) -> dict:
-    """'ruff=off, mypy=on' -> {"ruff": "off", "mypy": "on"}. Unknown tool names, unknown
-    states and blank/malformed chunks are silently skipped - a typo in this one-line prompt
-    should never crash a preferences flow; the caller shows the tool the resulting state
-    was applied to, so a skipped typo is visible, not silently lost."""
+def _parse_review_tool_overrides(raw: str) -> tuple:
+    """'ruff=off, mypy=on' -> ({"ruff": "off", "mypy": "on"}, []). Unknown tool names,
+    unknown states and blank/malformed chunks never crash the caller - they're returned
+    separately as `rejected` (the original chunk text) instead, so the caller can WARN
+    on them rather than silently dropping (fable UX review, 2026-08-05: entering
+    'mypy=off, semgrep=on' resulted in review-tools={'mypy': 'off'} with zero mention of
+    semgrep - readable as "I turned semgrep on" when nothing happened, worse than a
+    plain typo since semgrep is deliberately unsupported here, not just misspelled)."""
     overrides = {}
-    for chunk in raw.split(","):
-        name, _, state = chunk.strip().partition("=")
+    rejected = []
+    for raw_chunk in raw.split(","):
+        chunk = raw_chunk.strip()
+        if not chunk:
+            continue
+        name, _, state = chunk.partition("=")
         name, state = name.strip().lower(), state.strip().lower()
         if name in _REVIEW_TOOLS and state in _REVIEW_TOOL_STATES:
             overrides[name] = state
-    return overrides
+        else:
+            rejected.append(chunk)
+    return overrides, rejected
 
 
 def _ask_review_tool_overrides(style: Style, assume_yes: bool, current: dict) -> dict:
@@ -2643,13 +2677,29 @@ def _ask_review_tool_overrides(style: Style, assume_yes: bool, current: dict) ->
         assume_yes,
         style=style,
     )
+    parsed, rejected = _parse_review_tool_overrides(raw)
+    for chunk in rejected:
+        print(
+            style.yellow(
+                f"    ignored '{chunk}' - not one of {'/'.join(_REVIEW_TOOLS)}=auto|on|off"
+            )
+        )
     merged = dict(current)
-    for name, state in _parse_review_tool_overrides(raw).items():
+    for name, state in parsed.items():
         if state == "auto":
             merged.pop(name, None)
         else:
             merged[name] = state
     return merged
+
+
+def _format_review_tools(overrides: dict) -> str:
+    """{"mypy": "off", "black": "on"} -> "mypy=off,black=on" - matches the exact
+    'tool=state' syntax the override prompt accepts, instead of Python's dict repr
+    (fable UX review, 2026-08-05: summary lines showed review-tools={'mypy': 'off'})."""
+    if not overrides:
+        return "(all auto)"
+    return ",".join(f"{name}={state}" for name, state in overrides.items())
 
 
 def _apply_forced_on_validation(style: Style, mark_map: dict, wanted: dict, current: dict) -> dict:
@@ -2791,7 +2841,11 @@ def _write_model_to_settings_file(target: Path, model: Optional[str]) -> tuple[b
 
 
 def ask_and_set_model(
-    project: Path, style: Style, assume_yes: bool, demo: bool = False
+    project: Path,
+    style: Style,
+    assume_yes: bool,
+    demo: bool = False,
+    offer_global_scope: bool = True,
 ) -> tuple[bool, str]:
     """Ask scope, then opus/sonnet/default, and apply it (or report what a demo run
     would do). Free function (extracted 2026-08-04 from the Installer method of the same
@@ -2803,12 +2857,23 @@ def ask_and_set_model(
     every new/unconfigured project (write_orchestrator_model_default, user-level
     ~/.claude/settings.json - Claude Code layers project settings over user settings,
     so this is a genuine global default, not something this script has to re-apply
-    per project)."""
-    global_default = confirm(
-        "  Also make this the default for new/unconfigured projects, not just this one?",
-        default=False,
-        assume_yes=assume_yes,
-        style=style,
+    per project).
+
+    offer_global_scope=False skips that question entirely (always per-project) - used
+    by model_step specifically (fable UX review, 2026-08-05: the Advanced menu labels
+    that item "Morgan's model (per project only)", but the flow asked the global-scope
+    question regardless, contradicting its own label; Advanced -> "Machine defaults"
+    now covers the global case directly, so duplicating it here just to have a "no, per
+    project" answer available adds a needless extra question). run_configure keeps the
+    default True - it has no separate machine-defaults entry point of its own."""
+    global_default = (
+        offer_global_scope
+        and confirm(
+            "  Also make this the default for new/unconfigured projects, not just this one?",
+            default=False,
+            assume_yes=assume_yes,
+            style=style,
+        )
     )
     picked = (
         ask(
@@ -3080,7 +3145,7 @@ def run_configure(
         f"docx={'on' if docx_wanted else 'off'}, "
         f"citations={'on' if citations_wanted else 'off'}, "
         f"review-split={'on' if split_wanted else 'off'}, "
-        f"review-tools={review_tools_wanted or '(all auto)'}"
+        f"review-tools={_format_review_tools(review_tools_wanted)}"
     )
     if demo:
         print(style.dim(f"    would write preferences: {summary}"))
@@ -3408,7 +3473,11 @@ def run_setup_alias(
         if demo:
             print(style.dim("    (demo mode - nothing written)"))
             continue
-        if not confirm("  Add it?", default=True, assume_yes=assume_yes, style=style):
+        # Defaults to declining when the warning above just said this target "may be
+        # temporary" - live-caught (fable UX review, 2026-08-05): the confirm defaulted
+        # to Yes regardless, so pressing Enter wrote exactly the alias the warning had
+        # just advised against.
+        if not confirm("  Add it?", default=bool(resolved), assume_yes=assume_yes, style=style):
             print(f"{style.dim('-')} {label}: skipped")
             continue
         try:
@@ -3544,7 +3613,23 @@ def probe_analyser_output(tmpdir: Path, runner=None, only=None):
             yield (name, "ERROR", f"failed to launch: {exc}")
             continue
         combined = (proc.stdout or "") + (proc.stderr or "")
-        if "\x1b[" in combined:
+        # Checked BEFORE the noise heuristics, and independent of output length/ANSI -
+        # live-caught (fable UX review, 2026-08-05): a tool that crashed at startup
+        # (e.g. ModuleNotFoundError, a short traceback under the 200-byte NOISY
+        # threshold) was reported "OK: clean", the exact opposite of true. Every tool
+        # here is expected to exit 0 on a genuinely clean, well-formatted trivial file -
+        # nonzero is always anomalous (a crash, a misconfiguration, a version mismatch,
+        # or a false positive on our own fixture), never a legitimate "clean" result.
+        if proc.returncode != 0:
+            detail = combined.strip()
+            first_line = detail.splitlines()[0] if detail else "(no output)"
+            yield (
+                name,
+                "ERROR",
+                f"exit {proc.returncode} on a trivial clean file - crashed or "
+                f"misconfigured: {first_line[:150]}",
+            )
+        elif "\x1b[" in combined:
             yield (name, "NOISY", "ANSI escape codes leaked through the flags")
         elif len(combined.strip()) > 200:
             preview = combined.strip().splitlines()[0][:80]
@@ -3774,7 +3859,8 @@ def _bootstrap_only_hint(repo_root: Path) -> Optional[str]:
     return (
         "not installed yet - this looks like the single-file bootstrap download, not the "
         "full clone (no scripts/ next to install_helper.py here). Run the full install "
-        "(menu option 1, or --full) first, then re-run this check from inside the clone."
+        "(menu option 1, or: python install_helper.py install) first, then re-run this "
+        "check from inside the clone."
     )
 
 
@@ -4059,14 +4145,30 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
                 )
                 combined = (proc.stdout or "") + (proc.stderr or "")
                 found = "hardcoded_password" in combined
-                yield (
-                    "bandit (planted issue)",
-                    "OK" if found else "ERROR",
-                    "planted issue detected"
-                    if found
-                    else "planted issue NOT detected - bandit may be misconfigured",
-                    combined,
-                )
+                # Distinguishes a genuine crash from "ran fine, missed it" - live-caught
+                # (fable UX review, 2026-08-05): both used to be reported identically as
+                # "may be misconfigured", even when bandit's own exit code (0=clean,
+                # 1=issues found are its ONLY two normal outcomes) showed it never
+                # actually completed a real scan.
+                if found:
+                    yield ("bandit (planted issue)", "OK", "planted issue detected", combined)
+                elif proc.returncode not in (0, 1):
+                    first_line = combined.strip().splitlines()[0] if combined.strip() else "(no output)"
+                    yield (
+                        "bandit (planted issue)",
+                        "ERROR",
+                        f"crashed (exit {proc.returncode}), not just missed the issue: "
+                        f"{first_line[:150]}",
+                        combined,
+                    )
+                else:
+                    yield (
+                        "bandit (planted issue)",
+                        "ERROR",
+                        "planted issue NOT detected - bandit ran but its ruleset/config "
+                        "may be off",
+                        combined,
+                    )
             except (OSError, subprocess.TimeoutExpired) as exc:
                 yield ("bandit (planted issue)", "ERROR", f"failed to run: {exc}", None)
 
@@ -4218,6 +4320,20 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="install_helper",
         description="Install or update the compliance-surveillance-team Claude Code plugin.",
+        epilog=(
+            "Also (handled before any of the above, not shown in usage above since "
+            "argparse doesn't model them as a real subparser): "
+            "install_helper.py configure|archive|list-engagements [DIR] [--demo] [--yes] "
+            "- folder-scoped, same forms the 'virt-surv' alias (--setup-alias) runs when "
+            "you type e.g. 'virt-surv configure' from inside a project folder."
+        ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=banner_version_line(),
+        help="print the version and exit - cheap way to answer 'what are you running?' "
+        "when asking for support (fable UX review, 2026-08-05: no --version existed at all)",
     )
     parser.add_argument(
         "mode",
@@ -4448,6 +4564,26 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     assume_yes = "--yes" in rest
     paths = [a for a in rest if a not in ("--demo", "--yes")]
     style = Style(supports_color())
+    # Any OTHER dash-prefixed token (a typo, or a flag from the main parser that doesn't
+    # apply here) used to be silently treated as the target directory - live report
+    # (fable UX review, 2026-08-05): 'configure --branch dev' produced "not a directory:
+    # <cwd>/--branch" instead of a clear "that flag isn't supported here" error.
+    unknown_flags = [p for p in paths if p.startswith("-")]
+    if unknown_flags:
+        print(
+            f"{marks()['fail']} unknown option {unknown_flags[0]!r} for '{subcommand}' "
+            f"(supported: [DIR], --demo, --yes)"
+        )
+        return 1
+    # A one-line Morgan strapline, not the full boxed banner - user request, 2026-08-05
+    # ("make sure the install helper and virt-surv has a strapline from the Morgan
+    # persona"): the interactive menu already opens with print_banner()'s box + Morgan's
+    # intro line, but these folder-scoped 'virt-surv <subcommand>' calls went straight
+    # into the action with no persona touch at all - a genuinely different, quieter
+    # surface that the fast alias path exists specifically to keep quick, so the full
+    # banner box would be too heavy here.
+    hat = "🎩 " if _can_encode("🎩") else ""
+    print(style.dim(f"{hat}Morgan here - virt-surv {subcommand}"))
     if subcommand == "setup-alias":
         return run_setup_alias(style, marks(), assume_yes, demo)
     target = Path(paths[0]) if paths else Path(".")
@@ -4476,6 +4612,26 @@ def _main(argv=None) -> int:
     global run_cmd
     args = parse_args(argv)
     style = Style(supports_color())
+    # --model only means anything paired with one of these two - live-caught (fable UX
+    # review, 2026-08-05): `--model opus` alone was silently DISCARDED and fell through
+    # to a full install (nothing in the scripting-path gate below even looks at
+    # args.model on its own); and `--model-project DIR` WITHOUT --model silently reset
+    # an existing opus setting to sonnet, since a missing args.model (None) and an
+    # explicit `--model default` were indistinguishable downstream. Both are now errors
+    # instead of a surprise action or a silent write.
+    fail = marks()["fail"]
+    if args.model is not None and not (args.model_project or args.model_default):
+        print(
+            f"{fail} --model needs --model-project DIR or --model-default "
+            "(on its own it does nothing)"
+        )
+        return 1
+    if (args.model_project or args.model_default) and args.model is None:
+        print(
+            f"{fail} --model-project/--model-default need --model opus|sonnet|default "
+            "(nothing written - say which one explicitly, including 'default' to reset)"
+        )
+        return 1
     if (
         args.enable_project
         or args.permissions
@@ -4534,10 +4690,20 @@ def _main(argv=None) -> int:
         # terminal's input() blocks until the user types something, so this never spins;
         # see _menu_session's own docstring for why a SCRIPTED test fixture needs to feed
         # "q" once exhausted rather than an infinite "".
+        # Tracked so quitting after a real action doesn't claim "nothing changed" -
+        # live-caught (fable UX review, 2026-08-05): running Configure (which really
+        # enabled the plugin and wrote files) then quitting printed exactly that,
+        # readable as "your configuration was discarded". Never set for the one-shot
+        # "demo" preview or a session-wide --demo run, both of which genuinely write
+        # nothing regardless of which action was picked.
+        did_anything = False
         while True:
             action = choose_action(style)
             if action == "quit":
-                print("No problem - nothing changed. See you next time.")
+                if did_anything:
+                    print("See you next time.")
+                else:
+                    print("No problem - nothing changed. See you next time.")
                 return 0
             if action in ("configure", "manage"):
                 # Free-function flows with no need for Installer's clone-management
@@ -4548,8 +4714,10 @@ def _main(argv=None) -> int:
                     run_configure(target, style, marks(), args.yes, args.demo)
                 else:
                     run_manage_engagements(target, style, marks(), args.yes, args.demo)
+                did_anything = did_anything or not args.demo
             elif action == "alias":
                 run_setup_alias(style, marks(), args.yes, args.demo, args.repo)
+                did_anything = did_anything or not args.demo
             elif action == "demo":
                 # A one-shot preview of the full flow, not a persistent toggle - restored
                 # afterward so picking "Demo" once doesn't silently keep every LATER menu
@@ -4583,6 +4751,11 @@ def _main(argv=None) -> int:
                         run_cmd = saved_run_cmd
                 else:
                     Installer(args, style, marks(), subset=subset).run()
+                # Read-only diagnostics never change anything regardless of demo -
+                # "nothing changed" stays true after running one of these, unlike the
+                # write-capable subsets.
+                if subset not in ("check", "toolcheck", "envcheck", "selftest"):
+                    did_anything = did_anything or not args.demo
 
     subset = "full"
     if args.demo:
