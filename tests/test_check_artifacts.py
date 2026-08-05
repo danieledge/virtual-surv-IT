@@ -1096,6 +1096,77 @@ def test_apply_fixes_renders_report_from_pack_at_close(tmp_path):
     assert "**Likely cause:**" in report.read_text(encoding="utf-8")
 
 
+def test_apply_fixes_invalid_pack_does_not_crash_or_get_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status="🔒 CLOSING - finishing close artifacts")
+    bad = copy.deepcopy(_VALID_PACK)
+    del bad["findings"][0]["likely_cause"]
+    _pack(art, bad)
+    fixed = "\n".join(apply_fixes(art))  # must not crash; FINDINGS-INVALID reports it, not this
+    assert "FIXED: rendered" not in fixed
+    assert not (art / "REVIEW-t.md").exists()
+
+
+# --------------------------------------- findings/HTML rendering is in-process (2026-08-05)
+#
+# apply_fixes() used to shell out to render_findings.py (once per pack) and render_html.py
+# (once per un-rendered .md) as SEPARATE subprocesses - on a host where every python.exe spawn
+# is inflated by endpoint-security scanning (corp Windows), a handover pack with several
+# deliverables chained enough untimed spawns to present as the whole close step hanging. Now
+# calls render_findings.render_pack_file() / render_html.render_file() in-process.
+
+
+def test_apply_fixes_never_spawns_a_subprocess_for_rendering(tmp_path, monkeypatch):
+    import scripts.check_artifacts as ca
+
+    art = tmp_path / "artifacts"
+    _index(art, status="🔒 CLOSING - finishing close artifacts", listed=["notes.md"])
+    _pack(art, _VALID_PACK)  # slug "t" -> renders REVIEW-t.md, then REVIEW-t.html
+    _touch(art / "notes.md", "# Notes\n")  # a second .md missing its .html sibling
+
+    def _boom(*a, **k):
+        raise AssertionError("subprocess.run must not be called for rendering")
+
+    monkeypatch.setattr(ca.subprocess, "run", _boom)
+    fixed = apply_fixes(art)
+
+    assert (art / "REVIEW-t.md").is_file()
+    assert (art / "REVIEW-t.html").is_file()
+    assert (art / "notes.html").is_file()
+    assert any("REVIEW-t.md" in f or "REVIEW-t" in f for f in fixed)
+    assert any("notes.md -> notes.html" in f for f in fixed)
+
+
+def test_render_findings_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "render_findings")
+    monkeypatch.setattr(ca, "_RENDER_FINDINGS_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_render_findings_module()
+    second = ca._load_render_findings_module()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
+
+
+def test_render_html_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "render_html")
+    monkeypatch.setattr(ca, "_RENDER_HTML_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_render_html_module()
+    second = ca._load_render_html_module()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
+
+
 # ----------------------------------------------------- machine-readable state (ADR-006)
 
 

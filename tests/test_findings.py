@@ -111,3 +111,45 @@ def test_kind_performance_shows_gain_and_prefix(tmp_path):
     p.write_text(json.dumps(pack), encoding="utf-8")
     rf_main(["render_findings", str(p)])
     assert (tmp_path / "PERF-perf-x.md").is_file()
+
+
+# ------------------------------------------ render_pack_file (2026-08-05, in-process rendering)
+
+
+def test_render_pack_file_writes_the_default_out_path(tmp_path):
+    from scripts.render_findings import render_pack_file
+
+    (tmp_path / "data").mkdir()
+    p = tmp_path / "data" / "findings-t.json"
+    p.write_text(json.dumps(_GOLD), encoding="utf-8")
+    out = render_pack_file(p)
+    assert out == tmp_path / f"REVIEW-{_GOLD['slug']}.md"
+    assert out.is_file()
+
+
+def test_render_pack_file_invalid_pack_raises_value_error(tmp_path):
+    from scripts.render_findings import render_pack_file
+
+    bad = copy.deepcopy(_GOLD)
+    del bad["findings"][0]["likely_cause"]
+    (tmp_path / "data").mkdir()
+    p = tmp_path / "data" / "findings-bad.json"
+    p.write_text(json.dumps(bad), encoding="utf-8")
+    try:
+        render_pack_file(p)
+        raise AssertionError("expected ValueError for an invalid pack")
+    except ValueError as exc:
+        assert "schema violation" in str(exc)
+
+
+def test_render_pack_file_want_html_renders_in_process_no_subprocess(tmp_path):
+    import scripts.render_findings as rf
+
+    # 2026-08-05: render_findings no longer imports subprocess at all - --html is an
+    # in-process call to render_html.render_file(), not a child-process spawn.
+    assert not hasattr(rf, "subprocess")
+    (tmp_path / "data").mkdir()
+    p = tmp_path / "data" / "findings-t.json"
+    p.write_text(json.dumps(_GOLD), encoding="utf-8")
+    out = rf.render_pack_file(p, want_html=True)
+    assert out.with_suffix(".html").is_file()

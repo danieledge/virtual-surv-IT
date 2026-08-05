@@ -795,6 +795,67 @@ def _load_validate_findings_module():
         return None
 
 
+_RENDER_FINDINGS_MODULE_CACHE = None
+_RENDER_HTML_MODULE_CACHE = None
+
+
+def _load_render_findings_module():
+    """Import scripts.render_findings in BOTH run modes - same dual-mode pattern and
+    memoization as _load_validate_findings_module above.
+
+    2026-08-05 perf fix: apply_fixes() used to shell out to this script once PER PACK,
+    immediately followed by one subprocess spawn PER UN-RENDERED .md (see
+    _load_render_html_module below) - on a host where every python.exe spawn is inflated by
+    endpoint-security scanning (corp Windows), a handover pack with several deliverables
+    chained enough untimed spawns to present as the whole close step hanging. Both loops in
+    apply_fixes() now call the render function in-process instead."""
+    global _RENDER_FINDINGS_MODULE_CACHE
+    try:
+        from scripts import render_findings
+
+        return render_findings
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _RENDER_FINDINGS_MODULE_CACHE is not None:
+        return _RENDER_FINDINGS_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("render_findings.py")
+        spec = importlib.util.spec_from_file_location("render_findings", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _RENDER_FINDINGS_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
+def _load_render_html_module():
+    """Import scripts.render_html in BOTH run modes - same dual-mode pattern as
+    _load_render_findings_module above (2026-08-05 perf fix)."""
+    global _RENDER_HTML_MODULE_CACHE
+    try:
+        from scripts import render_html
+
+        return render_html
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _RENDER_HTML_MODULE_CACHE is not None:
+        return _RENDER_HTML_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("render_html.py")
+        spec = importlib.util.spec_from_file_location("render_html", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _RENDER_HTML_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
 def check_findings_packs(artifacts_dir: Path) -> list[str]:
     """Validate any structured findings pack under artifacts/data/ against the schema,
     in-process (2026-08-03 perf audit - was one subprocess spawn per pack). A pack that
@@ -1468,18 +1529,14 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
     # an invalid pack (that surfaces as FINDINGS-INVALID from the check, not a silent bad report).
     data_dir = artifacts_dir / "data"
     if data_dir.is_dir() and pack_status(artifacts_dir) in ("closing", "closed"):
-        renderer = Path(__file__).with_name("render_findings.py")
-        for pack in sorted(data_dir.glob("findings-*.json")):
-            result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
-                [sys.executable, str(renderer), str(pack)],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0:
-                fixed.append(
-                    f"FIXED: rendered {result.stdout.split('-> ')[-1].strip()} from {pack.name}"
-                )
-            # non-zero = invalid pack; the FINDINGS-INVALID check reports it, don't double-flag here
+        rf = _load_render_findings_module()
+        if rf is not None:  # fail open if the renderer module won't load, same posture as
+            for pack in sorted(data_dir.glob("findings-*.json")):  # check_findings_packs()
+                try:
+                    out = rf.render_pack_file(pack)
+                except Exception:
+                    continue  # invalid pack; FINDINGS-INVALID reports it, don't double-flag
+                fixed.append(f"FIXED: rendered {out} from {pack.name}")
 
     # Normalise the email FIRST so the render pass never renders a mis-typed .md email.
     for bad in sorted(artifacts_dir.rglob("engagement-summary-*.md")):
@@ -1565,23 +1622,21 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
             except Exception as exc:  # STATE-INVALID surfaces from the check; log, don't crash
                 fixed.append(f"COULD-NOT-RENDER START-HERE from state: {exc}")
 
-    # Render every .md lacking its .html sibling. render_html is resolved by __file__-relative
-    # path so this works both as `-m scripts.check_artifacts` and by direct-path plugin invocation.
-    render_html = Path(__file__).with_name("render_html.py")
+    # Render every .md lacking its .html sibling, in-process (2026-08-05 perf fix - see
+    # _load_render_html_module above).
+    rh = _load_render_html_module()
     for md in sorted(artifacts_dir.rglob("*.md")):
         if md.with_suffix(".html").is_file():
             continue
-        result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path arg
-            [sys.executable, str(render_html), str(md)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            fixed.append(
-                f"FIXED MISSING-HTML: rendered {md.name} -> {md.with_suffix('.html').name}"
-            )
-        else:
-            fixed.append(f"COULD-NOT-RENDER {md.name}: {(result.stderr or '').strip()[:120]}")
+        if rh is None:
+            fixed.append(f"COULD-NOT-RENDER {md.name}: render_html module unavailable")
+            continue
+        try:
+            out = rh.render_file(md)
+        except Exception as exc:
+            fixed.append(f"COULD-NOT-RENDER {md.name}: {exc}")
+            continue
+        fixed.append(f"FIXED MISSING-HTML: rendered {md.name} -> {out.name}")
     return fixed
 
 

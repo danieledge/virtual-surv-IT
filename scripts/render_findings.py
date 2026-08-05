@@ -12,15 +12,15 @@ top-level artifacts/ stays user-navigable; by default the rendered REVIEW-<slug>
 that top-level artifacts/ (the pack's grandparent when the pack is in a `data/` dir), keeping the
 .md/.html beside the other user-facing deliverables.
 
-Output is forced to UTF-8 (Windows-safe). No third-party deps for the Markdown; `--html` shells to
-the bundled render_html.py (resolved by path, so it works in repo and installed-plugin modes).
+Output is forced to UTF-8 (Windows-safe). No third-party deps for the Markdown; `--html` imports
+the bundled render_html.py in-process (resolved dual-mode, so it works in repo and
+installed-plugin modes - no subprocess spawn, 2026-08-05).
 Usage: python -m scripts.render_findings <pack.json> [--out REVIEW-<slug>.md] [--html]
 """
 
 from __future__ import annotations
 
 import json
-import subprocess  # nosec B404 - fixed-argv call to our own bundled render_html.py, no shell
 import sys
 from pathlib import Path
 
@@ -174,6 +174,30 @@ def _default_out(pack_path: Path, slug: str, prefix: str = "REVIEW") -> Path:
     return root / f"{prefix}-{slug}.md"
 
 
+def render_pack_file(pack_path: Path, out_path: Path | None = None, want_html: bool = False) -> Path:
+    """Validate + render one findings pack to its canonical REVIEW-<slug>.md, in-process.
+    Shared by main() (CLI) and check_artifacts.apply_fixes() (2026-08-05 perf fix - apply_fixes
+    used to shell out to this script once per pack, immediately followed by a subprocess per
+    un-rendered .md - on a host where every python.exe spawn is inflated by endpoint-security
+    scanning (corp Windows), that chain of untimed spawns could present as the whole close step
+    hanging). Raises ValueError (with the schema violations) on an invalid pack - never renders
+    a bad report silently."""
+    errs = load_and_validate(pack_path)
+    if errs:
+        raise ValueError(f"{len(errs)} schema violation(s): " + "; ".join(errs))
+    pack = json.loads(pack_path.read_text(encoding="utf-8"))
+    prefix = _KIND.get(pack.get("kind", "review"), _KIND["review"])[0]
+    out = out_path or _default_out(pack_path, pack["slug"], prefix)
+    out.write_text(render(pack), encoding="utf-8")
+    if want_html:
+        try:
+            from scripts.render_html import render_file as _render_html_file
+        except ImportError:  # pragma: no cover - direct-path invocation
+            from render_html import render_file as _render_html_file  # type: ignore[no-redef]
+        _render_html_file(out)
+    return out
+
+
 def main(argv: list[str]) -> int:
     _force_utf8_output()
     args = [a for a in argv[1:] if not a.startswith("--")]
@@ -185,23 +209,13 @@ def main(argv: list[str]) -> int:
         print("usage: python -m scripts.render_findings <pack.json> [--out FILE] [--html]")
         return 2
     pack_path = Path(args[0])
-    errs = load_and_validate(pack_path)
-    if errs:
-        print(
-            f"REFUSING to render {pack_path}: {len(errs)} schema violation(s) - run validate_findings"
-        )
+    out_override = Path(out_flag) if out_flag else None
+    try:
+        out = render_pack_file(pack_path, out_override, want_html=do_html)
+    except ValueError as exc:
+        print(f"REFUSING to render {pack_path}: {exc} - run validate_findings")
         return 1
-    pack = json.loads(pack_path.read_text(encoding="utf-8"))
-    prefix = _KIND.get(pack.get("kind", "review"), _KIND["review"])[0]
-    out = Path(out_flag) if out_flag else _default_out(pack_path, pack["slug"], prefix)
-    out.write_text(render(pack), encoding="utf-8")
-    print(f"Rendered findings pack -> {out}")
-    if do_html:
-        render_html = Path(__file__).with_name("render_html.py")
-        result = subprocess.run(  # nosec B603
-            [sys.executable, str(render_html), str(out)], capture_output=True, text=True
-        )
-        print(result.stdout.strip() or result.stderr.strip()[:200])
+    print(f"Rendered findings pack -> {out}" + (" (+ HTML)" if do_html else ""))
     return 0
 
 

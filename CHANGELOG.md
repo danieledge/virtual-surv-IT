@@ -3,6 +3,23 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.21] - 2026-08-05 - Close-time rendering is in-process: no more chained subprocess spawns
+
+### Fixed
+- `check_artifacts --fix` (run by `/handover` and every engagement close) used to shell out to
+  `render_findings.py` once per findings pack, then to `render_html.py` once per `.md` artifact
+  still missing its `.html` sibling - each a separate untimed `python.exe` child-process spawn.
+  On a host where every new process gets scanned by endpoint security (a corporate Windows box),
+  a handover pack with a findings-heavy review plus several other deliverables chained enough of
+  these spawns back-to-back to present as the whole close step hanging or timing out, with no
+  indication of which step was actually slow. `render_findings.py` and `render_html.py` each
+  gained an importable `render_pack_file()`/`render_file()` function; `check_artifacts.py` now
+  calls them in-process via the same dual-mode-import-plus-memoization pattern already used for
+  findings-pack schema validation (the 2026-08-03 perf audit that converted
+  `check_findings_packs()` away from a subprocess-per-pack). `render_findings.py --html` also no
+  longer shells out to `render_html.py` - same in-process call. Net effect: a close that used to
+  spawn N+1 child interpreters now spawns zero for rendering, regardless of findings-pack size.
+
 ## [0.33.20] - 2026-08-05 - Whole-plugin review: pack-filename collision and a raw-data guard wiring gap
 
 A report-only independent review of the whole plugin (everything outside `install_helper.py`,
