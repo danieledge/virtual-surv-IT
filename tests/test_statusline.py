@@ -118,6 +118,24 @@ def test_cache_hit_bypasses_the_probe_loop_entirely(tmp_path):
     assert "Sonnet 4.6" in proc.stdout
 
 
+def test_preferences_show_split_off_by_default(tmp_path):
+    proc = _run(tmp_path, _basic_payload(tmp_path))
+    assert proc.returncode == 0
+    assert "split:off" in proc.stdout
+
+
+def test_preferences_show_split_on_when_set(tmp_path):
+    prefs_dir = tmp_path / ".claude"
+    prefs_dir.mkdir(parents=True)
+    (prefs_dir / "team-preferences.json").write_text(
+        json.dumps({"large_context_review_split": True}), encoding="utf-8"
+    )
+    proc = _run(tmp_path, _basic_payload(tmp_path))
+    assert proc.returncode == 0
+    assert "split:on" in proc.stdout
+    assert "split:off" not in proc.stdout
+
+
 def test_invalid_cached_entry_falls_back_to_the_probe_loop(tmp_path):
     """A stale/bogus cache (e.g. an interpreter since uninstalled) must not brick the
     statusline - `command -v` on it fails, so it falls through exactly like no cache."""

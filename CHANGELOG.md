@@ -3,6 +3,20 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.22] - 2026-08-05 - Large-context review split was invisible: banner and statusline both missed it
+
+### Fixed
+- `large_context_review_split` (the per-project toggle that splits large reviews by component
+  to dodge corporate-proxy timeouts) was read correctly by the step-0 probe and printed in its
+  raw output, but nothing in `/engage`'s banner-composition instructions ever told Morgan to
+  actually state it - so a user who turned it on got no confirmation in the opening banner that
+  it took effect. `.claude/skills/.shared/engage-open.md` now instructs a one-line banner
+  mention when it's on (silent when off, since it's a reliability workaround most projects never
+  touch, not an output preference worth restating every engagement).
+- `scripts/statusline.sh` showed docx/citations/model preferences on every render but never
+  `large_context_review_split` - now shown unconditionally (`split:on|off`) alongside the other
+  three, so the setting is visible at a glance without asking Morgan.
+
 ## [0.33.21] - 2026-08-05 - Close-time rendering is in-process: no more chained subprocess spawns
 
 ### Fixed

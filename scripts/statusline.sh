@@ -4,9 +4,12 @@
 # Shows Morgan's state at ZERO context cost (a statusline is a shell render, not a model
 # turn): dormant sessions show that plainly; while an engagement is live it names the
 # ACTIVE slug, its status and phase. Every render also shows the project's docx/citations/
-# model preferences (same three /preferences and /engage's banner show), so they're visible
-# without asking. Reads the statusLine stdin JSON (model, cost, workspace) plus the on-disk
-# engagement state and team-preferences.json/settings.json; never talks to the model.
+# review-split/model preferences (same four settings /preferences shows; /engage's banner
+# surfaces the same four but stays silent on review-split when it's off, since that one is a
+# reliability workaround, not an output choice - docs/internal/large-context-review-splitting-plan.md),
+# so they're visible without asking. Reads the statusLine stdin JSON (model, cost, workspace)
+# plus the on-disk engagement state and team-preferences.json/settings.json; never talks to
+# the model.
 #
 # Wire (HUMAN-run - settings edits are human-only, ADR-002 rec 5):
 #   bash scripts/apply-statusline.sh
@@ -107,7 +110,8 @@ if art.is_dir():
 bits.append(live if live else "😴 Morgan dormant")
 
 # Preferences (project-wide; independent of whether an engagement is currently open -
-# same three settings /preferences and /engage's banner show).
+# same four settings /preferences shows; always-shown here regardless of state, unlike
+# /engage's banner which stays silent on review-split when it's off).
 prefs = {}
 try:
     prefs = json.loads((Path(cwd) / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
@@ -115,13 +119,17 @@ except Exception:
     pass
 docx_on = "docx" in (prefs.get("extra_formats") or [])
 citations_on = prefs.get("regulatory_citations", True)
+split_on = prefs.get("large_context_review_split", False)
 morgan_model = ""
 try:
     settings = json.loads((Path(cwd) / ".claude" / "settings.json").read_text(encoding="utf-8"))
     morgan_model = settings.get("model") or ""
 except Exception:
     pass
-bits.append(f"docx:{'on' if docx_on else 'off'} cite:{'on' if citations_on else 'off'} morgan:{morgan_model or 'default'}")
+bits.append(
+    f"docx:{'on' if docx_on else 'off'} cite:{'on' if citations_on else 'off'} "
+    f"split:{'on' if split_on else 'off'} morgan:{morgan_model or 'default'}"
+)
 
 if model:
     bits.append(model)

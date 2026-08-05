@@ -193,6 +193,15 @@ project preference, not a gate: no allow-list-style refusal, and Morgan may writ
 that file, unlike hooks/settings). **Same line, append citations**: from `REGULATORY_CITATIONS=`,
 *"regulatory citations on"* or *"off (project preference)"*.
 
+**Large-context review split (banner, one short line, only when on).** The probe prints
+`LARGE_CONTEXT_REVIEW_SPLIT=on|off` but - unlike doc formats/citations above - this is a
+reliability workaround, not an output preference (`docs/internal/large-context-review-splitting-plan.md`),
+so state it only when `on`: *"Large reviews will be split by component this session (project
+preference)."* Say nothing when `off` - most projects never touch this, and a per-engagement "off"
+line would be noise for a setting that already defaults to off. A user who explicitly names the
+corp-proxy/timeout issue mid-session still gets the split applied per the orchestration-discipline
+rule even if this stayed silent at open.
+
 **Model (banner, one short line, every engagement).** State which model you are actually
 running as this session (e.g. *"running as Sonnet 4.6"*) - your own identity, not a file read:
 `.claude/settings.json`'s `model` key (if any) is the *configured default*, which can differ from
