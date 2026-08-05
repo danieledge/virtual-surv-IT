@@ -517,6 +517,92 @@ def build_skeleton(
     return out
 
 
+# --------------------------------------------------------------------------- drift-stamp writer
+
+_FINGERPRINTS_FILENAME = "codebase-map.fingerprints.json"
+
+
+def _split_paths_cell(cell: str) -> list[str]:
+    return [g.strip() for g in cell.split(",") if g.strip()]
+
+
+def _parse_map_paths_column(map_path: Path) -> dict[str, list[str]]:
+    """Area -> globs, from the §2 table's optional `Paths` column - same column-driven
+    detection scripts.check_artifacts.check_map() already uses for As-of/Anchor (a table
+    without a Paths column contributes nothing, additively - no error, no entries)."""
+    if not map_path.is_file():
+        return {}
+    lines = map_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    columns: dict[str, int] | None = None
+    result: dict[str, list[str]] = {}
+    for line in lines:
+        if not line.lstrip().startswith("|"):
+            columns = None
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if not cells or set("".join(cells)) <= {"-", ":", " "}:
+            continue
+        lowered = [c.lower() for c in cells]
+        if any("basis" in c for c in lowered):
+            columns = {name: i for i, name in enumerate(lowered)}
+            continue
+        if columns is None:
+            continue
+        area_idx = columns.get("area")
+        paths_idx = next((i for n, i in columns.items() if "paths" in n), None)
+        if area_idx is None or paths_idx is None:
+            continue
+        if area_idx >= len(cells) or paths_idx >= len(cells):
+            continue
+        area = cells[area_idx].strip()
+        globs = _split_paths_cell(cells[paths_idx])
+        if area and globs:
+            result[area] = globs
+    return result
+
+
+def _current_head_sha(repo_root: Path) -> str:
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "no-vcs"
+    sha = result.stdout.strip()
+    return sha if result.returncode == 0 and sha else "no-vcs"
+
+
+def write_fingerprints(map_path: Path, out_path: Path | None = None) -> dict:
+    """Read the codebase map's §2 `Paths` column, fingerprint each entry's globs
+    (scripts.map_fingerprint.compute_fingerprint), and write the sidecar
+    docs/codebase-map.fingerprints.json (design: docs/adr/ADR-007-codebase-map-evolution.md).
+    `areas` (docs/codebase-map.d/<area>.md fingerprinting) is Chunk E territory - left as an
+    empty dict here, additive later, not a placeholder that needs revisiting to be valid."""
+    from datetime import datetime, timezone
+
+    from scripts.map_fingerprint import compute_fingerprint, resolve_globs
+
+    repo_root = map_path.parent
+    out_path = out_path or (repo_root / _FINGERPRINTS_FILENAME)
+    entries = {}
+    for area, globs in _parse_map_paths_column(map_path).items():
+        fp = compute_fingerprint(globs, repo_root)
+        files_hashed = len(resolve_globs(globs, repo_root))
+        entries[area] = {"paths": globs, "fingerprint": fp, "files_hashed": files_hashed}
+    payload = {
+        "generated_by": "repo_skeleton",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "root_anchor": _current_head_sha(repo_root),
+        "entries": entries,
+        "areas": {},
+    }
+    out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return payload
+
+
 # --------------------------------------------------------------------------- CLI
 
 
@@ -544,7 +630,26 @@ def main(argv: list[str]) -> int:
         action="store_true",
         help="append a Mermaid dependency graph section (only edges PageRank could resolve)",
     )
+    ap.add_argument(
+        "--fingerprint",
+        type=Path,
+        default=None,
+        metavar="MAP_PATH",
+        help="drift-stamp mode: read MAP_PATH's codebase-map §2 'Paths' column, fingerprint "
+        "each entry's globs, write codebase-map.fingerprints.json alongside it. Ignores "
+        "--budget/--out/--mermaid/etc - this is a separate mode, not a skeleton render",
+    )
     args = ap.parse_args(argv[1:])
+
+    if args.fingerprint:
+        map_path = args.fingerprint.expanduser().resolve()
+        if not map_path.is_file():
+            print(f"not a file: {map_path}", file=sys.stderr)
+            return 1
+        payload = write_fingerprints(map_path)
+        out_path = map_path.parent / _FINGERPRINTS_FILENAME
+        print(f"Wrote {len(payload['entries'])} fingerprint(s) -> {out_path}")
+        return 0
 
     root = Path(args.path).expanduser().resolve()
     if not root.is_dir():

@@ -5,6 +5,7 @@ Chunk B: PageRank, Mermaid, churn.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import time
 
@@ -19,8 +20,11 @@ from scripts.repo_skeleton import (
     mtime_churn,
     pagerank,
     render_mermaid,
+    write_fingerprints,
+    _current_head_sha,
     _estimate_tokens,
     _os_walk_files,
+    _parse_map_paths_column,
     _python_import_modules,
     _symbols_ast_python,
     _symbols_ctags,
@@ -454,3 +458,102 @@ def test_build_skeleton_omits_mermaid_section_when_graph_is_empty(tmp_path):
 
     out = build_skeleton(tmp_path, budget_tokens=6000, mermaid_graph={"a.py": set()})
     assert "## Dependency graph" not in out
+
+
+# --------------------------------------------------------------------------- drift-stamp writer
+
+_MAP_WITH_PATHS = """# Codebase Map - Test
+
+| # | Area | Entry | Basis | As-of | Anchor | Paths |
+|---|------|-------|-------|-------|--------|-------|
+| 1 | detection rules | Fact one | 📊 seen | 2026-08-06 | `abc123` | src/rules.py |
+| 2 | config | Fact two | 🧠 assumed | 2026-08-06 | `abc123` | src/config.py, src/settings.py |
+"""
+
+_MAP_WITHOUT_PATHS = """# Codebase Map - Test
+
+| # | Area | Entry | Basis | As-of | Anchor |
+|---|------|-------|-------|-------|--------|
+| 1 | detection rules | Fact one | 📊 seen | 2026-08-06 | `abc123` |
+"""
+
+
+def test_parse_map_paths_column_extracts_area_to_globs(tmp_path):
+    m = tmp_path / "map.md"
+    m.write_text(_MAP_WITH_PATHS, encoding="utf-8")
+    result = _parse_map_paths_column(m)
+    assert result == {
+        "detection rules": ["src/rules.py"],
+        "config": ["src/config.py", "src/settings.py"],
+    }
+
+
+def test_parse_map_paths_column_missing_column_is_empty_not_an_error(tmp_path):
+    m = tmp_path / "map.md"
+    m.write_text(_MAP_WITHOUT_PATHS, encoding="utf-8")
+    assert _parse_map_paths_column(m) == {}
+
+
+def test_parse_map_paths_column_missing_file_is_empty(tmp_path):
+    assert _parse_map_paths_column(tmp_path / "nonexistent.md") == {}
+
+
+def test_current_head_sha_no_vcs_when_not_a_git_repo(tmp_path):
+    assert _current_head_sha(tmp_path) == "no-vcs"
+
+
+def test_current_head_sha_resolves_in_a_real_repo(tmp_path):
+    subprocess.run(["git", "-C", str(tmp_path), "init", "-q"], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "config", "user.email", "t@example.com"], check=True
+    )
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "T"], check=True)
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "init"], check=True)
+    sha = _current_head_sha(tmp_path)
+    assert sha != "no-vcs"
+    assert len(sha) == 40
+
+
+def test_write_fingerprints_writes_sidecar_with_entries(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "rules.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "src" / "config.py").write_text("y = 2\n", encoding="utf-8")
+    (tmp_path / "src" / "settings.py").write_text("z = 3\n", encoding="utf-8")
+    m = tmp_path / "map.md"
+    m.write_text(_MAP_WITH_PATHS, encoding="utf-8")
+
+    payload = write_fingerprints(m)
+    assert set(payload["entries"]) == {"detection rules", "config"}
+    assert payload["entries"]["detection rules"]["files_hashed"] == 1
+    assert payload["entries"]["config"]["files_hashed"] == 2
+    assert payload["areas"] == {}
+    assert payload["generated_by"] == "repo_skeleton"
+
+    sidecar = tmp_path / "codebase-map.fingerprints.json"
+    assert sidecar.is_file()
+    on_disk = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert on_disk == payload
+
+
+def test_write_fingerprints_no_paths_column_writes_empty_entries(tmp_path):
+    m = tmp_path / "map.md"
+    m.write_text(_MAP_WITHOUT_PATHS, encoding="utf-8")
+    payload = write_fingerprints(m)
+    assert payload["entries"] == {}
+
+
+def test_write_fingerprints_fingerprint_changes_when_covered_file_changes(tmp_path):
+    (tmp_path / "src").mkdir()
+    f = tmp_path / "src" / "rules.py"
+    f.write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "src" / "config.py").write_text("y\n", encoding="utf-8")
+    (tmp_path / "src" / "settings.py").write_text("z\n", encoding="utf-8")
+    m = tmp_path / "map.md"
+    m.write_text(_MAP_WITH_PATHS, encoding="utf-8")
+
+    before = write_fingerprints(m)["entries"]["detection rules"]["fingerprint"]
+    f.write_text("x = 2\n", encoding="utf-8")
+    after = write_fingerprints(m)["entries"]["detection rules"]["fingerprint"]
+    assert before != after
