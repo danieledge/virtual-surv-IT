@@ -108,6 +108,46 @@ _NOVCS_CELL_RE = re.compile(r"(?i)^[\s`']*no[\s-]?vcs[\s`']*$")
 _MAP_STALENESS_BUDGET = 50
 _STALENESS_BUDGET_RE = re.compile(r"(?i)staleness-budget[^0-9]*(\d+)")
 
+# ADR-007 Phase 1 Chunk C: MAP-DRIFT/MAP-DEAD-POINTER. Backtick-wrapped `path/file.py:123` (or
+# a `:12-34` range) citations inside an entry's own text - the shape every existing map entry
+# already uses (see docs/templates/codebase-map.md's own examples), not a new convention.
+_MAP_CITATION_RE = re.compile(r"`([\w./-]+\.\w+):(\d+)(?:-\d+)?`")
+_FINGERPRINTS_FILENAME = "codebase-map.fingerprints.json"
+
+
+def _split_paths_cell(cell: str) -> list[str]:
+    return [g.strip() for g in cell.split(",") if g.strip()]
+
+
+def _read_map_skeleton_toggle(project_dir: Path) -> bool:
+    """map_skeleton toggle for MAP-DRIFT/MAP-DEAD-POINTER - off by default. Same 3-tier
+    precedence as the docx/citations preferences (project's own team-preferences.json key,
+    present-or-not, wins even if false; else this machine's installer.json default; else
+    built-in False). Deliberately re-derived, not imported, matching
+    engage_probe.read_machine_defaults()'s own stated standalone-runnability rationale - this
+    file must keep working invoked by path in plugin mode, not just as -m scripts.check_artifacts."""
+    try:
+        prefs = json.loads(
+            (project_dir / ".claude" / "team-preferences.json").read_text(encoding="utf-8-sig")
+        )
+        if isinstance(prefs, dict) and "map_skeleton" in prefs:
+            return bool(prefs["map_skeleton"])
+    except (OSError, ValueError):
+        pass
+    try:
+        import os
+
+        base = os.environ.get("XDG_CONFIG_HOME")
+        root = Path(base) if base else Path.home() / ".config"
+        installer_cfg = json.loads(
+            (root / "virt-surv-it" / "installer.json").read_text(encoding="utf-8-sig")
+        )
+        if isinstance(installer_cfg, dict):
+            return bool(installer_cfg.get("default_map_skeleton", False))
+    except (OSError, ValueError):
+        pass
+    return False
+
 # Code-without-QA gate: a live engagement (2026-07-21) delivered phase-2 implementation
 # code from inside an analysis workflow and no QA pass ever ran - the DoD items are
 # PM-attested, so nothing mechanical caught it. This check does: deliverable code in
@@ -605,14 +645,79 @@ def _split_cells(line: str) -> list[str]:
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
 
-def check_map(map_path: Path) -> list[str]:
+def _check_map_drift(
+    map_path: Path, project_dir: Path, drift_rows: list[tuple[int, str, list[str]]]
+) -> list[str]:
+    """MAP-DRIFT: a §2 entry's `Paths` glob no longer matches its recorded fingerprint (or
+    was never fingerprinted at all) - toggle-gated, called only when map_skeleton is on
+    (check_map). Escalate-only, matching the existing precedent that apply_fixes() never
+    auto-resolves map hygiene findings - re-verifying an entry's PROSE against the code it
+    now describes is a judgement call, not something to mechanically "fix"."""
+    if not drift_rows:
+        return []
+    mf = _load_map_fingerprint_module()
+    if mf is None:
+        return []  # fail open, same posture as every other optional-module load in this file
+    sidecar_path = project_dir / _FINGERPRINTS_FILENAME
+    try:
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        entries = sidecar.get("entries") or {}
+    except (OSError, ValueError):
+        entries = {}
+    findings: list[str] = []
+    for lineno, area, globs in drift_rows:
+        recorded = entries.get(area)
+        if recorded is None:
+            findings.append(
+                f"MAP-DRIFT: {map_path}:{lineno} area {area!r} has a Paths glob but was never "
+                f"fingerprinted - run `<python> -m scripts.repo_skeleton --fingerprint "
+                f"{map_path}` (or `/map-codebase --refresh`)"
+            )
+            continue
+        current = mf.compute_fingerprint(globs, project_dir)
+        if current != recorded.get("fingerprint"):
+            findings.append(
+                f"MAP-DRIFT: {map_path}:{lineno} area {area!r} changed since mapped - "
+                f"re-verify the entry and refresh its fingerprint (`<python> -m "
+                f"scripts.repo_skeleton --fingerprint {map_path}`)"
+            )
+    return findings
+
+
+def _check_map_dead_pointers(
+    map_path: Path, project_dir: Path, citation_checks: list[tuple[int, str]]
+) -> list[str]:
+    """MAP-DEAD-POINTER: a `file:line` citation in an entry's own text that no longer resolves
+    on disk - independent of the fingerprint sidecar, a pure filesystem check. Toggle-gated,
+    called only when map_skeleton is on (check_map)."""
+    findings: list[str] = []
+    for lineno, entry_text in citation_checks:
+        for m in _MAP_CITATION_RE.finditer(entry_text):
+            cited_path = m.group(1)
+            if not (project_dir / cited_path).is_file():
+                findings.append(
+                    f"MAP-DEAD-POINTER: {map_path}:{lineno} cites `{m.group(0)[1:-1]}` - "
+                    f"{cited_path} no longer exists"
+                )
+    return findings
+
+
+def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
     """Mechanical hygiene findings for a codebase map; empty means the gate is satisfied.
 
     2026-07-29 register M1/M2/M3/M7: the anchor placeholder no longer passes as no-vcs,
     per-entry As-of/Anchor cells are validated (entry SHAs must resolve), the header anchor
     is bounded against HEAD, entry detection is column-driven (rename-tolerant), and the
-    line cap excludes the Deprecated section ADR-003 mandates keeping."""
+    line cap excludes the Deprecated section ADR-003 mandates keeping.
+
+    ADR-007 Phase 1 Chunk C: MAP-DRIFT (a §2 entry's optional `Paths` glob no longer matches
+    its recorded fingerprint) and MAP-DEAD-POINTER (a `file:line` citation in an entry's own
+    text that no longer resolves on disk) - both gated behind the map_skeleton toggle
+    (_read_map_skeleton_toggle), off by default: a project that hasn't opted in sees zero new
+    findings, identical to pre-Chunk-C behaviour."""
     findings: list[str] = []
+    project_dir = project_dir or map_path.parent
+    map_skeleton_on = _read_map_skeleton_toggle(project_dir)
     text = map_path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
 
@@ -681,6 +786,10 @@ def check_map(map_path: Path) -> list[str]:
     # a real Anchor (SHA or the strict no-vcs token). Entry SHAs must resolve (M2: they
     # read as verified provenance on resume, so they may not be decorative).
     entry_shas: dict[str, int] = {}
+    # ADR-007 Phase 1 Chunk C - gathered during the same scan, only when the toggle is on
+    # (an empty list either way costs nothing extra below when map_skeleton_on is False).
+    drift_rows: list[tuple[int, str, list[str]]] = []  # lineno, area, globs
+    citation_checks: list[tuple[int, str]] = []  # lineno, entry cell text
     columns: dict[str, int] | None = None
     found_entry_table = False
     for lineno, line in enumerate(lines, start=1):
@@ -721,6 +830,22 @@ def check_map(map_path: Path) -> list[str]:
                     f"neither a commit SHA nor `no-vcs` ({cell[:30]!r}) - entry provenance "
                     "may not be decorative (ADR-003)"
                 )
+        if map_skeleton_on:
+            area_idx = columns.get("area")
+            paths_idx = next((i for n, i in columns.items() if "paths" in n), None)
+            if (
+                area_idx is not None
+                and paths_idx is not None
+                and area_idx < len(cells)
+                and paths_idx < len(cells)
+            ):
+                area = cells[area_idx].strip()
+                globs = _split_paths_cell(cells[paths_idx])
+                if area and globs:
+                    drift_rows.append((lineno, area, globs))
+            entry_idx = columns.get("entry")
+            if entry_idx is not None and entry_idx < len(cells):
+                citation_checks.append((lineno, cells[entry_idx]))
     if not found_entry_table:
         # Fallback for legacy maps whose entries table predates the Basis column: the old
         # section-name scan, so their rows still get the basis check.
@@ -749,6 +874,10 @@ def check_map(map_path: Path) -> list[str]:
                 f"MAP-STALE-ENTRY-ANCHOR: {map_path}:{lineno} entry anchor {sha} does not "
                 "resolve in this repository - re-verify the entry and refresh its anchor"
             )
+
+    if map_skeleton_on:
+        findings.extend(_check_map_drift(map_path, project_dir, drift_rows))
+        findings.extend(_check_map_dead_pointers(map_path, project_dir, citation_checks))
 
     for pattern, label in _SECRET_PATTERNS:
         if pattern.search(text):
@@ -851,6 +980,35 @@ def _load_render_html_module():
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         _RENDER_HTML_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
+_MAP_FINGERPRINT_MODULE_CACHE = None
+
+
+def _load_map_fingerprint_module():
+    """Import scripts.map_fingerprint in BOTH run modes - same dual-mode pattern as
+    _load_render_findings_module above (ADR-007 Phase 1 Chunk C: MAP-DRIFT needs
+    compute_fingerprint to agree byte-for-byte with what repo_skeleton --fingerprint wrote)."""
+    global _MAP_FINGERPRINT_MODULE_CACHE
+    try:
+        from scripts import map_fingerprint
+
+        return map_fingerprint
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _MAP_FINGERPRINT_MODULE_CACHE is not None:
+        return _MAP_FINGERPRINT_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("map_fingerprint.py")
+        spec = importlib.util.spec_from_file_location("map_fingerprint", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _MAP_FINGERPRINT_MODULE_CACHE = module
         return module
     except Exception:
         return None
@@ -1837,7 +1995,7 @@ def main(argv: list[str]) -> int:
     map_note = "no codebase map found - skipped (created at first close, ADR-003)"
     if map_path is not None:
         if map_path.is_file():
-            findings.extend(check_map(map_path))
+            findings.extend(check_map(map_path, project_dir=Path.cwd()))
             map_note = f"map checked: {map_path}"
         else:
             findings.append(f"MAP-NOT-FOUND: {map_path} was given explicitly but does not exist")

@@ -27,6 +27,7 @@ from scripts.check_artifacts import (
     find_codebase_map,
     main as ca_main,
     workspace_dirs,
+    _read_map_skeleton_toggle,
 )
 
 _VALID_PACK = {
@@ -657,6 +658,178 @@ def test_map_outside_git_skips_anchor_check(tmp_path):
     m = tmp_path / "nogit" / "docs" / "codebase-map.md"
     _touch(m, _good_map("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"))
     assert check_map(m) == []
+
+
+# ---------------------------------- MAP-DRIFT / MAP-DEAD-POINTER (ADR-007 Phase 1 Chunk C)
+
+
+def _good_map_with_paths(sha, entry="threshold rationale in `src/x.py:12`"):
+    return (
+        "# Codebase Map - Proj\n\n"
+        f"> **Document control** · Owner `Morgan (PM)` · As-of `2026-07-18` · Anchor `{sha}`\n\n"
+        "## 2. Map entries\n\n"
+        "| # | Area | Entry | Basis | As-of | Anchor | Paths |\n"
+        "|---|------|-------|-------|-------|--------|-------|\n"
+        f"| 1 | rules | {entry} | 📊 seen in review | 2026-07-18 | `{sha[:9]}` | src/x.py |\n"
+    )
+
+
+def test_map_skeleton_toggle_off_by_default_no_new_findings(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    # No team-preferences.json at all - toggle defaults to off - a Paths glob that was
+    # NEVER fingerprinted (the load-bearing regression guard: this would be MAP-DRIFT if on).
+    assert check_map(m, project_dir=repo) == []
+
+
+def test_map_skeleton_toggle_on_via_project_preference():
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / ".claude").mkdir()
+        (root / ".claude" / "team-preferences.json").write_text(
+            json.dumps({"map_skeleton": True}), encoding="utf-8"
+        )
+        assert _read_map_skeleton_toggle(root) is True
+
+
+def test_map_skeleton_toggle_project_false_overrides_machine_true(tmp_path, monkeypatch):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": False}), encoding="utf-8"
+    )
+    xdg = tmp_path / "xdg"
+    (xdg / "virt-surv-it").mkdir(parents=True)
+    (xdg / "virt-surv-it" / "installer.json").write_text(
+        json.dumps({"default_map_skeleton": True}), encoding="utf-8"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    # project's explicit False must win even though the machine default is True (same
+    # key-presence-wins precedence as docx/citations).
+    assert _read_map_skeleton_toggle(tmp_path) is False
+
+
+def test_map_skeleton_toggle_falls_back_to_machine_default(tmp_path, monkeypatch):
+    xdg = tmp_path / "xdg"
+    (xdg / "virt-surv-it").mkdir(parents=True)
+    (xdg / "virt-surv-it" / "installer.json").write_text(
+        json.dumps({"default_map_skeleton": True}), encoding="utf-8"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    assert _read_map_skeleton_toggle(tmp_path) is True
+
+
+def test_map_skeleton_toggle_no_config_anywhere_is_false(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty-xdg"))
+    assert _read_map_skeleton_toggle(tmp_path) is False
+
+
+def _write_fingerprint_sidecar(repo, entries):
+    (repo / "codebase-map.fingerprints.json").write_text(
+        json.dumps({"generated_by": "test", "entries": entries, "areas": {}}), encoding="utf-8"
+    )
+
+
+def test_map_drift_silent_when_fingerprint_matches(tmp_path):
+    from scripts.map_fingerprint import compute_fingerprint
+
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    _write_fingerprint_sidecar(
+        repo, {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], repo)}}
+    )
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DRIFT" not in codes
+
+
+def test_map_drift_fires_when_file_changed_since_fingerprinted(tmp_path):
+    from scripts.map_fingerprint import compute_fingerprint
+
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    f = repo / "src" / "x.py"
+    f.write_text("threshold = 1\n", encoding="utf-8")
+    _write_fingerprint_sidecar(
+        repo, {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], repo)}}
+    )
+    f.write_text("threshold = 2\n", encoding="utf-8")  # changed AFTER fingerprinting
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DRIFT" in codes
+
+
+def test_map_drift_fires_when_never_fingerprinted(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    # No sidecar file written at all.
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DRIFT" in codes
+
+
+def test_map_dead_pointer_fires_on_missing_citation(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    # No src/x.py file created - the citation is dead.
+    _touch(m, _good_map_with_paths(sha, entry="described in `src/x.py:12`"))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DEAD-POINTER" in codes
+
+
+def test_map_dead_pointer_silent_when_citation_resolves(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha, entry="described in `src/x.py:12`"))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DEAD-POINTER" not in codes
+
+
+def test_map_drift_and_dead_pointer_excluded_from_apply_fixes(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    art = repo / "artifacts"
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha, entry="described in `src/x.py:12`"))
+    # apply_fixes() takes an artifacts_dir, not a map_path - map hygiene was never wired into
+    # it (existing precedent for every other MAP-* code); this just confirms that precedent
+    # extends to the two new checks, not a behaviour change.
+    assert apply_fixes(art) == []
 
 
 # ------------------------------------------------ entry-anchor resolution is batched (2026-08-03)
