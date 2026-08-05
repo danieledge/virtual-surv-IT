@@ -488,7 +488,28 @@ async def run_engage_session(
     include_subagents: bool = True,
     plugins: list[dict] | None = None,
     disallowed_tools: list[str] | None = None,
+    live_dir: Path | None = None,
 ) -> SessionCapture:
+    """`live_dir`, if given (--target-path mode only - every case run leaves this None,
+    unaffected): transcript.md/events.jsonl/usage-series.jsonl are flushed to disk as the run
+    progresses, not only after it finishes - a long live run against a real project needs to be
+    watchable and killable mid-flight (a live corp report showed exactly the failure mode this
+    guards against: a single-generation blowup that would otherwise only be discovered after
+    burning the full budget/timeout waiting for a result that never usefully arrives). events.jsonl
+    and usage-series.jsonl are append-only (one write per new entry, cheap); transcript.md is
+    rewritten in full each flush (its content only grows by appending internally, so this stays
+    O(final size), not O(n^2) over the run)."""
+    events_fh = None
+    usage_fh = None
+    if live_dir is not None:
+        live_dir.mkdir(parents=True, exist_ok=True)
+        events_fh = (live_dir / "events.jsonl").open("a", encoding="utf-8")
+        usage_fh = (live_dir / "usage-series.jsonl").open("a", encoding="utf-8")
+
+    def _flush_transcript() -> None:
+        if live_dir is not None:
+            (live_dir / "transcript.md").write_text("".join(cap.transcript), encoding="utf-8")
+
     from claude_agent_sdk import (
         AssistantMessage,
         ClaudeAgentOptions,
@@ -599,66 +620,77 @@ async def run_engage_session(
     # legitimately works quietly for minutes mid-run).
     stream = query(prompt=_prompt_stream(), options=options).__aiter__()
     first_message = True
-    while True:
-        try:
-            if first_message:
-                message = await asyncio.wait_for(stream.__anext__(), timeout=STARTUP_TIMEOUT_S)
-            else:
-                message = await stream.__anext__()
-        except StopAsyncIteration:
-            break
-        except asyncio.TimeoutError:
-            session_done.set()
-            raise RuntimeError(
-                f"session emitted NOTHING within {STARTUP_TIMEOUT_S}s - dead at birth. "
-                "Likely causes: subscription usage window saturated (heavy interactive use "
-                "shares the Max window), auth failure, or a CLI/SDK handshake break. "
-                "Aborting fast instead of burning the full --timeout."
-            )
-        first_message = False
-        if grace is not None:
-            grace.cancel()
-            grace = None
-        msg_type = type(message).__name__
-        if msg_type == "RateLimitEvent":
-            # Surface the shared-window status instead of discovering it via a hang.
-            print(f"  rate-limit status: {repr(message)[:200]}")
-        if msg_type == "TaskStartedMessage":
-            inflight.add((getattr(message, "data", None) or {}).get("task_id"))
-        elif msg_type in ("TaskUpdatedMessage", "TaskNotificationMessage"):
-            data = getattr(message, "data", None) or {}
-            status = (data.get("patch") or {}).get("status") or data.get("status")
-            if status in TERMINAL_TASK_STATUSES:
-                inflight.discard(data.get("task_id"))
-        elif msg_type in ("AssistantMessage", "UserMessage"):
-            result_pending = False  # conversation moved on - the prior result wasn't final
-        cap.events.append({"type": msg_type, "repr": repr(message)[:4000]})
-        if isinstance(message, AssistantMessage):
-            from_subagent = message.parent_tool_use_id is not None
-            if not from_subagent or include_subagents:
-                cap.transcript += _transcript_lines(message, TextBlock, ToolUseBlock, from_subagent)
-            if message.usage:
-                cap.usage_series.append(
-                    {
+    try:
+        while True:
+            try:
+                if first_message:
+                    message = await asyncio.wait_for(
+                        stream.__anext__(), timeout=STARTUP_TIMEOUT_S
+                    )
+                else:
+                    message = await stream.__anext__()
+            except StopAsyncIteration:
+                break
+            except asyncio.TimeoutError:
+                session_done.set()
+                raise RuntimeError(
+                    f"session emitted NOTHING within {STARTUP_TIMEOUT_S}s - dead at birth. "
+                    "Likely causes: subscription usage window saturated (heavy interactive use "
+                    "shares the Max window), auth failure, or a CLI/SDK handshake break. "
+                    "Aborting fast instead of burning the full --timeout."
+                )
+            first_message = False
+            if grace is not None:
+                grace.cancel()
+                grace = None
+            msg_type = type(message).__name__
+            if msg_type == "RateLimitEvent":
+                # Surface the shared-window status instead of discovering it via a hang.
+                print(f"  rate-limit status: {repr(message)[:200]}")
+            if msg_type == "TaskStartedMessage":
+                inflight.add((getattr(message, "data", None) or {}).get("task_id"))
+            elif msg_type in ("TaskUpdatedMessage", "TaskNotificationMessage"):
+                data = getattr(message, "data", None) or {}
+                status = (data.get("patch") or {}).get("status") or data.get("status")
+                if status in TERMINAL_TASK_STATUSES:
+                    inflight.discard(data.get("task_id"))
+            elif msg_type in ("AssistantMessage", "UserMessage"):
+                result_pending = False  # conversation moved on - the prior result wasn't final
+            event_entry = {"type": msg_type, "repr": repr(message)[:4000]}
+            cap.events.append(event_entry)
+            if events_fh is not None:
+                events_fh.write(json.dumps(event_entry) + "\n")
+                events_fh.flush()
+            if isinstance(message, AssistantMessage):
+                from_subagent = message.parent_tool_use_id is not None
+                if not from_subagent or include_subagents:
+                    cap.transcript += _transcript_lines(
+                        message, TextBlock, ToolUseBlock, from_subagent
+                    )
+                    _flush_transcript()
+                if message.usage:
+                    usage_entry = {
                         "type": "assistant",
                         "from_subagent": from_subagent,
                         "model": message.model,
                         "usage": message.usage,
                     }
-                )
-        elif isinstance(message, ResultMessage):
-            # A result can arrive MID-RUN with subagent tasks still in flight (the CLI
-            # closes the main turn, TaskProgress frames keep coming, and a later result
-            # follows). Do NOT signal session_done here: ending the prompt stream closes
-            # stdin, stdin carries the permission control channel, and every remaining
-            # tool call then dies with "AbortError: Stream closed" (observed live - it
-            # killed all writes for the second half of a run). Last result wins for cost.
-            cap.cost_usd = message.total_cost_usd
-            cap.num_turns = message.num_turns
-            cap.is_error = bool(message.is_error)
-            if message.usage or message.model_usage:
-                cap.usage_series.append(
-                    {
+                    cap.usage_series.append(usage_entry)
+                    if usage_fh is not None:
+                        usage_fh.write(json.dumps(usage_entry) + "\n")
+                        usage_fh.flush()
+            elif isinstance(message, ResultMessage):
+                # A result can arrive MID-RUN with subagent tasks still in flight (the CLI
+                # closes the main turn, TaskProgress frames keep coming, and a later result
+                # follows). Do NOT signal session_done here: ending the prompt stream closes
+                # stdin, stdin carries the permission control channel, and every remaining
+                # tool call then dies with "AbortError: Stream closed" (observed live - it
+                # killed all writes for the second half of a run). Last result wins for cost.
+                cap.cost_usd = message.total_cost_usd
+                cap.num_turns = message.num_turns
+                cap.is_error = bool(message.is_error)
+                if message.usage or message.model_usage:
+                    usage_entry = {
                         "type": "result",
                         "total_cost_usd": message.total_cost_usd,
                         "num_turns": message.num_turns,
@@ -667,16 +699,26 @@ async def run_engage_session(
                         "usage": message.usage,
                         # ModelUsage is a TypedDict (plain dict at runtime) - dict(v) copies
                         # it without assuming any particular key set beyond what the SDK sent.
-                        "model_usage": {k: dict(v) for k, v in (message.model_usage or {}).items()},
+                        "model_usage": {
+                            k: dict(v) for k, v in (message.model_usage or {}).items()
+                        },
                     }
-                )
-            result_pending = True
-        if result_pending and not inflight:
-            grace = asyncio.create_task(_grace_close())
-    if grace is not None:
-        grace.cancel()
-    session_done.set()
-    return cap
+                    cap.usage_series.append(usage_entry)
+                    if usage_fh is not None:
+                        usage_fh.write(json.dumps(usage_entry) + "\n")
+                        usage_fh.flush()
+                result_pending = True
+            if result_pending and not inflight:
+                grace = asyncio.create_task(_grace_close())
+        if grace is not None:
+            grace.cancel()
+        session_done.set()
+        return cap
+    finally:
+        if events_fh is not None:
+            events_fh.close()
+        if usage_fh is not None:
+            usage_fh.close()
 
 
 # --------------------------------------------------------------------------- scoring
@@ -1122,6 +1164,7 @@ async def run_target(
                 include_subagents=not getattr(args, "exclude_subagent_output", False),
                 plugins=[{"type": "local", "path": str(REPO_ROOT)}],
                 disallowed_tools=["Bash"],
+                live_dir=out_dir,
             ),
             timeout=timeout_s if timeout_s > 0 else None,
         )
