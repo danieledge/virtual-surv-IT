@@ -291,6 +291,31 @@ def build_sandbox(dest: Path) -> None:
     )
 
 
+# Never copied into a --target-path sandbox: source control internals (this harness never
+# reads the target's own history), and node_modules specifically because it's typically both
+# huge and gitignored by the target project itself - excluding it here just saves the rsync
+# the trouble, it wouldn't have been used either way.
+_TARGET_EXCLUDES = (".git", "node_modules", "__pycache__", ".venv", "venv")
+
+
+def build_target_sandbox(source: Path, dest: Path, team_preferences: dict) -> None:
+    """Disposable copy of an ARBITRARY external directory (--target-path mode) - never the
+    live directory itself. Pre-seeds .claude/team-preferences.json with the given dict so the
+    session opens already configured, rather than relying on the conversational offer-to-set
+    flow. No git init here (unlike build_sandbox): the target's own history, if any, is not
+    this harness's concern, and creating one would misrepresent a foreign project's provenance."""
+    args = ["rsync", "-a"]
+    for ex in _TARGET_EXCLUDES:
+        args += ["--exclude", ex]
+    args += [f"{source}/", f"{dest}/"]
+    subprocess.run(args, check=True, capture_output=True)  # nosec B603 - fixed argv, no shell
+    claude_dir = dest / ".claude"
+    claude_dir.mkdir(exist_ok=True)
+    (claude_dir / "team-preferences.json").write_text(
+        json.dumps(team_preferences, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 # --------------------------------------------------------------------------- LLM calls
 async def _one_shot(prompt: str, model: str) -> str:
     """A clean, tool-less, settings-less single completion via the SDK (CLI auth)."""
@@ -409,6 +434,12 @@ class SessionCapture:
     is_error: bool = False
     timed_out: bool = False
     error: str | None = None
+    # Per-message usage (2026-08-06, --target-path diagnostic mode): the final ResultMessage's
+    # total_cost_usd/num_turns is enough for pass/fail scoring, but diagnosing WHERE token/time
+    # budget goes needs per-turn granularity. One entry per AssistantMessage/ResultMessage that
+    # carried a `usage` dict, in stream order - a small addition, always populated (not gated on
+    # --target-path), since it costs nothing case runs don't already pay for capturing events.
+    usage_series: list[dict] = field(default_factory=list)
 
 
 def _transcript_lines(
@@ -455,6 +486,8 @@ async def run_engage_session(
     team_model: str = "opus",
     extra_env: dict[str, str] | None = None,
     include_subagents: bool = True,
+    plugins: list[dict] | None = None,
+    disallowed_tools: list[str] | None = None,
 ) -> SessionCapture:
     from claude_agent_sdk import (
         AssistantMessage,
@@ -511,6 +544,18 @@ async def run_engage_session(
         # that; matching them keeps the eval faithful. Network hygiene stays enforced by
         # the _NET_BASH_RE deny in can_use_tool.
         sandbox={"enabled": False},
+        # --target-path mode only (both None/empty for every case run - additive, no
+        # behaviour change to the existing sandbox-is-a-repo-copy path): `plugins` loads
+        # this plugin's skills/agents regardless of what `cwd` is (the SDK's --plugin-dir
+        # equivalent, SdkPluginConfig={"type": "local", "path": ...}) - needed because cwd
+        # is now a FOREIGN directory, not a virt-survtecb copy, so setting_sources=["project"]
+        # alone would find no .claude/skills there. `disallowed_tools` structurally removes
+        # Bash from what the model can even call - the static-only guarantee for a run
+        # against a real (copied) project, independent of whether any guard hook happens to
+        # be loaded (foreign-project mode has no .claude/settings.json, so the usual
+        # exec-consent guard is not present to enforce it another way).
+        plugins=plugins or [],
+        disallowed_tools=disallowed_tools or [],
     )
 
     # can_use_tool requires streaming input mode: a single-message async iterable stands in
@@ -592,6 +637,15 @@ async def run_engage_session(
             from_subagent = message.parent_tool_use_id is not None
             if not from_subagent or include_subagents:
                 cap.transcript += _transcript_lines(message, TextBlock, ToolUseBlock, from_subagent)
+            if message.usage:
+                cap.usage_series.append(
+                    {
+                        "type": "assistant",
+                        "from_subagent": from_subagent,
+                        "model": message.model,
+                        "usage": message.usage,
+                    }
+                )
         elif isinstance(message, ResultMessage):
             # A result can arrive MID-RUN with subagent tasks still in flight (the CLI
             # closes the main turn, TaskProgress frames keep coming, and a later result
@@ -602,6 +656,20 @@ async def run_engage_session(
             cap.cost_usd = message.total_cost_usd
             cap.num_turns = message.num_turns
             cap.is_error = bool(message.is_error)
+            if message.usage or message.model_usage:
+                cap.usage_series.append(
+                    {
+                        "type": "result",
+                        "total_cost_usd": message.total_cost_usd,
+                        "num_turns": message.num_turns,
+                        "duration_ms": message.duration_ms,
+                        "duration_api_ms": message.duration_api_ms,
+                        "usage": message.usage,
+                        # ModelUsage is a TypedDict (plain dict at runtime) - dict(v) copies
+                        # it without assuming any particular key set beyond what the SDK sent.
+                        "model_usage": {k: dict(v) for k, v in (message.model_usage or {}).items()},
+                    }
+                )
             result_pending = True
         if result_pending and not inflight:
             grace = asyncio.create_task(_grace_close())
@@ -989,6 +1057,124 @@ async def run_case(
     if not args.keep_sandbox:
         shutil.rmtree(sandbox, ignore_errors=True)
     return result
+
+
+_TARGET_SCENARIO_DEFAULT = (
+    "Please review this application's codebase for issues - findings pack and report as normal."
+)
+
+
+async def run_target(
+    source: Path,
+    args: argparse.Namespace,
+    run_root: Path,
+) -> dict:
+    """Live /engage session against an ARBITRARY external directory (diagnostic mode, not a
+    golden-case run): no manifest, no expected.yaml, no scoring - just a real session against a
+    disposable copy of `source`, captured in full for human review. Skips build_sandbox/
+    case_workflow entirely; uses build_target_sandbox instead. See the plan at
+    ~/.claude/plans/golden-beaming-codd.md ("extend eval_engage.py for an arbitrary external
+    target directory") for the full design rationale."""
+    source = source.resolve()
+    if not source.is_dir():
+        raise SystemExit(f"--target-path is not a directory: {source}")
+
+    slug = re.sub(r"[^a-z0-9]+", "-", source.name.lower()).strip("-") or "target"
+    out_dir = run_root / f"target-{slug}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    sandbox = out_dir / "sandbox"
+    print(f"  [target:{slug}] building disposable copy of {source} -> {sandbox} ...")
+    build_target_sandbox(
+        source,
+        sandbox,
+        team_preferences={
+            "large_context_review_split": True,
+            "regulatory_citations": False,
+        },
+    )
+    ensure_workspace_trust(sandbox)
+
+    scenario = args.target_prompt or _TARGET_SCENARIO_DEFAULT
+    persona = DEFAULT_PERSONA.read_text(encoding="utf-8")
+    sim_log = SimTranscript()
+    cap = SessionCapture()
+    started = time.monotonic()
+    timeout_s = args.timeout if args.timeout is not None else DEFAULT_TIMEOUT_S
+    budget_note = f", ${args.max_budget}" if args.max_budget else ""
+    clock_note = f", {timeout_s}s wall clock" if timeout_s > 0 else ", no wall clock"
+    print(
+        f"  [target:{slug}] running live /engage session against a copy of {source.name} "
+        f"(cap {args.max_turns} turns{budget_note}{clock_note}, Bash disallowed)..."
+    )
+    try:
+        await asyncio.wait_for(
+            run_engage_session(
+                cap,
+                scenario,
+                sandbox,
+                persona,
+                args.sim_model,
+                args.max_turns,
+                args.max_budget,
+                sim_log,
+                workflow_cmd="/engage",
+                team_model=args.team_model,
+                include_subagents=not getattr(args, "exclude_subagent_output", False),
+                plugins=[{"type": "local", "path": str(REPO_ROOT)}],
+                disallowed_tools=["Bash"],
+            ),
+            timeout=timeout_s if timeout_s > 0 else None,
+        )
+    except asyncio.TimeoutError:
+        cap.timed_out = True
+        print(f"  [target:{slug}] TIMED OUT after {timeout_s}s", file=sys.stderr)
+    except Exception as exc:
+        cap.is_error = True
+        cap.error = f"{type(exc).__name__}: {exc}"
+        print(f"  [target:{slug}] SESSION ERROR: {cap.error}", file=sys.stderr)
+    finally:
+        drop_workspace_trust(sandbox)
+    duration = time.monotonic() - started
+
+    transcript = "".join(cap.transcript)
+    (out_dir / "transcript.md").write_text(transcript, encoding="utf-8")
+    (out_dir / "events.jsonl").write_text(
+        "\n".join(json.dumps(e) for e in cap.events), encoding="utf-8"
+    )
+    (out_dir / "usage-series.jsonl").write_text(
+        "\n".join(json.dumps(u) for u in cap.usage_series), encoding="utf-8"
+    )
+    (out_dir / "gates.json").write_text(
+        json.dumps(
+            {"consent_granted": sim_log.consent_granted, "exchanges": sim_log.exchanges}, indent=2
+        ),
+        encoding="utf-8",
+    )
+    summary = {
+        "source": str(source),
+        "sandbox_kept": bool(args.keep_sandbox),
+        "cost_usd": cap.cost_usd,
+        "num_turns": cap.num_turns,
+        "timed_out": cap.timed_out,
+        "session_error": cap.is_error,
+        "error": cap.error,
+        "duration_s": round(duration, 1),
+        "gates_answered": len(sim_log.exchanges),
+        "consent_granted": sim_log.consent_granted,
+        "assistant_messages_with_usage": sum(
+            1 for u in cap.usage_series if u["type"] == "assistant"
+        ),
+    }
+    (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print(
+        f"  [target:{slug}] done - cost=${cap.cost_usd or '?'} turns={cap.num_turns} "
+        f"duration={duration:.0f}s timed_out={cap.timed_out} error={cap.is_error}"
+    )
+    print(f"  [target:{slug}] output -> {out_dir}")
+
+    if not args.keep_sandbox:
+        shutil.rmtree(sandbox, ignore_errors=True)
+    return summary
 
 
 def gate_findings(out_dir: Path) -> list[dict]:
@@ -1549,6 +1735,25 @@ def main() -> int:
         "quality failures. No live session, no tokens",
     )
     ap.add_argument(
+        "--target-path",
+        help="diagnostic mode (NOT a golden-case run, no scoring): run a live /engage session "
+        "against a DISPOSABLE COPY of this external directory (never the live directory - the "
+        "copy is discarded unless --keep-sandbox). Loads this plugin via the SDK's local-plugin "
+        "mechanism (works regardless of cwd), pre-seeds large_context_review_split=true + "
+        "regulatory_citations=false in the copy's team-preferences.json, and disallows the Bash "
+        "tool outright for the session (static-only - no guard hooks are present in this mode "
+        "since the target has no .claude/settings.json, so this is the actual enforcement, not "
+        "the exec-consent marker). Writes transcript.md/events.jsonl/usage-series.jsonl/"
+        "summary.json for human review under evals/runs/ (git-ignored). Override the opening ask "
+        "with --target-prompt",
+    )
+    ap.add_argument(
+        "--target-prompt",
+        default=None,
+        help="the /engage opening message for --target-path mode (default: a generic "
+        "'review this codebase' ask)",
+    )
+    ap.add_argument(
         "--resume-run",
         help="path to a saved run's <case> dir with a KEPT sandbox: launch a fresh session in "
         "that sandbox with an uncoached 'resume and close' ask (cold resume from the artifacts "
@@ -1646,6 +1851,13 @@ def main() -> int:
             f"judge={result.get('judge', {}).get('weighted_score', '-')}"
         )
         return 0 if result["passed"] else 1
+
+    if args.target_path:
+        run_root = RUNS_ROOT / _now_utc()
+        run_root.mkdir(parents=True, exist_ok=True)
+        print(f"run dir: {run_root}")
+        summary = asyncio.run(run_target(Path(args.target_path), args, run_root))
+        return 1 if (summary["timed_out"] or summary["session_error"]) else 0
 
     if args.resume_run:
         src = Path(args.resume_run).resolve()
