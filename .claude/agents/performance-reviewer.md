@@ -89,8 +89,10 @@ rubric `code-reviewer` uses. Only the filtered, scored set goes into the pack; k
 `Found N · Reported R · Filtered F` count for the scoreboard.
 
 **Write it as the structured findings-pack JSON yourself**, to
-`artifacts/<slug>/data/findings-<slug>.json` (or `artifacts/data/findings-<slug>.json` for a flat
-pack - schema `docs/review/findings-schema.json`, `"kind": "performance"`): each finding takes
+`artifacts/<slug>/data/findings-performance-<slug>.json` (or
+`artifacts/data/findings-performance-<slug>.json` for a flat pack - schema
+`docs/review/findings-schema.json`, `"kind": "performance"`, `slug` prefixed `performance-` so it
+cannot collide with a code-review pack of the same engagement): each finding takes
 `id`/`title`/`severity`/`location`/`basis`/`disposition` plus the five required fields
 (`standard`, `problem`, `likely_cause`, `impact`, `fix`{`diff`,`why`}) **and the `current_cost` /
 `projected_cost` / `gain` fields**; workload, targets and the total saved go in

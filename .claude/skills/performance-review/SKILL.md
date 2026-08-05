@@ -73,8 +73,9 @@ profiling** requires the **execution-consent gate** (CLAUDE.md §7) - the defaul
 static / 🧠 inferred, so don't promise measured before/after unless execution has been consented.
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
 schema `docs/review/findings-schema.json`). `performance-reviewer` writes the findings itself,
-directly, to `artifacts/<slug>/data/findings-<slug>.json` with **`"kind": "performance"`** (it holds
-a Write grant scoped to exactly this path, mechanically enforced): each finding the five named
+directly, to `artifacts/<slug>/data/findings-performance-<slug>.json` with **`"kind":
+"performance"`** (the `performance-` prefix so it cannot collide with a code-review pack of the
+same engagement; it holds a Write grant scoped to exactly this path, mechanically enforced): each finding the five named
 fields (`basis` = 📊 measured / 📄 coded / 🧠 inferred as per the static-only rules above) **plus the
 optional `current_cost` / `projected_cost` / `gain`** fields; workload/targets and the total saved
 in `executive_summary`. Read it back rather than re-authoring it, then run

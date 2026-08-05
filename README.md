@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.19](https://img.shields.io/badge/version-0.33.19-blue)
+![Version 0.33.20](https://img.shields.io/badge/version-0.33.20-blue)
 ![Tests 1300+ passing](https://img.shields.io/badge/tests-1300%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.19** (2026-08-05) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.20** (2026-08-05) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle: `install_helper.py` rebuilt end-to-end.**
 - 🧭 **The menu reorganized and hardened.** A flat 10-option list became 6 top-level items plus
