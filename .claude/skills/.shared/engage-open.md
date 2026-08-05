@@ -202,6 +202,19 @@ line would be noise for a setting that already defaults to off. A user who expli
 corp-proxy/timeout issue mid-session still gets the split applied per the orchestration-discipline
 rule even if this stayed silent at open.
 
+**Tooling inventory (banner, one short line, every engagement).** The probe's tooling report
+already computes present/missing counts for the seven configurable analysers (cached, TTL-bound -
+**never re-probed just to compose this line**) and states outright that a missing tool degrades
+its dependent findings from 📊 measured to 🧠 inferred. That link was previously visible only in
+the raw probe output Morgan reads, never surfaced to the user - state it as one line so it's known
+before, not discovered after, a review. All seven present: *"✅ full tool-backed coverage this
+session."* Any missing: *"🧠 <tool, tool> not installed - dependent findings will be inferred, not
+measured (install for 📊 coverage)."* Name only the missing tools, not the best-effort/unsupported
+language list (TypeScript/Java/etc.) - that stays in the raw report for when it's actually
+relevant. If the user later installs a missing tool, tell them to re-run
+`bash scripts/check-review-tools.sh --refresh` (or the plugin-mode path form) rather than waiting
+out the cache TTL - stated once, not repeated every engagement.
+
 **Model (banner, one short line, every engagement).** State which model you are actually
 running as this session (e.g. *"running as Sonnet 4.6"*) - your own identity, not a file read:
 `.claude/settings.json`'s `model` key (if any) is the *configured default*, which can differ from

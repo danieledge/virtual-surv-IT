@@ -3,6 +3,24 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.23] - 2026-08-05 - Tooling inventory now stated at open; stale semgrep/pip-audit allow-list entries
+
+### Fixed
+- `/engage`'s opening banner never stated which of the seven configurable analysers are
+  present vs missing, even though the cached tooling report already computes this and already
+  states the consequence ("missing tools degrade dependent findings from 📊 measured to 🧠
+  inferred") - that link was visible only in the raw probe output Morgan reads, never surfaced
+  to the user. `.claude/skills/.shared/engage-open.md` now instructs a one-line banner summary
+  every engagement, still from the cache (no re-probe), so the tooling picture is known before
+  a review runs, not discovered after.
+- `.claude/settings.json`'s `permissions.allow` still listed `Bash(semgrep:*)` and
+  `Bash(pip-audit:*)`, contradicting the "deliberately excluded, never invoked" policy both
+  tools have carried since their 2026-08-04 removal (unconditional network calls, hung on
+  corporate proxies). `install_helper.py`'s `RECOMMENDED_ALLOW` - what actually gets written to
+  new/existing projects - was already clean; this repo's own checked-in settings predated that
+  removal. New `scripts/apply-remove-stale-tool-allowlist.sh` (human-run, settings.json edits
+  are human-only) removes both.
+
 ## [0.33.22] - 2026-08-05 - Large-context review split was invisible: banner and statusline both missed it
 
 ### Fixed
