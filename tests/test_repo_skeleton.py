@@ -1,0 +1,240 @@
+"""Tests for scripts/repo_skeleton.py - deterministic first-contact codebase orientation
+(ADR-007 Phase 1). Chunk A: inventory, tiered symbol extraction, token-budgeted output.
+"""
+
+from __future__ import annotations
+
+import subprocess
+
+import pytest
+
+from scripts.repo_skeleton import (
+    build_skeleton,
+    extract_symbols,
+    inventory,
+    _estimate_tokens,
+    _os_walk_files,
+    _symbols_ast_python,
+    _symbols_ctags,
+    _symbols_floor,
+    _symbols_tree_sitter,
+    _TIER_AST,
+    _TIER_CTAGS,
+    _TIER_FLOOR,
+    _TIER_TREE_SITTER,
+)
+
+
+def _git(root, *args):
+    subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
+
+def _init_repo(root):
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "t@example.com")
+    _git(root, "config", "user.name", "T")
+
+
+# --------------------------------------------------------------------------- inventory
+
+
+def test_inventory_git_repo_lists_tracked_and_untracked_not_ignored(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("ignored.py\n", encoding="utf-8")
+    (tmp_path / "ignored.py").write_text("y = 2\n", encoding="utf-8")
+    (tmp_path / "untracked.py").write_text("z = 3\n", encoding="utf-8")
+    _git(tmp_path, "add", "a.py", ".gitignore")
+
+    files = inventory(tmp_path)
+    assert "a.py" in files
+    assert ".gitignore" in files
+    assert "untracked.py" in files
+    assert "ignored.py" not in files  # respects .gitignore via git ls-files --exclude-standard
+
+
+def test_inventory_os_walk_fallback_when_no_git_repo(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "m.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "m.cpython-312.pyc").write_bytes(b"\x00")
+
+    files = inventory(tmp_path)
+    assert "src/m.py" in files
+    assert not any("__pycache__" in f for f in files)
+
+
+def test_os_walk_fallback_excludes_node_modules_without_descending(tmp_path):
+    """The exclusion must stop os.walk from DESCENDING, not just filter the listing -
+    otherwise a huge node_modules still gets stat'd file-by-file for nothing."""
+    nm = tmp_path / "node_modules" / "pkg"
+    nm.mkdir(parents=True)
+    (nm / "index.js").write_text("", encoding="utf-8")
+    (tmp_path / "app.js").write_text("", encoding="utf-8")
+
+    files = _os_walk_files(tmp_path)
+    assert "app.js" in files
+    assert not any("node_modules" in f for f in files)
+
+
+def test_inventory_is_sorted_and_deterministic(tmp_path):
+    _init_repo(tmp_path)
+    for name in ("z.py", "a.py", "m.py"):
+        (tmp_path / name).write_text("", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    files = inventory(tmp_path)
+    assert files == sorted(files)
+
+
+def test_inventory_falls_back_when_git_unavailable(tmp_path, monkeypatch):
+    import scripts.repo_skeleton as rs
+
+    monkeypatch.setattr(rs, "_git_ls_files", lambda root: None)
+    (tmp_path / "x.py").write_text("", encoding="utf-8")
+    assert inventory(tmp_path) == ["x.py"]
+
+
+# --------------------------------------------------------------------------- symbol extraction
+
+
+def test_ast_extracts_top_level_defs_and_classes(tmp_path):
+    f = tmp_path / "m.py"
+    f.write_text(
+        "def foo():\n    pass\n\n\nclass Bar:\n    def method(self):\n        pass\n",
+        encoding="utf-8",
+    )
+    symbols = _symbols_ast_python(f)
+    assert symbols == ["foo", "Bar", "method"]
+
+
+def test_ast_returns_none_on_syntax_error(tmp_path):
+    f = tmp_path / "broken.py"
+    f.write_text("def (:\n", encoding="utf-8")
+    assert _symbols_ast_python(f) is None
+
+
+def test_floor_extracts_markdown_headings(tmp_path):
+    f = tmp_path / "doc.md"
+    f.write_text("# Title\n\nSome text.\n\n## Section\n", encoding="utf-8")
+    assert _symbols_floor(f) == ["Title", "Section"]
+
+
+def test_floor_non_markdown_file_yields_no_symbols(tmp_path):
+    f = tmp_path / "data.json"
+    f.write_text('{"a": 1}', encoding="utf-8")
+    assert _symbols_floor(f) == []
+
+
+def test_tree_sitter_probe_never_crashes_when_absent(monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _blocked(name, *a, **k):
+        if name == "tree_sitter":
+            raise ImportError("no tree_sitter")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", _blocked)
+    assert _symbols_tree_sitter(None) is None
+
+
+def test_ctags_probe_never_crashes_when_absent(monkeypatch):
+    import scripts.repo_skeleton as rs
+
+    monkeypatch.setattr(rs.shutil, "which", lambda name: None)
+    assert _symbols_ctags(None) is None
+
+
+def test_ctags_probe_fails_soft_on_timeout(tmp_path, monkeypatch):
+    import scripts.repo_skeleton as rs
+
+    monkeypatch.setattr(rs.shutil, "which", lambda name: "/usr/bin/ctags")
+
+    def _boom(*a, **k):
+        raise subprocess.TimeoutExpired(["ctags"], 10)
+
+    monkeypatch.setattr(rs.subprocess, "run", _boom)
+    assert _symbols_ctags(tmp_path / "x.py") is None
+
+
+def test_extract_symbols_dispatches_to_ast_tier_for_python(tmp_path):
+    f = tmp_path / "m.py"
+    f.write_text("def foo():\n    pass\n", encoding="utf-8")
+    symbols, tier = extract_symbols(f)
+    assert tier == _TIER_AST
+    assert symbols == ["foo"]
+
+
+def test_extract_symbols_falls_to_floor_for_non_python(tmp_path):
+    f = tmp_path / "doc.md"
+    f.write_text("# Title\n", encoding="utf-8")
+    symbols, tier = extract_symbols(f)
+    assert tier == _TIER_FLOOR
+    assert symbols == ["Title"]
+
+
+def test_extract_symbols_tier_order_ctags_before_ast(tmp_path, monkeypatch):
+    """A .py file with ctags actually available should use the ctags tier, not ast -
+    ctags is ranked above ast in the fallback order."""
+    import scripts.repo_skeleton as rs
+
+    f = tmp_path / "m.py"
+    f.write_text("def foo():\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(rs, "_symbols_ctags", lambda path: ["from_ctags"])
+    symbols, tier = extract_symbols(f)
+    assert tier == _TIER_CTAGS
+    assert symbols == ["from_ctags"]
+
+
+# --------------------------------------------------------------------------- token budget
+
+
+def test_estimate_tokens_is_chars_over_four():
+    assert _estimate_tokens("x" * 400) == 100
+
+
+def test_build_skeleton_stays_full_detail_under_budget(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "a.py").write_text("def foo():\n    pass\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    out = build_skeleton(tmp_path, budget_tokens=6000)
+    assert "## a.py" in out
+    assert "foo" in out
+    assert "omitted" not in out
+
+
+def test_build_skeleton_switches_to_compact_tier_and_notes_omissions(tmp_path):
+    _init_repo(tmp_path)
+    for i in range(30):
+        (tmp_path / f"m{i:02d}.py").write_text(
+            f"def f{i}():\n    pass\n\n\ndef g{i}():\n    pass\n", encoding="utf-8"
+        )
+    _git(tmp_path, "add", "-A")
+
+    out = build_skeleton(tmp_path, budget_tokens=120)
+    assert "more lower-ranked file" in out
+    assert "omitted" in out
+
+
+def test_build_skeleton_output_is_deterministic_across_runs(tmp_path):
+    _init_repo(tmp_path)
+    for name in ("b.py", "a.py", "c.md"):
+        (tmp_path / name).write_text("def x():\n    pass\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    first = build_skeleton(tmp_path, budget_tokens=6000)
+    second = build_skeleton(tmp_path, budget_tokens=6000)
+    assert first == second
+
+
+def test_build_skeleton_ranks_drive_emission_order(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "low.py").write_text("def a():\n    pass\n", encoding="utf-8")
+    (tmp_path / "high.py").write_text("def b():\n    pass\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    out = build_skeleton(tmp_path, budget_tokens=6000, ranks={"high.py": 1.0, "low.py": 0.0})
+    assert out.index("## high.py") < out.index("## low.py")

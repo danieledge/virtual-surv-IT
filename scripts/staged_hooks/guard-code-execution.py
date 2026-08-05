@@ -132,7 +132,7 @@ _TEAM_SCRIPT_NAMES = (
     r"(?:render_html|render_findings|render_docx|convert_file|ingest|gen_synthetic|synthesise"
     r"|validate_masking|validate_manifest|validate_rtm|validate_references|check_citations|eval_score"
     r"|calibrate_spoofing|check_artifacts|engagement_state|extensions|convert_sarif"
-    r"|engage_probe)\.py"
+    r"|engage_probe|repo_skeleton)\.py"
 )
 
 # 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in
