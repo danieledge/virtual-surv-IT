@@ -3,7 +3,7 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [0.33.20] - 2026-08-05 - Whole-plugin review: pack-filename collision fixed, raw-data guard wiring gap staged
+## [0.33.20] - 2026-08-05 - Whole-plugin review: pack-filename collision and a raw-data guard wiring gap
 
 A report-only independent review of the whole plugin (everything outside `install_helper.py`,
 which had its own pass in 0.33.19) turned up 18 findings; full report:
@@ -15,16 +15,12 @@ which had its own pass in 0.33.19) turned up 18 findings; full report:
   silently clobber the first. `performance-reviewer` now writes
   `findings-performance-<slug>.json`, matching the `compliance-`/`model-validation-` prefix
   convention `compliance-reviewer`/`model-validator` already used to avoid exactly this.
-
-### Staged (human-applied - `bash scripts/apply-guard-raw-webfetch-wiring.sh`)
 - The 2026-08-01 raw-data-guard coverage fix taught `guard-raw-data.py` to handle `WebFetch`
   (a `file://` URL addresses the local filesystem) and `NotebookRead`, but nothing wired those
   tool names through: the PreToolUse matcher in `hooks/hooks.json` / `.claude/settings.json`
   never listed them, and the dispatcher's own tool-set table (`scripts/bash_hook_dispatcher.py`)
   independently restricted `guard_raw_data` to `{Read, Grep, Glob, Bash}` - so the fix was live
-  code on a dead wiring path. Staged at `scripts/staged_hooks/bash_hook_dispatcher.py`; the
-  live-vs-staged sync test now fails (by design, same pattern as every other staged guard fix)
-  until the apply script runs.
+  code on a dead wiring path. Both files now list `WebFetch`/`NotebookRead`.
 
 ## [0.33.19] - 2026-08-05 - Install helper: independent UX review, thirteen fixes
 

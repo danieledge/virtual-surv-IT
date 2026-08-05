@@ -16,8 +16,13 @@ imported by file path, not reimplemented - in ONE process instead of five.
 (2026-08-03: `guard_findings_pack_write` joined the registry below as a sixth check, added
 after this consolidation rather than migrated into it - the "five" above is the historical
 count from the original migration, not a ceiling. New checks register the same way: an entry
-in `_CHECKS` below, no dispatcher-wiring change needed since the matcher already covers every
-tool name any guard might need.)
+in `_CHECKS` below - but unlike the 2026-08-03 addition, a check that needs a tool_name NOT
+already in the top-level PreToolUse matcher (hooks.json / settings.json) also needs that
+matcher widened, or its process never starts. That happened once already: the 2026-08-01
+raw-data-guard coverage fix (ADR-002 rec 22) taught guard-raw-data.py to handle WebFetch and
+NotebookRead, but neither the matcher nor this file's own tool set were updated to match, so
+the new code path was dead until the 2026-08-05 review caught it and this comment plus the
+_CHECKS entry below were corrected. Check both places when a guard's tool coverage changes.)
 
 Design constraints, all deliberate:
   - Each guard's own main() is called directly, never re-executed via its own
@@ -59,7 +64,12 @@ _HOOKS_DIR = Path(__file__).resolve().parent.parent / ".claude" / "hooks"
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 
 _CHECKS = (
-    ("guard_raw_data", _HOOKS_DIR / "guard-raw-data.py", {"Read", "Grep", "Glob", "Bash"}, True),
+    (
+        "guard_raw_data",
+        _HOOKS_DIR / "guard-raw-data.py",
+        {"Read", "Grep", "Glob", "Bash", "WebFetch", "NotebookRead"},
+        True,
+    ),
     ("guard_code_execution", _HOOKS_DIR / "guard-code-execution.py", {"Bash"}, True),
     (
         "guard_consent_writes",
