@@ -3392,6 +3392,7 @@ def test_run_configure_happy_path_yes(tmp_path, monkeypatch, capsys):
         "extra_formats": [],
         "regulatory_citations": True,
         "large_context_review_split": False,
+        "map_skeleton": False,
     }
     assert "Configuration complete" in out
 
@@ -3448,11 +3449,15 @@ def test_project_preference_defaults_falls_back_to_machine_default(tmp_path):
         "default_docx": True,
         "default_regulatory_citations": False,
         "default_review_tools": {"ruff": "off"},
+        "default_map_skeleton": True,
     }
-    docx, citations, review_tools = _project_preference_defaults({}, machine_defaults)
+    docx, citations, review_tools, map_skeleton = _project_preference_defaults(
+        {}, machine_defaults
+    )
     assert docx is True
     assert citations is False
     assert review_tools == {"ruff": "off"}
+    assert map_skeleton is True
 
 
 def test_project_preference_defaults_project_choice_overrides_machine(tmp_path):
@@ -3461,16 +3466,25 @@ def test_project_preference_defaults_project_choice_overrides_machine(tmp_path):
     "can be overridden in the project's settings"."""
     from install_helper import _project_preference_defaults
 
-    existing = {"extra_formats": ["docx"], "regulatory_citations": True, "review_tools": {}}
+    existing = {
+        "extra_formats": ["docx"],
+        "regulatory_citations": True,
+        "review_tools": {},
+        "map_skeleton": False,
+    }
     machine_defaults = {
         "default_docx": False,
         "default_regulatory_citations": False,
         "default_review_tools": {"ruff": "off"},
+        "default_map_skeleton": True,
     }
-    docx, citations, review_tools = _project_preference_defaults(existing, machine_defaults)
+    docx, citations, review_tools, map_skeleton = _project_preference_defaults(
+        existing, machine_defaults
+    )
     assert docx is True  # project's own "docx on" wins over machine's "off"
     assert citations is True  # project's own "on" wins over machine's "off"
     assert review_tools == {}  # project's own explicit "all auto" wins over machine's override
+    assert map_skeleton is False  # project's own explicit "off" wins even though it's falsy
 
 
 def test_project_preference_defaults_no_machine_config_uses_builtin(tmp_path):
@@ -3478,10 +3492,11 @@ def test_project_preference_defaults_no_machine_config_uses_builtin(tmp_path):
     (docx off, citations on, review-tools all auto) still applies."""
     from install_helper import _project_preference_defaults
 
-    docx, citations, review_tools = _project_preference_defaults({}, {})
+    docx, citations, review_tools, map_skeleton = _project_preference_defaults({}, {})
     assert docx is False
     assert citations is True
     assert review_tools == {}
+    assert map_skeleton is False
 
 
 def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkeypatch):
@@ -3491,10 +3506,10 @@ def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkey
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     monkeypatch.setattr(sys, "stdin", _TtyStdin())  # see test_ask_and_set_model_rejects_bad_input
     # "n" to "use recommended settings?" (walk through each choice instead), "no" to the
-    # permissions question, "" (accept defaults) to the three preference prompts, ""
-    # (no change) to the review-tools override prompt, "" to the model prompt (declines
-    # - default for that one is False).
-    answers = iter(["n", "n", "", "", "", "", ""])
+    # permissions question, "" (accept defaults) to the four preference prompts (docx,
+    # citations, review-split, map-skeleton), "" (no change) to the review-tools override
+    # prompt, "" to the model prompt (declines - default for that one is False).
+    answers = iter(["n", "n", "", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -4442,9 +4457,9 @@ def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     # "n" to "use recommended settings?" (blank there would default to Yes and skip
     # every prompt below via assume_yes, defeating this test), "" enable-permissions
-    # default(Y), "" docx, "" citations, "" split, "mypy=off" review-tools override, ""
-    # model.
-    answers = iter(["n", "", "", "", "", "mypy=off", ""])
+    # default(Y), "" docx, "" citations, "" split, "" map-skeleton, "mypy=off"
+    # review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "mypy=off", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -4464,8 +4479,10 @@ def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch)
 
     monkeypatch.setattr(ih, "probe_analyser_output", fake_probe)
     # "n" to "use recommended settings?" first (blank there would default to Yes and
-    # skip every prompt below via assume_yes, defeating this test).
-    answers = iter(["n", "", "", "", "", "mypy=on", ""])
+    # skip every prompt below via assume_yes, defeating this test). Then "" enable-
+    # permissions, "" docx, "" citations, "" split, "" map-skeleton, "mypy=on"
+    # review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "mypy=on", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0

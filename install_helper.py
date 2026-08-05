@@ -2013,8 +2013,9 @@ class Installer:
             "supported analysers (ruff, mypy, bandit, black, sqlfluff, shfmt, gitleaks) "
             "on or off for this project. At the end, a separate, clearly optional "
             "question offers to also make these THIS MACHINE's default for other new "
-            "projects you configure later. (The large-context review-split preference "
-            "isn't asked here - it's set via 'Configure a project' instead.)"
+            "projects you configure later. (The large-context review-split and "
+            "codebase-skeleton drift-checking preferences aren't asked here - they're "
+            "set via 'Configure a project' instead.)"
         )
         raw = ask(f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style)
         project = Path(raw).expanduser().resolve()
@@ -2023,8 +2024,8 @@ class Installer:
             return
         prefs_path = project / ".claude" / "team-preferences.json"
         existing = _read_json_dict(prefs_path)
-        docx_current, citations_current, review_tools_current = _project_preference_defaults(
-            existing, self.cfg
+        docx_current, citations_current, review_tools_current, _map_skeleton_current = (
+            _project_preference_defaults(existing, self.cfg)
         )
         self.say(self.style.bold(f"\n  For {project.name}:"))
         self.say(
@@ -2129,12 +2130,14 @@ class Installer:
         docx_current = bool(self.cfg.get("default_docx", False))
         citations_current = bool(self.cfg.get("default_regulatory_citations", True))
         review_tools_current = self.cfg.get("default_review_tools") or {}
+        map_skeleton_current = bool(self.cfg.get("default_map_skeleton", False))
         model_current = _read_json_dict(user_settings_path()).get("model")
         self.say(
             self.style.dim(
                 f"    currently: docx by default = {'on' if docx_current else 'off'}, "
                 f"regulatory citations = {'on' if citations_current else 'off'}, "
                 f"review-tools = {review_tools_current or '(all auto)'}, "
+                f"codebase-skeleton drift checking = {'on' if map_skeleton_current else 'off'}, "
                 f"Morgan's model = {model_current or f'(unset - {ORCHESTRATOR_MODEL_DEFAULT} applies)'}"
             )
         )
@@ -2147,6 +2150,13 @@ class Installer:
         citations_wanted = confirm(
             "  New projects cite regulatory obligations by default - keep that on?",
             default=citations_current,
+            assume_yes=False,
+            style=self.style,
+        )
+        map_skeleton_wanted = confirm(
+            "  New projects get codebase-skeleton drift checking (MAP-DRIFT/"
+            "MAP-DEAD-POINTER) by default - experimental, ADR-007 Phase 1?",
+            default=map_skeleton_current,
             assume_yes=False,
             style=self.style,
         )
@@ -2184,6 +2194,7 @@ class Installer:
             f"docx={'on' if docx_wanted else 'off'}, "
             f"citations={'on' if citations_wanted else 'off'}, "
             f"review-tools={_format_review_tools(review_tools_wanted)}, "
+            f"map-skeleton={'on' if map_skeleton_wanted else 'off'}, "
             f"model={model_wanted or 'default'}"
         )
         if self.demo:
@@ -2198,6 +2209,7 @@ class Installer:
             docx_wanted == docx_current
             and citations_wanted == citations_current
             and review_tools_wanted == review_tools_current
+            and map_skeleton_wanted == map_skeleton_current
             and not model_changing
         ):
             self.step_ok("Machine defaults", "unchanged")
@@ -2205,6 +2217,7 @@ class Installer:
         self.cfg["default_docx"] = docx_wanted
         self.cfg["default_regulatory_citations"] = citations_wanted
         self.cfg["default_review_tools"] = review_tools_wanted
+        self.cfg["default_map_skeleton"] = map_skeleton_wanted
         save_config(self.cfg_path, self.cfg)
         self.step_ok("Machine defaults", f"{summary} ({self.cfg_path})")
 
@@ -2752,6 +2765,7 @@ def write_team_preferences(
     extra_formats: Optional[list] = None,
     regulatory_citations: Optional[bool] = None,
     large_context_review_split: Optional[bool] = None,
+    map_skeleton: Optional[bool] = None,
     review_tools: Optional[dict] = None,
 ) -> bool:
     """Project-scoped preferences (`.claude/team-preferences.json`), merge-only (a
@@ -2768,6 +2782,10 @@ def write_team_preferences(
       component from the start instead of discovering the need for it from a failed
       review call (docs/team-operating-guide.md's orchestration-discipline section).
       Defaults to False (off) whenever the key is absent.
+    - map_skeleton: whether check_map() runs MAP-DRIFT/MAP-DEAD-POINTER for a codebase map
+      with a Paths column (ADR-007 Phase 1 Chunk C/D). Defaults to False (off) whenever the
+      key is absent - unlike large_context_review_split, this one DOES have a machine-wide
+      default tier (installer.json default_map_skeleton), same as docx/citations.
     - review_tools: {tool: "on"|"off"} overrides for the _REVIEW_TOOLS set; "auto" (the
       implicit default for any tool not listed) means "use it if present, skip silently
       if not" - never stored literally, so the file only ever records actual overrides.
@@ -2783,6 +2801,8 @@ def write_team_preferences(
             prefs["regulatory_citations"] = bool(regulatory_citations)
         if large_context_review_split is not None:
             prefs["large_context_review_split"] = bool(large_context_review_split)
+        if map_skeleton is not None:
+            prefs["map_skeleton"] = bool(map_skeleton)
         if review_tools is not None:
             cleaned = {k: v for k, v in review_tools.items() if v != "auto"}
             if cleaned:
@@ -3018,17 +3038,20 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
 
 
 def _project_preference_defaults(existing: dict, machine_defaults: dict) -> tuple:
-    """(docx_current, citations_current, review_tools_current) - the project's own
-    explicit choice (the key is PRESENT in its team-preferences.json, even if falsy/
-    empty) always wins; otherwise falls back to THIS MACHINE's default; otherwise the
-    original built-in default (docx off, citations on, review-tools all auto). Shared
-    by run_configure and format_preferences_step so "what a human sees as the current/
-    suggested value while configuring" can never drift from what engage_probe.py
+    """(docx_current, citations_current, review_tools_current, map_skeleton_current) - the
+    project's own explicit choice (the key is PRESENT in its team-preferences.json, even if
+    falsy/empty) always wins; otherwise falls back to THIS MACHINE's default; otherwise the
+    original built-in default (docx off, citations on, review-tools all auto, map_skeleton
+    off). Shared by run_configure and format_preferences_step so "what a human sees as the
+    current/suggested value while configuring" can never drift from what engage_probe.py
     actually resolves at real /engage time (same precedence, mirrored deliberately).
     2026-08-05 user request: a "sensible defaults" fast path must respect machine-level
     overrides - e.g. ruff disabled at machine level must stay disabled by default for a
     brand-new project, not silently re-enabled; a project's own prior choice always
-    overrides the machine default regardless."""
+    overrides the machine default regardless.
+    2026-08-06 (ADR-007 Phase 1 Chunk D): map_skeleton follows the exact same 3-tier
+    precedence, added as a 4th value rather than a new function so the "shared, cannot
+    drift" property extends to it automatically."""
     if "extra_formats" in existing:
         docx_current = "docx" in (existing.get("extra_formats") or [])
     else:
@@ -3040,7 +3063,10 @@ def _project_preference_defaults(existing: dict, machine_defaults: dict) -> tupl
         review_tools_current = existing.get("review_tools") or {}
     else:
         review_tools_current = machine_defaults.get("default_review_tools") or {}
-    return docx_current, citations_current, review_tools_current
+    map_skeleton_current = existing.get(
+        "map_skeleton", machine_defaults.get("default_map_skeleton", False)
+    )
+    return docx_current, citations_current, review_tools_current, map_skeleton_current
 
 
 def run_configure(
@@ -3110,8 +3136,8 @@ def run_configure(
     print(style.dim("\n  Project preferences:"))
     existing = _read_json_dict(project / ".claude" / "team-preferences.json")
     machine_defaults = load_config(config_path())
-    docx_current, citations_current, review_tools_current = _project_preference_defaults(
-        existing, machine_defaults
+    docx_current, citations_current, review_tools_current, map_skeleton_current = (
+        _project_preference_defaults(existing, machine_defaults)
     )
     split_current = existing.get("large_context_review_split", False)
     docx_wanted = confirm(
@@ -3133,6 +3159,14 @@ def run_configure(
         assume_yes=assume_yes,
         style=style,
     )
+    map_skeleton_wanted = confirm(
+        "  Enable codebase-skeleton drift checking (MAP-DRIFT/MAP-DEAD-POINTER) for a "
+        "codebase map with a Paths column - experimental, ADR-007 Phase 1, off by "
+        "default?",
+        default=map_skeleton_current,
+        assume_yes=assume_yes,
+        style=style,
+    )
     review_tools_wanted = _ask_review_tool_overrides(style, assume_yes, review_tools_current)
     # Live-validates every newly forced-"on" tool even in demo mode - read-only against a
     # throwaway synthetic file, nothing project-related is touched, and the whole point is
@@ -3145,6 +3179,7 @@ def run_configure(
         f"docx={'on' if docx_wanted else 'off'}, "
         f"citations={'on' if citations_wanted else 'off'}, "
         f"review-split={'on' if split_wanted else 'off'}, "
+        f"map-skeleton={'on' if map_skeleton_wanted else 'off'}, "
         f"review-tools={_format_review_tools(review_tools_wanted)}"
     )
     if demo:
@@ -3154,6 +3189,7 @@ def run_configure(
         extra_formats=["docx"] if docx_wanted else [],
         regulatory_citations=citations_wanted,
         large_context_review_split=split_wanted,
+        map_skeleton=map_skeleton_wanted,
         review_tools=review_tools_wanted,
     ):
         print(f"  {ok} preferences: {summary}")

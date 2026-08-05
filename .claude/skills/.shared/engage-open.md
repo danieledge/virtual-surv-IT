@@ -138,8 +138,10 @@ conversation happens to make Windows obvious), `PYTHON_VERSION=`, `PLUGIN_VERSIO
 `REGULATORY_CITATIONS=on|off`, `LARGE_CONTEXT_REVIEW_SPLIT=on|off` (project preference - `on`
 means split a large, multi-component review by component from the start rather than waiting to
 discover the need for it from a failed call; see the orchestration-discipline section of
-`docs/team-operating-guide.md`), then the tooling report, the codebase map header + §3, the newest
-CHANGELOG entry, and any team-extensions block.
+`docs/team-operating-guide.md`), `MAP_SKELETON=on|off` (project preference, 3-tier precedence
+like docx/citations - `on` means `check_map()` runs MAP-DRIFT/MAP-DEAD-POINTER for a codebase
+map with a `Paths` column; ADR-007 Phase 1, experimental, off by default), then the tooling
+report, the codebase map header + §3, the newest CHANGELOG entry, and any team-extensions block.
 
 **The probe does NOT print the operating guide.** Read `docs/team-operating-guide.md` yourself
 (plugin mode: `$PLUGIN_ROOT/docs/team-operating-guide.md`): issue that `Read` in the SAME turn as

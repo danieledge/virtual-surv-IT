@@ -395,6 +395,12 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     else:
         citations_on = machine_defaults.get("default_regulatory_citations", True)
     review_split_on = prefs.get("large_context_review_split", False)
+    # map_skeleton (ADR-007 Phase 1 Chunk D): unlike large_context_review_split, this one
+    # DOES have a machine-default tier - same key-presence-wins precedence as docx/citations.
+    if "map_skeleton" in prefs:
+        map_skeleton_on = prefs["map_skeleton"]
+    else:
+        map_skeleton_on = machine_defaults.get("default_map_skeleton", False)
     tool_report = run_tool_probe(root, project_dir)
     extensions_block = run_extensions_show(root, project_dir)
 
@@ -409,6 +415,7 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         f"EXTRA_FORMATS={','.join(extra_formats)}",
         f"REGULATORY_CITATIONS={'on' if citations_on else 'off'}",
         f"LARGE_CONTEXT_REVIEW_SPLIT={'on' if review_split_on else 'off'}",
+        f"MAP_SKELETON={'on' if map_skeleton_on else 'off'}",
     ]
     if tool_report:
         lines += ["", tool_report.rstrip()]

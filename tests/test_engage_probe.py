@@ -340,6 +340,55 @@ def test_build_report_emits_large_context_review_split_on_when_set(tmp_path):
     assert "LARGE_CONTEXT_REVIEW_SPLIT=on" in out
 
 
+# --------------------------------- MAP_SKELETON (ADR-007 Phase 1 Chunk D, 3-tier precedence)
+
+
+def test_build_report_map_skeleton_off_by_default(tmp_path):
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "9.9.9"}), encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "MAP_SKELETON=off" in out
+
+
+def test_build_report_map_skeleton_on_via_project_preference(tmp_path):
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "MAP_SKELETON=on" in out
+
+
+def test_build_report_map_skeleton_falls_back_to_machine_default(tmp_path, monkeypatch):
+    _isolate_home_for_probe(monkeypatch, tmp_path)
+    _write_machine_defaults(tmp_path, default_map_skeleton=True)
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "9.9.9"}), encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "MAP_SKELETON=on" in out
+
+
+def test_build_report_map_skeleton_project_false_overrides_machine_true(tmp_path, monkeypatch):
+    _isolate_home_for_probe(monkeypatch, tmp_path)
+    _write_machine_defaults(tmp_path, default_map_skeleton=True)
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "9.9.9"}), encoding="utf-8"
+    )
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": False}), encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "MAP_SKELETON=off" in out
+
+
 def test_build_report_emits_os_windows(monkeypatch, tmp_path):
     # Live report 2026-08-03: the exec-consent command was given as the `!` form alone on
     # a Windows host, because nothing put "this is Windows" in front of the model as a
