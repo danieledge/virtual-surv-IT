@@ -136,6 +136,73 @@ def test_preferences_show_split_on_when_set(tmp_path):
     assert "split:off" not in proc.stdout
 
 
+# --- map: field is its OWN off-by-default preference (statusline_show_map), separate from
+# map_skeleton itself - a project can have drift-checking on without a longer statusline.
+
+
+def test_map_field_absent_by_default_even_when_map_skeleton_is_on(tmp_path):
+    prefs_dir = tmp_path / ".claude"
+    prefs_dir.mkdir(parents=True)
+    (prefs_dir / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    proc = _run(tmp_path, _basic_payload(tmp_path))
+    assert proc.returncode == 0
+    assert "map:" not in proc.stdout
+
+
+def test_map_field_shown_when_statusline_show_map_is_on(tmp_path):
+    prefs_dir = tmp_path / ".claude"
+    prefs_dir.mkdir(parents=True)
+    (prefs_dir / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True, "statusline_show_map": True}), encoding="utf-8"
+    )
+    proc = _run(tmp_path, _basic_payload(tmp_path))
+    assert proc.returncode == 0
+    assert "map:on" in proc.stdout
+
+
+def test_map_field_shown_off_when_statusline_show_map_on_but_map_skeleton_off(tmp_path):
+    prefs_dir = tmp_path / ".claude"
+    prefs_dir.mkdir(parents=True)
+    (prefs_dir / "team-preferences.json").write_text(
+        json.dumps({"statusline_show_map": True}), encoding="utf-8"
+    )
+    proc = _run(tmp_path, _basic_payload(tmp_path))
+    assert proc.returncode == 0
+    assert "map:off" in proc.stdout
+
+
+def test_statusline_show_map_falls_back_to_machine_default(tmp_path):
+    """No project preference set at all - the machine-wide installer.json default applies,
+    same 3-tier precedence as map_skeleton itself."""
+    config_dir = tmp_path / ".config" / "virt-surv-it"
+    config_dir.mkdir(parents=True)
+    (config_dir / "installer.json").write_text(
+        json.dumps({"default_statusline_show_map": True, "default_map_skeleton": True}),
+        encoding="utf-8",
+    )
+    proc = _run(tmp_path, _basic_payload(tmp_path))
+    assert proc.returncode == 0
+    assert "map:on" in proc.stdout
+
+
+def test_project_statusline_show_map_false_overrides_machine_true(tmp_path):
+    prefs_dir = tmp_path / ".claude"
+    prefs_dir.mkdir(parents=True)
+    (prefs_dir / "team-preferences.json").write_text(
+        json.dumps({"statusline_show_map": False}), encoding="utf-8"
+    )
+    config_dir = tmp_path / ".config" / "virt-surv-it"
+    config_dir.mkdir(parents=True)
+    (config_dir / "installer.json").write_text(
+        json.dumps({"default_statusline_show_map": True}), encoding="utf-8"
+    )
+    proc = _run(tmp_path, _basic_payload(tmp_path))
+    assert proc.returncode == 0
+    assert "map:" not in proc.stdout
+
+
 def test_invalid_cached_entry_falls_back_to_the_probe_loop(tmp_path):
     """A stale/bogus cache (e.g. an interpreter since uninstalled) must not brick the
     statusline - `command -v` on it fails, so it falls through exactly like no cache."""

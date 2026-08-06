@@ -4,11 +4,12 @@
 # Shows Morgan's state at ZERO context cost (a statusline is a shell render, not a model
 # turn): dormant sessions show that plainly; while an engagement is live it names the
 # ACTIVE slug, its status and phase. Every render also shows the project's docx/citations/
-# review-split/model preferences (same four settings /preferences shows; /engage's banner
-# surfaces the same four but stays silent on review-split when it's off, since that one is a
-# reliability workaround, not an output choice - docs/internal/large-context-review-splitting-plan.md),
-# so they're visible without asking. Reads the statusLine stdin JSON (model, cost, workspace)
-# plus the on-disk engagement state and team-preferences.json/settings.json; never talks to
+# review-split/map-skeleton preferences plus Morgan's own configured model (the same four
+# preferences + model /preferences shows; /engage's banner surfaces the same set but stays
+# silent on review-split when it's off, since that one is a reliability workaround, not an
+# output choice - docs/internal/large-context-review-splitting-plan.md), so they're visible
+# without asking. Reads the statusLine stdin JSON (model, cost, workspace) plus the on-disk
+# engagement state and team-preferences.json/settings.json/installer.json; never talks to
 # the model.
 #
 # Wire (HUMAN-run - settings edits are human-only, ADR-002 rec 5):
@@ -120,16 +121,49 @@ except Exception:
 docx_on = "docx" in (prefs.get("extra_formats") or [])
 citations_on = prefs.get("regulatory_citations", True)
 split_on = prefs.get("large_context_review_split", False)
+
+
+def _project_or_machine_default(key, machine_key, builtin_default):
+    """Key-presence-wins-else-machine-else-builtin - the same 3-tier precedence
+    engage_probe.py and check_artifacts.py already use for map_skeleton (ADR-007 Phase 1
+    Chunk D), now shared by statusline_show_map too. A statusline is a shell render (no
+    model context), so this is a small, self-contained re-derivation rather than an import -
+    same rationale as every other standalone-runnability note in this codebase."""
+    if key in prefs:
+        return bool(prefs[key])
+    try:
+        import os
+
+        xdg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+        installer_cfg = json.loads(
+            (Path(xdg) / "virt-surv-it" / "installer.json").read_text(encoding="utf-8")
+        )
+        return bool(installer_cfg.get(machine_key, builtin_default))
+    except Exception:
+        return builtin_default
+
+
+map_skeleton_on = _project_or_machine_default("map_skeleton", "default_map_skeleton", False)
+# statusline_show_map is its OWN off-by-default preference (separate from map_skeleton
+# itself) - a project can have drift-checking on without a longer statusline, since not
+# every project wants the extra field just because the underlying toggle happens to be on.
+statusline_show_map = _project_or_machine_default(
+    "statusline_show_map", "default_statusline_show_map", False
+)
 morgan_model = ""
 try:
     settings = json.loads((Path(cwd) / ".claude" / "settings.json").read_text(encoding="utf-8"))
     morgan_model = settings.get("model") or ""
 except Exception:
     pass
-bits.append(
+pref_line = (
     f"docx:{'on' if docx_on else 'off'} cite:{'on' if citations_on else 'off'} "
-    f"split:{'on' if split_on else 'off'} morgan:{morgan_model or 'default'}"
+    f"split:{'on' if split_on else 'off'}"
 )
+if statusline_show_map:
+    pref_line += f" map:{'on' if map_skeleton_on else 'off'}"
+pref_line += f" morgan:{morgan_model or 'default'}"
+bits.append(pref_line)
 
 if model:
     bits.append(model)

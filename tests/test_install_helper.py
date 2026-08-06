@@ -2759,6 +2759,33 @@ def test_write_team_preferences_omitted_args_preserve_existing(tmp_path):
     assert prefs["extra_formats"] == ["docx"]
 
 
+def test_write_team_preferences_statusline_show_map_flag(tmp_path):
+    from install_helper import write_team_preferences
+
+    write_team_preferences(tmp_path, statusline_show_map=True)
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["statusline_show_map"] is True
+    assert "extra_formats" not in prefs  # omitted arg leaves the other key untouched
+
+
+def test_machine_defaults_step_sets_statusline_show_map_default(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+
+    def _fake_confirm(prompt, default, assume_yes, style=None):
+        if "statusline" in prompt.lower():
+            return True  # the one field this test flips - forces the write path
+        return default  # everything else stays at its current (unchanged) value
+
+    monkeypatch.setattr(ih, "confirm", _fake_confirm)
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "")
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    cfg = json.loads((ih.config_path()).read_text())
+    assert cfg["default_statusline_show_map"] is True
+
+
 # --- analyser output cleanliness check (2026-08-04) ---------------------------------------
 
 
@@ -3443,6 +3470,7 @@ def test_run_configure_happy_path_yes(tmp_path, monkeypatch, capsys):
         "regulatory_citations": True,
         "large_context_review_split": False,
         "map_skeleton": False,
+        "statusline_show_map": False,
     }
     assert "Configuration complete" in out
 
@@ -3500,14 +3528,16 @@ def test_project_preference_defaults_falls_back_to_machine_default(tmp_path):
         "default_regulatory_citations": False,
         "default_review_tools": {"ruff": "off"},
         "default_map_skeleton": True,
+        "default_statusline_show_map": True,
     }
-    docx, citations, review_tools, map_skeleton = _project_preference_defaults(
-        {}, machine_defaults
+    docx, citations, review_tools, map_skeleton, statusline_show_map = (
+        _project_preference_defaults({}, machine_defaults)
     )
     assert docx is True
     assert citations is False
     assert review_tools == {"ruff": "off"}
     assert map_skeleton is True
+    assert statusline_show_map is True
 
 
 def test_project_preference_defaults_project_choice_overrides_machine(tmp_path):
@@ -3521,20 +3551,23 @@ def test_project_preference_defaults_project_choice_overrides_machine(tmp_path):
         "regulatory_citations": True,
         "review_tools": {},
         "map_skeleton": False,
+        "statusline_show_map": False,
     }
     machine_defaults = {
         "default_docx": False,
         "default_regulatory_citations": False,
         "default_review_tools": {"ruff": "off"},
         "default_map_skeleton": True,
+        "default_statusline_show_map": True,
     }
-    docx, citations, review_tools, map_skeleton = _project_preference_defaults(
-        existing, machine_defaults
+    docx, citations, review_tools, map_skeleton, statusline_show_map = (
+        _project_preference_defaults(existing, machine_defaults)
     )
     assert docx is True  # project's own "docx on" wins over machine's "off"
     assert citations is True  # project's own "on" wins over machine's "off"
     assert review_tools == {}  # project's own explicit "all auto" wins over machine's override
     assert map_skeleton is False  # project's own explicit "off" wins even though it's falsy
+    assert statusline_show_map is False  # same, for the statusline preference
 
 
 def test_project_preference_defaults_no_machine_config_uses_builtin(tmp_path):
@@ -3542,11 +3575,14 @@ def test_project_preference_defaults_no_machine_config_uses_builtin(tmp_path):
     (docx off, citations on, review-tools all auto) still applies."""
     from install_helper import _project_preference_defaults
 
-    docx, citations, review_tools, map_skeleton = _project_preference_defaults({}, {})
+    docx, citations, review_tools, map_skeleton, statusline_show_map = (
+        _project_preference_defaults({}, {})
+    )
     assert docx is False
     assert citations is True
     assert review_tools == {}
     assert map_skeleton is False
+    assert statusline_show_map is False
 
 
 def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkeypatch):
@@ -3556,10 +3592,10 @@ def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkey
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     monkeypatch.setattr(sys, "stdin", _TtyStdin())  # see test_ask_and_set_model_rejects_bad_input
     # "n" to "use recommended settings?" (walk through each choice instead), "no" to the
-    # permissions question, "" (accept defaults) to the four preference prompts (docx,
-    # citations, review-split, map-skeleton), "" (no change) to the review-tools override
-    # prompt, "" to the model prompt (declines - default for that one is False).
-    answers = iter(["n", "n", "", "", "", "", "", ""])
+    # permissions question, "" (accept defaults) to the five preference prompts (docx,
+    # citations, review-split, map-skeleton, statusline-map), "" (no change) to the
+    # review-tools override prompt, "" to the model prompt (declines - default is False).
+    answers = iter(["n", "n", "", "", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -4507,9 +4543,9 @@ def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     # "n" to "use recommended settings?" (blank there would default to Yes and skip
     # every prompt below via assume_yes, defeating this test), "" enable-permissions
-    # default(Y), "" docx, "" citations, "" split, "" map-skeleton, "mypy=off"
-    # review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "mypy=off", ""])
+    # default(Y), "" docx, "" citations, "" split, "" map-skeleton, "" statusline-map,
+    # "mypy=off" review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "mypy=off", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -4530,9 +4566,9 @@ def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch)
     monkeypatch.setattr(ih, "probe_analyser_output", fake_probe)
     # "n" to "use recommended settings?" first (blank there would default to Yes and
     # skip every prompt below via assume_yes, defeating this test). Then "" enable-
-    # permissions, "" docx, "" citations, "" split, "" map-skeleton, "mypy=on"
-    # review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "mypy=on", ""])
+    # permissions, "" docx, "" citations, "" split, "" map-skeleton, "" statusline-map,
+    # "mypy=on" review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "mypy=on", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0

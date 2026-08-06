@@ -3,6 +3,19 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.29] - 2026-08-06 - Statusline map indicator is its own off-by-default preference
+
+### Added
+- `scripts/statusline.sh`'s new `map:on/off` field (mirrors the `map_skeleton` preference,
+  ADR-007 Phase 1 Chunk D) is gated behind its own preference, `statusline_show_map`
+  (project `.claude/team-preferences.json`, machine `installer.json`
+  `default_statusline_show_map`, same 3-tier precedence as `map_skeleton` - project key
+  wins, else machine default, else off). Deliberately separate from `map_skeleton` itself:
+  a project can have drift-checking on without a longer statusline, or vice versa. Off by
+  default, so no existing project's statusline changes shape unless it opts in.
+- `install_helper.py`: the machine-defaults step and `--configure`'s guided flow both offer
+  this alongside `map_skeleton`, off by default, same wording pattern.
+
 ## [0.33.28] - 2026-08-06 - ADR-007 Phase 1+2 complete: /map-codebase, area files, three fingerprint bugs fixed
 
 ### Added (gated behind `map_skeleton`, off by default - no behaviour change unless opted in)

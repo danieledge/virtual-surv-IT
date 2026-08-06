@@ -2024,9 +2024,13 @@ class Installer:
             return
         prefs_path = project / ".claude" / "team-preferences.json"
         existing = _read_json_dict(prefs_path)
-        docx_current, citations_current, review_tools_current, _map_skeleton_current = (
-            _project_preference_defaults(existing, self.cfg)
-        )
+        (
+            docx_current,
+            citations_current,
+            review_tools_current,
+            _map_skeleton_current,
+            _statusline_show_map_current,
+        ) = _project_preference_defaults(existing, self.cfg)
         self.say(self.style.bold(f"\n  For {project.name}:"))
         self.say(
             self.style.dim(
@@ -2131,6 +2135,7 @@ class Installer:
         citations_current = bool(self.cfg.get("default_regulatory_citations", True))
         review_tools_current = self.cfg.get("default_review_tools") or {}
         map_skeleton_current = bool(self.cfg.get("default_map_skeleton", False))
+        statusline_show_map_current = bool(self.cfg.get("default_statusline_show_map", False))
         model_current = _read_json_dict(user_settings_path()).get("model")
         self.say(
             self.style.dim(
@@ -2138,6 +2143,7 @@ class Installer:
                 f"regulatory citations = {'on' if citations_current else 'off'}, "
                 f"review-tools = {review_tools_current or '(all auto)'}, "
                 f"codebase-skeleton drift checking = {'on' if map_skeleton_current else 'off'}, "
+                f"statusline map indicator = {'on' if statusline_show_map_current else 'off'}, "
                 f"Morgan's model = {model_current or f'(unset - {ORCHESTRATOR_MODEL_DEFAULT} applies)'}"
             )
         )
@@ -2157,6 +2163,13 @@ class Installer:
             "  New projects get codebase-skeleton drift checking (MAP-DRIFT/"
             "MAP-DEAD-POINTER) by default - experimental, ADR-007 Phase 1?",
             default=map_skeleton_current,
+            assume_yes=False,
+            style=self.style,
+        )
+        statusline_show_map_wanted = confirm(
+            "  New projects show map-skeleton status (map:on/off) in the statusline too - "
+            "off by default, keeps the line short unless wanted?",
+            default=statusline_show_map_current,
             assume_yes=False,
             style=self.style,
         )
@@ -2199,6 +2212,7 @@ class Installer:
             f"citations={'on' if citations_wanted else 'off'}, "
             f"review-tools={_format_review_tools(review_tools_wanted)}, "
             f"map-skeleton={'on' if map_skeleton_wanted else 'off'}, "
+            f"statusline-map={'on' if statusline_show_map_wanted else 'off'}, "
             f"model={model_wanted or 'default'}"
         )
         if self.demo:
@@ -2214,6 +2228,7 @@ class Installer:
             and citations_wanted == citations_current
             and review_tools_wanted == review_tools_current
             and map_skeleton_wanted == map_skeleton_current
+            and statusline_show_map_wanted == statusline_show_map_current
             and not model_changing
         ):
             self.step_ok("Machine defaults", "unchanged")
@@ -2222,6 +2237,7 @@ class Installer:
         self.cfg["default_regulatory_citations"] = citations_wanted
         self.cfg["default_review_tools"] = review_tools_wanted
         self.cfg["default_map_skeleton"] = map_skeleton_wanted
+        self.cfg["default_statusline_show_map"] = statusline_show_map_wanted
         save_config(self.cfg_path, self.cfg)
         self.step_ok("Machine defaults", f"{summary} ({self.cfg_path})")
 
@@ -2774,6 +2790,7 @@ def write_team_preferences(
     regulatory_citations: Optional[bool] = None,
     large_context_review_split: Optional[bool] = None,
     map_skeleton: Optional[bool] = None,
+    statusline_show_map: Optional[bool] = None,
     review_tools: Optional[dict] = None,
 ) -> bool:
     """Project-scoped preferences (`.claude/team-preferences.json`), merge-only (a
@@ -2794,6 +2811,11 @@ def write_team_preferences(
       with a Paths column (ADR-007 Phase 1 Chunk C/D). Defaults to False (off) whenever the
       key is absent - unlike large_context_review_split, this one DOES have a machine-wide
       default tier (installer.json default_map_skeleton), same as docx/citations.
+    - statusline_show_map: whether scripts/statusline.sh's render includes a `map:on/off`
+      field. Defaults to False (off) whenever the key is absent, same machine-wide default
+      tier as map_skeleton (installer.json default_statusline_show_map) - separate from
+      map_skeleton itself so a project can have drift-checking on without a longer
+      statusline, or vice versa.
     - review_tools: {tool: "on"|"off"} overrides for the _REVIEW_TOOLS set; "auto" (the
       implicit default for any tool not listed) means "use it if present, skip silently
       if not" - never stored literally, so the file only ever records actual overrides.
@@ -2811,6 +2833,8 @@ def write_team_preferences(
             prefs["large_context_review_split"] = bool(large_context_review_split)
         if map_skeleton is not None:
             prefs["map_skeleton"] = bool(map_skeleton)
+        if statusline_show_map is not None:
+            prefs["statusline_show_map"] = bool(statusline_show_map)
         if review_tools is not None:
             cleaned = {k: v for k, v in review_tools.items() if v != "auto"}
             if cleaned:
@@ -3061,20 +3085,25 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
 
 
 def _project_preference_defaults(existing: dict, machine_defaults: dict) -> tuple:
-    """(docx_current, citations_current, review_tools_current, map_skeleton_current) - the
-    project's own explicit choice (the key is PRESENT in its team-preferences.json, even if
-    falsy/empty) always wins; otherwise falls back to THIS MACHINE's default; otherwise the
-    original built-in default (docx off, citations on, review-tools all auto, map_skeleton
-    off). Shared by run_configure and format_preferences_step so "what a human sees as the
-    current/suggested value while configuring" can never drift from what engage_probe.py
-    actually resolves at real /engage time (same precedence, mirrored deliberately).
+    """(docx_current, citations_current, review_tools_current, map_skeleton_current,
+    statusline_show_map_current) - the project's own explicit choice (the key is PRESENT in
+    its team-preferences.json, even if falsy/empty) always wins; otherwise falls back to
+    THIS MACHINE's default; otherwise the original built-in default (docx off, citations on,
+    review-tools all auto, map_skeleton off, statusline_show_map off). Shared by
+    run_configure and format_preferences_step so "what a human sees as the current/suggested
+    value while configuring" can never drift from what engage_probe.py actually resolves at
+    real /engage time (same precedence, mirrored deliberately).
     2026-08-05 user request: a "sensible defaults" fast path must respect machine-level
     overrides - e.g. ruff disabled at machine level must stay disabled by default for a
     brand-new project, not silently re-enabled; a project's own prior choice always
     overrides the machine default regardless.
     2026-08-06 (ADR-007 Phase 1 Chunk D): map_skeleton follows the exact same 3-tier
     precedence, added as a 4th value rather than a new function so the "shared, cannot
-    drift" property extends to it automatically."""
+    drift" property extends to it automatically.
+    2026-08-06 (statusline): statusline_show_map (whether scripts/statusline.sh's render
+    grows a `map:on/off` field at all) follows the identical 3-tier precedence, added as a
+    5th value for the same reason - off by default, since not every project wants a longer
+    statusline just because map_skeleton itself might be on."""
     if "extra_formats" in existing:
         docx_current = "docx" in (existing.get("extra_formats") or [])
     else:
@@ -3089,7 +3118,16 @@ def _project_preference_defaults(existing: dict, machine_defaults: dict) -> tupl
     map_skeleton_current = existing.get(
         "map_skeleton", machine_defaults.get("default_map_skeleton", False)
     )
-    return docx_current, citations_current, review_tools_current, map_skeleton_current
+    statusline_show_map_current = existing.get(
+        "statusline_show_map", machine_defaults.get("default_statusline_show_map", False)
+    )
+    return (
+        docx_current,
+        citations_current,
+        review_tools_current,
+        map_skeleton_current,
+        statusline_show_map_current,
+    )
 
 
 def run_configure(
@@ -3159,9 +3197,13 @@ def run_configure(
     print(style.dim("\n  Project preferences:"))
     existing = _read_json_dict(project / ".claude" / "team-preferences.json")
     machine_defaults = load_config(config_path())
-    docx_current, citations_current, review_tools_current, map_skeleton_current = (
-        _project_preference_defaults(existing, machine_defaults)
-    )
+    (
+        docx_current,
+        citations_current,
+        review_tools_current,
+        map_skeleton_current,
+        statusline_show_map_current,
+    ) = _project_preference_defaults(existing, machine_defaults)
     split_current = existing.get("large_context_review_split", False)
     docx_wanted = confirm(
         "  Produce .docx by default for controlled documents?",
@@ -3190,6 +3232,13 @@ def run_configure(
         assume_yes=assume_yes,
         style=style,
     )
+    statusline_show_map_wanted = confirm(
+        "  Show map-skeleton status (map:on/off) in the statusline too - off by default, "
+        "keeps the line short unless you want it?",
+        default=statusline_show_map_current,
+        assume_yes=assume_yes,
+        style=style,
+    )
     review_tools_wanted = _ask_review_tool_overrides(style, assume_yes, review_tools_current)
     # Live-validates every newly forced-"on" tool even in demo mode - read-only against a
     # throwaway synthetic file, nothing project-related is touched, and the whole point is
@@ -3203,6 +3252,7 @@ def run_configure(
         f"citations={'on' if citations_wanted else 'off'}, "
         f"review-split={'on' if split_wanted else 'off'}, "
         f"map-skeleton={'on' if map_skeleton_wanted else 'off'}, "
+        f"statusline-map={'on' if statusline_show_map_wanted else 'off'}, "
         f"review-tools={_format_review_tools(review_tools_wanted)}"
     )
     if demo:
@@ -3213,6 +3263,7 @@ def run_configure(
         regulatory_citations=citations_wanted,
         large_context_review_split=split_wanted,
         map_skeleton=map_skeleton_wanted,
+        statusline_show_map=statusline_show_map_wanted,
         review_tools=review_tools_wanted,
     ):
         print(f"  {ok} preferences: {summary}")
