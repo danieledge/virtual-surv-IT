@@ -252,6 +252,46 @@ def test_compound_command_second_segments_raw_operand_still_blocks(project_with_
     )
 
 
+# ---------------------------- command substitution inside double quotes (2026-08-07) -------
+#
+# Same _segments() bug guard-code-execution.py had (found by a framework-wide audit): `` ` ``/
+# `$(` were gated on the same quote check as the ordinary delimiters, so a substitution
+# wrapped in double quotes never became its own segment. Fixed identically here for
+# consistency. UNLIKE the exec guard, this guard's final checks (RAW_MARKERS/_RAW_MARKER_RE)
+# are substring/regex scans over whatever segment text exists, not position-anchored patterns
+# - traced by hand and confirmed live below: the LIVE (pre-fix) guard already blocks every
+# case here too, because "data/raw" matches as a substring wherever it lands in the segment.
+# So this fix is a genuine hardening / cross-guard consistency improvement, NOT the closure of
+# an active gap in THIS specific guard - stated precisely, not oversold.
+
+
+def test_double_quoted_substitution_of_raw_path_blocks_on_both_guards(project_with_raw):
+    """Confirms no regression from the fix AND confirms the pre-fix guard was already safe
+    here (traced: the marker check is a substring scan, not anchored, so segmentation
+    precision doesn't change the outcome for this guard the way it does for the exec guard's
+    `^pytest\\b`-style anchored patterns)."""
+    cmd = 'echo "$(cat data/raw/trades.csv)"'
+    assert _blocks(project_with_raw, "Bash", {"command": cmd})
+    live_proc = subprocess.run(
+        [sys.executable, str(LIVE_PATH)],
+        input=json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}),
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "CLAUDE_PROJECT_DIR": str(project_with_raw)},
+    )
+    assert live_proc.returncode == 2  # already blocked pre-fix - see comment above
+
+
+def test_backtick_substitution_of_raw_path_still_blocks(project_with_raw):
+    assert _blocks(project_with_raw, "Bash", {"command": 'echo "`cat data/raw/trades.csv`"'})
+
+
+def test_double_quoted_substitution_with_no_raw_data_still_allowed(project_without_raw):
+    """The fix must not become a new false positive - a substitution with no raw marker at
+    all must still be allowed through, quotes or not."""
+    assert not _blocks(project_without_raw, "Bash", {"command": 'echo "$(cat data/masked/x.csv)"'})
+
+
 # ------------------------------------------------ quote-aware segment splitting
 # (2026-08-03, second fix): the naive split above chops INSIDE a quoted argument too - a
 # log message using ';' or '&&' as ordinary punctuation got sliced into a bogus fragment.

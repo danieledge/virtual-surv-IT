@@ -162,6 +162,94 @@ def test_exec_patterns_identical_to_live_guard():
     assert STAGED._SEGMENT_DELIMS == LIVE._SEGMENT_DELIMS
 
 
+# ---------------------------------- command substitution inside double quotes (2026-08-07)
+#
+# Found by a framework-wide audit, verified by hand before this fix: bash actually EXECUTES
+# `$(...)`/backtick substitution even inside double quotes - only single quotes suppress it.
+# _segments() gated backtick/`$(` on the same "not in_single and not in_double" condition as
+# the ordinary delimiters (;/&&/||/|/newline), for which that gating IS correct (those really
+# are just literal text inside "..."). So `echo "$(pytest)"` never became its own segment,
+# and the segment-start-anchored `^pytest` pattern in _EXEC_PATTERNS never saw it. Mirrors
+# the fix guard-consent-writes.py already had (its own comment: "command substitution
+# executes even inside double quotes - always a boundary").
+
+
+def test_dollar_paren_inside_double_quotes_starts_its_own_segment():
+    """The fix is lexical, not a matching-paren parser (ADR-002's own stated design: still
+    lexical, safe-direction-on-imprecision, same philosophy as "unclosed quotes fold the
+    remainder into one segment"). `$(`/backtick correctly become a segment boundary; the
+    guard does not attempt to find `$(...)`'s MATCHING close, so trailing characters after
+    it (the outer string's own closing quote, e.g.) stay glued onto that segment rather
+    than being cleanly separated. That's fine - checked separately below - because the
+    anchored patterns match on segment START, so the extra tail never hides the command."""
+    for cmd, expect_prefix in (
+        ('echo "$(pytest)"', "pytest"),
+        ('echo "$(make)"', "make"),
+        ('X="$(pytest -x)"', "pytest -x"),
+        ('echo "prefix $(pytest) suffix"', "pytest"),
+    ):
+        segs = STAGED._segments(cmd)
+        assert any(s.startswith(expect_prefix) for s in segs), (
+            f"{cmd!r} -> {segs!r} (expected some segment starting with {expect_prefix!r})"
+        )
+
+
+def test_backtick_inside_double_quotes_starts_its_own_segment():
+    segs = STAGED._segments('echo "`pytest`"')
+    assert any(s.startswith("pytest") for s in segs), segs
+
+
+def test_double_quoted_substitution_still_trips_the_exec_net():
+    """The segment the fix isolates must actually match _EXEC_PATTERNS (not just exist) -
+    proving the anchored `^pytest`/`^make` patterns see the real command, not the quote
+    wrapper, once _segments() stops hiding it inside a larger double-quoted blob."""
+    for cmd in ('echo "$(pytest)"', 'echo "$(make)"', 'echo "`pytest`"', 'X="$(pytest -x)"'):
+        segs = STAGED._segments(cmd)
+        assert any(STAGED._EXEC_RE.search(s) and not STAGED._TEAM_ALLOW.match(s) for s in segs), (
+            f"{cmd!r} -> {segs!r} - no segment both matches the exec net and fails the "
+            "team allow-list, meaning this command would NOT be blocked"
+        )
+
+
+def test_single_quoted_dollar_paren_correctly_stays_literal():
+    """Single quotes genuinely suppress substitution in real bash - `echo '$(pytest)'`
+    prints the literal text and never runs pytest. Confirms the fix didn't overcorrect
+    into treating $(/backtick as a boundary inside SINGLE quotes too."""
+    segs = STAGED._segments("echo '$(pytest)'")
+    assert segs == ["echo '$(pytest)'"], segs
+
+
+def test_ordinary_delimiters_still_stay_literal_inside_double_quotes():
+    """The fix must be scoped to command substitution ONLY - ;/&&/||/|/newline are still
+    genuinely literal text inside double quotes in real bash (this is the exact false-
+    positive test_guard_hardening's own 2026-08-03 fix protects), so this must not regress."""
+    cmd = 'git commit -m "close as-is; no real source data exists"'
+    segs = STAGED._segments(cmd)
+    assert len(segs) == 1, segs
+
+
+def test_double_quoted_exec_substitution_end_to_end_via_staged_guard(tmp_path):
+    """Full subprocess invocation of the staged guard script itself (not just internal
+    functions) - the strongest proof, matching exactly how the audit verified the bypass."""
+    import json
+    import os
+    import subprocess
+    import sys
+
+    staged_path = REPO / "scripts" / "staged_hooks" / "guard-code-execution.py"
+    for cmd in ('echo "$(pytest)"', 'echo "$(make)"', 'echo "`pytest`"'):
+        env = {k: v for k, v in os.environ.items() if k != "CST_ALLOW_EXEC"}
+        env["CLAUDE_PROJECT_DIR"] = str(tmp_path)
+        proc = subprocess.run(
+            [sys.executable, str(staged_path)],
+            input=json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}),
+            text=True,
+            capture_output=True,
+            env=env,
+        )
+        assert proc.returncode == 2, f"{cmd!r} was NOT blocked (rc={proc.returncode})"
+
+
 # ------------------------------------------------ env-var prefix before the interpreter
 # (2026-08-04): a compound command like `OUT=$(PYTHONIOENCODING=utf-8 python ".../x.py")`
 # splits (on `$(`) into a segment starting with `PYTHONIOENCODING=utf-8 python ...`, not

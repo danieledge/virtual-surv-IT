@@ -3,6 +3,26 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.30] - 2026-08-07 - Command substitution inside double quotes escaped two of the three guards
+
+### Fixed (staged - `bash scripts/apply-guard-exec-allow.sh` and `bash scripts/apply-guard-raw-coverage.sh`)
+- Found by a framework-wide audit, verified by hand: `guard-code-execution.py` and
+  `guard-raw-data.py`'s `_segments()` treated `` ` ``/`$(` as a segment boundary only
+  outside double quotes - wrong, since bash actually executes command substitution even
+  inside them. `echo "$(pytest)"` and the backtick equivalent ran unblocked, because the
+  real command never became its own segment for the exec guard's anchored patterns
+  (`^pytest`, `^make`, etc.) to see. `guard-consent-writes.py` already had this right; the
+  other two guards lost it in independent 2026-08-03 rewrites. Fixed identically in both -
+  `` ` ``/`$(` are now a boundary whenever outside single quotes, regardless of double-quote
+  state; the four ordinary delimiters (`;`/`&&`/`||`/`|`) keep their original quote gating,
+  unchanged, since those genuinely are just literal text inside `"..."` in real bash.
+  Impact stated precisely, not oversold: the exec guard's gap was real and proven live; the
+  raw-data guard's equivalent gap was latent, not active (its checks are substring/regex
+  scans, not anchored, so the pre-fix guard already blocked every case tested - confirmed by
+  running the same inputs against live and staged side by side) - fixed there anyway for
+  cross-guard consistency. Full writeup: `docs/adr/ADR-002-safety-hook-threat-model.md`'s
+  Residual risk section.
+
 ## [0.33.29] - 2026-08-06 - Statusline map indicator is its own off-by-default preference
 
 ### Added

@@ -25,6 +25,16 @@
 #      distinguish the pattern operand from the file operands. A file operand under data/raw
 #      still blocks.
 #
+# ALSO HARDENED, 2026-08-07 (NOT a closed gap - stated precisely, not oversold): `` ` ``/`$(`
+# in _segments() were gated on the same quote check as the ordinary delimiters (;/&&/||/|),
+# so a command substitution wrapped in double quotes never became its own segment - the exact
+# bug guard-code-execution.py had, found by a framework-wide audit and fixed identically here
+# for consistency. Traced by hand and confirmed live: THIS guard's final checks (RAW_MARKERS/
+# _RAW_MARKER_RE) are substring/regex scans over whatever segment text exists, not position-
+# anchored patterns, so the live (pre-fix) guard already blocked every case tested - this
+# closes a latent inconsistency between the three guards' segment splitters, not an active
+# hole in this one. See scripts/staged_hooks/guard-raw-data.py's own _segments() docstring.
+#
 # NOTE: this guard had no staged copy before today, so it had never had a live-vs-staged sync
 # test. It has one now, and it FAILS rather than skips until this script is run.
 #

@@ -333,6 +333,36 @@ in between - genuinely closes it, unlike another lexical patch). Until then: **t
 practice is the only real control** - the model does not invoke `apply-*.sh` itself, ever, even
 when asked to "go ahead" on an unrelated adjacent action; only the user runs it.
 
+**Fixed, 2026-08-07: command substitution inside double quotes escaped the segment splitter
+in two of the three guards.** Found by a framework-wide audit, verified by hand before any
+fix landed: `guard-code-execution.py` and `guard-raw-data.py`'s `_segments()` gated `` ` ``/
+`$(` on the same `not in_single and not in_double` condition as the four ordinary delimiters
+(`;`/`&&`/`||`/`|`) - correct for those four (they really are literal text inside a
+double-quoted string in real bash), wrong for command substitution, which **executes even
+inside double quotes**. So `echo "$(pytest)"` never became its own segment, and the
+exec guard's segment-start-anchored patterns (`^pytest`, `^make`, `^(pwsh|powershell)`, etc.)
+never saw the real command - verified live: `echo "$(pytest)"` and `` echo "`pytest`" `` both
+ran unblocked pre-fix. `guard-consent-writes.py` already had this right (its own comment:
+"command substitution executes even inside double quotes - always a boundary") - the other
+two guards lost that property in their independent 2026-08-03 quote-awareness rewrites and
+never regained it until now. Fixed identically in both: `` ` ``/`$(` are now a boundary
+whenever `not in_single`, regardless of `in_double`; the four ordinary delimiters keep their
+original `not in_single and not in_double` gate, unchanged.
+
+Impact differed by guard, traced by hand rather than assumed - stated precisely so the fix
+isn't oversold: the **exec guard's gap was real and exploitable** (an anchored-pattern miss,
+proven live). The **raw-data guard's equivalent gap was latent, not active** - its final
+checks (`RAW_MARKERS`/`_RAW_MARKER_RE`) are substring/regex scans over whatever segment text
+exists, not position-anchored, so the pre-fix live guard already blocked every case tested
+here (confirmed by running the same adversarial inputs against both the live and staged copy
+side by side). Fixed there anyway, for cross-guard consistency and because a future
+anchor-sensitive check added to that guard would otherwise silently inherit the same class of
+gap. Regression tests: `tests/test_guard_exec_team_allow.py` (including one full subprocess
+invocation of the staged guard, not just the internal `_segments()`/`_EXEC_RE` functions) and
+`tests/test_guard_raw_coverage.py` (including a same-input live-vs-staged comparison proving
+the "latent, not active" characterization rather than asserting it). Staged, not yet applied -
+`bash scripts/apply-guard-exec-allow.sh` and `bash scripts/apply-guard-raw-coverage.sh`.
+
 ## Implementation status & follow-up
 
 | Item | Detail |
