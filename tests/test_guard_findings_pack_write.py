@@ -10,6 +10,13 @@ having the orchestrator re-emit it (halving that round-trip's token cost). A Wri
 no path restriction is a much bigger blast radius than "author one JSON file", so this guard
 mechanically scopes it: fires only when the calling `agent_type` is one of the four, and
 blocks unless the target matches the findings-pack shape.
+
+Live freedom-dashboard diagnostic (2026-08-06): the same four agents were also granted `Edit`,
+scoped by this guard to the identical path pattern, so a scoped agent that hits the Write
+size cap (below) can chunk its own pack incrementally instead of silently dropping findings -
+the same option the orchestrator already had. The scoping half of the guard now fires for
+both `Write` and `Edit`; the size-cap half stays `Write`-only (Edit is the intended way past
+it, so it must stay exempt).
 """
 
 from __future__ import annotations
@@ -52,19 +59,29 @@ def test_orchestrators_own_write_is_untouched():
     assert not _blocks("Write", {"file_path": "src/anything.py"}, None)
 
 
+def test_orchestrators_own_edit_is_untouched():
+    assert not _blocks("Edit", {"file_path": "src/anything.py"}, None)
+
+
 def test_unrelated_agent_type_is_untouched():
     """An agent this guard doesn't scope (e.g. a build agent that legitimately writes
     source code) is not this guard's concern."""
     assert not _blocks("Write", {"file_path": "src/anything.py"}, "rules-developer")
 
 
-def test_non_write_tool_is_untouched():
+def test_unrelated_agent_type_edit_is_untouched():
+    assert not _blocks("Edit", {"file_path": "src/anything.py"}, "rules-developer")
+
+
+def test_non_write_edit_tool_is_untouched():
     assert not _blocks(
         "Read", {"file_path": "artifacts/x/data/findings-x.json"}, "compliance-reviewer"
     )
 
 
 # ------------------------------------------------ the four scoped agents, allowed path
+
+_TOOLS = ("Write", "Edit")
 
 
 def _allowed_paths():
@@ -78,6 +95,11 @@ def test_scoped_agents_can_write_their_own_findings_pack():
         assert not _blocks("Write", {"file_path": path}, agent), f"{agent} blocked on {path!r}"
 
 
+def test_scoped_agents_can_edit_their_own_findings_pack():
+    for agent, path in _allowed_paths():
+        assert not _blocks("Edit", {"file_path": path}, agent), f"{agent} blocked on {path!r}"
+
+
 def test_scoped_agents_can_write_an_absolute_findings_pack_path():
     assert not _blocks(
         "Write",
@@ -86,9 +108,25 @@ def test_scoped_agents_can_write_an_absolute_findings_pack_path():
     )
 
 
+def test_scoped_agents_can_edit_an_absolute_findings_pack_path():
+    assert not _blocks(
+        "Edit",
+        {"file_path": "/home/user/project/artifacts/my-slug/data/findings-my-slug.json"},
+        "compliance-reviewer",
+    )
+
+
 def test_scoped_agents_can_write_windows_style_path():
     assert not _blocks(
         "Write",
+        {"file_path": r"C:\project\artifacts\my-slug\data\findings-my-slug.json"},
+        "model-validator",
+    )
+
+
+def test_scoped_agents_can_edit_windows_style_path():
+    assert not _blocks(
+        "Edit",
         {"file_path": r"C:\project\artifacts\my-slug\data\findings-my-slug.json"},
         "model-validator",
     )
@@ -104,11 +142,24 @@ def test_scoped_agents_cannot_write_outside_the_findings_pack_shape():
         assert _blocks("Write", {"file_path": ".claude/settings.json"}, agent)
 
 
+def test_scoped_agents_cannot_edit_outside_the_findings_pack_shape():
+    for agent in _SCOPED_AGENTS:
+        assert _blocks("Edit", {"file_path": "src/app.py"}, agent)
+        assert _blocks("Edit", {"file_path": "CLAUDE.md"}, agent)
+        assert _blocks("Edit", {"file_path": ".claude/settings.json"}, agent)
+
+
 def test_scoped_agent_cannot_write_the_rendered_report_directly():
     """The rendered .md/.html is the RENDERER's output (check_artifacts --fix), never
     hand-authored - these agents author the JSON pack only."""
     assert _blocks(
         "Write", {"file_path": "artifacts/my-slug/REVIEW-my-slug.md"}, "code-reviewer"
+    )
+
+
+def test_scoped_agent_cannot_edit_the_rendered_report_directly():
+    assert _blocks(
+        "Edit", {"file_path": "artifacts/my-slug/REVIEW-my-slug.md"}, "code-reviewer"
     )
 
 
@@ -121,8 +172,9 @@ def test_scoped_agent_cannot_write_a_findings_looking_path_in_the_wrong_director
     )  # missing the /data/ segment
 
 
-def test_empty_path_blocks():
-    assert _blocks("Write", {"file_path": ""}, "performance-reviewer")
+def test_empty_path_blocks_for_both_tools():
+    for tool in _TOOLS:
+        assert _blocks(tool, {"file_path": ""}, "performance-reviewer")
 
 
 # ------------------------------------------------ crash / payload semantics
@@ -140,6 +192,7 @@ def test_malformed_payload_fails_open():
 
 def test_non_dict_tool_input_treated_as_empty():
     assert _blocks("Write", {}, "code-reviewer")  # missing tool_input -> empty path -> blocked
+    assert _blocks("Edit", {}, "code-reviewer")
 
 
 # ------------------------ size limit (2026-08-05, opt-in via large_context_review_split)
@@ -243,6 +296,25 @@ def test_size_limit_ignored_when_path_is_not_a_findings_pack(tmp_path):
     payload = {
         "tool_name": "Write",
         "tool_input": {"file_path": "artifacts/notes.md", "content": _pack_content(50)},
+    }
+    proc = _run_with_project(payload, tmp_path)
+    assert proc.returncode == 0
+
+
+def test_size_limit_never_applies_to_edit_even_when_split_on(tmp_path):
+    """Edit is the sanctioned way past the cap (append in batches) - capping it too would
+    defeat the point of granting it. Edit's tool_input has no `content` field anyway
+    (old_string/new_string instead), but this locks in the behaviour explicitly rather than
+    relying on that shape mismatch as an accident of implementation."""
+    _write_prefs(tmp_path, True)
+    payload = {
+        "tool_name": "Edit",
+        "agent_type": "performance-reviewer",
+        "tool_input": {
+            "file_path": "artifacts/x/data/findings-x.json",
+            "old_string": "]",
+            "new_string": _pack_content(50) + "]",
+        },
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 0

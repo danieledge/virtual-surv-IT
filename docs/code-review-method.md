@@ -142,13 +142,15 @@ predates the diff.
 
 ## Conciseness for the never-filtered reviewers
 
-`compliance-reviewer` and `model-validator` hold no Write tool, so their return message **is**
-their detail - there is nowhere else for it to live, which is exactly why an earlier hard cap on
-that return (≤ ~30 lines, no exception) silently lost real findings past the limit. Removing that
-cap fixed the loss, but a cap that is simply gone reappears as unbounded size instead: no fewer
-tokens, just a different failure mode. So the return is uncapped in **count of distinct
-findings** (never drop one to fit a budget) but bounded in two other ways that do not cost
-completeness:
+`compliance-reviewer` and `model-validator` write their own findings-pack JSON directly (Write
+and Edit, both scoped by `guard-findings-pack-write.py` to that one path), so their return
+message to the orchestrator is a distilled summary, not the detail itself - the pack file is.
+This section's history: an earlier hard cap on that return (≤ ~30 lines, no exception, back
+when neither agent could persist its own output) silently lost real findings past the limit.
+Removing that cap fixed the loss, but a cap that is simply gone reappears as unbounded size
+instead: no fewer tokens, just a different failure mode. So the **pack** is uncapped in
+**count of distinct findings** (never drop one to fit a budget) but the **return** stays
+bounded in two other ways that do not cost completeness:
 
 - **Deduplicate.** The same underlying issue at five call sites is **one finding** whose
   `location` field lists all five (`worker.py:40, worker.py:88, tasks.py:12, ...`), not five

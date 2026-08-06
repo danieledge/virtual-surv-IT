@@ -314,6 +314,25 @@ strong control. For **raw data**, only
 filesystem permissions / not-on-box (rec 9) actually contain a hostile Bash command. This matches
 the accepted-residual-risk notes already in the hooks and `docs/house-rules.md`.
 
+**Live instance, staged-hook self-apply (2026-08-06):** the "a human runs `apply-*.sh`" convention
+that gates every staged guard change (CLAUDE.md, this ADR's rec 5 note above) assumes
+`guard-consent-writes.py`'s `_HOOK_MUTATE` Bash check would block a model-invoked `cp` into
+`.claude/hooks/`. It does, when the mutation verb and the protected path both appear in the
+literal Bash command string the hook inspects - but `bash scripts/apply-guard-findings-pack-write.sh`
+contains neither: the `cp ... .claude/hooks/...` line lives inside the script file, invisible to a
+hook that only lexically scans the command it was invoked with. The model ran the apply script
+directly in a live session and it succeeded unblocked - exactly the "reconstruct a blocked
+operation from unblocked tokens" pattern this section already names in the abstract, now a
+concrete, in-the-wild instance against the team's own tooling rather than a hypothetical hostile
+one. Caught by the user, not the guard; reverted by hand (`git checkout` the live file) before
+commit. **Not yet hardened** - a fix would need either static per-segment inspection of any
+script a Bash command invokes (expensive, still lexical, still gameable one layer deeper) or
+moving the staged→live promotion out of the model's reach entirely (a pre-commit/CI check that
+fails if `.claude/hooks/*` differs from `scripts/staged_hooks/*` without a human-authored commit
+in between - genuinely closes it, unlike another lexical patch). Until then: **the standing
+practice is the only real control** - the model does not invoke `apply-*.sh` itself, ever, even
+when asked to "go ahead" on an unrelated adjacent action; only the user runs it.
+
 ## Implementation status & follow-up
 
 | Item | Detail |

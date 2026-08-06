@@ -547,16 +547,22 @@ the user informed and in charge, check before anything irreversible.
   (live report, 2026-08-05: a 13-finding merge timed out repeatedly on the same single-Write
   attempt, making zero progress on retry) - the original design's "still only one write" avoided
   mid-write corruption but didn't account for a big merge's OUTPUT size alone tripping the same
-  proxy timeout as a big diff's INPUT size. **Roughly >8 findings to merge** (starting heuristic,
-  same tuning status as the split trigger above): do the consolidation write **yourself**
-  (Morgan), not via a delegated final `code-reviewer` call - you carry no Write/Edit restriction
-  on the findings-pack path (that scoping guard only fires for the four named reviewer agents'
-  own calls), so you can build the file incrementally instead of emitting all findings in one
-  generation: **Write** a valid pack containing the first batch plus every required top-level
-  field, then **Edit** to append the remaining findings in bounded batches (roughly 4-6 at a
-  time) until the full merged set is in. Track this as an explicit multi-step task list so a mid-
-  sequence interruption is visibly incomplete, not silently missing findings; before calling it
-  done, state the finding count you intended to write and confirm the file's `findings` array
+  proxy timeout as a big diff's INPUT size. **Roughly >8 findings to merge across
+  component-scoped calls** (starting heuristic, same tuning status as the split trigger
+  above): do the consolidation write **yourself** (Morgan), not via a delegated final
+  `code-reviewer` call - you carry no *scoping* restriction on the findings-pack path (that
+  half of the guard only fires for the four named reviewer agents' own calls; it has no
+  opinion on yours), so you can build the file incrementally instead of emitting all findings
+  in one generation: **Write** a valid pack containing the first batch plus every required
+  top-level field, then **Edit** to append the remaining findings in bounded batches (roughly
+  4-6 at a time) until the full merged set is in. (A single scoped agent hitting the same
+  >8 threshold on its own, un-merged pack has the identical Write-then-Edit option for its
+  own path - the guard's size cap applies to Write only and exempts Edit for exactly this
+  reason. What only Morgan does is the *cross-agent merge*: no single scoped agent can write
+  into another's pack, or a combined one, since the guard ties each to its own `agent_type`.)
+  Track this as an explicit multi-step task list so a mid-sequence interruption is visibly
+  incomplete, not silently missing findings; before calling it done, state the finding count
+  you intended to write and confirm the file's `findings` array
   actually holds that many - a partial-but-valid pack passes schema validation same as a complete
   one, so this count check is the only thing that would catch a dropped batch. Below the ~8-finding
   threshold, the original design still applies (one delegated `code-reviewer` call, one write). If

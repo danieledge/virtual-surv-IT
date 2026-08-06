@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-PreToolUse guard: scope the four findings-pack agents' Write grant to their OWN pack file, and
-(opt-in) mechanically cap how many findings one Write to a findings-pack path may carry.
+PreToolUse guard: scope the four findings-pack agents' Write+Edit grant to their OWN pack
+file, and (opt-in) mechanically cap how many findings one Write to a findings-pack path may
+carry.
 
 2026-08-03 token-usage audit (P4): `code-reviewer`, `compliance-reviewer`, `model-validator`
 and `performance-reviewer` held no Write, so their full structured findings-pack JSON had to
 transit the orchestrator's context TWICE - once as the Task tool's return value, once again
 when the orchestrator re-emitted it as a Write tool call to persist the pack. Granting these
-four agents `Write` (never `Edit`) lets each write its own pack directly, halving that cost.
+four agents `Write` lets each write its own pack directly, halving that cost.
 
 The risk that grant opens: a Write tool with no path restriction, however it got there, is a
 much bigger blast radius than "author one JSON file". This guard closes that gap the same way
@@ -17,11 +18,11 @@ agent's own instructions to stay in scope.
 How SCOPING is enforced: Claude Code's PreToolUse payload includes `agent_type` whenever the
 tool call originates from a subagent (absent for the orchestrator's own calls) - see
 docs/adr/ADR-002-safety-hook-threat-model.md for the guard family's threat model. This half of
-the guard fires ONLY when `agent_type` is one of the four scoped names AND `tool_name ==
-"Write"`, and blocks unless the target path matches the findings-pack shape
+the guard fires ONLY when `agent_type` is one of the four scoped names AND `tool_name` is
+`Write` OR `Edit`, and blocks unless the target path matches the findings-pack shape
 (`artifacts/<slug>/data/findings-*.json`, or `artifacts/data/findings-*.json` for a flat pack).
-Every other Write call - the orchestrator's own, a build agent's, anything without a matching
-`agent_type` - passes through this half untouched; it has no opinion about them.
+Every other Write/Edit call - the orchestrator's own, a build agent's, anything without a
+matching `agent_type` - passes through this half untouched; it has no opinion about them.
 
 Deliberately ONE shared pattern for all four agents, not a per-agent kind-specific pattern
 (e.g. requiring `compliance-reviewer` to prefix its slug `compliance-`): that naming
@@ -34,9 +35,9 @@ outside the findings-pack directory at all").
 2026-08-05 (live corp report): a live consolidation write of 13 merged findings hit
 `API Error: The operation timed out` on the same single-Write attempt twice in a row - a
 generation large enough can trip a corporate proxy's timeout regardless of who's writing.
-`docs/team-operating-guide.md`'s orchestration-discipline bullet now tells Morgan to build a
-large merged pack incrementally (Write a small first batch, then Edit to append the rest) - but
-that is PROSE guidance, easy to skip under pressure. This second half of the guard makes it
+`docs/team-operating-guide.md`'s orchestration-discipline bullet tells Morgan to build a large
+merged pack incrementally (Write a small first batch, then Edit to append the rest) - but that
+is PROSE guidance, easy to skip under pressure. This second half of the guard makes it
 mechanical: when a project has opted into `large_context_review_split`
 (`.claude/team-preferences.json`, project-only, default `false` - same key the split-review
 design already uses, read fresh every call, no caching) and the Write content parses as a
@@ -47,7 +48,19 @@ consolidation write that timed out live was the orchestrator's own). Off by defa
 that has never hit this issue sees no behaviour change at all. This CANNOT prevent a timeout
 that happens mid-generation before a tool call even forms (no hook fires on that - there is no
 completed tool call yet); it only catches an oversized Write that DID finish generating,
-turning "she might remember the heuristic" into "she is told, mechanically, every time."
+turning "she might remember the heuristic" into "she is told, mechanically, every time." The
+size cap applies to `Write` ONLY, deliberately - `Edit` is the escape hatch past it, so capping
+Edit too would defeat the point of granting it.
+
+2026-08-06 (live freedom-dashboard diagnostic, --target-path): the size cap did its job - it
+blocked an oversized Write - but the FOUR SCOPED AGENTS had no Edit grant to chunk past it the
+way Morgan can, so a `performance-reviewer` pass that hit the cap improvised by silently
+dropping three lower-confidence findings from its own pack (recovered only because it happened
+to document what it dropped, and Morgan happened to read that and re-add them by hand - a
+lucky, not guaranteed, save). Fix: grant the same four agents `Edit`, scoped by this guard to
+the EXACT SAME path pattern `Write` already allows - not a broader capability, the same narrow
+one extended to a second tool. `Edit` is exempt from the size cap (see above); a scoped agent
+now has the identical incremental-build option Morgan already had.
 
 Protocol: read the PreToolUse JSON on stdin; exit 2 to block (stderr fed back to the model);
 exit 0 to allow. Fails CLOSED on an unexpected crash (a scoping guard that silently opened would
@@ -132,20 +145,23 @@ def main() -> int:
     except Exception:
         return 0  # malformed payload - fail open, matches every other guard's policy
 
-    if payload.get("tool_name") != "Write":
+    tool_name = payload.get("tool_name")
+    if tool_name not in ("Write", "Edit"):
         return 0
 
     tool_input = payload.get("tool_input") or {}
     path = tool_input.get("file_path") or ""
     agent_type = payload.get("agent_type") or ""
 
-    # Scoping half: only the four named reviewer agents are restricted to their own pack path.
+    # Scoping half: only the four named reviewer agents are restricted to their own pack
+    # path - applies to both Write and Edit, the same narrow grant extended to a second tool.
     if agent_type in _SCOPED_AGENTS and not _ALLOWED_PATH_RE.search(path):
         _block_scope(agent_type, path)
 
-    # Size-limit half: any Write to a findings-pack-shaped path - scoped agent OR the
+    # Size-limit half: Write only, deliberately - Edit is the escape hatch past the cap, so
+    # it must stay exempt. Any Write to a findings-pack-shaped path - scoped agent OR the
     # orchestrator's own call - once the project has opted into large_context_review_split.
-    if _ALLOWED_PATH_RE.search(path) and _large_context_split_enabled():
+    if tool_name == "Write" and _ALLOWED_PATH_RE.search(path) and _large_context_split_enabled():
         count = _finding_count(tool_input.get("content") or "")
         if count is not None and count > _MAX_FINDINGS_PER_WRITE:
             _block_size(path, count)

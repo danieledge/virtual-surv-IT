@@ -3,6 +3,25 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.26] - 2026-08-06 - The four scoped reviewer agents can now Edit their own findings pack
+
+### Added (staged - `bash scripts/apply-guard-findings-pack-write.sh`)
+- A live diagnostic run against a real, large codebase (`--target-path` mode, see below) showed
+  a gap in 0.33.25's fix: the four scoped reviewer agents (`code-reviewer`, `compliance-reviewer`,
+  `model-validator`, `performance-reviewer`) hit the size-limit guard mid-review, but had no
+  `Edit` grant to chunk past it the way the orchestrator can - `performance-reviewer` silently
+  dropped three findings from its own pack rather than splitting the write. All four now hold
+  `Edit`, scoped by `guard-findings-pack-write.py` to the exact same findings-pack path already
+  enforced for `Write` - not a broader capability, the same narrow one extended to a second
+  tool. The size-limit cap stays `Write`-only by design (Edit is the intended way past it).
+
+### Changed
+- `scripts/eval_engage.py` gained a `--target-path` diagnostic mode: run a live `/engage`
+  session against a disposable copy of any external directory (loaded via the Agent SDK's
+  plugin-dir mechanism, `Bash` disallowed so it's static-only) instead of only the built-in
+  `evals/cases/*` scenarios, with live-flushed transcript/events/usage output for monitoring a
+  run in progress. This is how the gap above was found.
+
 ## [0.33.25] - 2026-08-05 - Mechanical backstop for the large-consolidation-write timeout
 
 ### Added (staged - `bash scripts/apply-guard-findings-pack-write.sh`)

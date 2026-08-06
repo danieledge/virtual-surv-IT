@@ -39,9 +39,20 @@
    (`artifacts/<slug>/data/findings-*.json`) and **mechanically enforced**, not just
    prompted: `guard-findings-pack-write.py` (a PreToolUse hook keyed on the `agent_type`
    field Claude Code provides for subagent tool calls) blocks any Write from these four
-   agents that doesn't match that shape. The tool-grant-as-independence principle above
-   still holds in full for `Edit` - none of these four gained the ability to alter the code
-   or model they're reviewing.
+   agents that doesn't match that shape.
+
+   **2026-08-06 (live freedom-dashboard diagnostic): the same four agents also gained
+   `Edit`, scoped by the same guard to the identical path pattern.** The Write grant above
+   comes with a size cap (`_MAX_FINDINGS_PER_WRITE`, opt-in via `large_context_review_split`)
+   that blocks an oversized single Write to avoid tripping a corporate proxy timeout - but
+   without Edit, an agent that hit the cap had no sanctioned way to chunk past it the way the
+   orchestrator can, and a live run showed exactly that: `performance-reviewer` hit the cap
+   and silently dropped findings rather than splitting the write. `Edit` closes that gap and
+   is deliberately exempt from the size cap (it *is* the escape hatch), but stays scoped to
+   the same findings-pack path only - not a broader capability, the same narrow one extended
+   to a second tool. The tool-grant-as-independence principle above still holds in full: none
+   of these four gained the ability to alter the code or model they're reviewing, only their
+   own findings-pack JSON.
 3. **Match the model to the work (see §2).** Cheap tier for mechanical, top tier only where it
    changes outcomes.
 4. **Right-size every engagement.** Multi-agent costs ~15× the tokens; the PM uses the *leanest*
@@ -123,7 +134,7 @@ separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 | Best-practice item | Status | How |
 |---|---|---|
 | Frontmatter complete (name·description·tools·model) | ✅ | All 16. |
-| `tools:` least-privilege; advisors hold no Edit | ✅ | Verified - zero advisors hold Edit. (6 hold `Bash` for analysers/diffs, execution-gated §7; 4 hold `Write` scoped to their own findings-pack path only, mechanically enforced by `guard-findings-pack-write.py` - "no Edit, Write scoped", not strictly "read-only".) |
+| `tools:` least-privilege; advisors hold no general Edit | ✅ | Verified - zero advisors hold an unscoped Edit. (6 hold `Bash` for analysers/diffs, execution-gated §7; 4 hold `Write` and `Edit`, both scoped to their own findings-pack path only, mechanically enforced by `guard-findings-pack-write.py` - "no general Edit, Write+Edit scoped", not strictly "read-only".) |
 | Description = clear when-to-use trigger | ✅ | Standardised "When the team is engaged, use for…"; overlaps removed. |
 | Model tiering (not all-one-tier; documented) | ✅ | §2 above; 4/11/1 split. |
 | Reasonable agent count / no routing collisions | ✅ | §4; one historical overlap fixed. |
@@ -155,7 +166,7 @@ and this matrix are the guard against drift.*
 | Budget **~15× tokens**; reserve multi-agent for high value | ✅ | "~15× the tokens" cited verbatim (CLAUDE.md §6). |
 | **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 11 sonnet / 1 haiku. |
 | Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) + a **hard ≤~1,500-token / ~30-line return budget** stated in the delegation brief and each agent's return instruction (operating guide §Orchestration; an over-budget return is a stated defect to trim, aligned to Anthropic's 1-2k-token sub-agent return), **backstopped by a hook**: `scripts/subagent_return_budget.py` is a PostToolUse hook on the `Task` matcher (wired in `.claude/settings.json` + `hooks/hooks.json`) that measures the actual return and gives Morgan one nudge when it is clearly over budget (trigger: 2× the stated ceiling, so a borderline return is never flagged). Still 🟡, for two reasons stated plainly: the hook fires **after** the return has landed, so it prompts a trim rather than preventing the context cost; and the token count is a `chars / 4` estimate (a hook has no access to the model's tokenizer). It is advisory by design - fails open, silent outside a live engagement. |
-| **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no Edit (Bash, where granted, is execution-gated §7; Write, where granted, is scoped to one findings-pack path and mechanically enforced). |
+| **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no general Edit (Bash, where granted, is execution-gated §7; Write/Edit, where granted, are scoped to one findings-pack path and mechanically enforced). |
 | Guard the failure modes (over-spawn · duplicate · runaway · premature stop) | ✅ | Right-size + state-count (over-spawn); non-overlapping briefs (duplicate); fix-loop stop conditions (runaway); never-dead-end (premature stop). |
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
 | Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |
