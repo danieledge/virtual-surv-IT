@@ -41,8 +41,10 @@ for critical/high-stakes engagements.
 > - Regulatory citations by default: **on/off**
 > - Large-context reviews split by component from the start: **on/off**
 > - Codebase-skeleton drift checking (experimental): **on/off**
-> - My own model: **opus/sonnet/(account default)** - change this yourself, I can't write
->   `settings.json`: `python install_helper.py --model-project . --model opus` (or `sonnet`
+> - My own model: **opus/sonnet/sonnet-4-6/(account default)** - each written as an exact
+>   model ID, never Claude Code's generic `sonnet` alias (which resolves to a different
+>   actual model per API provider) - change this yourself, I can't write `settings.json`:
+>   `python install_helper.py --model-project . --model opus` (or `sonnet` / `sonnet-4-6`
 >   / `default`), or the installer's interactive menu, option 8.
 
 **3. Offer to change something - one question tool call, all four preferences,

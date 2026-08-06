@@ -377,27 +377,32 @@ def test_run_permissions_refuses_unparseable_settings(tmp_path, capsys):
 def test_write_orchestrator_model_creates_settings_when_absent(tmp_path):
     import json as _json
 
-    from install_helper import write_orchestrator_model
+    from install_helper import ORCHESTRATOR_MODEL_IDS, write_orchestrator_model
 
     ok, msg = write_orchestrator_model(tmp_path, "opus")
     assert ok
-    assert "model -> opus" in msg
+    assert f"model -> {ORCHESTRATOR_MODEL_IDS['opus']}" in msg
     written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    assert written["model"] == "opus"
+    assert written["model"] == ORCHESTRATOR_MODEL_IDS["opus"]  # exact ID, never the bare alias
 
 
 def test_write_orchestrator_model_none_resets_to_documented_default(tmp_path):
     import json as _json
 
-    from install_helper import ORCHESTRATOR_MODEL_DEFAULT, write_orchestrator_model
+    from install_helper import (
+        ORCHESTRATOR_MODEL_DEFAULT,
+        ORCHESTRATOR_MODEL_IDS,
+        write_orchestrator_model,
+    )
 
     ok, _ = write_orchestrator_model(tmp_path, "opus")
     assert ok
     ok, msg = write_orchestrator_model(tmp_path, None)  # "reset"
     assert ok
-    assert f"model -> {ORCHESTRATOR_MODEL_DEFAULT}" in msg
+    assert ORCHESTRATOR_MODEL_DEFAULT == "sonnet"
+    assert f"model -> {ORCHESTRATOR_MODEL_IDS['sonnet']}" in msg
     written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    assert written["model"] == ORCHESTRATOR_MODEL_DEFAULT == "sonnet"
+    assert written["model"] == ORCHESTRATOR_MODEL_IDS["sonnet"] == "claude-sonnet-5"
 
 
 def test_write_orchestrator_model_default_targets_user_settings(monkeypatch, tmp_path):
@@ -409,9 +414,9 @@ def test_write_orchestrator_model_default_targets_user_settings(monkeypatch, tmp
     monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
     ok, msg = ih.write_orchestrator_model_default("sonnet")
     assert ok
-    assert "model -> sonnet" in msg
+    assert f"model -> {ih.ORCHESTRATOR_MODEL_IDS['sonnet']}" in msg
     written = _json.loads(fake_home_settings.read_text(encoding="utf-8"))
-    assert written["model"] == "sonnet"
+    assert written["model"] == ih.ORCHESTRATOR_MODEL_IDS["sonnet"]
 
 
 def test_write_orchestrator_model_default_none_clears_key_rather_than_forcing_opus(
@@ -426,7 +431,7 @@ def test_write_orchestrator_model_default_none_clears_key_rather_than_forcing_op
 
     fake_home_settings = tmp_path / "claude" / "settings.json"
     monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
-    ih.write_orchestrator_model_default("opus")
+    ih.write_orchestrator_model_default("opus")  # writes ORCHESTRATOR_MODEL_IDS["opus"]
     ok, msg = ih.write_orchestrator_model_default(None)
     assert ok
     assert "cleared" in msg
@@ -460,7 +465,7 @@ def test_write_orchestrator_model_default_preserves_other_user_settings(monkeypa
     ok, _ = ih.write_orchestrator_model_default("opus")
     assert ok
     written = _json.loads(fake_home_settings.read_text(encoding="utf-8"))
-    assert written["model"] == "opus"
+    assert written["model"] == ih.ORCHESTRATOR_MODEL_IDS["opus"]
     assert written["statusLine"] == {"type": "command"}  # preserved
 
 
@@ -471,7 +476,7 @@ def test_run_orchestrator_model_default_success(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
     rc = ih.run_orchestrator_model_default("opus", ih.Style(False), ih.marks())
     assert rc == 0
-    assert "model -> opus" in capsys.readouterr().out
+    assert f"model -> {ih.ORCHESTRATOR_MODEL_IDS['opus']}" in capsys.readouterr().out
 
 
 def test_run_orchestrator_model_default_refuses_bad_model_name(tmp_path, capsys):
@@ -491,12 +496,12 @@ def test_write_orchestrator_model_merges_and_preserves_other_keys(tmp_path):
         '{"permissions": {"deny": ["Read(x)"]}, "statusLine": {"type": "command"}}',
         encoding="utf-8",
     )
-    from install_helper import write_orchestrator_model
+    from install_helper import ORCHESTRATOR_MODEL_IDS, write_orchestrator_model
 
     ok, _ = write_orchestrator_model(tmp_path, "sonnet")
     assert ok
     written = _json.loads((claude / "settings.json").read_text(encoding="utf-8"))
-    assert written["model"] == "sonnet"
+    assert written["model"] == ORCHESTRATOR_MODEL_IDS["sonnet"]
     assert written["permissions"]["deny"] == ["Read(x)"]  # preserved
     assert written["statusLine"] == {"type": "command"}  # preserved
     assert (claude / "settings.json.bak").is_file()  # backed up
@@ -522,12 +527,12 @@ def test_write_orchestrator_model_rejects_invalid_model_name(tmp_path):
 
 
 def test_run_orchestrator_model_success_notes_opus_has_no_tested_advantage(tmp_path, capsys):
-    from install_helper import Style, marks, run_orchestrator_model
+    from install_helper import ORCHESTRATOR_MODEL_IDS, Style, marks, run_orchestrator_model
 
     rc = run_orchestrator_model(tmp_path, "opus", Style(False), marks())
     assert rc == 0
     out = capsys.readouterr().out
-    assert "model -> opus" in out
+    assert f"model -> {ORCHESTRATOR_MODEL_IDS['opus']}" in out
     assert "testing to date" in out.lower()
     assert "critical" in out.lower()  # opus remains available for critical/high-stakes work
 
@@ -555,6 +560,51 @@ def test_run_orchestrator_model_refuses_bad_model_name(tmp_path, capsys):
     rc = run_orchestrator_model(tmp_path, "haiku", Style(False), marks())
     assert rc == 1
     assert "must be one of" in capsys.readouterr().out
+
+
+# --- exact model IDs, never the ambiguous "sonnet" alias (2026-08-06) ----------------------
+#
+# Live finding: Claude Code's generic "sonnet" alias resolves to a DIFFERENT actual model
+# depending on API provider (Sonnet 5 direct API, Sonnet 4.6 on Claude Platform on AWS,
+# Sonnet 4.5 on Bedrock/other platforms) - a project pinned to the bare alias could silently
+# run an older model than intended. Every token this tool writes must resolve to an exact,
+# provider-independent model ID.
+
+
+def test_orchestrator_model_ids_are_exact_never_bare_aliases():
+    from install_helper import ORCHESTRATOR_MODEL_IDS, ORCHESTRATOR_MODELS
+
+    assert set(ORCHESTRATOR_MODELS) == {"opus", "sonnet", "sonnet-4-6"}
+    assert ORCHESTRATOR_MODEL_IDS == {
+        "opus": "claude-opus-5",
+        "sonnet": "claude-sonnet-5",
+        "sonnet-4-6": "claude-sonnet-4-6",
+    }
+    # None of the written values collapse back to a bare generic alias.
+    for token, exact_id in ORCHESTRATOR_MODEL_IDS.items():
+        assert exact_id not in ("opus", "sonnet"), f"{token} must write an exact ID, not an alias"
+
+
+def test_write_orchestrator_model_sonnet_4_6_writes_exact_id(tmp_path):
+    import json as _json
+
+    from install_helper import ORCHESTRATOR_MODEL_IDS, write_orchestrator_model
+
+    ok, msg = write_orchestrator_model(tmp_path, "sonnet-4-6")
+    assert ok
+    assert f"model -> {ORCHESTRATOR_MODEL_IDS['sonnet-4-6']}" in msg
+    written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert written["model"] == "claude-sonnet-4-6"
+
+
+def test_run_orchestrator_model_default_accepts_sonnet_4_6(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    fake_home_settings = tmp_path / "claude" / "settings.json"
+    monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
+    rc = ih.run_orchestrator_model_default("sonnet-4-6", ih.Style(False), ih.marks())
+    assert rc == 0
+    assert "claude-sonnet-4-6" in capsys.readouterr().out
 
 
 # --- Windows .cmd shim launch (2026-07-30) ------------------------------------------------
@@ -2665,7 +2715,7 @@ def test_machine_defaults_step_sets_model_default(tmp_path, monkeypatch):
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
     inst.machine_defaults_step()
     settings = json.loads((tmp_path / "home" / ".claude" / "settings.json").read_text())
-    assert settings["model"] == "opus"
+    assert settings["model"] == ih.ORCHESTRATOR_MODEL_IDS["opus"]
 
 
 def test_machine_defaults_step_invalid_model_input_leaves_unchanged(tmp_path, monkeypatch, capsys):
@@ -2679,7 +2729,7 @@ def test_machine_defaults_step_invalid_model_input_leaves_unchanged(tmp_path, mo
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
     inst.machine_defaults_step()
     assert not (tmp_path / "home" / ".claude" / "settings.json").exists()
-    assert "expected opus/sonnet/default" in capsys.readouterr().out
+    assert "expected opus/sonnet/sonnet-4-6/default" in capsys.readouterr().out
 
 
 def test_menu_option_6_maps_to_advanced_submenu():
@@ -3304,7 +3354,7 @@ def test_ask_and_set_model_project_scope(tmp_path, monkeypatch):
     ok, message = ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False)
     assert ok
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
-    assert settings["model"] == ih.ORCHESTRATOR_MODEL_DEFAULT
+    assert settings["model"] == ih.ORCHESTRATOR_MODEL_IDS[ih.ORCHESTRATOR_MODEL_DEFAULT]
 
 
 def test_ask_and_set_model_rejects_bad_input(tmp_path, monkeypatch):
@@ -3317,7 +3367,7 @@ def test_ask_and_set_model_rejects_bad_input(tmp_path, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     ok, message = ih.ask_and_set_model(tmp_path, ih.Style(False), assume_yes=False)
     assert not ok
-    assert "expected opus/sonnet/default" in message
+    assert "expected opus/sonnet/sonnet-4-6/default" in message
 
 
 def test_ask_and_set_model_demo_mode_writes_nothing(tmp_path, monkeypatch):
@@ -3345,7 +3395,7 @@ def test_ask_and_set_model_offer_global_scope_false_skips_that_question(tmp_path
     )
     assert ok
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
-    assert settings["model"] == "opus"  # written per-project, not to user-level settings
+    assert settings["model"] == ih.ORCHESTRATOR_MODEL_IDS["opus"]  # written per-project
 
 
 def test_model_step_never_offers_global_scope(monkeypatch, tmp_path):

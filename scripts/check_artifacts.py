@@ -566,6 +566,19 @@ def find_codebase_map(project_dir: Path) -> Path | None:
     return None
 
 
+def find_codebase_map_area_files(project_dir: Path) -> list[Path]:
+    """ADR-007 Phase 1 Chunk E: `docs/codebase-map.d/*.md` area files - the root map's
+    Index (docs/templates/codebase-map.md) points to these for detail the ~200-line root
+    budget can't hold. Each one is a map in its own right (same doc-control header, same
+    §2 entries shape) and gets the identical per-file hygiene check_map() already runs on
+    the root map - sorted for deterministic output, absent directory is the common case
+    (a project that never ran /map-codebase), not an error."""
+    area_dir = project_dir / "docs" / "codebase-map.d"
+    if not area_dir.is_dir():
+        return []
+    return sorted(p for p in area_dir.glob("*.md") if p.is_file())
+
+
 def _anchor_resolves(sha: str, repo_dir: Path) -> bool | None:
     """True/False if git could answer; None when git/repo is unavailable (skip check)."""
     try:
@@ -652,13 +665,22 @@ def _check_map_drift(
     was never fingerprinted at all) - toggle-gated, called only when map_skeleton is on
     (check_map). Escalate-only, matching the existing precedent that apply_fixes() never
     auto-resolves map hygiene findings - re-verifying an entry's PROSE against the code it
-    now describes is a judgement call, not something to mechanically "fix"."""
+    now describes is a judgement call, not something to mechanically "fix".
+
+    Sidecar lives NEXT TO map_path (map_path.parent), never project_dir - matching exactly
+    where scripts.repo_skeleton.write_fingerprints() writes it. Bug found 2026-08-06
+    (building Chunk E): this used to read project_dir/<name>, which only happened to equal
+    map_path.parent when the map lives at the project ROOT - silently wrong for the
+    documented default location (docs/codebase-map.md), where the two paths differ. Fixed on
+    both sides together; project_dir stays a parameter (used elsewhere in this function,
+    below, for globs resolved relative to the project root) but no longer decides where the
+    sidecar itself is looked up."""
     if not drift_rows:
         return []
     mf = _load_map_fingerprint_module()
     if mf is None:
         return []  # fail open, same posture as every other optional-module load in this file
-    sidecar_path = project_dir / _FINGERPRINTS_FILENAME
+    sidecar_path = map_path.parent / _FINGERPRINTS_FILENAME
     try:
         sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
         entries = sidecar.get("entries") or {}
@@ -831,19 +853,34 @@ def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
                     "may not be decorative (ADR-003)"
                 )
         if map_skeleton_on:
-            area_idx = columns.get("area")
+            # Substring lookups throughout (not columns.get("area")/("entry") exact-match) -
+            # matching the same rename-tolerant column-driven design already used for
+            # asof_idx/anchor_idx/paths_idx above. Bug found 2026-08-06 (Chunk E): "entry"
+            # was an exact-match .get() while every sibling column used a substring search,
+            # so it never matched the documented template's own header ("Entry (a durable
+            # code fact - NOT a finding or an activity note)") - MAP-DEAD-POINTER silently
+            # never fired for any project that followed the template as written.
+            #
+            # The sidecar KEY per row is the Area column on the root map (many areas, one
+            # table) but an ID column on an area file (one area, many entries, no Area
+            # column to key on - docs/templates/codebase-map-area.md) - try Area first,
+            # fall back to ID, so ONE function handles both table shapes with no bespoke
+            # area-file branch.
+            key_idx = next((i for n, i in columns.items() if "area" in n), None)
+            if key_idx is None:
+                key_idx = next((i for n, i in columns.items() if "id" in n), None)
             paths_idx = next((i for n, i in columns.items() if "paths" in n), None)
             if (
-                area_idx is not None
+                key_idx is not None
                 and paths_idx is not None
-                and area_idx < len(cells)
+                and key_idx < len(cells)
                 and paths_idx < len(cells)
             ):
-                area = cells[area_idx].strip()
+                area = cells[key_idx].strip()
                 globs = _split_paths_cell(cells[paths_idx])
                 if area and globs:
                     drift_rows.append((lineno, area, globs))
-            entry_idx = columns.get("entry")
+            entry_idx = next((i for n, i in columns.items() if "entry" in n), None)
             if entry_idx is not None and entry_idx < len(cells):
                 citation_checks.append((lineno, cells[entry_idx]))
     if not found_entry_table:
@@ -2001,7 +2038,13 @@ def main(argv: list[str]) -> int:
             findings.append(f"MAP-NOT-FOUND: {map_path} was given explicitly but does not exist")
             map_note = f"map missing: {map_path}"
 
+    area_files = find_codebase_map_area_files(Path.cwd())
+    for area_file in area_files:
+        findings.extend(check_map(area_file, project_dir=Path.cwd()))
+
     notes = [map_note]
+    if area_files:
+        notes.append(f"{len(area_files)} area file(s) checked")
     if skipped_fresh:
         notes.append(f"{skipped_fresh} closed pack(s) skipped via fingerprint")
     archived_count = sum(

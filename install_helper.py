@@ -2168,8 +2168,8 @@ class Installer:
         )
         picked = (
             ask(
-                "  Morgan's default model - opus / sonnet / default (clear), blank to "
-                "leave unchanged",
+                "  Morgan's default model - opus / sonnet / sonnet-4-6 / default (clear), "
+                "blank to leave unchanged",
                 "",
                 False,
                 style=self.style,
@@ -2185,7 +2185,11 @@ class Installer:
         elif picked == "":
             model_wanted = model_current
         else:
-            self.say(self.style.yellow(f"    expected opus/sonnet/default, got {picked!r} - left unchanged"))
+            self.say(
+                self.style.yellow(
+                    f"    expected opus/sonnet/sonnet-4-6/default, got {picked!r} - left unchanged"
+                )
+            )
             model_wanted = model_current
             model_changing = False
         if model_wanted == "opus":
@@ -2234,8 +2238,12 @@ class Installer:
             "Morgan's own model for this project - sonnet is the documented default "
             "(testing to date has not yielded any better results from opus for "
             "orchestration); opus remains available for critical/high-stakes engagements "
-            "if you want the extra margin. Or reset back to sonnet. (This machine's "
-            "own default model lives under Advanced -> Machine defaults instead.)"
+            "if you want the extra margin, and sonnet-4-6 pins the previous generation "
+            "explicitly if you want that instead of the current one. All three are written "
+            "as an exact model ID, never a bare alias - Claude Code's generic 'sonnet' "
+            "alias resolves to a different actual model depending on API provider. Or "
+            "reset back to sonnet. (This machine's own default model lives under "
+            "Advanced -> Machine defaults instead.)"
         )
         raw = ask(f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style)
         project = Path(raw).expanduser().resolve()
@@ -2815,9 +2823,24 @@ def write_team_preferences(
         return False
 
 
-ORCHESTRATOR_MODELS = ("opus", "sonnet")
+# Short, human-typed tokens map to EXACT model IDs, never a bare alias like "sonnet" -
+# 2026-08-06: found live that Claude Code's "sonnet" alias resolves to a DIFFERENT actual
+# model depending on API provider (Sonnet 5 on the direct Anthropic API, Sonnet 4.6 on
+# Claude Platform on AWS, Sonnet 4.5 on Bedrock/other platforms) - a project pinned to the
+# alias could silently run an older model than intended, with no error and no visible
+# signal beyond the statusline's display_name. Pinning to the exact ID (the documented fix,
+# https://code.claude.com/docs/en/model-config.md) makes the written value unambiguous and
+# provider-independent. "sonnet-4-6" is offered as its own explicit choice (not just
+# reachable by luck of provider) for anyone who deliberately wants that generation pinned.
+ORCHESTRATOR_MODEL_IDS = {
+    "opus": "claude-opus-5",
+    "sonnet": "claude-sonnet-5",
+    "sonnet-4-6": "claude-sonnet-4-6",
+}
+ORCHESTRATOR_MODELS = tuple(ORCHESTRATOR_MODEL_IDS)  # ("opus", "sonnet", "sonnet-4-6")
 # Testing to date has not yielded any better results from opus for orchestration than
-# sonnet, so sonnet is the default. This is the value "reset to default" writes.
+# sonnet, so sonnet is the default. This is the token "reset to default" resolves to
+# (ORCHESTRATOR_MODEL_IDS["sonnet"] = "claude-sonnet-5" is the value actually written).
 ORCHESTRATOR_MODEL_DEFAULT = "sonnet"
 # Shown when a human picks opus explicitly - it remains available, it just isn't the
 # default, since nothing observed so far justifies the extra cost for the orchestrator
@@ -2848,7 +2871,7 @@ def _write_model_to_settings_file(target: Path, model: Optional[str]) -> tuple[b
                 raise ValueError("settings root is not an object")
         except (OSError, ValueError) as exc:
             return False, f"{target} is not readable JSON ({exc}) - refusing to touch it"
-    settings["model"] = model or ORCHESTRATOR_MODEL_DEFAULT
+    settings["model"] = ORCHESTRATOR_MODEL_IDS[model or ORCHESTRATOR_MODEL_DEFAULT]
     try:
         if target.is_file():
             backup = target.with_suffix(target.suffix + ".bak")
@@ -2897,7 +2920,7 @@ def ask_and_set_model(
     )
     picked = (
         ask(
-            "  opus / sonnet / default (reset to sonnet)?",
+            "  opus / sonnet / sonnet-4-6 / default (reset to sonnet)?",
             "default",
             assume_yes,
             style=style,
@@ -2910,7 +2933,7 @@ def ask_and_set_model(
     elif picked in ORCHESTRATOR_MODELS:
         model = picked
     else:
-        return False, f"expected opus/sonnet/default, got {picked!r}"
+        return False, f"expected opus/sonnet/sonnet-4-6/default, got {picked!r}"
     if model == "opus":
         print(style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
     if demo:
@@ -4433,9 +4456,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--model",
         choices=[*ORCHESTRATOR_MODELS, "default"],
-        help="with --model-project or --model-default: opus/sonnet, or 'default' to "
-        "reset to sonnet (the documented default for the orchestrator) - "
-        "or, with --model-default only, to clear the global default entirely",
+        help="with --model-project or --model-default: opus/sonnet/sonnet-4-6 (each "
+        "written as an exact model ID, never Claude Code's generic 'sonnet' alias, which "
+        "resolves to a different actual model per API provider), or 'default' to reset "
+        "to sonnet (the documented default for the orchestrator) - or, with "
+        "--model-default only, to clear the global default entirely",
     )
     parser.add_argument(
         "--check-tools",
@@ -4664,8 +4689,8 @@ def _main(argv=None) -> int:
         return 1
     if (args.model_project or args.model_default) and args.model is None:
         print(
-            f"{fail} --model-project/--model-default need --model opus|sonnet|default "
-            "(nothing written - say which one explicitly, including 'default' to reset)"
+            f"{fail} --model-project/--model-default need --model opus|sonnet|sonnet-4-6|"
+            "default (nothing written - say which one explicitly, including 'default' to reset)"
         )
         return 1
     if (

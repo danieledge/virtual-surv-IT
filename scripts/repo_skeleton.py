@@ -575,29 +575,81 @@ def _current_head_sha(repo_root: Path) -> str:
     return sha if result.returncode == 0 and sha else "no-vcs"
 
 
-def write_fingerprints(map_path: Path, out_path: Path | None = None) -> dict:
-    """Read the codebase map's §2 `Paths` column, fingerprint each entry's globs
-    (scripts.map_fingerprint.compute_fingerprint), and write the sidecar
-    docs/codebase-map.fingerprints.json (design: docs/adr/ADR-007-codebase-map-evolution.md).
-    `areas` (docs/codebase-map.d/<area>.md fingerprinting) is Chunk E territory - left as an
-    empty dict here, additive later, not a placeholder that needs revisiting to be valid."""
+def _load_map_fingerprint_module():
+    """Import scripts.map_fingerprint in BOTH run modes - same dual-mode pattern as
+    scripts.check_artifacts._load_map_fingerprint_module (proper package import when run as
+    `-m scripts.repo_skeleton`; a file-relative importlib fallback when run by direct path,
+    the plugin-mode invocation form with no package context to resolve `scripts.` against).
+    Bug found 2026-08-06 building Chunk E: the plain `from scripts.map_fingerprint import ...`
+    this replaced worked only in the first mode, so `--fingerprint` crashed with
+    ModuleNotFoundError under the exact invocation form /map-codebase (Chunk E) needs."""
+    try:
+        from scripts import map_fingerprint
+
+        return map_fingerprint
+    except ImportError:
+        pass
+    import importlib.util
+
+    path = Path(__file__).with_name("map_fingerprint.py")
+    spec = importlib.util.spec_from_file_location("map_fingerprint", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def write_fingerprints(
+    map_path: Path, project_dir: Path | None = None, out_path: Path | None = None
+) -> dict:
+    """Read a codebase map's (root OR an area file - identical §2 table shape, so this
+    function has no notion of "root" vs "area", just "a map-shaped file") `Paths` column,
+    fingerprint each entry's globs (scripts.map_fingerprint.compute_fingerprint), and write
+    the sidecar to the SAME directory as map_path (design: docs/adr/ADR-007-codebase-map-
+    evolution.md) - never a project-root-relative path, so the root map's sidecar
+    (docs/codebase-map.fingerprints.json) and each docs/codebase-map.d/ area file's shared
+    sidecar (docs/codebase-map.d/codebase-map.fingerprints.json) each live next to what they
+    describe. Bug found 2026-08-06 (Chunk E): scripts.check_artifacts._check_map_drift used
+    to look for the sidecar at project_dir/<name> while this wrote it at
+    map_path.parent/<name> - identical only when the map lives at the project ROOT, silently
+    wrong for the documented default location (docs/codebase-map.md) - fixed on both sides
+    together, see that function's own docstring.
+
+    `project_dir` is a SEPARATE concern from the sidecar's location: it is what the Paths
+    column's globs are relative to (`scripts/*.py` means the project's own scripts/, not
+    docs/scripts/) and what `_check_map_drift` also uses for the exact same globs - the two
+    must agree, or every entry drifts permanently the moment the map isn't at the project
+    root. Second bug found alongside the first: this used to hash relative to map_path.parent
+    (silently wrong for the same reason). Defaults to map_path.parent only as a last resort
+    (correct for a map placed directly at the project root); the CLI passes it explicitly.
+
+    MERGES into an existing sidecar rather than overwriting it (2026-08-06, needed once
+    multiple area files share one directory and therefore one sidecar): re-fingerprinting
+    file A must not erase file B's already-recorded entries."""
     from datetime import datetime, timezone
 
-    from scripts.map_fingerprint import compute_fingerprint, resolve_globs
+    mf = _load_map_fingerprint_module()
+    compute_fingerprint, resolve_globs = mf.compute_fingerprint, mf.resolve_globs
 
-    repo_root = map_path.parent
-    out_path = out_path or (repo_root / _FINGERPRINTS_FILENAME)
-    entries = {}
+    project_dir = project_dir or map_path.parent
+    sidecar_dir = map_path.parent
+    out_path = out_path or (sidecar_dir / _FINGERPRINTS_FILENAME)
+    existing_entries: dict = {}
+    if out_path.is_file():
+        try:
+            existing = json.loads(out_path.read_text(encoding="utf-8"))
+            existing_entries = existing.get("entries") or {} if isinstance(existing, dict) else {}
+        except (OSError, ValueError):
+            existing_entries = {}  # unreadable/corrupt sidecar - rebuild from this file only
+    entries = dict(existing_entries)
     for area, globs in _parse_map_paths_column(map_path).items():
-        fp = compute_fingerprint(globs, repo_root)
-        files_hashed = len(resolve_globs(globs, repo_root))
+        fp = compute_fingerprint(globs, project_dir)
+        files_hashed = len(resolve_globs(globs, project_dir))
         entries[area] = {"paths": globs, "fingerprint": fp, "files_hashed": files_hashed}
     payload = {
         "generated_by": "repo_skeleton",
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "root_anchor": _current_head_sha(repo_root),
+        "root_anchor": _current_head_sha(project_dir),
         "entries": entries,
-        "areas": {},
     }
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload
@@ -636,8 +688,17 @@ def main(argv: list[str]) -> int:
         default=None,
         metavar="MAP_PATH",
         help="drift-stamp mode: read MAP_PATH's codebase-map §2 'Paths' column, fingerprint "
-        "each entry's globs, write codebase-map.fingerprints.json alongside it. Ignores "
-        "--budget/--out/--mermaid/etc - this is a separate mode, not a skeleton render",
+        "each entry's globs (relative to --project-dir, default: current directory), write/"
+        "merge codebase-map.fingerprints.json alongside MAP_PATH. Ignores --budget/--out/"
+        "--mermaid/etc - this is a separate mode, not a skeleton render",
+    )
+    ap.add_argument(
+        "--project-dir",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="with --fingerprint only: what the Paths column's globs are relative to - "
+        "default: current directory (run this from the project root, the normal case)",
     )
     args = ap.parse_args(argv[1:])
 
@@ -646,7 +707,8 @@ def main(argv: list[str]) -> int:
         if not map_path.is_file():
             print(f"not a file: {map_path}", file=sys.stderr)
             return 1
-        payload = write_fingerprints(map_path)
+        project_dir = (args.project_dir or Path.cwd()).expanduser().resolve()
+        payload = write_fingerprints(map_path, project_dir=project_dir)
         out_path = map_path.parent / _FINGERPRINTS_FILENAME
         print(f"Wrote {len(payload['entries'])} fingerprint(s) -> {out_path}")
         return 0

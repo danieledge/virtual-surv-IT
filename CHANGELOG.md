@@ -3,6 +3,49 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.28] - 2026-08-06 - ADR-007 Phase 1+2 complete: /map-codebase, area files, three fingerprint bugs fixed
+
+### Added (gated behind `map_skeleton`, off by default - no behaviour change unless opted in)
+- `/map-codebase` skill: a deterministic `repo_skeleton` first-contact pass, then a small
+  (1-3, stated out loud) synthesis-agent team producing curated codebase-map entries -
+  invariants, gotchas, risk areas, never prose summaries or symbol inventories (the skeleton
+  already has those). `--refresh` mode re-verifies only drifted areas via the existing
+  fingerprint sidecar, so a clean map costs nothing to re-check.
+- `docs/codebase-map.d/<area>.md` area files (`docs/templates/codebase-map-area.md`) for
+  detail that doesn't fit the root map's ~200-line budget, discovered and hygiene-checked by
+  `check_artifacts` exactly like the root map. Root map template gained an unnumbered `##
+  Index` section listing them with a load-trigger line each.
+
+### Fixed
+- Three bugs found live while wiring `/map-codebase` to the drift-stamp mechanism shipped
+  in Chunk C (0.33.x): (1) the fingerprint sidecar's write location and read location
+  disagreed whenever the map wasn't at the project root (the documented default,
+  `docs/codebase-map.md`) - `MAP-DRIFT` would report every entry as permanently
+  unfingerprinted; (2) glob resolution for the Paths column had the same project-root-vs-
+  map-parent confusion, silently hashing the wrong files; (3) `MAP-DEAD-POINTER`'s "entry"
+  column lookup was an exact match while every sibling column used a rename-tolerant
+  substring search, so it never matched the documented template's own long header text and
+  never fired for any project using the template as written. All three fixed together, with
+  regression tests against the actual documented template text (not an abbreviated test
+  fixture) so the gap can't reopen unnoticed the same way.
+- `scripts/repo_skeleton.py --fingerprint` crashed with `ModuleNotFoundError` under
+  plugin-mode invocation (direct file path, no package context) - added the same dual-mode
+  import loader `check_artifacts.py` already uses.
+
+## [0.33.27] - 2026-08-06 - Morgan's model is pinned to an exact ID, never Claude Code's generic alias
+
+### Fixed
+- Found live: Claude Code's `"sonnet"` alias resolves to a DIFFERENT actual model depending
+  on API provider (Sonnet 5 on the direct Anthropic API, Sonnet 4.6 on Claude Platform on
+  AWS, Sonnet 4.5 on Bedrock/other platforms) - a project pinned to the bare alias could
+  silently run an older model than intended, with no error and no signal beyond the
+  statusline's `display_name`. `install_helper.py`'s model-setting flow (`--model`, the
+  interactive menu, `/preferences`) now writes an exact, provider-independent model ID for
+  every choice (`opus` → `claude-opus-5`, `sonnet` → `claude-sonnet-5`) instead of the bare
+  alias, and adds `sonnet-4-6` (→ `claude-sonnet-4-6`) as its own explicit third choice for
+  anyone who deliberately wants that generation pinned rather than reaching it by luck of
+  provider.
+
 ## [0.33.26] - 2026-08-06 - The four scoped reviewer agents can now Edit their own findings pack
 
 ### Added (staged - `bash scripts/apply-guard-findings-pack-write.sh`)

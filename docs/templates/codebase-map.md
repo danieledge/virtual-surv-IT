@@ -71,6 +71,22 @@ One short paragraph: purpose, tech stack, entry points, how it is built/run/test
 |---|------|-------|-------|-------|--------|-------|
 | 1 | <e.g. detection rules> | <how the code is built - fact, decision or quirk in one or two sentences, with `path/file.py:line` pointers; no finding IDs/severities/dispositions> | 📊 <where seen> / 🧠 <assumption> | <YYYY-MM-DD> | `<sha>` | <e.g. `path/*.py`> |
 
+## Index (ADR-007 Phase 1 Chunk E - only if `docs/codebase-map.d/` has files)
+
+> Deliberately UNNUMBERED (not "## 3.") - `scripts/engage_probe.py`'s regex locates the
+> Engagement history section by its exact "## 3." / "## 4." heading anchors; a numbered
+> section here would shift those anchors and silently break the what's-new-since-you-last-
+> engaged banner. Keep this section unnumbered wherever it sits in the file.
+
+Detail that doesn't fit §2's budget lives in its own area file, generated/refreshed by
+`/map-codebase`. **Omit this section entirely** for a project with no area files - an empty
+Index is noise, not a placeholder to fill in. Each row states its own load-trigger, so a
+specialist reads only what the task in front of them actually needs:
+
+| Area file | Read this when... |
+|-----------|--------------------|
+| `docs/codebase-map.d/<area>.md` | <e.g. touching detection scoring logic, or before a deep review of that area> |
+
 ## 3. Engagement history
 
 | Date | Engagement | Team ver | What was delivered | Key artifacts |

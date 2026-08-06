@@ -528,7 +528,7 @@ def test_write_fingerprints_writes_sidecar_with_entries(tmp_path):
     assert set(payload["entries"]) == {"detection rules", "config"}
     assert payload["entries"]["detection rules"]["files_hashed"] == 1
     assert payload["entries"]["config"]["files_hashed"] == 2
-    assert payload["areas"] == {}
+    assert "areas" not in payload  # dropped 2026-08-06 - unused scaffolding, never read
     assert payload["generated_by"] == "repo_skeleton"
 
     sidecar = tmp_path / "codebase-map.fingerprints.json"
@@ -557,3 +557,90 @@ def test_write_fingerprints_fingerprint_changes_when_covered_file_changes(tmp_pa
     f.write_text("x = 2\n", encoding="utf-8")
     after = write_fingerprints(m)["entries"]["detection rules"]["fingerprint"]
     assert before != after
+
+
+# --- bugs found live building Chunk E (2026-08-06): sidecar location vs glob-resolution root
+# were silently conflated as "map_path.parent", correct only when the map sits at the
+# project root - wrong for the documented default location (docs/codebase-map.md), where the
+# map's own directory and the project root differ. ------------------------------------------
+
+
+def test_write_fingerprints_globs_resolve_against_project_dir_not_map_parent(tmp_path):
+    """The map lives in docs/ but its Paths globs (src/*.py) are relative to the PROJECT
+    root, not to docs/ - this must hash the real files, not silently find nothing."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "rules.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "src" / "config.py").write_text("y\n", encoding="utf-8")
+    (tmp_path / "src" / "settings.py").write_text("z\n", encoding="utf-8")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    m = docs / "codebase-map.md"
+    m.write_text(_MAP_WITH_PATHS, encoding="utf-8")
+
+    payload = write_fingerprints(m, project_dir=tmp_path)
+    assert payload["entries"]["detection rules"]["files_hashed"] == 1
+    assert payload["entries"]["config"]["files_hashed"] == 2
+
+
+def test_write_fingerprints_sidecar_lives_next_to_map_not_at_project_dir(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "rules.py").write_text("x\n", encoding="utf-8")
+    (tmp_path / "src" / "config.py").write_text("y\n", encoding="utf-8")
+    (tmp_path / "src" / "settings.py").write_text("z\n", encoding="utf-8")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    m = docs / "codebase-map.md"
+    m.write_text(_MAP_WITH_PATHS, encoding="utf-8")
+
+    write_fingerprints(m, project_dir=tmp_path)
+    assert (docs / "codebase-map.fingerprints.json").is_file()
+    assert not (tmp_path / "codebase-map.fingerprints.json").is_file()
+
+
+def test_write_fingerprints_merges_instead_of_overwriting_a_shared_sidecar(tmp_path):
+    """Two area files in the same directory share one sidecar (docs/codebase-map.d/
+    codebase-map.fingerprints.json) - fingerprinting the second must not erase the first's
+    already-recorded entries."""
+    area_dir = tmp_path / "docs" / "codebase-map.d"
+    area_dir.mkdir(parents=True)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "rules.py").write_text("x\n", encoding="utf-8")
+    (tmp_path / "src" / "config.py").write_text("y\n", encoding="utf-8")
+    (tmp_path / "src" / "settings.py").write_text("z\n", encoding="utf-8")
+
+    area_a = area_dir / "area-a.md"
+    area_a.write_text(_MAP_WITH_PATHS, encoding="utf-8")
+    write_fingerprints(area_a, project_dir=tmp_path)
+
+    area_b = area_dir / "area-b.md"
+    area_b.write_text(
+        "# Codebase Map - B\n\n"
+        "| # | Area | Entry | Basis | As-of | Anchor | Paths |\n"
+        "|---|------|-------|-------|-------|--------|-------|\n"
+        "| 1 | other area | Fact | 📊 seen | 2026-08-06 | `abc123` | src/rules.py |\n",
+        encoding="utf-8",
+    )
+    write_fingerprints(area_b, project_dir=tmp_path)
+
+    sidecar = json.loads((area_dir / "codebase-map.fingerprints.json").read_text(encoding="utf-8"))
+    assert set(sidecar["entries"]) == {"detection rules", "config", "other area"}
+
+
+def test_write_fingerprints_plugin_mode_import_does_not_crash(tmp_path, monkeypatch):
+    """The dual-mode loader must work even when `scripts` isn't importable as a package -
+    the exact invocation form /map-codebase uses in a plugin install (direct file path, no
+    package context). Simulated by breaking the package-import branch."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _no_scripts_package(name, *a, **k):
+        if name == "scripts" or name.startswith("scripts."):
+            raise ImportError(f"simulated: {name} not importable as a package")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", _no_scripts_package)
+    m = tmp_path / "map.md"
+    m.write_text(_MAP_WITHOUT_PATHS, encoding="utf-8")
+    payload = write_fingerprints(m)  # must not raise ModuleNotFoundError
+    assert payload["entries"] == {}

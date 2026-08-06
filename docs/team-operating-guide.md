@@ -35,11 +35,14 @@ Route by **deliverable type**, not habit:
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
-## Command index (canonical - all 24 skills)
+## Command index (canonical - all 25 skills)
 
 - `/engage` - front door: intake + orchestration for any request (problem, review or build)
 - `/engage-light` - explicit low-ceremony profile: same safety gates + code chain, one-page
   brief, 2-3 agents, short summary email, no delivery report; refuses detection logic, upgrades to standard
+- `/map-codebase` - deterministic first-contact skeleton pass + a small synthesis team,
+  producing/refreshing the curated codebase map (ADR-007 Phase 1, `--refresh` re-verifies only
+  drifted areas)
 - `/meet-the-team` - Morgan introduces the roster (canonical intro)
 - `/prepare-data` - safe data onboarding (synthetic or masked) before any agent sees it
 - `/demo` - guided end-to-end demo on synthetic data, every decision narrated

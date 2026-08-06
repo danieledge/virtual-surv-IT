@@ -1,19 +1,20 @@
-# ADR-007: Codebase map evolution - regenerate the mechanical, curate the durable (re-scoped)
+# ADR-007: Codebase map evolution - regenerate the mechanical, curate the durable (Phase 1+2 implemented)
 
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-007` · Version `0.2` · Status `Re-scoped`
-> · Classification `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-07-29`
+> **Document control** · ID `ADR-007` · Version `0.3` · Status `Phase 1+2 implemented`
+> · Classification `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-08-06`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-27 | deep-research synthesis (3 parallel researchers: tooling landscape, agent-memory evidence, internal audit) | Proposed design |
 > | 0.2 | 2026-07-29 | workflow-robustness remediation phase 4 (user ruling D3) | Re-scoped: staleness subset implemented in `check_map`; the generative layer (repo_skeleton / map.d / /map-codebase / fingerprint drift stamps) is parked, revisit on demand |
+> | 0.3 | 2026-08-06 | user request: "the need has materialised, build it" | The parked generative layer, built: `scripts/repo_skeleton.py` (inventory, tiered symbols, PageRank, Mermaid, churn), drift stamps + `MAP-DRIFT`/`MAP-DEAD-POINTER`, `/map-codebase` skill + `docs/codebase-map.d/` area files + root Index section. Gated behind `map_skeleton` (project/machine preference, off by default) - a project that hasn't opted in sees zero behaviour change. Phase 3 (blast-radius-refresh automation, a rendered map browser) stays deferred, unchanged. |
 
 | | |
 |---|---|
-| **Status** | **Re-scoped** (2026-07-29, ruling D3) - the staleness-detection goal is implemented in reduced, git-based form; the generative layer is parked. This ADR missed both its original target releases (0.31, 0.32) without a decision - the register's M6 finding; this revision IS that decision. |
+| **Status** | **Phase 1+2 implemented** (2026-08-06) - built in full, gated behind the `map_skeleton` toggle (off by default) so it can be tested per-environment without affecting a project that hasn't opted in. Phase 3 (demand-driven blast-radius refresh automation, a human-facing rendered map browser) remains explicitly deferred - revisit if a concrete need materialises, per the same standard this Phase applied. |
 | **Date** | 2026-07-27 (proposed) · 2026-07-29 (re-scoped) |
 | **Deciders** | Morgan (orchestrator), human approver (remediation plan D3) |
 | **Traceability** | ADR-003 (engagement memory - this evolves, does not replace, its §2 discipline); `check_map` in `scripts/check_artifacts.py`; 2026-07-29 robustness register M2/M3/M6/M7 |
@@ -142,11 +143,13 @@ SCIP toolchains (service/install sprawl); any always-loaded context (dormancy in
   start per-directory); tree-sitter wheels are a new optional dependency (tiered fallbacks
   keep the floor at stdlib); the light-profile survey must respect the ~15x fan-out rule.
 
-## Build plan (when accepted)
+## Build plan
 
-Phase 1 (0.31, with or after multi-engagement workspaces): repo_skeleton with tiered
-extractors + tests; drift stamps + MAP-DRIFT/MAP-DEAD-POINTER in check_map; guard allow-list
-staging. Phase 2: /map-codebase skill + root index section + map.d/ discovery + golden case
-(`process-first-contact-map`); ADR-003 revision note pointing here. Phase 3 (optional,
-demand-driven): blast-radius refresh automation; human-facing rendered map browser via the
-existing dashboard.
+**Phase 1 - done (0.33.x, 2026-08-06):** `repo_skeleton.py` with tiered extractors + tests;
+drift stamps + `MAP-DRIFT`/`MAP-DEAD-POINTER` in `check_map`; guard allow-list staging.
+**Phase 2 - done (0.33.x, 2026-08-06):** `/map-codebase` skill + root Index section +
+`docs/codebase-map.d/` discovery; `docs/templates/codebase-map-area.md`. Golden eval case
+(`process-first-contact-map`) not yet written - tracked separately, not blocking the toggle
+staying off by default in the meantime. **Phase 3 (optional, demand-driven, still parked):**
+blast-radius refresh automation; a human-facing rendered map browser via the existing
+dashboard.

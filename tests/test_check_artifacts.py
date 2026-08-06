@@ -25,6 +25,7 @@ from scripts.check_artifacts import (
     check_registry,
     check_roster,
     find_codebase_map,
+    find_codebase_map_area_files,
     main as ca_main,
     workspace_dirs,
     _read_map_skeleton_toggle,
@@ -730,8 +731,15 @@ def test_map_skeleton_toggle_no_config_anywhere_is_false(tmp_path, monkeypatch):
 
 
 def _write_fingerprint_sidecar(repo, entries):
-    (repo / "codebase-map.fingerprints.json").write_text(
-        json.dumps({"generated_by": "test", "entries": entries, "areas": {}}), encoding="utf-8"
+    """Sidecar lives NEXT TO the map file (repo/docs/, the standard map location used by
+    every test below - m = repo / "docs" / "codebase-map.md"), matching exactly where
+    scripts.repo_skeleton.write_fingerprints() writes it - see that function's own docstring
+    for the 2026-08-06 bug this fixed (used to be repo/, silently wrong once the map isn't
+    at the project root)."""
+    docs = repo / "docs"
+    docs.mkdir(exist_ok=True)
+    (docs / "codebase-map.fingerprints.json").write_text(
+        json.dumps({"generated_by": "test", "entries": entries}), encoding="utf-8"
     )
 
 
@@ -830,6 +838,106 @@ def test_map_drift_and_dead_pointer_excluded_from_apply_fixes(tmp_path):
     # it (existing precedent for every other MAP-* code); this just confirms that precedent
     # extends to the two new checks, not a behaviour change.
     assert apply_fixes(art) == []
+
+
+# ---------------------------- docs/codebase-map.d/ area files (ADR-007 Phase 1 Chunk E) ----
+
+
+def test_find_codebase_map_area_files_absent_directory_is_empty(tmp_path):
+    assert find_codebase_map_area_files(tmp_path) == []
+
+
+def test_find_codebase_map_area_files_discovers_and_sorts(tmp_path):
+    area_dir = tmp_path / "docs" / "codebase-map.d"
+    area_dir.mkdir(parents=True)
+    (area_dir / "z-area.md").write_text("x", encoding="utf-8")
+    (area_dir / "a-area.md").write_text("x", encoding="utf-8")
+    (area_dir / "not-markdown.txt").write_text("x", encoding="utf-8")
+    found = find_codebase_map_area_files(tmp_path)
+    assert [p.name for p in found] == ["a-area.md", "z-area.md"]
+
+
+def test_area_file_gets_the_same_hygiene_checks_as_the_root_map(tmp_path):
+    """An area file with no As-of/Anchor header is exactly as invalid as a root map missing
+    them - check_map() has no notion of "root" vs "area", it's generic per-file (this is
+    the load-bearing property Chunk E relies on rather than duplicating check_map's logic)."""
+    repo, sha = _map_repo(tmp_path)
+    area_dir = repo / "docs" / "codebase-map.d"
+    area_dir.mkdir(parents=True)
+    area_file = area_dir / "scripts.md"
+    area_file.write_text("# Area: scripts\n\nno header fields at all\n", encoding="utf-8")
+    findings = check_map(area_file, project_dir=repo)
+    assert any("MAP-NO-ASOF" in f for f in findings)
+    assert any("MAP-NO-ANCHOR" in f for f in findings)
+
+
+def test_main_checks_area_files_alongside_root_map(tmp_path, monkeypatch, capsys):
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map(sha))
+    area_dir = repo / "docs" / "codebase-map.d"
+    area_dir.mkdir(parents=True)
+    bad_area = area_dir / "scripts.md"
+    bad_area.write_text("# Area: scripts\n\nno header fields at all\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+    rc = ca_main(["artifacts"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "MAP-NO-ASOF" in out and str(bad_area) in out
+
+
+# --- two more bugs found live building Chunk E: MAP-DEAD-POINTER's "entry" column lookup was
+# an exact-match .get() while every sibling column used a rename-tolerant substring search, so
+# it never matched the documented template's own long header text - and the drift-row key
+# required an "Area" column, which an area file's own template deliberately doesn't have (one
+# area per file), so MAP-DRIFT could never fire there either. -------------------------------
+
+
+def _area_map_with_paths(sha, entry="threshold rationale in `src/x.py:12`"):
+    """Mirrors docs/templates/codebase-map-area.md's actual header text (the long
+    descriptive "Entry (...)" column, an ID column instead of Area) - the exact shape the
+    entry_idx/key_idx substring-lookup bugs were found against."""
+    return (
+        "# Codebase Map Area - Scripts\n\n"
+        f"> **Document control** · Owner `Morgan (PM)` · As-of `2026-07-18` · Anchor `{sha}`\n\n"
+        "## Entries\n\n"
+        "| ID | Entry (a durable code fact - NOT a finding or an activity note) | Basis | As-of | Anchor | Paths (optional) |\n"
+        "|----|-------|-------|-------|--------|-------|\n"
+        f"| scripts-1 | {entry} | 📊 seen in review | 2026-07-18 | `{sha[:9]}` | src/x.py |\n"
+    )
+
+
+def test_map_dead_pointer_fires_against_the_documented_template_header(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    # missing.py does not exist - a live dead pointer, using the TEMPLATE's real long header.
+    _touch(m, _good_map_with_paths(sha, entry="described in `missing.py:1`"))
+    findings = check_map(m, project_dir=repo)
+    assert any("MAP-DEAD-POINTER" in f for f in findings)
+
+
+def test_map_drift_keys_on_id_column_when_no_area_column_present(tmp_path):
+    """An area file (docs/templates/codebase-map-area.md's shape: ID column, no Area
+    column) must still get MAP-DRIFT - keyed on ID instead of Area."""
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    area_dir = repo / "docs" / "codebase-map.d"
+    area_dir.mkdir(parents=True)
+    m = area_dir / "scripts.md"
+    _touch(m, _area_map_with_paths(sha))
+    # never fingerprinted -> MAP-DRIFT, proving drift_rows was actually populated (keyed on
+    # "scripts-1", the ID column) rather than silently skipped for lack of an Area column.
+    findings = check_map(m, project_dir=repo)
+    assert any("MAP-DRIFT" in f for f in findings)
 
 
 # ------------------------------------------------ entry-anchor resolution is batched (2026-08-03)
