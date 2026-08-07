@@ -3,6 +3,40 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.39] - 2026-08-07 - Faster default setup: new defaults, `virt-surv engage`, fewer prompts
+
+### Changed
+- New CONFIGURE-recommended defaults (user request: "set the defaults to be citations off,
+  split on, docx off, map on"): `_project_preference_defaults()`'s built-in fallback flips
+  `regulatory_citations` on->off and `map_skeleton` off->on; `run_configure`'s
+  `large_context_review_split` fallback flips off->on (it has no machine-wide tier by
+  design, see `write_team_preferences`'s docstring); `docx` stays off, tuned env vars
+  already defaulted on. `machine_defaults_step`'s own display defaults updated to match, so
+  it never shows a stale "currently" value for the same underlying default. Deliberately
+  scoped to what CONFIGURE writes - `scripts/engage_probe.py` keeps its own unchanged
+  built-in fallback for a project that has never run configure/preferences at all, since
+  changing that is a much larger-blast-radius runtime default the user didn't ask for.
+- Option 1 (the default full install/update run): status line and the `virt-surv` shell
+  alias are now wired automatically on a real interactive terminal - no "do you want this"
+  question, matching the user's "should be to enable... done on default path" request.
+  `--yes` (unattended/CI) is unchanged for both. "Enable for a project" is no longer part
+  of this default run at all - project-level setup moved entirely to `virt-surv configure`/
+  `virt-surv engage`, run from the project's own root (the same folder you'll run `claude`
+  from). The closing "Over to you" summary was rewritten to point there instead.
+
+### Added
+- New `virt-surv engage` alias subcommand: runs the same pass as `virt-surv configure` but
+  with `assume_yes` always True regardless of flags - every recommended default applied,
+  zero prompts - then prints a Morgan-voiced "Claude Code is ready to launch here - run
+  `claude` and say hello" close on success. `--demo` still previews without writing or
+  printing the close message.
+
+### Fixed
+- `claude plugin install`/`claude plugin enable` reporting "already installed"/"already
+  enabled" as a failure - it's the desired end state, now informational only. The install
+  path previously used `step_fail`'s fatal-by-default behaviour here, which aborted the
+  entire install run for a condition that isn't actually a problem.
+
 ## [0.33.38] - 2026-08-07 - --configure always refreshes the analyser-availability cache
 
 ### Added

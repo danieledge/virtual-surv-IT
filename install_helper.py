@@ -1762,9 +1762,16 @@ class Installer:
             return
         if proc.returncode != 0:
             err = proc.stderr.strip() or proc.stdout.strip()
-            if "group policy" in err.lower() or "blocked" in err.lower():
+            lowered = err.lower()
+            if "group policy" in lowered or "blocked" in lowered:
                 self.say_claude_launch_trace()
                 self.register_directly("the claude CLI launch is blocked by policy")
+                return
+            if "already installed" in lowered:
+                # Already at the desired end state - informational, not a failure
+                # (2026-08-07 user report: this was aborting the whole run via step_fail's
+                # default fatal=True, for a condition that isn't actually a problem).
+                self.step_ok(f"Plugin {PLUGIN_ID} already installed")
                 return
             self.say_claude_launch_trace()
             self.step_fail("Install plugin", err or "claude plugin install failed")
@@ -1865,9 +1872,17 @@ class Installer:
         if self.subset in ("full", "setup"):
             self.say("")
             self.say(s.bold("Over to you:"))
+            # 2026-08-07 user request: project-level setup is no longer part of this
+            # default run - point at `virt-surv configure`, run FROM the project's own
+            # root folder (the same folder you'll run `claude` from), instead.
+            fallback = f"python {self.repo / 'install_helper.py'} --configure ." if self.repo else "install_helper.py --configure ."
             self.say(
-                "  1. Enable more projects any time: run me again (option 2, Configure "
-                "a project) or /plugin inside Claude Code."
+                "  1. Set up a project: cd into its root folder - the same folder you'll "
+                f"run `claude` from - and run 'virt-surv configure' (or '{fallback}' if "
+                "you skipped the alias above) to review or change the defaults "
+                "(citations, review-split, docx, codebase-map skeleton, tuned env vars, "
+                "permissions, Morgan's model). Or 'virt-surv engage' to apply every "
+                "default with zero prompts and go straight to launching claude."
             )
             self.say("  2. Restart Claude Code to load the new version.")
         self.say("")
@@ -1914,7 +1929,15 @@ class Installer:
         if self.subset == "statusline":
             wanted = True  # the user picked this from the menu
         elif self.args.yes:
-            wanted = self.args.statusline
+            wanted = self.args.statusline  # unattended run: unchanged, flag-gated
+        elif self.subset == "full":
+            # 2026-08-07 user request: "the default should be to enable the status bar
+            # ... done on default path" - the normal interactive full install/update no
+            # longer asks, it just wires it (still skipped above on Windows without Git
+            # Bash, and the conflict-resolution prompt below still asks before replacing
+            # a DIFFERENT existing statusLine - this only removes the "do you want this
+            # at all" question).
+            wanted = True
         else:
             wanted = confirm(
                 "  Shall I wire the status line - it shows the team's state and session "
@@ -2007,20 +2030,24 @@ class Installer:
         you want this at all" gate."""
         self.step_intro(
             "Optional: the 'virt-surv' alias lets you launch this installer from any "
-            "folder and run 'virt-surv configure'/'archive'/'list-engagements' scoped to "
-            "wherever you are."
+            "folder and run 'virt-surv configure'/'engage'/'archive'/'list-engagements' "
+            "scoped to wherever you are."
         )
         if self.args.yes:
             wanted = False  # opt-in only - never touch shell rc files on an unattended run
+        elif sys.stdin.isatty():
+            # 2026-08-07 user request: "the default should be to enable ... virt-surv
+            # alias ... done on default path" - a real interactive terminal no longer
+            # asks "do you want this at all", it just does it. run_setup_alias still runs
+            # its own per-file preview + confirm below (unaffected by this change).
+            wanted = True
         else:
-            # sys.stdin.isatty() check mirrors statusline_step exactly: a REAL live
-            # terminal gets the inviting True default; a non-tty, non-`--yes` run (piped
-            # input, a script) gets False regardless - confirm() itself would otherwise
+            # Non-tty, non-`--yes` run (piped input, a script): still ask rather than
             # silently take the True default with no human actually there to see it
             # (live-caught by test_demo_mode_executes_nothing_and_writes_nothing, 2026-08-04).
             wanted = confirm(
                 "  Shall I also set up the 'virt-surv' alias?",
-                default=True if sys.stdin.isatty() else False,
+                default=False,
                 assume_yes=False,
                 style=self.style,
             )
@@ -2177,9 +2204,9 @@ class Installer:
             "`model` key) always overrides these."
         )
         docx_current = bool(self.cfg.get("default_docx", False))
-        citations_current = bool(self.cfg.get("default_regulatory_citations", True))
+        citations_current = bool(self.cfg.get("default_regulatory_citations", False))
         review_tools_current = self.cfg.get("default_review_tools") or {}
-        map_skeleton_current = bool(self.cfg.get("default_map_skeleton", False))
+        map_skeleton_current = bool(self.cfg.get("default_map_skeleton", True))
         statusline_show_map_current = bool(self.cfg.get("default_statusline_show_map", False))
         model_current = _read_json_dict(user_settings_path()).get("model")
         self.say(
@@ -2600,9 +2627,8 @@ class Installer:
             ("Optional pip requirements", self.optional_pip),
             ("Claude Code marketplace", self.marketplace),
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
-            ("Status line (optional)", self.statusline_step),
-            ("Enable for a project (optional)", self.enable_step),
-            ("Alias setup (optional)", self.alias_step),
+            ("Status line", self.statusline_step),
+            ("Alias setup", self.alias_step),
         ]
 
     def run(self) -> int:
@@ -3178,6 +3204,12 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
         stderr = (proc.stderr or "").strip()
         stdout = (proc.stdout or "").strip()
         combined = stderr or stdout
+        lowered = combined.lower()
+        if "already enabled" in lowered:
+            # Already at the desired end state - informational, not a failure (same
+            # 2026-08-07 fix as the plugin-install "already installed" case above).
+            print(f"{ok} already enabled for {project}")
+            return 0
         if "group policy" not in combined.lower() and "blocked" not in combined.lower():
             if combined:
                 print(f"{fail} enable failed for {project} (exit {proc.returncode}): {combined}")
@@ -3215,11 +3247,11 @@ def _project_preference_defaults(existing: dict, machine_defaults: dict) -> tupl
     """(docx_current, citations_current, review_tools_current, map_skeleton_current,
     statusline_show_map_current) - the project's own explicit choice (the key is PRESENT in
     its team-preferences.json, even if falsy/empty) always wins; otherwise falls back to
-    THIS MACHINE's default; otherwise the original built-in default (docx off, citations on,
-    review-tools all auto, map_skeleton off, statusline_show_map off). Shared by
-    run_configure and format_preferences_step so "what a human sees as the current/suggested
-    value while configuring" can never drift from what engage_probe.py actually resolves at
-    real /engage time (same precedence, mirrored deliberately).
+    THIS MACHINE's default; otherwise the built-in CONFIGURE-recommended default (docx off,
+    citations off, review-tools all auto, map_skeleton on, statusline_show_map off - 2026-08-07
+    user request: "set the defaults to be citations off, split on, docx off, map on").
+    Shared by run_configure and format_preferences_step so the two never suggest different
+    values for the same project.
     2026-08-05 user request: a "sensible defaults" fast path must respect machine-level
     overrides - e.g. ruff disabled at machine level must stay disabled by default for a
     brand-new project, not silently re-enabled; a project's own prior choice always
@@ -3230,20 +3262,26 @@ def _project_preference_defaults(existing: dict, machine_defaults: dict) -> tupl
     2026-08-06 (statusline): statusline_show_map (whether scripts/statusline.sh's render
     grows a `map:on/off` field at all) follows the identical 3-tier precedence, added as a
     5th value for the same reason - off by default, since not every project wants a longer
-    statusline just because map_skeleton itself might be on."""
+    statusline just because map_skeleton itself might be on.
+    2026-08-07: citations/map_skeleton's built-in fallback changed (on->off, off->on).
+    Deliberately scoped to CONFIGURE's own suggested/written default only - `scripts/
+    engage_probe.py` keeps its own independent, unchanged built-in fallback for a project
+    that has NEVER run configure/preferences at all (no key, no machine default either); that
+    is a much larger-blast-radius runtime default the user did not ask to change, so the two
+    are now intentionally decoupled rather than "mirrored" as the docstring used to claim."""
     if "extra_formats" in existing:
         docx_current = "docx" in (existing.get("extra_formats") or [])
     else:
         docx_current = bool(machine_defaults.get("default_docx", False))
     citations_current = existing.get(
-        "regulatory_citations", machine_defaults.get("default_regulatory_citations", True)
+        "regulatory_citations", machine_defaults.get("default_regulatory_citations", False)
     )
     if "review_tools" in existing:
         review_tools_current = existing.get("review_tools") or {}
     else:
         review_tools_current = machine_defaults.get("default_review_tools") or {}
     map_skeleton_current = existing.get(
-        "map_skeleton", machine_defaults.get("default_map_skeleton", False)
+        "map_skeleton", machine_defaults.get("default_map_skeleton", True)
     )
     statusline_show_map_current = existing.get(
         "statusline_show_map", machine_defaults.get("default_statusline_show_map", False)
@@ -3348,7 +3386,10 @@ def run_configure(
         map_skeleton_current,
         statusline_show_map_current,
     ) = _project_preference_defaults(existing, machine_defaults)
-    split_current = existing.get("large_context_review_split", False)
+    # Built-in default True (2026-08-07 user request: "split on") - large_context_review_split
+    # deliberately has no machine-wide tier (see write_team_preferences' own docstring), so this
+    # literal is its only fallback.
+    split_current = existing.get("large_context_review_split", True)
     docx_wanted = confirm(
         "  Produce .docx by default for controlled documents?",
         default=docx_current,
@@ -3813,7 +3854,9 @@ def run_setup_alias(
                 "session instead: POSIX shells - `source` your rc file (e.g. `source "
                 "~/.bashrc`); PowerShell - `. $PROFILE` (PowerShell does not auto-reload "
                 "its profile mid-session). Then: cd into any project and run 'virt-surv "
-                "configure', 'virt-surv archive', or 'virt-surv list-engagements'."
+                "configure' (asks, recommended defaults pre-filled), 'virt-surv engage' "
+                "(applies every default with zero prompts, then tells you to launch "
+                "claude), 'virt-surv archive', or 'virt-surv list-engagements'."
             )
         )
     return 1 if had_error else 0
@@ -4856,17 +4899,17 @@ def _relocate_if_running_inside_target_repo(
         pass
 
 
-_FOLDER_SUBCOMMANDS = ("configure", "archive", "list-engagements", "setup-alias")
+_FOLDER_SUBCOMMANDS = ("configure", "engage", "archive", "list-engagements", "setup-alias")
 
 
 def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     """Handles the 'virt-surv <subcommand> [dir] [--demo] [--yes]' positional form
-    directly, bypassing parse_args() entirely for these four words. Deliberately NOT
+    directly, bypassing parse_args() entirely for these words. Deliberately NOT
     folded into the main `mode` positional (install/update) - argparse `choices` there
     drives decide_mode() and the self-update re-exec helper, both already battle-tested;
     adding unrelated subcommands to that same positional risked touching either for no
-    real benefit, given these four need nothing parse_args already provides beyond an
-    optional trailing path and the two flags handled explicitly below.
+    real benefit, given these subcommands need nothing parse_args already provides beyond
+    an optional trailing path and the two flags handled explicitly below.
 
     --demo/--yes are scanned for anywhere in the remaining args (not assumed to be in a
     fixed position) - live-tested gap, 2026-08-04: bypassing parse_args() entirely meant
@@ -4909,6 +4952,22 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     target = Path(paths[0]) if paths else Path(".")
     if subcommand == "configure":
         return run_configure(target, style, marks(), assume_yes, demo)
+    if subcommand == "engage":
+        # 2026-08-07 user request: "applies all the project defaults without prompting
+        # the user, tell them what's been set, and then says claude code ready to
+        # launch" - assume_yes is ALWAYS True here regardless of whether --yes was
+        # passed (that's the entire point of this subcommand over plain 'configure');
+        # --demo is still honoured, same as every other subcommand here.
+        rc = run_configure(target, style, marks(), True, demo)
+        if rc == 0 and not demo:
+            print("")
+            print(
+                style.green(
+                    f"{hat}Claude Code is ready to launch here - run `claude` and say hello."
+                )
+            )
+            print(style.dim("   - Morgan"))
+        return rc
     if subcommand == "archive":
         return run_archive_engagements(target, style, marks(), demo)
     return run_list_engagements(target, style, marks())

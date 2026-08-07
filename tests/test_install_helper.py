@@ -1731,8 +1731,8 @@ def test_full_plan_includes_alias_setup_as_last_step():
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
     plan = inst.build_plan()
     titles = [t() if callable(t) else t for t, _ in plan]
-    assert "Alias setup (optional)" in titles
-    assert titles[-1] == "Alias setup (optional)"  # after project enablement
+    assert "Alias setup" in titles
+    assert titles[-1] == "Alias setup"  # last step
 
 
 def test_alias_step_skipped_by_default_on_yes_run(monkeypatch, tmp_path, capsys):
@@ -1776,6 +1776,51 @@ def test_alias_step_runs_setup_alias_when_confirmed(monkeypatch, tmp_path):
     inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
     inst.alias_step()
     assert calls == [(False, True)]
+
+
+def test_alias_step_auto_enabled_on_real_tty_full_run(monkeypatch, tmp_path):
+    """2026-08-07 user request: "the default should be to enable ... virt-surv alias ...
+    done on default path" - a real interactive terminal running the full install no
+    longer asks "do you want this at all", it just does it."""
+    import install_helper as ih
+
+    calls = []
+
+    def boom(*a, **k):
+        raise AssertionError("must not ask - the outer gate is unconditional on a real tty")
+
+    monkeypatch.setattr(
+        ih,
+        "run_setup_alias",
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append(
+            (assume_yes, demo)
+        )
+        or 0,
+    )
+    monkeypatch.setattr(ih, "confirm", boom)
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
+    inst.alias_step()
+    assert calls == [(False, True)]
+
+
+def test_statusline_step_auto_enabled_on_real_tty_full_run(monkeypatch, tmp_path):
+    """Same 2026-08-07 request, for the status line."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+
+    def boom(*a, **k):
+        raise AssertionError("must not ask - the outer gate is unconditional on a real tty")
+
+    monkeypatch.setattr(ih, "confirm", boom)
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
+    inst.repo = tmp_path
+    inst.statusline_step()
+    out_ok = any(name == "Status line" and status == "ok" for name, status, _d in inst.tracker.steps)
+    assert out_ok
 
 
 def test_looks_like_repo_accepts_worktree_git_file(tmp_path):
@@ -2473,6 +2518,44 @@ def test_run_enable_project_ordinary_failure_still_fails(tmp_path):
     assert not (project / ".claude" / "settings.json").exists()
 
 
+def test_run_enable_project_already_enabled_is_ok_not_fail(tmp_path, capsys):
+    """2026-08-07 user report: "already enabled/installed" was being reported as a
+    failure - it's the desired end state, informational only."""
+    from install_helper import Style, run_enable_project
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    runner = lambda argv, **kw: _proc(  # noqa: E731
+        returncode=1, stderr="Error: plugin is already enabled for this scope\n"
+    )
+    rc = run_enable_project(project, Style(enabled=False), {"ok": "OK", "fail": "X"}, runner=runner)
+    assert rc == 0
+    assert "already enabled" in capsys.readouterr().out
+    assert not (project / ".claude" / "settings.json").exists()  # nothing needed writing
+
+
+def test_installer_plugin_step_already_installed_is_ok_not_fail(monkeypatch, tmp_path, capsys):
+    """Same 2026-08-07 fix, for the full-run install path: `claude plugin install`
+    reporting "already installed" must not abort the whole run via step_fail's fatal
+    default (it would otherwise raise InstallAbort and stop everything after it)."""
+    import install_helper as ih
+
+    def fake_run_cmd(argv, cwd=None, **kw):
+        if "uninstall" in argv:
+            return _proc(returncode=1, stderr="not installed\n")
+        if "install" in argv:
+            return _proc(returncode=1, stderr="Error: plugin is already installed\n")
+        return _proc(returncode=0)
+
+    monkeypatch.setattr(ih, "run_cmd", fake_run_cmd)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.mode = "install"
+    inst.plugin()  # must not raise InstallAbort
+    assert any(status == "ok" for _name, status, _detail in inst.tracker.steps)
+    assert not any(status == "fail" for _name, status, _detail in inst.tracker.steps)
+    assert "already installed" in capsys.readouterr().out
+
+
 # ------------------------------------------------------ Git Bash off-PATH discovery
 
 
@@ -2735,7 +2818,7 @@ def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, mo
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
     monkeypatch.setattr(
         ih, "confirm", _confirm_by_prompt({"docx": True, "citations": True})
-    )  # turn docx on; citations stays on (the default)
+    )  # turn docx on; turn citations on too (both changes from the off-by-default builtin)
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
     inst.format_preferences_step()
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
@@ -2744,19 +2827,20 @@ def test_format_preferences_step_shows_current_and_writes_on_change(tmp_path, mo
     assert "docx=on" in capsys.readouterr().out
 
 
-def test_format_preferences_step_can_turn_off_citations(tmp_path, monkeypatch, capsys):
+def test_format_preferences_step_can_turn_on_citations(tmp_path, monkeypatch, capsys):
+    """2026-08-07: citations defaults to OFF now, so turning it ON is the change case."""
     import install_helper as ih
 
     _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": False}))
+    monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": True}))
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
     inst.format_preferences_step()
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
-    assert prefs["regulatory_citations"] is False
-    assert "citations=off" in capsys.readouterr().out
+    assert prefs["regulatory_citations"] is True
+    assert "citations=on" in capsys.readouterr().out
 
 
 def test_format_preferences_step_no_write_when_unchanged(tmp_path, monkeypatch):
@@ -2766,8 +2850,8 @@ def test_format_preferences_step_no_write_when_unchanged(tmp_path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    # matches the current defaults: docx off, citations on
-    monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": True}))
+    # matches the current defaults: docx off, citations off (2026-08-07)
+    monkeypatch.setattr(ih, "confirm", _confirm_by_prompt({"docx": False, "citations": False}))
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="formats")
     inst.format_preferences_step()
     assert not (project / ".claude" / "team-preferences.json").exists()
@@ -2849,7 +2933,7 @@ def test_machine_defaults_step_unchanged_writes_nothing(tmp_path, monkeypatch):
 
     _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        ih, "confirm", _confirm_by_prompt_machine({"docx": False, "citations": True})
+        ih, "confirm", _confirm_by_prompt_machine({"docx": False, "citations": False})
     )
     monkeypatch.setattr(ih, "ask", lambda *a, **k: "")
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
@@ -3636,9 +3720,9 @@ def test_run_configure_happy_path_yes(tmp_path, monkeypatch, capsys):
     prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
     assert prefs == {
         "extra_formats": [],
-        "regulatory_citations": True,
-        "large_context_review_split": False,
-        "map_skeleton": False,
+        "regulatory_citations": False,
+        "large_context_review_split": True,
+        "map_skeleton": True,
         "statusline_show_map": False,
     }
     assert "Configuration complete" in out
@@ -3740,17 +3824,18 @@ def test_project_preference_defaults_project_choice_overrides_machine(tmp_path):
 
 
 def test_project_preference_defaults_no_machine_config_uses_builtin(tmp_path):
-    """No project setting AND no machine config at all - the original built-in default
-    (docx off, citations on, review-tools all auto) still applies."""
+    """No project setting AND no machine config at all - the built-in CONFIGURE-recommended
+    default (docx off, citations off, review-tools all auto, map_skeleton on - 2026-08-07)
+    applies."""
     from install_helper import _project_preference_defaults
 
     docx, citations, review_tools, map_skeleton, statusline_show_map = (
         _project_preference_defaults({}, {})
     )
     assert docx is False
-    assert citations is True
+    assert citations is False
     assert review_tools == {}
-    assert map_skeleton is False
+    assert map_skeleton is True
     assert statusline_show_map is False
 
 
@@ -4245,6 +4330,55 @@ def test_dispatch_folder_subcommand_setup_alias(monkeypatch):
 
     monkeypatch.setattr(ih, "run_setup_alias", lambda style, mm, assume_yes=False, demo=False: 0)
     assert ih._dispatch_folder_subcommand(["setup-alias"]) == 0
+
+
+def test_dispatch_folder_subcommand_engage_always_assume_yes(tmp_path, monkeypatch):
+    """2026-08-07 user request: 'virt-surv engage' applies every default with zero
+    prompts - assume_yes must be True even when --yes was NOT passed, unlike 'configure'
+    which only assumes yes when told to."""
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: calls.append(
+            (target, assume_yes, demo)
+        )
+        or 0,
+    )
+    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
+    assert rc == 0
+    assert calls == [(Path(tmp_path), True, False)]
+
+
+def test_dispatch_folder_subcommand_engage_prints_ready_message_on_success(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "ready to launch" in out.lower()
+    assert "Morgan" in out
+
+
+def test_dispatch_folder_subcommand_engage_no_ready_message_on_failure(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 1)
+    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
+    assert rc == 1
+    assert "ready to launch" not in capsys.readouterr().out.lower()
+
+
+def test_dispatch_folder_subcommand_engage_demo_never_prints_ready_message(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path), "--demo"])
+    assert rc == 0
+    assert "ready to launch" not in capsys.readouterr().out.lower()
 
 
 def test_main_dispatches_folder_subcommand_before_argparse(monkeypatch):
