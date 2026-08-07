@@ -3267,6 +3267,11 @@ def run_configure(
     menu options for the same first-time setup. Interactive by design (each step confirm()s)
     unless assume_yes forces safe defaults, matching --yes semantics used elsewhere here.
 
+    2026-08-07 user request: "always run check-review-tools.sh --refresh when configuring" -
+    run_tool_cache_refresh runs unconditionally near the end (after preferences are written,
+    so the probe reflects any review_tools override just set), no confirm() gate, since the
+    user's own word was "always" rather than "offer".
+
     demo=True previews every step and writes NOTHING - live-tested gap, 2026-08-04: this
     function originally had no demo support at all, so `--demo` combined with configure
     silently wrote real files. Each step below is therefore branched explicitly rather
@@ -3410,6 +3415,9 @@ def run_configure(
         print(f"  {fail} could not write team-preferences.json")
         rc = 1
 
+    print(style.dim("\n  Refreshing the analyser-availability cache:"))
+    rc = max(rc, run_tool_cache_refresh(project, style, mark_map, demo=demo))
+
     if confirm(
         "\n  Set Morgan's model for this project (default: sonnet)?",
         default=False,
@@ -3435,6 +3443,57 @@ def _engagement_state_script() -> Optional[Path]:
     about locating things from an ARBITRARY foreign project directory)."""
     candidate = Path(__file__).resolve().parent / "scripts" / "engagement_state.py"
     return candidate if candidate.is_file() else None
+
+
+def _review_tools_script() -> Optional[Path]:
+    """Locates scripts/check-review-tools.sh relative to THIS clone - same rationale as
+    _engagement_state_script()."""
+    candidate = Path(__file__).resolve().parent / "scripts" / "check-review-tools.sh"
+    return candidate if candidate.is_file() else None
+
+
+def run_tool_cache_refresh(project_dir: Path, style: Style, mark_map: dict, demo: bool = False) -> int:
+    """Run automatically at the end of every --configure pass (2026-08-07 user request:
+    "always run check-review-tools.sh --refresh when configuring via virt-surv configure") -
+    forces a fresh analyser-availability probe for the TARGET project instead of leaving it to
+    serve a stale (up to 7-day) cache, or - on a brand-new project - having no cache at all
+    until the first /engage open. Runs LAST in run_configure, after review-tool preferences are
+    written, so the probe's "effective state per tool" (which already reads the project's
+    team-preferences.json review_tools override) reflects what was just configured, not what
+    was there before this pass started.
+
+    Bridges to the script with cwd set to the project - same cwd-redirection pattern as
+    run_list_engagements/run_archive_engagements bridging to engagement_state.py - so the
+    script's relative `.claude/.tool-availability` cache path resolves in the TARGET project,
+    not this clone. Soft-fail throughout (bash missing, script missing, non-zero exit): all
+    reported, none block configure - matching the script's own documented "report, not a gate,
+    always exits 0" contract; a probe failure here is informational only."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    project = project_dir.expanduser().resolve()
+    if not project.is_dir():
+        print(f"{fail} not a directory: {project}")
+        return 1
+    script = _review_tools_script()
+    if script is None:
+        print(f"{fail} scripts/check-review-tools.sh not found next to install_helper.py - skipped")
+        return 1
+    bash = find_bash()
+    if bash is None:
+        print(f"{fail} no bash found (needed for check-review-tools.sh) - analyser-cache refresh skipped")
+        return 1
+    if demo:
+        print(style.dim(f"    would run: bash {script} --refresh (in {project})"))
+        return 0
+    try:
+        proc = run_cmd([bash, str(script), "--refresh"], cwd=project)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"{fail} check-review-tools.sh --refresh failed to run: {exc}")
+        return 1
+    if proc.returncode != 0:
+        print(f"{fail} check-review-tools.sh --refresh exited {proc.returncode}")
+        return 1
+    print(f"{ok} analyser-availability cache refreshed ({project / '.claude' / '.tool-availability'})")
+    return 0
 
 
 def run_archive_engagements(target: Path, style: Style, mark_map: dict, demo: bool = False) -> int:
@@ -4693,9 +4752,11 @@ def parse_args(argv=None) -> argparse.Namespace:
         nargs="?",
         const=".",
         help="standalone: one-shot project setup for DIR (default: current directory) - "
-        "enable + permissions + preferences + model in one guided pass, and exit. This "
-        "is what the 'virt-surv' alias (--setup-alias) runs when you type "
-        "'virt-surv configure' from inside a project folder",
+        "enable + permissions + preferences + model in one guided pass, plus an "
+        "unconditional analyser-availability cache refresh (check-review-tools.sh "
+        "--refresh) at the end, and exit. This is what the 'virt-surv' alias "
+        "(--setup-alias) runs when you type 'virt-surv configure' from inside a "
+        "project folder",
     )
     parser.add_argument(
         "--archive",

@@ -3,6 +3,18 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.38] - 2026-08-07 - --configure always refreshes the analyser-availability cache
+
+### Added
+- `install_helper.py`: `--configure` (`virt-surv configure`) now unconditionally runs
+  `bash scripts/check-review-tools.sh --refresh` as its last step, after preferences are
+  written - explicit user request ("always run ... when configuring"), no confirm() gate.
+  New `run_tool_cache_refresh()` bridges to the script with `cwd` set to the TARGET project
+  (same pattern as `run_list_engagements`/`run_archive_engagements` bridging to
+  `engagement_state.py`), so the refreshed `.claude/.tool-availability` cache lands in the
+  right place. Soft-fail throughout (bash absent, script missing, non-zero exit): reported,
+  never blocks configure - matching the script's own "report, not a gate" contract.
+
 ## [0.33.37] - 2026-08-07 - ADR-007 Chunk F: golden eval case + stale roadmap entry fixed
 
 ### Added

@@ -462,6 +462,84 @@ def test_run_env_tuning_refuses_unparseable_settings(tmp_path, capsys):
     assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched
 
 
+# --- run_tool_cache_refresh: run automatically at the end of --configure (2026-08-07) -----
+
+
+def test_run_tool_cache_refresh_success(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    calls = []
+
+    def fake_run_cmd(argv, cwd=None, **kw):
+        calls.append((argv, cwd))
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", fake_run_cmd)
+    monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+    rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks())
+    assert rc == 0
+    assert "refreshed" in capsys.readouterr().out
+    (argv, cwd) = calls[0]
+    assert argv[0] == "/usr/bin/bash"
+    assert argv[-1] == "--refresh"
+    assert str(argv[1]).endswith("check-review-tools.sh")
+    assert cwd == tmp_path.expanduser().resolve()  # cache lands in the TARGET project
+
+
+def test_run_tool_cache_refresh_no_bash_is_soft_fail(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    def boom(*a, **k):
+        raise AssertionError("must not shell out when bash is unavailable")
+
+    monkeypatch.setattr(ih, "run_cmd", boom)
+    monkeypatch.setattr(ih, "find_bash", lambda: None)
+    rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks())
+    assert rc == 1
+    assert "no bash found" in capsys.readouterr().out
+
+
+def test_run_tool_cache_refresh_nonzero_exit_reported(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(3))
+    monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+    rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks())
+    assert rc == 1
+    assert "exited 3" in capsys.readouterr().out
+
+
+def test_run_tool_cache_refresh_demo_writes_nothing(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    def boom(*a, **k):
+        raise AssertionError("demo mode must never actually shell out")
+
+    monkeypatch.setattr(ih, "run_cmd", boom)
+    monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+    rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks(), demo=True)
+    assert rc == 0
+    assert "would run" in capsys.readouterr().out
+
+
+def test_run_configure_always_refreshes_the_tool_cache(tmp_path, monkeypatch):
+    """The 2026-08-07 user requirement, verbatim: "always run check-review-tools.sh
+    --refresh when configuring the project via virt-surv configure" - no confirm() gate,
+    unconditional, every --configure pass."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    calls = []
+
+    def fake_run_cmd(argv, cwd=None, **kw):
+        calls.append(argv)
+        return _FakeProc(0)
+
+    monkeypatch.setattr(ih, "run_cmd", fake_run_cmd)
+    ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
+    assert any("check-review-tools.sh" in str(a) for call in calls for a in call)
+
+
 # --- Morgan's model, settings.json write + CLI wrapper (2026-08-03) ----------------------
 
 
