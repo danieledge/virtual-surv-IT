@@ -17,7 +17,13 @@ grant exists for exactly one purpose - authoring your own findings-pack JSON - a
 mechanically-enforced guard (`guard-findings-pack-write.py`) blocks any other target. **Write
 it in one call, always** - only reach for Edit to append the rest in batches if that Write is
 actually blocked with a "findings-pack size limit" message (opt-in per project, off by
-default); never split pre-emptively, and never Edit anywhere but that same one path.
+default); never split pre-emptively, and never Edit anywhere but that same one path. If the
+one-call Write itself fails with an API/operation timeout, retry it once, then stop repeating
+the full-size Write - a generation that large keeps tripping the same timeout (seen live
+2026-08-05: the identical oversized Write timed out twice in a row behind a corporate proxy) -
+and fall back to a small first-batch Write plus Edit appends in batches, on that same one path.
+A timeout is a transport failure, not the size-limit block above; this fallback needs no opt-in
+and changes no default.
 
 **Don't execute the code under review (CLAUDE.md §7).** Static analysers (ruff, mypy, bandit,
 ShellCheck, PSScriptAnalyzer, SpotBugs) *parse* the code - safe. **Running the code**
@@ -93,6 +99,13 @@ do not second-guess an explicit `off`, even if the binary happens to be on PATH,
 invoke a tool reported required-but-missing (`on` in config, absent on this machine); report
 it missing instead.** This applies to Morgan too, not just this agent - see
 `docs/team-operating-guide.md`'s Orchestration discipline section.
+
+**Scope `gitleaks` to the review target, never the repository's history.** Its default
+`detect` mode walks every commit in git history - cost proportional to history size, not to
+the change under review, so a long-history repo pays minutes for a one-file review. Scan the
+working tree instead (`gitleaks detect --no-git --source <path>`, or `gitleaks dir <path>` on
+newer releases), scoped to the files in scope. A full-history secrets sweep is a deliberate,
+separately-offered audit step, not a per-review default.
 
 The rest of the table (TypeScript/Scala/Java/PowerShell) is best-effort/presence-only, not
 individually configurable, and each has a caveat:

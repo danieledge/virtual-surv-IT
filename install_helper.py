@@ -125,6 +125,16 @@ def merge_allow(settings: dict, entries=RECOMMENDED_ALLOW):
 # large-output/timeout pattern this repo has hit before). Merged UPSERT by --env-tuning: any
 # OTHER env var already in the project's settings.json is left untouched; these specific keys
 # are added if missing and corrected if present with a different value.
+#
+# Trade-off (2026-08-07 latency investigation, kept by explicit user decision): this set buys
+# resilience by WAITING instead of failing fast. API_TIMEOUT_MS allows up to 30 minutes per
+# request, and CLAUDE_CODE_RETRY_WATCHDOG raises the transient-error retry ceiling to ~300
+# attempts (roughly three hours of backoff) - and ordinary rate-limit throttling counts as a
+# transient error, so a healthy-infra session can still sit in that backoff. The documented
+# symptom is a run that grinds silently for hours with no visible progress (a ~3-hour deep
+# review of a small codebase was traced to this area). None of these cost anything on a clean,
+# unthrottled run. To fail fast instead, the human removes API_TIMEOUT_MS and
+# CLAUDE_CODE_RETRY_WATCHDOG from the project settings' env block.
 RECOMMENDED_ENV = {
     "API_TIMEOUT_MS": "1800000",
     "API_FORCE_IDLE_TIMEOUT": "0",
@@ -2543,7 +2553,9 @@ class Installer:
                 self._demo_permissions(project)
             if confirm(
                 "  Also tune API timeout / stream-idle / output-size env vars for this "
-                "project (helps on slow networks or behind a corporate proxy)?",
+                "project (helps on slow networks or behind a corporate proxy; trade-off: "
+                "transient API/throttling errors then retry quietly for up to hours "
+                "instead of failing fast)?",
                 default=True,
                 assume_yes=False,
                 style=self.style,
@@ -2588,7 +2600,9 @@ class Installer:
                 run_permissions(target, self.style, self.marks)
             if confirm(
                 "  Also tune API timeout / stream-idle / output-size env vars for this "
-                "project (helps on slow networks or behind a corporate proxy)?",
+                "project (helps on slow networks or behind a corporate proxy; trade-off: "
+                "transient API/throttling errors then retry quietly for up to hours "
+                "instead of failing fast)?",
                 default=True,
                 assume_yes=False,
                 style=self.style,
@@ -3475,7 +3489,8 @@ def run_configure(
 
     if confirm(
         "\n  Tune API timeout / stream-idle / output-size env vars (helps on slow "
-        "networks or behind a corporate proxy)?",
+        "networks or behind a corporate proxy; trade-off: transient API/throttling "
+        "errors then retry quietly for up to hours instead of failing fast)?",
         default=True,
         assume_yes=assume_yes,
         style=style,

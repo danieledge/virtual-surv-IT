@@ -18,7 +18,13 @@ Write grant exists for exactly one purpose - authoring your own findings-pack JS
 mechanically-enforced guard (`guard-findings-pack-write.py`) blocks any other target. **Write
 it in one call, always** - only reach for Edit to append the rest in batches if that Write is
 actually blocked with a "findings-pack size limit" message (opt-in per project, off by
-default); never split pre-emptively, and never Edit anywhere but that same one path.
+default); never split pre-emptively, and never Edit anywhere but that same one path. If the
+one-call Write itself fails with an API/operation timeout, retry it once, then stop repeating
+the full-size Write - a generation that large keeps tripping the same timeout (seen live
+2026-08-05: the identical oversized Write timed out twice in a row behind a corporate proxy) -
+and fall back to a small first-batch Write plus Edit appends in batches, on that same one path.
+A timeout is a transport failure, not the size-limit block above; this fallback needs no opt-in
+and changes no default.
 
 When validating a detection model:
 1. Assess conceptual soundness: is the method appropriate for the risk and data?

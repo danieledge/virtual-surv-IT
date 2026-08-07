@@ -3,6 +3,29 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.45] - 2026-08-07 - Findings-pack timeout fallback; gitleaks scoped to target
+
+### Added
+- `.claude/agents/{code-reviewer,compliance-reviewer,model-validator,performance-reviewer}.md`:
+  the "Write it in one call, always" findings-pack instruction now has an explicit fallback
+  for a genuine API/operation timeout on the Write itself (distinct from the guard's
+  finding-count size-cap block) - retry once, then fall back to a small first-batch Write
+  plus Edit appends on the same path. Addresses the documented 2026-08-05 live failure
+  (`guard-findings-pack-write.py`'s own docstring: an oversized consolidation Write timed
+  out twice in a row behind a corporate proxy). No opt-in needed, no default changed.
+- `code-reviewer.md`: new instruction to scope `gitleaks` to the review target
+  (`gitleaks detect --no-git --source <path>` / `gitleaks dir <path>`) rather than its
+  default full-git-history walk, whose cost scales with history size, not review size.
+- `install_helper.py`: the `RECOMMENDED_ENV` block now documents its own trade-off in a
+  comment (30-min request timeout + ~300-retry watchdog means a persistent transient/
+  throttling error can retry silently for hours instead of failing fast - traced to a
+  live ~3-hour deep-review stall), and all three `--env-tuning` confirm prompts state this
+  trade-off to the user up front. No env values or defaults changed.
+
+Traced from a live-reported ~3-hour deep code review of a small codebase; root-caused via a
+careful, evidence-cited investigation (verified independently - `2026-08-05` citation,
+`gitleaks` CLI flags, and full test suite all confirmed accurate before landing).
+
 ## [0.33.44] - 2026-08-07 - New golden case: review-scorer delegation compliance
 
 ### Added
