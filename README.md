@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.43](https://img.shields.io/badge/version-0.33.43-blue)
+![Version 0.33.44](https://img.shields.io/badge/version-0.33.44-blue)
 ![Tests 1400+ passing](https://img.shields.io/badge/tests-1400%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.43** (2026-08-07) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.44** (2026-08-07) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle: `install_helper.py` rebuilt end-to-end.**
 - 🧭 **The menu reorganized and hardened.** A flat 10-option list became 6 top-level items plus
@@ -194,7 +194,7 @@ What the team gives you today, each row tied to where the claim is enforced or d
 | Independent QA + a mechanical DoD gate | A close only counts when `check_artifacts` passes - finding codes like `STALE-INDEX`, `FINAL-BEFORE-CLOSE`, `ROSTER-UNKNOWN` catch the failure modes that actually happened live. Iteration history stays visible append-only (journey strip, QA cycles). | [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) · [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
 | Engagement memory | A per-project **codebase map**: bounded, PM-curated, SHA-anchored, hygiene-checked mechanically, advisory-only - repeat engagements start warm. | [ADR-003](docs/adr/ADR-003-engagement-memory.md) · [ADR-007](docs/adr/ADR-007-codebase-map-evolution.md) |
 | Company extensions | Additive per-project standing instructions, close actions, an analyser registry and named integrations - never a safety waiver, and eval-tested. | [ADR-009](docs/adr/ADR-009-company-extensions.md) · [`docs/EXTENDING.md`](docs/EXTENDING.md) |
-| Self-tested quality | 9 rubrics + 44 golden cases with a deterministic scorer in CI, and a mechanical dev→main release gate that fails a promotion with no eval baseline. | [`evals/README.md`](evals/README.md) · [`scripts/release_gate.py`](scripts/release_gate.py) · [Self-test](#-self-test-eval-harness) |
+| Self-tested quality | 9 rubrics + 45 golden cases with a deterministic scorer in CI, and a mechanical dev→main release gate that fails a promotion with no eval baseline. | [`evals/README.md`](evals/README.md) · [`scripts/release_gate.py`](scripts/release_gate.py) · [Self-test](#-self-test-eval-harness) |
 | Cost visibility | Measured per-run token numbers, and a local observability page: engagement inventory, DoD gate result, map hygiene, consent highlight, measured token cost (`python -m scripts.dashboard`). | [Token usage](#-token-usage--optimisation) · [`scripts/dashboard.py`](scripts/dashboard.py) |
 | Console & UX discipline | Progress in the native task list (TodoWrite), every clarification via the question tool, a statusline showing dormant-vs-engaged, and a clean console with detail in artifacts. | [`docs/team-operating-guide.md`](docs/team-operating-guide.md) · [`scripts/statusline.sh`](scripts/statusline.sh) |
 | Explicit AI identity | Every roster name in an artifact is marked 🤖 + "Virtual Surveillance IT"; an agent never shares a sign-off line with a human - mechanically checked. | [FAQ](docs/FAQ.md) · `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` in [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
@@ -646,7 +646,7 @@ a convention), that's stated rather than dressed up.
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
 | **Remembers, safely** | Each working project gets one codebase map: bounded, SHA-anchored, 📊/🧠-tagged, PM-written only, **advisory context never enforcement**, and no PII/MNPI/secrets, ever. | ADR-003/ADR-007 + `check_artifacts` map hygiene - mechanical: size (excl. Deprecated), header fields, per-entry As-of/Anchor validation, anchor resolution + a staleness budget against HEAD, basis tags, secret patterns. The read-at-open / update-at-close discipline itself is prompt-enforced and eval-sampled, not mechanical. The guard hooks stay the only enforcement layer. |
 | **Show the journey** | Iteration history is evidence: failed review/QA passes stay visible append-only (journey strip, test cycles, clarification rounds), never smoothed into a clean narrative. | Two DoD gates ("a multi-pass engagement whose docs read first-pass-clean fails") + the templates' append-only structures. Prompt-enforced, eval-sampled. |
-| **Self-tested** | The team's own quality is regression-tested like code. | 1400+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 9 rubrics, 44 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
+| **Self-tested** | The team's own quality is regression-tested like code. | 1400+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 9 rubrics, 45 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -710,17 +710,17 @@ disabled; nothing is silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **1400+ passing unit tests** (1,873 collected as of 0.33.43) check
+The repo's **1400+ passing unit tests** (1,873 collected as of 0.33.44) check
 the *code*, and run in CI. The **eval harness** ([`evals/`](evals/)) checks the **quality of what the
 team produces**: its contract and scorer run in CI, but scoring the *live team* (catching a prompt
 change that silently weakens a review) is run manually via `/run-evals`, not on every commit, because
 it spends tokens. (This is the regression net Anthropic's multi-agent guidance recommends.)
 
 <details>
-<summary>🧪 <b>What's in the harness</b>: 9 rubrics · 44 golden cases · deterministic scorer</summary>
+<summary>🧪 <b>What's in the harness</b>: 9 rubrics · 45 golden cases · deterministic scorer</summary>
 
 - **9 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety · process-discipline ·
-  process-discipline-light · prompt-injection · regulatory-citation) + **44 golden cases** with deliberately seeded issues
+  process-discipline-light · prompt-injection · regulatory-citation) + **45 golden cases** with deliberately seeded issues
   *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
 - **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)): matches the team's
   findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
@@ -901,7 +901,7 @@ vendor/                         # convert_file's deps, bundled (pure Python, pin
 config/                         # masking schema + regulatory register + feed-schema example
 docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
                                 #   scenarios/ · demos/ · templates/ · adr/
-evals/                          # team-quality eval harness: 9 rubrics + 44 golden cases
+evals/                          # team-quality eval harness: 9 rubrics + 45 golden cases
 .github/workflows/ci.yml        # tests + lint + manifest validation + gitleaks + no-raw-data check
 .pre-commit-config.yaml         # local secret / raw-data guardrails
 ```
@@ -1070,7 +1070,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
 <summary>🗺️ <b>What's shipped and what's next</b></summary>
 
 **Quality & evaluation**
-- ✅ **Team-quality eval harness: SHIPPED (0.5.0)**. `evals/` has 9 rubrics + 44 golden cases
+- ✅ **Team-quality eval harness: SHIPPED (0.5.0)**. `evals/` has 9 rubrics + 45 golden cases
   (seeded issues + false-positive traps) across review, coverage, spec/traceability, tuning and
   data-safety. The deterministic scorer (`scripts/eval_score.py`) is unit-tested; `/run-evals`
   runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and

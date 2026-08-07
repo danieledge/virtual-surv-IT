@@ -3,6 +3,23 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.44] - 2026-08-07 - New golden case: review-scorer delegation compliance
+
+### Added
+- `evals/cases/process-review-scorer-delegation/` (45th golden case): pins
+  `docs/code-review-method.md`'s unconditional delegation rule - review-scorer (Pip) must
+  be delegated to for both context/language detection AND scoring/filtering on every
+  code-reviewer/performance-reviewer review. Live-reported (2026-08-07): the same command
+  against the same scenario delegated correctly once, then skipped the delegation entirely
+  on a later run - since the rule is always-loaded (not a JIT reference doc), this makes
+  the failure rate measurable via repeated `/run-evals` runs rather than anecdotal. First
+  live run: PASS (recall 1.0, judge 0.92, cost $14.80 on the harness's opus-tier
+  orchestrator default) - confirmed genuine via transcript inspection (an actual
+  `TaskCreate review-scorer` call, not just narration). One passing run does not establish
+  a failure rate; also note the harness's default `--team-model opus` does not match this
+  project's actual sonnet-4-6 orchestrator, so this run doesn't yet test the tier where the
+  original failure was observed.
+
 ## [0.33.43] - 2026-08-07 - Opt-in workaround for an LLM-gateway beta-fields rejection
 
 ### Added

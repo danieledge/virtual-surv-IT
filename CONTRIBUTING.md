@@ -26,7 +26,7 @@ be introduced later; until then, opening a PR constitutes that agreement.
 A promotion is a release: the DoD requires prompt-touching changes to be **eval-gated**, and the
 gate is now mechanical, not a documented intention:
 
-1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 44 golden cases) in a
+1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 45 golden cases) in a
    Claude Code session on this repo.
 2. Record the result as **`evals/eval-baseline-<version>.md`** (date · cases run · pass/fail ·
    notes; `Scope: full` — or `Scope: deterministic-only` for a patch release with no prompt
