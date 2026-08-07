@@ -1967,10 +1967,29 @@ def check_registry(artifacts_dir: Path) -> list[str]:
     return []
 
 
+_KNOWN_FLAGS = frozenset({"--fix"})
+
+
 def main(argv: list[str]) -> int:
     _force_utf8_output()
-    do_fix = "--fix" in argv[1:]
-    positional = [a for a in argv[1:] if not a.startswith("-")]
+    rest = argv[1:]
+    # 2026-08-07 (found by a framework-wide audit): `do_fix = "--fix" in argv[1:]` matched
+    # only the exact string - a typo'd flag (--fx, --Fix, --fixx) or an unrecognized one
+    # was silently ignored rather than erroring, so a human typing `check_artifacts --fx`
+    # got a silent check-only run instead of the fix pass they asked for, with nothing
+    # telling them why nothing got fixed. Every flag-shaped argument is now validated
+    # against the one real flag this script accepts; an unrecognized one is a usage error
+    # (exit 2, distinct from 1 = "gate not satisfied"), not a silent no-op.
+    unknown = [a for a in rest if a.startswith("-") and a not in _KNOWN_FLAGS]
+    if unknown:
+        print(
+            f"unrecognized flag(s): {' '.join(unknown)} - only --fix is accepted "
+            "(positional args: [artifacts_dir] [map_path])",
+            file=sys.stderr,
+        )
+        return 2
+    do_fix = "--fix" in rest
+    positional = [a for a in rest if not a.startswith("-")]
     artifacts_dir = Path(positional[0]) if positional else Path("artifacts")
     map_path = Path(positional[1]) if len(positional) > 1 else find_codebase_map(Path.cwd())
 

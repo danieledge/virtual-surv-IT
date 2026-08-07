@@ -2097,3 +2097,45 @@ def test_check_state_standalone_call_still_works_without_shared_walk(tmp_path):
 
     findings = check_state(art)  # no _all_md - must still find it via its own fresh walk
     assert any("RATIFIED-CLAIM-PENDING" in f for f in findings)
+
+
+# ---------------------------- unrecognized --flag is a usage error (2026-08-07) ------------
+#
+# Found by a framework-wide audit: `do_fix = "--fix" in argv[1:]` matched only the exact
+# string, so a typo'd flag was silently ignored - `check_artifacts --fx` ran a silent
+# check-only pass instead of the fix pass the human asked for, with no error explaining why
+# nothing got fixed.
+
+
+def test_typo_fix_flag_is_a_usage_error_not_a_silent_no_op(tmp_path, capsys):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    # argv[0] is the discarded "program name", matching every real invocation
+    # (`python -m scripts.check_artifacts ...`) and this file's own existing convention
+    # (e.g. ca_main(["check_artifacts", str(art)])) - omitting it would silently drop the
+    # directory argument into the discarded slot instead of testing it.
+    rc = ca_main(["check_artifacts", str(art), "--fx"])
+    assert rc == 2
+    assert "unrecognized flag" in capsys.readouterr().err
+
+
+def test_unknown_flag_is_a_usage_error(tmp_path, capsys):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    rc = ca_main(["check_artifacts", str(art), "--verbose"])
+    assert rc == 2
+    assert "unrecognized flag" in capsys.readouterr().err
+
+
+def test_real_fix_flag_still_works(tmp_path):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    rc = ca_main(["check_artifacts", str(art), "--fix"])
+    assert rc in (0, 1)  # never 2 - a real, recognized flag is not a usage error
+
+
+def test_no_flags_still_works(tmp_path):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    rc = ca_main(["check_artifacts", str(art)])
+    assert rc in (0, 1)

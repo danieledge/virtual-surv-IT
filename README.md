@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.31](https://img.shields.io/badge/version-0.33.31-blue)
+![Version 0.33.32](https://img.shields.io/badge/version-0.33.32-blue)
 ![Tests 1300+ passing](https://img.shields.io/badge/tests-1300%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.31** (2026-08-07) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.32** (2026-08-07) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle: `install_helper.py` rebuilt end-to-end.**
 - 🧭 **The menu reorganized and hardened.** A flat 10-option list became 6 top-level items plus
@@ -456,7 +456,7 @@ get it past the reviewers **and** the change board. · *Slack:* "happy to take t
   *Slack:* "prove it. then prove it again. then document it."
 - **Ravi**: *Code Reviewer.* Reads seven languages (**Python, TypeScript/JS, Scala, Java,
   PowerShell, Bash, SQL**) and the security flaws in all of them. Drives the real analysers
-  (ruff/bandit/SpotBugs/ShellCheck/Semgrep…), adds judgement on top, and, sorry, there's a
+  (ruff/mypy/bandit/SpotBugs/ShellCheck…), adds judgement on top, and, sorry, there's a
   hard-coded secret on line 42. · *Slack:* "nit: naming (×40). also: CRITICAL, line 42."
 - **Thabo**: *Performance Reviewer.* Asks one question (*"will it survive month-end?"*) and
   answers with evidence, not vibes. **Static by default** (won't run your code uninvited, §7). ·

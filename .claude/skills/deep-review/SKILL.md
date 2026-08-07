@@ -65,7 +65,8 @@ and states what's applicable vs not.
    (`docs/review/agent-router.md`, canonical for pipeline shape: today that is sequential focused
    passes inside `code-reviewer`, one lens at a time, with the trade-off stated there), plus the
    standard analysers (ruff/mypy/bandit,
-   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep). Deep adds
+   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck - **not Semgrep**,
+   deliberately excluded, see `code-reviewer.md` for why). Deep adds
    the **architecture** lens, **impact analysis**, and test/doc coverage.
 4. **Score & filter** *(delegate to `review-scorer`, haiku)* - apply the scoring rubric and
    produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). Tag each finding's

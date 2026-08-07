@@ -42,9 +42,13 @@ findings against the newly-added text, costing 8 gate executions and 4 close att
 close). Write complete, run the gate once, fix everything it lists in one pass, close.
 
 The close sequence, in order (use these exact forms rather than guessing a flag and correcting
-after a usage error):
+after a usage error - **`set-status closing` is the FIRST command, not an implicit side effect**:
+it enters the 🔒 closing window that makes the summary email and delivery report legitimate
+work-in-progress rather than artifacts appearing with no state transition to explain them,
+`docs/team-operating-guide.md`'s "Close ordering"):
 
 ```
+<python> -m scripts.engagement_state set-status closing --slug <slug>
 <python> -m scripts.engagement_state resolve-outstanding "<substring>" --slug <slug>
 <python> -m scripts.engagement_state set-team "Name (role)" "Name2 (role2)" --slug <slug>
 <python> -m scripts.engagement_state finalise-artifacts --slug <slug>
@@ -56,4 +60,6 @@ after a usage error):
 (the `--fix` mode auto-renders missing `.html` siblings and renames a mis-typed summary email to
 `.txt`). Write the **engagement-summary email**
 (`docs/templates/engagement-summary-email.md`) as a `.txt` in the workspace, **signed off as
-Morgan**, before this sequence. Act on anything the gate still flags before handing back.
+Morgan**, right after `set-status closing` (during the closing window it just opened, alongside
+the delivery report) and before the rest of the sequence. Act on anything the gate still flags
+before handing back.

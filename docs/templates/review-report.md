@@ -99,7 +99,7 @@ never ambiguous what was actioned. A not-yet verdict must list the Open items ex
 |----------|------|-------|
 | ruff / mypy / bandit | | |
 | ShellCheck / PSScriptAnalyzer / SpotBugs / ... | | |
-| Semgrep / gitleaks | | |
+| gitleaks | | |
 
 State explicitly which analysers were unavailable - nothing silently skipped.
 

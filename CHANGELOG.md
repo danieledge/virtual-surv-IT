@@ -3,6 +3,29 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.32] - 2026-08-07 - check_artifacts flag validation, stale semgrep refs, missing close-sequence step
+
+### Fixed
+- `scripts/check_artifacts.py`: `"--fix" in argv[1:]` matched only the exact string, so a
+  typo'd flag (`--fx`, `--Fix`) was silently ignored - a check-only run happened instead of
+  the fix pass asked for, with no error explaining why nothing got fixed. Any unrecognized
+  `-`-prefixed argument is now a usage error (exit 2), not a silent no-op.
+- `deep-review/SKILL.md` and `audit-review/SKILL.md` listed Semgrep among the "standard
+  analysers" code-reviewer drives - stale since 2026-08-04, when `code-reviewer.md` removed
+  it (unconditional network calls, no offline mode, repeated corp-proxy hangs). Fixed both,
+  plus the same stale mention in the README roster blurb, `docs/templates/review-report.md`'s
+  tooling-coverage table, and `docs/review/gold-findings.md`'s exemplar citation (swapped
+  for `bandit`, a tool that's actually used for that exact finding class).
+- `.claude/skills/.shared/engagement-bookends.md`'s documented close sequence was missing
+  `set-status closing` entirely - the step that opens the 🔒 closing window and is what
+  makes writing the summary email/delivery report *before* `set-status closed` legitimate
+  work-in-progress rather than artifacts appearing with no matching state transition
+  (`docs/team-operating-guide.md`'s own "Close ordering" already documented it; this shared
+  file just never had it). `handover/SKILL.md` had the same gap more severely - it produces
+  its own closing artifacts inline and had ZERO `set-status` calls anywhere, so a handover
+  produced via this skill never actually flipped `engagement-state.json` out of whatever
+  status it already had. Both fixed.
+
 ## [0.33.31] - 2026-08-07 - Dispatcher write-protection, fail-closed-on-missing-guard, slug path traversal
 
 ### Fixed (staged - `bash scripts/apply-guard-git-config.sh` and `bash scripts/apply-bash-hook-dispatcher.sh`)

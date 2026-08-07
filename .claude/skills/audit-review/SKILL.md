@@ -25,7 +25,8 @@ Run an **evaluator-optimizer loop**:
 1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first, telling it to inherit
    **Mode = audit** and the **compliance** dimension and not to re-ask those) - comprehensive review
    across the languages present, driving the standard analysers (ruff/mypy/bandit,
-   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep),
+   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck - **not Semgrep**,
+   deliberately excluded, see `code-reviewer.md` for why),
    citing OWASP ASVS / CWE / SEI CERT, with confidence scoring and filter transparency
    (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope. The embedded
    `/deep-review` asks whether the code was **AI-assisted / vibe-coded**; if so, carry its
