@@ -114,6 +114,23 @@ _EXEC_PATTERNS = [
 ]
 _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 
+# Subset of _EXEC_PATTERNS covering "ad hoc inline diagnostic" shapes specifically
+# (`python -c "..."`, `python -`, `node -e`, `ruby -e`, `perl -e`, `php -r`) - checked
+# separately so _block() can add a MORE TARGETED note for exactly this class. Live report,
+# recurring (2026-08-04, 2026-08-07): a session hits a hiccup (a step-0 /engage probe
+# failure, or anything else), reaches for "let me just check X directly" as an ad hoc
+# inline command, and gets blocked - correctly, but the GENERIC block message gave no hint
+# that (a) this specific shape is always blocked regardless of consent, so granting consent
+# won't help, and (b) if this followed a probe failure, the fix is retrying the exact probe
+# block, not improvising a replacement. `.claude/skills/engage/references/probe-contract.md`
+# already said this, but it's a just-in-time reference the model may never open before
+# reaching for the ad hoc command in the first place - this note fires AT THE BLOCK ITSELF,
+# which the model has already seen by definition.
+_INLINE_CODE_RE = re.compile(
+    rf"\b{_PY}\s+(?:\S+\s+)*-c\b|\b{_PY}\s+-\s*$|\bnode\s+-e\b|\bruby\s+-e\b|\bperl\s+-e\b|\bphp\s+-r\b",
+    re.IGNORECASE,
+)
+
 # The team's OWN trusted tooling - allowed even though it runs python. ANCHORED at the start of
 # a segment (ADR-002: the old `.search()` matched anywhere, so `echo "scripts."; pytest` waved
 # the whole line through). Two forms:
@@ -283,10 +300,28 @@ def _segments(cmd: str) -> list[str]:
 def _block(cmd: str, segment: str | None = None) -> None:
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     marker = os.path.join(root, ".claude", ".exec-consent")
+    inline_note = ""
+    if segment and _INLINE_CODE_RE.search(segment):
+        inline_note = (
+            "This looks like an ad hoc inline diagnostic (`-c`/stdin code execution) - it is "
+            "ALWAYS blocked here, unconditionally, no matter how harmless it looks. This is NOT "
+            "a consent question: granting consent will not change this, since inline execution "
+            "is blocked regardless of authorisation state. Two live-report shapes this has "
+            "recurred as: (1) retrying after a step-0 /engage probe failure by improvising a "
+            "replacement instead of re-running the exact probe block character for character "
+            "(see PROBE_FAILED in .claude/skills/engage/references/probe-contract.md); (2) "
+            "checking a JSON/text file (e.g. verifying a findings pack parses and counting its "
+            "entries) by running `python -c \"...json.load...\"` instead of just reading the "
+            "file - it is already text you can Read and count directly, no execution needed "
+            "(docs/team-operating-guide.md's findings-count-verification guidance). If you "
+            "genuinely need the interpreter's own path or version, use `python --version` or "
+            "`python -V` instead - never `-c`.\n"
+        )
     sys.stderr.write(
         "Blocked (code-execution gate, CLAUDE.md §7): this command EXECUTES code, and review is "
         "static by default. Running the code under review (its tests, the script itself, or a "
         "profiler/benchmark) needs authorisation.\n"
+        f"{inline_note}"
         "To allow execution - ONLY for trusted code in a safe/dev or sandbox environment on "
         "synthetic data - the USER grants consent (the model cannot): run "
         f"`touch {marker}` in any terminal (or `! touch {marker}` as the first characters of "
