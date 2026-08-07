@@ -353,6 +353,71 @@ def test_single_workspace_auto_resolves_without_slug(tmp_path, monkeypatch):
     assert load_state(tmp_path / "artifacts" / "audit")["status"] == "blocked"
 
 
+# --------------------------------------- slug path-traversal (found 2026-08-07, fixed) -------
+#
+# Every command that builds a workspace path from a --slug used to do `root / slug` with no
+# validation. Two real escapes, verified by hand before fixing: (1) Path.__truediv__ DISCARDS
+# the left side when the right is absolute, so a slug of an absolute path targets that path
+# directly, not a subdirectory of it; (2) a `..`-bearing slug resolves outside the artifacts
+# root on .resolve(), ordinary directory traversal. Both must be refused, not just the
+# character that happens to be in one example.
+
+
+def test_init_absolute_path_slug_is_refused(tmp_path, monkeypatch):
+    outside = tmp_path / "outside-target"
+    rc = _run_env(monkeypatch, tmp_path, "init", "--title", "T", "--slug", str(outside))
+    assert rc == 2
+    assert not outside.exists()  # never created at the escaped location
+
+
+def test_init_dotdot_slug_is_refused(tmp_path, monkeypatch):
+    rc = _run_env(monkeypatch, tmp_path, "init", "--title", "T", "--slug", "../../escaped")
+    assert rc == 2
+    assert not (tmp_path.parent.parent / "escaped").exists()
+
+
+def test_init_legitimate_slug_with_dots_still_works(tmp_path, monkeypatch):
+    """The fix checks CONTAINMENT after resolving, not a character blocklist - a slug that
+    merely contains a single dot (not a traversal sequence) must still work fine."""
+    rc = _run_env(monkeypatch, tmp_path, "init", "--title", "T", "--slug", "release-0.33")
+    assert rc == 0
+    assert (tmp_path / "artifacts" / "release-0.33" / "engagement-state.json").is_file()
+
+
+def test_set_active_absolute_path_slug_is_refused(tmp_path, monkeypatch):
+    _run_env(monkeypatch, tmp_path, "init", "--title", "T", "--slug", "real")
+    outside = tmp_path / "outside-target"
+    rc = _run_env(monkeypatch, tmp_path, "set-active", "--slug", str(outside))
+    assert rc == 2
+    assert not outside.exists()
+
+
+def test_archive_dotdot_slug_is_refused(tmp_path, monkeypatch):
+    _run_env(monkeypatch, tmp_path, "init", "--title", "T", "--slug", "real")
+    rc = _run_env(monkeypatch, tmp_path, "archive", "--slug", "../../escaped")
+    assert rc == 2
+    assert not (tmp_path.parent.parent / "escaped").exists()
+
+
+def test_unarchive_dotdot_slug_is_refused(tmp_path, monkeypatch):
+    rc = _run_env(monkeypatch, tmp_path, "unarchive", "--slug", "../../escaped")
+    assert rc == 2
+
+
+def test_resolve_pack_dir_target_slug_dotdot_is_refused(tmp_path, monkeypatch):
+    """Exercises resolve_pack_dir()'s own --slug branch (shared by most non-init/list
+    commands) via `set-status`, which routes through it when --dir is omitted.
+    resolve_pack_dir() already raises SystemExit(2) directly for its pre-existing
+    ambiguity error (line ~465) rather than returning an error code - this fix follows
+    that same established convention rather than inventing a new one."""
+    import pytest
+
+    _run_env(monkeypatch, tmp_path, "init", "--title", "T", "--slug", "real")
+    with pytest.raises(SystemExit) as exc:
+        _run_env(monkeypatch, tmp_path, "set-status", "blocked", "--slug", "../../escaped")
+    assert exc.value.code == 2
+
+
 def test_multiple_workspaces_require_slug_without_active_marker(tmp_path, monkeypatch):
     """R1 update (2026-07-29): ambiguity is resolved by the on-disk ACTIVE marker when one
     exists; with the marker cleared it stays the hard error it always was."""

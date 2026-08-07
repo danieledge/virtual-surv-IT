@@ -103,3 +103,83 @@ def test_write_tool_on_staged_hooks_is_not_blocked_path():
     # staging area is scripts/, not .claude/hooks/ - the Write channel must not confuse them
     payload = {"tool_name": "Write", "tool_input": {"file_path": str(_STAGED)}}
     assert _run(payload) == ALLOW
+
+
+# --- scripts/bash_hook_dispatcher.py (2026-08-07) --------------------------------------------
+#
+# Found by a framework-wide audit, verified live before fixing: the dispatcher all four guards
+# route through (P4, 2026-07-31) lives in scripts/, not .claude/hooks/, so _HOOK_PATH_RE and
+# _HOOK_MUTATE never matched it - a Write/Edit or Bash mutation of its _CHECKS registry could
+# neuter every guard through the exact channel this guard exists to close.
+
+
+def test_edit_dispatcher_live_copy_blocks():
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": "scripts/bash_hook_dispatcher.py",
+            "old_string": "x",
+            "new_string": "y",
+        },
+    }
+    assert _run(payload) == BLOCK
+
+
+def test_write_dispatcher_live_copy_blocks():
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": "scripts/bash_hook_dispatcher.py", "content": "evil"},
+    }
+    assert _run(payload) == BLOCK
+
+
+def test_edit_dispatcher_staged_copy_still_allowed():
+    """The model must keep editing the STAGED dispatcher freely - only the live copy is
+    protected, same as every other guard's staged/live split."""
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": "scripts/staged_hooks/bash_hook_dispatcher.py",
+            "old_string": "x",
+            "new_string": "y",
+        },
+    }
+    assert _run(payload) == ALLOW
+
+
+def test_bash_sed_on_dispatcher_blocks():
+    cmd = 'sed -i "s/exit(2)/exit(0)/" scripts/bash_hook_dispatcher.py'
+    assert _run(_bash(cmd)) == BLOCK
+
+
+def test_bash_cp_over_dispatcher_blocks():
+    assert _run(_bash("cp /tmp/evil.py scripts/bash_hook_dispatcher.py")) == BLOCK
+
+
+def test_bash_rm_dispatcher_blocks():
+    assert _run(_bash("rm scripts/bash_hook_dispatcher.py")) == BLOCK
+
+
+def test_bash_read_of_dispatcher_still_allowed():
+    # reads/static analysis must stay allowed, same policy as .claude/hooks/ files
+    assert _run(_bash("cat scripts/bash_hook_dispatcher.py")) == ALLOW
+    assert _run(_bash("grep _CHECKS scripts/bash_hook_dispatcher.py")) == ALLOW
+
+
+def test_dispatcher_mentioned_in_prose_still_allowed():
+    # the classic false-positive class: naming the file in a commit message or log-note
+    cmd = 'git commit -m "fix a typo in scripts/bash_hook_dispatcher.py comment"'
+    assert _run(_bash(cmd)) == ALLOW
+
+
+def test_unrelated_scripts_file_still_unaffected():
+    # the fix must not widen protection to scripts/ generally - only this one exact file
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": "scripts/check_artifacts.py",
+            "old_string": "x",
+            "new_string": "y",
+        },
+    }
+    assert _run(payload) == ALLOW

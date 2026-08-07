@@ -3,6 +3,31 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.31] - 2026-08-07 - Dispatcher write-protection, fail-closed-on-missing-guard, slug path traversal
+
+### Fixed (staged - `bash scripts/apply-guard-git-config.sh` and `bash scripts/apply-bash-hook-dispatcher.sh`)
+- `scripts/bash_hook_dispatcher.py` - which all four guards route through (P4) - was not
+  covered by `guard-consent-writes.py`'s protection at all (only `.claude/hooks/*` and
+  `hooks/hooks.json` were guarded). One Edit to its `_CHECKS` registry could neuter every
+  guard through the *protected* Write/Edit channel, not just the already-known Bash-lexical
+  residual. Verified live before fixing; now blocked identically to a guard under
+  `.claude/hooks/`. Deliberately scoped to the live copy only - `scripts/staged_hooks/
+  bash_hook_dispatcher.py` stays freely model-editable, same as every other staged guard.
+- The dispatcher's own missing-guard-file handling failed OPEN unconditionally, asymmetric
+  with a guard file that exists but fails to *load*, which already failed closed. There is
+  no legitimate reason for a shipped safety-guard file to be missing from a working
+  install; both cases now follow the identical `fail_closed` policy per check.
+
+### Fixed (live, no apply step needed - not a staged guard file)
+- `scripts/engagement_state.py`: every command that builds a workspace path from `--slug`
+  did `root / slug` with no validation. Two real escapes, verified by hand: an absolute-
+  path slug discards the artifacts-root prefix entirely (`Path.__truediv__`'s documented
+  behaviour), and a `..`-bearing slug resolves outside the root on `.resolve()`. Both
+  closed with one shared containment-check helper (verify the *resolved* result is still
+  inside the root, not a character blocklist) applied at all 6 call sites: `init`,
+  `set-active`, `archive`, `unarchive`, `migrate`, and `resolve_pack_dir` (shared by most
+  other commands).
+
 ## [0.33.30] - 2026-08-07 - Command substitution inside double quotes escaped two of the three guards
 
 ### Fixed (staged - `bash scripts/apply-guard-exec-allow.sh` and `bash scripts/apply-guard-raw-coverage.sh`)

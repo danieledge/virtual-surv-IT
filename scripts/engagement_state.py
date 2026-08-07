@@ -136,6 +136,35 @@ def _default_artifacts_dir() -> Path:
     return base / "artifacts"
 
 
+def _safe_slug_join(base: Path, slug: str) -> Path | None:
+    """`base / slug` with a path-traversal check - returns None (never raises) when the
+    join would escape `base`, so every call site can print its own error and exit 2.
+
+    Found by a framework-wide audit (2026-08-07), verified before fixing: every workspace
+    command builds its target directory as `<artifacts-root> / <slug>` with no validation
+    at all, and `slug` is whatever a --slug flag (or a state file's own recorded slug, for
+    `migrate`) happens to contain. Two real escapes, not just an unlikely edge case:
+      1. Path.__truediv__ DISCARDS the left side entirely when the right is absolute -
+         `Path("artifacts") / "/etc/passwd"` is literally `Path("/etc/passwd")`, not an
+         error and not a relative join. A slug of `/etc/passwd` (or any absolute path)
+         targets that path directly.
+      2. A `..`-bearing slug resolves outside `base` on `.resolve()`, same as any other
+         directory-traversal - `Path("artifacts") / "../../.claude/hooks"` resolves two
+         levels above the intended root.
+    A character-blocklist would chase these one symbol at a time and miss the next one;
+    checking the RESOLVED result's actual containment inside `base` closes both by
+    construction, regardless of what characters got there. `base` itself is resolved too,
+    so this holds even when `base` itself hasn't been resolved by the caller yet."""
+    if not slug:
+        return None
+    candidate = (base / slug).resolve()
+    try:
+        candidate.relative_to(base.resolve())
+    except ValueError:
+        return None
+    return candidate
+
+
 # ------------------------------------------------------------------ workspaces (0.31)
 # Several engagements can coexist in one project at independent states: each lives in its
 # own workspace `artifacts/<slug>/` with its own state + rendered index. The root carries a
@@ -409,7 +438,11 @@ def resolve_pack_dir(args: argparse.Namespace) -> Path:
     root = _default_artifacts_dir()
     slug = getattr(args, "target_slug", None)
     if slug:
-        return root / slug
+        safe = _safe_slug_join(root, slug)
+        if safe is None:
+            print(f"--slug {slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+            sys.exit(2)
+        return safe
     candidates: list[Path] = []
     if state_path(root).is_file():
         candidates.append(root)
@@ -912,7 +945,11 @@ def _cmd_init(args: argparse.Namespace) -> int:
     # keeps flat semantics (tests, custom layouts, pre-0.31 behaviour).
     workspaced = args.dir is None
     if args.dir is None:
-        args.dir = _default_artifacts_dir() / args.slug
+        safe = _safe_slug_join(_default_artifacts_dir(), args.slug)
+        if safe is None:
+            print(f"--slug {args.slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+            return 2
+        args.dir = safe
     else:
         # Explicit --dir: refuse a target nested inside another engagement pack or a
         # second artifacts level (artifacts/<old>/artifacts/<new> - the 2026-07-30
@@ -1258,7 +1295,10 @@ def _cmd_set_active(args: argparse.Namespace) -> int:
     if not slug:
         print("set-active: give a <slug> or --slug", file=sys.stderr)
         return 2
-    target = root / slug
+    target = _safe_slug_join(root, slug)
+    if target is None:
+        print(f"--slug {slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+        return 2
     if not ((target / STATE_FILENAME).is_file() or (target / INDEX_FILENAME).is_file()):
         print(f"no engagement workspace at {target} - nothing to mark ACTIVE", file=sys.stderr)
         return 2
@@ -1286,7 +1326,11 @@ def _cmd_archive(args: argparse.Namespace) -> int:
         if not slug:
             print("archive: give a <slug> (or --slug), or --all-closed", file=sys.stderr)
             return 2
-        targets = [root / slug]
+        safe = _safe_slug_join(root, slug)
+        if safe is None:
+            print(f"--slug {slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+            return 2
+        targets = [safe]
     archived_now = 0
     for pack in targets:
         if not state_path(pack).is_file():
@@ -1364,7 +1408,10 @@ def _cmd_unarchive(args: argparse.Namespace) -> int:
     if not slug:
         print("unarchive: give a <slug> or --slug", file=sys.stderr)
         return 2
-    pack = root / slug
+    pack = _safe_slug_join(root, slug)
+    if pack is None:
+        print(f"--slug {slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+        return 2
     marker = pack / ARCHIVE_MARKER
     if not marker.is_file():
         print(f"{pack.name} is not archived (no {ARCHIVE_MARKER})", file=sys.stderr)
@@ -1486,7 +1533,14 @@ def _cmd_migrate(args: argparse.Namespace) -> int:
         return 2
     state = load_state(root)
     slug = (state.get("engagement") or {}).get("slug") or "engagement"
-    target = root / slug
+    target = _safe_slug_join(root, slug)
+    if target is None:
+        print(
+            f"the pack's own recorded slug {slug!r} escapes the artifacts root - refusing "
+            "to migrate; fix the slug in the state file first",
+            file=sys.stderr,
+        )
+        return 2
     if target.exists():
         print(f"refusing: {target} already exists", file=sys.stderr)
         return 2

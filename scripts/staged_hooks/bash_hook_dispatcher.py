@@ -142,9 +142,22 @@ def main() -> int:
         if tool not in tools:
             continue
         try:
-            if not path.is_file():
-                continue  # missing guard file - fail open for THAT check only
+            missing = not path.is_file()
         except OSError:
+            missing = True
+        if missing:
+            # 2026-08-07 (found by a framework-wide audit): this used to unconditionally
+            # `continue` here regardless of fail_closed - a missing safety-guard FILE
+            # (accidental deletion, a broken install, tampering that bypasses the
+            # Bash-lexical mutation check) failed OPEN, asymmetric with the "failed to
+            # LOAD" branch three lines below, which already correctly fails closed for
+            # the same class of guard. There is no legitimate reason for a shipped guard
+            # file to be missing from a working install, so this now follows the exact
+            # same fail_closed policy as a load failure - both are "this guard cannot
+            # run", and a guard that cannot run must not silently pass.
+            if fail_closed:
+                sys.stderr.write(f"{name} guard file not found; failing closed (blocked).\n")
+                return 2
             continue
         module = _load(name, path)
         if module is None:

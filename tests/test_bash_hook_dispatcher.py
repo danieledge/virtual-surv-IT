@@ -263,13 +263,32 @@ def test_every_applicable_check_sees_the_full_original_payload(monkeypatch):
     assert seen == [payload, payload]
 
 
-def test_missing_guard_file_skips_that_check_without_crashing(monkeypatch, tmp_path):
-    """A clone missing one of the underlying scripts (unusual layout, partial checkout)
-    must not brick every tool call it would have gated - fail open for that ONE check."""
+def test_missing_safety_guard_file_fails_closed(monkeypatch, tmp_path, capsys):
+    """2026-08-07 fix (found by a framework-wide audit): a missing FILE for a fail_closed
+    guard used to unconditionally skip that check (fail OPEN), asymmetric with a file that
+    exists but fails to LOAD, which already failed closed below. There is no legitimate
+    reason for a shipped safety-guard file to be missing from a working install - a
+    missing file and a load failure are both "this guard cannot run", and now follow the
+    identical fail_closed policy."""
     monkeypatch.setattr(
         bhd,
         "_CHECKS",
         (("guard_raw_data", tmp_path / "does-not-exist.py", {"Read"}, True),),
+    )
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps({"tool_name": "Read"})))
+    assert bhd.main() == 2
+    assert "failing closed" in capsys.readouterr().err
+
+
+def test_missing_redirect_file_still_skips_without_blocking(monkeypatch, tmp_path):
+    """document_input_redirect/module_form_redirect are fail_closed=False (convenience
+    redirects, never a safety control) - a missing file for THESE must still skip that one
+    check without blocking, unchanged by the 2026-08-07 fix above, which is conditional on
+    fail_closed."""
+    monkeypatch.setattr(
+        bhd,
+        "_CHECKS",
+        (("document_input_redirect", tmp_path / "does-not-exist.py", {"Read"}, False),),
     )
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps({"tool_name": "Read"})))
     assert bhd.main() == 0
