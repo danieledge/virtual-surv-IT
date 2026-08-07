@@ -210,6 +210,46 @@ def test_agent_count_references_match_filesystem():
             )
 
 
+def _test_function_def_count() -> int:
+    """A cheap, pure-file-read LOWER BOUND on the real pytest-collected test count - a
+    parametrized `def test_x` collects as MANY test IDs, never fewer, so this is always
+    <= the true collected count. Deliberately not an exact match (this file's own stated
+    design is pure file reads, no execution - actually invoking pytest --collect-only from
+    inside a test would be circular and slow); a floor-check on the def-count is the
+    strongest claim obtainable without running the suite."""
+    total = 0
+    for path in (_ROOT / "tests").glob("test_*.py"):
+        total += len(re.findall(r"^def test_", path.read_text(encoding="utf-8"), re.M))
+    return total
+
+
+def test_readme_test_count_claim_is_never_an_overstatement():
+    """Found live 2026-08-07 (framework-wide audit): README claimed '700+ unit tests' /
+    '785 collected as of 0.33.1' / a '1300+ passing' badge - three DIFFERENT numbers, none
+    matching the real count by then (1842 collected). A hand-maintained exact count always
+    eventually drifts (the skill/agent-count tests above solve this by deriving an EXACT
+    match from disk; a test count can't use that pattern, since it changes on nearly every
+    commit that touches tests/). This instead pins a WEAKER, permanently-true property: the
+    rounded "N+" claims in README must never overstate reality - the real def-count (itself
+    a floor on the true collected count) must be >= every "N+ ... test" figure quoted."""
+    floor = _test_function_def_count()
+    readme = _read("README.md")
+    # Two phrasings appear: "N+ ... test(s)" (prose) and "Tests N+" (the badge alt text/URL).
+    claims = re.findall(r"(\d[\d,]*)\+\s*(?:passing\s+)?(?:unit\s+)?tests?\b", readme, re.I)
+    claims += re.findall(r"[Tt]ests?[\s-](\d[\d,]*)\+", readme)
+    assert len(claims) >= 3, (
+        f"README: expected at least 3 'N+ test(s)' claims (badge + two prose mentions), "
+        f"found {len(claims)}: {claims} - did the wording change enough to need a new pattern?"
+    )
+    for claim in claims:
+        n = int(claim.replace(",", ""))
+        assert n <= floor, (
+            f"README claims '{claim}+ tests' but only {floor} `def test_` definitions exist "
+            f"on disk (a floor on the true collected count) - the claim overstates reality, "
+            f"lower it"
+        )
+
+
 def test_roster_gate_matches_operating_guide():
     """The roster hardcoded in check_artifacts (for ROSTER-UNKNOWN/ROSTER-ROLE-MISMATCH) must
     match the canonical roster line in the operating guide, so the name->role map can't drift."""

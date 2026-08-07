@@ -3,6 +3,23 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.33] - 2026-08-07 - README test-count claims fixed, and pinned so they can't overstate again
+
+### Fixed
+- README had three DIFFERENT, all-wrong test-count claims: a "1300+ passing" badge, "700+
+  unit tests", and "700+ passing unit tests (785 collected as of 0.33.1)" - the real
+  collected count is 1,842. All three corrected to a conservative "1400+" (a rounded floor,
+  not a hyper-precise number that goes stale on the next test-adding commit) plus the
+  accurate current snapshot figure.
+- New test (`test_readme_test_count_claim_is_never_an_overstatement`,
+  `tests/test_docs_consistency.py`) pins this so it can't silently drift wrong again: unlike
+  the skill/agent-count tests (which derive an EXACT match from disk, viable since those
+  only change when a whole skill/agent is added), a test count changes on nearly every
+  commit that touches `tests/`, so an exact-match test would be pure maintenance burden.
+  Instead it checks a weaker, permanently-true property - every "N+ test(s)" claim in
+  README must never exceed the real `def test_` count on disk (itself a floor on the true
+  pytest-collected count, since parametrized tests always collect as more than one ID).
+
 ## [0.33.32] - 2026-08-07 - check_artifacts flag validation, stale semgrep refs, missing close-sequence step
 
 ### Fixed
