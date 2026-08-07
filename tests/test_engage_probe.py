@@ -13,6 +13,7 @@ from scripts.engage_probe import (
     build_report,
     first_changelog_entry,
     last_team_version,
+    map_drift_summary,
     read_machine_defaults,
     read_map,
     read_plugin_version,
@@ -387,6 +388,155 @@ def test_build_report_map_skeleton_project_false_overrides_machine_true(tmp_path
     )
     out = build_report("", tmp_path)
     assert "MAP_SKELETON=off" in out
+
+
+# --------------------------------------- MAP_DRIFT (open-time, 2026-08-07 user request)
+# "wouldn't it make sense to run [the drift check] first and feed that info into the
+# agents" - minimal, standalone (root map only) duplicate of check_map()'s MAP-DRIFT
+# subset, so it's available at OPEN, not just close.
+
+
+def _map_with_paths(area="rules", paths="src/x.py", entry="threshold rationale"):
+    return (
+        "# Codebase Map - Proj\n\n"
+        "> **Document control** · Owner `Morgan (PM)` · As-of `2026-07-18` · Anchor `no-vcs`\n\n"
+        "## 2. Map entries\n\n"
+        "| # | Area | Entry | Basis | As-of | Anchor | Paths |\n"
+        "|---|------|-------|-------|-------|--------|-------|\n"
+        f"| 1 | {area} | {entry} | 📊 seen in review | 2026-07-18 | no-vcs | {paths} |\n"
+    )
+
+
+def _write_sidecar(map_dir, entries):
+    map_dir.mkdir(parents=True, exist_ok=True)
+    (map_dir / "codebase-map.fingerprints.json").write_text(
+        json.dumps({"generated_by": "test", "entries": entries}), encoding="utf-8"
+    )
+
+
+def test_map_drift_summary_empty_when_toggle_off(tmp_path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    assert map_drift_summary(tmp_path, map_skeleton_on=False) == ""
+
+
+def test_map_drift_summary_empty_when_no_map(tmp_path):
+    assert map_drift_summary(tmp_path, map_skeleton_on=True) == ""
+
+
+def test_map_drift_summary_empty_when_never_fingerprinted_matches_fingerprint(tmp_path):
+    """No sidecar at all still counts as drifted (never fingerprinted), same as
+    check_map()'s own MAP-DRIFT precedent."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    summary = map_drift_summary(tmp_path, map_skeleton_on=True)
+    assert "1 of 1 area(s): rules" in summary
+
+
+def test_map_drift_summary_silent_when_fingerprint_matches(tmp_path):
+    from scripts.map_fingerprint import compute_fingerprint
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    _write_sidecar(
+        tmp_path / "docs",
+        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], tmp_path)}},
+    )
+    assert map_drift_summary(tmp_path, map_skeleton_on=True) == ""
+
+
+def test_map_drift_summary_fires_when_file_changed_since_fingerprinted(tmp_path):
+    from scripts.map_fingerprint import compute_fingerprint
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    f = tmp_path / "src" / "x.py"
+    f.write_text("threshold = 1\n", encoding="utf-8")
+    _write_sidecar(
+        tmp_path / "docs",
+        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], tmp_path)}},
+    )
+    f.write_text("threshold = 2\n", encoding="utf-8")  # changed AFTER fingerprinting
+    summary = map_drift_summary(tmp_path, map_skeleton_on=True)
+    assert "1 of 1 area(s): rules" in summary
+
+
+def test_map_drift_summary_empty_when_no_paths_column(tmp_path):
+    (tmp_path / "docs").mkdir()
+    # Same shape as _good_map (test_check_artifacts.py) - no Paths column at all.
+    (tmp_path / "docs" / "codebase-map.md").write_text(
+        "# Codebase Map\n\n"
+        "> As-of `2026-07-18` · Anchor `no-vcs`\n\n"
+        "## 2. Map entries\n\n"
+        "| # | Area | Entry | Basis | As-of | Anchor |\n"
+        "|---|------|-------|-------|-------|--------|\n"
+        "| 1 | rules | threshold rationale | 📊 seen in review | 2026-07-18 | no-vcs |\n",
+        encoding="utf-8",
+    )
+    assert map_drift_summary(tmp_path, map_skeleton_on=True) == ""
+
+
+def test_build_report_includes_map_drift_line_when_drifted(tmp_path):
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "9.9.9"}), encoding="utf-8"
+    )
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    out = build_report("", tmp_path)
+    assert "MAP_DRIFT=1 of 1 area(s): rules" in out
+
+
+def test_build_report_omits_map_drift_line_when_toggle_off(tmp_path):
+    """Off means zero added output - no MAP_DRIFT line at all, not an empty one, even
+    with a real drift condition sitting on disk."""
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "9.9.9"}), encoding="utf-8"
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    out = build_report("", tmp_path)
+    assert "MAP_SKELETON=off" in out
+    assert "MAP_DRIFT=" not in out
+
+
+def test_build_report_omits_map_drift_line_when_nothing_drifted(tmp_path):
+    from scripts.map_fingerprint import compute_fingerprint
+
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "9.9.9"}), encoding="utf-8"
+    )
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    _write_sidecar(
+        tmp_path / "docs",
+        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], tmp_path)}},
+    )
+    out = build_report("", tmp_path)
+    assert "MAP_DRIFT=" not in out
 
 
 def test_build_report_emits_os_windows(monkeypatch, tmp_path):

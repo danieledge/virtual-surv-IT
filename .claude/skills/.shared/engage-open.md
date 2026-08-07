@@ -140,8 +140,15 @@ means split a large, multi-component review by component from the start rather t
 discover the need for it from a failed call; see the orchestration-discipline section of
 `docs/team-operating-guide.md`), `MAP_SKELETON=on|off` (project preference, 3-tier precedence
 like docx/citations - `on` means `check_map()` runs MAP-DRIFT/MAP-DEAD-POINTER for a codebase
-map with a `Paths` column; ADR-007 Phase 1, experimental, off by default), then the tooling
-report, the codebase map header + §3, the newest CHANGELOG entry, and any team-extensions block.
+map with a `Paths` column; ADR-007 Phase 1, experimental, off by default), then, ONLY when
+`MAP_SKELETON=on` AND something has actually drifted, `MAP_DRIFT=<n> of <m> area(s): <list>` -
+**use this, don't just print it**: when briefing an agent whose work touches a drifted area,
+say so explicitly (that area's map entries are unverified, not `📊 observed`) instead of handing
+over the map's claims as settled fact; if the drift is central to what this engagement is about,
+consider offering `/map-codebase --refresh` before briefing rather than working from a known-stale
+map. (Root map only - `docs/codebase-map.d/` area files aren't covered by this open-time check,
+only by the full sweep at close.) Then the tooling report, the codebase map header + §3, the
+newest CHANGELOG entry, and any team-extensions block.
 
 **The probe does NOT print the operating guide.** Read `docs/team-operating-guide.md` yourself
 (plugin mode: `$PLUGIN_ROOT/docs/team-operating-guide.md`): issue that `Read` in the SAME turn as

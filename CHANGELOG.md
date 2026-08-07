@@ -3,6 +3,40 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.43] - 2026-08-07 - Opt-in workaround for an LLM-gateway beta-fields rejection
+
+### Added
+- `install_helper.py`: new `--env-tuning-betas <project-dir>` flag (plus a matching
+  opt-in question in `--configure`, off by default) upserts
+  `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` into a project's `.claude/settings.json` env
+  block. Workaround for a live-reported failure: a haiku-tier subagent call (review-scorer
+  is the only agent in this roster pinned to `model: haiku`) failed with `API Error: 400
+  tools.0.custom.eager_input_streaming: Extra inputs are not permitted` - the exact
+  signature of an LLM gateway rejecting Anthropic's beta tool-schema fields. Kept separate
+  from `--env-tuning`'s on-by-default bundle since it has a real tradeoff of its own (MCP
+  tool search disabled) that only makes sense if you're actually hitting this gateway
+  incompatibility. Same upsert/backup mechanics as `--env-tuning` (shared
+  `_run_env_upsert` helper, extracted from `run_env_tuning` in this change).
+
+## [0.33.42] - 2026-08-07 - Codebase-map drift surfaced at open, not just close (ADR-007 0.5)
+
+### Added
+- `scripts/engage_probe.py`: new `MAP_DRIFT=<n> of <m> area(s): <list>` line in the
+  open-time probe report, gated behind `map_skeleton` (only appears when the toggle is on
+  AND something has actually drifted - off means zero added output, same contract as
+  every other map_skeleton-gated behaviour). Root map only (`docs/codebase-map.d/` area
+  files aren't covered by this open-time check, only by the full close-time sweep).
+  Minimal, standalone duplicate of `check_artifacts.check_map()`'s `MAP-DRIFT` logic
+  rather than an import - `engage_probe.py` must stay runnable before any plugin-mode
+  import of a sibling `scripts/` module is guaranteed reliable.
+- `.claude/skills/.shared/engage-open.md`: instructs Morgan to actually use the new field
+  - when briefing an agent whose work touches a drifted area, say so explicitly (that
+    area's map claims are unverified) instead of handing over the map as settled fact;
+    consider `/map-codebase --refresh` first if the drift is central to the engagement.
+    Closes the gap ADR-007's own build plan had left as an unbuilt "optional" item - user
+    request: "wouldn't it make sense to run [drift detection] first and feed that info
+    into the agents... otherwise it's not adding value."
+
 ## [0.33.41] - 2026-08-07 - `virt-surv onboard`, project-root sanity check, map-update narration
 
 ### Added

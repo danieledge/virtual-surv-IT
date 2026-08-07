@@ -3,7 +3,7 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-007` · Version `0.4` · Status `Phase 1+2 implemented`
+> **Document control** · ID `ADR-007` · Version `0.5` · Status `Phase 1+2 implemented`
 > · Classification `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-08-07`
 >
 > | Version | Date | Author | Change |
@@ -12,6 +12,7 @@
 > | 0.2 | 2026-07-29 | workflow-robustness remediation phase 4 (user ruling D3) | Re-scoped: staleness subset implemented in `check_map`; the generative layer (repo_skeleton / map.d / /map-codebase / fingerprint drift stamps) is parked, revisit on demand |
 > | 0.3 | 2026-08-06 | user request: "the need has materialised, build it" | The parked generative layer, built: `scripts/repo_skeleton.py` (inventory, tiered symbols, PageRank, Mermaid, churn), drift stamps + `MAP-DRIFT`/`MAP-DEAD-POINTER`, `/map-codebase` skill + `docs/codebase-map.d/` area files + root Index section. Gated behind `map_skeleton` (project/machine preference, off by default) - a project that hasn't opted in sees zero behaviour change. Phase 3 (blast-radius-refresh automation, a rendered map browser) stays deferred, unchanged. |
 > | 0.4 | 2026-08-07 | Chunk F wrap-up | Golden eval case `evals/cases/process-first-contact-map/` landed, pinning the toggle contract (silent when off, human-adjudicated finding when on) as a scored behaviour case, not just unit-tested mechanism. Phase 1+2 build plan closed out; README's stale "RE-SCOPED / parked" roadmap entry corrected to match the shipped state. |
+> | 0.5 | 2026-08-07 | user request: "wouldn't it make sense to run [drift detection] first and feed that info into the agents" | `scripts/engage_probe.py` gained `MAP_DRIFT=` - a minimal, standalone (root map only) drift summary surfaced at OPEN, not only close. Closes the Chunk E item this ADR's own build plan had left as "optional, if it fits cleanly" - computing drift without it reaching agent briefs "isn't adding value" (the user's own framing). `.claude/skills/.shared/engage-open.md` instructs Morgan to actually use it: treat a drifted area's map claims as unverified when briefing an agent whose work touches it. |
 
 | | |
 |---|---|

@@ -462,6 +462,67 @@ def test_run_env_tuning_refuses_unparseable_settings(tmp_path, capsys):
     assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched
 
 
+# --- --env-tuning-betas: opt-in gateway-compat workaround (2026-08-07) --------------------
+
+
+def test_merge_env_with_experimental_betas_entries():
+    from install_helper import EXPERIMENTAL_BETAS_ENV, merge_env
+
+    settings, added, updated = merge_env({}, entries=EXPERIMENTAL_BETAS_ENV)
+    assert settings["env"] == {"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"}
+    assert added == ["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"]
+    assert updated == []
+
+
+def test_run_env_tuning_betas_creates_settings_when_absent(tmp_path, capsys):
+    import json as _json
+
+    from install_helper import EXPERIMENTAL_BETAS_ENV, Style, marks, run_env_tuning_betas
+
+    rc = run_env_tuning_betas(tmp_path, Style(False), marks())
+    assert rc == 0
+    written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert written["env"] == EXPERIMENTAL_BETAS_ENV
+    out = capsys.readouterr().out
+    assert "beta-fields-workaround" in out
+
+
+def test_run_env_tuning_betas_does_not_touch_env_tuning_vars(tmp_path):
+    """The two toggles are independent - turning on the beta-fields workaround must not
+    also silently write the unrelated RECOMMENDED_ENV bundle, and vice versa."""
+    import json as _json
+
+    from install_helper import RECOMMENDED_ENV, Style, marks, run_env_tuning_betas
+
+    run_env_tuning_betas(tmp_path, Style(False), marks())
+    written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert set(written["env"]) == {"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"}
+    assert not any(k in written["env"] for k in RECOMMENDED_ENV)
+
+
+def test_run_env_tuning_betas_refuses_unparseable_settings(tmp_path, capsys):
+    from install_helper import Style, marks, run_env_tuning_betas
+
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "settings.json").write_text("{broken", encoding="utf-8")
+    assert run_env_tuning_betas(tmp_path, Style(False), marks()) == 1
+    assert "refusing" in capsys.readouterr().out
+    assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched
+
+
+def test_run_configure_env_tuning_betas_off_by_default(tmp_path, monkeypatch):
+    """Unlike --env-tuning (on by default under assume_yes), the beta-fields workaround
+    stays off even when the user accepts every other recommended default."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+    assert "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS" not in settings.get("env", {})
+
+
 # --- run_tool_cache_refresh: run automatically at the end of --configure (2026-08-07) -----
 
 
@@ -3934,11 +3995,12 @@ def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkey
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     monkeypatch.setattr(sys, "stdin", _TtyStdin())  # see test_ask_and_set_model_rejects_bad_input
     # "n" to "use recommended settings?" (walk through each choice instead), "no" to the
-    # permissions question, "no" to the env-tuning question (keeps "nothing creates the
-    # file" true below), "" (accept defaults) to the five preference prompts (docx,
-    # citations, review-split, map-skeleton, statusline-map), "" (no change) to the
-    # review-tools override prompt, "" to the model prompt (declines - default is False).
-    answers = iter(["n", "n", "n", "", "", "", "", "", "", ""])
+    # permissions question, "no" to the env-tuning question, "no" to the beta-fields-
+    # workaround question (keeps "nothing creates the file" true below), "" (accept
+    # defaults) to the five preference prompts (docx, citations, review-split,
+    # map-skeleton, statusline-map), "" (no change) to the review-tools override prompt,
+    # "" to the model prompt (declines - default is False).
+    answers = iter(["n", "n", "n", "n", "", "", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -5021,9 +5083,10 @@ def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     # "n" to "use recommended settings?" (blank there would default to Yes and skip
     # every prompt below via assume_yes, defeating this test), "" enable-permissions
-    # default(Y), "" env-tuning default(Y), "" docx, "" citations, "" split, ""
-    # map-skeleton, "" statusline-map, "mypy=off" review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "", "mypy=off", ""])
+    # default(Y), "" env-tuning default(Y), "" beta-fields-workaround default(N), ""
+    # docx, "" citations, "" split, "" map-skeleton, "" statusline-map, "mypy=off"
+    # review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "", "mypy=off", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -5044,9 +5107,9 @@ def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch)
     monkeypatch.setattr(ih, "probe_analyser_output", fake_probe)
     # "n" to "use recommended settings?" first (blank there would default to Yes and
     # skip every prompt below via assume_yes, defeating this test). Then "" enable-
-    # permissions, "" env-tuning, "" docx, "" citations, "" split, "" map-skeleton, ""
-    # statusline-map, "mypy=on" review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "", "mypy=on", ""])
+    # permissions, "" env-tuning, "" beta-fields-workaround, "" docx, "" citations, ""
+    # split, "" map-skeleton, "" statusline-map, "mypy=on" review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "", "mypy=on", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0

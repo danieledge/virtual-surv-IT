@@ -33,8 +33,11 @@ Design constraints:
   merges the README's recommended permissions.allow entries into that project's
   .claude/settings.json (add-only, deny/hooks untouched); `--env-tuning <project-dir>`
   upserts the recommended API-timeout/stream-idle/output-size env vars into that same
-  file's env block (every other env var and setting left untouched); `--model-project`/
-  `--model-default` set Morgan's model. Each refuses on an unparseable settings file and
+  file's env block (every other env var and setting left untouched); `--env-tuning-betas
+  <project-dir>` upserts CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1 the same way - an opt-in
+  workaround for an LLM gateway that rejects Anthropic's beta tool-schema fields, off
+  unless you're actually hitting it; `--model-project`/`--model-default` set Morgan's
+  model. Each refuses on an unparseable settings file and
   backs the existing file up first rather than overwrite blind. Because you run this
   helper yourself, these writes are a human act (ADR-002 rec 5 governs the model, which
   stays blocked).
@@ -156,6 +159,19 @@ def merge_env(settings: dict, entries=RECOMMENDED_ENV):
             updated.append(key)
         env[key] = value
     return settings, added, updated
+
+
+# Workaround for an LLM-gateway compatibility issue (2026-08-07 live report): a haiku-tier
+# subagent call (review-scorer is the one agent in this roster pinned to model: haiku) failed
+# with "API Error: 400 tools.0.custom.eager_input_streaming: Extra inputs are not permitted" -
+# the exact signature CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS's own docs name for a gateway that
+# rejects the Anthropic-specific beta tool-schema fields Claude Code sends by default. Kept
+# SEPARATE from RECOMMENDED_ENV (not on by default, not folded into --env-tuning) because it has
+# a real tradeoff of its own - MCP tool search is disabled and every MCP tool loads upfront -
+# that only makes sense for someone actually hitting this gateway incompatibility.
+EXPERIMENTAL_BETAS_ENV = {
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+}
 
 
 # ------------------------------------------------------------------ config persistence
@@ -2789,20 +2805,22 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     return 0
 
 
-def run_env_tuning(project_dir: Path, style: Style, mark_map: dict) -> int:
-    """Standalone opt-in step: upsert RECOMMENDED_ENV into <project>/.claude/settings.json's
-    "env" block - project-level only. Feasible and sufficient: Claude Code layers a
-    settings-file "env" value over the shell's own (Environment variables doc, "Precedence"),
-    so writing it once at project level covers both Linux and PowerShell shells without a
-    platform-specific shell-profile edit; there is deliberately no user-level equivalent here
-    (unlike the model-default flow) since these are per-project network/output-size tuning
-    values, not an account-wide preference.
+def _run_env_upsert(
+    project_dir: Path, style: Style, mark_map: dict, entries: dict, label: str
+) -> int:
+    """Shared upsert-into-settings.json "env" block implementation for run_env_tuning and
+    run_env_tuning_betas - only the entries dict and the log label differ. Project-level
+    only. Feasible and sufficient: Claude Code layers a settings-file "env" value over the
+    shell's own (Environment variables doc, "Precedence"), so writing it once at project
+    level covers both Linux and PowerShell shells without a platform-specific shell-profile
+    edit; there is deliberately no user-level equivalent here (unlike the model-default
+    flow) since these are per-project values, not an account-wide preference.
 
-    Upsert, not add-only (unlike run_permissions): a key in RECOMMENDED_ENV already present
-    with a DIFFERENT value is corrected; any other env var already in the file, and every other
-    top-level key (permissions, hooks, model, ...), is left untouched. Dated backup of any
-    existing file before writing, same as run_permissions; refuses on unparseable JSON rather
-    than clobbering."""
+    Upsert, not add-only (unlike run_permissions): a key already present with a DIFFERENT
+    value is corrected; any other env var already in the file, and every other top-level
+    key (permissions, hooks, model, ...), is left untouched. Dated backup of any existing
+    file before writing, same as run_permissions; refuses on unparseable JSON rather than
+    clobbering."""
     ok, fail = mark_map["ok"], mark_map["fail"]
     project = project_dir.expanduser().resolve()
     if not project.is_dir():
@@ -2819,12 +2837,12 @@ def run_env_tuning(project_dir: Path, style: Style, mark_map: dict) -> int:
             print(f"{fail} {target} is not readable JSON ({exc}) - refusing to touch it")
             return 1
     try:
-        settings, added, updated = merge_env(settings)
+        settings, added, updated = merge_env(settings, entries=entries)
     except InstallAbort as exc:
         print(f"{fail} {exc}")
         return 1
     if not added and not updated:
-        print(f"{ok} {target}: all {len(RECOMMENDED_ENV)} tuning env vars already set correctly")
+        print(f"{ok} {target}: all {len(entries)} {label} env vars already set correctly")
         return 0
     if target.is_file():
         today = datetime.now().strftime("%Y-%m-%d")
@@ -2844,10 +2862,31 @@ def run_env_tuning(project_dir: Path, style: Style, mark_map: dict) -> int:
         bits.append(f"updated {len(updated)}")
     total = len(added) + len(updated)
     print(
-        f"{ok} {target}: {', '.join(bits)} tuning env var{'s' if total != 1 else ''} "
+        f"{ok} {target}: {', '.join(bits)} {label} env var{'s' if total != 1 else ''} "
         "(other env vars and settings untouched)"
     )
     return 0
+
+
+def run_env_tuning(project_dir: Path, style: Style, mark_map: dict) -> int:
+    """Standalone opt-in step (on by default during --configure/--engage): upsert
+    RECOMMENDED_ENV - API-timeout/stream-idle/output-size tuning - into
+    <project>/.claude/settings.json's "env" block. See _run_env_upsert for the mechanics."""
+    return _run_env_upsert(project_dir, style, mark_map, RECOMMENDED_ENV, "tuning")
+
+
+def run_env_tuning_betas(project_dir: Path, style: Style, mark_map: dict) -> int:
+    """Standalone opt-in step (OFF by default, unlike run_env_tuning): upsert
+    EXPERIMENTAL_BETAS_ENV (CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1) into
+    <project>/.claude/settings.json's "env" block - a workaround for an LLM gateway that
+    rejects Anthropic's beta tool-schema fields (2026-08-07 live report: a haiku-tier
+    subagent call - review-scorer is the only agent in this roster pinned to model: haiku -
+    failed with "tools.0.custom.eager_input_streaming: Extra inputs are not permitted").
+    Only worth turning on if you're actually hitting this - see EXPERIMENTAL_BETAS_ENV's
+    own comment for the tradeoff (MCP tool search disabled, every MCP tool loads upfront)."""
+    return _run_env_upsert(
+        project_dir, style, mark_map, EXPERIMENTAL_BETAS_ENV, "beta-fields-workaround"
+    )
 
 
 def run_orchestrator_model(project_dir: Path, model: Optional[str], style: Style, mark_map: dict) -> int:
@@ -3445,6 +3484,24 @@ def run_configure(
             print(style.dim(f"    would upsert {len(RECOMMENDED_ENV)} tuning env vars"))
         else:
             rc = max(rc, run_env_tuning(project, style, mark_map))
+
+    if confirm(
+        "\n  Work around an LLM-gateway compatibility issue (a subagent call fails with "
+        "'tools.0.custom.eager_input_streaming: Extra inputs are not permitted', most "
+        "often on a haiku-tier call) - off unless you're actually hitting this, since it "
+        "also disables MCP tool search?",
+        default=False,
+        assume_yes=assume_yes,
+        style=style,
+    ):
+        if demo:
+            print(
+                style.dim(
+                    f"    would upsert {len(EXPERIMENTAL_BETAS_ENV)} beta-fields-workaround env var(s)"
+                )
+            )
+        else:
+            rc = max(rc, run_env_tuning_betas(project, style, mark_map))
 
     print(style.dim("\n  Project preferences:"))
     existing = _read_json_dict(project / ".claude" / "team-preferences.json")
@@ -4813,6 +4870,16 @@ def parse_args(argv=None) -> argparse.Namespace:
         "untouched; backs the file up first) and exit",
     )
     parser.add_argument(
+        "--env-tuning-betas",
+        metavar="PROJECT_DIR",
+        help="standalone: upsert CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1 into "
+        "PROJECT_DIR/.claude/settings.json's env block - a workaround for an LLM gateway "
+        "that rejects Anthropic's beta tool-schema fields (400 'tools.0.custom."
+        "eager_input_streaming: Extra inputs are not permitted', most often on a "
+        "haiku-tier call). Only worth it if you're actually hitting this - it also "
+        "disables MCP tool search. Same upsert/backup mechanics as --env-tuning, and exit",
+    )
+    parser.add_argument(
         "--model-project",
         metavar="PROJECT_DIR",
         help="standalone, combine with --model: set or reset Morgan's model for "
@@ -5120,6 +5187,7 @@ def _main(argv=None) -> int:
         args.enable_project
         or args.permissions
         or args.env_tuning
+        or args.env_tuning_betas
         or args.model_project
         or args.model_default
         or args.check_tools
@@ -5138,6 +5206,8 @@ def _main(argv=None) -> int:
             rc = max(rc, run_permissions(Path(args.permissions), style, marks()))
         if args.env_tuning:
             rc = max(rc, run_env_tuning(Path(args.env_tuning), style, marks()))
+        if args.env_tuning_betas:
+            rc = max(rc, run_env_tuning_betas(Path(args.env_tuning_betas), style, marks()))
         if args.model_project:
             wanted = None if (args.model or "default") == "default" else args.model
             rc = max(rc, run_orchestrator_model(Path(args.model_project), wanted, style, marks()))

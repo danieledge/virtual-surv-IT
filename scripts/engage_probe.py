@@ -24,6 +24,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -166,6 +167,120 @@ def read_map(project_dir: Path) -> tuple[str, str]:
             section3 = _cap_section3_rows(m.group(0).rstrip()) if m else ""
             return header, section3
     return "", ""
+
+
+def _resolve_globs_probe(globs: list, repo_root: Path) -> list:
+    """Duplicated from scripts/map_fingerprint.py::resolve_globs (kept byte-identical in
+    behaviour - see _compute_fingerprint_probe for why this is duplicated rather than
+    imported). A bare trailing `**` is treated as `**/*` too, same reasoning as the
+    original: stdlib pathlib's `**` alone only matches directories, and silently returning
+    zero files for the obviously-intended pattern would make an entry's drift check
+    permanently blind."""
+    matches = set()
+    for pattern in globs:
+        effective = [pattern]
+        if pattern == "**" or pattern.endswith("/**"):
+            effective.append(f"{pattern}/*")
+        for variant in effective:
+            for path in repo_root.glob(variant):
+                if path.is_file():
+                    matches.add(path.relative_to(repo_root).as_posix())
+    return sorted(matches)
+
+
+def _compute_fingerprint_probe(globs: list, repo_root: Path) -> str:
+    """Duplicated from scripts/map_fingerprint.py::compute_fingerprint - MUST stay
+    byte-identical to that function (same algorithm, same "sha256:" prefix) or every
+    entry would show as spuriously drifted here even when check_artifacts.py's own
+    check_map() (the authoritative, close-time check) says otherwise. Duplicated rather
+    than imported because engage_probe.py must stay runnable standalone, before any
+    plugin-mode import of a sibling scripts/ module is guaranteed reliable - same
+    rationale as read_machine_defaults() re-deriving preference precedence instead of
+    importing install_helper.py's."""
+    files = _resolve_globs_probe(globs, repo_root)
+    digest = hashlib.sha256()
+    for rel_path in files:
+        digest.update(rel_path.encode("utf-8"))
+        digest.update(b"\0")
+        try:
+            digest.update((repo_root / rel_path).read_bytes())
+        except OSError:
+            digest.update(b"<unreadable>")
+        digest.update(b"\0")
+    return f"sha256:{digest.hexdigest()}"
+
+
+def map_drift_summary(project_dir: Path, map_skeleton_on: bool) -> str:
+    """Minimal, standalone open-time drift check (2026-08-07 user request: surface drift at
+    OPEN, not only at close, so Morgan can factor it into how she briefs agents - "otherwise
+    it's not adding value", her words, echoed by the user). Deliberately duplicates a
+    MINIMAL subset of check_artifacts.check_map()'s MAP-DRIFT logic (column-driven §2-table
+    scan, sha256 fingerprint compare) instead of importing it - see
+    _compute_fingerprint_probe's docstring for the standalone-runnability rationale.
+
+    Root map only (docs/codebase-map.md / CODEBASE-MAP.md) - docs/codebase-map.d/ area
+    files are not scanned here (scope kept minimal per explicit user instruction; the
+    close-time check_map() sweep remains the authoritative, complete check across both).
+
+    Returns "" when there is nothing to report - toggle off, no map, no Paths-glob entries,
+    or nothing drifted - a silent no-op, matching the toggle's off-by-default contract."""
+    if not map_skeleton_on:
+        return ""
+    map_path = None
+    for name in ("docs/codebase-map.md", "CODEBASE-MAP.md"):
+        candidate = project_dir / name
+        if candidate.is_file():
+            map_path = candidate
+            break
+    if map_path is None:
+        return ""
+    try:
+        lines = map_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    rows = []  # (area, globs)
+    columns = None
+    for line in lines:
+        stripped = line.lstrip()
+        if not stripped.startswith("|"):
+            columns = None
+            continue
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        if not cells or set("".join(cells)) <= {"-", ":", " "}:
+            continue  # |---| divider
+        lowered = [c.lower() for c in cells]
+        if any("basis" in c for c in lowered):
+            columns = {name: i for i, name in enumerate(lowered)}
+            continue  # the header row itself
+        if columns is None:
+            continue  # a table without a Basis column (history, deprecated, doc control)
+        paths_idx = next((i for n, i in columns.items() if "paths" in n), None)
+        if paths_idx is None or paths_idx >= len(cells) or not cells[paths_idx]:
+            continue  # no Paths glob on this entry - nothing to fingerprint
+        area_idx = next((i for n, i in columns.items() if "area" in n), None)
+        if area_idx is None:
+            area_idx = next((i for n, i in columns.items() if n == "id"), None)
+        area = cells[area_idx] if area_idx is not None and area_idx < len(cells) else "?"
+        globs = [g.strip() for g in cells[paths_idx].split(",") if g.strip()]
+        if globs:
+            rows.append((area, globs))
+    if not rows:
+        return ""
+    sidecar_path = map_path.parent / "codebase-map.fingerprints.json"
+    try:
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8")).get("entries") or {}
+    except (OSError, ValueError):
+        sidecar = {}
+    drifted = []
+    for area, globs in rows:
+        recorded = sidecar.get(area)
+        current = _compute_fingerprint_probe(globs, project_dir)
+        if recorded is None or current != recorded.get("fingerprint"):
+            drifted.append(area)
+    if not drifted:
+        return ""
+    shown = ", ".join(drifted[:5]) + (", ..." if len(drifted) > 5 else "")
+    return f"{len(drifted)} of {len(rows)} area(s): {shown}"
 
 
 def first_changelog_entry(root: Path) -> str:
@@ -403,6 +518,7 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         map_skeleton_on = machine_defaults.get("default_map_skeleton", False)
     tool_report = run_tool_probe(root, project_dir)
     extensions_block = run_extensions_show(root, project_dir)
+    drift = map_drift_summary(project_dir, map_skeleton_on)
 
     lines = [
         f"PLUGIN_ROOT={pr_display}",
@@ -417,6 +533,11 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         f"LARGE_CONTEXT_REVIEW_SPLIT={'on' if review_split_on else 'off'}",
         f"MAP_SKELETON={'on' if map_skeleton_on else 'off'}",
     ]
+    if drift:
+        # Only appended when there's something to say - map_skeleton off, no map, no
+        # Paths-glob entries, or nothing drifted all mean this line doesn't exist at all,
+        # matching the toggle's "off means zero added output" contract everywhere else.
+        lines.append(f"MAP_DRIFT={drift}")
     if tool_report:
         lines += ["", tool_report.rstrip()]
     if map_header:
