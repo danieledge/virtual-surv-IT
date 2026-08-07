@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.35](https://img.shields.io/badge/version-0.33.35-blue)
+![Version 0.33.36](https://img.shields.io/badge/version-0.33.36-blue)
 ![Tests 1400+ passing](https://img.shields.io/badge/tests-1400%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.35** (2026-08-07) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.36** (2026-08-07) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle: `install_helper.py` rebuilt end-to-end.**
 - 🧭 **The menu reorganized and hardened.** A flat 10-option list became 6 top-level items plus
@@ -269,6 +269,14 @@ for you: `python install_helper.py --permissions <project-dir>` - opt-in, add-on
 backs up the settings file first. (`/permissions` shows every rule and which file it came
 from. Permission rules are Claude Code's prompting layer; the team's execution *gate* is
 separate and stays human-consent-only.)
+
+**Fewer timeouts on slow networks/proxies (optional).** `python install_helper.py --env-tuning
+<project-dir>` upserts a curated set of Claude Code env vars into the project's
+`.claude/settings.json` - raised API/stream-idle timeouts, retry-watchdog, and capped
+single-tool output sizes. Opt-in, project-level only (Claude Code's settings-file `env` block
+already wins over the shell on Linux and PowerShell alike), backs up the settings file first;
+any other env var already there, or set with a different value than recommended, is corrected
+in place, and everything unrelated is left untouched.
 
 **Verify it actually works (optional).** `python install_helper.py --selftest` runs a throwaway
 synthetic "review this code" engagement - real guard hooks, an analyser proven to *detect* a
@@ -698,7 +706,7 @@ disabled; nothing is silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **1400+ passing unit tests** (1,842 collected as of 0.33.35) check
+The repo's **1400+ passing unit tests** (1,841 collected as of 0.33.36) check
 the *code*, and run in CI. The **eval harness** ([`evals/`](evals/)) checks the **quality of what the
 team produces**: its contract and scorer run in CI, but scoring the *live team* (catching a prompt
 change that silently weakens a review) is run manually via `/run-evals`, not on every commit, because

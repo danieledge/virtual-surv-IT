@@ -3,7 +3,24 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
-## [0.33.35] - 2026-08-07 - PROBE_FAILED recovery: stop improvising a diagnostic that's always blocked
+## [0.33.36] - 2026-08-07 - install_helper.py can tune API-timeout/output-size env vars
+
+### Added
+- `install_helper.py`: new `--env-tuning PROJECT_DIR` standalone flag, plus an offer during
+  the guided `enable`/`--configure` flows, that upserts a curated set of Claude Code env vars
+  into the project's `.claude/settings.json` (`API_TIMEOUT_MS`, `API_FORCE_IDLE_TIMEOUT`,
+  `CLAUDE_STREAM_IDLE_TIMEOUT_MS`, `CLAUDE_ENABLE_BYTE_WATCHDOG`, `CLAUDE_CODE_RETRY_WATCHDOG`,
+  `CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING`, `ENABLE_TOOL_SEARCH`,
+  `MAX_MCP_OUTPUT_TOKENS`, `BASH_MAX_OUTPUT_LENGTH`, `TASK_MAX_OUTPUT_LENGTH`) - raises
+  request/stream timeouts and caps single-tool output sizes, aimed at the timeout/large-output
+  pattern seen on slow networks or behind a corporate proxy. Project-level only: Claude Code's
+  settings-file `env` block already wins over the shell on both Linux and PowerShell, so no
+  platform-specific shell-profile edit is needed. New `merge_env()` is an UPSERT (unlike the
+  existing add-only `merge_allow()` for `--permissions`): any other env var already in the
+  file is left untouched, a tracked key present with a different value is corrected, a missing
+  key is added - matching the explicit "don't overwrite other vars, update stale ones, add
+  missing ones" requirement. Same backup-before-write and refuse-on-unparseable-JSON safety
+  bar as `--permissions`.
 
 ### Fixed
 - `probe-contract.md`'s `PROBE_FAILED` recovery said "retry the exact same compound block" but

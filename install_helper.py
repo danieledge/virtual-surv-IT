@@ -28,12 +28,16 @@ Design constraints:
 - Human-run from a terminal. It shells out to the `claude` CLI (`claude plugin ...`),
   which is the scriptable twin of the interactive `/plugin` commands; it never writes
   secrets and never runs the repo's apply-*.sh scripts (those are deliberate separate
-  human actions - the summary lists them as reminders instead). The ONE settings write it
-  can do is explicit opt-in: `--permissions <project-dir>` merges the README's recommended
-  permissions.allow entries into that project's .claude/settings.json - add-only (nothing
-  is removed or overwritten, deny/hooks untouched), the existing file is backed up first,
-  and an unparseable settings file makes it refuse. Because you run this helper yourself,
-  that write is a human act (ADR-002 rec 5 governs the model, which stays blocked).
+  human actions - the summary lists them as reminders instead). Every settings write it
+  can do is explicit opt-in, each scoped and backed-up: `--permissions <project-dir>`
+  merges the README's recommended permissions.allow entries into that project's
+  .claude/settings.json (add-only, deny/hooks untouched); `--env-tuning <project-dir>`
+  upserts the recommended API-timeout/stream-idle/output-size env vars into that same
+  file's env block (every other env var and setting left untouched); `--model-project`/
+  `--model-default` set Morgan's model. Each refuses on an unparseable settings file and
+  backs the existing file up first rather than overwrite blind. Because you run this
+  helper yourself, these writes are a human act (ADR-002 rec 5 governs the model, which
+  stays blocked).
 - Never destructive: a dirty working tree is detected before any reset and the run
   refuses (or stashes, only on an explicit interactive choice). Local commits ahead of
   origin block a non-interactive reset.
@@ -111,6 +115,47 @@ def merge_allow(settings: dict, entries=RECOMMENDED_ALLOW):
     added = [e for e in entries if e not in allow]
     allow.extend(added)
     return settings, added
+
+
+# Timeout/output-size tuning: raises the API request and stream-idle timeouts (helps on slow
+# networks or behind a corporate proxy) and caps single-tool output sizes (helps avoid the
+# large-output/timeout pattern this repo has hit before). Merged UPSERT by --env-tuning: any
+# OTHER env var already in the project's settings.json is left untouched; these specific keys
+# are added if missing and corrected if present with a different value.
+RECOMMENDED_ENV = {
+    "API_TIMEOUT_MS": "1800000",
+    "API_FORCE_IDLE_TIMEOUT": "0",
+    "CLAUDE_STREAM_IDLE_TIMEOUT_MS": "600000",
+    "CLAUDE_ENABLE_BYTE_WATCHDOG": "1",
+    "CLAUDE_CODE_RETRY_WATCHDOG": "1",
+    "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING": "1",
+    "ENABLE_TOOL_SEARCH": "auto",
+    "MAX_MCP_OUTPUT_TOKENS": "15000",
+    "BASH_MAX_OUTPUT_LENGTH": "20000",
+    "TASK_MAX_OUTPUT_LENGTH": "24000",
+}
+
+
+def merge_env(settings: dict, entries=RECOMMENDED_ENV):
+    """Upsert merge of tuning env vars into a settings dict's top-level "env" block.
+    Returns (settings, added, updated) - the keys touched, for reporting.
+
+    Unlike merge_allow (add-only), this corrects a key that's already present with a
+    stale/different value - "update if they have other values, add new ones" (explicit user
+    instruction) - while every OTHER env var, and every other top-level settings key, is left
+    exactly as found. A key already equal to the recommended value is silently skipped (not
+    reported as added or updated)."""
+    env = settings.setdefault("env", {})
+    if not isinstance(env, dict):
+        raise InstallAbort('"env" in the target settings is not an object - not touching it')
+    added, updated = [], []
+    for key, value in entries.items():
+        if key not in env:
+            added.append(key)
+        elif env[key] != value:
+            updated.append(key)
+        env[key] = value
+    return settings, added, updated
 
 
 # ------------------------------------------------------------------ config persistence
@@ -2386,6 +2431,19 @@ class Installer:
             ):
                 self._demo_permissions(project)
             if confirm(
+                "  Also tune API timeout / stream-idle / output-size env vars for this "
+                "project (helps on slow networks or behind a corporate proxy)?",
+                default=True,
+                assume_yes=False,
+                style=self.style,
+            ):
+                self.say(
+                    self.style.dim(
+                        f"    would upsert {len(RECOMMENDED_ENV)} env vars into "
+                        f"{project / '.claude' / 'settings.json'} (other env vars untouched)"
+                    )
+                )
+            if confirm(
                 "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
                 "produce a Word (.docx) copy by default, for reviewers who redline in Word?",
                 default=bool(self.cfg.get("default_docx", False)),
@@ -2417,6 +2475,14 @@ class Installer:
                 style=self.style,
             ):
                 run_permissions(target, self.style, self.marks)
+            if confirm(
+                "  Also tune API timeout / stream-idle / output-size env vars for this "
+                "project (helps on slow networks or behind a corporate proxy)?",
+                default=True,
+                assume_yes=False,
+                style=self.style,
+            ):
+                run_env_tuning(target.expanduser().resolve(), self.style, self.marks)
             if confirm(
                 "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
                 "produce a Word (.docx) copy by default, for reviewers who redline in Word?",
@@ -2624,6 +2690,67 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
         f"{ok} {target}: added {len(added)} allow entr{'y' if len(added) == 1 else 'ies'} (add-only; deny rules and hooks untouched)"
     )
     print(style.dim("    Inspect any time with /permissions inside Claude Code."))
+    return 0
+
+
+def run_env_tuning(project_dir: Path, style: Style, mark_map: dict) -> int:
+    """Standalone opt-in step: upsert RECOMMENDED_ENV into <project>/.claude/settings.json's
+    "env" block - project-level only. Feasible and sufficient: Claude Code layers a
+    settings-file "env" value over the shell's own (Environment variables doc, "Precedence"),
+    so writing it once at project level covers both Linux and PowerShell shells without a
+    platform-specific shell-profile edit; there is deliberately no user-level equivalent here
+    (unlike the model-default flow) since these are per-project network/output-size tuning
+    values, not an account-wide preference.
+
+    Upsert, not add-only (unlike run_permissions): a key in RECOMMENDED_ENV already present
+    with a DIFFERENT value is corrected; any other env var already in the file, and every other
+    top-level key (permissions, hooks, model, ...), is left untouched. Dated backup of any
+    existing file before writing, same as run_permissions; refuses on unparseable JSON rather
+    than clobbering."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    project = project_dir.expanduser().resolve()
+    if not project.is_dir():
+        print(f"{fail} not a directory: {project}")
+        return 1
+    target = project / ".claude" / "settings.json"
+    settings: dict = {}
+    if target.is_file():
+        try:
+            settings = json.loads(target.read_text(encoding="utf-8-sig"))
+            if not isinstance(settings, dict):
+                raise ValueError("settings root is not an object")
+        except (OSError, ValueError) as exc:
+            print(f"{fail} {target} is not readable JSON ({exc}) - refusing to touch it")
+            return 1
+    try:
+        settings, added, updated = merge_env(settings)
+    except InstallAbort as exc:
+        print(f"{fail} {exc}")
+        return 1
+    if not added and not updated:
+        print(f"{ok} {target}: all {len(RECOMMENDED_ENV)} tuning env vars already set correctly")
+        return 0
+    if target.is_file():
+        today = datetime.now().strftime("%Y-%m-%d")
+        backup = target.with_name(f"settings.json.bak-{today}")
+        n = 1
+        while backup.exists():
+            n += 1
+            backup = target.with_name(f"settings.json.bak-{today}.{n}")
+        backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"{ok} backed up existing settings to {backup.name}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    bits = []
+    if added:
+        bits.append(f"added {len(added)}")
+    if updated:
+        bits.append(f"updated {len(updated)}")
+    total = len(added) + len(updated)
+    print(
+        f"{ok} {target}: {', '.join(bits)} tuning env var{'s' if total != 1 else ''} "
+        "(other env vars and settings untouched)"
+    )
     return 0
 
 
@@ -3193,6 +3320,18 @@ def run_configure(
             print(style.dim(f"    would add up to {len(RECOMMENDED_ALLOW)} allow entries"))
         else:
             rc = max(rc, run_permissions(project, style, mark_map))
+
+    if confirm(
+        "\n  Tune API timeout / stream-idle / output-size env vars (helps on slow "
+        "networks or behind a corporate proxy)?",
+        default=True,
+        assume_yes=assume_yes,
+        style=style,
+    ):
+        if demo:
+            print(style.dim(f"    would upsert {len(RECOMMENDED_ENV)} tuning env vars"))
+        else:
+            rc = max(rc, run_env_tuning(project, style, mark_map))
 
     print(style.dim("\n  Project preferences:"))
     existing = _read_json_dict(project / ".claude" / "team-preferences.json")
@@ -4492,6 +4631,14 @@ def parse_args(argv=None) -> argparse.Namespace:
         "PROJECT_DIR/.claude/settings.json (add-only, backs the file up first) and exit",
     )
     parser.add_argument(
+        "--env-tuning",
+        metavar="PROJECT_DIR",
+        help="standalone: upsert recommended API-timeout/stream-idle/output-size env vars "
+        "into PROJECT_DIR/.claude/settings.json's env block (adds missing keys, corrects "
+        "keys present with a different value, leaves every other env var and setting "
+        "untouched; backs the file up first) and exit",
+    )
+    parser.add_argument(
         "--model-project",
         metavar="PROJECT_DIR",
         help="standalone, combine with --model: set or reset Morgan's model for "
@@ -4747,6 +4894,7 @@ def _main(argv=None) -> int:
     if (
         args.enable_project
         or args.permissions
+        or args.env_tuning
         or args.model_project
         or args.model_default
         or args.check_tools
@@ -4763,6 +4911,8 @@ def _main(argv=None) -> int:
             rc = max(rc, run_enable_project(Path(target), style, marks()))
         if args.permissions:
             rc = max(rc, run_permissions(Path(args.permissions), style, marks()))
+        if args.env_tuning:
+            rc = max(rc, run_env_tuning(Path(args.env_tuning), style, marks()))
         if args.model_project:
             wanted = None if (args.model or "default") == "default" else args.model
             rc = max(rc, run_orchestrator_model(Path(args.model_project), wanted, style, marks()))

@@ -371,6 +371,97 @@ def test_run_permissions_refuses_unparseable_settings(tmp_path, capsys):
     assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched
 
 
+# --- --env-tuning: opt-in, upsert env-var merge (2026-08-07) -----------------------------
+
+
+def test_merge_env_into_empty_settings():
+    from install_helper import RECOMMENDED_ENV, merge_env
+
+    settings, added, updated = merge_env({})
+    assert settings["env"] == RECOMMENDED_ENV
+    assert set(added) == set(RECOMMENDED_ENV)
+    assert updated == []
+
+
+def test_merge_env_preserves_unrelated_vars_updates_stale_ones_adds_missing():
+    from install_helper import merge_env
+
+    existing = {
+        "env": {
+            "MY_OWN_VAR": "keep-me",
+            "API_TIMEOUT_MS": "60000",  # stale -> should be corrected
+        },
+        "permissions": {"allow": ["Bash(ruff *)"]},
+    }
+    settings, added, updated = merge_env(existing)
+    env = settings["env"]
+    assert env["MY_OWN_VAR"] == "keep-me"  # untouched
+    assert env["API_TIMEOUT_MS"] == "1800000"  # corrected
+    assert "API_TIMEOUT_MS" in updated
+    assert "MY_OWN_VAR" not in updated and "MY_OWN_VAR" not in added
+    assert "MAX_MCP_OUTPUT_TOKENS" in added  # was missing
+    assert settings["permissions"] == {"allow": ["Bash(ruff *)"]}  # untouched
+
+
+def test_merge_env_already_correct_reports_nothing():
+    from install_helper import RECOMMENDED_ENV, merge_env
+
+    settings, added, updated = merge_env({"env": dict(RECOMMENDED_ENV)})
+    assert added == [] and updated == []
+    assert settings["env"] == RECOMMENDED_ENV
+
+
+def test_run_env_tuning_creates_settings_when_absent(tmp_path, capsys):
+    import json as _json
+
+    from install_helper import RECOMMENDED_ENV, Style, marks, run_env_tuning
+
+    rc = run_env_tuning(tmp_path, Style(False), marks())
+    assert rc == 0
+    written = _json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert written["env"] == RECOMMENDED_ENV
+    assert "backed up" not in capsys.readouterr().out  # nothing existed to back up
+
+
+def test_run_env_tuning_backs_up_updates_and_preserves_unrelated(tmp_path, capsys):
+    import json as _json
+
+    from install_helper import Style, marks, run_env_tuning
+
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "settings.json").write_text(
+        '{"env": {"MY_OWN_VAR": "keep-me", "API_TIMEOUT_MS": "60000"}, '
+        '"permissions": {"deny": ["Read(x)"]}}',
+        encoding="utf-8",
+    )
+    assert run_env_tuning(tmp_path, Style(False), marks()) == 0
+    out = capsys.readouterr().out
+    assert "backed up" in out
+    assert "added" in out and "updated" in out
+    backups = list(claude.glob("settings.json.bak-*"))
+    assert len(backups) == 1
+    written = _json.loads((claude / "settings.json").read_text(encoding="utf-8"))
+    assert written["env"]["MY_OWN_VAR"] == "keep-me"  # preserved
+    assert written["env"]["API_TIMEOUT_MS"] == "1800000"  # corrected
+    assert written["permissions"] == {"deny": ["Read(x)"]}  # preserved
+    # Second run: everything already correct, no new backup.
+    assert run_env_tuning(tmp_path, Style(False), marks()) == 0
+    assert "already set correctly" in capsys.readouterr().out
+    assert len(list(claude.glob("settings.json.bak-*"))) == 1
+
+
+def test_run_env_tuning_refuses_unparseable_settings(tmp_path, capsys):
+    from install_helper import Style, marks, run_env_tuning
+
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "settings.json").write_text("{broken", encoding="utf-8")
+    assert run_env_tuning(tmp_path, Style(False), marks()) == 1
+    assert "refusing" in capsys.readouterr().out
+    assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched
+
+
 # --- Morgan's model, settings.json write + CLI wrapper (2026-08-03) ----------------------
 
 
@@ -3592,10 +3683,11 @@ def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkey
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     monkeypatch.setattr(sys, "stdin", _TtyStdin())  # see test_ask_and_set_model_rejects_bad_input
     # "n" to "use recommended settings?" (walk through each choice instead), "no" to the
-    # permissions question, "" (accept defaults) to the five preference prompts (docx,
+    # permissions question, "no" to the env-tuning question (keeps "nothing creates the
+    # file" true below), "" (accept defaults) to the five preference prompts (docx,
     # citations, review-split, map-skeleton, statusline-map), "" (no change) to the
     # review-tools override prompt, "" to the model prompt (declines - default is False).
-    answers = iter(["n", "n", "", "", "", "", "", "", ""])
+    answers = iter(["n", "n", "n", "", "", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -4543,9 +4635,9 @@ def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     # "n" to "use recommended settings?" (blank there would default to Yes and skip
     # every prompt below via assume_yes, defeating this test), "" enable-permissions
-    # default(Y), "" docx, "" citations, "" split, "" map-skeleton, "" statusline-map,
-    # "mypy=off" review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "mypy=off", ""])
+    # default(Y), "" env-tuning default(Y), "" docx, "" citations, "" split, ""
+    # map-skeleton, "" statusline-map, "mypy=off" review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "mypy=off", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -4566,9 +4658,9 @@ def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch)
     monkeypatch.setattr(ih, "probe_analyser_output", fake_probe)
     # "n" to "use recommended settings?" first (blank there would default to Yes and
     # skip every prompt below via assume_yes, defeating this test). Then "" enable-
-    # permissions, "" docx, "" citations, "" split, "" map-skeleton, "" statusline-map,
-    # "mypy=on" review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "mypy=on", ""])
+    # permissions, "" env-tuning, "" docx, "" citations, "" split, "" map-skeleton, ""
+    # statusline-map, "mypy=on" review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "mypy=on", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
