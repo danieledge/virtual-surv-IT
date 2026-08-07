@@ -70,7 +70,19 @@ _PRECOMMIT_RE = re.compile(r"\.pre-commit-config\.ya?ml\b")
 # Enforced on the precise Write/Edit channel; the Bash channel checks MUTATION only (see
 # _HOOK_MUTATE) so legitimate static analysis (shellcheck/shfmt/ruff of the hooks) still runs.
 # Maintenance goes through CST_ALLOW_CONFIG_EDIT.
-_HOOK_PATH_RE = re.compile(r"(\.claude[/\\]hooks[/\\]|(^|[/\\])hooks[/\\]hooks\.json$)")
+#
+# 2026-08-07 (found by a framework-wide audit, verified live before fixing):
+# scripts/bash_hook_dispatcher.py is NOT under .claude/hooks/, so it matched neither branch
+# below even though all four guards route through it (P4, 2026-07-31) - one Edit to its
+# _CHECKS registry can neuter every guard via this "protected" channel, not just the
+# already-documented Bash-lexical residual. Anchored to the LIVE copy only
+# (scripts/bash_hook_dispatcher.py, end of path) - deliberately does NOT match
+# scripts/staged_hooks/bash_hook_dispatcher.py, which the model must keep editing freely,
+# same as every other staged_hooks/*.py file.
+_HOOK_PATH_RE = re.compile(
+    r"(\.claude[/\\]hooks[/\\]|(^|[/\\])hooks[/\\]hooks\.json$"
+    r"|(^|[/\\])scripts[/\\]bash_hook_dispatcher\.py$)"
+)
 
 # `.git/config` and `.git/hooks/` are CONSENT-EQUIVALENT execution config (audit 2026-08-01).
 # Nothing here writes the consent marker, so the "model cannot self-consent" property stayed
@@ -121,10 +133,15 @@ _GIT_EXEC_KEY = re.compile(
 # the false-positive concern the Write/Edit-only rule was originally protecting. `rm` is included:
 # unlike deleting the consent marker (which CLOSES the gate, fail-safe), deleting a guard DISARMS
 # it.
+#
+# 2026-08-07: extended to the live dispatcher path too, same rationale as _HOOK_PATH_RE above -
+# a Bash mutation of scripts/bash_hook_dispatcher.py is exactly as disarming as one on a guard
+# under .claude/hooks/.
+_HOOK_PATH_FRAGMENT = r"(?:\.claude[/\\]hooks[/\\]|scripts[/\\]bash_hook_dispatcher\.py)"
 _HOOK_MUTATE = re.compile(
-    r">\s*\S*\.claude[/\\]hooks[/\\]"
-    r"|(?:^|[;&|\s])(?:sed\s+-i|tee|cp|mv|dd|install|ln|chmod|chown|truncate|rm)\b"
-    r"[^;&|]*\.claude[/\\]hooks[/\\]"
+    rf">\s*\S*{_HOOK_PATH_FRAGMENT}"
+    rf"|(?:^|[;&|\s])(?:sed\s+-i|tee|cp|mv|dd|install|ln|chmod|chown|truncate|rm)\b"
+    rf"[^;&|]*{_HOOK_PATH_FRAGMENT}"
 )
 
 # Verbs that only read or delete the protected files - safe directions. Deleting the marker
