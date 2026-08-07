@@ -111,7 +111,15 @@ _FLAGS_WITH_VALUE = {
 # became "file operands" of an EARLIER search verb - a live false positive during the
 # 2026-08-03 token-usage audit itself (the audit's own multi-statement command got
 # blocked). Each segment is now judged independently.
+#
+# 2026-08-07: kept as one combined tuple for readability even though `` ` ``/`$(` now get
+# different quote-gating than the other four below - see _ORDINARY_DELIMS and _segments().
 _SEGMENT_DELIMS = (";", "&&", "||", "|", "\n", "`", "$(")
+
+# Of _SEGMENT_DELIMS, only these four are ordinary text inside a double-quoted string in
+# real bash (`echo "a; b"` prints "a; b" literally) - `` ` ``/`$(` are handled separately
+# in _segments() because command substitution EXECUTES even inside double quotes.
+_ORDINARY_DELIMS = (";", "&&", "||", "|", "\n")
 
 # `git commit`/`git tag -m <text>` (or --message=<text>): the message is prose the user
 # wrote, not a file read, so it must not trip the marker scan just for MENTIONING the
@@ -263,7 +271,16 @@ def _segments(command: str) -> list[str]:
     ("...close as-is; no real source data exists...") became its own bogus mid-sentence
     segment, live in an eval run. Delimiters are only boundaries OUTSIDE '...' / "..." -
     still lexical, not a full shell parser (ADR-002's irreducible residual): an unclosed
-    quote just folds the remainder into one segment, the safe direction."""
+    quote just folds the remainder into one segment, the safe direction.
+
+    2026-08-07 fix: that "boundaries only outside quotes" rule is TRUE for `;`/`&&`/`||`/
+    `|`/newline but FALSE for command substitution - `echo "$(cat data/raw/x.csv)"` really
+    executes the inner `cat` in bash even though it's inside double quotes; only single
+    quotes suppress it. The 2026-08-03 rewrite gated backtick/`$(` on the same quote check
+    as the other four, so a substitution wrapped in double quotes never became its own
+    segment - mirrors the identical fix in guard-code-execution.py's _segments(), found by
+    the same framework-wide audit and applied to both guards together so the fix doesn't
+    live in only one of them."""
     segments: list[str] = []
     current: list[str] = []
     in_single = in_double = False
@@ -289,13 +306,26 @@ def _segments(command: str) -> list[str]:
             current.append(ch)
             i += 1
             continue
-        if not in_single and not in_double:
-            hit = next((d for d in _SEGMENT_DELIMS if command.startswith(d, i)), None)
-            if hit is not None:
+        if not in_single:
+            # Command substitution executes even inside double quotes - always a boundary
+            # regardless of in_double, unlike the four ordinary delimiters below.
+            if command.startswith("`", i):
                 segments.append("".join(current))
                 current = []
-                i += len(hit)
+                i += 1
                 continue
+            if command.startswith("$(", i):
+                segments.append("".join(current))
+                current = []
+                i += 2
+                continue
+            if not in_double:
+                hit = next((d for d in _ORDINARY_DELIMS if command.startswith(d, i)), None)
+                if hit is not None:
+                    segments.append("".join(current))
+                    current = []
+                    i += len(hit)
+                    continue
         current.append(ch)
         i += 1
     segments.append("".join(current))

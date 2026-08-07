@@ -132,7 +132,7 @@ _TEAM_SCRIPT_NAMES = (
     r"(?:render_html|render_findings|render_docx|convert_file|ingest|gen_synthetic|synthesise"
     r"|validate_masking|validate_manifest|validate_rtm|validate_references|check_citations|eval_score"
     r"|calibrate_spoofing|check_artifacts|engagement_state|extensions|convert_sarif"
-    r"|engage_probe)\.py"
+    r"|engage_probe|repo_skeleton)\.py"
 )
 
 # 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in
@@ -190,7 +190,18 @@ _TEAM_ALLOW = re.compile(
 # Shell separators we split on so an allow-listed segment can't wave through a blocked one chained
 # after it. Splitting on `$(`/backtick is deliberately crude - it errs toward inspecting MORE,
 # which for a guard means failing safe. (Lexical only; see ADR-002 for the irreducible residual.)
+#
+# 2026-08-07 (found live by a framework-wide audit, verified by hand before this fix):
+# `` ` `` and `$(` are split out from _SEGMENT_DELIMS proper because they need DIFFERENT
+# quote-gating than the other four - see _segments()'s in_single-only check below. Kept in
+# one combined tuple here anyway (rather than folded entirely into the loop) so a reader
+# scanning top-of-file constants still sees every boundary token in one place.
 _SEGMENT_DELIMS = (";", "&&", "||", "|", "\n", "`", "$(")
+
+# Of _SEGMENT_DELIMS, only these four are ordinary text inside a double-quoted string in
+# real bash (`echo "a; b"` prints "a; b" literally) - so only these stay gated on
+# `not in_double` too. `` ` `` and `$(` are handled separately in the loop below.
+_ORDINARY_DELIMS = (";", "&&", "||", "|", "\n")
 
 
 def _segments(cmd: str) -> list[str]:
@@ -205,6 +216,18 @@ def _segments(cmd: str) -> list[str]:
     not a full shell parser (ADR-002's irreducible residual): unclosed quotes just fold
     the remainder into one segment, which is the safe direction (inspecting MORE as one
     unit, never less).
+
+    2026-08-07 fix: that "inside a quote they are just text" rule is TRUE for `;`/`&&`/
+    `||`/`|`/newline but FALSE for command substitution - `echo "$(pytest)"` and the
+    equivalent backtick form both actually RUN pytest in real bash; only single quotes
+    suppress substitution. The 2026-08-03 quote-awareness rewrite above gated backtick/`$(` on the
+    same `not in_single and not in_double` condition as the other four, so a command
+    wrapped in double quotes silently escaped every anchored `_EXEC_PATTERNS`/`_TEAM_ALLOW`
+    check (`^pytest`, `^make`, etc. - segment-start anchors that never saw the real command
+    because it never became its own segment). `guard-consent-writes.py`'s own `_segments`-
+    equivalent already had this right (its own comment: "command substitution executes even
+    inside double quotes - always a boundary") - this brings the other two guards in line
+    with it instead of leaving the fix live in only one of the three.
     """
     segments: list[str] = []
     current: list[str] = []
@@ -231,13 +254,26 @@ def _segments(cmd: str) -> list[str]:
             current.append(ch)
             i += 1
             continue
-        if not in_single and not in_double:
-            hit = next((d for d in _SEGMENT_DELIMS if cmd.startswith(d, i)), None)
-            if hit is not None:
+        if not in_single:
+            # Command substitution executes even inside double quotes - always a boundary
+            # regardless of in_double, unlike the four ordinary delimiters below.
+            if cmd.startswith("`", i):
                 segments.append("".join(current))
                 current = []
-                i += len(hit)
+                i += 1
                 continue
+            if cmd.startswith("$(", i):
+                segments.append("".join(current))
+                current = []
+                i += 2
+                continue
+            if not in_double:
+                hit = next((d for d in _ORDINARY_DELIMS if cmd.startswith(d, i)), None)
+                if hit is not None:
+                    segments.append("".join(current))
+                    current = []
+                    i += len(hit)
+                    continue
         current.append(ch)
         i += 1
     segments.append("".join(current))
