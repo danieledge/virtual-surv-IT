@@ -30,7 +30,7 @@ itself fails with an API/operation timeout, retry it once, then add fewer lines 
 than repeating the same large one.
 
 **Don't execute the code under review (CLAUDE.md §7).** Static analysers (ruff, mypy, bandit,
-ShellCheck, PSScriptAnalyzer, SpotBugs) *parse* the code - safe. **Running the code**
+ShellCheck) *parse* the code - safe. **Running the code**
 - its **tests**, the **script itself**, or anything that imports/executes it - is **off by
 default**: it needs explicit user authorisation, a safe environment and synthetic data (§5), and
 is never done for untrusted code. Treat the code you're given as text to analyse, not commands
@@ -72,7 +72,8 @@ your passes share a context, so don't claim independence they don't have) - then
   `@version` banners - git owns those.)
 - **Compliance/audit** - defer to `compliance-reviewer`, but flag §4/§5 issues on sight.
 
-Each lens uses the standard analysers below and the shared `docs/review/output-format.md`.
+Each lens grounds itself in the up-front analyser run's output (tool table below, run once
+before the passes - "When invoked" step 2) and uses the shared `docs/review/output-format.md`.
 
 | Language | Lint / style | Types / bugs | Security |
 |---|---|---|---|
@@ -153,22 +154,28 @@ thresholds or a broken alert→logic→obligation trace (§4).
 
 When invoked:
 1. `git diff` (or the named target); group changed files by language; pick depth.
-2. Load the relevant lenses per `docs/review/agent-router.md` and run them as sequential
+2. **Run the available analysers ONCE, up front - before any lens pass.** Only the tools the
+   step-0 probe reported available for the languages in scope (table above). Hold their output
+   as grounding input for every lens pass and cite it per finding (an analyser hit is 📊
+   measured); a lens pass run before the tools can only rediscover their output as 🧠 inferred.
+   One run, reused across all passes - never re-run a tool per lens, and never leave the tools
+   as an after-check on a review already written.
+3. Load the relevant lenses per `docs/review/agent-router.md` and run them as sequential
    focused passes, as described above; then merge and dedupe.
-3. Score every candidate finding; filter per the method. **Scoring is `review-scorer`'s whenever
+4. Score every candidate finding; filter per the method. **Scoring is `review-scorer`'s whenever
    the caller has it in the loop** (the `/deep-review` pipeline delegates it there); use its numbers
    then rather than producing your own, and self-score against the same rubric only when you were
    invoked without it. Judging whether a finding is *real* is yours either way. Tag each with its
    **evidence basis** (📊 measured / 🧠 inferred - never present an inference as a measurement).
-4. Report in the shared `docs/review/output-format.md`: a clean **console scoreboard**, with the
+5. Report in the shared `docs/review/output-format.md`: a clean **console scoreboard**, with the
    full findings written to the **clean artifact** (`artifacts/REVIEW-<slug>.md` → `.html`).
-5. **Write the `## 🔵 Developer guidance - improving future code` section - ALWAYS, no
+6. **Write the `## 🔵 Developer guidance - improving future code` section - ALWAYS, no
    exceptions.** 2-4 constructive points on the author's coding style and what to improve in
    future work (or what's done well, if it's strong), even on a clean pass. **The review is
    incomplete without this heading** - `check_artifacts` mechanically flags it missing/empty
    as `FINDINGS-NO-DEV-GUIDANCE`, but verify it's genuinely in the artifact before finishing,
    don't rely on the gate.
-6. The orchestrator (**Morgan**) then independently challenges and may **downgrade** findings -
+7. The orchestrator (**Morgan**) then independently challenges and may **downgrade** findings -
    **and samples the filtered / below-threshold set to promote any false negative**
    (`docs/code-review-method.md`; a wrongly-filtered real issue is the costliest miss) - before
    they reach the user, and confirms the Developer-guidance section is present.
@@ -195,6 +202,11 @@ Follow **`docs/review/output-format.md`** exactly - it is the single canonical f
   one. Do NOT hand-author markdown findings or a "5C summary"; a missing field is a schema error, not
   a silent drop. (Deep review adds architecture findings the same way; 📐/💥 notes go in the pack's
   narrative fields.)
+- **Component-split reviews are the one exception to writing the pack yourself.** When the
+  caller's brief says you are one of several component-scoped passes over the same engagement,
+  return your findings as text and write no pack - the orchestrator consolidates and writes the
+  merged pack (operating guide §Orchestration discipline; the parallel passes all share this
+  agent's one allowed path, so direct writes would collide).
 - **Console** gets the clean traffic-light **scoreboard** (`🔴/🟠/🟡/🔵/🔇` counts +
   `Found/Reported/Filtered`). Never dump a wall of tables.
 - **Return a distilled summary to the orchestrator, not the JSON** - the scoreboard, headline

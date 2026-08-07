@@ -95,11 +95,13 @@ and how do you know" - never present an inferred projection as a measured result
 total execution time saved at target volume** (the aggregate headline, e.g. "~Xs → ~Ys per run
 at 5M rows: ~Z saved"), split **coded/measured (facts) vs projected (🧠)** so the total stays accurate.
 
-**Score your candidate findings before returning.** Unlike compliance/model-validation findings,
-performance findings are not in `docs/code-review-method.md`'s never-filter list - hand your
-candidates to `review-scorer` (Pip) for confidence scoring and below-threshold filtering, the same
-rubric `code-reviewer` uses. Only the filtered, scored set goes into the pack; keep the
-`Found N · Reported R · Filtered F` count for the scoreboard.
+**Scoring and filtering are `review-scorer`'s (Pip's) whenever the caller has it in the loop.**
+Performance findings are not in `docs/code-review-method.md`'s never-filter list, so they are
+genuinely scored and filtered - but you cannot call another agent yourself (subagents don't hand
+off directly): write every candidate finding to the pack, and the caller delegates
+`review-scorer` over it once it exists, then trims what scores below threshold. Self-score
+against the same rubric only when you were invoked with no scorer in the loop, and say so in the
+pack's `methodology`. Keep the `Found N · Reported R · Filtered F` counts for the scoreboard.
 
 **Write it as the structured findings-pack JSONL yourself**, to
 `artifacts/<slug>/data/findings-performance-<slug>.jsonl` (or
@@ -110,8 +112,8 @@ cannot collide with a code-review pack of the same engagement): each finding tak
 (`standard`, `problem`, `likely_cause`, `impact`, `fix`{`diff`,`why`}) **and the `current_cost` /
 `projected_cost` / `gain` fields**; workload, targets and the total saved go in
 `executive_summary`. **You author the DATA and write it - never the report layout** -
-`check_artifacts --fix` renders the `PERF-<slug>` report from what you wrote; anything left out of
-the pack (or filtered by Pip) is gone, so filter before you write it, not after. A mechanical guard
+`check_artifacts --fix` renders the `PERF-<slug>` report from what you wrote; anything you leave
+out of the pack is lost. A mechanical guard
 blocks any Write outside that exact path - don't attempt one. Keep the prose you return to a
 distilled summary (≤ ~30 lines: verdict, headline gains, top findings, and the path you wrote).
 Durable lessons per CLAUDE.md §6: project-specific → the

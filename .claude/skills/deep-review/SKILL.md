@@ -73,10 +73,11 @@ and states what's applicable vs not.
 2. **Load lenses** progressively via the router - only those `review-scorer` selected.
 3. **Analyse** - drive `code-reviewer` to run the loaded lenses in the topology the router defines
    (`docs/review/agent-router.md`, canonical for pipeline shape: today that is sequential focused
-   passes inside `code-reviewer`, one lens at a time, with the trade-off stated there), plus the
-   standard analysers (ruff/mypy/bandit,
-   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck - **not Semgrep**,
-   deliberately excluded, see `code-reviewer.md` for why). Deep adds
+   passes inside `code-reviewer`, one lens at a time, with the trade-off stated there),
+   **analysers first**: the available analysers run once, up front, before any lens pass, and
+   their output grounds every pass - never an after-check on a review already written
+   (`code-reviewer.md`'s tool table is the single source of truth for which tools and their
+   caveats; **Semgrep** stays deliberately excluded, see there for why). Deep adds
    the **architecture** lens, **impact analysis**, and test/doc coverage. If the target is
    split into multiple independent component passes (operating guide §Orchestration
    discipline, `large_context_review_split`), dispatch them as **concurrent Task calls in one
@@ -108,10 +109,12 @@ and states what's applicable vs not.
 
 **4. Present - findings pack → rendered report → scoreboard** (`docs/review/output-format.md`):
    1. `code-reviewer` already **wrote** the structured pack itself, directly, to
-      `artifacts/<slug>/data/findings-<slug>.json` (schema `docs/review/findings-schema.json`,
-      exemplar `docs/review/gold-findings.json` - it holds a Write grant scoped to exactly this
+      `artifacts/<slug>/data/findings-<slug>.jsonl` (schema `docs/review/findings-schema.json`,
+      exemplar `docs/review/gold-findings.jsonl` - it holds a Write grant scoped to exactly this
       path, mechanically enforced) - read it back for your challenge pass (step 6) rather than
-      re-authoring it. **Only if your challenge pass downgrades or drops something** do you edit
+      re-authoring it. **In a component-split review** (step 3.3) the passes returned findings
+      as text instead and **you** wrote the merged pack yourself (operating guide §Orchestration
+      discipline, the >8-finding Write-then-Edit rule) - challenge from that file the same way. **Only if your challenge pass downgrades or drops something** do you edit
       that same file to reflect the final (post-challenge) findings; otherwise leave it exactly as
       written.
    2. Run **`<python> -m scripts.check_artifacts --fix`** (allow-listed - no consent needed): it

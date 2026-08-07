@@ -55,7 +55,7 @@ anything you omit is lost. Budget ~30 lines of *prose*; a **structured payload**
 matrix, a reconciliation table) is the deliverable itself and is **exempt from that budget - but
 uncapped means uncapped in COUNT of distinct gaps, not in verbosity per gap**
 (`docs/code-review-method.md` §Conciseness for the never-filtered reviewers - the same discipline,
-applied here even though your payload isn't a findings-pack JSON). Never drop a real gap to save
+applied here even though your payload isn't a findings pack). Never drop a real gap to save
 space. Do: **consolidate** the same underlying gap found at several feeds/channels into ONE row
 citing them all, instead of repeating the same implication/evidence prose per site; keep each
 row's implication and evidence to a sentence or two, not a restated paragraph.

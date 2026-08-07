@@ -29,8 +29,9 @@ distinct question with the stated header and `multiSelect` (tool limits: ≤4 qu
 
 > ⚙️ **STATIC-ONLY mode (CLAUDE.md §7).** This review does **not execute** the code - profilers
 > and benchmarks *run* it, and the team is configured not to. So assess performance
-> **statically** and mark findings **🧠 inferred** (or 📊 only for an explicit value *read* in the
-> code). Measured profiling is a future opt-in that needs execution re-enabled via the consent
+> **statically** and mark findings **🧠 inferred** (or **📄 coded** for an explicit value *read* in
+> the code - never 📊 measured: nothing ran). Measured profiling is a future opt-in that needs
+> execution re-enabled via the consent
 > flow; until then, **do not run anything** (the `guard-code-execution.py` hook enforces this).
 
 Drive **performance-reviewer** (CLAUDE.md §6). When this review runs alongside independent
@@ -42,26 +43,31 @@ the `performance-reviewer` call **in the same message as those passes** so they 
    target. Ask the user if not stated (surveillance volumes are large; this changes the
    verdict). Batch or streaming?
 2. **Assess statically - run nothing.** Two kinds of finding:
-   - **📊 Explicit coded costs (hunt these first)** - a literal `sleep`/fixed wait, polling
+   - **📄 Explicit coded costs (hunt these first)** - a literal `sleep`/fixed wait, polling
      interval, oversized timeout/retry back-off, blocking `WaitForExit`/`join`, hard-coded
-     `LIMIT`/batch. The cost is *in the source*, so it's **measured** (quantify it: "sleep(5) →
+     `LIMIT`/batch. The cost is *in the source* - a hard fact, **📄 coded, not 📊 measured**
+     (nothing ran; quantify it: "sleep(5) →
      5s × N calls"); flag any that are unnecessary - usually the easiest, most certain win.
    - **🧠 Inferred** - complexity / data structures / `EXPLAIN` plan-only / concurrency / memory
      at target volume. Reasoned from structure; name the benchmark that would confirm each.
-   Never present an inference as measured, but **do** claim 📊 for a delay you read in the code.
+   Never present an inference as measured, and never claim 📊 for a delay you read in the code -
+   that is **📄 coded** (`docs/code-review-method.md` §Evidence basis).
 3. Assess **complexity, scaling, I/O/queries, concurrency, memory** and resource hygiene.
 4. **State the basis of every claim** (this is what survives a developer's challenge):
-   distinguish **📊 measured** - an explicit value in the code (a literal `sleep`, a fixed
-   batch size, a declared timeout, `LIMIT n`) or a profiler/benchmark number you ran (cite it)
+   distinguish **📄 coded** - an explicit value read in the code (a literal `sleep`, a fixed
+   batch size, a declared timeout, `LIMIT n`) - and **📊 measured** - a profiler/benchmark
+   number you ran (cite it; off in static mode)
    - from **🧠 inferred** - reasoned from structure (e.g. "O(n²) nested scan") but not executed.
    Never present an inference as a measurement; for an inference, give the reasoning **and the
    benchmark that would confirm it**. If you couldn't measure, say so in tooling coverage rather
    than upgrading a guess to a fact.
-5. **Score & filter** *(delegate to `review-scorer`, haiku)* - apply `docs/code-review-method.md`'s
-   confidence rubric to the candidate findings from steps 2-4 and produce the
-   `Found N · Reported R · Filtered F` counts. Performance findings are not in the never-filter
-   regulated list, so this is genuine filtering (unlike compliance/model-validation packs) - keep
-   the pack to what scores above threshold. This is a delegation, not an option: name Pip in the
+5. **Score & filter** *(delegate to `review-scorer`, haiku - after `performance-reviewer`'s pack
+   exists: the scorer pass is the one genuinely sequential step, same as `/deep-review`)* - apply
+   `docs/code-review-method.md`'s confidence rubric to the pack's candidate findings and produce
+   the `Found N · Reported R · Filtered F` counts. Performance findings are not in the never-filter
+   regulated list, so this is genuine filtering (unlike compliance/model-validation packs) - trim
+   the pack to what scores above threshold (your edit, the same post-scoring edit `/deep-review`
+   step 4 describes). This is a delegation, not an option: name Pip in the
    fan-out plan before dispatching anyone, and counts self-scored by `performance-reviewer` are
    a defect to redo via `review-scorer`, not accept (live failure 2026-08-07 - see
    `/deep-review` step 3's roll-call rule, which applies here identically).
@@ -71,7 +77,7 @@ the `performance-reviewer` call **in the same message as those passes** so they 
    presenting.
 7. Produce the **performance report** (`docs/templates/performance-report.md`, shared
    `docs/review/output-format.md` conventions): a **scoreboard to the console**, full
-   evidence-backed findings (with 📊/🧠 basis) in the **clean artifact**, impact at target
+   evidence-backed findings (with 📊/📄/🧠 basis) in the **clean artifact**, impact at target
    volume, and a scale verdict.
 
 Fixes route to `rules-developer` / `platform-engineer` / `ml-engineer`; any **before/after
@@ -79,7 +85,7 @@ profiling** requires the **execution-consent gate** (CLAUDE.md §7) - the defaul
 static / 🧠 inferred, so don't promise measured before/after unless execution has been consented.
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
 schema `docs/review/findings-schema.json`). `performance-reviewer` writes the findings itself,
-directly, to `artifacts/<slug>/data/findings-performance-<slug>.json` with **`"kind":
+directly, to `artifacts/<slug>/data/findings-performance-<slug>.jsonl` with **`"kind":
 "performance"`** (the `performance-` prefix so it cannot collide with a code-review pack of the
 same engagement; it holds a Write grant scoped to exactly this path, mechanically enforced): each finding the five named
 fields (`basis` = 📊 measured / 📄 coded / 🧠 inferred as per the static-only rules above) **plus the

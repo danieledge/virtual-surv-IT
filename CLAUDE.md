@@ -90,8 +90,8 @@ and the **deliverable → owner routing table** all live there.
   `compliance-reviewer`, `data-quality-reviewer`) hold no general Edit (six hold Bash for
   analysers/diffs, execution-gated by §7); build agents implement. Four of the six
   (`code-reviewer`, `compliance-reviewer`, `model-validator`, `performance-reviewer`) hold
-  **Write and Edit, both scoped to one path only** - their own findings-pack JSON
-  (`artifacts/<slug>/data/findings-*.json`), mechanically enforced by
+  **Write and Edit, both scoped to one path only** - their own findings-pack JSONL
+  (`artifacts/<slug>/data/findings-*.jsonl`), mechanically enforced by
   `guard-findings-pack-write.py` so neither grant can widen in practice; they author that pack
   directly instead of returning it through the PM, and Edit lets them chunk a large pack
   incrementally instead of dropping findings when the same guard's Write size-limit fires

@@ -54,8 +54,11 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
 
 2. **Deep security review** (`code-reviewer` in **audit** mode - pre-existing issues stay in scope).
    Load the **security + per-language + architecture** lenses via `docs/review/agent-router.md`, and
-   drive the **security analysers** where available: `bandit`, `gitleaks` / secret-scan,
-   `find-sec-bugs` (JVM), `ShellCheck`, `PSScriptAnalyzer` security rules, plus a **dependency /
+   drive the **security analysers** first - run before the lens passes, their output grounding
+   each pass - where available: `bandit`, `gitleaks` / secret-scan, `ShellCheck`,
+   `PSScriptAnalyzer` security rules (consent-gated: the execution guard treats `pwsh` as code
+   execution - see `code-reviewer.md`, which also dropped `find-sec-bugs` outright: it needs a
+   compiled build), plus a **dependency /
    supply-chain** scan (`npm audit`, `osv-scanner`) for known-vulnerable dependencies. (`semgrep`
    and `pip-audit` deliberately excluded - both made unconditional network calls with no reliable
    offline mode found, causing repeated live corp-proxy hangs; see `code-reviewer.md` for the
@@ -96,10 +99,10 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
 schema `docs/review/findings-schema.json`). Tell `code-reviewer` (step 2) to write its own pack
-directly to `artifacts/<slug>/data/findings-<slug>.json` with **`"kind": "security-audit"`** (each
+directly to `artifacts/<slug>/data/findings-<slug>.jsonl` with **`"kind": "security-audit"`** (each
 finding the five named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition -
 it holds a Write grant scoped to exactly this path, mechanically enforced); `compliance-reviewer`
-(step 3) writes its own alongside it (`findings-compliance-<slug>.json`). **Read both back and
+(step 3) writes its own alongside it (`findings-compliance-<slug>.jsonl`). **Read both back and
 consolidate** - merge `compliance-reviewer`'s `findings[]` into the security pack - then run
 **`<python> -m scripts.check_artifacts --fix`** (allow-listed): it validates the pack
 (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `artifacts/<slug>/SECURITY-AUDIT-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first)

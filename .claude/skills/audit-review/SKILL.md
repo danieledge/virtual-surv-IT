@@ -24,9 +24,10 @@ Run an **evaluator-optimizer loop**:
 
 1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first, telling it to inherit
    **Mode = audit** and the **compliance** dimension and not to re-ask those) - comprehensive review
-   across the languages present, driving the standard analysers (ruff/mypy/bandit,
-   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck - **not Semgrep**,
-   deliberately excluded, see `code-reviewer.md` for why),
+   across the languages present, driving the standard analysers first - run once, up front,
+   before the lens passes, their output grounding each pass (`code-reviewer.md`'s tool table is
+   the single source of truth for which tools; **Semgrep** stays deliberately excluded, see
+   there for why),
    citing OWASP ASVS / CWE / SEI CERT, with confidence scoring and filter transparency
    (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope. The embedded
    `/deep-review` asks whether the code was **AI-assisted / vibe-coded**; if so, carry its
@@ -70,8 +71,8 @@ Run an **evaluator-optimizer loop**:
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`).
 Step 1's `/deep-review` already had `code-reviewer` write its own pack directly to
-`artifacts/<slug>/data/findings-<slug>.json`, and step 2's `compliance-reviewer` writes its own
-alongside it (`findings-compliance-<slug>.json`, both agents hold a Write grant scoped to exactly
+`artifacts/<slug>/data/findings-<slug>.jsonl`, and step 2's `compliance-reviewer` writes its own
+alongside it (`findings-compliance-<slug>.jsonl`, both agents hold a Write grant scoped to exactly
 their own path, mechanically enforced) - **read both back and consolidate**: merge
 `compliance-reviewer`'s `findings[]` into the code-review pack (append; use its narrative fields
 for the audit skeleton), then run **`<python> -m scripts.check_artifacts --fix`** - it validates the

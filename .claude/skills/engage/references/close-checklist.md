@@ -65,7 +65,7 @@ comments), and verify each against the FINAL state:
   number everywhere. If a findings list is enumerated in more than one document, the membership
   must be identical, by ID, in all of them. **`check_artifacts` mechanically verifies the
   finding-ID set and disposition tally in a rendered `REVIEW-<slug>.md` against its source
-  `data/findings-<slug>.json`** (`STALE-FINDINGS-RENDER` / `COUNT-MISMATCH`, audit finding #3,
+  `data/findings-<slug>.jsonl`** (`STALE-FINDINGS-RENDER` / `COUNT-MISMATCH`, audit finding #3,
   2026-07-30) - re-run `render_findings` if it flags either; this covers the findings-pack case,
   not free-text counts elsewhere (test totals in prose, requirement ranges), which still need
   your own re-read.

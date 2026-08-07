@@ -108,8 +108,9 @@ its own pack loses the independent mechanical pass AND pays the rote work at the
 tier - if a pass returns self-scored counts, the scorer still runs (live failure 2026-08-07: a
 full review ran with no `review-scorer` call anywhere and the reviewers self-scored). For
 `compliance-reviewer` and `model-validator`, Pip's role is the mechanical dedup/accounting pass
-above, never score-based filtering. Only `code-reviewer`'s judgement on findings + **Morgan's**
-challenge pass + the §4/§5 regulated calls pay **opus** (CLAUDE.md §8).
+above, never score-based filtering. Only `code-reviewer`'s judgement on findings and the §4/§5
+regulated calls pay **opus** (CLAUDE.md §8); **Morgan's** challenge pass runs at the
+orchestrator's own tier - sonnet by default, opus when configured for the engagement.
 
 **How the lenses execute is not defined here.** `docs/review/agent-router.md` is canonical for the
 pipeline's shape (which lenses load, and whether they run sequentially or fanned out), and for the
@@ -146,7 +147,7 @@ predates the diff.
 
 ## Conciseness for the never-filtered reviewers
 
-`compliance-reviewer` and `model-validator` write their own findings-pack JSON directly (Write
+`compliance-reviewer` and `model-validator` write their own findings-pack JSONL directly (Write
 and Edit, both scoped by `guard-findings-pack-write.py` to that one path), so their return
 message to the orchestrator is a distilled summary, not the detail itself - the pack file is.
 This section's history: an earlier hard cap on that return (≤ ~30 lines, no exception, back

@@ -284,7 +284,7 @@ Specialists: `business-analyst`, `tm-sme` / `trade-surveillance-sme` / `comms-su
 `qa-engineer`, `code-reviewer`, `performance-reviewer`, `model-validator`, `compliance-reviewer`,
 `data-quality-reviewer`, `review-scorer`. Advisors hold no Edit (where they hold Bash it is
 for analysers/diffs, execution-gated per CLAUDE.md §7); `code-reviewer`, `compliance-reviewer`,
-`model-validator` and `performance-reviewer` hold Write scoped to their own findings-pack JSON
+`model-validator` and `performance-reviewer` hold Write scoped to their own findings-pack JSONL
 only, mechanically enforced (`guard-findings-pack-write.py`).
 
 Stop for human approval before anything that touches live systems.

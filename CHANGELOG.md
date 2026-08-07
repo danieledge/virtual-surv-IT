@@ -3,6 +3,66 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.48] - 2026-08-07 - Review-pipeline documentation audit: JSONL sweep, tooling order, contradictions
+
+A second, broader pass over the review pipeline's own documentation - not reacting to a new
+incident this time, a deliberate "would this survive a skeptical external read" audit of the
+core orchestration docs and the four scored-reviewer agents.
+
+### Fixed
+- **Finished the JSON→JSONL prose sweep** deferred from 0.33.46: every remaining
+  `findings-<slug>.json` reference across `CLAUDE.md`, `README.md`, the `.claude/skills/*/SKILL.md`
+  files, `docs/DEFINITION-OF-DONE.md`, `docs/EXTENDING.md`, `docs/adr/ADR-010-one-placement-rule.md`,
+  `docs/agent-design.md`, `docs/review/output-format.md`, `docs/review/agent-router.md` and
+  `docs/internal/cross-platform-portability-roadmap.md` now correctly says `.jsonl`.
+  `findings-schema.json` (the schema file, not a pack) is untouched everywhere, as are dated
+  historical snapshots (`CHANGELOG.md`, `docs/internal/whole-plugin-review-2026-08-05.md`).
+- **Static analysers now explicitly run once, up front, before any lens pass** - `code-reviewer.md`,
+  `docs/review/agent-router.md` and the `deep-review`/`audit-review`/`security-audit` skills all
+  previously left this ordering unstated (tools ran, but nothing said *when* relative to the LLM
+  review); now explicit, so a tool hit is grounding input a lens pass cites (📊 measured) rather
+  than something a pass might rediscover as 🧠 inferred, or worse, skip checking against entirely.
+- **A structural bug in `performance-reviewer.md`**: it told the agent to "hand your candidates to
+  `review-scorer` (Pip)" - but `performance-reviewer` has no `Agent`/`Task` tool and cannot call
+  another agent (subagents don't hand off directly, as its own opening line says). Fixed: it
+  writes every candidate to the pack; the *caller* delegates `review-scorer` over the pack once it
+  exists.
+- **Model-tiering contradiction**: `docs/review/agent-router.md` and `docs/code-review-method.md`
+  both claimed the lens passes run on sonnet and Morgan's challenge pass pays opus - `code-reviewer`
+  is `model: opus` and the lens passes run *inside* it (one agent invocation, not separate calls),
+  so they necessarily ride its tier; Morgan's challenge runs at the orchestrator's own tier (sonnet
+  default, opus if configured). Both docs corrected to match `docs/team-operating-guide.md` and
+  `deep-review/SKILL.md`, which already had it right.
+- **Stale analyser rosters**: `deep-review`/`audit-review`/`security-audit` skills still listed
+  SpotBugs, `find-sec-bugs`, `scapegoat` and unconditional PSScriptAnalyzer as driven tools;
+  `code-reviewer.md` already documents all four as not driven (no network-free path) or
+  consent-gated. Skills now defer to `code-reviewer.md`'s tool table as the single source of truth
+  instead of restating a list that drifts.
+- **Component-split write collision**: `docs/team-operating-guide.md` says split-review passes
+  "return findings as text, never write directly", but `code-reviewer.md`'s standing Write
+  instruction said write the pack yourself - and every component pass shares the same one allowed
+  path, so a briefed agent following its own file would collide with its siblings. `code-reviewer.md`
+  and `deep-review/SKILL.md` now state the exception explicitly: component-split passes return text,
+  the orchestrator writes the merged pack.
+- **Evidence-basis mislabelling** in `performance-review/SKILL.md`: called explicit coded costs
+  (a literal `sleep`, a fixed timeout) "measured" - `docs/code-review-method.md` and
+  `performance-reviewer.md` both correctly call these 📄 *coded*, never 📊 *measured* (nothing ran).
+  Skill file brought in line.
+
+### Verified, no change needed
+Cross-checked every file/script/subcommand the operating guide and router reference against the
+actual repo (all exist); all four scored-reviewer agents' schema field references match
+`findings-schema.json`; `compliance-reviewer.md` and `model-validator.md` were already internally
+consistent.
+
+### Flagged, not fixed (needs an owner decision, not a docs fix)
+- `security-audit/SKILL.md` still directs `npm audit` / `osv-scanner` - both reach the network by
+  default, the same bar that already removed `semgrep`/`pip-audit`. `osv-scanner` has an offline-db
+  mode that could be mandated instead of dropping the step outright.
+- `scripts/check-review-tools.sh` still probes for `spotbugs` even though it's never driven -
+  harmless (presence-report only) but potentially misleading; trimming it is a script change, not
+  a docs one.
+
 ## [0.33.47] - 2026-08-07 - Concurrent dispatch for independent review passes; review-scorer delegation hardened
 
 Traced from a live diagnostic: a real, disposable-copy `/engage` run against Flask's own core

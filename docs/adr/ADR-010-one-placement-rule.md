@@ -37,7 +37,7 @@ validated non-recursively (P5); and the live tree held five engagements interlea
    - `artifacts/<slug>/` - all deliverable documents (fixed filenames below), produced
      code, tests and QA evidence;
    - `artifacts/<slug>/data/` - machine-readable source (findings packs
-     `findings-*.json`), validated recursively, excluded from the .html-sibling and index
+     `findings-*.jsonl`), validated recursively, excluded from the .html-sibling and index
      checks;
    - `artifacts/<slug>/adr/` - client-facing ADRs (`ADR-NNN-<topic>.md`), when the
      engagement produces them.

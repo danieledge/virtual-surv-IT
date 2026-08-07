@@ -36,7 +36,7 @@
    its own pack directly, halving that cost - but a bare `Write` grant is a much bigger
    blast radius than "author one JSON file", so unlike the build agents' project-wide Write
    access, this grant is scoped to exactly one path pattern
-   (`artifacts/<slug>/data/findings-*.json`) and **mechanically enforced**, not just
+   (`artifacts/<slug>/data/findings-*.jsonl`) and **mechanically enforced**, not just
    prompted: `guard-findings-pack-write.py` (a PreToolUse hook keyed on the `agent_type`
    field Claude Code provides for subagent tool calls) blocks any Write from these four
    agents that doesn't match that shape.
@@ -52,7 +52,7 @@
    the same findings-pack path only - not a broader capability, the same narrow one extended
    to a second tool. The tool-grant-as-independence principle above still holds in full: none
    of these four gained the ability to alter the code or model they're reviewing, only their
-   own findings-pack JSON.
+   own findings-pack JSONL.
 3. **Match the model to the work (see §2).** Cheap tier for mechanical, top tier only where it
    changes outcomes.
 4. **Right-size every engagement.** Multi-agent costs ~15× the tokens; the PM uses the *leanest*

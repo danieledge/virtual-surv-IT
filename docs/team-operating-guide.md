@@ -465,7 +465,7 @@ skills point here rather than restating paths. Filenames are workspace-relative.
 | Produced code + its tests + QA scripts | workspace root, tests/QA in the SAME scope as the code they verify (a grouping subfolder carries its own tests + QA handover - the gate checks per scope); code delivered into the working project's source tree follows the escalation rule instead |
 | Delivery report (close-only) | `delivery-report.md` |
 | Engagement-summary email (close-only) | `engagement-summary-<slug>.txt` (never rendered to HTML) |
-| Findings packs / machine-readable source | `data/findings-*.json` (validated recursively; excluded from the .html-sibling and index checks) |
+| Findings packs / machine-readable source | `data/findings-*.jsonl` (validated recursively; excluded from the .html-sibling and index checks) |
 | Standalone `/prepare-data` output (no engagement open) | `artifacts/data-prep/` (root lane, outside any workspace) |
 
 Project-level (never per-engagement): the codebase map at `docs/codebase-map.md` or

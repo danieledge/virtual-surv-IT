@@ -91,7 +91,7 @@ findings are NOT degraded because bandit is absent. SARIF output flows through:
 
 ```bash
 python3 -m scripts.convert_sarif artifacts/<ws>/data/cx.sarif --slug <slug> --scope "src/"
-python3 -m scripts.validate_findings artifacts/<ws>/data/findings-<slug>.json
+python3 -m scripts.validate_findings artifacts/<ws>/data/findings-<slug>.jsonl
 ```
 
 Expected: a schema-valid findings pack, 📊 measured, rendered into the standard review.
