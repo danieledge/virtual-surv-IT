@@ -1723,16 +1723,19 @@ def test_statusline_step_skips_without_bash_on_windows(monkeypatch, tmp_path, ca
     assert any(status == "skip" for _n, status, _d in inst.tracker.steps)
 
 
-def test_full_plan_includes_alias_setup_as_last_step():
+def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, tmp_path):
     """2026-08-04 user request: the alias should be offered as part of a full install,
-    the same way statusline already is - not only reachable as its own menu item."""
+    the same way statusline already is - not only reachable as its own menu item.
+    2026-08-07: machine_defaults_offer was added after it, as the new last step."""
     import install_helper as ih
 
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
     plan = inst.build_plan()
     titles = [t() if callable(t) else t for t, _ in plan]
     assert "Alias setup" in titles
-    assert titles[-1] == "Alias setup"  # last step
+    assert "Machine defaults (optional)" in titles
+    assert titles[-1] == "Machine defaults (optional)"  # last step
+    assert titles.index("Alias setup") == titles.index("Machine defaults (optional)") - 1
 
 
 def test_alias_step_skipped_by_default_on_yes_run(monkeypatch, tmp_path, capsys):
@@ -1778,16 +1781,16 @@ def test_alias_step_runs_setup_alias_when_confirmed(monkeypatch, tmp_path):
     assert calls == [(False, True)]
 
 
-def test_alias_step_auto_enabled_on_real_tty_full_run(monkeypatch, tmp_path):
-    """2026-08-07 user request: "the default should be to enable ... virt-surv alias ...
-    done on default path" - a real interactive terminal running the full install no
-    longer asks "do you want this at all", it just does it."""
+def test_alias_step_auto_enabled_when_quick_defaults_chosen(monkeypatch, tmp_path):
+    """2026-08-07 user request: an upfront "go with defaults vs manually configure"
+    choice - choosing defaults means the alias step no longer asks "do you want this at
+    all", it just does it."""
     import install_helper as ih
 
     calls = []
 
     def boom(*a, **k):
-        raise AssertionError("must not ask - the outer gate is unconditional on a real tty")
+        raise AssertionError("must not ask - quick_defaults skips the outer gate")
 
     monkeypatch.setattr(
         ih,
@@ -1798,13 +1801,98 @@ def test_alias_step_auto_enabled_on_real_tty_full_run(monkeypatch, tmp_path):
         or 0,
     )
     monkeypatch.setattr(ih, "confirm", boom)
-    monkeypatch.setattr(sys, "stdin", _TtyStdin())
     inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_defaults = True
     inst.alias_step()
     assert calls == [(False, True)]
 
 
-def test_statusline_step_auto_enabled_on_real_tty_full_run(monkeypatch, tmp_path):
+def test_quick_setup_choice_yes_run_skips_question_and_defaults_true():
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_setup_choice()
+    assert inst.quick_defaults is True
+
+
+def test_quick_setup_choice_real_tty_defaults_to_quick(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")  # blank = accept default
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_setup_choice()
+    assert inst.quick_defaults is True
+
+
+def test_quick_setup_choice_non_tty_defaults_to_manual():
+    """Non-tty, non-`--yes` (e.g. piped input, a script): conservative False, so every
+    downstream step falls back to its own already-safe non-tty handling."""
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_setup_choice()
+    assert inst.quick_defaults is False
+
+
+def test_quick_setup_choice_manual_answer_is_respected(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_setup_choice()
+    assert inst.quick_defaults is False
+
+
+def test_machine_defaults_offer_skipped_on_yes_run(capsys):
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.machine_defaults_offer()
+    assert "non-interactive" in capsys.readouterr().out
+
+
+def test_machine_defaults_offer_declined_does_not_call_machine_defaults_step(monkeypatch):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(ih.Installer, "machine_defaults_step", lambda self: called.append(True))
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.machine_defaults_offer()
+    assert called == []
+
+
+def test_machine_defaults_offer_accepted_calls_machine_defaults_step(monkeypatch):
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(ih.Installer, "machine_defaults_step", lambda self: called.append(True))
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.machine_defaults_offer()
+    assert called == [True]
+
+
+def test_alias_step_asks_when_manual_configure_chosen(monkeypatch, tmp_path):
+    """quick_defaults False (manual walkthrough) restores the ORIGINAL per-step question,
+    including its original True-on-a-real-tty default."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
+    assert inst.quick_defaults is False  # the __init__ default
+    calls = []
+    monkeypatch.setattr(
+        ih, "run_setup_alias", lambda *a, **k: calls.append(a) or 0
+    )
+    inst.alias_step()
+    assert calls == []  # confirm() declined -> never called
+
+
+def test_statusline_step_auto_enabled_when_quick_defaults_chosen(monkeypatch, tmp_path):
     """Same 2026-08-07 request, for the status line."""
     import install_helper as ih
 
@@ -1812,12 +1900,12 @@ def test_statusline_step_auto_enabled_on_real_tty_full_run(monkeypatch, tmp_path
     monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
 
     def boom(*a, **k):
-        raise AssertionError("must not ask - the outer gate is unconditional on a real tty")
+        raise AssertionError("must not ask - quick_defaults skips the outer gate")
 
     monkeypatch.setattr(ih, "confirm", boom)
-    monkeypatch.setattr(sys, "stdin", _TtyStdin())
     inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
     inst.repo = tmp_path
+    inst.quick_defaults = True
     inst.statusline_step()
     out_ok = any(name == "Status line" and status == "ok" for name, status, _d in inst.tracker.steps)
     assert out_ok

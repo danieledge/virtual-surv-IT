@@ -567,7 +567,14 @@ the user informed and in charge, check before anything irreversible.
   incomplete, not silently missing findings; before calling it done, state the finding count
   you intended to write and confirm the file's `findings` array
   actually holds that many - a partial-but-valid pack passes schema validation same as a complete
-  one, so this count check is the only thing that would catch a dropped batch. Below the ~8-finding
+  one, so this count check is the only thing that would catch a dropped batch. **Do this check
+  by reading the file** (`Read`, then count `"id":` occurrences in the `findings` array, or
+  count the top-level array entries directly in the text you already have from the Write/Edit
+  call) - **never** by running `python -c "...json.load..."` or any other inline execution to
+  parse it: the file is already text you can read and count without executing anything, and
+  the code-execution gate blocks inline `-c` unconditionally regardless of intent (live
+  report, recurring - a session reached for exactly this as an ad hoc JSON-parsing check on a
+  findings pack). Below the ~8-finding
   threshold, the original design still applies (one delegated `code-reviewer` call, one write). If
   a review call fails or times out regardless (proxy, or a heuristic miss), retry only the failed
   unit - never discard already-completed components' work by restarting the whole review. If this

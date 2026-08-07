@@ -1182,6 +1182,12 @@ class Installer:
         self.mode = "install"
         self.stashed = False
         self.code_stale = False  # user declined the update: clone used as-is
+        # 2026-08-07 user request: an upfront "go with defaults vs manually configure"
+        # choice for the optional post-install steps (pip, status line, alias, machine
+        # settings) - set by quick_setup_choice(), read by each of those steps. Defaults
+        # to False (ask individually) so a step reached WITHOUT quick_setup_choice ever
+        # running (a subset other than "full") keeps its own original per-step question.
+        self.quick_defaults = False
 
     # ---- console helpers
 
@@ -1645,6 +1651,35 @@ class Installer:
         self.print_update_preview(preview, branch, local_version)
         self.step_ok("Check complete - nothing changed", "run a full update (option 1) to apply")
 
+    def quick_setup_choice(self) -> None:
+        """First of the optional post-install steps for a full install/update
+        (2026-08-07 user request): one upfront choice instead of a question per step -
+        "go with defaults" (fast: dev requirements, status line and the 'virt-surv' alias
+        are all wired with no further questions) or "manually configure" (walk through
+        each one individually, exactly as this installer did before). --yes always
+        implies the fast path (a scripted/CI run can't answer an interactive question),
+        matching this installer's `--yes` semantics everywhere else."""
+        if self.args.yes:
+            self.quick_defaults = True
+            return
+        self.step_intro(
+            "A few more optional bits follow: dev requirements, the status line, the "
+            "'virt-surv' shell alias, and this machine's default settings."
+        )
+        self.quick_defaults = confirm(
+            "  Go with the recommended defaults for all of these (fast, recommended), "
+            "or walk through each one individually?",
+            # isatty()-gated, same reasoning as every downstream step's own fallback: a
+            # REAL terminal gets the inviting True default; non-tty/non-`--yes` (piped
+            # input, a test harness) gets the conservative False - "manually configure" -
+            # so each downstream step falls back to ITS OWN original, already-safe
+            # non-tty handling instead of silently fast-pathing something like the alias
+            # step's real (if harmless) interpreter probe with no human watching.
+            default=True if sys.stdin.isatty() else False,
+            assume_yes=False,
+            style=self.style,
+        )
+
     def optional_pip(self) -> None:
         self.step_intro(
             "Optional extras, installed once per Python environment (not per project): the HTML "
@@ -1656,16 +1691,20 @@ class Installer:
         if not req.exists() and not self.demo:
             self.step_skip("Dev requirements", "requirements-dev.txt not present")
             return
-        wanted = (
-            self.args.pip
-            if self.args.yes
-            else confirm(
+        if self.args.yes:
+            wanted = self.args.pip  # unattended: unchanged, flag-gated
+        elif self.subset == "full" and self.quick_defaults:
+            # 2026-08-07 user request: chose "go with defaults" at quick_setup_choice -
+            # no further question, just install them (still skipped above when
+            # requirements-dev.txt isn't present).
+            wanted = True
+        else:
+            wanted = confirm(
                 "  Shall I install the optional dev requirements (pytest, render deps)?",
                 default=self.args.pip,
                 assume_yes=False,
                 style=self.style,
             )
-        )
         if not wanted:
             self.step_skip("Dev requirements", "skipped - the plugin works without them")
             return
@@ -1930,13 +1969,11 @@ class Installer:
             wanted = True  # the user picked this from the menu
         elif self.args.yes:
             wanted = self.args.statusline  # unattended run: unchanged, flag-gated
-        elif self.subset == "full":
-            # 2026-08-07 user request: "the default should be to enable the status bar
-            # ... done on default path" - the normal interactive full install/update no
-            # longer asks, it just wires it (still skipped above on Windows without Git
-            # Bash, and the conflict-resolution prompt below still asks before replacing
-            # a DIFFERENT existing statusLine - this only removes the "do you want this
-            # at all" question).
+        elif self.subset == "full" and self.quick_defaults:
+            # 2026-08-07 user request: chose "go with defaults" at quick_setup_choice -
+            # no further question, just wire it (still skipped above on Windows without
+            # Git Bash, and the conflict-resolution prompt below still asks before
+            # replacing a DIFFERENT existing statusLine).
             wanted = True
         else:
             wanted = confirm(
@@ -2035,19 +2072,21 @@ class Installer:
         )
         if self.args.yes:
             wanted = False  # opt-in only - never touch shell rc files on an unattended run
-        elif sys.stdin.isatty():
-            # 2026-08-07 user request: "the default should be to enable ... virt-surv
-            # alias ... done on default path" - a real interactive terminal no longer
-            # asks "do you want this at all", it just does it. run_setup_alias still runs
-            # its own per-file preview + confirm below (unaffected by this change).
+        elif self.subset == "full" and self.quick_defaults:
+            # 2026-08-07 user request: chose "go with defaults" at quick_setup_choice -
+            # no further question, just do it. run_setup_alias still runs its own
+            # per-file preview + confirm below (unaffected by this change).
             wanted = True
         else:
-            # Non-tty, non-`--yes` run (piped input, a script): still ask rather than
-            # silently take the True default with no human actually there to see it
-            # (live-caught by test_demo_mode_executes_nothing_and_writes_nothing, 2026-08-04).
+            # "Manually configure" chosen (or a subset other than "full"): the original
+            # per-step question, unchanged - a REAL live terminal gets the inviting True
+            # default; a non-tty, non-`--yes` run (piped input, a script) gets False
+            # regardless - confirm() itself would otherwise silently take the True
+            # default with no human actually there to see it (live-caught by
+            # test_demo_mode_executes_nothing_and_writes_nothing, 2026-08-04).
             wanted = confirm(
                 "  Shall I also set up the 'virt-surv' alias?",
-                default=False,
+                default=True if sys.stdin.isatty() else False,
                 assume_yes=False,
                 style=self.style,
             )
@@ -2178,6 +2217,34 @@ class Installer:
             f"{summary} for {project.name} ({prefs_path})"
             + (" - also saved as this machine's new-project default" if save_as_default else ""),
         )
+
+    def machine_defaults_offer(self) -> None:
+        """Last of the optional post-install steps for a full install/update (2026-08-07
+        user request: "we are missing an option to be able to modify settings on install
+        too" - project-level setup moved entirely to virt-surv configure/engage, but
+        THIS MACHINE's own defaults deserve a way back in during install instead of only
+        being reachable via the separate Advanced -> Machine defaults menu item).
+        Always asks (never auto-applied by quick_defaults - changing what every future
+        project inherits is a deliberate action, not a "no real downside" default like
+        the status line or the alias) unless --yes, matching machine_defaults_step's own
+        interactive-only nature."""
+        if self.args.yes:
+            self.step_skip(
+                "Machine defaults",
+                "non-interactive - Advanced -> Machine defaults any time, or edit "
+                f"{self.cfg_path} directly",
+            )
+            return
+        if not confirm(
+            "  Shall I also walk through this machine's default settings now (citations, "
+            "review-tools, codebase-map skeleton, Morgan's model)?",
+            default=False,
+            assume_yes=False,
+            style=self.style,
+        ):
+            self.step_skip("Machine defaults", "unchanged - Advanced -> Machine defaults any time")
+            return
+        self.machine_defaults_step()
 
     def machine_defaults_step(self) -> None:
         """View/edit THIS MACHINE's defaults directly, no project needed (Advanced menu
@@ -2624,11 +2691,13 @@ class Installer:
             ("Local clone", self.resolve_repo),
             (lambda: f"Sync to origin/{self.branch}", self.sync_branch),
             ("Guard interpreter cache", self.prewarm_guard_cache),
+            ("Quick setup or manual?", self.quick_setup_choice),
             ("Optional pip requirements", self.optional_pip),
             ("Claude Code marketplace", self.marketplace),
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
             ("Status line", self.statusline_step),
             ("Alias setup", self.alias_step),
+            ("Machine defaults (optional)", self.machine_defaults_offer),
         ]
 
     def run(self) -> int:

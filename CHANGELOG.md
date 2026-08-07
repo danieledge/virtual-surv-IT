@@ -3,6 +3,43 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.40] - 2026-08-07 - Upfront quick/manual install choice; targeted note on inline-exec blocks
+
+### Changed
+- Reworked the 0.33.39 "auto-enable on a real tty" behaviour for the full install/update
+  path into a single upfront choice (user request): a new `quick_setup_choice` step asks
+  once - "go with the recommended defaults (fast) or walk through each one individually?"
+  - and `optional_pip`/`statusline_step`/`alias_step` read the answer instead of each
+  hardcoding "auto-on for subset full". Choosing "manually configure" restores the exact
+  original per-step questions, including their original tty-gated defaults. `--yes` still
+  always implies the fast path (unattended, unchanged). Fixes a live regression from
+  0.33.39 along the way: the new question's own non-tty fallback defaulted to True, which
+  cascaded into the alias step actually invoking a real interpreter subprocess probe
+  during a plain `--demo` run - now conservatively False off a real terminal, matching
+  every other step's own non-tty handling.
+
+### Added
+- `machine_defaults_offer`: new last step of the full install/update path (user request:
+  "we are missing an option to be able to modify settings on install too" - project-level
+  setup moved to `virt-surv configure`/`engage` in 0.33.39, this restores a way to review/
+  change THIS MACHINE's defaults during install without hunting through the Advanced
+  menu). Always asks explicitly (never folded into quick_defaults - changing what every
+  future project inherits is a deliberate action) unless `--yes`.
+- `scripts/staged_hooks/guard-code-execution.py` (**staged - human apply required**:
+  `bash scripts/apply-guard-exec-allow.sh`): the code-execution block message now adds a
+  targeted note when the blocked command is an ad hoc inline diagnostic (`python -c`,
+  `node -e`, etc.) - this is unconditionally blocked regardless of consent, not a
+  permission question, and the note names the two live-recurring shapes (improvising a
+  replacement after a step-0 /engage probe failure instead of retrying the exact block;
+  checking a findings-pack JSON by running `python -c "...json.load..."` instead of just
+  reading the file) plus the safe alternative for interpreter info (`python --version`/
+  `-V`, never `-c`). The generic message alone gave no hint of either, requiring the model
+  to already know to consult a just-in-time reference doc it may never open before
+  reaching for the ad hoc command in the first place.
+- `docs/team-operating-guide.md`'s findings-count-verification guidance now says
+  explicitly how to check a written pack's finding count: read the file and count
+  entries in the text, never by executing `python -c` to parse it.
+
 ## [0.33.39] - 2026-08-07 - Faster default setup: new defaults, `virt-surv engage`, fewer prompts
 
 ### Changed

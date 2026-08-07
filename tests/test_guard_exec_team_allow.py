@@ -415,3 +415,57 @@ def test_the_live_eval_regression_no_longer_false_positives(monkeypatch):
     assert len(log_note_segs) == 1
     assert "no real source data exists for it (2026-08-03)" in log_note_segs[0]
     assert log_note_segs[0].strip().startswith("python3 -m scripts.engagement_state log-note")
+
+
+# --------------------------------------- targeted note for ad hoc inline diagnostics
+# (2026-08-07): the GENERIC block message gave no hint that `-c`/stdin execution is
+# ALWAYS blocked (not a consent question) or what to do instead - live-recurring in two
+# shapes: retrying after a step-0 /engage probe failure by improvising a replacement, and
+# verifying a findings-pack JSON parses by running `python -c "...json.load..."` instead
+# of just reading the file. Pinned here so the note fires exactly for this command shape
+# and nowhere else.
+
+
+def test_inline_code_re_matches_python_dash_c():
+    assert STAGED._INLINE_CODE_RE.search('python -c "import sys; print(sys.executable)"')
+
+
+def test_inline_code_re_matches_the_findings_pack_verification_live_report():
+    """The exact command shape from the 2026-08-07 live report: checking a findings pack
+    parses and counting its entries via an ad hoc python -c, inside a cd && chain."""
+    cmd = (
+        'cd "C:/Users/dev/claude/analytics-project" && python -c "import json,sys;'
+        "d=json.load(open('artifacts/analytics-project-full/data/findings-code-backend-core-"
+        "analytics-project-full.json',encoding='utf-8')); f=d['findings']; "
+        "print('parsed OK, findings:',len(f))\""
+    )
+    segs = STAGED._segments(cmd)
+    hit = [s for s in segs if STAGED._INLINE_CODE_RE.search(s)]
+    assert len(hit) == 1
+    assert STAGED._EXEC_RE.search(hit[0])  # also caught by the general exec pattern
+
+
+def test_inline_code_re_does_not_match_ordinary_exec_patterns():
+    assert not STAGED._INLINE_CODE_RE.search("pytest tests/")
+    assert not STAGED._INLINE_CODE_RE.search("python target_module.py")
+    assert not STAGED._INLINE_CODE_RE.search("python -m scripts.ingest data/raw")
+
+
+def test_block_adds_the_inline_note_for_python_dash_c(capsys):
+    with pytest.raises(SystemExit) as exc:
+        STAGED._block('python -c "import json"', 'python -c "import json"')
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "ad hoc inline diagnostic" in err
+    assert "NOT a consent question" in err
+    assert "python --version" in err
+    assert "python -V" in err
+
+
+def test_block_omits_the_inline_note_for_ordinary_exec(capsys):
+    with pytest.raises(SystemExit):
+        STAGED._block("pytest tests/", "pytest tests/")
+    err = capsys.readouterr().err
+    assert "ad hoc inline diagnostic" not in err
+    # the standard consent instructions are still present regardless
+    assert "CST_ALLOW_EXEC" in err
