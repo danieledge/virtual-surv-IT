@@ -5,9 +5,8 @@ re-run after the findings pack changed - this catches exactly that drift class."
 
 from __future__ import annotations
 
-import json
-
 from scripts.check_artifacts import check_findings_render_freshness
+from scripts.findings_pack_io import read_pack, write_pack
 from scripts.render_findings import render
 
 VALID_FINDING = {
@@ -40,8 +39,8 @@ def _pack(slug="demo", findings=None, kind="review"):
 def _write(tmp_path, pack, render_it=True):
     data_dir = tmp_path / "data"
     data_dir.mkdir(exist_ok=True)
-    pack_path = data_dir / f"findings-{pack['slug']}.json"
-    pack_path.write_text(json.dumps(pack), encoding="utf-8")
+    pack_path = data_dir / f"findings-{pack['slug']}.jsonl"
+    write_pack(pack_path, pack)
     if render_it:
         (tmp_path / f"REVIEW-{pack['slug']}.md").write_text(render(pack), encoding="utf-8")
     return pack_path
@@ -68,9 +67,9 @@ def test_pack_grew_a_finding_after_the_last_render(tmp_path):
     caught up - a fresh render is written, then the pack is mutated afterward."""
     pack = _pack()
     pack_path = _write(tmp_path, pack)
-    grown = json.loads(pack_path.read_text(encoding="utf-8"))
+    grown = read_pack(pack_path)
     grown["findings"].append({**VALID_FINDING, "id": "F-002", "title": "New one"})
-    pack_path.write_text(json.dumps(grown), encoding="utf-8")
+    write_pack(pack_path, grown)
     findings = check_findings_render_freshness(tmp_path)
     assert any("STALE-FINDINGS-RENDER" in f and "F-002" in f for f in findings)
 
@@ -78,9 +77,9 @@ def test_pack_grew_a_finding_after_the_last_render(tmp_path):
 def test_pack_lost_a_finding_after_the_last_render(tmp_path):
     pack = _pack(findings=[dict(VALID_FINDING), {**VALID_FINDING, "id": "F-002"}])
     pack_path = _write(tmp_path, pack)
-    shrunk = json.loads(pack_path.read_text(encoding="utf-8"))
+    shrunk = read_pack(pack_path)
     shrunk["findings"] = shrunk["findings"][:1]
-    pack_path.write_text(json.dumps(shrunk), encoding="utf-8")
+    write_pack(pack_path, shrunk)
     findings = check_findings_render_freshness(tmp_path)
     assert any("STALE-FINDINGS-RENDER" in f and "F-002" in f for f in findings)
 
@@ -91,9 +90,9 @@ def test_disposition_changed_after_render_flags_count_mismatch(tmp_path):
     'one authoritative number everywhere' rule, mechanised."""
     pack = _pack()
     pack_path = _write(tmp_path, pack)
-    changed = json.loads(pack_path.read_text(encoding="utf-8"))
+    changed = read_pack(pack_path)
     changed["findings"][0]["disposition"] = "fixed"
-    pack_path.write_text(json.dumps(changed), encoding="utf-8")
+    write_pack(pack_path, changed)
     findings = check_findings_render_freshness(tmp_path)
     assert any("COUNT-MISMATCH" in f for f in findings)
 
@@ -101,9 +100,9 @@ def test_disposition_changed_after_render_flags_count_mismatch(tmp_path):
 def test_stale_id_set_skips_the_tally_check_to_avoid_double_reporting(tmp_path):
     pack = _pack()
     pack_path = _write(tmp_path, pack)
-    grown = json.loads(pack_path.read_text(encoding="utf-8"))
+    grown = read_pack(pack_path)
     grown["findings"].append({**VALID_FINDING, "id": "F-002"})
-    pack_path.write_text(json.dumps(grown), encoding="utf-8")
+    write_pack(pack_path, grown)
     findings = check_findings_render_freshness(tmp_path)
     codes = [f.split(":")[0] for f in findings]
     assert codes.count("STALE-FINDINGS-RENDER") == 1
@@ -113,7 +112,7 @@ def test_stale_id_set_skips_the_tally_check_to_avoid_double_reporting(tmp_path):
 def test_unreadable_pack_fails_open(tmp_path):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
-    (data_dir / "findings-broken.json").write_text("{not json", encoding="utf-8")
+    (data_dir / "findings-broken.jsonl").write_text("{not json", encoding="utf-8")
     assert check_findings_render_freshness(tmp_path) == []
 
 
@@ -121,7 +120,7 @@ def test_security_audit_kind_uses_its_own_prefix(tmp_path):
     pack = _pack(kind="security-audit")
     data_dir = tmp_path / "data"
     data_dir.mkdir()
-    pack_path = data_dir / f"findings-{pack['slug']}.json"
-    pack_path.write_text(json.dumps(pack), encoding="utf-8")
+    pack_path = data_dir / f"findings-{pack['slug']}.jsonl"
+    write_pack(pack_path, pack)
     (tmp_path / "SECURITY-AUDIT-demo.md").write_text(render(pack), encoding="utf-8")
     assert check_findings_render_freshness(tmp_path) == []

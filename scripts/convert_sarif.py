@@ -2,10 +2,11 @@
 scripts/convert_sarif.py - SARIF tool output -> the team's findings pack (ADR-009).
 
 Most commercial analysers (registered via the company extensions contract) emit SARIF.
-This deterministic converter maps a SARIF log to the findings-pack JSON the review
-pipeline already consumes (docs/review/findings-schema.json), so company-tool findings
-keep 📊 measured status with the tool report retained on disk as evidence, and render
-through the same `render_findings` path as every other review. Zero LLM.
+This deterministic converter maps a SARIF log to the findings-pack JSONL the review
+pipeline already consumes (docs/review/findings-schema.json; on-disk format in
+findings_pack_io.py), so company-tool findings keep 📊 measured status with the tool report
+retained on disk as evidence, and render through the same `render_findings` path as every
+other review. Zero LLM.
 
 Mapping: each run's results become findings; severity from SARIF `level` through the
 company severity map (default: error->critical, warning->warning, note->style); location
@@ -16,8 +17,8 @@ triage-required text - never invented specifics.
 Usage (consent-free team tooling):
   python -m scripts.convert_sarif report.sarif --slug <slug> --scope "<what was scanned>"
       [--tool NAME] [--severity-map error=critical,warning=warning,note=style]
-      [--mode audit|change] [-o artifacts/<ws>/data/findings-<slug>.json]
-Default output: alongside the input as findings-<slug>.json. Validate with
+      [--mode audit|change] [-o artifacts/<ws>/data/findings-<slug>.jsonl]
+Default output: alongside the input as findings-<slug>.jsonl. Validate with
 `python -m scripts.validate_findings <pack>`.
 """
 
@@ -27,6 +28,11 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
+try:
+    from scripts.findings_pack_io import write_pack
+except ImportError:  # pragma: no cover - direct-path invocation
+    from findings_pack_io import write_pack  # type: ignore[no-redef]
 
 _DEFAULT_SEV = {"error": "critical", "warning": "warning", "note": "style", "none": "style"}
 
@@ -146,8 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     pack = convert(
         sarif, args.slug, args.scope, args.tool, args.severity_map, args.mode, args.sarif.name
     )
-    out = args.out or args.sarif.parent / f"findings-{args.slug}.json"
-    out.write_text(json.dumps(pack, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    out = args.out or args.sarif.parent / f"findings-{args.slug}.jsonl"
+    write_pack(out, pack)
     print(f"wrote {out} ({len(pack['findings'])} finding(s); verdict {pack['verdict']})")
     return 0
 

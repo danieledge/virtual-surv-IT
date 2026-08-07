@@ -102,7 +102,11 @@ scored and filtered*. Don't restate the format here.
 
 Scoring, filtering and context detection are **rote, mechanical** work, so they run on the cheap
 tier: the review skills delegate them to the **`review-scorer` (haiku)** agent, for
-`code-reviewer` **and `performance-reviewer`** findings alike (score + filter below threshold). For
+`code-reviewer` **and `performance-reviewer`** findings alike (score + filter below threshold).
+That delegation is part of the pipeline, not an optimisation to drop: a reviewer self-scoring
+its own pack loses the independent mechanical pass AND pays the rote work at the reviewer's
+tier - if a pass returns self-scored counts, the scorer still runs (live failure 2026-08-07: a
+full review ran with no `review-scorer` call anywhere and the reviewers self-scored). For
 `compliance-reviewer` and `model-validator`, Pip's role is the mechanical dedup/accounting pass
 above, never score-based filtering. Only `code-reviewer`'s judgement on findings + **Morgan's**
 challenge pass + the §4/§5 regulated calls pay **opus** (CLAUDE.md §8).

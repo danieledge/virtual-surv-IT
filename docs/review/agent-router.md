@@ -57,7 +57,9 @@ for the §4/§5 trail.
 3. Load minimum lenses→ core (bugs+security) + per-language + architecture (deep)
 4. Run lenses      → SEQUENTIAL focused passes inside code-reviewer, one lens at a time
                         (full attention per lens), then merge + dedupe
-5. Score & filter     → docs/code-review-method.md  (mechanical; cheap tier)
+5. Score & filter     → DELEGATE to review-scorer (haiku), rubric in
+                        docs/code-review-method.md - a reviewer self-scoring its own
+                        pack is a pipeline defect, not a fallback
 6. Morgan challenges  → spot-checks, not re-scores (every Critical, anything regulated,
                         anything with a thin evidence basis, plus a sample of the rest),
                         downgrades/drops what fails, then presents the scoreboard
@@ -83,6 +85,13 @@ catches more" property does **not** hold here - real independence would need sep
 this pipeline deliberately does not spend. Running the lenses as separate **sonnet** sub-agents
 remains an optional next step, not current behaviour. What *is* delegated today is the mechanical
 work: context detection, lens selection and scoring go to `review-scorer` (haiku).
+
+**Sequential means the lens order inside one call, not the dispatch across calls.** When a large
+target is split into multiple component-scoped `code-reviewer` calls (operating guide
+§Orchestration discipline), those calls are independent and dispatch **concurrently, in one
+message** - the per-call lens order stays sequential within each. Serialising independent calls
+across turns buys nothing (same tokens either way) and multiplies wall-clock time (live failure
+2026-08-07: a 4-pass split dispatched one call per turn).
 
 ## Adding a lens
 Create `docs/review/lenses/language-<name>.md` (same shape as the others: frontmatter with

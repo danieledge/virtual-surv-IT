@@ -333,7 +333,7 @@ def test_audit_batch_scripts_staged_2026_07_30():
     Bash - each needed adding, same gap class the memory note about this allow-list warns
     about ('new scripts/ need an entry or plugin users get consent prompts')."""
     for cmd in (
-        "python3 /x/plug/scripts/render_findings.py artifacts/data/findings-x.json",
+        "python3 /x/plug/scripts/render_findings.py artifacts/data/findings-x.jsonl",
         'python3 "/Users/x/App Support/plug/scripts/render_docx.py" BRD-x.md',
         "python scripts/engage_probe.py --plugin-root /x/plug --interpreter-name python",
     ):

@@ -15,8 +15,14 @@ Live freedom-dashboard diagnostic (2026-08-06): the same four agents were also g
 scoped by this guard to the identical path pattern, so a scoped agent that hits the Write
 size cap (below) can chunk its own pack incrementally instead of silently dropping findings -
 the same option the orchestrator already had. The scoping half of the guard now fires for
-both `Write` and `Edit`; the size-cap half stays `Write`-only (Edit is the intended way past
-it, so it must stay exempt).
+both `Write` and `Edit`.
+
+JSONL format migration (2026-08-07): the pack moved from one JSON object per file to JSONL
+(`scripts/findings_pack_io.py`) - an envelope line plus one line per finding - so appending is
+a genuine line-append, never a JSON-array patch. That removed the reason `Edit` was exempt from
+the size cap (it used to be the deliberate escape hatch past a Write that could no longer
+safely be split further); now every append - Write's initial batch, or an Edit adding more
+lines later - is symmetric, so the size-cap half applies to BOTH Write and Edit.
 """
 
 from __future__ import annotations
@@ -75,7 +81,7 @@ def test_unrelated_agent_type_edit_is_untouched():
 
 def test_non_write_edit_tool_is_untouched():
     assert not _blocks(
-        "Read", {"file_path": "artifacts/x/data/findings-x.json"}, "compliance-reviewer"
+        "Read", {"file_path": "artifacts/x/data/findings-x.jsonl"}, "compliance-reviewer"
     )
 
 
@@ -86,8 +92,8 @@ _TOOLS = ("Write", "Edit")
 
 def _allowed_paths():
     for agent in _SCOPED_AGENTS:
-        yield agent, f"artifacts/my-slug/data/findings-{agent}.json"
-        yield agent, "artifacts/data/findings-flat.json"  # flat pack, no slug directory
+        yield agent, f"artifacts/my-slug/data/findings-{agent}.jsonl"
+        yield agent, "artifacts/data/findings-flat.jsonl"  # flat pack, no slug directory
 
 
 def test_scoped_agents_can_write_their_own_findings_pack():
@@ -103,7 +109,7 @@ def test_scoped_agents_can_edit_their_own_findings_pack():
 def test_scoped_agents_can_write_an_absolute_findings_pack_path():
     assert not _blocks(
         "Write",
-        {"file_path": "/home/user/project/artifacts/my-slug/data/findings-my-slug.json"},
+        {"file_path": "/home/user/project/artifacts/my-slug/data/findings-my-slug.jsonl"},
         "compliance-reviewer",
     )
 
@@ -111,7 +117,7 @@ def test_scoped_agents_can_write_an_absolute_findings_pack_path():
 def test_scoped_agents_can_edit_an_absolute_findings_pack_path():
     assert not _blocks(
         "Edit",
-        {"file_path": "/home/user/project/artifacts/my-slug/data/findings-my-slug.json"},
+        {"file_path": "/home/user/project/artifacts/my-slug/data/findings-my-slug.jsonl"},
         "compliance-reviewer",
     )
 
@@ -119,7 +125,7 @@ def test_scoped_agents_can_edit_an_absolute_findings_pack_path():
 def test_scoped_agents_can_write_windows_style_path():
     assert not _blocks(
         "Write",
-        {"file_path": r"C:\project\artifacts\my-slug\data\findings-my-slug.json"},
+        {"file_path": r"C:\project\artifacts\my-slug\data\findings-my-slug.jsonl"},
         "model-validator",
     )
 
@@ -127,7 +133,7 @@ def test_scoped_agents_can_write_windows_style_path():
 def test_scoped_agents_can_edit_windows_style_path():
     assert not _blocks(
         "Edit",
-        {"file_path": r"C:\project\artifacts\my-slug\data\findings-my-slug.json"},
+        {"file_path": r"C:\project\artifacts\my-slug\data\findings-my-slug.jsonl"},
         "model-validator",
     )
 
@@ -166,9 +172,9 @@ def test_scoped_agent_cannot_edit_the_rendered_report_directly():
 def test_scoped_agent_cannot_write_a_findings_looking_path_in_the_wrong_directory():
     """The shape must be genuinely under artifacts/.../data/, not just contain the
     filename pattern anywhere in a path."""
-    assert _blocks("Write", {"file_path": "data/findings-x.json"}, "compliance-reviewer")
+    assert _blocks("Write", {"file_path": "data/findings-x.jsonl"}, "compliance-reviewer")
     assert _blocks(
-        "Write", {"file_path": "artifacts/my-slug/findings-my-slug.json"}, "compliance-reviewer"
+        "Write", {"file_path": "artifacts/my-slug/findings-my-slug.jsonl"}, "compliance-reviewer"
     )  # missing the /data/ segment
 
 
@@ -198,13 +204,24 @@ def test_non_dict_tool_input_treated_as_empty():
 # ------------------------ size limit (2026-08-05, opt-in via large_context_review_split)
 
 
-def _pack_content(n_findings: int) -> str:
+def _finding_lines(n_findings: int, start: int = 0) -> str:
     finding = {
         "id": "F1", "title": "t", "severity": "warning", "location": "a.py:1",
         "basis": "coded", "standard": "s", "problem": "p", "likely_cause": "c",
         "impact": "i", "fix": {"diff": "-x\n+y", "why": "w"}, "disposition": "open",
     }
-    return json.dumps({"findings": [dict(finding, id=f"F{i}") for i in range(n_findings)]})
+    return "\n".join(
+        json.dumps(dict(finding, id=f"F{i}")) for i in range(start, start + n_findings)
+    ) + ("\n" if n_findings else "")
+
+
+def _envelope_line() -> str:
+    return json.dumps({"slug": "x", "scope": "s", "mode": "audit", "verdict": "conditional"}) + "\n"
+
+
+def _pack_content(n_findings: int) -> str:
+    """A full Write's `content`: the envelope line plus `n_findings` finding lines."""
+    return _envelope_line() + _finding_lines(n_findings)
 
 
 def _run_with_project(payload: dict, project_dir: Path) -> subprocess.CompletedProcess:
@@ -231,7 +248,7 @@ def test_size_limit_silent_when_split_off_by_default(tmp_path):
     _write_prefs(tmp_path, None)  # no team-preferences.json at all
     payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(20)},
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(20)},
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 0
@@ -241,7 +258,7 @@ def test_size_limit_silent_when_split_explicitly_off(tmp_path):
     _write_prefs(tmp_path, False)
     payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(20)},
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(20)},
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 0
@@ -251,7 +268,7 @@ def test_size_limit_blocks_oversized_orchestrator_write_when_split_on(tmp_path):
     _write_prefs(tmp_path, True)
     payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(9)},
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(9)},
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 2
@@ -263,7 +280,7 @@ def test_size_limit_allows_write_at_the_threshold(tmp_path):
     _write_prefs(tmp_path, True)
     payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(8)},
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(8)},
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 0
@@ -274,7 +291,7 @@ def test_size_limit_applies_to_scoped_agent_too_when_split_on(tmp_path):
     payload = {
         "tool_name": "Write",
         "agent_type": "code-reviewer",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": _pack_content(9)},
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(9)},
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 2
@@ -285,7 +302,7 @@ def test_size_limit_ignored_when_content_not_valid_json(tmp_path):
     _write_prefs(tmp_path, True)
     payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.json", "content": "not json"},
+        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": "not json"},
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 0
@@ -301,19 +318,38 @@ def test_size_limit_ignored_when_path_is_not_a_findings_pack(tmp_path):
     assert proc.returncode == 0
 
 
-def test_size_limit_never_applies_to_edit_even_when_split_on(tmp_path):
-    """Edit is the sanctioned way past the cap (append in batches) - capping it too would
-    defeat the point of granting it. Edit's tool_input has no `content` field anyway
-    (old_string/new_string instead), but this locks in the behaviour explicitly rather than
-    relying on that shape mismatch as an accident of implementation."""
+def test_size_limit_applies_to_edit_too_since_jsonl_migration(tmp_path):
+    """2026-08-07: Edit used to be the exempt escape hatch past the Write cap, because a
+    JSON array couldn't safely be appended-to any other way. JSONL removed that reason -
+    every append (Write's first batch, or an Edit adding more lines later) is now
+    symmetric, so an Edit call smuggling in too many new finding lines in one shot is
+    capped exactly like an oversized Write would be."""
     _write_prefs(tmp_path, True)
+    anchor = _finding_lines(1, start=0)
     payload = {
         "tool_name": "Edit",
         "agent_type": "performance-reviewer",
         "tool_input": {
-            "file_path": "artifacts/x/data/findings-x.json",
-            "old_string": "]",
-            "new_string": _pack_content(50) + "]",
+            "file_path": "artifacts/x/data/findings-x.jsonl",
+            "old_string": anchor,
+            "new_string": anchor + "\n" + _finding_lines(9, start=1),
+        },
+    }
+    proc = _run_with_project(payload, tmp_path)
+    assert proc.returncode == 2
+    assert "findings-pack size limit" in proc.stderr
+
+
+def test_size_limit_allows_edit_at_the_threshold(tmp_path):
+    _write_prefs(tmp_path, True)
+    anchor = _finding_lines(1, start=0)
+    payload = {
+        "tool_name": "Edit",
+        "agent_type": "performance-reviewer",
+        "tool_input": {
+            "file_path": "artifacts/x/data/findings-x.jsonl",
+            "old_string": anchor,
+            "new_string": anchor + "\n" + _finding_lines(8, start=1),
         },
     }
     proc = _run_with_project(payload, tmp_path)

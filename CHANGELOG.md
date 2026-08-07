@@ -3,6 +3,80 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.47] - 2026-08-07 - Concurrent dispatch for independent review passes; review-scorer delegation hardened
+
+Traced from a live diagnostic: a real, disposable-copy `/engage` run against Flask's own core
+package (pallets/flask open source, ~9,500 LOC, sonnet tier - matching actual production usage,
+not the eval harness's opus default) surfaced two orchestration-quality gaps in an otherwise
+clean 25-minute, $12.66, zero-crash run.
+
+### Changed
+- **`docs/team-operating-guide.md`**: new orchestration-discipline rule - once independent
+  subagent calls are decided (no dependency on each other's output), dispatch them as multiple
+  Task calls in ONE assistant message so the runtime runs them concurrently, not one call per
+  turn. No token-cost trade-off, wall-clock only. Live failure: a 4-pass component-split review
+  (3 `code-reviewer` + 1 `performance-reviewer`, mutually independent) went out as four lone
+  calls across four separate turns, and the serialised waiting dominated the run.
+- **`.claude/skills/deep-review/SKILL.md`**, **`performance-review/SKILL.md`**,
+  **`docs/review/agent-router.md`**: wired the same concurrent-dispatch rule into the review
+  pipeline's own fan-out steps; clarified that "sequential" in the router's pipeline-shape
+  description means lens order inside one `code-reviewer` call, not dispatch across independent
+  calls.
+- **`review-scorer` (Pip) delegation hardened.** Same live run: zero `review-scorer` calls
+  anywhere across the whole engagement, despite `deep-review/SKILL.md` already documenting the
+  delegation twice (context/lens selection, score & filter) - the stated fan-out plan simply
+  never named Pip, and reviewers self-scored instead. `deep-review/SKILL.md` now requires
+  Morgan to state the full pipeline roll-call ("Pip context → reviewers (concurrent) → Pip
+  score/filter → challenge") out loud before dispatching anyone; self-scored counts are now
+  explicitly a defect to redo via Pip, not accept - reinforced in `performance-review/SKILL.md`,
+  `docs/review/agent-router.md` and `docs/code-review-method.md`.
+
+### Not changed
+- `large_context_review_split`'s default split behaviour - the same run showed opus (used by
+  `code-reviewer`'s 3-way split) as 57% of total cost, but the split count itself wasn't shown
+  to be miscalibrated, so it was left alone pending real evidence either way.
+
+## [0.33.46] - 2026-08-07 - Findings-pack format: JSON → JSONL (append-safe writes)
+
+### Changed
+- **Findings-pack on-disk format moved from a single JSON object to JSONL** (envelope line +
+  one finding per line) - `findings-<slug>.jsonl`, was `.json`. Root cause: a JSON array must
+  stay syntactically whole (matched brackets/commas) at every step, so appending more findings
+  after an initial Write meant patching the existing file, not safely adding to it; that's what
+  tripped a corporate proxy's request timeout on a live consolidation Write (2026-08-05) and is
+  the likely cause of a separately live-reported ~3-hour deep review on a small codebase
+  (2026-08-07). JSONL makes every append a genuine append - new lines only, nothing existing
+  ever touched, no bracket/comma bookkeeping.
+- New shared module `scripts/findings_pack_io.py` (`read_pack`/`write_pack`/`envelope_line`/
+  `finding_line`) is the one place that knows the on-disk shape; `render_findings.py`,
+  `validate_findings.py`, `check_artifacts.py`, `convert_sarif.py` and the findings-pack write
+  guard all import it. `render()`/`validate()` and `docs/review/findings-schema.json` are
+  unchanged - both already operated on the reconstructed in-memory dict, so this is an I/O-layer
+  migration, not a pipeline/logic change.
+- `.claude/agents/{code-reviewer,compliance-reviewer,model-validator,performance-reviewer}.md`:
+  the Write/Edit protocol simplified - write the envelope line then as many finding lines as fit,
+  then append further findings by Edit (matching the last existing line) in batches of ~4-6. The
+  old "Write in one call, or Edit-append only if blocked" distinction is gone: appending is now
+  uniformly safe either way. The 2026-08-05 timeout citation is kept as historical rationale.
+- **`guard-findings-pack-write.py`** (staged - human-applied via
+  `scripts/apply-guard-findings-pack-write.sh`): path pattern now matches `.jsonl`; the size cap
+  (`large_context_review_split`, opt-in) now applies to **both Write and Edit** - JSONL removed
+  the reason Edit was exempt (it was the deliberate escape hatch past a Write that could no
+  longer safely be split further; every line is independently countable now, so there's no
+  reason to leave a second, uncapped path open). **Requires a human run of
+  `bash scripts/apply-guard-findings-pack-write.sh` before the live hook picks this up** - not
+  yet applied as of this release.
+- `docs/review/gold-findings.json` → `gold-findings.jsonl` (same content, new format). Note:
+  `docs/review/gold-findings.md` is a separate, hand-authored worked-exemplar document (not a
+  render of the gold pack) and is unaffected.
+
+### Deliberately not doing
+- No backward-compat shim for old `.json` packs - findings packs are per-engagement, ephemeral
+  artifacts, and this plugin is an explicit POC; a dual-format reader would be complexity for a
+  narrow window (an engagement mid-review exactly at upgrade time). Clean cutover.
+- No sweep of the ~20 prose/doc files (README, ADRs, team-operating-guide, skill files) that
+  also mention the old `.json` pack format - tracked as a fast-follow, not blocking this release.
+
 ## [0.33.45] - 2026-08-07 - Findings-pack timeout fallback; gitleaks scoped to target
 
 ### Added

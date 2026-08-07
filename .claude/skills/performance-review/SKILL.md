@@ -33,7 +33,10 @@ distinct question with the stated header and `multiSelect` (tool limits: ≤4 qu
 > code). Measured profiling is a future opt-in that needs execution re-enabled via the consent
 > flow; until then, **do not run anything** (the `guard-code-execution.py` hook enforces this).
 
-Drive **performance-reviewer** (CLAUDE.md §6):
+Drive **performance-reviewer** (CLAUDE.md §6). When this review runs alongside independent
+code-review passes in the same engagement (non-overlapping concern, no shared output), dispatch
+the `performance-reviewer` call **in the same message as those passes** so they run concurrently
+(operating guide §Orchestration discipline - no token cost, wall-clock only):
 
 1. Establish the **workload** - current and expected data volumes and the latency/throughput
    target. Ask the user if not stated (surveillance volumes are large; this changes the
@@ -58,7 +61,10 @@ Drive **performance-reviewer** (CLAUDE.md §6):
    confidence rubric to the candidate findings from steps 2-4 and produce the
    `Found N · Reported R · Filtered F` counts. Performance findings are not in the never-filter
    regulated list, so this is genuine filtering (unlike compliance/model-validation packs) - keep
-   the pack to what scores above threshold.
+   the pack to what scores above threshold. This is a delegation, not an option: name Pip in the
+   fan-out plan before dispatching anyone, and counts self-scored by `performance-reviewer` are
+   a defect to redo via `review-scorer`, not accept (live failure 2026-08-07 - see
+   `/deep-review` step 3's roll-call rule, which applies here identically).
 6. **Morgan's challenge pass (the orchestrator's own tier - sonnet by default, opus if
    configured for this engagement).** Independently re-test each performance claim - is it
    measured or inferred? is the number real? - and downgrade unsupported assertions before

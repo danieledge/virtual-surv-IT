@@ -33,7 +33,7 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      (`EMAIL-AGENT-UNMARKED`) - it is the pack's most-forwarded artifact;
   7. once the engagement is ✅ closed, no content artifact still carries a mutable interim/
      in-progress status banner - the status lives only in START-HERE (`STALE-STATUS`);
-  8. any structured findings pack under `artifacts/data/findings-*.json` validates against
+  8. any structured findings pack under `artifacts/data/findings-*.jsonl` validates against
      `docs/review/findings-schema.json` (`FINDINGS-INVALID`) - the pack is the source of truth a
      report is rendered from. (`artifacts/data/` is machine-readable source; the top-level
      `artifacts/` stays user-navigable .md/.txt/.html and is what the .html-sibling + index checks
@@ -927,6 +927,32 @@ def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
 
 
 _VALIDATE_FINDINGS_MODULE_CACHE = None
+_FINDINGS_PACK_IO_MODULE_CACHE = None
+
+
+def _load_findings_pack_io_module():
+    """Import scripts.findings_pack_io in BOTH run modes - same dual-mode pattern and
+    memoization as _load_validate_findings_module below."""
+    global _FINDINGS_PACK_IO_MODULE_CACHE
+    try:
+        from scripts import findings_pack_io  # normal `-m` / package mode
+
+        return findings_pack_io
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _FINDINGS_PACK_IO_MODULE_CACHE is not None:
+        return _FINDINGS_PACK_IO_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("findings_pack_io.py")
+        spec = importlib.util.spec_from_file_location("findings_pack_io", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _FINDINGS_PACK_IO_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
 
 
 def _load_validate_findings_module():
@@ -1064,7 +1090,7 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
     vf = _load_validate_findings_module()
     if vf is None:
         return findings  # validator unavailable - fail open, same posture as before
-    for pack in sorted(data_dir.rglob("findings-*.json")):
+    for pack in sorted(data_dir.rglob("findings-*.jsonl")):
         try:
             errs = vf.load_and_validate(pack)
         except (OSError, ValueError) as exc:
@@ -1089,7 +1115,7 @@ def check_findings_render_freshness(artifacts_dir: Path) -> list[str]:
     still is, a prose re-read-every-document instruction. This closes the two pieces that
     ARE mechanically checkable without inventing a new textual convention: does the
     rendered REVIEW-<slug>.md's finding-ID set and disposition tally still match the
-    CURRENT data/findings-<slug>.json pack, or did the pack change after the last render
+    CURRENT data/findings-<slug>.jsonl pack, or did the pack change after the last render
     (a fix cycle, a re-review) without a re-render catching up. (Late-cycle prose changes
     and struck-citation sweeping stay judgement calls - no existing marker distinguishes a
     struck citation from a live one in free text, so a mechanical check there would be
@@ -1098,9 +1124,12 @@ def check_findings_render_freshness(artifacts_dir: Path) -> list[str]:
     data_dir = artifacts_dir / "data"
     if not data_dir.is_dir():
         return findings
-    for pack_path in sorted(data_dir.rglob("findings-*.json")):
+    fp_io = _load_findings_pack_io_module()
+    if fp_io is None:
+        return findings  # loader unavailable - fail open, same posture as before
+    for pack_path in sorted(data_dir.rglob("findings-*.jsonl")):
         try:
-            pack = json.loads(pack_path.read_text(encoding="utf-8"))
+            pack = fp_io.read_pack(pack_path)
         except (OSError, ValueError):
             continue  # FINDINGS-INVALID already covers unreadable/malformed packs
         if not isinstance(pack, dict):
@@ -1708,7 +1737,7 @@ def check(artifacts_dir: Path) -> list[str]:
 def apply_fixes(artifacts_dir: Path) -> list[str]:
     """Mechanically resolve the auto-fixable DoD defects (docs/DEFINITION-OF-DONE.md 'AUTO-FIX'
     class) so the close does not depend on the model remembering each step:
-      * render each findings pack (artifacts/data/findings-*.json) to its canonical
+      * render each findings pack (artifacts/data/findings-*.jsonl) to its canonical
         REVIEW-<slug>.md - AT CLOSE ONLY (🔒 closing / ✅ closed; D4 ruling 2026-07-29,
         register P3: the tool used to manufacture mid-engagement the very artifact the
         prose declares close-only);
@@ -1726,7 +1755,7 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
     if data_dir.is_dir() and pack_status(artifacts_dir) in ("closing", "closed"):
         rf = _load_render_findings_module()
         if rf is not None:  # fail open if the renderer module won't load, same posture as
-            for pack in sorted(data_dir.glob("findings-*.json")):  # check_findings_packs()
+            for pack in sorted(data_dir.glob("findings-*.jsonl")):  # check_findings_packs()
                 try:
                     out = rf.render_pack_file(pack)
                 except Exception:

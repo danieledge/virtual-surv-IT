@@ -57,6 +57,16 @@ and states what's applicable vs not.
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
 `docs/review/lenses/`; router `docs/review/agent-router.md`):
 
+> ⚠️ **Pip (`review-scorer`) is two of these steps, and both are delegations, not options.**
+> Before dispatching anyone, state the pipeline roll-call in one line - *"Pip context → Ravi
+> (×N, concurrent) → Pip score/filter → my challenge"* - the same out-loud discipline as the
+> agent count (operating guide §Orchestration discipline). A fan-out plan that names the
+> reviewers but not `review-scorer` is wrong; Found/Reported/Filtered counts self-scored by the
+> reviewer are a defect to redo via Pip, not accept. Skipping the haiku helper saves nothing -
+> it moves rote work onto the most expensive tier. (Live failure 2026-08-07: a full audit-depth
+> review ran with zero `review-scorer` calls - the stated plan never named Pip, and the
+> reviewers self-scored, noting it in their own packs.)
+
 1. **Context** *(delegate to `review-scorer`, haiku)* - detect languages, list changed
    files/lines, check for CLAUDE.md, and select the minimal lens set per the router. This is
    rote work - run it on the cheap tier, not opus.
@@ -67,9 +77,16 @@ and states what's applicable vs not.
    standard analysers (ruff/mypy/bandit,
    Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck - **not Semgrep**,
    deliberately excluded, see `code-reviewer.md` for why). Deep adds
-   the **architecture** lens, **impact analysis**, and test/doc coverage.
+   the **architecture** lens, **impact analysis**, and test/doc coverage. If the target is
+   split into multiple independent component passes (operating guide §Orchestration
+   discipline, `large_context_review_split`), dispatch them as **concurrent Task calls in one
+   message** - never one per turn; a `performance-reviewer` pass on the same target joins the
+   same message.
 4. **Score & filter** *(delegate to `review-scorer`, haiku)* - apply the scoring rubric and
-   produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). Tag each finding's
+   produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). This is the one
+   genuinely sequential step in the fan-out (it depends on the packs existing), and it runs
+   **even if a pass returned self-scored counts** - the reviewer applying the rubric to its own
+   findings is not a substitute. Tag each finding's
    **evidence basis** (📊 measured / 🧠 inferred). **Never** filter regulated findings (secrets,
    PII/raw data §5, undocumented thresholds / broken traceability §4) - those stay with
    `code-reviewer`/`compliance-reviewer`, not the scorer.

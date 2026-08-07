@@ -7,7 +7,7 @@ this renderer lays them out - the same five fields, in order, on their own lines
 finding, every time. It refuses to render an invalid pack (validate_findings), so a missing field
 is caught, not silently dropped.
 
-Folder convention: the JSON pack lives in a subfolder (artifacts/data/findings-<slug>.json) so the
+Folder convention: the pack lives in a subfolder (artifacts/data/findings-<slug>.jsonl) so the
 top-level artifacts/ stays user-navigable; by default the rendered REVIEW-<slug>.md is written UP to
 that top-level artifacts/ (the pack's grandparent when the pack is in a `data/` dir), keeping the
 .md/.html beside the other user-facing deliverables.
@@ -15,12 +15,11 @@ that top-level artifacts/ (the pack's grandparent when the pack is in a `data/` 
 Output is forced to UTF-8 (Windows-safe). No third-party deps for the Markdown; `--html` imports
 the bundled render_html.py in-process (resolved dual-mode, so it works in repo and
 installed-plugin modes - no subprocess spawn, 2026-08-05).
-Usage: python -m scripts.render_findings <pack.json> [--out REVIEW-<slug>.md] [--html]
+Usage: python -m scripts.render_findings <pack.jsonl> [--out REVIEW-<slug>.md] [--html]
 """
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -29,8 +28,10 @@ from pathlib import Path
 # installed plugin) - the latter puts scripts/ on sys.path[0], so the sibling import resolves.
 try:
     from scripts.validate_findings import load_and_validate
+    from scripts.findings_pack_io import read_pack
 except ImportError:  # pragma: no cover - direct-path invocation
     from validate_findings import load_and_validate  # type: ignore[no-redef]
+    from findings_pack_io import read_pack  # type: ignore[no-redef]
 
 _SEV = {"critical": "🔴", "warning": "🟠", "medium": "🟡", "style": "🔵"}
 _SEV_ORDER = ["critical", "warning", "medium", "style"]
@@ -185,7 +186,7 @@ def render_pack_file(pack_path: Path, out_path: Path | None = None, want_html: b
     errs = load_and_validate(pack_path)
     if errs:
         raise ValueError(f"{len(errs)} schema violation(s): " + "; ".join(errs))
-    pack = json.loads(pack_path.read_text(encoding="utf-8"))
+    pack = read_pack(pack_path)
     prefix = _KIND.get(pack.get("kind", "review"), _KIND["review"])[0]
     out = out_path or _default_out(pack_path, pack["slug"], prefix)
     out.write_text(render(pack), encoding="utf-8")
@@ -206,7 +207,7 @@ def main(argv: list[str]) -> int:
         (argv[i + 1] for i, a in enumerate(argv) if a == "--out" and i + 1 < len(argv)), None
     )
     if not args:
-        print("usage: python -m scripts.render_findings <pack.json> [--out FILE] [--html]")
+        print("usage: python -m scripts.render_findings <pack.jsonl> [--out FILE] [--html]")
         return 2
     pack_path = Path(args[0])
     out_override = Path(out_flag) if out_flag else None

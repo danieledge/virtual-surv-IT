@@ -4712,8 +4712,15 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
         )
         data_dir = project / "artifacts" / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
-        pack_path = data_dir / f"findings-{slug}.json"
-        pack_path.write_text(json.dumps(_selftest_findings_pack(slug), indent=2), encoding="utf-8")
+        pack_path = data_dir / f"findings-{slug}.jsonl"
+        pack = _selftest_findings_pack(slug)
+        # JSONL (envelope line + one finding per line), matching scripts/findings_pack_io.py's
+        # on-disk format - written inline (no import) since this runs against a throwaway temp
+        # project dir, not necessarily this repo's own layout.
+        envelope = {k: v for k, v in pack.items() if k != "findings"}
+        lines = [json.dumps(envelope, ensure_ascii=False)]
+        lines += [json.dumps(f, ensure_ascii=False) for f in pack["findings"]]
+        pack_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         yield run_step("render findings", [py, str(render_findings), str(pack_path), "--html"])
         yield run_step("set-team", [py, str(engagement_state), "set-team", "Selftest (synthetic)"])
         # The close-gate SHOULD refuse an incomplete close (no AI marker, no summary

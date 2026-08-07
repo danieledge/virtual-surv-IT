@@ -536,13 +536,29 @@ the user informed and in charge, check before anything irreversible.
   deliverables. Numeric
   heuristic: simple fact-finding → 1 agent, 3-10 tool calls; direct comparison → 2-4 agents,
   10-15 calls each; full delivery → the minimal sufficient chain.
+- **Dispatch independent calls concurrently - one message, multiple Task calls.** Right-sizing
+  decides *who* to engage; this rule decides *how to issue the calls once that's decided*. When
+  two or more subagent calls have no dependency on each other - non-overlapping scope, neither
+  consumes the other's output - send them as **multiple Task tool calls in ONE assistant
+  message**, so the runtime executes them concurrently. There is **no token-cost trade-off**:
+  each subagent reads the same brief and does the same work either way; the only difference is
+  whether they overlap in time, so dispatching independent calls one per turn is pure wall-clock
+  waste, never a safe default. Example: a component-split review - 3 `code-reviewer` passes over
+  non-overlapping file sets plus a `performance-reviewer` pass over the same target - is one
+  message with four Task calls. (Live failure 2026-08-07: exactly that 4-pass split went out as
+  four lone calls in four separate turns, and the serialised waiting dominated a 25-minute run.)
+  Sequential dispatch is only for genuine dependency: a fix pass that consumes a prior review's
+  findings, the cross-component consolidation after split passes return, QA after the build,
+  `review-scorer`'s score-and-filter pass over packs that must exist first.
 - **Split a large, multi-component review instead of one whole-diff call.** A single review
   spanning multiple components (frontend + backend + infra in one pass) both loses focus and
   risks a request timeout on a corporate proxy between Claude Code and Anthropic (live report,
   2026-08-04). Before delegating a review, check `git diff --stat`: if the diff spans more than
   one top-level component/directory **and** is large (roughly >15 files or >400 changed lines -
   a starting heuristic, tune per engagement), split by component instead of one call across
-  everything; a flat layout with no real component boundary just doesn't split. Each
+  everything; a flat layout with no real component boundary just doesn't split. The
+  component-scoped calls are exactly the independent, non-overlapping case the dispatch rule
+  above describes - issue them concurrently in one message, not one per turn. Each
   component-scoped reviewer call returns its findings **as text, never writes directly**; do a
   light cross-component consistency pass yourself over the combined output (an API change on one
   side with no matching update on the other is exactly what siloed review misses).

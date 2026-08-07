@@ -54,10 +54,10 @@ _VALID_PACK = {
 }
 
 
-def _pack(art, obj, name="findings-t.json"):
-    d = art / "data"
-    d.mkdir(parents=True, exist_ok=True)
-    (d / name).write_text(json.dumps(obj), encoding="utf-8")
+def _pack(art, obj, name="findings-t.jsonl"):
+    from scripts.findings_pack_io import write_pack
+
+    write_pack(art / "data" / name, obj)
 
 
 STATUS_OPEN = "⏳ IN PROGRESS"
@@ -1298,30 +1298,30 @@ def test_findings_pack_validation_never_spawns_a_subprocess(tmp_path, monkeypatc
     _pack(art, _VALID_PACK)
     bad = copy.deepcopy(_VALID_PACK)
     del bad["findings"][0]["likely_cause"]
-    _pack(art, bad, name="findings-bad.json")
+    _pack(art, bad, name="findings-bad.jsonl")
 
     def _boom(*a, **k):
         raise AssertionError("subprocess.run must not be called for findings-pack validation")
 
     monkeypatch.setattr("scripts.check_artifacts.subprocess.run", _boom)
     findings = check_findings_packs(art)
-    assert any("findings-bad.json" in f for f in findings)
-    assert not any("findings-t.json" in f for f in findings)  # the valid pack stays clean
+    assert any("findings-bad.jsonl" in f for f in findings)
+    assert not any("findings-t.jsonl" in f for f in findings)  # the valid pack stays clean
 
 
 def test_findings_pack_validation_handles_multiple_packs(tmp_path):
     from scripts.check_artifacts import check_findings_packs
 
     art = tmp_path / "artifacts"
-    _pack(art, _VALID_PACK, name="findings-a.json")
-    _pack(art, _VALID_PACK, name="findings-b.json")
+    _pack(art, _VALID_PACK, name="findings-a.jsonl")
+    _pack(art, _VALID_PACK, name="findings-b.jsonl")
     bad = copy.deepcopy(_VALID_PACK)
     del bad["findings"][0]["standard"]
-    _pack(art, bad, name="findings-c.json")
+    _pack(art, bad, name="findings-c.jsonl")
 
     findings = check_findings_packs(art)
     assert len(findings) == 1
-    assert "findings-c.json" in findings[0]
+    assert "findings-c.jsonl" in findings[0]
 
 
 def test_findings_pack_unreadable_json_reports_cannot_parse(tmp_path):
@@ -1330,12 +1330,12 @@ def test_findings_pack_unreadable_json_reports_cannot_parse(tmp_path):
     art = tmp_path / "artifacts"
     d = art / "data"
     d.mkdir(parents=True)
-    (d / "findings-broken.json").write_text("{not valid json", encoding="utf-8")
+    (d / "findings-broken.jsonl").write_text("{not valid json", encoding="utf-8")
 
     findings = check_findings_packs(art)
     assert len(findings) == 1
     assert "FINDINGS-INVALID" in findings[0]
-    assert "findings-broken.json" in findings[0]
+    assert "findings-broken.jsonl" in findings[0]
     assert "cannot read/parse" in findings[0]
 
 
@@ -1361,7 +1361,7 @@ def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
     _touch(art / "engagement-summary-t.txt", "Hi,\n\nMorgan\n")
     _pack(art, _VALID_PACK)
     joined = "\n".join(check(art))
-    assert "findings-t.json" not in joined  # never named by MISSING-HTML / STALE-INDEX
+    assert "findings-t.jsonl" not in joined  # never named by MISSING-HTML / STALE-INDEX
 
 
 def test_apply_fixes_renders_report_from_pack_at_close(tmp_path):

@@ -5151,12 +5151,13 @@ def test_format_preferences_step_review_tools_save_as_default(tmp_path, monkeypa
 def test_selftest_findings_pack_is_schema_valid(tmp_path):
     """The synthetic pack must actually satisfy docs/review/findings-schema.json - proves
     render_findings.py's real validate-then-render path, not a shortcut."""
+    from scripts.findings_pack_io import write_pack
     from scripts.validate_findings import load_and_validate
     import install_helper as ih
 
     pack = ih._selftest_findings_pack("selftest-demo")
-    pack_path = tmp_path / "pack.json"
-    pack_path.write_text(json.dumps(pack), encoding="utf-8")
+    pack_path = tmp_path / "pack.jsonl"
+    write_pack(pack_path, pack)
     assert load_and_validate(pack_path) == []
 
 
