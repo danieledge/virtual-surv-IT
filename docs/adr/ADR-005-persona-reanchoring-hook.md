@@ -3,14 +3,15 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-005` · Version `0.3` · Status `Accepted`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-08-01`
+> **Document control** · ID `ADR-005` · Version `0.4` · Status `Accepted`
+> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-08-07`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-23 | persona-decay discussion (user-reported) | Initial proposal: dormancy-aware UserPromptSubmit re-anchor hook |
 > | 0.2 | 2026-07-24 | best-practice review remediation | Accepted & implemented: `scripts/persona_anchor.py` (tested, ≤8-line anchor, live-engagement trigger); wiring by a one-shot human-run script, retired 2026-07-30 after its wiring was committed (re-wiring today: `bash scripts/apply-project-anchor.sh`) |
 > | 0.3 | 2026-08-01 | documentation-drift audit | Revision note: the flat `artifacts/START-HERE.md` path the engaged signal was written against is **superseded by [ADR-008](ADR-008-multi-engagement-workspaces.md)** (0.31, per-engagement workspaces `artifacts/<slug>/`) and by [ADR-006](ADR-006-machine-readable-engagement-state.md) (state leads, START-HERE renders). The decision itself (a dormancy-gated per-turn re-anchor) is unchanged; only the signal's location and shape moved. `scripts/persona_anchor.py` now scans every workspace pack under `artifacts/` plus the legacy flat pack, reading each pack's `engagement-state.json` first and falling back to that pack's `START-HERE.md` emoji. |
+> | 0.4 | 2026-08-07 | framework-wide audit | Correction: the design section below still describes injecting the full inline name↔role roster ("Amara=`business-analyst`, Ravi=`code-reviewer`, ... all 16 + Morgan") every anchored turn - the shipped `_ANCHOR` never did that; it points at the roster (`docs/team-operating-guide.md`) instead of inlining it, and the 2026-08-03 steady-state shrink (further shortening `_ANCHOR_SHORT` after the first turn) postdates and supersedes the original proposal further still. Design section annotated to match what actually shipped, cheaper than proposed. |
 
 | | |
 |---|---|
@@ -59,11 +60,19 @@ engaged** - via a **`UserPromptSubmit` hook** (`scripts/persona_anchor.py`):
   Morgan); standing rules: question-tool, the fix-list gate, lifecycle discipline, data-safety
   §5; detail in `docs/team-operating-guide.md`." Re-injected each turn, so it **survives
   compaction**.
+  > **As shipped (0.4 correction):** cheaper than proposed here. `_ANCHOR`
+  > (`scripts/persona_anchor.py`) never inlines the 16-name roster mapping - it points at it
+  > ("Name specialists by their roster names (roster: team-operating-guide.md)") instead of
+  > paying to restate all 16 pairs every anchored turn. The "two-for-one" name-drift fix below
+  > still holds (a pointer is enough to stop the low-salience lookup from fading), just cheaper
+  > than the inline-everything design this bullet originally proposed. The 2026-08-03
+  > steady-state shrink went further still: the full anchor fires once per engagement, then a
+  > 3-line `_ANCHOR_SHORT` (voice marker, question-tool, roster-by-name) for every later turn.
 - **Source of truth:** the anchor derives from `docs/team-operating-guide.md` (the roster line +
   standing rules), or a small dedicated `docs/persona-anchor.md`, pinned by a docs-consistency
   test - so it can't drift like every other duplicated fact eventually has.
 
-**Two-for-one:** injecting the full **name↔role roster** each turn also fixes the existing
+**Two-for-one:** pointing at the **name↔role roster** each turn also fixes the existing
 name-drift known issue - that low-salience name↔role lookup is exactly what fades today.
 
 ## Consequences

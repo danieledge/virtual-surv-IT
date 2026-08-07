@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.33](https://img.shields.io/badge/version-0.33.33-blue)
+![Version 0.33.34](https://img.shields.io/badge/version-0.33.34-blue)
 ![Tests 1400+ passing](https://img.shields.io/badge/tests-1400%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.33** (2026-08-07) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.34** (2026-08-07) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle: `install_helper.py` rebuilt end-to-end.**
 - 🧭 **The menu reorganized and hardened.** A flat 10-option list became 6 top-level items plus
@@ -698,7 +698,7 @@ disabled; nothing is silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **1400+ passing unit tests** (1,842 collected as of 0.33.33) check
+The repo's **1400+ passing unit tests** (1,842 collected as of 0.33.34) check
 the *code*, and run in CI. The **eval harness** ([`evals/`](evals/)) checks the **quality of what the
 team produces**: its contract and scorer run in CI, but scoring the *live team* (catching a prompt
 change that silently weakens a review) is run manually via `/run-evals`, not on every commit, because

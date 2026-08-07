@@ -3,14 +3,15 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-006` · Version `0.3` · Status `Accepted`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-08-01`
+> **Document control** · ID `ADR-006` · Version `0.4` · Status `Accepted`
+> · Classification `Internal` · Owner `Morgan (PM)` · As-of `2026-08-07`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-26 | external-review discussion (user-driven) | Accepted & implemented: `scripts/engagement_state.py` (schema v1, validate/render/mutators), `check_artifacts` STATE-* gates, state-first lifecycle hooks with legacy fallback |
 > | 0.2 | 2026-07-26 | live-run artifact review remediation (same day) | Schema v2: `log` split from `outstanding` (+ blocked requires outstanding), structured `ratifications`; close-completeness validation (`set-team`/`finalise-artifacts` before close); gates `RATIFIED-CLAIM-PENDING` + `REVIEW-FINGERPRINT-GAP`; v1 upgrades in place on first mutation |
 > | 0.3 | 2026-08-01 | documentation-drift audit | Revision note: the flat paths below (`artifacts/engagement-state.json`, `artifacts/START-HERE.md`) are **superseded by [ADR-008](ADR-008-multi-engagement-workspaces.md)** (0.31): one state file and one rendered index **per engagement workspace**, `artifacts/<slug>/engagement-state.json` + `artifacts/<slug>/START-HERE.md`, with a derived registry (`artifacts/engagements.json` + rendered `ENGAGEMENTS.md`) and the session's ACTIVE slug recorded in `artifacts/.active-engagement.json`. The design in this ADR (state leads, START-HERE renders, mutators re-validate and re-render, the STATE-* gates, the consent exclusion) is unchanged and applies per workspace; a legacy flat pack is still read. Only the location moved. |
+> | 0.4 | 2026-08-07 | framework-wide audit | Correction: §5's "consent exclusion" was stated as an absolute no-exception rule, but `execution_consent_outcome` (register R3, added 2026-07-29 - BEFORE the 0.3 revision above, which should have caught this and didn't) is a real, narrow, already-shipped exception. §5 rewritten to describe it accurately instead of asserting a rule the code doesn't actually enforce. No behaviour change - the code was already correct; only this ADR's description of it was wrong. |
 
 | | |
 |---|---|
@@ -68,10 +69,17 @@ the one fact whose provenance the whole threat model protects.
    even over a stale ⏳ render; an open status arms them before any render exists) and fall
    back to the legacy emoji sniff otherwise. No hook wiring changed - both were already
    registered - so no human apply step was needed.
-5. **The consent exclusion (the one hard rule).** The schema forbids any key containing
-   `consent` or `exec`, recursively, at validation - enforced in `validate_state`, surfaced
-   as `STATE-INVALID` by the gate, and pinned by tests end-to-end. Execution consent remains
-   the marker file and nothing else.
+5. **The consent exclusion (the one hard rule: no GRANT can live here).** The schema forbids
+   any `consent`/`exec`-shaped key, recursively, at validation - enforced in `validate_state`,
+   surfaced as `STATE-INVALID` by the gate, and pinned by tests end-to-end - **with exactly
+   one sanctioned, narrow exception**: a root-level `execution_consent_outcome` record of the
+   NON-granting outcomes only (`asked` / `declined`), so a "No" is distinguishable from
+   never-asked after compaction (re-asking is the path back to an accidental yes; register R3,
+   added 2026-07-29). Its value is hard-limited to those two outcomes by validation - anything
+   grant-shaped in it fails just like anywhere else - and the actual grant remains, unchanged,
+   ONLY the human-created `.claude/.exec-consent` marker (ADR-002). Every other consent/exec-
+   shaped key, at any depth, stays forbidden. (This exception predates and was missed by the
+   0.3 documentation-drift audit above - corrected in 0.4.)
 
 ## Consequences
 

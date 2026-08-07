@@ -3,6 +3,29 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.34] - 2026-08-07 - Four ADRs corrected against what actually shipped
+
+### Fixed
+- `docs/adr/README.md`: the ADR-007 index row still said "Re-scoped" - stale since this
+  session's Phase 1+2 build; updated to match ADR-007's own document control.
+- `docs/adr/ADR-002-safety-hook-threat-model.md`: rec 1 claimed the raw-data guard "does
+  not segment-split and does not need to" - true when written (verified 2026-08-01), false
+  since the guard gained its own `_segments()` on 2026-08-03 (an unrelated false-positive
+  fix). Corrected with the actual current reasoning.
+- `docs/adr/ADR-006-machine-readable-engagement-state.md`: §5 stated the consent-exclusion
+  schema rule as absolute ("the one hard rule," no exception), but `execution_consent_outcome`
+  (register R3, added 2026-07-29) is a real, narrow, already-shipped exception - predates
+  and was missed by the 0.3 documentation-drift audit. Rewritten to describe the actual rule
+  (no GRANT can live here; a non-granting outcome record is the one sanctioned exception).
+- `docs/adr/ADR-005-persona-reanchoring-hook.md`: the design section still describes
+  injecting the full inline 16-name roster mapping every anchored turn - the shipped
+  `_ANCHOR` never did that; it points at the roster instead, cheaper than proposed, and the
+  2026-08-03 steady-state shrink (a 3-line anchor after the first turn) went further still.
+  Annotated to match what actually shipped.
+
+No behaviour changes in this entry - every fix here is documentation-only, correcting each
+ADR's description of already-shipped, already-correct code.
+
 ## [0.33.33] - 2026-08-07 - README test-count claims fixed, and pinned so they can't overstate again
 
 ### Fixed

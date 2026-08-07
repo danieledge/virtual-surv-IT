@@ -96,10 +96,17 @@ Two structural facts dominate:
    the whole line (kills the "allowed-substring-anywhere" bypass) and the raw guard inspects each
    piped sub-command. **Done** in the execution guard (verified 2026-08-01): `_SEGMENT_SPLIT` /
    `_segments()` in `guard-code-execution.py` split on `;`, `&&`, `||`, `|`, newline, backtick and
-   `$(`, and `_EXEC_PATTERNS` / `_TEAM_ALLOW` are evaluated per segment. The raw-data guard does
-   **not** segment-split and does not need to: it substring-scans the whole Bash command string
-   for the `data/raw` markers, so a marker in any sub-command blocks the call (broader than
-   per-segment, and the same lexical residual as everything else here).
+   `$(`, and `_EXEC_PATTERNS` / `_TEAM_ALLOW` are evaluated per segment. **Update 2026-08-07
+   (found stale by a framework-wide audit): the raw-data guard DOES now segment-split too** -
+   this section previously said it didn't and didn't need to (a whole-command substring scan
+   for the `data/raw` marker was broader than per-segment, so splitting seemed unnecessary), but
+   `guard-raw-data.py` gained its own `_segments()` on 2026-08-03 (fixing an unrelated false
+   positive: a compound command's second, unrelated statement was judged as file operands of the
+   first's search verb) and this entry was never updated to match. The substring-scan property
+   this paragraph originally praised is *separately* still true and still the reason the
+   command-substitution-in-double-quotes gap (found 2026-08-07, see Residual risk below) mattered
+   far less for this guard than for the exec guard - segmentation precision was never this
+   guard's real defence, the marker scan was.
 2. **Anchor `_TEAM_ALLOW`** to segment start instead of `.search()` anywhere - **done** (verified
    2026-08-01): `_TEAM_ALLOW` in `guard-code-execution.py` is compiled `^(?:…)` and matched
    against each segment, so an allow-listed string later in the line no longer waves the segment
