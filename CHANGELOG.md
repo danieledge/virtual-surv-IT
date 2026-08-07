@@ -3,6 +3,23 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.41] - 2026-08-07 - `virt-surv onboard`, project-root sanity check, map-update narration
+
+### Added
+- `virt-surv onboard` alias subcommand: identical to `virt-surv engage` (same code path) -
+  added as a second name for the same zero-prompt project-setup behaviour, since both read
+  naturally depending on how you think about it ("onboard this project" vs "engage").
+- Both `engage` and `onboard` now print the resolved target folder up front and warn
+  (non-blocking - these commands stay zero-prompt by design) if it looks like the wrong
+  place to run from - your HOME directory or a filesystem root. The success message now
+  names the resolved folder explicitly ("run `claude` from <path> and say hello").
+
+### Changed
+- `.claude/skills/engage/references/close-checklist.md`: the codebase-map update at close
+  (ADR-003) was silent to the user - added an explicit one-line narration instruction
+  ("Updating the codebase map with what this engagement taught us...") before/while doing
+  it, so it's never a surprise entry in the diff.
+
 ## [0.33.40] - 2026-08-07 - Upfront quick/manual install choice; targeted note on inline-exec blocks
 
 ### Changed

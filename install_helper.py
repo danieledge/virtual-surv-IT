@@ -1920,8 +1920,9 @@ class Installer:
                 f"run `claude` from - and run 'virt-surv configure' (or '{fallback}' if "
                 "you skipped the alias above) to review or change the defaults "
                 "(citations, review-split, docx, codebase-map skeleton, tuned env vars, "
-                "permissions, Morgan's model). Or 'virt-surv engage' to apply every "
-                "default with zero prompts and go straight to launching claude."
+                "permissions, Morgan's model). Or 'virt-surv engage' (or 'virt-surv "
+                "onboard' - same thing) to apply every default with zero prompts and go "
+                "straight to launching claude."
             )
             self.say("  2. Restart Claude Code to load the new version.")
         self.say("")
@@ -2067,8 +2068,8 @@ class Installer:
         you want this at all" gate."""
         self.step_intro(
             "Optional: the 'virt-surv' alias lets you launch this installer from any "
-            "folder and run 'virt-surv configure'/'engage'/'archive'/'list-engagements' "
-            "scoped to wherever you are."
+            "folder and run 'virt-surv configure'/'engage'/'onboard'/'archive'/"
+            "'list-engagements' scoped to wherever you are."
         )
         if self.args.yes:
             wanted = False  # opt-in only - never touch shell rc files on an unattended run
@@ -3922,10 +3923,12 @@ def run_setup_alias(
                 "\nA new terminal picks this up automatically. To use it in THIS "
                 "session instead: POSIX shells - `source` your rc file (e.g. `source "
                 "~/.bashrc`); PowerShell - `. $PROFILE` (PowerShell does not auto-reload "
-                "its profile mid-session). Then: cd into any project and run 'virt-surv "
-                "configure' (asks, recommended defaults pre-filled), 'virt-surv engage' "
-                "(applies every default with zero prompts, then tells you to launch "
-                "claude), 'virt-surv archive', or 'virt-surv list-engagements'."
+                "its profile mid-session). Then: cd into your PROJECT's root folder (the "
+                "same folder you'll run `claude` from) and run 'virt-surv configure' "
+                "(asks, recommended defaults pre-filled), 'virt-surv engage' or 'virt-surv "
+                "onboard' (same thing - applies every default with zero prompts, then "
+                "tells you to launch claude), 'virt-surv archive', or 'virt-surv "
+                "list-engagements'."
             )
         )
     return 1 if had_error else 0
@@ -4968,7 +4971,26 @@ def _relocate_if_running_inside_target_repo(
         pass
 
 
-_FOLDER_SUBCOMMANDS = ("configure", "engage", "archive", "list-engagements", "setup-alias")
+_FOLDER_SUBCOMMANDS = ("configure", "engage", "onboard", "archive", "list-engagements", "setup-alias")
+
+
+def _project_root_warning(target: Path) -> Optional[str]:
+    """Non-blocking sanity check for 'virt-surv engage'/'onboard' (2026-08-07 user
+    request: "check that the user is running it in the root of the project's folder"):
+    catches the two common wrong-directory mistakes without asking a question (these
+    commands are zero-prompt by design) - just a warning, never a block, since there is
+    no reliable way to KNOW a folder is a project root, only ways to notice it probably
+    isn't."""
+    resolved = target.expanduser().resolve()
+    try:
+        home = Path.home().resolve()
+    except OSError:
+        home = None
+    if home is not None and resolved == home:
+        return "this is your HOME directory, not a project folder"
+    if resolved.parent == resolved:  # filesystem root (/, C:\, ...)
+        return "this is a filesystem root, not a project folder"
+    return None
 
 
 def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
@@ -5021,18 +5043,32 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     target = Path(paths[0]) if paths else Path(".")
     if subcommand == "configure":
         return run_configure(target, style, marks(), assume_yes, demo)
-    if subcommand == "engage":
+    if subcommand in ("engage", "onboard"):
         # 2026-08-07 user request: "applies all the project defaults without prompting
         # the user, tell them what's been set, and then says claude code ready to
         # launch" - assume_yes is ALWAYS True here regardless of whether --yes was
-        # passed (that's the entire point of this subcommand over plain 'configure');
+        # passed (that's the entire point of these subcommands over plain 'configure').
+        # 'onboard' is a deliberate alias of 'engage', same behaviour, same code path -
+        # project setup only (not the machine-level install), added because both names
+        # read naturally depending on context ("onboard this project" / "engage").
         # --demo is still honoured, same as every other subcommand here.
+        resolved_target = target.expanduser().resolve()
+        warning = _project_root_warning(target)
+        if warning:
+            print(
+                style.yellow(
+                    f"  ! {resolved_target} - {warning}. If that's not intentional, "
+                    "Ctrl-C and cd into your actual project root first."
+                )
+            )
+        print(style.dim(f"  Setting up {resolved_target} as your project."))
         rc = run_configure(target, style, marks(), True, demo)
         if rc == 0 and not demo:
             print("")
             print(
                 style.green(
-                    f"{hat}Claude Code is ready to launch here - run `claude` and say hello."
+                    f"{hat}Claude Code is ready to launch here - run `claude` from "
+                    f"{resolved_target} and say hello."
                 )
             )
             print(style.dim("   - Morgan"))

@@ -4469,6 +4469,92 @@ def test_dispatch_folder_subcommand_engage_demo_never_prints_ready_message(tmp_p
     assert "ready to launch" not in capsys.readouterr().out.lower()
 
 
+def test_dispatch_folder_subcommand_onboard_is_identical_to_engage(tmp_path, monkeypatch, capsys):
+    """2026-08-07 user request: 'onboard' does exactly the same thing as 'engage' - same
+    code path, same behaviour, just a different name for a different mental model."""
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: calls.append(
+            (target, assume_yes, demo)
+        )
+        or 0,
+    )
+    rc = ih._dispatch_folder_subcommand(["onboard", str(tmp_path)])
+    assert rc == 0
+    assert calls == [(Path(tmp_path), True, False)]
+    out = capsys.readouterr().out
+    assert "ready to launch" in out.lower()
+    assert "Morgan" in out
+
+
+def test_project_root_warning_none_for_ordinary_project(tmp_path):
+    from install_helper import _project_root_warning
+
+    project = tmp_path / "my-project"
+    project.mkdir()
+    assert _project_root_warning(project) is None
+
+
+def test_project_root_warning_flags_home_directory(monkeypatch, tmp_path):
+    from install_helper import _project_root_warning
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    warning = _project_root_warning(tmp_path)
+    assert warning is not None
+    assert "HOME" in warning
+
+
+def test_project_root_warning_flags_filesystem_root():
+    from install_helper import _project_root_warning
+
+    root = Path(Path(".").resolve().anchor)
+    warning = _project_root_warning(root)
+    assert warning is not None
+    assert "filesystem root" in warning
+
+
+def test_dispatch_engage_prints_warning_for_home_directory(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "HOME directory" in out
+    assert "Ctrl-C" in out
+
+
+def test_dispatch_engage_no_warning_for_ordinary_project(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    project = tmp_path / "my-project"
+    project.mkdir()
+    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    rc = ih._dispatch_folder_subcommand(["engage", str(project)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Ctrl-C" not in out
+    assert "Setting up" in out and str(project.resolve()) in out
+
+
+def test_dispatch_engage_ready_message_names_the_resolved_folder(tmp_path, monkeypatch, capsys):
+    """2026-08-07 user request: "tell them to launch claude from the same place"."""
+    import install_helper as ih
+
+    project = tmp_path / "my-project"
+    project.mkdir()
+    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    rc = ih._dispatch_folder_subcommand(["engage", str(project)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert f"run `claude` from {project.resolve()}" in out
+
+
 def test_main_dispatches_folder_subcommand_before_argparse(monkeypatch):
     """Confirms main() checks the folder-subcommand form BEFORE falling through to the
     normal parse_args()-based flow, which would reject 'configure' as an invalid mode."""

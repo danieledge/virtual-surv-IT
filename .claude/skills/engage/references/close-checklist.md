@@ -109,6 +109,11 @@ specialist artifacts. The mechanical gate verifies all of this: `MISSING-INDEX` 
 
 ## Update the codebase map at close (ADR-003 - a DoD gate)
 
+**Say you're doing it.** This step is otherwise silent to the user - one line before or while
+you update it (e.g. "🎩 Updating the codebase map with what this engagement taught us...") is
+enough; no question, no pause, just narration so the user knows the map write is happening and
+isn't a surprise entry in the diff.
+
 Before the engagement closes, **update the working project's codebase map**
 (`docs/codebase-map.md`; create from `docs/templates/codebase-map.md` on a first engagement):
 **add** the **durable architecture** this engagement taught you about the code - how it is built,
