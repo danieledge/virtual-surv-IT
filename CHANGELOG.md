@@ -3,6 +3,18 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.35] - 2026-08-07 - PROBE_FAILED recovery: stop improvising a diagnostic that's always blocked
+
+### Fixed
+- `probe-contract.md`'s `PROBE_FAILED` recovery said "retry the exact same compound block" but
+  had nothing telling the model NOT to improvise something else instead. Live report: a session
+  reached for its own ad hoc check - `python -c "import sys; print(sys.executable)"` - instead
+  of retrying the documented block, and got blocked (correctly - inline `-c` execution is always
+  blocked, CLAUDE.md §7, no exception for a hand-typed diagnostic). Added an explicit negative
+  instruction: don't improvise, `-c`/stdin code execution is unconditionally blocked regardless
+  of intent, and `python --version`/`-V` are the safe alternative if interpreter info is
+  genuinely needed beyond what `INTERPRETER=`/`PYTHON_VERSION=` already printed.
+
 ## [0.33.34] - 2026-08-07 - Four ADRs corrected against what actually shipped
 
 ### Fixed

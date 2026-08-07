@@ -112,3 +112,17 @@ as an ordinary Python traceback on stderr, not a hung or garbled shell parse. A 
 coming back empty is **not** a failure: a plugin install is usually a plain file copy with no
 `.git` at all, and a detached HEAD is reported as unknown rather than as a branch name that does
 not exist.
+
+**Do not improvise a replacement diagnostic command - re-run the exact block above, character for
+character, nothing else.** Live report (2026-08-07): after a hiccup, a session constructed its own
+ad hoc check instead - `python -c "import sys; print(sys.executable)"` - reaching for the common
+"let me just check X directly" instinct rather than following this section's own instruction to
+retry the exact block. `python -c` (or any inline `-c`/stdin code execution, in any language) is
+**always** blocked by the execution guard, unconditionally, regardless of what you're trying to
+inspect or how harmless it looks - CLAUDE.md §7, and it will fire on a hand-typed diagnostic exactly
+as readily as on anything else. It is not a false positive to work around; it is the same gate
+`/engage`'s own probe block is deliberately written to never trigger (the heredoc form above exists
+*specifically* so this class of command never has to run). If you genuinely need the interpreter's
+own path or version outside what `INTERPRETER=`/`PYTHON_VERSION=` already gave you, `python
+--version` or `python -V` are not `-c` and are not blocked - use one of those, never a `-c`
+one-liner, however small.
