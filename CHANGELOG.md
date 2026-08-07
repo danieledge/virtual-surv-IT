@@ -3,6 +3,23 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.37] - 2026-08-07 - ADR-007 Chunk F: golden eval case + stale roadmap entry fixed
+
+### Added
+- `evals/cases/process-first-contact-map/` (44th golden case, `process-discipline-probe`
+  rubric, modelled on `process-codebase-map-architecture`): pins the `map_skeleton` toggle
+  contract as a scored behaviour case, not just a unit-tested mechanism - a real drift
+  condition produces zero automatic output when the toggle is off, and a real-but-human-
+  adjudicated `MAP-DRIFT`/`MAP-DEAD-POINTER` finding when it's on, never a silent auto-fix.
+  This was ADR-007's last unbuilt Chunk F item, previously tracked as explicitly deferred.
+
+### Fixed
+- README's "What's shipped and what's next" section still described the ADR-007 generative
+  layer (`repo_skeleton`, `/map-codebase`, drift stamps) as "RE-SCOPED... parked" - stale since
+  0.33.28, when it actually shipped. Corrected to SHIPPED, with a pointer to the new eval case.
+- `docs/adr/ADR-007-codebase-map-evolution.md` bumped to v0.4: Build plan section closed out
+  (Golden eval case was the only open item), version-history row added.
+
 ## [0.33.36] - 2026-08-07 - install_helper.py can tune API-timeout/output-size env vars
 
 ### Added

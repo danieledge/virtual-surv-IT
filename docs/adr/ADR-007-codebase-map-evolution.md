@@ -3,14 +3,15 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-007` · Version `0.3` · Status `Phase 1+2 implemented`
-> · Classification `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-08-06`
+> **Document control** · ID `ADR-007` · Version `0.4` · Status `Phase 1+2 implemented`
+> · Classification `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-08-07`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-07-27 | deep-research synthesis (3 parallel researchers: tooling landscape, agent-memory evidence, internal audit) | Proposed design |
 > | 0.2 | 2026-07-29 | workflow-robustness remediation phase 4 (user ruling D3) | Re-scoped: staleness subset implemented in `check_map`; the generative layer (repo_skeleton / map.d / /map-codebase / fingerprint drift stamps) is parked, revisit on demand |
 > | 0.3 | 2026-08-06 | user request: "the need has materialised, build it" | The parked generative layer, built: `scripts/repo_skeleton.py` (inventory, tiered symbols, PageRank, Mermaid, churn), drift stamps + `MAP-DRIFT`/`MAP-DEAD-POINTER`, `/map-codebase` skill + `docs/codebase-map.d/` area files + root Index section. Gated behind `map_skeleton` (project/machine preference, off by default) - a project that hasn't opted in sees zero behaviour change. Phase 3 (blast-radius-refresh automation, a rendered map browser) stays deferred, unchanged. |
+> | 0.4 | 2026-08-07 | Chunk F wrap-up | Golden eval case `evals/cases/process-first-contact-map/` landed, pinning the toggle contract (silent when off, human-adjudicated finding when on) as a scored behaviour case, not just unit-tested mechanism. Phase 1+2 build plan closed out; README's stale "RE-SCOPED / parked" roadmap entry corrected to match the shipped state. |
 
 | | |
 |---|---|
@@ -149,7 +150,10 @@ SCIP toolchains (service/install sprawl); any always-loaded context (dormancy in
 drift stamps + `MAP-DRIFT`/`MAP-DEAD-POINTER` in `check_map`; guard allow-list staging.
 **Phase 2 - done (0.33.x, 2026-08-06):** `/map-codebase` skill + root Index section +
 `docs/codebase-map.d/` discovery; `docs/templates/codebase-map-area.md`. Golden eval case
-(`process-first-contact-map`) not yet written - tracked separately, not blocking the toggle
-staying off by default in the meantime. **Phase 3 (optional, demand-driven, still parked):**
-blast-radius refresh automation; a human-facing rendered map browser via the existing
-dashboard.
+`evals/cases/process-first-contact-map/` (probe-style, `process-discipline-probe` rubric,
+modelled on `process-codebase-map-architecture`) landed 2026-08-07, pinning the toggle
+contract in both directions - a real drift condition produces zero automatic output when
+`map_skeleton` is off, and a real-but-human-adjudicated `MAP-DRIFT`/`MAP-DEAD-POINTER` finding
+when it's on, never a silent auto-fix. **Phase 1+2 are now complete end to end.** **Phase 3
+(optional, demand-driven, still parked):** blast-radius refresh automation; a human-facing
+rendered map browser via the existing dashboard.
