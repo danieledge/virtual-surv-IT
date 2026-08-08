@@ -341,6 +341,21 @@ def test_build_report_emits_large_context_review_split_on_when_set(tmp_path):
     assert "LARGE_CONTEXT_REVIEW_SPLIT=on" in out
 
 
+def test_build_report_parallel_dispatch_via_workflow_on_by_default(tmp_path):
+    out = build_report("", tmp_path)  # no preferences file at all
+    assert "PARALLEL_DISPATCH_VIA_WORKFLOW=on" in out
+
+
+def test_build_report_parallel_dispatch_via_workflow_off_when_disabled(tmp_path):
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "team-preferences.json").write_text(
+        json.dumps({"parallel_dispatch_via_workflow": False}), encoding="utf-8"
+    )
+    out = build_report("", tmp_path)
+    assert "PARALLEL_DISPATCH_VIA_WORKFLOW=off" in out
+
+
 # --------------------------------- MAP_SKELETON (ADR-007 Phase 1 Chunk D, 3-tier precedence)
 
 

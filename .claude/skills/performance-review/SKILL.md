@@ -36,8 +36,22 @@ distinct question with the stated header and `multiSelect` (tool limits: ≤4 qu
 
 Drive **performance-reviewer** (CLAUDE.md §6). When this review runs alongside independent
 code-review passes in the same engagement (non-overlapping concern, no shared output), dispatch
-the `performance-reviewer` call **in the same message as those passes** so they run concurrently
-(operating guide §Orchestration discipline - no token cost, wall-clock only):
+the whole independent set per the operating guide's dispatch rule (no token cost, wall-clock
+only). **Default path**: when `PARALLEL_DISPATCH_VIA_WORKFLOW=on` (the probe line; on by
+default) and the `Workflow` tool is available this session, this pass is one
+`{label, prompt, agentType: "performance-reviewer"}` spec in the same `args` array as the
+code-review specs, run through the fixed script in
+`.claude/skills/.shared/workflow-dispatch.md` verbatim - results arrive as a later background
+task notification (say so plainly; two-turn flow in that shared file). **Fallback** (preference
+off, tool absent, or the Workflow call failed): dispatch
+the `performance-reviewer` call **in the same message as those passes** so they run
+concurrently. **Live-tested
+failure mode (2026-08-07/08, three attempts): stating this was not enough - the calls still
+went out one per
+turn, even once while narrating "dispatching... concurrently" in the same breath** - which is
+why the Workflow path is the default. On the fallback, follow the
+literal procedure: enumerate every independent call first, then emit all of them as Task
+tool-uses in this ONE response, before reading any of their results:
 
 1. Establish the **workload** - current and expected data volumes and the latency/throughput
    target. Ask the user if not stated (surveillance volumes are large; this changes the

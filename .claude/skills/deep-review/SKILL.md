@@ -80,9 +80,23 @@ and states what's applicable vs not.
    caveats; **Semgrep** stays deliberately excluded, see there for why). Deep adds
    the **architecture** lens, **impact analysis**, and test/doc coverage. If the target is
    split into multiple independent component passes (operating guide §Orchestration
-   discipline, `large_context_review_split`), dispatch them as **concurrent Task calls in one
-   message** - never one per turn; a `performance-reviewer` pass on the same target joins the
-   same message.
+   discipline, `large_context_review_split`), dispatch the set per the dispatch rule's
+   **default path**: when `PARALLEL_DISPATCH_VIA_WORKFLOW=on` (the probe line; on by default)
+   and the `Workflow` tool is available this session, use the fixed script in
+   `.claude/skills/.shared/workflow-dispatch.md` verbatim - one `{label, prompt, agentType}`
+   spec per pass, `agentType: "code-reviewer"`, a `performance-reviewer` pass on the same
+   target joins the same `args` array; the passes run concurrently in the background and the
+   results arrive as a later task notification (say so plainly - the two-turn flow is in that
+   shared file). **Fallback** (preference off, tool absent, or the Workflow call failed):
+   dispatch them as **concurrent Task calls in one
+   message** - never one per turn; the `performance-reviewer` pass joins the
+   same message. **Live-tested failure mode (2026-08-07/08, three attempts): stating this rule
+   was not enough
+   on its own - the calls still went out one per turn every time**, which is why the Workflow
+   path is the default. On the fallback, follow the operating guide's literal
+   procedure: list every independent call first, then emit all of them as Task tool-uses in
+   this ONE response before reading any of their results. N independent passes = N Task
+   tool-uses in this turn, not N turns.
 4. **Score & filter** *(delegate to `review-scorer`, haiku)* - apply the scoring rubric and
    produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). This is the one
    genuinely sequential step in the fan-out (it depends on the packs existing), and it runs

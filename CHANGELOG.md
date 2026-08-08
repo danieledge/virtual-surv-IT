@@ -3,6 +3,54 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.50] - 2026-08-08 - Workflow-tool parallel dispatch: deterministic concurrency for independent review passes
+
+After 0.33.47/0.33.48/0.33.49's three prompt-only concurrent-dispatch fixes all failed live
+(three phrasings, identical failure - a documented model tendency, not wording), the dispatch
+mechanism itself changes: independent review-pass fan-outs now default to Claude Code's
+`Workflow` tool, whose `parallel()` is a deterministic script construct with no per-turn
+judgement call. Trade-off accepted by design: Workflow is always asynchronous - dispatch
+returns immediately, results arrive as a later background task notification.
+
+### Added
+- **`parallel_dispatch_via_workflow` team preference** - default **on** when the key is absent
+  (only an explicit `false` disables), no machine-wide tier (same precedent as
+  `large_context_review_split`): installer confirm + write-through (`install_helper.py`),
+  probe line `PARALLEL_DISPATCH_VIA_WORKFLOW=on|off` (`scripts/engage_probe.py`), documented
+  in `preferences/SKILL.md` (now five known keys; the 4-question menu keeps the four most
+  likely rows, drift checking moves to the say-it-in-words path).
+- **`.claude/skills/.shared/workflow-dispatch.md`** - the canonical doctrine plus a **fixed,
+  verbatim workflow script** (Morgan never improvises workflow JS): `args` takes an array of
+  `{label, prompt, agentType?}` specs as a real JSON value, `parallel()` runs them (wrapped as
+  functions, per the tool contract), `agent()` without `schema` returns each pass's final text
+  - the same return shape as today's Task calls, so the split-review merge flow is unchanged.
+  Also covers: the availability check (Workflow must appear in the session's own tool
+  listing; not named = not callable = fallback, no probing), failure handling (any refused
+  call = fallback for the engagement, never a retry loop), null slots (re-run just that pass
+  via Task), and the two-turn narration (state plainly it runs in the background with results
+  to follow; never narrate un-arrived results; consolidate and continue on notification).
+
+### Changed
+- **`docs/team-operating-guide.md`** dispatch rule now branches: Workflow path by default
+  (preference on + tool available), the previous one-message multi-Task procedure retained
+  verbatim as the explicit fallback; the live-failure history extended from two to three
+  attempts. The split-review bullet routes its component-scoped calls through the same rule.
+- **`deep-review/SKILL.md`** step 3.3 and **`performance-review/SKILL.md`**'s fan-out step
+  reference the conditional path (Workflow default, Task-batch fallback).
+- **`docs/agent-design.md`** script/Workflow conformance row: ➖ → 🟡 (mechanism adopted for
+  determinism, not scale).
+
+### Verification notes (stated plainly)
+- The workflow-script contract (meta-literal-first, `args` as real JSON, functions into
+  `parallel()`, text return from `agent()`, async-only result) was verified against the
+  **installed Claude Code 2.1.226 binary's own tool schema and prompt strings** on 2026-08-08,
+  not against a live Workflow run. A live run additionally depends on per-session enablement
+  (managed settings `disableWorkflows`, org policy, the "Dynamic workflows" `/config` setting)
+  and on the user approving the script - both are handled as fallback triggers, not assumed.
+- Whether a headless SDK eval session (`scripts/eval_engage.py`) ever exposes the Workflow
+  tool is **unverified**; the harness neither enables nor disallows it, and enablement is
+  gated outside the harness's control, so no eval case asserts on this path yet.
+
 ## [0.33.49] - 2026-08-08 - Mechanical PACK-UNSCORED gate; resume logic verified live
 
 Two more live diagnostics, plus a mechanical follow-up when one of them found the prior

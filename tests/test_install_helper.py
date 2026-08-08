@@ -2832,6 +2832,17 @@ def test_write_team_preferences_merges_and_preserves_other_keys(tmp_path):
     assert prefs["extra_formats"] == ["docx"]
 
 
+def test_write_team_preferences_parallel_dispatch_via_workflow(tmp_path):
+    from install_helper import write_team_preferences
+
+    target = tmp_path / ".claude" / "team-preferences.json"
+    write_team_preferences(tmp_path, parallel_dispatch_via_workflow=False)
+    assert json.loads(target.read_text())["parallel_dispatch_via_workflow"] is False
+    # Omitted argument leaves the key untouched (merge-only contract).
+    write_team_preferences(tmp_path, extra_formats=["docx"])
+    assert json.loads(target.read_text())["parallel_dispatch_via_workflow"] is False
+
+
 def test_write_team_preferences_best_effort(tmp_path, monkeypatch):
     from install_helper import write_team_preferences
 
@@ -3871,6 +3882,7 @@ def test_run_configure_happy_path_yes(tmp_path, monkeypatch, capsys):
         "extra_formats": [],
         "regulatory_citations": False,
         "large_context_review_split": True,
+        "parallel_dispatch_via_workflow": True,
         "map_skeleton": True,
         "statusline_show_map": False,
     }
@@ -3997,10 +4009,10 @@ def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkey
     # "n" to "use recommended settings?" (walk through each choice instead), "no" to the
     # permissions question, "no" to the env-tuning question, "no" to the beta-fields-
     # workaround question (keeps "nothing creates the file" true below), "" (accept
-    # defaults) to the five preference prompts (docx, citations, review-split,
-    # map-skeleton, statusline-map), "" (no change) to the review-tools override prompt,
-    # "" to the model prompt (declines - default is False).
-    answers = iter(["n", "n", "n", "n", "", "", "", "", "", "", ""])
+    # defaults) to the six preference prompts (docx, citations, review-split,
+    # workflow-dispatch, map-skeleton, statusline-map), "" (no change) to the
+    # review-tools override prompt, "" to the model prompt (declines - default is False).
+    answers = iter(["n", "n", "n", "n", "", "", "", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -5084,9 +5096,9 @@ def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
     # "n" to "use recommended settings?" (blank there would default to Yes and skip
     # every prompt below via assume_yes, defeating this test), "" enable-permissions
     # default(Y), "" env-tuning default(Y), "" beta-fields-workaround default(N), ""
-    # docx, "" citations, "" split, "" map-skeleton, "" statusline-map, "mypy=off"
-    # review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "", "", "mypy=off", ""])
+    # docx, "" citations, "" split, "" workflow-dispatch, "" map-skeleton, ""
+    # statusline-map, "mypy=off" review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "", "", "mypy=off", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -5108,8 +5120,9 @@ def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch)
     # "n" to "use recommended settings?" first (blank there would default to Yes and
     # skip every prompt below via assume_yes, defeating this test). Then "" enable-
     # permissions, "" env-tuning, "" beta-fields-workaround, "" docx, "" citations, ""
-    # split, "" map-skeleton, "" statusline-map, "mypy=on" review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "", "", "mypy=on", ""])
+    # split, "" workflow-dispatch, "" map-skeleton, "" statusline-map, "mypy=on"
+    # review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "", "", "mypy=on", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0

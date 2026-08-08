@@ -174,7 +174,7 @@ and this matrix are the guard against drift.*
 | **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 9 rubrics + 45 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
 | Subagent **self-assessment** (plan → evaluate → refine) | 🟡 | A team-wide *convention* (CLAUDE.md §6: agents self-verify and flag gaps), but a single line - not a structured plan→evaluate→refine loop in each prompt. We lean on **independent** verification (reviewer chains, `model-validator`) instead - arguably stronger, but a different lesson. |
 | **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
-| **Dozens-hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable - right-sizing keeps us at 2-5 agents per engagement; we never reach that scale. |
+| **Dozens-hundreds** of agents → orchestrate via a **script/Workflow** | 🟡 | Not at that scale - right-sizing keeps us at 2-5 agents per engagement. But the *mechanism* is adopted for a different reason: independent review-pass fan-outs default to the Workflow tool's deterministic `parallel()` (`parallel_dispatch_via_workflow`, `.claude/skills/.shared/workflow-dispatch.md`) because three live-tested prompt-only fixes could not make batched Task dispatch stick (0.33.47-0.33.49). |
 
 **Net:** strong conformance on the high-value lessons. The 🟡s are deliberate partials - some are
 deliberate fits to our *interactive, human-gated* model (vs Anthropic's long-running autonomous

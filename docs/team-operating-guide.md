@@ -536,20 +536,62 @@ the user informed and in charge, check before anything irreversible.
   deliverables. Numeric
   heuristic: simple fact-finding → 1 agent, 3-10 tool calls; direct comparison → 2-4 agents,
   10-15 calls each; full delivery → the minimal sufficient chain.
-- **Dispatch independent calls concurrently - one message, multiple Task calls.** Right-sizing
+- **Dispatch independent calls concurrently.** Right-sizing
   decides *who* to engage; this rule decides *how to issue the calls once that's decided*. When
   two or more subagent calls have no dependency on each other - non-overlapping scope, neither
-  consumes the other's output - send them as **multiple Task tool calls in ONE assistant
-  message**, so the runtime executes them concurrently. There is **no token-cost trade-off**:
+  consumes the other's output - they must overlap in time. There is **no token-cost trade-off**:
   each subagent reads the same brief and does the same work either way; the only difference is
   whether they overlap in time, so dispatching independent calls one per turn is pure wall-clock
-  waste, never a safe default. Example: a component-split review - 3 `code-reviewer` passes over
-  non-overlapping file sets plus a `performance-reviewer` pass over the same target - is one
-  message with four Task calls. (Live failure 2026-08-07: exactly that 4-pass split went out as
-  four lone calls in four separate turns, and the serialised waiting dominated a 25-minute run.)
-  Sequential dispatch is only for genuine dependency: a fix pass that consumes a prior review's
-  findings, the cross-component consolidation after split passes return, QA after the build,
-  `review-scorer`'s score-and-filter pass over packs that must exist first.
+  waste, never a safe default. Sequential dispatch is only for genuine dependency: a fix pass
+  that consumes a prior review's findings, the cross-component consolidation after split passes
+  return, QA after the build, `review-scorer`'s score-and-filter pass over packs that must exist
+  first.
+  - **Default path - the Workflow tool** (`parallel_dispatch_via_workflow`, probe line
+    `PARALLEL_DISPATCH_VIA_WORKFLOW=on|off`, on by default, no machine-wide tier). When the
+    preference is on AND the `Workflow` tool is available this session, dispatch the
+    independent set through the **fixed script** in
+    `.claude/skills/.shared/workflow-dispatch.md` - its `parallel()` is a deterministic script
+    construct, so concurrency stops being a per-turn judgement call. Availability means
+    `Workflow` appears in this session's own tool listing (defined in context, or named in a
+    system-reminder listing deferred tools); not named anywhere = not callable = fallback,
+    without attempting the call. The trade-off, accepted by design: Workflow is **always
+    asynchronous** - dispatch returns immediately and results arrive later as a background
+    task notification (the two-turn flow, narration rules and failure handling are in that
+    shared file). Any Workflow failure - disabled for the session, named-workflows-only
+    restriction, declined approval - means the fallback for the rest of the engagement, stated
+    in one line, never a retry loop.
+  - **Fallback path - one message, multiple Task calls** (preference off, tool absent, or a
+    failed Workflow call): send the set as **multiple Task tool calls in ONE assistant
+    message**, so the runtime executes them concurrently, following the literal procedure
+    below.
+  - **The fallback is best-effort, and that is a known model tendency, not just a wording gap**
+    (Anthropic's own tool-use docs
+    note Claude can under-use parallel tool calls even when nothing disables it) - confirmed
+    live here three times: a stated rule ("dispatch independent calls concurrently"), then the
+    literal procedure below, then a worked example were each live-tested on 2026-08-07/08
+    (0.33.47/0.33.48/0.33.49) and every time the calls still went out one per turn, once even
+    while narrating "dispatching both now, concurrently" in the same breath. Three different
+    phrasings failing identically is exactly why the Workflow path above exists and is the
+    default. A *description* of the
+    rule is not enough - on the fallback path, follow the **procedure** below literally, not
+    just its intent.
+  - **The fallback procedure, not just the principle:**
+    1. Before making ANY of the independent calls, enumerate the full list - every
+       `code-reviewer`/`performance-reviewer`/etc. call this fan-out needs.
+    2. Emit **all of them as Task tool-uses in this one response**, back to back - do not send
+       the first, read its result, and only then decide on the second. If a plan calls for N
+       independent passes, this turn contains N Task tool-uses, not one.
+    3. The wrong pattern looks like: *call 1 -> wait for its result -> call 2 -> wait -> call
+       3*. The right pattern looks like: *call 1, call 2, call 3, all in this response -> wait
+       for all three results together*. If you notice you are about to make an independent
+       call **after** already having a prior independent call's result in hand, that call
+       should have gone out with the earlier one - it is too late for that pair, but batch
+       whatever is left.
+  - Example: a component-split review - 3 `code-reviewer` passes over non-overlapping file sets
+    plus a `performance-reviewer` pass over the same target - is **one response, four Task
+    tool-uses**. (Live failure, reproduced twice: 2026-08-07 and 2026-08-08, exactly that shape
+    of fan-out went out as lone calls across separate turns both times, and the serialised
+    waiting dominated each run's wall-clock time.)
 - **Split a large, multi-component review instead of one whole-diff call.** A single review
   spanning multiple components (frontend + backend + infra in one pass) both loses focus and
   risks a request timeout on a corporate proxy between Claude Code and Anthropic (live report,
@@ -558,7 +600,8 @@ the user informed and in charge, check before anything irreversible.
   a starting heuristic, tune per engagement), split by component instead of one call across
   everything; a flat layout with no real component boundary just doesn't split. The
   component-scoped calls are exactly the independent, non-overlapping case the dispatch rule
-  above describes - issue them concurrently in one message, not one per turn. Each
+  above describes - dispatch them per that rule (the Workflow path when on and available,
+  otherwise one message, multiple Task calls - never one per turn). Each
   component-scoped reviewer call returns its findings **as text, never writes directly**; do a
   light cross-component consistency pass yourself over the combined output (an API change on one
   side with no matching update on the other is exactly what siloed review misses).

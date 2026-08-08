@@ -3065,6 +3065,7 @@ def write_team_preferences(
     extra_formats: Optional[list] = None,
     regulatory_citations: Optional[bool] = None,
     large_context_review_split: Optional[bool] = None,
+    parallel_dispatch_via_workflow: Optional[bool] = None,
     map_skeleton: Optional[bool] = None,
     statusline_show_map: Optional[bool] = None,
     review_tools: Optional[dict] = None,
@@ -3083,6 +3084,11 @@ def write_team_preferences(
       component from the start instead of discovering the need for it from a failed
       review call (docs/team-operating-guide.md's orchestration-discipline section).
       Defaults to False (off) whenever the key is absent.
+    - parallel_dispatch_via_workflow: whether independent review-pass fan-outs go through
+      the Claude Code Workflow tool when it is available (deterministic concurrency;
+      docs/team-operating-guide.md's dispatch rule). Defaults to True (on) whenever the
+      key is absent - only an explicit False turns it off. Like large_context_review_split,
+      deliberately no machine-wide tier.
     - map_skeleton: whether check_map() runs MAP-DRIFT/MAP-DEAD-POINTER for a codebase map
       with a Paths column (ADR-007 Phase 1 Chunk C/D). Defaults to False (off) whenever the
       key is absent - unlike large_context_review_split, this one DOES have a machine-wide
@@ -3107,6 +3113,8 @@ def write_team_preferences(
             prefs["regulatory_citations"] = bool(regulatory_citations)
         if large_context_review_split is not None:
             prefs["large_context_review_split"] = bool(large_context_review_split)
+        if parallel_dispatch_via_workflow is not None:
+            prefs["parallel_dispatch_via_workflow"] = bool(parallel_dispatch_via_workflow)
         if map_skeleton is not None:
             prefs["map_skeleton"] = bool(map_skeleton)
         if statusline_show_map is not None:
@@ -3532,6 +3540,9 @@ def run_configure(
     # deliberately has no machine-wide tier (see write_team_preferences' own docstring), so this
     # literal is its only fallback.
     split_current = existing.get("large_context_review_split", True)
+    # Built-in default True - same no-machine-wide-tier precedent as
+    # large_context_review_split above; this literal is its only fallback.
+    workflow_dispatch_current = existing.get("parallel_dispatch_via_workflow", True)
     docx_wanted = confirm(
         "  Produce .docx by default for controlled documents?",
         default=docx_current,
@@ -3548,6 +3559,14 @@ def run_configure(
         "  Split large, multi-component reviews by component from the start (useful "
         "behind a corporate proxy that times out on large requests)?",
         default=split_current,
+        assume_yes=assume_yes,
+        style=style,
+    )
+    workflow_dispatch_wanted = confirm(
+        "  Dispatch independent review passes via the Claude Code Workflow tool when "
+        "available (guaranteed concurrent execution; runs in the background and reports "
+        "back when done)?",
+        default=workflow_dispatch_current,
         assume_yes=assume_yes,
         style=style,
     )
@@ -3578,6 +3597,7 @@ def run_configure(
         f"docx={'on' if docx_wanted else 'off'}, "
         f"citations={'on' if citations_wanted else 'off'}, "
         f"review-split={'on' if split_wanted else 'off'}, "
+        f"workflow-dispatch={'on' if workflow_dispatch_wanted else 'off'}, "
         f"map-skeleton={'on' if map_skeleton_wanted else 'off'}, "
         f"statusline-map={'on' if statusline_show_map_wanted else 'off'}, "
         f"review-tools={_format_review_tools(review_tools_wanted)}"
@@ -3589,6 +3609,7 @@ def run_configure(
         extra_formats=["docx"] if docx_wanted else [],
         regulatory_citations=citations_wanted,
         large_context_review_split=split_wanted,
+        parallel_dispatch_via_workflow=workflow_dispatch_wanted,
         map_skeleton=map_skeleton_wanted,
         statusline_show_map=statusline_show_map_wanted,
         review_tools=review_tools_wanted,
