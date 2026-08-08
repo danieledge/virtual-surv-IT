@@ -3,6 +3,55 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.49] - 2026-08-08 - Mechanical PACK-UNSCORED gate; resume logic verified live
+
+Two more live diagnostics, plus a mechanical follow-up when one of them found the prior
+fix hadn't actually worked.
+
+### Verified live
+- **Resume/interruption logic**: ran the `process-full-lifecycle` golden case for real, killed
+  it mid-engagement (after QA/code-review/compliance-review had all completed but before the fix
+  pass or close, with a deliberately stale `outstanding[]` bookkeeping list still saying "not yet
+  run" for all three), then launched a fresh, uncoached session against the same kept sandbox
+  ("the previous session got cut off, resume where it left off" - no hints). It correctly
+  detected the interrupted engagement, did not re-run any completed review, explicitly caught and
+  fixed the stale `outstanding[]` list, surfaced the one genuine remaining judgement call, ran the
+  fix -> re-verify loop and closed cleanly (9/9 process-discipline checks, 0 false-positive traps,
+  all 3 Criticals resolved, 59/59 tests green).
+- **A live performance-focused review of Flask's real core package** (separate from 0.33.46's
+  full audit-depth run) completed cleanly - but re-confirmed, on fresh evidence, that the
+  0.33.47/0.33.48 documentation fixes for `review-scorer` delegation and concurrent dispatch had
+  **not** actually changed live behaviour: `review-scorer` was delegated to in neither this run
+  nor the resume run above (zero matching `Agent` calls in either `events.jsonl`), and in the
+  Flask run Morgan explicitly narrated *"Dispatching both now, concurrently"* then issued the two
+  calls as two separate assistant turns anyway (confirmed via `events.jsonl`, not the transcript's
+  own prose) - a claimed fix that wasn't real, worse than a silent skip.
+
+### Added
+- **`PACK-UNSCORED`** (`scripts/check_artifacts.py`): a scored-kind findings pack (review /
+  security-audit / performance) that carries findings must record its `review-scorer` pass in a
+  new envelope `scoring` field; a self-scoring note alone does not clear it (the scorer still runs
+  even after self-scoring, per `docs/code-review-method.md`). Surfaces with **zero new hook
+  wiring** - `check()` already runs inside the existing, live `dod_stop_gate.py` Stop hook, so the
+  new check gets that infrastructure (one-time nudge per finding set, fails open) for free.
+  Verified against today's real packs before landing: correctly flags the two live runs' actual
+  unscored packs and leaves the compliance pack and a malformed pack alone.
+- `docs/review/findings-schema.json`: documents the new optional `scoring` field.
+  `.claude/agents/code-reviewer.md`, `performance-reviewer.md`, `deep-review/SKILL.md`,
+  `performance-review/SKILL.md`: record the provenance convention at the point each already
+  describes the scoring step.
+
+### Investigated, not built
+- **Concurrent dispatch has no reliable mechanical check today.** Detecting "should these Task
+  calls have been batched" would need either an undocumented session-transcript format (no
+  stability guarantee, and this repo already treats undocumented Task-tool payload shapes as
+  fragile - see `subagent_return_budget.py`) or new harness infrastructure identifying which
+  assistant turn a tool call belongs to - neither exists today. A start/end marker pair on the
+  `Task` tool can observe sequence but not intent (sequential dispatch is often correct - a
+  re-review after fixes, the scorer's own pass), so it would false-flag legitimate cases against
+  this codebase's own never-wrongly-flag bar for hooks. Nothing shipped for this rather than
+  ship something fragile.
+
 ## [0.33.48] - 2026-08-07 - Review-pipeline documentation audit: JSONL sweep, tooling order, contradictions
 
 A second, broader pass over the review pipeline's own documentation - not reacting to a new

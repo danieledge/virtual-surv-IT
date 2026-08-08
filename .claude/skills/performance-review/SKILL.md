@@ -67,7 +67,9 @@ the `performance-reviewer` call **in the same message as those passes** so they 
    the `Found N · Reported R · Filtered F` counts. Performance findings are not in the never-filter
    regulated list, so this is genuine filtering (unlike compliance/model-validation packs) - trim
    the pack to what scores above threshold (your edit, the same post-scoring edit `/deep-review`
-   step 4 describes). This is a delegation, not an option: name Pip in the
+   step 4 describes), and record the pass in the pack's envelope `scoring` field ("scored by
+   review-scorer: Found N · Reported R · Filtered F") - `check_artifacts` flags a scored-kind
+   pack without that record (`PACK-UNSCORED`). This is a delegation, not an option: name Pip in the
    fan-out plan before dispatching anyone, and counts self-scored by `performance-reviewer` are
    a defect to redo via `review-scorer`, not accept (live failure 2026-08-07 - see
    `/deep-review` step 3's roll-call rule, which applies here identically).

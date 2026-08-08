@@ -72,6 +72,49 @@ def test_open_but_clean_does_not_nudge(tmp_path, monkeypatch, capsys):
     assert out == "" or json.loads(out).get("decision") != "block"
 
 
+def test_unscored_review_pack_surfaces_in_nudge(tmp_path, monkeypatch, capsys):
+    """PACK-UNSCORED reaches the model through the existing Stop-hook path with no new
+    wiring - an open engagement whose scored-kind pack records no review-scorer pass is
+    nudged at turn end, while the scorer delegation can still run."""
+    from scripts.findings_pack_io import write_pack
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "START-HERE.md").write_text(
+        "Status: ⏳ in progress\n\n- `data/findings-t.jsonl`\n", encoding="utf-8"
+    )
+    (art / "START-HERE.html").write_text("<p>ok</p>\n", encoding="utf-8")
+    write_pack(
+        art / "data" / "findings-t.jsonl",
+        {
+            "slug": "t",
+            "scope": "s",
+            "mode": "audit",
+            "verdict": "conditional",
+            "findings": [
+                {
+                    "id": "F1",
+                    "title": "t",
+                    "severity": "warning",
+                    "location": "a.py:1",
+                    "basis": "coded",
+                    "standard": "CWE-1",
+                    "problem": "p",
+                    "likely_cause": "c",
+                    "impact": "i",
+                    "fix": {"diff": "-x\n+y", "why": "w"},
+                    "disposition": "open",
+                }
+            ],
+        },
+    )
+    rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert rc == 0
+    decision = json.loads(out)
+    assert decision["decision"] == "block"
+    assert "PACK-UNSCORED" in decision["reason"]
+
+
 # --------------------------------------------- machine-readable state first (ADR-006)
 
 

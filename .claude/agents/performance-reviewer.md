@@ -102,6 +102,10 @@ off directly): write every candidate finding to the pack, and the caller delegat
 `review-scorer` over it once it exists, then trims what scores below threshold. Self-score
 against the same rubric only when you were invoked with no scorer in the loop, and say so in the
 pack's `methodology`. Keep the `Found N · Reported R · Filtered F` counts for the scoreboard.
+Record scoring provenance in the pack's envelope `scoring` field ("scored by review-scorer: ..."
+once the scorer's numbers are applied; "self-scored: ..." until then) - the DoD gate
+(`PACK-UNSCORED`) flags a scored-kind pack with no recorded scorer pass, so a self-score note
+leaves the gate armed until the caller runs `review-scorer` over the pack.
 
 **Write it as the structured findings-pack JSONL yourself**, to
 `artifacts/<slug>/data/findings-performance-<slug>.jsonl` (or

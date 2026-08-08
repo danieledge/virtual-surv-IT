@@ -87,7 +87,10 @@ and states what's applicable vs not.
    produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). This is the one
    genuinely sequential step in the fan-out (it depends on the packs existing), and it runs
    **even if a pass returned self-scored counts** - the reviewer applying the rubric to its own
-   findings is not a substitute. Tag each finding's
+   findings is not a substitute. Once the scorer's numbers are applied, record the pass in each
+   pack's envelope `scoring` field ("scored by review-scorer: Found N · Reported R · Filtered F")
+   - `check_artifacts` mechanically flags a scored-kind pack without that record
+   (`PACK-UNSCORED`), and a self-scoring note there does not clear it. Tag each finding's
    **evidence basis** (📊 measured / 🧠 inferred). **Never** filter regulated findings (secrets,
    PII/raw data §5, undocumented thresholds / broken traceability §4) - those stay with
    `code-reviewer`/`compliance-reviewer`, not the scorer.

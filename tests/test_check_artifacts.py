@@ -1354,12 +1354,107 @@ def test_findings_pack_validator_loader_is_memoized_across_calls(monkeypatch):
     assert len(exec_calls) == 1
 
 
+# ---------------------------------------- review-scorer attestation (PACK-UNSCORED)
+#
+# 2026-08-08: two live /engage runs skipped the review-scorer delegation entirely, after two
+# prose strengthenings of the same rule - so the evidence is now mechanical: a scored-kind
+# pack with findings must record the scorer pass in its envelope `scoring` field.
+
+
+def test_scored_kind_pack_without_scoring_record_flagged(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK)
+    findings = check_findings_scoring(art)
+    assert len(findings) == 1
+    assert "PACK-UNSCORED" in findings[0] and "findings-t.jsonl" in findings[0]
+
+
+def test_scoring_record_naming_review_scorer_passes(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    ok = copy.deepcopy(_VALID_PACK)
+    ok["scoring"] = "scored by review-scorer: Found 3 · Reported 1 · Filtered 2"
+    _pack(art, ok)
+    assert check_findings_scoring(art) == []
+
+
+def test_self_scored_record_still_flagged(tmp_path):
+    # docs/code-review-method.md: the scorer still runs even after self-scoring - a
+    # self-score note is provenance, not a scorer pass.
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    selfscored = copy.deepcopy(_VALID_PACK)
+    selfscored["scoring"] = "self-scored against the rubric; no scorer in the loop"
+    _pack(art, selfscored)
+    findings = check_findings_scoring(art)
+    assert len(findings) == 1 and "PACK-UNSCORED" in findings[0]
+
+
+def test_performance_kind_is_a_scored_kind(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    perf = copy.deepcopy(_VALID_PACK)
+    perf["kind"] = "performance"
+    _pack(art, perf, name="findings-performance-t.jsonl")
+    findings = check_findings_scoring(art)
+    assert len(findings) == 1 and "PACK-UNSCORED" in findings[0]
+
+
+def test_compliance_and_model_validation_packs_exempt(tmp_path):
+    # Their findings are never score-filtered; the scorer's dedup pass over them is optional.
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    for kind, name in (
+        ("compliance", "findings-compliance-t.jsonl"),
+        ("model-validation", "findings-model-validation-t.jsonl"),
+    ):
+        p = copy.deepcopy(_VALID_PACK)
+        p["kind"] = kind
+        _pack(art, p, name=name)
+    assert check_findings_scoring(art) == []
+
+
+def test_empty_findings_pack_needs_no_scoring_record(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    clean = copy.deepcopy(_VALID_PACK)
+    clean["findings"] = []
+    _pack(art, clean)
+    assert check_findings_scoring(art) == []
+
+
+def test_unparseable_pack_left_to_findings_invalid(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    d = art / "data"
+    d.mkdir(parents=True)
+    (d / "findings-broken.jsonl").write_text("{not json", encoding="utf-8")
+    assert check_findings_scoring(art) == []
+
+
+def test_pack_unscored_surfaces_via_check(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_OPEN)
+    _pack(art, _VALID_PACK)
+    assert any("PACK-UNSCORED" in f for f in check(art))
+
+
 def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
     # A .json pack under data/ must not trip MISSING-HTML or STALE-INDEX (it's machine source).
     art = tmp_path / "artifacts"
     _index(art, listed=["engagement-summary-t.txt"])
     _touch(art / "engagement-summary-t.txt", "Hi,\n\nMorgan\n")
-    _pack(art, _VALID_PACK)
+    scored = copy.deepcopy(_VALID_PACK)  # scored, so PACK-UNSCORED can't name the file either
+    scored["scoring"] = "scored by review-scorer: Found 1 · Reported 1 · Filtered 0"
+    _pack(art, scored)
     joined = "\n".join(check(art))
     assert "findings-t.jsonl" not in joined  # never named by MISSING-HTML / STALE-INDEX
 

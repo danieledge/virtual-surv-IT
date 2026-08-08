@@ -165,7 +165,11 @@ When invoked:
 4. Score every candidate finding; filter per the method. **Scoring is `review-scorer`'s whenever
    the caller has it in the loop** (the `/deep-review` pipeline delegates it there); use its numbers
    then rather than producing your own, and self-score against the same rubric only when you were
-   invoked without it. Judging whether a finding is *real* is yours either way. Tag each with its
+   invoked without it. The pack's envelope `scoring` field records the provenance either way:
+   a scorer pass as "scored by review-scorer: Found N · Reported R · Filtered F", a self-score
+   as such - the DoD gate (`PACK-UNSCORED`) demands a recorded scorer pass on a scored-kind
+   pack, and only the scorer pass clears it. Judging whether a finding is *real* is yours
+   either way. Tag each with its
    **evidence basis** (📊 measured / 🧠 inferred - never present an inference as a measurement).
 5. Report in the shared `docs/review/output-format.md`: a clean **console scoreboard**, with the
    full findings written to the **clean artifact** (`artifacts/REVIEW-<slug>.md` → `.html`).

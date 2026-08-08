@@ -55,6 +55,12 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      snapshot allowlist `.dod-root-allowlist.json`, taken on the rule's first run (D2
      ruling 2026-07-29: pre-existing flat files are exempt, the layout applies to new
      work only).
+ 12. a scored-kind findings pack (review / security-audit / performance) that carries
+     findings records its review-scorer pass in the envelope `scoring` field
+     (`PACK-UNSCORED`) - the scorer delegation was silently skipped in two live runs on
+     2026-08-08 after repeated prose fixes, and only a recorded attestation on disk is
+     mechanically checkable; compliance/model-validation packs are exempt (their findings
+     are never score-filtered).
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
 No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
@@ -1103,6 +1109,64 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+# Kinds whose findings are genuinely scored and filtered by review-scorer
+# (docs/code-review-method.md): compliance/model-validation are never score-filtered, and
+# the scorer's dedup pass over those is optional - so they are exempt from PACK-UNSCORED.
+_SCORED_PACK_KINDS = {"review", "security-audit", "performance"}
+_SCORER_ATTEST_RE = re.compile(r"(?i)review[-_ ]?scorer")
+
+
+def check_findings_scoring(artifacts_dir: Path) -> list[str]:
+    """PACK-UNSCORED: a scored-kind findings pack must record its review-scorer pass.
+
+    Born of two live runs on 2026-08-08 (a Flask review and a full-lifecycle golden case)
+    where the review-scorer delegation was silently skipped in BOTH, after two prior prose
+    strengthenings of the same rule - the pipeline step exists only in instructions the
+    orchestrator does not reliably follow, and nothing on disk evidenced whether it ran.
+    This makes the evidence mechanical: a pack of a scored kind (review / security-audit /
+    performance - docs/code-review-method.md: those findings are genuinely filtered, and
+    the scorer still runs even after self-scoring) that carries findings must record the
+    scorer pass in its envelope `scoring` field. By construction never a wrong accusation:
+    a pack that WAS scored but not recorded has a real provenance gap, and the fix is to
+    record the pass - same posture as STALE-FINDINGS-RENDER. Judgement item, never
+    auto-fixed (recording a scorer pass that never ran would be fabrication)."""
+    findings: list[str] = []
+    data_dir = artifacts_dir / "data"
+    if not data_dir.is_dir():
+        return findings
+    fp_io = _load_findings_pack_io_module()
+    if fp_io is None:
+        return findings  # loader unavailable - fail open, same posture as before
+    for pack_path in sorted(data_dir.rglob("findings-*.jsonl")):
+        try:
+            pack = fp_io.read_pack(pack_path)
+        except (OSError, ValueError):
+            continue  # FINDINGS-INVALID already covers unreadable/malformed packs
+        except Exception:
+            continue  # fail open - an unexpected reader crash must not brick the gate
+        if not isinstance(pack, dict):
+            continue
+        if pack.get("kind", "review") not in _SCORED_PACK_KINDS:
+            continue
+        n = len(pack.get("findings") or [])
+        if n == 0:
+            continue  # a clean pack has nothing to score/filter
+        scoring = pack.get("scoring")
+        if isinstance(scoring, str) and _SCORER_ATTEST_RE.search(scoring):
+            continue
+        findings.append(
+            f"PACK-UNSCORED: {pack_path.name} carries {n} finding(s) but its envelope "
+            "records no review-scorer pass - code/performance findings are scored and "
+            "filtered by review-scorer, even after self-scoring "
+            "(docs/code-review-method.md). Dispatch review-scorer over the pack, apply "
+            "its numbers, then record the pass in the envelope's `scoring` field (e.g. "
+            '"scored by review-scorer: Found N · Reported R · Filtered F"); if the '
+            "scorer already ran, record that pass there (judgement item, never "
+            "auto-fixed)"
+        )
+    return findings
+
+
 _FINDING_ID_RE = re.compile(r"^###\s+\S+\s+(\S+)\s+—", re.M)
 _TALLY_LINE_RE = re.compile(r"^\*\*Disposition tally:\*\*\s*(.+)$", re.M)
 _KIND_PREFIX = {"review": "REVIEW", "security-audit": "SECURITY-AUDIT", "performance": "PERF"}
@@ -1490,6 +1554,7 @@ def check(artifacts_dir: Path) -> list[str]:
 
     findings.extend(check_findings_packs(artifacts_dir))
     findings.extend(check_findings_render_freshness(artifacts_dir))
+    findings.extend(check_findings_scoring(artifacts_dir))
     findings.extend(check_state(artifacts_dir, _all_md=all_md))
     findings.extend(check_review_fingerprints(artifacts_dir))
     findings.extend(check_rtm(artifacts_dir, _all_md=all_md))
