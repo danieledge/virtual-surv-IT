@@ -3,6 +3,19 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.51] - 2026-08-08 - Fix: workflow-dispatch script threw on every real invocation
+
+Live-tested 0.33.50 for the first time (a real `Workflow` call, not the mocked/static
+verification it shipped with) and it failed immediately: the script's own guard rejected
+`args`, because `args` arrived inside the script as a JSON-encoded **string**, not the array
+passed in the tool call - reproduced twice, contradicting the Workflow tool's own documented
+contract ("pass arrays as actual JSON values, not stringified"). Fixed in
+`.claude/skills/.shared/workflow-dispatch.md`'s script: normalises `args` with
+`typeof args === "string" ? JSON.parse(args) : args` before use, rather than trusting the
+documented shape. Re-tested live after the fix: two agents dispatched and returned correctly
+(`alpha`/`bravo`), 0 errors, 3.6s. This is the first genuine live confirmation the mechanism
+works end to end.
+
 ## [0.33.50] - 2026-08-08 - Workflow-tool parallel dispatch: deterministic concurrency for independent review passes
 
 After 0.33.47/0.33.48/0.33.49's three prompt-only concurrent-dispatch fixes all failed live

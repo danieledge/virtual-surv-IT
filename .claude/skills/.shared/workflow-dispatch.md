@@ -47,16 +47,17 @@ export const meta = {
   description: "Dispatch independent team subagent passes concurrently; each returns its final text"
 };
 
-if (!Array.isArray(args) || args.length === 0) {
+const specs = typeof args === "string" ? JSON.parse(args) : args;
+if (!Array.isArray(specs) || specs.length === 0) {
   throw new Error("args must be a non-empty array of {label, prompt, agentType?} specs");
 }
-log("Dispatching " + args.length + " independent passes concurrently");
-const results = await parallel(args.map((spec) => () => {
+log("Dispatching " + specs.length + " independent passes concurrently");
+const results = await parallel(specs.map((spec) => () => {
   const opts = { label: spec.label, phase: "Independent passes" };
   if (spec.agentType) opts.agentType = spec.agentType;
   return agent(spec.prompt, opts);
 }));
-return args.map((spec, i) => ({ label: spec.label, result: results[i] }));
+return specs.map((spec, i) => ({ label: spec.label, result: results[i] }));
 ```
 
 Call shape:
@@ -67,8 +68,16 @@ Workflow
   args: [ {"label": "...", "prompt": "...", "agentType": "..."}, ... ]
 ```
 
-- `args` is a **real JSON array, never a stringified one** (a stringified list breaks
-  `args.map` inside the script).
+- Pass `args` as a **real JSON array in the tool call, never a hand-stringified one**
+  (an explicitly stringified list is a call-site mistake, still worth avoiding). **Live-tested
+  2026-08-08: it arrived inside the script as a JSON-encoded string even when passed as a
+  real array in the tool call** - contradicting the Workflow tool's own documented contract,
+  reproduced twice, not a one-off. The script above defends against both shapes
+  (`typeof args === "string" ? JSON.parse(args) : args`) rather than trusting the documented
+  behaviour - this is the fix, verified live: the undefended version threw on every call in
+  this environment; the defended version dispatched and returned correctly
+  (`[{"label":"smoke-a","result":"alpha"},{"label":"smoke-b","result":"bravo"}]`, 2 agents,
+  0 errors, 3.6s).
 - One spec per independent pass. `label`: short display label ("code-reviewer: frontend").
   `prompt`: the same full brief you would put in that pass's Task call today - a workflow
   subagent inherits none of the conversation, so the brief is its only channel in.
@@ -80,9 +89,10 @@ Workflow
 - A `null` slot in the returned array means that pass was skipped by the user or died on a
   terminal API error. Re-run **just that pass** via the fallback Task path; keep the others.
 
-Contract notes (verified against Claude Code 2.1.226, 2026-08-08 - the reason the template
-looks the way it does; if the tool rejects the script on a future version, treat it as a
-fallback trigger and report the error, do not patch the script live):
+Contract notes (verified against Claude Code 2.1.226, 2026-08-08; the `args` line below is
+verified by a real live invocation, everything else by schema extraction - if the tool
+rejects the script on a future version, treat it as a fallback trigger and report the error,
+do not patch the script live):
 
 - The `export const meta = {...}` literal must be the **first statement** and pure (no computed
   values). `name` and `description` are required.
@@ -93,6 +103,10 @@ fallback trigger and report the error, do not patch the script live):
   and a persisted `scriptPath`; the completion arrives later as a task notification. If a
   completed run's result looks empty, `journal.jsonl` in the run's transcript directory records
   each agent's actual return value.
+- **`args` arrives inside the script as a JSON-encoded string, not the array passed in the
+  tool call** - live-tested, reproduced twice, contradicts the tool's own stated contract.
+  The script above normalises it (`typeof args === "string" ? JSON.parse(args) : args`)
+  rather than trusting the documented shape - do not remove that line.
 
 ## The two-turn flow - what Morgan says and does
 
