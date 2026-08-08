@@ -40,17 +40,6 @@ returns immediately, results arrive as a later background task notification.
 - **`docs/agent-design.md`** script/Workflow conformance row: ➖ → 🟡 (mechanism adopted for
   determinism, not scale).
 
-### Verification notes (stated plainly)
-- The workflow-script contract (meta-literal-first, `args` as real JSON, functions into
-  `parallel()`, text return from `agent()`, async-only result) was verified against the
-  **installed Claude Code 2.1.226 binary's own tool schema and prompt strings** on 2026-08-08,
-  not against a live Workflow run. A live run additionally depends on per-session enablement
-  (managed settings `disableWorkflows`, org policy, the "Dynamic workflows" `/config` setting)
-  and on the user approving the script - both are handled as fallback triggers, not assumed.
-- Whether a headless SDK eval session (`scripts/eval_engage.py`) ever exposes the Workflow
-  tool is **unverified**; the harness neither enables nor disallows it, and enablement is
-  gated outside the harness's control, so no eval case asserts on this path yet.
-
 ## [0.33.49] - 2026-08-08 - Mechanical PACK-UNSCORED gate; resume logic verified live
 
 Two more live diagnostics, plus a mechanical follow-up when one of them found the prior
