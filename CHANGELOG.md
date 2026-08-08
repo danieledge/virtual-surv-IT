@@ -3,6 +3,37 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.53] - 2026-08-08 - Fix: deliverables written to the plugin root instead of the working directory
+
+The `--target-path` diagnostic-mode artifact leak, seen twice today (real files landing in this
+repo's own `artifacts/` instead of the live test's disposable sandbox), traced to its actual
+cause: nothing in the team's own docs ever distinguished **reading** team docs/skills
+(`$PLUGIN_ROOT` in installed-plugin mode - already documented) from **writing** the user's own
+deliverables (always the working directory - never previously stated). With no Bash tool
+available to confirm the actual working directory, and having just successfully read team docs
+from an absolute `$PLUGIN_ROOT` path, real deliverable writes reused that same absolute path
+instead.
+
+### Fixed
+- `.claude/skills/.shared/run-mode.md`: new section stating plainly that `artifacts/...` writes
+  are always relative to the working directory, never `$PLUGIN_ROOT`, regardless of run mode -
+  the mechanical rule is to use a relative path for every deliverable write, never an absolute
+  one recycled from a team-doc `Read` call.
+
+### Verified live, twice
+- A "lean, report only" request: this time Morgan skipped the artifact-write path entirely
+  (findings delivered in chat) - no leak, but not a real test of the fix either, since nothing
+  was written.
+- A "full audit with a delivery report package" request: this time real writes happened - both
+  `code-reviewer` and `compliance-reviewer` findings packs (JSONL) - and landed correctly inside
+  the sandbox, not the real repo. This is the genuine test, and it held.
+
+This is specific to the Bash-disabled `--target-path` live-diagnostic testing mode used
+throughout today's work, not standard production usage (a real user's Claude Code session always
+has Bash), but the underlying confusion (plugin-doc location vs. working directory) could in
+principle occur anywhere the plugin is installed separately from the working project and Bash is
+unavailable for any reason - worth having fixed regardless of how rarely it triggers in practice.
+
 ## [0.33.52] - 2026-08-08 - Extend Workflow dispatch to code-reviewer + compliance-reviewer; fix the reliability gap
 
 Two more live tests today. First: `security-audit/SKILL.md` and `audit-review/SKILL.md` had
