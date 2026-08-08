@@ -3,6 +3,41 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.52] - 2026-08-08 - Extend Workflow dispatch to code-reviewer + compliance-reviewer; fix the reliability gap
+
+Two more live tests today. First: `security-audit/SKILL.md` and `audit-review/SKILL.md` had
+`code-reviewer` and `compliance-reviewer` as sequential numbered steps, with text implying a
+dependency ("jurisdiction established in step 2") that traced back to an intake question asked
+before either reviewer runs - not a real handoff. Reworded both to dispatch concurrently via the
+same `parallel_dispatch_via_workflow` mechanism (default on, same opt-out preference, no new
+toggle) - `docs/review/agent-router.md` and `docs/code-review-method.md` checked, no equivalent
+false-dependency text found there.
+
+Live-tested and it failed: `Workflow` was never called at all, every dispatch went out
+sequentially one Task call per turn - despite Morgan's own right-sizing line saying "dispatched
+concurrently." Comparing against the ONE run that did work (today's earlier 8-agent Flask
+review) found a real difference: that run's right-sizing statement named "the Workflow tool"
+explicitly as part of stating the plan; this one just said "concurrently" without naming a
+mechanism. Fixed the actual behavioural gap, not the wording of the dispatch rule again:
+`docs/team-operating-guide.md`'s right-sizing bullet (the one Morgan reliably follows every
+time, evidenced across every transcript today) now requires naming the dispatch mechanism
+inside the SAME statement as the agent count for any 2+ independent agents, not as a separate
+later decision.
+
+Re-tested live immediately after: right-sizing line said "dispatched... via the Workflow tool"
+as part of naming the two specialists, and `events.jsonl` confirms exactly one real `Workflow`
+call, both reviewers completed concurrently in ~6 minutes, genuine findings delivered (including
+independently catching that a planted regex bug caused under-alerting, not just a security gap).
+Small sample (this is the second real success after the fix, following one real failure before
+it), not a guarantee - but a clean, evidence-matched result tied to a specific, testable
+hypothesis rather than another blind wording pass.
+
+Also reconfirmed the known `--target-path` diagnostic-mode artifact leak (no Bash tool available
+means Morgan cannot confirm its own working directory, and can write real files into this repo's
+`artifacts/` instead of the disposable sandbox) - happened again on this run, cleaned up. This is
+specific to the Bash-disabled live-diagnostic testing mode, not standard usage, and remains
+unfixed - flagged, not addressed, in this release.
+
 ## [0.33.51] - 2026-08-08 - Fix: workflow-dispatch script threw on every real invocation
 
 Live-tested 0.33.50 for the first time (a real `Workflow` call, not the mocked/static

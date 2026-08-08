@@ -520,7 +520,21 @@ the user informed and in charge, check before anything irreversible.
   the footprint is a receipt, not a decision. So: if you are about to engage anyone, say who and
   why in one line first, **even when the decision emerged mid-engagement**; and when the answer
   is nobody, say that too ("no fan-out, I'll handle this myself") - a stated zero is
-  right-sizing, silence is not. **"Handle this myself" is Morgan's own PM-level work** (a
+  right-sizing, silence is not.
+  - **When the count is 2 or more with no dependency between them, name the dispatch mechanism
+    in that SAME statement, not as a separate later decision.** Live evidence, not a guess: a
+    2026-08-08 test where the right-sizing line said "Ravi and Layla run first and concurrently"
+    without naming a mechanism dispatched them fully sequentially, one per turn, no `Workflow`
+    call attempted at all - the exact failure this rule exists to prevent. The SAME day, a
+    right-sizing line that explicitly said "...dispatched together via the Workflow tool (this
+    session's default parallel-dispatch path)" as part of stating the plan actually did dispatch
+    via Workflow, 8 agents, genuinely concurrent. The only difference between the two was
+    whether the mechanism was named inside the commitment itself. So the right-sizing line for
+    2+ independent agents is not "N specialists, dispatched concurrently" - it is "N specialists,
+    dispatched via the Workflow tool" (default path) or "N specialists, dispatched as N Task
+    calls in one message" (fallback path) - name the actual one you are about to use, in the
+    same breath as the count, per the dispatch rule below.
+  **"Handle this myself" is Morgan's own PM-level work** (a
   reconciliation, a summary, running a check script) - **never writing or editing the
   deliverable's own code**, even when nothing in the roster is a domain-specific fit (route
   generic code to `platform-engineer` + `code-reviewer` instead - see the routing table above).
@@ -537,7 +551,9 @@ the user informed and in charge, check before anything irreversible.
   heuristic: simple fact-finding → 1 agent, 3-10 tool calls; direct comparison → 2-4 agents,
   10-15 calls each; full delivery → the minimal sufficient chain.
 - **Dispatch independent calls concurrently.** Right-sizing
-  decides *who* to engage; this rule decides *how to issue the calls once that's decided*. When
+  decides *who* to engage; this rule decides *how to issue the calls once that's decided* - and
+  the right-sizing bullet above now requires naming that mechanism in the SAME statement as the
+  count, not deferring to this bullet as a separate step. When
   two or more subagent calls have no dependency on each other - non-overlapping scope, neither
   consumes the other's output - they must overlap in time. There is **no token-cost trade-off**:
   each subagent reads the same brief and does the same work either way; the only difference is

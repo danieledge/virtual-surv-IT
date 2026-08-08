@@ -22,7 +22,7 @@ from the artifact menu / at close, not mixed into this action question.
 
 Run an **evaluator-optimizer loop**:
 
-1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first, telling it to inherit
+1. **code-reviewer** in **deep** mode (i.e. run `/deep-review`, telling it to inherit
    **Mode = audit** and the **compliance** dimension and not to re-ask those) - comprehensive review
    across the languages present, driving the standard analysers first - run once, up front,
    before the lens passes, their output grounding each pass (`code-reviewer.md`'s tool table is
@@ -32,11 +32,27 @@ Run an **evaluator-optimizer loop**:
    (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope. The embedded
    `/deep-review` asks whether the code was **AI-assisted / vibe-coded**; if so, carry its
    **🧑‍💻 Prompting guidance** through into the audit report (see `docs/review/output-format.md`).
-2. **compliance-reviewer** - use the **jurisdiction(s)** already established in step 1's
-   `/deep-review` (or CLAUDE.md §2 / `docs/scope-and-stack.md`); **only ask if still unknown** -
-   don't re-ask what step 1 captured. It assesses against the **applicable** regime(s) and states
+2. **compliance-reviewer** - use the **jurisdiction(s)** already established at step 1's
+   `/deep-review` **intake** (asked and answered before any reviewer is dispatched; or CLAUDE.md
+   §2 / `docs/scope-and-stack.md`); **only ask if still unknown** - don't re-ask what intake
+   captured, and don't wait for `code-reviewer`'s output: jurisdiction is an intake answer, not a
+   review result. It assesses against the **applicable** regime(s) and states
    what's applicable vs not. Then: auditability, the alert→logic→obligation trace, threshold
    rationale, secrets/PII, test coverage, and change control.
+
+   **Steps 1 and 2 are one concurrent dispatch, not step-after-step.** The two reviews are
+   independent - separate packs (`findings-<slug>.jsonl`, `findings-compliance-<slug>.jsonl`),
+   merged only in the consolidation step below - so once intake is answered, dispatch
+   `compliance-reviewer` together with step 1's `code-reviewer` pass(es) per the operating
+   guide's dispatch rule. **Default path**: when `PARALLEL_DISPATCH_VIA_WORKFLOW=on` (the probe
+   line; on by default) and the `Workflow` tool is available this session, its
+   `{label, prompt, agentType: "compliance-reviewer"}` spec joins the same `args` array as the
+   `agentType: "code-reviewer"` spec(s), through the fixed script in
+   `.claude/skills/.shared/workflow-dispatch.md` verbatim - the passes run concurrently in the
+   background and the results arrive as a later task notification (say so plainly; two-turn flow
+   in that shared file). **Fallback** (preference off, tool absent, or the Workflow call failed):
+   all of them as Task tool-uses in **one message** - never one per turn - per the operating
+   guide's literal procedure ("Dispatch independent calls concurrently").
 3. If any **Critical/Warning** findings (and fixes are in scope), route fixes to the right
    builder, then **re-review** - and **fix everything you safely can in this pass, don't defer
    fixable work to a later sprint**. **Record every pass as it happens** in the Delivery

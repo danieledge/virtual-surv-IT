@@ -73,8 +73,22 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
 
 3. **compliance-reviewer** - the **§5 data-safety trail** (no secrets, no PII/MNPI/raw data in
    code, logs or fixtures) and, where detection logic is touched, the §4 alert→logic→obligation
-   trace. Use the jurisdiction(s) established in step 2 (or CLAUDE.md §2 / `docs/scope-and-stack.md`);
-   only ask if still unknown. Regulated findings are **never filtered**.
+   trace. Use the jurisdiction(s) established at intake (or CLAUDE.md §2 / `docs/scope-and-stack.md`);
+   only ask if still unknown - it is an intake answer, not something step 2 produces. Regulated
+   findings are **never filtered**.
+
+   **Steps 2 and 3 are one concurrent dispatch, not step-after-step.** The two passes are
+   independent - separate packs (`findings-<slug>.jsonl`, `findings-compliance-<slug>.jsonl`),
+   merged only in the consolidation step below - so dispatch them per the operating guide's
+   dispatch rule. **Default path**: when `PARALLEL_DISPATCH_VIA_WORKFLOW=on` (the probe line; on
+   by default) and the `Workflow` tool is available this session, one `{label, prompt, agentType}`
+   spec per pass (`agentType: "code-reviewer"`, `agentType: "compliance-reviewer"`) in the same
+   `args` array, through the fixed script in `.claude/skills/.shared/workflow-dispatch.md`
+   verbatim - the passes run concurrently in the background and the results arrive as a later
+   task notification (say so plainly; two-turn flow in that shared file). **Fallback**
+   (preference off, tool absent, or the Workflow call failed): both as Task tool-uses in **one
+   message** - never one per turn - per the operating guide's literal procedure ("Dispatch
+   independent calls concurrently").
 
 4. If any **Critical/Warning** findings (and fixes are in scope), route fixes to the right builder
    (or `/remediate`), then **re-review** - **fix everything you safely can this pass; don't defer
