@@ -2245,6 +2245,40 @@ class Installer:
             + (" - also saved as this machine's new-project default" if save_as_default else ""),
         )
 
+    def dashboard_step(self) -> None:
+        """Best-effort closing step for a full install/update (2026-08-09 user request):
+        rebuild the local team dashboard right after install/update so the very first
+        thing you have afterward is a working, up-to-date link, not a separate action to
+        remember. Never fatal (fatal=False throughout) - no Node, no network for a first
+        `npm install`, or a build failure all just skip with a plain reason; the plugin
+        itself works fully without this ever succeeding. `run_cmd` is already swapped for
+        the dry-run stand-in in --demo (see make_demo_runner) - no separate demo branch
+        needed here, same as every other step in this class."""
+        self.step_intro(
+            "Rebuilds the local team dashboard (dashboard-ui/) so there's a fresh link as "
+            "soon as setup finishes - the same thing /dashboard does later, run once now."
+        )
+        ui_dir = self.repo / "dashboard-ui"
+        if not ui_dir.is_dir():
+            self.step_skip("Dashboard", "dashboard-ui/ not present in this checkout")
+            return
+        node = _find_node()
+        npm = shutil.which("npm.cmd") or shutil.which("npm")
+        if not node or not npm:
+            self.step_skip("Dashboard", "Node/npm not found - run /dashboard later once Node is set up")
+            return
+        if not (ui_dir / "node_modules").is_dir():
+            proc = run_cmd([npm, "install"], cwd=ui_dir, timeout=600)
+            if proc.returncode != 0:
+                self.step_fail("Dashboard", "npm install failed - run /dashboard later to retry", fatal=False)
+                return
+        proc = run_cmd([npm, "run", "dashboard"], cwd=ui_dir, timeout=300)
+        if proc.returncode != 0:
+            self.step_fail("Dashboard", "build failed - run /dashboard later to retry", fatal=False)
+            return
+        out = ui_dir / "dist" / "index.html"
+        self.step_ok("Dashboard " + self.did("rebuilt", "would be rebuilt"), str(out))
+
     def machine_defaults_offer(self) -> None:
         """Last of the optional post-install steps for a full install/update (2026-08-07
         user request: "we are missing an option to be able to modify settings on install
@@ -2729,6 +2763,7 @@ class Installer:
             ("Status line", self.statusline_step),
             ("Alias setup", self.alias_step),
             ("Machine defaults (optional)", self.machine_defaults_offer),
+            ("Dashboard (optional)", self.dashboard_step),
         ]
 
     def run(self) -> int:

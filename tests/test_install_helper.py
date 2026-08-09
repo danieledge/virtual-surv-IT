@@ -1787,7 +1787,9 @@ def test_statusline_step_skips_without_bash_on_windows(monkeypatch, tmp_path, ca
 def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, tmp_path):
     """2026-08-04 user request: the alias should be offered as part of a full install,
     the same way statusline already is - not only reachable as its own menu item.
-    2026-08-07: machine_defaults_offer was added after it, as the new last step."""
+    2026-08-07: machine_defaults_offer was added after it, as the new last step.
+    2026-08-09: dashboard_step added after THAT, as the new last step (a fresh dashboard
+    link right after setup finishes, not a separate thing to remember to run)."""
     import install_helper as ih
 
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
@@ -1795,8 +1797,10 @@ def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, 
     titles = [t() if callable(t) else t for t, _ in plan]
     assert "Alias setup" in titles
     assert "Machine defaults (optional)" in titles
-    assert titles[-1] == "Machine defaults (optional)"  # last step
+    assert "Dashboard (optional)" in titles
+    assert titles[-1] == "Dashboard (optional)"  # last step
     assert titles.index("Alias setup") == titles.index("Machine defaults (optional)") - 1
+    assert titles.index("Machine defaults (optional)") == titles.index("Dashboard (optional)") - 1
 
 
 def test_alias_step_skipped_by_default_on_yes_run(monkeypatch, tmp_path, capsys):
@@ -1934,6 +1938,69 @@ def test_machine_defaults_offer_accepted_calls_machine_defaults_step(monkeypatch
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
     inst.machine_defaults_offer()
     assert called == [True]
+
+
+def test_dashboard_step_skips_when_dashboard_ui_missing(tmp_path, capsys):
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.repo = tmp_path  # no dashboard-ui/ subdir created
+    inst.dashboard_step()
+    out = capsys.readouterr().out
+    assert "not present in this checkout" in out
+
+
+def test_dashboard_step_skips_when_node_missing(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    (tmp_path / "dashboard-ui").mkdir()
+    monkeypatch.setattr(ih, "_find_node", lambda: None)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.repo = tmp_path
+    inst.dashboard_step()
+    out = capsys.readouterr().out
+    assert "Node/npm not found" in out
+
+
+def test_dashboard_step_builds_and_reports_the_output_path(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    ui_dir = tmp_path / "dashboard-ui"
+    (ui_dir / "node_modules").mkdir(parents=True)  # skip npm install
+    monkeypatch.setattr(ih, "_find_node", lambda: "/usr/bin/node")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/npm" if "npm" in name else None)
+    calls = []
+
+    def fake_run_cmd(argv, cwd=None, timeout=300):
+        calls.append((list(argv), cwd))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(ih, "run_cmd", fake_run_cmd)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.repo = tmp_path
+    inst.dashboard_step()
+    out = capsys.readouterr().out
+    assert "Dashboard" in out
+    assert str(ui_dir / "dist" / "index.html") in out
+    # npm install skipped (node_modules already present), only the build ran
+    assert len(calls) == 1
+    assert calls[0][0][-2:] == ["run", "dashboard"]
+    assert calls[0][1] == ui_dir
+
+
+def test_dashboard_step_never_fatal_on_build_failure(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    ui_dir = tmp_path / "dashboard-ui"
+    (ui_dir / "node_modules").mkdir(parents=True)
+    monkeypatch.setattr(ih, "_find_node", lambda: "/usr/bin/node")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/npm" if "npm" in name else None)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: SimpleNamespace(returncode=1))
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.repo = tmp_path
+    inst.dashboard_step()  # must not raise InstallAbort
+    out = capsys.readouterr().out
+    assert "build failed" in out
 
 
 def test_alias_step_asks_when_manual_configure_chosen(monkeypatch, tmp_path):

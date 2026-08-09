@@ -18,6 +18,11 @@ artifacts/
 !evals/cases/*/fixtures/
 !evals/cases/*/fixtures/**
 
+# Same deliverables, relocated (2026-08-09) out of artifacts/ so the dashboard's discovery scan
+# stops treating them as live evidence - still the same kind of content artifacts/ excludes
+# above, so the same policy applies.
+legacy-artifacts/
+
 # Code-execution consent marker (per-engagement; never commit — it's a local authorisation)
 .claude/.exec-consent
 

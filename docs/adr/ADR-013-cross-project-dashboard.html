@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-013: Cross-project dashboard - settings snapshot, run time, timeline, React frontend (accepted)</title>
+<style>body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55; max-width: 52rem; margin: 0 auto; padding: 0 1.25rem 3rem;
+  color: #1a1a1a; background: #fff; }
+.letterhead { border-bottom: 2px solid #0969da; margin: 0 -1.25rem 1.5rem; padding: .7rem 1.25rem;
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  font-size: .8rem; color: #57606a; }
+.letterhead .brand { font-weight: 600; color: #0969da; letter-spacing: .02em; }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.8em; }
+h1 { border-bottom: 2px solid #e3e3e3; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #ececec; padding-bottom: .2em; }
+/* An H1 inside a callout blockquote should not look like a second document title. */
+blockquote h1, blockquote h2 { border: 0; font-size: 1.05em; margin: .2em 0; padding: 0; }
+code { background: #f4f4f5; padding: .15em .35em; border-radius: 4px; font-size: .9em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+pre { background: #f6f8fa; padding: 1em; border-radius: 8px; overflow-x: auto;
+  border: 1px solid #eaecef; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #dcdcdc; padding: .5em .7em; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; color: #4a5158; }
+a { color: #0969da; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
+  color: #595959; font-size: .8rem; }
+/* In-progress status pulse - CSS-only (no JS: bleach strips script elements from body content
+   by design, see _sanitise()'s docstring). #status-in-progress is set by engagement_state.py's
+   render_markdown() only while status == in_progress; never applied to blocked/closing/closed. */
+#status-in-progress { display: inline-block; animation: status-pulse 1.8s ease-in-out infinite; }
+@keyframes status-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { #status-in-progress { animation: none; } }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1, h2 { border-color: #30363d; }
+  .letterhead { border-color: #1f6feb; color: #9da7b3; }
+  code, pre { background: #161b22; } pre { border-color: #30363d; }
+  th { background: #161b22; } th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) { background: #11161d; }
+  blockquote { color: #9da7b3; border-color: #30363d; }
+  a { color: #539bf5; } .footer { color: #8b949e; border-color: #30363d; }
+}
+@media print {
+  body { max-width: none; font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+  @page { margin: 18mm; }
+  h1, h2, h3 { break-after: avoid; }
+  tr, pre, table, blockquote { break-inside: avoid; }
+  thead { display: table-header-group; }   /* repeat table headers on each page */
+  .letterhead { position: running(head); }
+}</style>
+</head>
+<body>
+<header class="letterhead"><span class="brand">Compliance Surveillance Engineering</span><span>2026-08-08</span></header>
+<h1 id="adr-013-cross-project-dashboard-settings-snapshot-run-time-timeline-react-frontend-accepted">ADR-013: Cross-project dashboard - settings snapshot, run time, timeline, React frontend (accepted)</h1>
+<blockquote>
+<p>Architecture Decision Record (Nygard format). One file per significant decision, so the
+<em>why</em> is auditable later. Authored in <code>.md</code>, rendered to <code>.html</code>.</p>
+<p><strong>Document control</strong> · ID <code>ADR-013</code> · Version <code>0.2</code> · Status <code>Accepted</code>
+· Classification <code>Internal</code> · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of <code>2026-08-08</code></p>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Date</th>
+<th>Author</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2026-08-08</td>
+<td>0.33.54 feature (user-requested, straight-to-implementation)</td>
+<td>Accepted, implemented same day</td>
+</tr>
+<tr>
+<td>0.2</td>
+<td>2026-08-08</td>
+<td>0.33.55 feature (live UX feedback, user approved a JS framework)</td>
+<td>Rendering ownership split: Python stays the data layer (<code>emit_json()</code>), a new <code>dashboard-ui/</code> Vite/React app owns ALL presentation, including a swimlane/loop-arc engagement timeline and a 3-tab page split. See §6 below.</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<table>
+
+<tbody>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted / implemented</strong> (0.33.54 + 0.33.55; <code>scripts/dashboard.py</code>, <code>scripts/engagement_state.py</code>, <code>scripts/engage_probe.py</code>, <code>.claude/skills/dashboard/</code>, <code>dashboard-ui/</code>)</td>
+</tr>
+<tr>
+<td><strong>Date</strong></td>
+<td>2026-08-08</td>
+</tr>
+<tr>
+<td><strong>Deciders</strong></td>
+<td>Human requester (brainstorm → "both!" → straight to implementation → two rounds of live UX feedback → "happy to use a JS framework"), Morgan (design)</td>
+</tr>
+<tr>
+<td><strong>Traceability</strong></td>
+<td>ADR-006 (machine-readable engagement state - <code>settings_snapshot</code>/<code>log</code> extend it additively), ADR-008 (workspaces - <code>scan_engagements()</code> is the per-project source this reads), <code>docs/team-operating-guide.md</code> (<code>log-note --tag review-loop</code> convention)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="context">Context</h2>
+<p>The team already wrote a rich local dashboard (<code>scripts/dashboard.py</code>, 2026-07-31) but it
+was effectively invisible - no <code>/dashboard</code> skill, no mention in the operating guide - and
+the user's complaint ("hard to find engagements across multiple folders, no top-down view
+of what's been delivered") plus three follow-on asks (settings captured per engagement,
+total run time, a visual timeline of artifacts and agent review loops) needed a decision on
+scope before implementation, specifically: whether to build a new cross-project registry
+file, and how to represent "run time" and "review loops" without a schema rewrite.</p>
+<h2 id="decision">Decision</h2>
+<p><strong>No new registry file.</strong> <code>discover_projects()</code> already unions evidence from Claude Code's
+own project config and transcript fingerprinting, and <code>dashboard.py</code>'s <code>main()</code> already
+defaults to it with no project args. Building a second, hand-maintained registry would
+duplicate working, dependency-free logic for no gain - the actual gap was that nothing
+pointed at the existing mechanism. Fixed with a <code>/dashboard</code> skill instead.</p>
+<p><strong>Settings are snapshotted at open, not live-resolved.</strong> <code>engagement_state._cmd_init</code> now
+calls <code>engage_probe.resolve_preferences()</code> (extracted from <code>build_report()</code>, same
+precedence chain: project → machine-default → built-in) and stores the result as
+<code>state["settings_snapshot"]</code> - a point-in-time record. Re-resolving live at dashboard-render
+time was rejected: an engagement's settings should read as "what was true when this ran",
+not silently drift to match the project's <em>current</em> preferences.</p>
+<p><strong>Run time is two separate, honestly-scoped numbers, never blended into one.</strong> Mirrors the
+page's own existing token-cost separation (measured vs inferred):
+- 🧠 inferred, per engagement: <code>closed - opened</code>, date-granularity only (<code>_day_span</code>).
+- 📊 measured, portfolio-wide: sum of consecutive-message transcript-timestamp gaps under a
+  15-minute idle cap (<code>_active_seconds</code>). A first-to-last span was tried first and rejected
+  - a live check against this repo's own transcripts produced "171h 55m" for one session,
+  because Claude Code sessions routinely sit open for hours or days between messages
+  (resume-later is normal), and a raw span counts that idle time as active work.</p>
+<p><strong>The engagement timeline reuses <code>log</code> as a plain <code>list[str]</code> - no schema change.</strong>
+<code>log-note</code> gained an optional <code>--tag NAME</code> flag that stores a bracket-prefixed string
+(<code>"2026-08-08 [review-loop]: X -&gt; Y: reason"</code>) instead of a new structured field. This keeps
+<code>validate_state()</code> untouched (a genuine schema addition for "events" was considered and
+rejected as disproportionate to the ask) while giving the dashboard enough signal to render
+a distinct icon for a review handback. The timeline itself is built from data three mutators
+already write (<code>init</code>'s <code>opened</code>, <code>add-artifact</code>'s <code>added</code> date, <code>log-note</code>'s entries,
+<code>set-status closed</code>'s <code>closed</code>) - nothing new to track, nothing inferred.</p>
+<p><strong>The obligation-coverage map reuses <code>check_citations</code>'s own matcher verbatim</strong> (<code>_load_register</code>,
+<code>check_text</code>) rather than writing a second citation parser - scanned across every known
+engagement's artifacts, portfolio-wide, tallied by register id.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Zero new dependencies, zero new persistent files beyond the additive
+  <code>settings_snapshot</code> state field and the (unchanged-shape) <code>log</code> string convention.</li>
+<li><code>settings_snapshot</code> and the <code>--tag</code> convention are best-effort: a foreign install that
+  can't load <code>engage_probe</code> gets <code>settings_snapshot: null</code>; an engagement that never used
+  <code>--tag</code> still gets a real timeline, just without loop-specific icons. Neither degrades to
+  a broken page - both are stated on the page (<code>_settings_chips</code>'s "not captured" text).</li>
+<li>The <code>log-note --tag review-loop</code> convention only populates itself if specialists actually
+  use it - <code>docs/team-operating-guide.md</code> now names the convention at the point handoffs
+  happen, but nothing enforces it mechanically (a deliberate choice: forcing every log-note
+  through a tag taxonomy was rejected as more ceremony than the ask warranted).</li>
+<li>Residual: the activity heatmap caps at the most recent 120 days (stated on the page, not
+  silent); a portfolio with genuinely ancient history would need that raised.</li>
+</ul>
+<h2 id="6-v02-react-frontend-swimlane-timeline-page-split-2026-08-08-same-day">§6 - v0.2: React frontend, swimlane timeline, page split (2026-08-08, same day)</h2>
+<p>Two rounds of live feedback on the v0.1 result: a general "materially enhance the UX/UI" ask
+(answered in-place with a KPI strip, card accents, agent-name humanization), then a specific
+one - <em>"i want the timeline to be more graphically nice - visually showing the loops - so it
+has the real feel of a team and its interactions. the long list of sessions and then only one
+engagement is confusing"</em>. A flat bulleted list with one amber-tinted row was never going to
+satisfy "visually showing the loops" - that needs a real layout engine, not more CSS on a
+Python-templated string. The user explicitly approved pulling in a JS framework for this.</p>
+<p><strong>Decision: split rendering ownership, don't rewrite the data layer.</strong> <code>scripts/dashboard.py</code>
+keeps every aggregation function unchanged and gains one additive function, <code>emit_json()</code>,
+serializing the same in-memory structures to camelCase JSON. A new <code>dashboard-ui/</code> (Vite +
+React + TypeScript) app owns 100% of presentation - the KPI strip, project/engagement cards,
+portfolio views, and the new swimlane/loop-arc timeline. The plain HTML <code>render()</code> path is
+<strong>frozen, not deleted</strong> - it stays the no-Node fallback (<code>--out</code>, unchanged, still tested),
+kept because rewriting it added no value and removing it would break plugin-cache installs
+with no Node available.</p>
+<p><strong>Decision: static build, zero server</strong> (locked via <code>AskUserQuestion</code> before implementation) -
+<code>npm run dashboard</code> = <code>emit_json()</code> write + <code>vite build</code>, producing one <code>dashboard-ui/dist/
+index.html</code> you still just double-click open. No <code>npm run dev</code> loop, no running local server -
+the project's own "no server, no port, no auth surface" house rule stays honoured.</p>
+<p><strong>A real technical trap, caught before it shipped broken:</strong> Vite's default build emits
+<code>&lt;script type="module" src="..."&gt;</code>, which Chrome/Edge block from loading under <code>file://</code>
+(module-script cross-origin restriction) - the page would silently render blank when
+double-clicked open, the exact failure mode "static build, zero server" was supposed to
+prevent. <code>vite-plugin-singlefile</code> fixes this correctly: it inlines JS/CSS into one <strong>inline</strong>
+<code>&lt;script type="module"&gt;</code> (no external <code>src=</code>), which does NOT trigger the restriction (the
+restriction is about a module <em>fetching another file</em> cross-origin, not an inline script with
+no external imports left after bundling). Verified live: built the app, ran
+<code>google-chrome --headless --dump-dom "file://.../dist/index.html"</code> and confirmed real content
+(KPI strip, tab labels, the swimlane SVG, a rendered <code>REVIEW-LOOP</code> arc) in the DOM - not just
+<code>npm run dev</code>, the actual <code>file://</code> path the tool is supposed to work under.</p>
+<p><strong>Decision: ordinal (not linear) time axis for the timeline</strong> - dates are day-granular and
+sparse; a linear scale would either crush same-day back-and-forth into illegible overlap
+(exactly the loops most worth showing) or waste width on empty gaps. Column pitch is ordinal
+with a capped <code>log2(day-gap)</code> nudge, so a real time gap is still hinted at without dominating
+the layout.</p>
+<p><strong>Decision: three tabs (Engagements / Portfolio / Sessions &amp; cost), not an accordion</strong> - the
+session/token table is ops telemetry, categorically different from delivery tracking, and was
+the literal source of "the long list of sessions and then only one engagement is confusing."
+An accordion still occupies the same scroll position directly after an engagement; a tab
+removes it from that flow entirely.</p>
+<h3 id="consequences-v02">Consequences (v0.2)</h3>
+<ul>
+<li><code>dashboard-ui/</code> adds this repo's first Node/npm dependency - scoped deliberately to this
+  one user-run, not-agent-invoked tool (see <code>dashboard.py</code>'s own docstring); the plugin's own
+  agent-invoked tooling stays stdlib-only, untouched (CLAUDE.md's pip-less requirement is
+  about <code>scripts/*.py</code> the TEAM runs, not this).</li>
+<li>Two implementations of the same view now exist (Python HTML, React). This is accepted, not
+  ignored: the Python path is explicitly frozen/insurance-only, not under active visual
+  development, so it doesn't become two things drifting apart - it becomes one thing plus one
+  known-stale fallback.</li>
+<li><code>dashboard-ui</code>'s primary path needs a repo-as-project checkout with Node; a plugin-cache
+  install (or a machine with no Node) falls back to the plain HTML path automatically - see
+  <code>.claude/skills/dashboard/SKILL.md</code> step 1's mode check.</li>
+<li>Pure timeline-parsing logic (<code>buildTimelineModel</code>, <code>parseHandoff</code>, …) is unit-tested
+  (Vitest, <code>dashboard-ui/src/lib/timelineModel.test.ts</code>); component/rendering tests are
+  explicitly out of scope for v1 (visual verification is the headless-Chrome dump above plus
+  manual review) - a narrower bar than the Python side's test discipline, stated rather than
+  silently lower.</li>
+</ul>
+<div class="footer">Generated from Markdown by the compliance surveillance engineering team. &middot; Source: ADR-013-cross-project-dashboard.md &middot; 2026-08-08</div>
+</body>
+</html>
