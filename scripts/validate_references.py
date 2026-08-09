@@ -64,6 +64,7 @@ _RUNTIME_PARTS = (
     "artifacts/", "START-HERE", "ENGAGEMENTS", "engagements.json", "engagement-state.json",
     ".active-engagement", ".dod-root-allowlist", "CODEBASE-MAP", "codebase-map", ".mcp.json",
     "INSTRUCTIONS.md", "team-preferences.json", "team-extensions.md", _MARKER,
+    "dashboard.html", "scst-dashboard.html", "dashboard-data.json",
     ".guard-interpreter", "SKILL.md", "report.md", "score.json", "findings.json", "gates.json",
     "transcript.md", "events.jsonl", "expected.yaml", "scenario.md", "notes.md",
     "results.jsonl", "fixture-baseline.json",

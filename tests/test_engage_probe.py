@@ -18,6 +18,7 @@ from scripts.engage_probe import (
     read_map,
     read_plugin_version,
     read_team_preferences,
+    resolve_preferences,
     run_extensions_show,
     version_changed,
 )
@@ -313,6 +314,40 @@ def test_build_report_falls_back_to_builtin_default_when_no_machine_config_eithe
     out = build_report("", tmp_path)
     assert "EXTRA_FORMATS=" in out and "EXTRA_FORMATS=docx" not in out
     assert "REGULATORY_CITATIONS=on" in out
+
+
+def test_resolve_preferences_returns_dict_matching_build_report(tmp_path, monkeypatch):
+    """resolve_preferences() (extracted 2026-08-08 so engagement_state.init can snapshot
+    it) must resolve the SAME precedence chain build_report()'s own EXTRA_FORMATS/
+    REGULATORY_CITATIONS/etc. lines already prove - here checked as a structured dict
+    rather than parsed text, since that's the shape init actually stores."""
+    _isolate_home_for_probe(monkeypatch, tmp_path)
+    _write_machine_defaults(tmp_path, default_docx=True, default_regulatory_citations=False)
+    claude = tmp_path / ".claude"
+    claude.mkdir()
+    (claude / "team-preferences.json").write_text(
+        json.dumps({"large_context_review_split": True}), encoding="utf-8"
+    )
+    resolved = resolve_preferences(tmp_path)
+    assert resolved == {
+        "extra_formats": ["docx"],  # machine default (project never set its own)
+        "regulatory_citations": False,  # machine default
+        "large_context_review_split": True,  # project override
+        "parallel_dispatch_via_workflow": True,  # built-in default, no machine tier
+        "map_skeleton": False,  # built-in default
+    }
+
+
+def test_resolve_preferences_all_builtin_defaults_when_nothing_set(tmp_path, monkeypatch):
+    _isolate_home_for_probe(monkeypatch, tmp_path)
+    resolved = resolve_preferences(tmp_path)
+    assert resolved == {
+        "extra_formats": [],
+        "regulatory_citations": True,
+        "large_context_review_split": False,
+        "parallel_dispatch_via_workflow": True,
+        "map_skeleton": False,
+    }
 
 
 def test_build_report_emits_all_fields_repo_as_project(tmp_path):

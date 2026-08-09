@@ -483,16 +483,15 @@ def run_extensions_show(root: Path, project_dir: Path) -> str:
         return ""
 
 
-def build_report(plugin_root_arg: str, project_dir: Path) -> str:
-    root, pr_display = resolve_root(plugin_root_arg, project_dir)
-    plugin_version = read_plugin_version(root)
-    branch = git_branch(root)
-    map_header, map_section3 = read_map(project_dir)
-    prev_ver = last_team_version(map_section3) if map_section3 else ""
-    changed = version_changed(plugin_version, prev_ver)
-    # The skill's own what's-new rule is "no -> show nothing" - so don't even print it: this
-    # used to land in the transcript on every open regardless of VERSION_CHANGED.
-    changelog_entry = first_changelog_entry(root) if changed == "yes" else ""
+def resolve_preferences(project_dir: Path) -> dict:
+    """Resolve the 5 team-preferences flags through the project -> machine-default ->
+    built-in precedence chain. Pulled out of build_report() (2026-08-08) so a point-in-time
+    snapshot of "what was enabled" can be taken independently of the open-time probe banner
+    (engagement_state._cmd_init stores the result as state["settings_snapshot"]).
+
+    Returns {"extra_formats": list[str], "regulatory_citations": bool,
+    "large_context_review_split": bool, "parallel_dispatch_via_workflow": bool,
+    "map_skeleton": bool}."""
     prefs = read_team_preferences(project_dir)
     # Project setting wins if this project has ever explicitly set it (even to "off" -
     # write_team_preferences always records extra_formats/regulatory_citations once a
@@ -519,6 +518,31 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         map_skeleton_on = prefs["map_skeleton"]
     else:
         map_skeleton_on = machine_defaults.get("default_map_skeleton", False)
+    return {
+        "extra_formats": extra_formats,
+        "regulatory_citations": citations_on,
+        "large_context_review_split": review_split_on,
+        "parallel_dispatch_via_workflow": workflow_dispatch_on,
+        "map_skeleton": map_skeleton_on,
+    }
+
+
+def build_report(plugin_root_arg: str, project_dir: Path) -> str:
+    root, pr_display = resolve_root(plugin_root_arg, project_dir)
+    plugin_version = read_plugin_version(root)
+    branch = git_branch(root)
+    map_header, map_section3 = read_map(project_dir)
+    prev_ver = last_team_version(map_section3) if map_section3 else ""
+    changed = version_changed(plugin_version, prev_ver)
+    # The skill's own what's-new rule is "no -> show nothing" - so don't even print it: this
+    # used to land in the transcript on every open regardless of VERSION_CHANGED.
+    changelog_entry = first_changelog_entry(root) if changed == "yes" else ""
+    resolved = resolve_preferences(project_dir)
+    extra_formats = resolved["extra_formats"]
+    citations_on = resolved["regulatory_citations"]
+    review_split_on = resolved["large_context_review_split"]
+    workflow_dispatch_on = resolved["parallel_dispatch_via_workflow"]
+    map_skeleton_on = resolved["map_skeleton"]
     tool_report = run_tool_probe(root, project_dir)
     extensions_block = run_extensions_show(root, project_dir)
     drift = map_drift_summary(project_dir, map_skeleton_on)

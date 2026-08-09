@@ -353,6 +353,90 @@ def test_single_workspace_auto_resolves_without_slug(tmp_path, monkeypatch):
     assert load_state(tmp_path / "artifacts" / "audit")["status"] == "blocked"
 
 
+# --------------------------------------------------- settings snapshot (2026-08-08, dashboard v2)
+
+
+def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeypatch):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"regulatory_citations": False, "large_context_review_split": True}),
+        encoding="utf-8",
+    )
+    _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit")
+    state = load_state(tmp_path / "artifacts" / "audit")
+    assert state["settings_snapshot"] == {
+        "extra_formats": [],
+        "regulatory_citations": False,
+        "large_context_review_split": True,
+        "parallel_dispatch_via_workflow": True,
+        "map_skeleton": False,
+    }
+    assert validate_state(state) == []
+
+
+def test_init_settings_snapshot_builtin_defaults_when_no_preferences_file(tmp_path, monkeypatch):
+    _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit")
+    state = load_state(tmp_path / "artifacts" / "audit")
+    assert state["settings_snapshot"] == {
+        "extra_formats": [],
+        "regulatory_citations": True,
+        "large_context_review_split": False,
+        "parallel_dispatch_via_workflow": True,
+        "map_skeleton": False,
+    }
+
+
+def test_settings_snapshot_is_a_point_in_time_record_not_relive_resolved(tmp_path, monkeypatch):
+    """Changing team-preferences.json AFTER init must not retroactively change an already-
+    recorded snapshot - it is a record of what was true when the engagement opened."""
+    _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit")
+    before = load_state(tmp_path / "artifacts" / "audit")["settings_snapshot"]
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"regulatory_citations": False}), encoding="utf-8"
+    )
+    _run_env(monkeypatch, tmp_path, "log-note", "unrelated mutation")
+    after = load_state(tmp_path / "artifacts" / "audit")["settings_snapshot"]
+    assert before == after
+    assert after["regulatory_citations"] is True  # unchanged despite the later preference edit
+
+
+def test_validate_state_rejects_non_dict_settings_snapshot():
+    bad = copy.deepcopy(_STATE)
+    bad["settings_snapshot"] = "not a dict"
+    assert any("settings_snapshot" in p for p in validate_state(bad))
+
+
+# --------------------------------------------------- log-note --tag (2026-08-08, dashboard v2)
+
+
+def test_log_note_without_tag_is_unchanged(tmp_path):
+    assert _run(tmp_path, "init", "--title", "T", "--slug", "t") == 0
+    assert _run(tmp_path, "log-note", "plain note") == 0
+    log = load_state(tmp_path)["log"]
+    assert len(log) == 1
+    assert log[0].endswith(": plain note")
+    assert "[" not in log[0]
+
+
+def test_log_note_tag_round_trip(tmp_path):
+    assert _run(tmp_path, "init", "--title", "T", "--slug", "t") == 0
+    assert (
+        _run(
+            tmp_path,
+            "log-note",
+            "Ravi -> Mateo: 3 findings, resubmit",
+            "--tag",
+            "review-loop",
+        )
+        == 0
+    )
+    log = load_state(tmp_path)["log"]
+    assert len(log) == 1
+    assert "[review-loop]: Ravi -> Mateo: 3 findings, resubmit" in log[0]
+    assert validate_state(load_state(tmp_path)) == []
+
+
 # --------------------------------------- slug path-traversal (found 2026-08-07, fixed) -------
 #
 # Every command that builds a workspace path from a --slug used to do `root / slug` with no

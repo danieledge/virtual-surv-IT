@@ -33,7 +33,10 @@ Usage (all consent-free team tooling, `python -m scripts.engagement_state <cmd>`
   set-team "Name (role)" ...
   finalise-artifacts
   set-footprint [--agents N] [--tokens TEXT]
-  log-note TEXT                # dated event/completion note - NOT the outstanding list
+  log-note TEXT [--tag NAME]   # dated event/completion note - NOT the outstanding list;
+                                # --tag (e.g. review-loop) marks a bracketed prefix the
+                                # dashboard timeline reads to pick an icon - plain notes
+                                # need no tag and render exactly as before
   add-ratification TEXT        # a decision awaiting human ratification (status pending)
   ratify SUBSTRING [--by WHO]  # human-confirmed: pending -> ratified, dated
   set-active SLUG              # ACTIVE-engagement marker (R1); cleared by clear-active/close
@@ -46,6 +49,15 @@ open work (the live run parked "COMPLETE" notes in outstanding, hiding convergen
 `ratifications` make approval state structured - artifacts asserting a ratification the
 state still records as pending is a `RATIFIED-CLAIM-PENDING` gate finding. v1 files remain
 valid and upgrade in place on their first mutation.
+
+`settings_snapshot` (additive, 2026-08-08, no schema bump - same treatment as `footprint`):
+`init` best-effort snapshots the 5 team-preferences flags (docx/citations/review-split/
+workflow-dispatch/map-skeleton), fully resolved through the project -> machine-default ->
+built-in precedence chain (`engage_probe.resolve_preferences()`), as a point-in-time record
+of what was enabled when the engagement OPENED - never re-resolved later, so it stays true
+to history even if the project's preferences change afterwards. `None` when the probe
+module can't be loaded (foreign install edge case) or the project has no preferences file
+- optional metadata, never load-bearing. Feeds the dashboard's per-engagement settings chips.
 
 Close ordering: `set-team` and `finalise-artifacts` must precede `set-status closed` -
 closed-state validation requires a non-empty team and no interim artifact rows (born of the
@@ -134,6 +146,20 @@ def _default_artifacts_dir() -> Path:
     if tops:
         return tops[-1]  # outermost = the project's real artifacts root
     return base / "artifacts"
+
+
+def _project_root_for(pack_dir: Path) -> Path:
+    """Best-effort working-project root for a pack dir (init's settings-snapshot lookup
+    only - never load-bearing for validation or the registry): the parent of the outermost
+    `artifacts` ancestor, mirroring _default_artifacts_dir()'s logic in reverse. Falls back
+    to the pack's own parent for a bespoke --dir layout with no `artifacts` ancestor at all
+    (e.g. some test fixtures) - team-preferences.json simply won't be found there, which
+    resolve_preferences() already treats as "no project preferences set" (built-in defaults)."""
+    resolved = pack_dir.resolve()
+    tops = [p for p in (resolved, *resolved.parents) if p.name == "artifacts"]
+    if tops:
+        return tops[-1].parent
+    return resolved.parent
 
 
 def _safe_slug_join(base: Path, slug: str) -> Path | None:
@@ -644,6 +670,10 @@ def validate_state(state: dict) -> list[str]:
     if footprint is not None and not isinstance(footprint, dict):
         problems.append("'footprint' must be an object")
 
+    settings_snapshot = state.get("settings_snapshot")
+    if settings_snapshot is not None and not isinstance(settings_snapshot, dict):
+        problems.append("'settings_snapshot' must be an object")
+
     # R3: the sanctioned consent-outcome record may hold NON-granting outcomes only.
     outcome_rec = state.get(_CONSENT_OUTCOME_KEY)
     if outcome_rec is not None:
@@ -971,6 +1001,13 @@ def _cmd_init(args: argparse.Namespace) -> int:
     if target.exists():
         print(f"refusing to overwrite existing {target}", file=sys.stderr)
         return 2
+    settings_snapshot = None
+    probe = _load_engage_probe()
+    if probe is not None:
+        try:
+            settings_snapshot = probe.resolve_preferences(_project_root_for(args.dir))
+        except Exception:  # nosec B110 - best-effort snapshot, never blocks init
+            settings_snapshot = None
     state = {
         "schema": SCHEMA_VERSION,
         "engagement": {
@@ -986,6 +1023,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
         "team": [],
         "verdict": None,
         "footprint": {"agents": None, "approx_tokens": None},
+        "settings_snapshot": settings_snapshot,
         "outstanding": [
             "independent QA - not yet run",
             "DoD check_artifacts - not yet run",
@@ -1096,6 +1134,35 @@ def _load_checker():
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         _CHECK_ARTIFACTS_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
+_ENGAGE_PROBE_MODULE_CACHE = None
+
+
+def _load_engage_probe():
+    """scripts.engage_probe in BOTH run modes, same dual-mode/memoized pattern as
+    _load_checker(). None = unavailable; _cmd_init then simply skips the settings
+    snapshot - optional metadata, never load-bearing for the engagement itself."""
+    global _ENGAGE_PROBE_MODULE_CACHE
+    try:
+        from scripts import engage_probe  # normal `-m` / package mode
+
+        return engage_probe
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _ENGAGE_PROBE_MODULE_CACHE is not None:
+        return _ENGAGE_PROBE_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("engage_probe.py")
+        spec = importlib.util.spec_from_file_location("engage_probe", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _ENGAGE_PROBE_MODULE_CACHE = module
         return module
     except Exception:
         return None
@@ -1236,7 +1303,13 @@ def _cmd_set_decision(args: argparse.Namespace) -> int:
 
 def _cmd_log_note(args: argparse.Namespace) -> int:
     def fn(state: dict) -> None:
-        entry = f"{_dt.date.today().isoformat()}: {args.text}"
+        date = _dt.date.today().isoformat()
+        tag = getattr(args, "tag", None)
+        # Bracket-tag convention, not a new field: `log` stays a plain list[str] (zero
+        # validate_state/schema change) while giving the dashboard timeline enough signal
+        # to pick an icon (e.g. --tag review-loop for a "sent back to X" handoff). Untagged
+        # notes render byte-identical to before this existed.
+        entry = f"{date} [{tag}]: {args.text}" if tag else f"{date}: {args.text}"
         log = state.setdefault("log", [])
         if entry not in log:
             log.append(entry)
@@ -1676,6 +1749,12 @@ def main(argv: list[str] | None = None) -> int:
         help="append a dated event/completion note to the log (renders)",
     )
     p.add_argument("text")
+    p.add_argument(
+        "--tag",
+        default=None,
+        help="optional short tag (e.g. review-loop) rendered as a bracketed prefix - the "
+        "dashboard timeline uses it to pick an icon; plain notes need no tag",
+    )
     p.set_defaults(fn=_cmd_log_note)
 
     p = sub.add_parser(

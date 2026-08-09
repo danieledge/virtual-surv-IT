@@ -35,7 +35,7 @@ Route by **deliverable type**, not habit:
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
-## Command index (canonical - all 25 skills)
+## Command index (canonical - all 26 skills)
 
 - `/engage` - front door: intake + orchestration for any request (problem, review or build)
 - `/engage-light` - explicit low-ceremony profile: same safety gates + code chain, one-page
@@ -66,6 +66,13 @@ Route by **deliverable type**, not habit:
 - `/run-evals` - team-quality eval harness against golden cases (regression net)
 - `/preferences` - view/change project-wide settings (docx export, regulatory citations);
   quick utility, no engagement opened
+- `/dashboard` - regenerate the local, static, cross-project dashboard: every project this
+  machine has evidence the team ran in (existing auto-discovery, no separate registry),
+  each engagement's settings snapshot and a team-interaction timeline (swimlane + loop arcs
+  for review handoffs), portfolio roster/activity/obligation-coverage views (ADR-013); quick
+  utility, no engagement opened, read-only by design. Primary build is `dashboard-ui/`
+  (Vite/React, `npm run dashboard`) - repo-as-project + Node only; falls back automatically
+  to the plain Python-only HTML (`--out`, no Node required) otherwise.
 
 ## Asking questions (standing user preference)
 
@@ -678,7 +685,12 @@ the user informed and in charge, check before anything irreversible.
   feedback the moment a return is clearly (2x) over budget - advisory, never blocking, don't rely
   on it instead of briefing well in the first place.
 - **Coordinate through artifacts, not chatter (the "blackboard")** - agents read/write the shared
-  set (Delivery Report, RTM, specs); each step's output is the next step's input.
+  set (Delivery Report, RTM, specs); each step's output is the next step's input. **When a review
+  sends work back to a build agent, log it**: `python -m scripts.engagement_state log-note
+  --tag review-loop "code-reviewer -> rules-developer: 3 findings, resubmit"` - the local
+  dashboard's per-engagement timeline (`/dashboard`, ADR-013) reads the `--tag` prefix to
+  render a distinct icon for a handoff; a plain `log-note` (no `--tag`) works exactly as
+  before and still lands on the timeline, just without the icon.
 - **Challenge the agents - the PM is a sceptic, not a relay.** Don't pass findings through verbatim:
   **spot-check, don't re-score** (the scorer already applied the rubric - challenge every Critical,
   anything regulated, anything whose evidence basis looks thin, a sample of the rest, **and a sample
