@@ -41,6 +41,9 @@ evals/runs/
 # guard-raw-data.py - see scripts/staged_hooks/guard-raw-data.py)
 .claude/.raw-data-present
 
+# Serialization lock for concurrent guard launches, transient - see run-guard.sh
+.claude/.guard-lock/
+
 # Python
 __pycache__/
 *.py[cod]
