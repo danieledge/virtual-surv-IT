@@ -5459,3 +5459,112 @@ def test_run_env_check_folds_in_synthetic_engagement(monkeypatch, tmp_path, caps
     assert "Synthetic engagement" in out
     assert "lifecycle probe" in out
     assert "Summary" in out  # the new scoreboard is present too
+
+
+# --- enable_step's betas question: asked normally, or skipped under quick_defaults (2026-08-10) ---
+
+
+def _enable_step_confirm_fake(enable_answer=True):
+    """Answers only the top-level 'enable now?' question and the betas question (by its
+    distinctive text) - everything else (permissions/env-tuning/docx/model) declines, so
+    those unrelated collaborators never need mocking for a test focused on one question."""
+
+    def _fn(prompt, default, assume_yes, style=None):
+        if "enable the team for a project now" in prompt:
+            return enable_answer
+        return False
+
+    return _fn
+
+
+def test_enable_step_asks_the_betas_question_when_not_quick_defaults(tmp_path, monkeypatch):
+    """Manually walking through project enablement (quick_defaults False, the pre-existing
+    behavior) still asks, and a decline must not call run_env_tuning_betas."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "run_enable_project", lambda *a, **k: 0)
+    monkeypatch.setattr(ih, "confirm", _enable_step_confirm_fake())
+    betas_calls = []
+    monkeypatch.setattr(
+        ih, "run_env_tuning_betas", lambda *a, **k: betas_calls.append(a) or 0
+    )
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_defaults = False
+    inst.enable_step()
+    assert betas_calls == []  # declined (fake answers False) - must not have run
+
+
+def test_enable_step_applies_betas_workaround_without_asking_under_quick_defaults(
+    tmp_path, monkeypatch
+):
+    """'Go with the recommended defaults for everything' (quick_setup_choice) must apply
+    the workaround directly - same 'no further question' idiom optional_pip already uses
+    for that mode - not silently skip it just because nothing answered its question."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "run_enable_project", lambda *a, **k: 0)
+    asked_betas_question = []
+
+    def _confirm(prompt, default, assume_yes, style=None):
+        if "eager_input_streaming" in prompt:
+            asked_betas_question.append(prompt)
+        if "enable the team for a project now" in prompt:
+            return True
+        return False
+
+    monkeypatch.setattr(ih, "confirm", _confirm)
+    betas_calls = []
+    monkeypatch.setattr(
+        ih, "run_env_tuning_betas", lambda *a, **k: betas_calls.append(a) or 0
+    )
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_defaults = True
+    inst.enable_step()
+    assert len(betas_calls) == 1  # applied directly
+    assert asked_betas_question == []  # and never asked as a question at all
+
+
+def test_enable_step_quick_defaults_does_not_affect_the_standalone_enable_subset(
+    tmp_path, monkeypatch
+):
+    """quick_defaults only ever gets set True via quick_setup_choice, which is part of the
+    'full' install/update flow - the standalone menu 'enable' subset never runs it, so
+    self.quick_defaults stays at its class default (False) there regardless. Belt-and-
+    braces: even if something set it True out of band, the subset != 'full' guard must
+    still require asking."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "run_enable_project", lambda *a, **k: 0)
+    asked_betas_question = []
+
+    def _confirm(prompt, default, assume_yes, style=None):
+        if "eager_input_streaming" in prompt:
+            asked_betas_question.append(prompt)
+        return False  # "enable" subset skips the top-level ask entirely (implied by menu choice)
+
+    monkeypatch.setattr(ih, "confirm", _confirm)
+    betas_calls = []
+    monkeypatch.setattr(
+        ih, "run_env_tuning_betas", lambda *a, **k: betas_calls.append(a) or 0
+    )
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="enable")
+    inst.quick_defaults = True  # out-of-band - should not happen in practice, tested anyway
+    inst.enable_step()
+    assert betas_calls == []  # subset != "full", so the direct-apply branch never fires
+    assert asked_betas_question == ["  Seeing subagent tool calls fail with \"tools.0.custom."
+        "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
+        "rejecting Claude Code's beta tool-schema fields)? A workaround exists, but "
+        "it has a real cost - MCP tool search turns off and every MCP tool loads "
+        "upfront - only worth it if you're actually hitting this."]

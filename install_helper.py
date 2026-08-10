@@ -178,9 +178,16 @@ def merge_env(settings: dict, entries=RECOMMENDED_ENV):
 # with "API Error: 400 tools.0.custom.eager_input_streaming: Extra inputs are not permitted" -
 # the exact signature CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS's own docs name for a gateway that
 # rejects the Anthropic-specific beta tool-schema fields Claude Code sends by default. Kept
-# SEPARATE from RECOMMENDED_ENV (not on by default, not folded into --env-tuning) because it has
-# a real tradeoff of its own - MCP tool search is disabled and every MCP tool loads upfront -
-# that only makes sense for someone actually hitting this gateway incompatibility.
+# SEPARATE from RECOMMENDED_ENV (not folded into --env-tuning) because it has a real tradeoff
+# of its own - MCP tool search is disabled and every MCP tool loads upfront.
+#
+# Default posture is context-dependent, by explicit user decision (2026-08-10): asked
+# individually, default OFF, for --env-tuning-betas / --configure / manually walking through
+# project enablement one question at a time - the tradeoff only makes sense for someone
+# actually hitting the gateway incompatibility, so it stays a deliberate opt-in there. Applied
+# WITHOUT asking when a full install/update chose "recommended defaults for everything" at
+# quick_setup_choice (enable_step) - same "no further question, just do it" idiom
+# optional_pip already uses for that mode.
 EXPERIMENTAL_BETAS_ENV = {
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
 }
@@ -2602,7 +2609,21 @@ class Installer:
                         f"{project / '.claude' / 'settings.json'} (other env vars untouched)"
                     )
                 )
-            if confirm(
+            if self.subset == "full" and self.quick_defaults:
+                # "Go with the recommended defaults" (quick_setup_choice) means exactly
+                # that - no further question, same idiom optional_pip already uses. Only
+                # in this specific mode: someone individually walking through project
+                # enablement (quick_defaults False, or reached via the standalone --enable
+                # path where quick_defaults never applies) still gets asked, default off -
+                # the real MCP-tool-search cost stays a deliberate choice there.
+                self.say(
+                    self.style.dim(
+                        f"    would upsert {len(EXPERIMENTAL_BETAS_ENV)} env var into "
+                        f"{project / '.claude' / 'settings.json'} (recommended defaults - "
+                        "LLM-gateway compatibility workaround)"
+                    )
+                )
+            elif confirm(
                 "  Seeing subagent tool calls fail with \"tools.0.custom."
                 "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
                 "rejecting Claude Code's beta tool-schema fields)? A workaround exists, but "
@@ -2660,7 +2681,15 @@ class Installer:
                 style=self.style,
             ):
                 run_env_tuning(target.expanduser().resolve(), self.style, self.marks)
-            if confirm(
+            if self.subset == "full" and self.quick_defaults:
+                # "Go with the recommended defaults" (quick_setup_choice) means exactly
+                # that - no further question, same idiom optional_pip already uses. Only
+                # in this specific mode: someone individually walking through project
+                # enablement (quick_defaults False, or reached via the standalone --enable
+                # path where quick_defaults never applies) still gets asked, default off -
+                # the real MCP-tool-search cost stays a deliberate choice there.
+                run_env_tuning_betas(target.expanduser().resolve(), self.style, self.marks)
+            elif confirm(
                 "  Seeing subagent tool calls fail with \"tools.0.custom."
                 "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
                 "rejecting Claude Code's beta tool-schema fields)? A workaround exists, but "
