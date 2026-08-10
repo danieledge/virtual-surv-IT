@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "data": "cd .. && python3 -m scripts.dashboard --json dashboard-ui/data/dashboard-data.json",
+    "data": "node scripts/run-data.mjs",
     "dashboard": "npm run data && npm run build",
     "dashboard:live": "node live-server.mjs"
   },
