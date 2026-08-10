@@ -83,6 +83,23 @@ def test_lock_is_released_after_a_normal_call(proj):
     assert not _lock_dir(proj).exists()
 
 
+def test_lock_acquires_promptly_when_claude_dir_does_not_exist_yet(tmp_path):
+    """mkdir "$LOCK_DIR" deliberately has no -p (an existing target failing IS the
+    "someone else holds it" signal the loop polls on) - so the parent must be created
+    separately, once, up front. Without that, a missing .claude/ fails every acquisition
+    attempt the same way real contention would, wasting the full ~1.5s wait budget on every
+    call rather than succeeding immediately."""
+    proj_dir = tmp_path / "proj-no-claude-yet"
+    proj_dir.mkdir()
+    assert not (proj_dir / ".claude").exists()
+    start = time.monotonic()
+    proc = _run(proj_dir)
+    elapsed = time.monotonic() - start
+    assert proc.returncode == 0
+    assert elapsed < 1.0, f"took {elapsed:.2f}s - should acquire immediately, not wait out the budget"
+    assert not _lock_dir(proj_dir).exists()  # released after this call's own completion
+
+
 def test_concurrent_calls_are_actually_serialized(proj):
     """Real concurrency (a thread pool, not a loop) driving N launcher invocations that each
     record their own start/end wall-clock around a short sleep - proves the lock queues them

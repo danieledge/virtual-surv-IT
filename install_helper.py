@@ -36,7 +36,9 @@ Design constraints:
   file's env block (every other env var and setting left untouched); `--env-tuning-betas
   <project-dir>` upserts CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1 the same way - an opt-in
   workaround for an LLM gateway that rejects Anthropic's beta tool-schema fields, off
-  unless you're actually hitting it; `--model-project`/`--model-default` set Morgan's
+  unless you're actually hitting it (also offered as an interactive yes/no during normal
+  project enablement, same opt-in default, not just reachable as this standalone flag);
+  `--model-project`/`--model-default` set Morgan's
   model. Each refuses on an unparseable settings file and
   backs the existing file up first rather than overwrite blind. Because you run this
   helper yourself, these writes are a human act (ADR-002 rec 5 governs the model, which
@@ -2601,6 +2603,22 @@ class Installer:
                     )
                 )
             if confirm(
+                "  Seeing subagent tool calls fail with \"tools.0.custom."
+                "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
+                "rejecting Claude Code's beta tool-schema fields)? A workaround exists, but "
+                "it has a real cost - MCP tool search turns off and every MCP tool loads "
+                "upfront - only worth it if you're actually hitting this.",
+                default=False,
+                assume_yes=False,
+                style=self.style,
+            ):
+                self.say(
+                    self.style.dim(
+                        f"    would upsert {len(EXPERIMENTAL_BETAS_ENV)} env var into "
+                        f"{project / '.claude' / 'settings.json'} (other env vars untouched)"
+                    )
+                )
+            if confirm(
                 "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
                 "produce a Word (.docx) copy by default, for reviewers who redline in Word?",
                 default=bool(self.cfg.get("default_docx", False)),
@@ -2642,6 +2660,17 @@ class Installer:
                 style=self.style,
             ):
                 run_env_tuning(target.expanduser().resolve(), self.style, self.marks)
+            if confirm(
+                "  Seeing subagent tool calls fail with \"tools.0.custom."
+                "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
+                "rejecting Claude Code's beta tool-schema fields)? A workaround exists, but "
+                "it has a real cost - MCP tool search turns off and every MCP tool loads "
+                "upfront - only worth it if you're actually hitting this.",
+                default=False,
+                assume_yes=False,
+                style=self.style,
+            ):
+                run_env_tuning_betas(target.expanduser().resolve(), self.style, self.marks)
             if confirm(
                 "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
                 "produce a Word (.docx) copy by default, for reviewers who redline in Word?",

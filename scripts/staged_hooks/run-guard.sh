@@ -71,6 +71,13 @@ LOCK_MAX_AGE_SECONDS=10  # generous upper bound for one interpreter start + guar
 LOCK_WAIT_BUDGET_MS=1500
 LOCK_POLL_MS=25
 
+# Ensure the PARENT exists once, up front - mkdir "$LOCK_DIR" below deliberately has no -p
+# (an existing target must make it fail, that failure IS the "someone else holds it" signal
+# the loop polls on); without this, a missing .claude/ would make every acquisition attempt
+# fail the same way as real contention, silently wasting the full wait budget every call
+# before falling through to fail-open, rather than succeeding immediately as it should.
+mkdir -p "$(dirname "$LOCK_DIR")" 2>/dev/null
+
 _lock_acquired=0
 _elapsed_ms=0
 while [ "$_elapsed_ms" -lt "$LOCK_WAIT_BUDGET_MS" ]; do
