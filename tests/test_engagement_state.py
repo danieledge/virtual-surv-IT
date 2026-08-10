@@ -151,6 +151,28 @@ def _run(tmp_path, *argv) -> int:
     return main(["--dir", str(tmp_path), *argv])
 
 
+def test_dir_flag_also_works_after_the_subcommand_name(tmp_path):
+    """Regression (2026-08-10, live Windows session where a Claude Code agent's shell cwd
+    kept resetting away from the project root): --dir only worked typed BEFORE the
+    subcommand for init/list/migrate/clear-active - their subparsers were missing
+    parents=[common], unlike every other subcommand, so e.g. `list --menu --dir X` failed
+    with argparse's "unrecognized arguments" even though `--dir X list --menu` worked fine.
+    _run()/_run_env() elsewhere in this file always use the working (before) ordering, so
+    this gap went uncaught until it hit a real machine."""
+    assert main(["init", "--title", "T", "--slug", "t", "--dir", str(tmp_path)]) == 0
+    assert state_path(tmp_path).is_file()
+    assert main(["list", "--menu", "--dir", str(tmp_path)]) == 0
+    assert main(["clear-active", "--dir", str(tmp_path)]) == 0
+
+
+def test_migrate_dir_flag_also_works_after_the_subcommand_name(tmp_path):
+    """Same regression as above, isolated to migrate: needs its own tmp_path so the flat
+    pack it inits isn't nested inside another test's pack (init refuses that on purpose)."""
+    assert main(["init", "--title", "F", "--slug", "flat-job", "--dir", str(tmp_path)]) == 0
+    assert main(["migrate", "--dir", str(tmp_path)]) == 0
+    assert (tmp_path / "flat-job" / "engagement-state.json").is_file()
+
+
 def test_init_creates_state_and_rendered_view(tmp_path):
     assert _run(tmp_path, "init", "--title", "T", "--slug", "t") == 0
     assert state_path(tmp_path).is_file()

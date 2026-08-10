@@ -1667,6 +1667,12 @@ def main(argv: list[str] | None = None) -> int:
     common.add_argument("--slug", dest="target_slug", default=argparse.SUPPRESS)
 
     p = sub.add_parser("init", help="create the state file and first render")
+    # Not parents=[common]: common's own --slug (dest target_slug, "which pack to operate
+    # on") would collide with init's --slug below (a different meaning - the NEW
+    # engagement's slug). --dir alone, same SUPPRESS-default reasoning as common's, so an
+    # omitted --dir here doesn't clobber a value already parsed at the top level (see the
+    # comment above common's own definition).
+    p.add_argument("--dir", type=Path, default=argparse.SUPPRESS)
     p.add_argument("--title", required=True)
     p.add_argument("--slug", required=True)
     p.add_argument("--requested-by", default=None)
@@ -1786,7 +1792,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("slug", nargs="?", help="or use --slug, like every other subcommand")
     p.set_defaults(fn=_cmd_set_active)
 
-    p = sub.add_parser("clear-active", help="remove the ACTIVE-engagement marker")
+    p = sub.add_parser("clear-active", parents=[common], help="remove the ACTIVE-engagement marker")
     p.set_defaults(fn=_cmd_clear_active)
 
     p = sub.add_parser(
@@ -1848,7 +1854,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--tokens", default=None)
     p.set_defaults(fn=_cmd_set_footprint)
 
-    p = sub.add_parser("list", help="list this project's engagements (registry scan)")
+    p = sub.add_parser(
+        "list", parents=[common], help="list this project's engagements (registry scan)"
+    )
     p.add_argument(
         "--menu",
         action="store_true",
@@ -1858,7 +1866,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_list)
 
     p = sub.add_parser(
-        "migrate", help="move a legacy flat pack into its own artifacts/<slug>/ workspace"
+        "migrate",
+        parents=[common],
+        help="move a legacy flat pack into its own artifacts/<slug>/ workspace",
     )
     p.set_defaults(fn=_cmd_migrate)
 

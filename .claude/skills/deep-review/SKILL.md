@@ -57,19 +57,28 @@ and states what's applicable vs not.
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
 `docs/review/lenses/`; router `docs/review/agent-router.md`):
 
-> ⚠️ **Pip (`review-scorer`) is two of these steps, and both are delegations, not options.**
-> Before dispatching anyone, state the pipeline roll-call in one line - *"Pip context → Ravi
-> (×N, concurrent) → Pip score/filter → my challenge"* - the same out-loud discipline as the
-> agent count (operating guide §Orchestration discipline). A fan-out plan that names the
-> reviewers but not `review-scorer` is wrong; Found/Reported/Filtered counts self-scored by the
-> reviewer are a defect to redo via Pip, not accept. Skipping the haiku helper saves nothing -
-> it moves rote work onto the most expensive tier. (Live failure 2026-08-07: a full audit-depth
-> review ran with zero `review-scorer` calls - the stated plan never named Pip, and the
-> reviewers self-scored, noting it in their own packs.)
+> ⚠️ **Pip (`review-scorer`) is two of these steps, and both are delegations, not options -**
+> **including doing the step yourself "to save a turn."** Before dispatching anyone, state the
+> pipeline roll-call in one line - *"Pip context → Ravi (×N, concurrent) → Pip score/filter →
+> my challenge"* - the same out-loud discipline as the agent count (operating guide
+> §Orchestration discipline). A fan-out plan that names the reviewers but not `review-scorer`
+> is wrong; Found/Reported/Filtered counts self-scored by the reviewer are a defect to redo via
+> Pip, not accept. Skipping the haiku helper saves nothing - it moves rote work onto the most
+> expensive tier, whether that's the reviewer self-scoring (below) or the orchestrator doing
+> Pip's context step inline. Two live failures, two different shapes of the same mistake:
+> **2026-08-07** - a full audit-depth review ran with zero `review-scorer` calls, the stated
+> plan never named Pip, and the reviewers self-scored, noting it in their own packs. **2026-08-10**
+> - step 4 (scoring) was correctly queued for Pip, but step 1 (context) wasn't: the
+> orchestrator read the analyser outputs, detected languages and picked lenses itself, then
+> self-disclosed it in the task list as "effectively done inline by Morgan." Faster in the
+> moment, but sonnet doing haiku's rote work still costs more, and a plan can fail this rule
+> one step at a time, not just wholesale.
 
-1. **Context** *(delegate to `review-scorer`, haiku)* - detect languages, list changed
-   files/lines, check for CLAUDE.md, and select the minimal lens set per the router. This is
-   rote work - run it on the cheap tier, not opus.
+1. **Context** - a real `Task` tool call, `subagent_type: review-scorer` (haiku), not the
+   orchestrator doing the equivalent work itself - detect languages, list changed files/lines,
+   check for CLAUDE.md, and select the minimal lens set per the router. This is rote work - run
+   it on the cheap tier, not opus, and not inline on whatever tier the orchestrator is already
+   running.
 2. **Load lenses** progressively via the router - only those `review-scorer` selected.
 3. **Analyse** - drive `code-reviewer` to run the loaded lenses in the topology the router defines
    (`docs/review/agent-router.md`, canonical for pipeline shape: today that is sequential focused

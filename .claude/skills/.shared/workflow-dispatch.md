@@ -102,7 +102,13 @@ do not patch the script live):
 - The tool result returns immediately with `status: "async_launched"`, a `taskId`, a `runId`
   and a persisted `scriptPath`; the completion arrives later as a task notification. If a
   completed run's result looks empty, `journal.jsonl` in the run's transcript directory records
-  each agent's actual return value.
+  each agent's actual return value. **Read it directly - it's already text, no `python -c` (or
+  any inline execution) needed to parse or count it, and the code-execution gate blocks that
+  unconditionally regardless of size** (live-tested 2026-08-10: reaching for `python -c
+  "import json; ..."` on this exact file cost a full blocked-then-retry cycle before falling
+  back to reading it plainly, which is what `check_artifacts`/the findings-count-verification
+  guidance already expect). Same applies to any other JSON/text output this step reads
+  (`*.meta.json`, findings packs) - `cat`/`Read` first, always.
 - **`args` arrives inside the script as a JSON-encoded string, not the array passed in the
   tool call** - live-tested, reproduced twice, contradicts the tool's own stated contract.
   The script above normalises it (`typeof args === "string" ? JSON.parse(args) : args`)
@@ -123,3 +129,26 @@ these passes are done until they are (no unevidenced in-progress claims).
 exactly where batched Task returns would have resumed the pipeline - the scorer pass over the
 packs, the merged-pack write, the challenge pass. Nothing downstream changes; only the dispatch
 mechanism did.
+
+**Reading `journal.jsonl` cheaply (live-tested 2026-08-10: a 3-pass run produced a ~32k-token
+file - too large to `Read` whole without burning a large chunk of context on it).** Each pass's
+own `label` (the string you set in `args` at dispatch, e.g. `"code-reviewer: frontend"`) is the
+one anchor you already know going in, regardless of the journal's exact JSON shape - `Grep` for
+it first to find which line(s) belong to that pass, then read only that range, not the whole
+file. Repeat per label rather than loading everything at once. This is a size/technique problem
+only, never a reason to reach for `python -c`/inline execution to parse or search it - the same
+unconditional block and the same fix (`Read`/`Grep`, plain text) applies here as to any other
+output file this step touches.
+
+**Extract every finding in ONE pass, never one `Grep` call per finding.** Same live case, worse
+in practice: 71 findings total (34 backend + 27 frontend + 10 performance) across the three
+packs, and the run pulled them out **one at a time** - a separate `grep -o` per finding ID
+(`BE-006`, then `BE-009`, then `BE-012`...), several individually hitting a 1-minute timeout.
+At that rate, extracting the results took longer than the 11.8 minutes the three passes spent
+producing them - the mechanical step outweighing the actual analysis is the tell that the
+technique, not the data, is the problem. The fix is the same shape as the label lookup above:
+one `Grep` with a **general pattern that matches every finding marker at once** (e.g. every
+`**[XX-###]` occurrence, not one literal ID per call), so the IDs and their positions come back
+in a single pass; batch-read the content from there rather than re-querying per ID. If a finding
+count is unusually high (as here), that is itself worth a line in the report's own commentary,
+not just a slower extraction loop.
