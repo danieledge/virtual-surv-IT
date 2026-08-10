@@ -624,26 +624,39 @@ the user informed and in charge, check before anything irreversible.
   everything; a flat layout with no real component boundary just doesn't split. The
   component-scoped calls are exactly the independent, non-overlapping case the dispatch rule
   above describes - dispatch them per that rule (the Workflow path when on and available,
-  otherwise one message, multiple Task calls - never one per turn). Each
-  component-scoped reviewer call returns its findings **as text, never writes directly**; do a
-  light cross-component consistency pass yourself over the combined output (an API change on one
-  side with no matching update on the other is exactly what siloed review misses).
-  **Consolidating and writing the merged pack can ITSELF be the large-output timeout point**
+  otherwise one message, multiple Task calls - never one per turn). **Each component-scoped
+  reviewer call writes its own findings pack directly**, to its own component-qualified path
+  (`artifacts/<slug>/data/findings-<slug>-<component>.jsonl`, e.g. `findings-<slug>-backend.jsonl`
+  - never the shared canonical name), and returns only a short confirmation (finding counts +
+  its own pack path), not its findings as prose text. This used to be the other way round
+  ("returns findings as text, never writes directly") specifically to stop multiple calls
+  racing on ONE shared path - since each call now targets its OWN distinct, never-shared path,
+  that race cannot happen regardless of how many run concurrently, and there is no longer a
+  reason to route findings through prose text first. (Live-verified 2026-08-10: the
+  `agent_type`-based write-scoping guard, `guard-findings-pack-write.py`, was confirmed to fire
+  identically whether a pass is dispatched via `Task` or via `Workflow`'s `agent()` - so this
+  applies to both dispatch paths, not just one.) Do a light cross-component consistency pass
+  yourself over the combined findings once merged (an API change on one side with no matching
+  update on the other is exactly what siloed review misses).
+  **Consolidating and writing the MERGED pack can still be the large-output timeout point**
   (live report, 2026-08-05: a 13-finding merge timed out repeatedly on the same single-Write
-  attempt, making zero progress on retry) - the original design's "still only one write" avoided
-  mid-write corruption but didn't account for a big merge's OUTPUT size alone tripping the same
-  proxy timeout as a big diff's INPUT size. **Roughly >8 findings to merge across
-  component-scoped calls** (starting heuristic, same tuning status as the split trigger
-  above): do the consolidation write **yourself** (Morgan), not via a delegated final
-  `code-reviewer` call - you carry no *scoping* restriction on the findings-pack path (that
-  half of the guard only fires for the four named reviewer agents' own calls; it has no
-  opinion on yours), so you can build the file incrementally instead of emitting all findings
-  in one generation: **Write** a valid pack containing the first batch plus every required
-  top-level field, then **Edit** to append the remaining findings in bounded batches (roughly
-  4-6 at a time) until the full merged set is in. (A single scoped agent hitting the same
-  >8 threshold on its own, un-merged pack has the identical Write-then-Edit option for its
-  own path - the guard's size cap applies to Write only and exempts Edit for exactly this
-  reason. What only Morgan does is the *cross-agent merge*: no single scoped agent can write
+  attempt, making zero progress on retry) - this is now purely an OUTPUT-size concern on
+  Morgan's own merge write, separate from how the component packs were collected. **Roughly >8
+  findings to merge across component-scoped calls** (starting heuristic, same tuning status as
+  the split trigger above): read each component's own pack back first (already-valid JSONL, no
+  reconstruction from prose needed - just `Read` each small file) and merge their `findings`
+  arrays; do the consolidation write **yourself** (Morgan) into the canonical
+  `findings-<slug>.jsonl`, not via a delegated final `code-reviewer` call - you carry no
+  *scoping* restriction on the findings-pack path (that half of the guard only fires for the
+  four named reviewer agents' own calls; it has no opinion on yours), so you can build the
+  merged file incrementally instead of emitting everything in one generation: **Write** a valid
+  pack containing the first batch plus every required top-level field, then **Edit** to append
+  the remaining findings in bounded batches (roughly 4-6 at a time) until the full merged set is
+  in. (A single scoped agent hitting the same >8 threshold on its own, un-merged pack has the
+  identical Write-then-Edit option for its own path - the guard's size cap applies to Write only
+  and exempts Edit for exactly this reason - so a component pass with an unusually large finding
+  count for its own slice uses the same batching, independently, before Morgan ever reads it
+  back. What only Morgan does is the *cross-component merge*: no single scoped agent can write
   into another's pack, or a combined one, since the guard ties each to its own `agent_type`.)
   Track this as an explicit multi-step task list so a mid-sequence interruption is visibly
   incomplete, not silently missing findings; before calling it done, state the finding count

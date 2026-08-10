@@ -9,6 +9,20 @@
 > **Update 2026-08-05:** a live corp report found the original design's single-write consolidation
 > step can itself hit the same proxy timeout once a merge is large enough - design point 4 below
 > now has a dated update covering the fix (chunked consolidation, above roughly 8 findings).
+>
+> **Update 2026-08-10 - point 4's "calls never write at all" premise is superseded.** That
+> premise was to avoid multiple component-scoped calls racing on ONE shared pack path; it
+> predates the Workflow tool by four days and was never revisited when Workflow shipped. A live
+> session showed the actual cost of "return findings as text": Morgan had to reconstruct 71
+> findings from prose buried in a large `journal.jsonl`, one `Grep` call per finding, slower
+> than the review itself. Live-verified the same day that `guard-findings-pack-write.py`'s
+> `agent_type` scoping fires identically for Task- and Workflow-dispatched calls, so the
+> original race concern can be solved more simply: each component call writes its OWN
+> distinctly-named pack (`findings-<slug>-<component>.jsonl`) - never the shared canonical name
+> - so no two calls ever target the same path and nothing needs to return text instead of
+> writing. Current behaviour lives in `docs/team-operating-guide.md`'s orchestration-discipline
+> section and `.claude/skills/.shared/workflow-dispatch.md`; point 4 below is kept for the
+> now-superseded reasoning, not as the current design.
 
 ## The problem(s) - two, not one
 

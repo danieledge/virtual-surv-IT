@@ -96,7 +96,12 @@ and states what's applicable vs not.
    spec per pass, `agentType: "code-reviewer"`, a `performance-reviewer` pass on the same
    target joins the same `args` array; the passes run concurrently in the background and the
    results arrive as a later task notification (say so plainly - the two-turn flow is in that
-   shared file). **Fallback** (preference off, tool absent, or the Workflow call failed):
+   shared file). **Each pass's prompt must instruct it to write its own findings pack directly**
+   to its own component-qualified path (operating guide §Orchestration discipline -
+   `findings-<slug>-<component>.jsonl`, never the shared canonical name) and return only a short
+   confirmation, not its findings as text - see `.claude/skills/.shared/workflow-dispatch.md`
+   for the exact convention.
+   **Fallback** (preference off, tool absent, or the Workflow call failed):
    dispatch them as **concurrent Task calls in one
    message** - never one per turn; the `performance-reviewer` pass joins the
    same message. **Live-tested failure mode (2026-08-07/08, three attempts): stating this rule
@@ -138,9 +143,11 @@ and states what's applicable vs not.
       `artifacts/<slug>/data/findings-<slug>.jsonl` (schema `docs/review/findings-schema.json`,
       exemplar `docs/review/gold-findings.jsonl` - it holds a Write grant scoped to exactly this
       path, mechanically enforced) - read it back for your challenge pass (step 6) rather than
-      re-authoring it. **In a component-split review** (step 3.3) the passes returned findings
-      as text instead and **you** wrote the merged pack yourself (operating guide §Orchestration
-      discipline, the >8-finding Write-then-Edit rule) - challenge from that file the same way. **Only if your challenge pass downgrades or drops something** do you edit
+      re-authoring it. **In a component-split review** (step 3.3) each pass instead wrote its own
+      pack directly to its own component-qualified path - read those small packs back (`Read`
+      each one, no reconstruction from prose needed) and **you** merge them into the canonical
+      `findings-<slug>.jsonl` yourself (operating guide §Orchestration discipline, the
+      >8-finding Write-then-Edit rule) - challenge from that merged file the same way. **Only if your challenge pass downgrades or drops something** do you edit
       that same file to reflect the final (post-challenge) findings; otherwise leave it exactly as
       written.
    2. Run **`<python> -m scripts.check_artifacts --fix`** (allow-listed - no consent needed): it

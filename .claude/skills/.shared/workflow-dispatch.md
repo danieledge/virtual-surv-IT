@@ -83,9 +83,23 @@ Workflow
   subagent inherits none of the conversation, so the brief is its only channel in.
   `agentType` (optional): the same agent type name you would give the Task tool in this
   session (e.g. `code-reviewer`, `performance-reviewer`); omit it for a general-purpose pass.
-- `agent()` without a `schema` option returns the subagent's **final text as a string** - the
-  same kind of return each reviewer pass gives today, so the component-split convention
-  ("passes return findings as text, the orchestrator writes the merged pack") is unchanged.
+- `agent()` without a `schema` option returns the subagent's **final text as a string** - for a
+  general-purpose pass, that text IS the result. **For a findings-producing pass (`code-reviewer`,
+  `performance-reviewer`, `compliance-reviewer`, `model-validator`), the prompt must instead
+  instruct it to `Write` its own findings pack directly** to a component-qualified path -
+  `artifacts/<slug>/data/findings-<slug>-<component>.jsonl`, never the shared canonical
+  `findings-<slug>.jsonl` name (operating guide §Orchestration discipline) - and return only a
+  short confirmation (finding counts + the exact path it wrote) as its text result. Each pass's
+  own path is guaranteed distinct (component-qualified), so concurrent writes never collide -
+  the old convention ("passes return findings as text, the orchestrator writes the merged pack")
+  existed specifically to avoid that collision and no longer needs to, now that each pass has
+  its own path (live-verified 2026-08-10: the findings-pack write-scoping guard fires
+  identically for a Task-dispatched or a Workflow-`agent()`-dispatched call, so the same Write
+  grant that lets a normal `code-reviewer` pass write its pack works here too). Morgan still
+  does the final cross-component merge into the canonical `findings-<slug>.jsonl` herself (same
+  file, same >8-finding Write-then-Edit batching as before) - what changed is that she now reads
+  that merge input from small, already-valid JSONL files instead of reconstructing it from
+  prose buried in `journal.jsonl`.
 - A `null` slot in the returned array means that pass was skipped by the user or died on a
   terminal API error. Re-run **just that pass** via the fallback Task path; keep the others.
 
@@ -130,25 +144,35 @@ exactly where batched Task returns would have resumed the pipeline - the scorer 
 packs, the merged-pack write, the challenge pass. Nothing downstream changes; only the dispatch
 mechanism did.
 
-**Reading `journal.jsonl` cheaply (live-tested 2026-08-10: a 3-pass run produced a ~32k-token
-file - too large to `Read` whole without burning a large chunk of context on it).** Each pass's
-own `label` (the string you set in `args` at dispatch, e.g. `"code-reviewer: frontend"`) is the
-one anchor you already know going in, regardless of the journal's exact JSON shape - `Grep` for
-it first to find which line(s) belong to that pass, then read only that range, not the whole
-file. Repeat per label rather than loading everything at once. This is a size/technique problem
-only, never a reason to reach for `python -c`/inline execution to parse or search it - the same
+**For findings-producing passes (the normal case), this is now cheap by construction:** each
+pass wrote its own pack directly (see the `agentType`/prompt bullet above) and returned only a
+short confirmation, so "read the per-label results" means reading N small confirmation strings
+plus N small pack files - never the full `journal.jsonl`. The technique notes below are the
+**fallback**, for a general-purpose (non-findings) pass whose real result IS its returned text,
+or for the rare case a findings-producing pass didn't follow the write-directly instruction and
+its findings ended up in `journal.jsonl` as prose after all.
+
+**Fallback - reading `journal.jsonl` cheaply, if you ever do need it (live-tested 2026-08-10:
+a 3-pass run that returned text instead of writing produced a ~32k-token file - too large to
+`Read` whole without burning a large chunk of context on it).** Each pass's own `label` (the
+string you set in `args` at dispatch, e.g. `"code-reviewer: frontend"`) is the one anchor you
+already know going in, regardless of the journal's exact JSON shape - `Grep` for it first to
+find which line(s) belong to that pass, then read only that range, not the whole file. Repeat
+per label rather than loading everything at once. This is a size/technique problem only, never
+a reason to reach for `python -c`/inline execution to parse or search it - the same
 unconditional block and the same fix (`Read`/`Grep`, plain text) applies here as to any other
 output file this step touches.
 
-**Extract every finding in ONE pass, never one `Grep` call per finding.** Same live case, worse
-in practice: 71 findings total (34 backend + 27 frontend + 10 performance) across the three
-packs, and the run pulled them out **one at a time** - a separate `grep -o` per finding ID
-(`BE-006`, then `BE-009`, then `BE-012`...), several individually hitting a 1-minute timeout.
-At that rate, extracting the results took longer than the 11.8 minutes the three passes spent
-producing them - the mechanical step outweighing the actual analysis is the tell that the
-technique, not the data, is the problem. The fix is the same shape as the label lookup above:
-one `Grep` with a **general pattern that matches every finding marker at once** (e.g. every
-`**[XX-###]` occurrence, not one literal ID per call), so the IDs and their positions come back
-in a single pass; batch-read the content from there rather than re-querying per ID. If a finding
-count is unusually high (as here), that is itself worth a line in the report's own commentary,
-not just a slower extraction loop.
+**Fallback - if you still end up extracting individual findings from returned text, do it in
+ONE pass, never one `Grep` call per finding.** The live case that motivated writing packs
+directly in the first place: 71 findings total (34 backend + 27 frontend + 10 performance)
+across three text-returning passes, pulled out **one at a time** - a separate `grep -o` per
+finding ID (`BE-006`, then `BE-009`, then `BE-012`...), several individually hitting a 1-minute
+timeout, and each call paying its own PreToolUse hook-dispatch overhead on top. At that rate,
+extracting the results took longer than the 11.8 minutes the three passes spent producing them
+- the mechanical step outweighing the actual analysis is the tell that the technique, not the
+data, is the problem (this is exactly the failure mode writing packs directly avoids - prefer
+that over getting good at this fallback). If you are in this fallback anyway: one `Grep` with a
+**general pattern that matches every finding marker at once** (e.g. every `**[XX-###]`
+occurrence, not one literal ID per call), so the IDs and their positions come back in a single
+pass; batch-read the content from there rather than re-querying per ID.

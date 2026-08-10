@@ -132,7 +132,12 @@ commands, skills, hook wiring, `scripts/`, docs consistency, manifest, README.
 2. **`guard-findings-pack-write.py` depends on an `agent_type` field** in the PreToolUse
    payload (line 79) that I could not confirm is actually delivered for subagent tool calls
    (tests inject it synthetically). If it's absent in practice, the scoping guard fails open.
-   Worth one live verification against a captured payload.
+   Worth one live verification against a captured payload. **Resolved 2026-08-10, live-verified
+   both dispatch paths:** a real `code-reviewer` subagent attempting an out-of-scope `Write`,
+   dispatched once via `Task` and once via `Workflow`'s `agent(prompt, {agentType:
+   "code-reviewer"})`, was blocked identically both times (`Blocked (findings-pack write scope,
+   agent=code-reviewer): ...`) - `agent_type` is delivered correctly for both, the guard does
+   not fail open on this dimension for either dispatch mechanism.
 
 3. **Live false positive observed during this review:** guard-consent-writes blocked a
    read-only Python heredoc that merely *mentioned* a protected filename
