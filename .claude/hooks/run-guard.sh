@@ -4,11 +4,14 @@
 # Claude Code runs hook commands in a POSIX shell (sh/bash on Linux & macOS, Git Bash on
 # Windows). The bare `python3` used previously is not present on Windows, where the interpreter
 # is `python` or the `py` launcher - so the guard failed to start there ("python3: command not
-# found") and, worse, did not run at all. This finds whichever interpreter exists and `exec`s it,
-# so the guard's stdin (the tool payload) and exit code (2 = block) pass through unchanged.
+# found") and, worse, did not run at all. This finds whichever interpreter exists and runs it
+# (as a foreground child, not `exec` - see the locking comment below for why), so the guard's
+# stdin (the tool payload) and exit code (2 = block) pass through unchanged either way.
 #
 # This wrapper is intentionally tiny and holds NO guard logic - the guards themselves
-# (guard-raw-data.py, guard-code-execution.py) are unchanged. It only selects an interpreter.
+# (guard-raw-data.py, guard-code-execution.py) are unchanged. It selects an interpreter and
+# (2026-08-10) serializes concurrent launches under subagent fan-out - see the lock section
+# below for why and how.
 #
 # Interpreters are version-probed: the guards need Python >= 3.9 (pathlib.Path.is_relative_to);
 # an older interpreter would crash at runtime, and we'd rather skip it and try the next one than
@@ -42,11 +45,75 @@
 export PYTHONIOENCODING=utf-8
 export PYTHONUTF8=1
 
+# Serialize concurrent invocations (corp report, 2026-08-10): a Workflow-tool fan-out fires
+# several subagents' tool calls within the same instant, each independently spawning this
+# launcher - normally hidden (one spawn finishes before the next tool call starts), but under
+# real concurrency N interpreter cold-starts hit CPU scheduling and endpoint-security scanning
+# on a Windows box AT ONCE, measured live turning ~50-100ms hook latency into 2,000-8,000ms
+# across the board. An mkdir-based lock (atomic and portable - no flock dependency, which Git
+# Bash is not guaranteed to ship) queues concurrent launches instead of letting them all spawn
+# simultaneously; total process-creation work is unchanged, but it stops happening in one
+# contended burst. Two failure modes are handled explicitly rather than left implicit, because
+# this gates every tool call in the session - a bug here is worse than the slowness it fixes:
+#   - Bounded wait, not indefinite: give up and proceed WITHOUT the lock (fail open) after
+#     LOCK_WAIT_BUDGET_MS rather than risk hanging every tool call on a stuck lock. Same
+#     "launcher-level infrastructure problems fail open" posture as the no-interpreter-found
+#     case below - a missing/broken serialization mechanism is not a reason to brick the
+#     session, only a reason to lose the (purely perf) benefit of serializing.
+#   - Stale-lock reclaim: a lock older than LOCK_MAX_AGE_SECONDS is treated as abandoned (its
+#     holder crashed or was SIGKILLed - not catchable by the EXIT trap below) and is removed
+#     immediately rather than waited out, so one dead holder can't starve every call behind it
+#     for the rest of the session.
+LOCK_DIR="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/.guard-lock"
+LOCK_STAMP="$LOCK_DIR/acquired-at"
+LOCK_MAX_AGE_SECONDS=10  # generous upper bound for one interpreter start + guard check;
+# older means the holder is gone, not genuinely still working.
+LOCK_WAIT_BUDGET_MS=1500
+LOCK_POLL_MS=25
+
+# Ensure the PARENT exists once, up front - mkdir "$LOCK_DIR" below deliberately has no -p
+# (an existing target must make it fail, that failure IS the "someone else holds it" signal
+# the loop polls on); without this, a missing .claude/ would make every acquisition attempt
+# fail the same way as real contention, silently wasting the full wait budget every call
+# before falling through to fail-open, rather than succeeding immediately as it should.
+mkdir -p "$(dirname "$LOCK_DIR")" 2>/dev/null
+
+_lock_acquired=0
+_elapsed_ms=0
+while [ "$_elapsed_ms" -lt "$LOCK_WAIT_BUDGET_MS" ]; do
+	if mkdir "$LOCK_DIR" 2>/dev/null; then
+		date +%s >"$LOCK_STAMP" 2>/dev/null
+		_lock_acquired=1
+		break
+	fi
+	if [ -f "$LOCK_STAMP" ]; then
+		_stamp=$(cat "$LOCK_STAMP" 2>/dev/null)
+		_now=$(date +%s 2>/dev/null)
+		if [ -n "$_stamp" ] && [ -n "$_now" ] && [ "$((_now - _stamp))" -gt "$LOCK_MAX_AGE_SECONDS" ] 2>/dev/null; then
+			rm -rf "$LOCK_DIR" 2>/dev/null
+			continue
+		fi
+	fi
+	sleep 0.025 2>/dev/null || sleep 1
+	_elapsed_ms=$((_elapsed_ms + LOCK_POLL_MS))
+done
+if [ "$_lock_acquired" = 1 ]; then
+	# Covers the interpreter (or crash/kill) exiting abnormally; SIGKILL still can't be
+	# trapped by design (POSIX), which is exactly why the stale-lock reclaim above exists as
+	# the backstop for that one case this trap cannot cover.
+	trap 'rm -rf "$LOCK_DIR" 2>/dev/null' EXIT INT TERM
+fi
+
+# Below: same interpreter resolution as before, just "run and wait" instead of "exec" (exec
+# replaces this process image, which would skip the lock-release above entirely - it must
+# run after the guard completes, not instead of this script continuing).
+
 CACHE="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/.guard-interpreter"
 if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)
 	if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
-		exec "$cached" "$@"
+		"$cached" "$@"
+		exit $?
 	fi
 fi
 # Probe order (2026-07-31 corporate report, P2): the loop below still EXECUTES the first
@@ -65,7 +132,8 @@ for interpreter in $order; do
 		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
 			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
 			printf '%s' "$interpreter" >"$CACHE" 2>/dev/null
-			exec "$interpreter" "$@"
+			"$interpreter" "$@"
+			exit $?
 		fi
 	fi
 done
