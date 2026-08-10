@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Moon, Sun, SunMoon } from 'lucide-react'
 import rawData from '../data/dashboard-data.json'
 import type { DashboardData } from './lib/types'
-import { engagementAnchorId } from './lib/links'
 import { KpiStrip } from './components/KpiStrip'
-import { ProjectCard } from './components/ProjectCard'
+import { EngagementExplorer } from './components/EngagementExplorer'
 import { Heatmap } from './components/Heatmap'
 import { RosterBars } from './components/RosterBars'
 import { ObligationTable } from './components/ObligationTable'
@@ -29,8 +28,6 @@ const THEME_NEXT_LABEL: Record<ThemeChoice, string> = { system: 'light', light: 
 // `npm run dashboard`, which also rebuilds).
 const data = rawData as unknown as DashboardData
 
-const HIGHLIGHT_MS = 2200
-
 interface NavTarget {
   project: string
   slug: string
@@ -41,44 +38,16 @@ function App() {
   const { theme, cycleTheme } = useTheme()
   const ThemeIcon = THEME_ICON[theme]
   // Portfolio/Sessions -> Engagements cross-linking (2026-08-08, "portfolio feels disjointed
-  // from the page that actually shows engagements"): switch to the Engagements tab, scroll
-  // the target row into view, and flash it briefly so the click's effect is visible even
-  // when the row was already on screen. An engagement is always inside its project (2026-08-09
-  // - there used to be a second, freestanding "Engagement Command Centre" section up here with
-  // its own picker; removed, since it just duplicated the one below with no real link between
-  // them) - so "go to an engagement" always means "open its project, open its row".
+  // from the page that actually shows engagements"): switch to the Engagements tab and select
+  // the target engagement there. EngagementExplorer (2026-08-09, master-detail redesign) owns
+  // turning this into visible feedback itself - selecting IS the navigation now, so there's no
+  // separate scroll+flash step to coordinate here.
   const [navTarget, setNavTarget] = useState<NavTarget | null>(null)
 
   const goToEngagement = useCallback((project: string, slug: string) => {
     setTab('engagements')
     setNavTarget({ project, slug })
   }, [])
-
-  useEffect(() => {
-    if (!navTarget || tab !== 'engagements') return
-    const el = document.getElementById(engagementAnchorId(navTarget.project, navTarget.slug))
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    const timer = setTimeout(() => setNavTarget(null), HIGHLIGHT_MS)
-    return () => clearTimeout(timer)
-  }, [navTarget, tab])
-
-  // Project search (2026-08-09, "projects collapsed and searchable by default") - filters by
-  // project name or any of its engagements' title/slug, so searching for an engagement finds
-  // the project it lives in too, not just an exact project-name match.
-  const [projectSearch, setProjectSearch] = useState('')
-  const projectSearchQuery = projectSearch.trim().toLowerCase()
-  const filteredProjects = useMemo(() => {
-    if (!projectSearchQuery) return data.projects
-    return data.projects.filter(
-      (p) =>
-        p.name.toLowerCase().includes(projectSearchQuery) ||
-        p.engagements.some(
-          (e) =>
-            e.slug.toLowerCase().includes(projectSearchQuery) ||
-            (e.title ?? '').toLowerCase().includes(projectSearchQuery),
-        ),
-    )
-  }, [projectSearchQuery])
 
   return (
     <>
@@ -112,39 +81,13 @@ function App() {
 
         {tab === 'engagements' && (
           <>
-            <div className="mb-2 mt-2 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="!m-0">Projects</h2>
-              <label className="relative">
-                <span className="sr-only">Search projects and engagements</span>
-                <input
-                  type="search"
-                  value={projectSearch}
-                  onChange={(event) => setProjectSearch(event.target.value)}
-                  placeholder="Search projects or engagements…"
-                  className="w-56 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm text-fg placeholder:text-muted focus:border-border-strong focus:outline-none sm:w-72"
-                />
-              </label>
-            </div>
-            <p className="sub muted mb-3">
-              Expand a project to see its engagements, expand an engagement for its full detail -
-              real roster, handoffs and review-loop rework, at day-granularity (no per-second
-              timing, confidence scores, or conversation text - not recorded anywhere today).
-            </p>
-            {data.projects.length === 0 ? (
-              <p className="text-muted">No team projects found.</p>
-            ) : filteredProjects.length === 0 ? (
-              <p className="text-muted">No project or engagement matches &quot;{projectSearch.trim()}&quot;.</p>
-            ) : (
-              filteredProjects.map((p) => (
-                <ProjectCard
-                  key={p.path}
-                  project={p}
-                  roleLabels={data.roleLabels}
-                  highlightSlug={navTarget?.project === p.name ? navTarget.slug : null}
-                  forceOpen={projectSearchQuery.length > 0}
-                />
-              ))
-            )}
+            <h2 className="mb-2 mt-2">Engagements</h2>
+            <EngagementExplorer
+              projects={data.projects}
+              roleLabels={data.roleLabels}
+              navTarget={navTarget}
+              onNavConsumed={() => setNavTarget(null)}
+            />
           </>
         )}
 

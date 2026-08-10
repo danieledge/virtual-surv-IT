@@ -6,9 +6,6 @@ import { formatCompact } from './ccVisuals'
 export interface EngagementHeaderProps {
   engagement: CcEngagement
   currentTime: number
-  // See CommandCentre's own `compact` doc comment - skips the name/status/started/ID block when
-  // a parent already shows it, keeps the metrics strip (the one part that's genuinely additive).
-  hideIdentity?: boolean
 }
 
 const STATUS_LABEL: Record<CcEngagement['status'], string> = {
@@ -34,7 +31,7 @@ function confidenceTone(confidence: number): string {
 // Dense operational readout strip, not dashboard tiles - every figure here is computed from
 // engagement.events at render time (never hardcoded), including during replay where Elapsed
 // visibly ticks against currentTime.
-export function EngagementHeader({ engagement, currentTime, hideIdentity = false }: EngagementHeaderProps) {
+export function EngagementHeader({ engagement, currentTime }: EngagementHeaderProps) {
   const hasConfidence = engagement.confidence !== undefined
   const hasRealCost = engagement.realCostRollup !== undefined
 
@@ -74,35 +71,33 @@ export function EngagementHeader({ engagement, currentTime, hideIdentity = false
 
   return (
     <header className="cc-header">
-      {!hideIdentity && (
-        <div className="cc-header-top">
-          <div className="cc-header-id">
-            <span className="cc-header-eyebrow">{engagement.id}</span>
-            <div className="cc-header-name-row">
-              <h1 className="cc-header-name">{engagement.name}</h1>
-              <span className={`cc-status-pill cc-status-${engagement.status}`}>{STATUS_LABEL[engagement.status]}</span>
-            </div>
-            <span className="cc-header-meta">Type: {engagement.type}</span>
+      <div className="cc-header-top">
+        <div className="cc-header-id">
+          <span className="cc-header-eyebrow">{engagement.id}</span>
+          <div className="cc-header-name-row">
+            <h1 className="cc-header-name">{engagement.name}</h1>
+            <span className={`cc-status-pill cc-status-${engagement.status}`}>{STATUS_LABEL[engagement.status]}</span>
           </div>
+          <span className="cc-header-meta">Type: {engagement.type}</span>
+        </div>
 
-          <div className="cc-header-subcard">
-            <span className="cc-header-subcard-menu" aria-hidden="true">
-              ⋯
-            </span>
-            <div className="cc-header-subcard-row">
-              <span className="cc-header-subcard-label">Started</span>
-              {/* No "Today," prefix - a real engagement's day-granular open date is very often
-                  not today (see lib/commandCentre/fromReal.ts's own note on startClock being a
-                  fixed, honest midnight anchor, not a real timestamp). */}
-              <span className="cc-header-subcard-value">{engagement.startClock}</span>
-            </div>
-            <div className="cc-header-subcard-row">
-              <span className="cc-header-subcard-label">ID</span>
-              <span className="cc-header-subcard-value">{engagement.id}</span>
-            </div>
+        <div className="cc-header-subcard">
+          <span className="cc-header-subcard-menu" aria-hidden="true">
+            ⋯
+          </span>
+          <div className="cc-header-subcard-row">
+            <span className="cc-header-subcard-label">Started</span>
+            {/* No "Today," prefix - a real engagement's day-granular open date is very often
+                not today (see lib/commandCentre/fromReal.ts's own note on startClock being a
+                fixed, honest midnight anchor, not a real timestamp). */}
+            <span className="cc-header-subcard-value">{engagement.startClock}</span>
+          </div>
+          <div className="cc-header-subcard-row">
+            <span className="cc-header-subcard-label">ID</span>
+            <span className="cc-header-subcard-value">{engagement.id}</span>
           </div>
         </div>
-      )}
+      </div>
 
       <dl className="cc-metrics-strip">
         <div className="cc-metric">

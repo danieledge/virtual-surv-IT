@@ -14,11 +14,6 @@ import './ccStyles.css'
 
 export interface CommandCentreProps {
   engagement: CcEngagement
-  // True when nested under something that already shows this engagement's name/status/dates
-  // (EngagementRow's own <summary> line) - suppresses EngagementHeader's identity block so the
-  // two don't repeat each other, while keeping its metrics strip (Elapsed/Agents/Interactions/
-  // Loops/Tokens/Cost), which the row doesn't show.
-  compact?: boolean
 }
 
 const DEFAULT_SPEED = 1
@@ -27,7 +22,7 @@ const DEFAULT_SPEED = 1
 // loop is "open" in the sidebar at a time) and the replay clock. The replay clock advances via
 // requestAnimationFrame using real elapsed wall-time between frames (never a fixed per-tick
 // step), so changing `speed` mid-playback feels smooth rather than jumpy.
-export function CommandCentre({ engagement, compact = false }: CommandCentreProps) {
+export function CommandCentre({ engagement }: CommandCentreProps) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [selectedLoopId, setSelectedLoopId] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -130,7 +125,7 @@ export function CommandCentre({ engagement, compact = false }: CommandCentreProp
 
       <div className="cc-layout">
         <div className="cc-main">
-          <EngagementHeader engagement={engagement} currentTime={currentTime} hideIdentity={compact} />
+          <EngagementHeader engagement={engagement} currentTime={currentTime} />
           <EngagementPulse
             engagement={engagement}
             selectedEventId={selectedEventId}
@@ -161,6 +156,11 @@ export function CommandCentre({ engagement, compact = false }: CommandCentreProp
             onSeek={handleSeek}
             onRestart={handleRestart}
           />
+          <p className="max-w-[66ch] text-xs text-muted">
+            Day-granular: no per-second timing, confidence scores, or conversation text - none of
+            that is recorded today. Replay is disabled when an engagement opens and closes on the
+            same day.
+          </p>
         </div>
 
         <div className="cc-sidebar">
