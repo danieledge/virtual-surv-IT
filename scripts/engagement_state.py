@@ -30,6 +30,7 @@ Usage (all consent-free team tooling, `python -m scripts.engagement_state <cmd>`
   add-outstanding TEXT
   resolve-outstanding SUBSTRING
   set-decision KEY VALUE
+  set-decisions --json '{"key": "value", ...}'  # batch form, one process for several decisions
   set-team "Name (role)" ...
   finalise-artifacts
   set-footprint [--agents N] [--tokens TEXT]
@@ -1301,6 +1302,31 @@ def _cmd_set_decision(args: argparse.Namespace) -> int:
     return _mutate(args, lambda s: s.setdefault("decisions", {}).__setitem__(args.key, args.value))
 
 
+def _cmd_set_decisions(args: argparse.Namespace) -> int:
+    """Batch form of set-decision (corp perf report, 2026-08-10): intake commonly records
+    several decisions in one breath (data-attestation, fix-cycle, and others) via one Bash
+    call chaining N separate `set-decision` invocations with `&&` - N full interpreter cold
+    starts for what is conceptually one write. This does the same mutation in ONE process,
+    ONE load/upgrade/render cycle, same reasoning as bash_hook_dispatcher.py's 5-processes-
+    to-1 consolidation, different call site. `set-decision` (singular) is unchanged and
+    still the right tool for a single decision."""
+    try:
+        pairs = json.loads(args.json)
+    except (json.JSONDecodeError, TypeError) as e:
+        print(f"invalid --json: {e}", file=sys.stderr)
+        return 2
+    if not isinstance(pairs, dict) or not pairs:
+        print("--json must be a non-empty JSON object of {key: value}", file=sys.stderr)
+        return 2
+
+    def fn(state: dict) -> None:
+        decisions = state.setdefault("decisions", {})
+        for key, value in pairs.items():
+            decisions[key] = value
+
+    return _mutate(args, fn)
+
+
 def _cmd_log_note(args: argparse.Namespace) -> int:
     def fn(state: dict) -> None:
         date = _dt.date.today().isoformat()
@@ -1748,6 +1774,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("key")
     p.add_argument("value")
     p.set_defaults(fn=_cmd_set_decision)
+
+    p = sub.add_parser(
+        "set-decisions",
+        parents=[common],
+        help="record several decisions in one process (renders once) - batch form of "
+        "set-decision, for intake sequences that used to chain N separate invocations",
+    )
+    p.add_argument("--json", required=True, help='JSON object, e.g. \'{"data-attestation": '
+        '"...", "fix-cycle": "..."}\'')
+    p.set_defaults(fn=_cmd_set_decisions)
 
     p = sub.add_parser(
         "log-note",

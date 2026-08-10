@@ -13,6 +13,8 @@ from __future__ import annotations
 import copy
 import json
 
+import pytest
+
 from scripts.engagement_state import (
     embedded_hash,
     load_state,
@@ -457,6 +459,61 @@ def test_log_note_tag_round_trip(tmp_path):
     assert len(log) == 1
     assert "[review-loop]: Ravi -> Mateo: 3 findings, resubmit" in log[0]
     assert validate_state(load_state(tmp_path)) == []
+
+
+# --------------------------------------------------- set-decisions (batch, corp perf report 2026-08-10)
+
+
+def test_set_decisions_records_all_pairs_in_one_call(tmp_path):
+    assert _run(tmp_path, "init", "--title", "T", "--slug", "t") == 0
+    assert (
+        _run(
+            tmp_path,
+            "set-decisions",
+            "--json",
+            json.dumps({"data-attestation": "yes - masked", "fix-cycle": "report"}),
+        )
+        == 0
+    )
+    decisions = load_state(tmp_path)["decisions"]
+    assert decisions == {"data-attestation": "yes - masked", "fix-cycle": "report"}
+    assert validate_state(load_state(tmp_path)) == []
+
+
+def test_set_decisions_matches_equivalent_set_decision_calls(tmp_path):
+    """The batch and single forms must produce byte-identical state - this is a process-
+    count optimization, not a behavior change."""
+    assert _run(tmp_path, "init", "--title", "T", "--slug", "t") == 0
+    assert _run(tmp_path, "set-decision", "a", "1") == 0
+    assert _run(tmp_path, "set-decision", "b", "2") == 0
+    sequential = load_state(tmp_path)["decisions"]
+
+    other = tmp_path.parent / (tmp_path.name + "-batch")
+    assert _run(other, "init", "--title", "T", "--slug", "t") == 0
+    assert _run(other, "set-decisions", "--json", json.dumps({"a": "1", "b": "2"})) == 0
+    batched = load_state(other)["decisions"]
+
+    assert sequential == batched == {"a": "1", "b": "2"}
+
+
+def test_set_decisions_merges_with_existing_decisions(tmp_path):
+    assert _run(tmp_path, "init", "--title", "T", "--slug", "t") == 0
+    assert _run(tmp_path, "set-decision", "existing", "kept") == 0
+    assert _run(tmp_path, "set-decisions", "--json", json.dumps({"new": "added"})) == 0
+    assert load_state(tmp_path)["decisions"] == {"existing": "kept", "new": "added"}
+
+
+def test_set_decisions_rejects_invalid_json(tmp_path):
+    assert _run(tmp_path, "init", "--title", "T", "--slug", "t") == 0
+    assert _run(tmp_path, "set-decisions", "--json", "not json") == 2
+    assert load_state(tmp_path).get("decisions", {}) == {}
+
+
+@pytest.mark.parametrize("bad_json", ["[]", "5", '"a string"', "{}"])
+def test_set_decisions_rejects_non_object_or_empty_json(tmp_path, bad_json):
+    assert _run(tmp_path, "init", "--title", "T", "--slug", "t") == 0
+    assert _run(tmp_path, "set-decisions", "--json", bad_json) == 2
+    assert load_state(tmp_path).get("decisions", {}) == {}
 
 
 # --------------------------------------- slug path-traversal (found 2026-08-07, fixed) -------

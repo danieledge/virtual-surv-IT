@@ -63,6 +63,7 @@ import os
 import re
 import shlex
 import sys
+import time
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -142,6 +143,9 @@ _GIT_MESSAGE_VERBS = ("commit", "tag")
 # ---------------------------------------------------------------------------
 _project_root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
 _RAW_DIR = (Path(_project_root) / "data" / "raw").resolve()
+_RAW_PRESENT_CACHE = Path(_project_root) / ".claude" / ".raw-data-present"
+_RAW_PRESENT_CACHE_TTL_SECONDS = 30  # short enough to catch a mid-session data/raw
+# addition quickly; long enough to collapse a burst of Grep/Glob calls into one real walk.
 
 
 def _raw_data_present() -> bool:
@@ -152,14 +156,36 @@ def _raw_data_present() -> bool:
     - a fresh clone, a synthetic-only project - blocking every repo-root search would be a
     pure false positive and would make the guard hated rather than respected. The precise
     path checks below are unconditional and do not consult this.
+
+    Cached (2026-08-10, corp report): a path-less Grep/Glob call always roots at the
+    project dir, which is trivially an ancestor of data/raw, so this ran a full os.walk()
+    on nearly every real search - measurable overhead on a corporate Windows box with
+    endpoint security scanning each filesystem op. A short-TTL file cache (same pattern as
+    .claude/.guard-interpreter) collapses a burst of calls into one real walk. The cache is
+    never load-bearing: any read/write failure falls straight through to a real check, and
+    the fail-closed exception handler below is unchanged.
     """
     try:
         if not _RAW_DIR.is_dir():
             return False
+        try:
+            cached = _RAW_PRESENT_CACHE.read_text(encoding="utf-8").strip()
+            age = time.time() - _RAW_PRESENT_CACHE.stat().st_mtime
+            if age < _RAW_PRESENT_CACHE_TTL_SECONDS:
+                return cached == "true"
+        except (OSError, ValueError):
+            pass  # no valid cache - fall through to a real check
+        result = False
         for _root, _dirs, files in os.walk(_RAW_DIR):
             if files:
-                return True
-        return False
+                result = True
+                break
+        try:
+            _RAW_PRESENT_CACHE.parent.mkdir(parents=True, exist_ok=True)
+            _RAW_PRESENT_CACHE.write_text("true" if result else "false", encoding="utf-8")
+        except OSError:
+            pass  # cache write is an optimization only, never load-bearing
+        return result
     except Exception:
         # Cannot tell - assume present so the stricter branch applies (fail closed).
         return True

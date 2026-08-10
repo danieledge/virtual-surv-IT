@@ -23,8 +23,10 @@ sync test. It does now, and it FAILS rather than skips until applied.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -161,6 +163,50 @@ def test_sibling_scoped_search_still_allowed(project_with_raw):
 def test_direct_raw_path_still_blocks(project_with_raw):
     assert _blocks(project_with_raw, "Read", {"file_path": "data/raw/trades.csv"})
     assert _blocks(project_with_raw, "Grep", {"pattern": "x", "path": "data/raw"})
+
+
+# ------------------------------------------------ presence cache (2026-08-10 corp report)
+# Every hook invocation is a fresh subprocess (no shared in-memory state), so these exercise
+# the FILE cache exactly as real usage would - same reason _run() below already shells out.
+
+
+def test_pathless_grep_writes_a_presence_cache_file(project_with_raw):
+    cache = project_with_raw / ".claude" / ".raw-data-present"
+    assert not cache.exists()
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
+    assert cache.is_file()
+    assert cache.read_text(encoding="utf-8").strip() == "true"
+
+
+def test_cached_presence_used_within_ttl_even_if_the_file_is_then_removed(project_with_raw):
+    """Proves the cache is actually consulted, not just written: prime it with raw data
+    present, then remove the only raw file and call again immediately - a fresh, uncached
+    check would now correctly return False, but a cache hit inside the 30s TTL should still
+    return the stale (but not yet expired) True."""
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})  # primes the cache
+    for f in (project_with_raw / "data" / "raw").iterdir():
+        f.unlink()
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})  # still cached True
+
+
+def test_expired_cache_is_not_trusted(project_with_raw):
+    """A cache entry older than the TTL must trigger a real re-check, not be trusted blindly
+    - the opposite of the previous test, forcing the expiry branch instead of the hit one."""
+    cache = project_with_raw / ".claude" / ".raw-data-present"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text("false", encoding="utf-8")  # stale + wrong: real data IS present
+    stale = time.time() - 31  # just past the 30s TTL
+    os.utime(cache, (stale, stale))
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})  # re-checked, correct
+
+
+def test_cache_write_failure_does_not_break_the_check(project_with_raw):
+    """Cache write is an optimization only, never load-bearing - if the cache PATH is
+    unwritable (here: occupied by a directory instead of a file), the guard must still
+    reach the correct, real answer rather than erroring or silently allowing."""
+    cache = project_with_raw / ".claude" / ".raw-data-present"
+    cache.mkdir(parents=True)  # occupies the path so write_text() must fail
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
 
 
 # ------------------------------------------------ fix 3: search-pattern false positive
