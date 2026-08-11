@@ -1,6 +1,6 @@
 ---
 description: First-contact codebase orientation - a deterministic skeleton pass plus a small synthesis team, producing/refreshing the curated codebase map (ADR-007 Phase 1, gated behind the map_skeleton preference, off by default)
-argument-hint: [path] [--refresh]
+argument-hint: "[path] [--refresh]"
 disable-model-invocation: true
 ---
 
