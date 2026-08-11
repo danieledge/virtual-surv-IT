@@ -74,6 +74,8 @@ import shutil
 import subprocess  # fixed-argv calls to git/claude/pip, no shell  # nosec B404
 import sys
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -1089,6 +1091,7 @@ _DIAGNOSTICS_ACTIONS = {
     "2": "toolcheck",
     "3": "envcheck",
     "4": "selftest",
+    "5": "hooklatency",
     "b": "back",
 }
 _ADVANCED_ACTIONS = {
@@ -1098,6 +1101,7 @@ _ADVANCED_ACTIONS = {
     "4": "model",
     "5": "demo",
     "6": "machinedefaults",
+    "7": "dashboard",
     "b": "back",
 }
 
@@ -1167,6 +1171,7 @@ def choose_action(style: Style) -> str:
                     ("2", "Quick: analyser output cleanliness only"),
                     ("3", "Comprehensive: the full environment + synthetic-engagement report"),
                     ("4", "Self-test only: just the synthetic engagement"),
+                    ("5", "Hook latency: feeds the ADR-014 daemon decision (slower - repeated + concurrent)"),
                     ("b", "Back"),
                 ),
                 _DIAGNOSTICS_ACTIONS,
@@ -1185,6 +1190,7 @@ def choose_action(style: Style) -> str:
                         "6",
                         "This machine's defaults (view/edit - no project needed)",
                     ),
+                    ("7", "Rebuild the local team dashboard"),
                     ("b", "Back"),
                 ),
                 _ADVANCED_ACTIONS,
@@ -2255,13 +2261,17 @@ class Installer:
         )
 
     def dashboard_step(self) -> None:
-        """Best-effort closing step for a full install/update (2026-08-09 user request):
-        rebuild the local team dashboard right after install/update so the very first
-        thing you have afterward is a working, up-to-date link, not a separate action to
-        remember. Never fatal (fatal=False throughout) - no Node, no network for a first
-        `npm install`, or a build failure all just skip with a plain reason; the plugin
-        itself works fully without this ever succeeding. `run_cmd` is already swapped for
-        the dry-run stand-in in --demo (see make_demo_runner) - no separate demo branch
+        """Standalone (Advanced submenu option 7, subset="dashboard"): rebuild the local
+        team dashboard on demand. 2026-08-09: originally added as a full-install/update
+        closing step (a fresh dashboard link right after setup, nothing extra to
+        remember). 2026-08-11 user request: pulled back out of the default full-install
+        path - a rebuild is a one-off action to reach for, not something every
+        install/update should pay for unconditionally; `/dashboard` and this menu item
+        cover the same ground on demand. Never fatal (fatal=False throughout) - no Node,
+        no network for a first `npm install`, or a build failure all just skip with a
+        plain reason; the plugin itself works fully without this ever succeeding.
+        `run_cmd` is already swapped for the dry-run stand-in in --demo (see
+        make_demo_runner) - no separate demo branch
         needed here, same as every other step in this class."""
         self.step_intro(
             "Rebuilds the local team dashboard (dashboard-ui/) so there's a fresh link as "
@@ -2545,6 +2555,30 @@ class Installer:
                 fatal=False,
             )
 
+    def hook_latency_step(self) -> None:
+        """Standalone, easily re-runnable (menu option 5 under Diagnostics): measures real
+        PreToolUse hook latency on THIS machine - repeated cold starts, the real
+        guard-launcher end to end, and a concurrent fan-out simulation - and always writes
+        the full numbers to a file, feeding the ADR-014 persistent-daemon decision with
+        actual evidence instead of guesswork. Slower than the other diagnostics on
+        purpose - say so up front."""
+        self.step_intro(
+            "Measures real hook latency: repeated interpreter cold starts, the real "
+            "guard-launcher end to end, and a genuinely concurrent fan-out simulation - "
+            "the evidence docs/adr/ADR-014 calls for before deciding whether a persistent "
+            "guard daemon is worth building. Slower than the other checks (repeated + "
+            "concurrent measurement) - always writes the full numbers to a file, pass or "
+            "fail, since the data is the point here."
+        )
+        if run_hook_latency_diagnostic(self.style, self.marks, self.args.repo) == 0:
+            self.step_ok("Hook latency diagnostic", "measured - see the data file for full numbers")
+        else:
+            self.step_fail(
+                "Hook latency diagnostic",
+                "see detail above and the data file - informational, not a blocker",
+                fatal=False,
+            )
+
     def enable_step(self) -> None:
         """Optional: enable the team for a project right now, and offer the recommended
         permission allow-list for the same project. Interactive only - non-interactive
@@ -2796,6 +2830,10 @@ class Installer:
             return [
                 ("Machine defaults", self.machine_defaults_step),
             ]
+        if self.subset == "dashboard":
+            return [
+                ("Dashboard", self.dashboard_step),
+            ]
         if self.subset == "toolcheck":
             return [
                 ("Analyser output cleanliness", self.tool_check_step),
@@ -2807,6 +2845,10 @@ class Installer:
         if self.subset == "selftest":
             return [
                 ("Self-test", self.selftest_step),
+            ]
+        if self.subset == "hooklatency":
+            return [
+                ("Hook latency diagnostic", self.hook_latency_step),
             ]
         return [
             ("Preflight checks", self.preflight),
@@ -2821,7 +2863,6 @@ class Installer:
             ("Status line", self.statusline_step),
             ("Alias setup", self.alias_step),
             ("Machine defaults (optional)", self.machine_defaults_offer),
-            ("Dashboard (optional)", self.dashboard_step),
         ]
 
     def run(self) -> int:
@@ -4717,6 +4758,247 @@ def run_env_check(style: Style, mark_map: dict, repo_hint: Optional[str] = None)
     return 0
 
 
+# ------------------------------------------------------------------ hook-latency diagnostic
+#
+# 2026-08-11 live corp bug report (Windows debug-log monitoring): 87 slow PreToolUse events,
+# 2-9s normal, 25-90s under Workflow-tool fan-out, traced to a fresh Python process per hook
+# call plus (hypothesised, not yet confirmed on that specific box) per-process endpoint-
+# security scanning. ADR-014 proposes a persistent guard daemon as the real fix but
+# explicitly requires real measurement before committing to it - this project's own
+# established discipline is "measured live, not reasoned about in the abstract" (every
+# other fix in run-guard.sh's history has been a live reproduction, not design-time
+# reasoning alone). This diagnostic is that measurement, made repeatable instead of ad hoc.
+
+
+def _fmt_latency_stats(samples: list) -> str:
+    """samples: elapsed seconds per call, or None for a call that errored/timed out -
+    excluded from the stats but counted separately so a crash mid-run doesn't silently
+    vanish or masquerade as a fast success."""
+    good = sorted(s for s in samples if s is not None)
+    dropped = len(samples) - len(good)
+    if not good:
+        return "no successful samples" + (f" ({dropped} failed/timed out)" if dropped else "")
+    good_ms = [s * 1000 for s in good]
+    n = len(good_ms)
+    median = good_ms[n // 2] if n % 2 else (good_ms[n // 2 - 1] + good_ms[n // 2]) / 2
+    detail = f"min={good_ms[0]:.0f}ms median={median:.0f}ms max={good_ms[-1]:.0f}ms (n={n})"
+    if dropped:
+        detail += f", {dropped} failed/timed out"
+    return detail
+
+
+def _measure_repeated(argv_fn, n: int, timeout: float = 20.0) -> list:
+    """n separate, FRESH subprocess invocations, one after another - argv_fn() returns
+    (argv, kwargs) recomputed each call so a caller can vary the payload if needed. Returns
+    elapsed seconds per call; None = that call errored or timed out."""
+    samples = []
+    for _ in range(n):
+        argv, kwargs = argv_fn()
+        start = time.monotonic()
+        try:
+            subprocess.run(argv, capture_output=True, timeout=timeout, **kwargs)
+            samples.append(time.monotonic() - start)
+        except (OSError, subprocess.TimeoutExpired):
+            samples.append(None)
+    return samples
+
+
+def _trend_verdict(good_bare: list) -> tuple:
+    """The decision-relevant signal: does repetition help? A sharp drop after the first
+    call is consistent with a one-time "this binary is now trusted" AV/EDR cache; a flat
+    cost across all samples is consistent with per-process scanning regardless of
+    repetition - the daemon only earns its keep in the second case (fewer processes =
+    fewer scans; a cache that already makes repeats cheap gets most of that benefit for
+    free without one). Pulled out of run_hook_latency_diagnostic as a pure function
+    (samples in, verdict out) specifically so it's testable with contrived sample lists -
+    the real function's actual timings come from mocked-instant subprocess calls in tests,
+    which can't be made to reproduce a genuine first-call-slow pattern through the mock
+    alone. Returns (status, detail)."""
+    if len(good_bare) < 3:
+        return "SKIP", "not enough successful samples to judge a trend"
+    first, rest = good_bare[0], good_bare[1:]
+    rest_median = sorted(rest)[len(rest) // 2]
+    if first > 0 and rest_median < first * 0.5:
+        return "OK", (
+            f"first call {first * 1000:.0f}ms, later calls ~{rest_median * 1000:.0f}ms - "
+            "consistent with a one-time trust/scan cache, NOT per-process scanning. "
+            "Worth investigating AV allow-listing or interpreter start-up flags (-S/-I) "
+            "before considering the daemon in ADR-014."
+        )
+    return "WARN", (
+        f"first call {first * 1000:.0f}ms, later calls ~{rest_median * 1000:.0f}ms - "
+        "no meaningful drop-off, consistent with per-process scanning regardless of "
+        "repetition. This is the signal ADR-014's daemon proposal is aimed at - fewer "
+        "processes is the only lever that reduces this."
+    )
+
+
+def _measure_concurrent(argv_fn, n: int, timeout: float = 30.0) -> tuple:
+    """n GENUINELY concurrent invocations (ThreadPoolExecutor, not a loop - the same
+    technique tests/test_run_guard_lock.py::test_concurrent_calls_are_actually_serialized
+    already uses) - reproduces the actual reported Workflow-fan-out symptom on demand
+    instead of waiting for it to happen organically in a real session. Returns (per-call
+    elapsed-seconds list, total wall-clock for the whole batch)."""
+
+    def _one(_i):
+        argv, kwargs = argv_fn()
+        start = time.monotonic()
+        try:
+            subprocess.run(argv, capture_output=True, timeout=timeout, **kwargs)
+            return time.monotonic() - start
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+
+    batch_start = time.monotonic()
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        samples = list(pool.map(_one, range(n)))
+    total = time.monotonic() - batch_start
+    return samples, total
+
+
+def run_hook_latency_diagnostic(
+    style: Style, mark_map: dict, repo_hint: Optional[str] = None
+) -> int:
+    """Standalone diagnostic (--check-hook-latency / Diagnostics menu option 5): measures
+    real PreToolUse hook latency on THIS machine - repeated bare interpreter cold starts,
+    the real guard-launcher end to end, and a genuinely concurrent fan-out simulation -
+    feeding the ADR-014 daemon decision with actual numbers instead of guesswork. Slower
+    than the other diagnostics on purpose (repeated + concurrent measurement, not a single
+    pass) - ALWAYS writes its full numbers to a timestamped file, pass or fail, since the
+    data is the point here, not just catching errors (unlike run_selftest's bundle, which
+    is failure-only).
+
+    Verdict logic is deliberately conservative: it reports what the numbers are consistent
+    with, never a directive - "measured live" evidence for a human decision, matching this
+    project's own established discipline for changes of this size (docs/adr/ADR-014)."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    repo_root = _resolve_repo_root(repo_hint) or Path(__file__).resolve().parent
+    rows = []
+    bundle_lines = []
+
+    def record(label: str, status: str, detail: str) -> None:
+        rows.append((label, status, detail))
+        bundle_lines.append(f"--- {label} [{status}] ---\n{detail}\n")
+        mark = {"OK": ok, "SKIP": style.dim("-"), "WARN": style.yellow("!")}.get(status, fail)
+        print(f"  {mark} {label}: {detail}", flush=True)
+
+    print(style.bold("Hook latency diagnostic (feeds the ADR-014 daemon decision)"))
+    print(style.dim("  Repeated + concurrent measurement - slower than the other checks on purpose."))
+
+    order = ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
+    interp_rows, interpreter = _check_interpreters(order)
+    print(style.dim("\n  Interpreter resolution:"))
+    for name, status, detail in interp_rows:
+        record(name, status, detail)
+    if not interpreter:
+        record("bare cold start", "SKIP", "no working interpreter found - nothing to measure")
+        _print_diagnostic_summary(style, mark_map, rows)
+        return 1
+
+    print(style.dim(f"\n  Bare interpreter cold start ({interpreter}, 5 separate fresh calls):"))
+    bare = _measure_repeated(lambda: ([interpreter, "-c", "pass"], {}), n=5)
+    good_bare = [s for s in bare if s is not None]
+    record("bare cold start", "OK" if good_bare else "ERROR", _fmt_latency_stats(bare))
+
+    trend_status, trend_detail = _trend_verdict(good_bare)
+    record("repetition trend (daemon-relevant signal)", trend_status, trend_detail)
+
+    launcher = repo_root / ".claude" / "hooks" / "run-guard.sh"
+    dispatcher = repo_root / "scripts" / "bash_hook_dispatcher.py"
+    sh_path = shutil.which("sh")
+    guard_good: list = []
+    if not (sh_path and launcher.is_file() and dispatcher.is_file()):
+        record(
+            "real guard-launcher cost",
+            "SKIP",
+            "sh, run-guard.sh or bash_hook_dispatcher.py not found - can't measure the real path",
+        )
+    else:
+        print(style.dim("\n  Real guard-launcher end to end (harmless payload, 5 separate calls):"))
+        payload = json.dumps(
+            {"tool_name": "Read", "tool_input": {"file_path": str(repo_root / "README.md")}}
+        )
+        guard_samples = _measure_repeated(
+            lambda: (
+                [sh_path, str(launcher), str(dispatcher)],
+                {"input": payload, "text": True, "cwd": repo_root},
+            ),
+            n=5,
+        )
+        guard_good = [s for s in guard_samples if s is not None]
+        record(
+            "real guard-launcher cost", "OK" if guard_good else "ERROR", _fmt_latency_stats(guard_samples)
+        )
+        if good_bare and guard_good:
+            bare_median = sorted(good_bare)[len(good_bare) // 2]
+            guard_median = sorted(guard_good)[len(guard_good) // 2]
+            record(
+                "guard overhead beyond bare interpreter",
+                "OK",
+                f"~{(guard_median - bare_median) * 1000:.0f}ms (guard imports/logic on top of "
+                "interpreter start-up alone)",
+            )
+
+        print(style.dim("\n  Concurrent fan-out simulation (8 genuinely concurrent calls):"))
+        fanout_samples, fanout_total = _measure_concurrent(
+            lambda: (
+                [sh_path, str(launcher), str(dispatcher)],
+                {"input": payload, "text": True, "cwd": repo_root},
+            ),
+            n=8,
+        )
+        fanout_good = [s for s in fanout_samples if s is not None]
+        record(
+            "concurrent fan-out (8 calls)",
+            "OK" if fanout_good else "ERROR",
+            f"{_fmt_latency_stats(fanout_samples)}, total wall-clock {fanout_total * 1000:.0f}ms",
+        )
+        if fanout_good:
+            worst_ms = max(fanout_good) * 1000
+            record(
+                "worst-case single call under fan-out",
+                "WARN" if worst_ms > 5000 else "OK",
+                f"{worst_ms:.0f}ms - compare against the 25-90s originally reported; this "
+                "reproduces the shape of that symptom on demand instead of waiting for it "
+                "to happen organically",
+            )
+
+    if sys.platform == "win32":
+        ps = shutil.which("powershell") or shutil.which("pwsh")
+        if ps:
+            print(style.dim(f"\n  PowerShell cold start ({ps}, diagnostic signal only, 5 calls):"))
+            ps_samples = _measure_repeated(lambda: ([ps, "-NoProfile", "-Command", "exit 0"], {}), n=5)
+            record(
+                "PowerShell cold start (diagnostic signal only - not a proposed fix, see ADR-014)",
+                "OK" if any(s is not None for s in ps_samples) else "ERROR",
+                _fmt_latency_stats(ps_samples),
+            )
+        else:
+            record("PowerShell cold start", "SKIP", "powershell/pwsh not found on PATH")
+    else:
+        record("PowerShell cold start", "SKIP", "Windows-only diagnostic signal")
+
+    _print_diagnostic_summary(style, mark_map, rows)
+
+    ts = datetime.now().strftime("%Y%m%dT%H%M%S")
+    bundle_path = Path.cwd() / f"virt-surv-hook-latency-{ts}.txt"
+    header = (
+        "virt-surv-it hook-latency diagnostic (feeds the ADR-014 daemon decision)\n"
+        f"Python: {sys.version}\nPlatform: {sys.platform}\nInterpreter: {interpreter}\n"
+        f"Repo root: {repo_root}\n\n"
+    )
+    try:
+        bundle_path.write_text(header + "\n".join(bundle_lines), encoding="utf-8")
+        print("")
+        print(style.dim(f"Full numbers written to: {bundle_path} - hand this back whole."))
+    except OSError as exc:
+        print("")
+        print(style.yellow(f"Could not write the data file: {exc}"))
+
+    bad = sum(1 for _label, status, _detail in rows if status == "ERROR")
+    return 1 if bad else 0
+
+
 # ------------------------------------------------------------------ self-test (mechanical smoke test)
 #
 # 2026-08-04 user request: a lightweight but MEANINGFUL validation of a "review this code"
@@ -5088,6 +5370,15 @@ def parse_args(argv=None) -> argparse.Namespace:
         "exit; writes a debug bundle on any failure",
     )
     parser.add_argument(
+        "--check-hook-latency",
+        action="store_true",
+        help="standalone: measures real PreToolUse hook latency on this machine - "
+        "repeated interpreter cold starts, the real guard-launcher end to end, and a "
+        "concurrent fan-out simulation - feeding the docs/adr/ADR-014 persistent-daemon "
+        "decision with actual numbers. Slower than the other checks on purpose; always "
+        "writes the full numbers to a file, pass or fail, and exit",
+    )
+    parser.add_argument(
         "--configure",
         metavar="DIR",
         nargs="?",
@@ -5352,6 +5643,7 @@ def _main(argv=None) -> int:
         or args.check_tools
         or args.check_env
         or args.selftest
+        or args.check_hook_latency
         or args.configure
         or args.archive
         or args.list_engagements
@@ -5379,6 +5671,8 @@ def _main(argv=None) -> int:
             rc = max(rc, run_env_check(style, marks(), args.repo))
         if args.selftest:
             rc = max(rc, run_selftest(style, marks(), args.repo))
+        if args.check_hook_latency:
+            rc = max(rc, run_hook_latency_diagnostic(style, marks(), args.repo))
         if args.configure:
             rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
         if args.archive:
@@ -5470,7 +5764,7 @@ def _main(argv=None) -> int:
                 # Read-only diagnostics never change anything regardless of demo -
                 # "nothing changed" stays true after running one of these, unlike the
                 # write-capable subsets.
-                if subset not in ("check", "toolcheck", "envcheck", "selftest"):
+                if subset not in ("check", "toolcheck", "envcheck", "selftest", "hooklatency"):
                     did_anything = did_anything or not args.demo
 
     subset = "full"

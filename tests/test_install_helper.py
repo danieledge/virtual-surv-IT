@@ -1788,8 +1788,12 @@ def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, 
     """2026-08-04 user request: the alias should be offered as part of a full install,
     the same way statusline already is - not only reachable as its own menu item.
     2026-08-07: machine_defaults_offer was added after it, as the new last step.
-    2026-08-09: dashboard_step added after THAT, as the new last step (a fresh dashboard
-    link right after setup finishes, not a separate thing to remember to run)."""
+    2026-08-09: dashboard_step was added after THAT, as the new last step (a fresh
+    dashboard link right after setup finishes). 2026-08-11: dashboard_step was pulled back
+    OUT of the default full-install path and into its own standalone Advanced-submenu
+    item (subset="dashboard") - a rebuild is a one-off action a user reaches for, not
+    something every install/update should pay for unconditionally. Machine defaults is
+    the last step again, as it was before dashboard_step existed."""
     import install_helper as ih
 
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
@@ -1797,10 +1801,21 @@ def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, 
     titles = [t() if callable(t) else t for t, _ in plan]
     assert "Alias setup" in titles
     assert "Machine defaults (optional)" in titles
-    assert "Dashboard (optional)" in titles
-    assert titles[-1] == "Dashboard (optional)"  # last step
+    assert "Dashboard (optional)" not in titles  # no longer part of the default flow
+    assert titles[-1] == "Machine defaults (optional)"  # last step, now that dashboard moved out
     assert titles.index("Alias setup") == titles.index("Machine defaults (optional)") - 1
-    assert titles.index("Machine defaults (optional)") == titles.index("Dashboard (optional)") - 1
+
+
+def test_dashboard_subset_reaches_dashboard_step_standalone(monkeypatch, tmp_path):
+    """The Advanced-submenu path (subset="dashboard") reaches dashboard_step on its own,
+    not bundled with anything else - the standalone equivalent of --check-env/--selftest
+    for the diagnostics, just for a build action instead of a check."""
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="dashboard")
+    plan = inst.build_plan()
+    titles = [t() if callable(t) else t for t, _ in plan]
+    assert titles == ["Dashboard"]
 
 
 def test_alias_step_skipped_by_default_on_yes_run(monkeypatch, tmp_path, capsys):
@@ -5470,6 +5485,166 @@ def test_run_env_check_folds_in_synthetic_engagement(monkeypatch, tmp_path, caps
     assert "Synthetic engagement" in out
     assert "lifecycle probe" in out
     assert "Summary" in out  # the new scoreboard is present too
+
+
+# --- hook-latency diagnostic (feeds the ADR-014 daemon decision) ---
+
+
+def test_fmt_latency_stats_empty_list():
+    import install_helper as ih
+
+    assert ih._fmt_latency_stats([]) == "no successful samples"
+
+
+def test_fmt_latency_stats_all_failed():
+    import install_helper as ih
+
+    assert ih._fmt_latency_stats([None, None]) == "no successful samples (2 failed/timed out)"
+
+
+def test_fmt_latency_stats_mixed_reports_min_median_max_and_dropped_count():
+    import install_helper as ih
+
+    detail = ih._fmt_latency_stats([0.1, 0.2, 0.3, None])
+    assert "min=100ms" in detail
+    assert "median=200ms" in detail
+    assert "max=300ms" in detail
+    assert "n=3" in detail
+    assert "1 failed/timed out" in detail
+
+
+def test_trend_verdict_skips_with_too_few_samples():
+    import install_helper as ih
+
+    status, detail = ih._trend_verdict([0.1, 0.2])
+    assert status == "SKIP"
+    assert "not enough" in detail
+
+
+def test_trend_verdict_detects_one_time_cache_pattern():
+    """First call much slower than the rest -> consistent with a one-time AV/EDR trust
+    cache, NOT per-process scanning - status OK (a cheaper fix than the daemon may exist)."""
+    import install_helper as ih
+
+    status, detail = ih._trend_verdict([0.5, 0.05, 0.04, 0.06, 0.05])
+    assert status == "OK"
+    assert "trust/scan cache" in detail
+    assert "ADR-014" in detail
+
+
+def test_trend_verdict_detects_flat_per_process_pattern():
+    """No meaningful drop-off -> consistent with per-process scanning regardless of
+    repetition - status WARN (the signal the daemon proposal is actually aimed at)."""
+    import install_helper as ih
+
+    status, detail = ih._trend_verdict([0.5, 0.48, 0.51, 0.49, 0.5])
+    assert status == "WARN"
+    assert "no meaningful drop-off" in detail
+    assert "daemon proposal" in detail
+
+
+def test_measure_repeated_returns_n_samples_all_successful(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
+    samples = ih._measure_repeated(lambda: (["true"], {}), n=5)
+    assert len(samples) == 5
+    assert all(s is not None and s >= 0 for s in samples)
+
+
+def test_measure_repeated_records_none_on_timeout(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.subprocess, "run", _timeout_runner)
+    samples = ih._measure_repeated(lambda: (["true"], {}), n=3)
+    assert samples == [None, None, None]
+
+
+def test_measure_concurrent_returns_n_samples_and_a_total(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
+    samples, total = ih._measure_concurrent(lambda: (["true"], {}), n=6)
+    assert len(samples) == 6
+    assert all(s is not None for s in samples)
+    assert total >= 0
+
+
+def test_run_hook_latency_diagnostic_no_interpreter_skips_and_returns_1(monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], ""))
+    rc = ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks())
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "no working interpreter found" in out
+
+
+def test_run_hook_latency_diagnostic_missing_launcher_skips_guard_sections(
+    monkeypatch, tmp_path, capsys
+):
+    """No .claude/hooks/run-guard.sh in this repo root -> the guard-launcher and fan-out
+    sections SKIP cleanly rather than erroring - the bare cold-start + trend sections
+    still run, since they only need an interpreter, not the launcher."""
+    import install_helper as ih
+
+    monkeypatch.chdir(tmp_path)
+    _stub_interpreters(monkeypatch, ih, winner="python3")
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)  # no sh, no powershell
+    rc = ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    out = capsys.readouterr().out
+    assert rc == 0  # SKIP is not a failure
+    assert "real guard-launcher cost" in out
+    assert "can't measure the real path" in out
+    assert list(tmp_path.glob("virt-surv-hook-latency-*.txt"))  # always written
+
+
+def test_run_hook_latency_diagnostic_always_writes_data_file_even_when_clean(
+    monkeypatch, tmp_path, capsys
+):
+    """Unlike run_selftest's failure-only bundle, this one writes every time - the numbers
+    are the point here, not just catching errors."""
+    import install_helper as ih
+
+    monkeypatch.chdir(tmp_path)
+    _stub_interpreters(monkeypatch, ih, winner="python3")
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    files = list(tmp_path.glob("virt-surv-hook-latency-*.txt"))
+    assert len(files) == 1
+    content = files[0].read_text(encoding="utf-8")
+    assert "hook-latency diagnostic" in content
+    assert "ADR-014" in content
+
+
+def test_run_hook_latency_diagnostic_measures_real_launcher_when_present(
+    monkeypatch, tmp_path, capsys
+):
+    """With a resolvable sh and a present run-guard.sh/dispatcher, the guard-launcher and
+    concurrent fan-out sections actually run (not just SKIP) - confirms the wiring reaches
+    the real-path branch, not just the missing-launcher fallback tested above."""
+    import install_helper as ih
+
+    monkeypatch.chdir(tmp_path)
+    hooks_dir = tmp_path / ".claude" / "hooks"
+    hooks_dir.mkdir(parents=True)
+    (hooks_dir / "run-guard.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "bash_hook_dispatcher.py").write_text("", encoding="utf-8")
+    (tmp_path / "README.md").write_text("x", encoding="utf-8")
+
+    _stub_interpreters(monkeypatch, ih, winner="python3")
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/bin/sh" if name == "sh" else None)
+    rc = ih.run_hook_latency_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Real guard-launcher end to end" in out
+    assert "Concurrent fan-out simulation" in out
+    assert "guard overhead beyond bare interpreter" in out
 
 
 # --- enable_step's betas question: asked normally, or skipped under quick_defaults (2026-08-10) ---

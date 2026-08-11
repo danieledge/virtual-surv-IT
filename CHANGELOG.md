@@ -3,6 +3,24 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.55] - 2026-08-11 - New: hook-latency diagnostic (feeds the ADR-014 daemon decision); dashboard rebuild moved out of the default install path
+
+`install_helper.py` gains a fifth Diagnostics option (`--check-hook-latency`, menu option
+5): measures real PreToolUse hook latency on this machine - repeated bare interpreter cold
+starts, the real guard-launcher end to end, a genuinely concurrent fan-out simulation, and
+(Windows-only, diagnostic signal only) a PowerShell cold-start comparison - with a
+conservative, evidence-based repetition-trend read (does cost drop after the first call,
+consistent with a one-time AV/EDR trust cache, or stay flat, consistent with per-process
+scanning) feeding the persistent-daemon decision in ADR-014 with actual numbers instead of
+guesswork. Always writes its full numbers to a timestamped file, pass or fail - the data is
+the point, not just catching errors.
+
+Separately, `dashboard_step` (rebuild the local team dashboard) is pulled back out of the
+default full-install/update sequence - added there 2026-08-09, but a rebuild is a one-off
+action to reach for, not something every install/update should pay for unconditionally.
+Now standalone only: Advanced submenu option 7, or `subset="dashboard"` - `/dashboard`
+covers the same ground on demand, same as before.
+
 ## [0.33.54] - 2026-08-11 - Fix: guard-launcher latency/correctness under Workflow fan-out; DoD Stop hook now scopes auto-fix to the active engagement
 
 Live corp bug report (Windows debug-log monitoring): 87 slow PreToolUse events, 2-9s normal,
