@@ -5543,6 +5543,78 @@ def test_trend_verdict_detects_flat_per_process_pattern():
     assert "daemon proposal" in detail
 
 
+def test_resolve_sh_env_var_points_directly_at_sh(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    sh = tmp_path / "sh.exe"
+    sh.write_text("", encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_CODE_GIT_BASH_PATH", str(sh))
+    assert ih._resolve_sh() == str(sh)
+
+
+def test_resolve_sh_env_var_points_at_bash_exe_finds_sibling_sh(monkeypatch, tmp_path):
+    """CLAUDE_CODE_GIT_BASH_PATH conventionally names bash.exe/git-bash.exe, not sh -
+    sh.exe normally lives alongside it in the same directory."""
+    import install_helper as ih
+
+    bash = tmp_path / "bash.exe"
+    bash.write_text("", encoding="utf-8")
+    sh = tmp_path / "sh.exe"
+    sh.write_text("", encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_CODE_GIT_BASH_PATH", str(bash))
+    assert ih._resolve_sh() == str(sh)
+
+
+def test_resolve_sh_env_var_points_at_directory_finds_sh_inside(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    sh = tmp_path / "sh.exe"
+    sh.write_text("", encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_CODE_GIT_BASH_PATH", str(tmp_path))
+    assert ih._resolve_sh() == str(sh)
+
+
+def test_resolve_sh_env_var_points_at_directory_finds_sh_in_bin_subdir(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    sh = bindir / "sh.exe"
+    sh.write_text("", encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_CODE_GIT_BASH_PATH", str(tmp_path))
+    assert ih._resolve_sh() == str(sh)
+
+
+def test_resolve_sh_falls_back_to_which_when_no_env_var(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
+    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/sh" if name == "sh" else None)
+    assert ih._resolve_sh() == "/usr/bin/sh"
+
+
+def test_resolve_sh_windows_fallback_paths_when_which_fails(monkeypatch):
+    """2026-08-11 live corp report: a PowerShell session has no `sh` on PATH at all even
+    with Git Bash installed - this is the fallback that closes that specific gap."""
+    import install_helper as ih
+
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    target = r"C:\Program Files\Git\usr\bin\sh.exe"
+    monkeypatch.setattr(ih.Path, "is_file", lambda self: str(self) == target)
+    assert ih._resolve_sh() == target
+
+
+def test_resolve_sh_returns_none_when_nothing_resolves(monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih.sys, "platform", "linux")
+    assert ih._resolve_sh() is None
+
+
 def test_measure_repeated_returns_n_samples_all_successful(monkeypatch):
     import install_helper as ih
 
@@ -5589,6 +5661,7 @@ def test_run_hook_latency_diagnostic_missing_launcher_skips_guard_sections(
     import install_helper as ih
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
     _stub_interpreters(monkeypatch, ih, winner="python3")
     monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)  # no sh, no powershell
@@ -5608,6 +5681,7 @@ def test_run_hook_latency_diagnostic_always_writes_data_file_even_when_clean(
     import install_helper as ih
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
     _stub_interpreters(monkeypatch, ih, winner="python3")
     monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
@@ -5628,6 +5702,7 @@ def test_run_hook_latency_diagnostic_measures_real_launcher_when_present(
     import install_helper as ih
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("CLAUDE_CODE_GIT_BASH_PATH", raising=False)
     hooks_dir = tmp_path / ".claude" / "hooks"
     hooks_dir.mkdir(parents=True)
     (hooks_dir / "run-guard.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")

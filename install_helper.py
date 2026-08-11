@@ -4787,6 +4787,50 @@ def _fmt_latency_stats(samples: list) -> str:
     return detail
 
 
+def _resolve_sh() -> Optional[str]:
+    """Resolve a POSIX shell to run run-guard.sh with - PATH alone is not enough on
+    Windows. Live-confirmed 2026-08-11: a corp Windows box's PowerShell session had no
+    `sh` on PATH at all despite Git Bash being installed (PowerShell does not add Git
+    Bash's bin/ to PATH by default), which made the guard-launcher and fan-out sections
+    of this diagnostic SKIP entirely - exactly the two measurements that matter most.
+    Claude Code itself does not have this problem because it does not depend on the
+    invoking shell's PATH for this; public bug-tracker discussion around Windows/Git-Bash
+    hook execution points at a `CLAUDE_CODE_GIT_BASH_PATH` env var as the mechanism it
+    uses instead - not independently verified against Claude Code's own source, so this
+    checks it opportunistically (several plausible shapes: the env var pointing straight
+    at sh.exe, at bash.exe/git-bash.exe with sh.exe alongside it, or at the containing
+    directory) rather than assuming one exact convention. Falls through to shutil.which
+    (works everywhere sh genuinely is on PATH), then common Windows Git-Bash install
+    locations as a last resort. Returns None if nothing resolves - the caller SKIPs, same
+    as before, never guesses at a shell that might not actually be there."""
+    override = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")
+    if override:
+        p = Path(override)
+        candidates = []
+        if p.is_file():
+            candidates.append(p)  # might already BE sh.exe
+            candidates.append(p.parent / "sh.exe")  # or bash.exe/git-bash.exe alongside it
+        elif p.is_dir():
+            candidates.append(p / "sh.exe")
+            candidates.append(p / "bin" / "sh.exe")
+        for c in candidates:
+            if c.is_file():
+                return str(c)
+    found = shutil.which("sh")
+    if found:
+        return found
+    if sys.platform == "win32":
+        for candidate in (
+            r"C:\Program Files\Git\bin\sh.exe",
+            r"C:\Program Files\Git\usr\bin\sh.exe",
+            r"C:\Program Files (x86)\Git\bin\sh.exe",
+            r"C:\Program Files (x86)\Git\usr\bin\sh.exe",
+        ):
+            if Path(candidate).is_file():
+                return candidate
+    return None
+
+
 def _measure_repeated(argv_fn, n: int, timeout: float = 20.0) -> list:
     """n separate, FRESH subprocess invocations, one after another - argv_fn() returns
     (argv, kwargs) recomputed each call so a caller can vary the payload if needed. Returns
@@ -4905,7 +4949,7 @@ def run_hook_latency_diagnostic(
 
     launcher = repo_root / ".claude" / "hooks" / "run-guard.sh"
     dispatcher = repo_root / "scripts" / "bash_hook_dispatcher.py"
-    sh_path = shutil.which("sh")
+    sh_path = _resolve_sh()
     guard_good: list = []
     if not (sh_path and launcher.is_file() and dispatcher.is_file()):
         record(

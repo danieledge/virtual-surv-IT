@@ -3,6 +3,32 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.56] - 2026-08-11 - Fix: hook-latency diagnostic couldn't find `sh` on Windows/PowerShell, skipping the two measurements that matter most
+
+Live corp report, same day: the diagnostic shipped in 0.33.55 ran on the actual reporting
+Windows box, and its two most decision-relevant sections - real guard-launcher cost and the
+concurrent fan-out simulation - both SKIPPED with "sh, run-guard.sh or
+bash_hook_dispatcher.py not found". Traced to the diagnostic resolving `sh` via
+`shutil.which("sh")` alone, which is genuinely absent from PATH in a plain PowerShell
+session even with Git Bash installed (PowerShell does not add Git Bash's `bin/` to PATH by
+default) - confirmed directly from the run's own `PS C:\...>` prompt. Claude Code itself
+doesn't have this problem because it doesn't depend on the invoking shell's PATH for this.
+
+New `_resolve_sh()`: checks `CLAUDE_CODE_GIT_BASH_PATH` first (the mechanism public
+bug-tracker discussion around Windows/Git-Bash hook execution points at Claude Code itself
+using - several plausible shapes handled, since this isn't independently verified against
+Claude Code's own source), then `shutil.which("sh")` as before, then common Windows Git-Bash
+install locations as a last resort. Returns None (caller SKIPs, same as before) only if
+nothing resolves at all.
+
+Also from that same live run: bare Python cold start measured 136-173ms (median 142ms),
+flat across repetition - correctly flagged the daemon-relevant WARN signal, but the number
+itself is far below the originally reported 2-9s, meaning the real cost lives in the guard
+dispatch path or concurrency itself, not bare interpreter startup - exactly what this fix
+lets the diagnostic actually measure next run. PowerShell cold start (diagnostic signal
+only) measured 537-1416ms, over 4x Python's median - confirms switching the guard launcher
+to PowerShell would not have helped.
+
 ## [0.33.55] - 2026-08-11 - New: hook-latency diagnostic (feeds the ADR-014 daemon decision); dashboard rebuild moved out of the default install path
 
 `install_helper.py` gains a fifth Diagnostics option (`--check-hook-latency`, menu option
