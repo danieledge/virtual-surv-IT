@@ -3159,6 +3159,7 @@ def write_team_preferences(
     regulatory_citations: Optional[bool] = None,
     large_context_review_split: Optional[bool] = None,
     parallel_dispatch_via_workflow: Optional[bool] = None,
+    standards_critique: Optional[bool] = None,
     map_skeleton: Optional[bool] = None,
     statusline_show_map: Optional[bool] = None,
     review_tools: Optional[dict] = None,
@@ -3182,6 +3183,12 @@ def write_team_preferences(
       docs/team-operating-guide.md's dispatch rule). Defaults to True (on) whenever the
       key is absent - only an explicit False turns it off. Like large_context_review_split,
       deliberately no machine-wide tier.
+    - standards_critique: whether the DoD "Critiqued against the named standard" pass runs -
+      a second, independent agent re-reading a finished review against its profession's named
+      criteria (BABOK / ISO 29119 / SR 11-7-shaped, per docs/review/output-format.md; a full
+      extra review pass, not a section of the review it checks). Defaults to False (off)
+      whenever the key is absent - an explicit True turns it on project-wide. Like
+      large_context_review_split, deliberately no machine-wide tier.
     - map_skeleton: whether check_map() runs MAP-DRIFT/MAP-DEAD-POINTER for a codebase map
       with a Paths column (ADR-007 Phase 1 Chunk C/D). Defaults to False (off) whenever the
       key is absent - unlike large_context_review_split, this one DOES have a machine-wide
@@ -3208,6 +3215,8 @@ def write_team_preferences(
             prefs["large_context_review_split"] = bool(large_context_review_split)
         if parallel_dispatch_via_workflow is not None:
             prefs["parallel_dispatch_via_workflow"] = bool(parallel_dispatch_via_workflow)
+        if standards_critique is not None:
+            prefs["standards_critique"] = bool(standards_critique)
         if map_skeleton is not None:
             prefs["map_skeleton"] = bool(map_skeleton)
         if statusline_show_map is not None:
@@ -3636,6 +3645,10 @@ def run_configure(
     # Built-in default True - same no-machine-wide-tier precedent as
     # large_context_review_split above; this literal is its only fallback.
     workflow_dispatch_current = existing.get("parallel_dispatch_via_workflow", True)
+    # Built-in default False (2026-08-11 user request: "off by default") -
+    # standards_critique deliberately has no machine-wide tier, same as
+    # large_context_review_split above; this literal is its only fallback.
+    standards_critique_current = existing.get("standards_critique", False)
     docx_wanted = confirm(
         "  Produce .docx by default for controlled documents?",
         default=docx_current,
@@ -3660,6 +3673,14 @@ def run_configure(
         "available (guaranteed concurrent execution; runs in the background and reports "
         "back when done)?",
         default=workflow_dispatch_current,
+        assume_yes=assume_yes,
+        style=style,
+    )
+    standards_critique_wanted = confirm(
+        "  Run the independent standards-critique pass (a second agent checking a "
+        "finished review against its profession's named criteria) - off by default, "
+        "since it is a full extra review pass on top of the review itself?",
+        default=standards_critique_current,
         assume_yes=assume_yes,
         style=style,
     )
@@ -3691,6 +3712,7 @@ def run_configure(
         f"citations={'on' if citations_wanted else 'off'}, "
         f"review-split={'on' if split_wanted else 'off'}, "
         f"workflow-dispatch={'on' if workflow_dispatch_wanted else 'off'}, "
+        f"standards-critique={'on' if standards_critique_wanted else 'off'}, "
         f"map-skeleton={'on' if map_skeleton_wanted else 'off'}, "
         f"statusline-map={'on' if statusline_show_map_wanted else 'off'}, "
         f"review-tools={_format_review_tools(review_tools_wanted)}"
@@ -3703,6 +3725,7 @@ def run_configure(
         regulatory_citations=citations_wanted,
         large_context_review_split=split_wanted,
         parallel_dispatch_via_workflow=workflow_dispatch_wanted,
+        standards_critique=standards_critique_wanted,
         map_skeleton=map_skeleton_wanted,
         statusline_show_map=statusline_show_map_wanted,
         review_tools=review_tools_wanted,

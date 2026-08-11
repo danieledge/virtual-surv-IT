@@ -155,13 +155,18 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       filtered/ reported counts recorded; every finding has a **disposition** (fixed / open /
       accepted / deferred) and the review carries a **🔵 Developer guidance - improving future
       code** section (always present, even on a clean pass).
-- [ ] **Critiqued against the named standard** - before handover, a critic **who is not the
+- [ ] **Critiqued against the named standard** - **opt-in, off by default**
+      (`.claude/team-preferences.json` `standards_critique`, project-wide, configurable via
+      `/preferences` or the installer - same mechanism as `regulatory_citations`, opposite
+      default: this is a full second review pass over an already-finished deliverable, not a
+      universal expectation). **When on:** before handover, a critic **who is not the
       author** checked each major deliverable against its profession's named criteria
       (findings → the 5 C's shape in `docs/review/output-format.md`; requirements → BABOK
       quality criteria; QA evidence → ISO/IEC 29119-shaped completeness; validation reports →
       SR 11-7-style documentation expectations), and the deliverable records which standard
       it was checked against (operating guide, Outcome discipline 6). Ungrounded
-      "second-look" passes do not satisfy this gate.
+      "second-look" passes do not satisfy this gate. **When off,** this item is **N/A, not a
+      failure** - say so plainly rather than silently omitting it.
 - [ ] **Audit-compatible skeleton (default, every review depth)** - the review output carries
       document control, scope at a stated commit, reviewer independence, methodology + tooling
       coverage, the findings register with dispositions, filtered transparency and a
@@ -184,16 +189,21 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       pass (CLAUDE.md §4; not a default for every build - operating guide routing table says so
       explicitly: "not every code review"). Every deliverable, regardless of type, still carries
       the universal self-check: no secrets/PII/raw data in the repo (§5).
-- [ ] **Documented for handover** - a **developer handover** (`developer-handover.md`): how
-      to build/run/test, design decisions (ADRs - architecture decision records), known
-      limitations and tech debt. When
+- [ ] **Documented for handover** - **where the deliverable ships new or changed code**, a
+      **developer handover** (`developer-handover.md`): how to build/run/test, design
+      decisions (ADRs - architecture decision records), known limitations and tech debt. When
       handing to an IT team with its own controls, also draft the artifacts those controls
       consume (**change request**, **ops runbook + release notes**) with approval/owner
       fields left for the IT team - the team drafts, it does not approve or deploy.
-- [ ] **Handover docs are clear & usable, not just present** - a developer who has never seen
-      the code could build, run and safely change it from the doc **alone** (no tribal knowledge,
-      no unexplained jargon, commands copy-pastable). `compliance-reviewer` checks usability at
-      this gate, not merely existence.
+      **A review-only deliverable (existing code, nothing built or changed by the team) does
+      not produce a developer handover** - the review's own findings register and the
+      mandatory 🔵 Developer guidance section are the handover. Applies identically under
+      `/engage` and `/engage-light` - this is a deliverable-type condition, not a profile one.
+- [ ] **Handover docs are clear & usable, not just present** - *where a developer handover was
+      produced*, a developer who has never seen the code could build, run and safely change it
+      from the doc **alone** (no tribal knowledge, no unexplained jargon, commands
+      copy-pastable). `compliance-reviewer` checks usability at this gate, not merely
+      existence.
 - [ ] **Indexed - a LIVING, GENERATED START-HERE entry point** - the workspace's
       `artifacts/<slug>/START-HERE.md` (render shape: `docs/templates/start-here.md`) is
       **rendered from `engagement-state.json` at engagement open** (`engagement_state init`)

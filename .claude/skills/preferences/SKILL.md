@@ -1,5 +1,5 @@
 ---
-description: View or change this project's team preferences (docx export, regulatory citations, large-context review splitting, workflow-based parallel dispatch, codebase-skeleton drift checking)
+description: View or change this project's team preferences (docx export, regulatory citations, large-context review splitting, workflow-based parallel dispatch, standards-critique pass, codebase-skeleton drift checking)
 disable-model-invocation: true
 ---
 
@@ -8,7 +8,7 @@ You are **Morgan**. The user invoked `/preferences` - show and optionally change
 gate (unlike hooks/settings.json) - you may read and write it directly.
 
 **1. Read the current state.** `Read .claude/team-preferences.json` if it exists (absent
-is the common, valid default - not an error). Resolve the five known preferences:
+is the common, valid default - not an error). Resolve the six known preferences:
 
 - `extra_formats` (list, default `[]`): whether controlled documents (BRD, FSD, delivery
   report, etc.) also get a Word `.docx` copy alongside the always-required `.md` + `.html`
@@ -27,6 +27,11 @@ is the common, valid default - not an error). Resolve the five known preferences
   execution, asynchronous results) instead of best-effort batched Task calls - full behaviour
   and the fixed script in `.claude/skills/.shared/workflow-dispatch.md`. Like
   `large_context_review_split`, no machine-wide tier.
+- `standards_critique` (bool, default `false` when the key is absent): whether the DoD
+  "Critiqued against the named standard" pass runs - a second, independent agent re-reading
+  a finished review against its profession's named criteria (BABOK/ISO 29119/SR 11-7-shaped).
+  Off by default because it is a full extra review pass on top of the review it checks, not a
+  universal expectation - like `large_context_review_split`, no machine-wide tier.
 - `map_skeleton` (bool, default `false` when the key is absent): whether `check_map()`
   runs MAP-DRIFT/MAP-DEAD-POINTER for a codebase map with a `Paths` column - experimental,
   ADR-007 Phase 1. Unlike `large_context_review_split`, this one also has a machine-wide
@@ -47,6 +52,7 @@ for critical/high-stakes engagements.
 > - Regulatory citations by default: **on/off**
 > - Large-context reviews split by component from the start: **on/off**
 > - Independent review passes dispatched via the Workflow tool when available: **on/off**
+> - Standards-critique pass (a second agent checking a finished review): **on/off**
 > - Codebase-skeleton drift checking (experimental): **on/off**
 > - My own model: **opus/sonnet/sonnet-4-6/(account default)** - each written as an exact
 >   model ID, never Claude Code's generic `sonnet` alias (which resolves to a different
@@ -55,7 +61,7 @@ for critical/high-stakes engagements.
 >   / `default`), or the installer's interactive menu, option 8.
 
 **3. Offer to change something - one question tool call, single-select per row (or skip
-entirely if the user just wanted to look). Five preferences but the tool caps at 4 questions
+entirely if the user just wanted to look). Six preferences but the tool caps at 4 questions
 per call, so the first screen carries these four:**
 
 ```
@@ -66,9 +72,10 @@ AskUserQuestion:
   "Dispatch independent review passes via the Workflow tool when available?" -> On / Off (current marked)
 ```
 
-Codebase-skeleton drift checking doesn't fit the cap: it stays visible in step 2, changes on a
-word from the user ("turn on drift checking"), and gets its own follow-up screen only if the
-user says they want to change it without saying which way.
+The standards-critique pass and codebase-skeleton drift checking don't fit the cap: both stay
+visible in step 2, change on a word from the user ("turn on the standards critique", "turn on
+drift checking"), and get their own follow-up screen only if the user says they want to
+change one without saying which way.
 
 If the user's own message already stated what they want ("turn on docx", "stop citing
 obligations"), skip the question and just act - don't make them answer a menu for

@@ -3229,6 +3229,17 @@ def test_write_team_preferences_regulatory_citations_flag(tmp_path):
     assert "extra_formats" not in prefs  # omitted arg leaves the other key untouched
 
 
+def test_write_team_preferences_standards_critique_flag(tmp_path):
+    """standards_critique: opposite default from regulatory_citations (off, not on, when
+    absent) - same merge-only, no-machine-wide-tier mechanism as large_context_review_split."""
+    from install_helper import write_team_preferences
+
+    write_team_preferences(tmp_path, standards_critique=True)
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["standards_critique"] is True
+    assert "regulatory_citations" not in prefs  # omitted arg leaves the other key untouched
+
+
 def test_write_team_preferences_omitted_args_preserve_existing(tmp_path):
     from install_helper import write_team_preferences
 

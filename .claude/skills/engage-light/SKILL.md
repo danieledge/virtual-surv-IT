@@ -38,8 +38,12 @@ both disclaimers, execution-consent intent (human-only grant), data attestation,
 question call. No light shortcut touches §5/§7.
 
 **2. Scope in one exchange.** No BRD/FSD/RTM: requirements are a short bullet list captured
-directly in a ONE-PAGE brief (decisions, assumptions, the bullet requirements, routing).
-Open the state with the profile recorded (this creates the engagement's own workspace
+directly in a ONE-PAGE brief (decisions, assumptions, the bullet requirements, routing). **If
+the ask is a review of code touching a security-sensitive surface** (auth, input parsing, DB
+access, external I/O, crypto, secrets, or PII/data handling), fold the same security-audit
+offer standard `/engage` makes into this exchange (header `Security`, single-select: *review
+only* · *review + a dedicated security audit* (`/security-audit`)) - never a separate
+round-trip; light stays low-ceremony, not lower-safety. Open the state with the profile recorded (this creates the engagement's own workspace
 `artifacts/<slug>/`; if other engagements already exist, first run
 `<python> -m scripts.engagement_state list --menu` and, if `open` is non-empty, read
 `.claude/skills/engage/references/resume-menu.md` (plugin mode:
@@ -54,11 +58,17 @@ fan-outs** (typically one builder + one reviewer, or a single analyst). Evidence
 (📊/🧠) and the blocked/⛔ discipline apply unchanged. **If deliverable code is produced, the
 mandatory chain applies in full kind, light in count**: tests (project's own framework,
 command recorded) → ONE code-review pass with fixes → ONE independent QA verification cycle
-(evidence preserved). A QA fail still loops - light never ships a failing verdict.
+(evidence preserved). A QA fail still loops - light never ships a failing verdict. **If no
+code is produced or changed** (a review of existing code, an analysis, a question), **no
+developer-handover doc is produced** (DoD "Documented for handover") - the review's own
+findings and 🔵 Developer guidance section are the deliverable.
 
 **4. Close-lite.** `set-status closing` first (marks the close window on disk - the summary
-email written next is legitimate close work, register R5); run
-`<python> -m scripts.check_artifacts --fix` and fix the list; then
+email written next is legitimate close work, register R5); run the **citations gate**,
+unchanged from standard - `<python> -m scripts.check_citations` over the artifacts
+(`.claude/skills/engage/references/close-checklist.md` §Citations gate: anything flagged
+TO-VERIFY ships flagged with a permalink and the standard limitations note, never blocking the
+close) - then `<python> -m scripts.check_artifacts --fix` and fix the list; then
 `set-team`, `finalise-artifacts`, `set-footprint`, and `set-status closed --verdict "..."` -
 the close runs the DoD gate itself and refuses on findings (register R6).
 **No delivery report** - but the **engagement-summary email stays, kept SHORT**

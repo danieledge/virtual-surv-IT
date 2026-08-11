@@ -491,7 +491,7 @@ def resolve_preferences(project_dir: Path) -> dict:
 
     Returns {"extra_formats": list[str], "regulatory_citations": bool,
     "large_context_review_split": bool, "parallel_dispatch_via_workflow": bool,
-    "map_skeleton": bool}."""
+    "standards_critique": bool, "map_skeleton": bool}."""
     prefs = read_team_preferences(project_dir)
     # Project setting wins if this project has ever explicitly set it (even to "off" -
     # write_team_preferences always records extra_formats/regulatory_citations once a
@@ -512,6 +512,11 @@ def resolve_preferences(project_dir: Path) -> dict:
     # parallel_dispatch_via_workflow: on by default when absent (unlike review_split) -
     # only an explicit false in team-preferences.json turns it off. No machine-wide tier.
     workflow_dispatch_on = prefs.get("parallel_dispatch_via_workflow", True)
+    # standards_critique: off by default when absent - same no-machine-wide-tier precedent
+    # as large_context_review_split/parallel_dispatch_via_workflow. It gates the DoD
+    # "Critiqued against the named standard" pass (a second, independent review of a
+    # finished review), not a universal expectation.
+    standards_critique_on = prefs.get("standards_critique", False)
     # map_skeleton (ADR-007 Phase 1 Chunk D): unlike large_context_review_split, this one
     # DOES have a machine-default tier - same key-presence-wins precedence as docx/citations.
     if "map_skeleton" in prefs:
@@ -523,6 +528,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "regulatory_citations": citations_on,
         "large_context_review_split": review_split_on,
         "parallel_dispatch_via_workflow": workflow_dispatch_on,
+        "standards_critique": standards_critique_on,
         "map_skeleton": map_skeleton_on,
     }
 
@@ -542,6 +548,7 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     citations_on = resolved["regulatory_citations"]
     review_split_on = resolved["large_context_review_split"]
     workflow_dispatch_on = resolved["parallel_dispatch_via_workflow"]
+    standards_critique_on = resolved["standards_critique"]
     map_skeleton_on = resolved["map_skeleton"]
     tool_report = run_tool_probe(root, project_dir)
     extensions_block = run_extensions_show(root, project_dir)
@@ -559,6 +566,7 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         f"REGULATORY_CITATIONS={'on' if citations_on else 'off'}",
         f"LARGE_CONTEXT_REVIEW_SPLIT={'on' if review_split_on else 'off'}",
         f"PARALLEL_DISPATCH_VIA_WORKFLOW={'on' if workflow_dispatch_on else 'off'}",
+        f"STANDARDS_CRITIQUE={'on' if standards_critique_on else 'off'}",
         f"MAP_SKELETON={'on' if map_skeleton_on else 'off'}",
     ]
     if drift:
