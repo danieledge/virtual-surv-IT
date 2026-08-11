@@ -206,11 +206,17 @@ Follow **`docs/review/output-format.md`** exactly - it is the single canonical f
   one. Do NOT hand-author markdown findings or a "5C summary"; a missing field is a schema error, not
   a silent drop. (Deep review adds architecture findings the same way; 📐/💥 notes go in the pack's
   narrative fields.)
-- **Component-split reviews are the one exception to writing the pack yourself.** When the
-  caller's brief says you are one of several component-scoped passes over the same engagement,
-  return your findings as text and write no pack - the orchestrator consolidates and writes the
-  merged pack (operating guide §Orchestration discipline; the parallel passes all share this
-  agent's one allowed path, so direct writes would collide).
+- **Component-split reviews write their own pack too, same as any other pass - just to your
+  own component-qualified path**, not the shared canonical name (operating guide
+  §Orchestration discipline: `findings-<slug>-<component>.jsonl`, given to you in the
+  dispatch brief - use exactly that path, never guess your own). This used to be the one
+  exception ("return findings as text instead, the orchestrator writes the merged pack") -
+  that existed only to stop multiple passes racing on ONE shared path; since each pass now
+  gets its own distinct path, that race can't happen and there's no reason to route findings
+  through prose text first (live-verified 2026-08-10: the write-scoping guard fires
+  identically for this whether you're dispatched via `Task` or via `Workflow`). Morgan still
+  does the final cross-component MERGE into the canonical `findings-<slug>.jsonl` herself,
+  reading your pack back rather than reconstructing it from your prose.
 - **Console** gets the clean traffic-light **scoreboard** (`🔴/🟠/🟡/🔵/🔇` counts +
   `Found/Reported/Filtered`). Never dump a wall of tables.
 - **Return a distilled summary to the orchestrator, not the JSON** - the scoreboard, headline

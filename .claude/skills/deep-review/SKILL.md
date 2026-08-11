@@ -115,10 +115,14 @@ and states what's applicable vs not.
    produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). This is the one
    genuinely sequential step in the fan-out (it depends on the packs existing), and it runs
    **even if a pass returned self-scored counts** - the reviewer applying the rubric to its own
-   findings is not a substitute. Once the scorer's numbers are applied, record the pass in each
-   pack's envelope `scoring` field ("scored by review-scorer: Found N · Reported R · Filtered F")
-   - `check_artifacts` mechanically flags a scored-kind pack without that record
-   (`PACK-UNSCORED`), and a self-scoring note there does not clear it. Tag each finding's
+   findings is not a substitute. Once the scorer's numbers are applied, **you (Morgan) record
+   the pass in each pack's envelope `scoring` field** ("scored by review-scorer: Found N ·
+   Reported R · Filtered F") **right here, as part of this step - before the challenge pass,
+   not as part of it.** Pip has no Write/Edit of its own (advisory, judgement stays with the
+   reviewers and you), and the reviewer that wrote the pack has already returned by now, so
+   this bookkeeping edit is yours to make regardless of whether your later challenge pass
+   changes anything - `check_artifacts` mechanically flags a scored-kind pack without that
+   record (`PACK-UNSCORED`), and a self-scoring note there does not clear it. Tag each finding's
    **evidence basis** (📊 measured / 🧠 inferred). **Never** filter regulated findings (secrets,
    PII/raw data §5, undocumented thresholds / broken traceability §4) - those stay with
    `code-reviewer`/`compliance-reviewer`, not the scorer.
@@ -147,7 +151,10 @@ and states what's applicable vs not.
       pack directly to its own component-qualified path - read those small packs back (`Read`
       each one, no reconstruction from prose needed) and **you** merge them into the canonical
       `findings-<slug>.jsonl` yourself (operating guide §Orchestration discipline, the
-      >8-finding Write-then-Edit rule) - challenge from that merged file the same way. **Only if your challenge pass downgrades or drops something** do you edit
+      >8-finding Write-then-Edit rule) - challenge from that merged file the same way. The
+      `scoring` envelope edit (step 4) already happened before you get here, regardless of
+      what the challenge pass does - what's carved out below is FINDING CONTENT specifically.
+      **Only if your challenge pass downgrades or drops something** do you edit
       that same file to reflect the final (post-challenge) findings; otherwise leave it exactly as
       written.
    2. Run **`<python> -m scripts.check_artifacts --fix`** (allow-listed - no consent needed): it
