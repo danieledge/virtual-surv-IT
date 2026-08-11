@@ -3,6 +3,31 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.54] - 2026-08-11 - Fix: guard-launcher latency/correctness under Workflow fan-out; DoD Stop hook now scopes auto-fix to the active engagement
+
+Live corp bug report (Windows debug-log monitoring): 87 slow PreToolUse events, 2-9s normal,
+25-90s under Workflow-tool fan-out. Four causes found; three fixed here in `run-guard.sh`: a
+trailing `/` in `CLAUDE_PLUGIN_ROOT` produced a doubled path that let the stale-lock stamp
+write fail silently, permanently disabling stale-lock reclaim for the rest of the session -
+now stripped up front, and a stamp-write failure is now visible (stderr) and fails open
+(releases the lock) rather than risking one nobody can ever reclaim. `LOCK_WAIT_BUDGET_MS`
+was a flat 1500ms regardless of real interpreter cold-start time on the host - now scales
+with a one-time-measured, cached cold-start cost (floor unchanged at 1500ms, so a fast host
+behaves exactly as before an earlier version of this fix over-corrected by tying the floor to
+`LOCK_MAX_AGE_SECONDS`, which broke `test_a_genuinely_held_lock_fails_open_within_the_wait_budget`
+- caught before landing, floor reverted to the original). The fourth cause - a fresh Python
+process per hook call, the actual root of the cold-start cost - is not fixed here; a
+persistent guard daemon is proposed as the real fix in ADR-014, design only, not built.
+
+Same report separately found the DoD Stop-hook backstop (`dod_stop_gate.py`) scanning every
+open engagement project-wide but instructing auto-fix on all of them undifferentiated - a
+session opened for a code review in one workspace got pulled into fixing unrelated,
+unattended engagements nobody asked it to touch. The scan stays project-wide on purpose
+(that's the whole point of the backstop - catch a close that silently never ran, anywhere in
+the project); the auto-fix instruction is now scoped to the session's active engagement only
+(`.active-engagement.json`), with other open engagements' findings surfaced but explicitly
+marked not-actioned.
+
 ## [0.33.53] - 2026-08-08 - Fix: deliverables written to the plugin root instead of the working directory
 
 The `--target-path` diagnostic-mode artifact leak, seen twice today (real files landing in this

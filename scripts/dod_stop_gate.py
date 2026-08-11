@@ -95,26 +95,51 @@ def _already_nudged(pack: Path, findings_hash: str) -> bool:
     return any(marker in str(entry) for entry in log)
 
 
-def _reason(findings: list[str], slug: str | None, findings_hash: str) -> str:
-    bullet = "\n- ".join(findings)
+def _reason(
+    active_findings: list[str], other_findings: list[str], slug: str | None, findings_hash: str
+) -> str:
     log_note = (
         f'engagement_state --slug {slug} log-note "{_NUDGE_MARKER_PREFIX}{findings_hash}"'
         if slug
         else f'engagement_state log-note "{_NUDGE_MARKER_PREFIX}{findings_hash}"'
     )
+    other_block = ""
+    if other_findings:
+        other_bullet = "\n- ".join(other_findings)
+        other_block = (
+            "\n\nOther open engagements in this project also have outstanding DoD findings "
+            "(surfaced so silent drift is never missed entirely, but NOT auto-fixed here - "
+            "stay scoped to your active engagement unless the user asks you to switch):\n- "
+            f"{other_bullet}"
+        )
+    if active_findings:
+        bullet = "\n- ".join(active_findings)
+        head = (
+            "🎩 DoD backstop (Stop hook, warn-first): your ACTIVE engagement is still "
+            "OPEN and the mechanical DoD check flags:\n- "
+            f"{bullet}\n\n"
+            "The gate is a FIX-LIST (docs/DEFINITION-OF-DONE.md): AUTO-FIX the deterministic ones "
+            "(render a missing .html sibling, create/refresh the START-HERE index, regenerate a "
+            "stale registry) and re-close; ESCALATE only what needs a human. A final-/"
+            "delivery-report/summary-email flagged before close means a close is UNDERWAY or was "
+            "interrupted - resume and FINISH it (`set-status closing`, complete the close "
+            "artifacts, `check_artifacts --fix`, `set-status closed`); NEVER delete completed "
+            "close deliverables to satisfy the gate. If the engagement is genuinely still "
+            'blocked, end the turn saying so plainly ("NOT closed - outstanding: ...") rather '
+            "than stopping silently."
+        )
+    else:
+        # The active engagement itself is clean - only OTHER open engagements have
+        # findings. Still worth one nudge (so a silently-never-closed sibling is never
+        # missed project-wide) but there is nothing here for THIS session to act on.
+        head = (
+            "🎩 DoD backstop (Stop hook, warn-first): your active engagement has no "
+            "outstanding DoD findings of its own."
+        )
     return (
-        "🎩 DoD backstop (Stop hook, warn-first): an engagement in this project is still "
-        "OPEN and the mechanical DoD check flags:\n- "
-        f"{bullet}\n\n"
-        "The gate is a FIX-LIST (docs/DEFINITION-OF-DONE.md): AUTO-FIX the deterministic ones "
-        "(render a missing .html sibling, create/refresh the START-HERE index, regenerate a "
-        "stale registry) and re-close; ESCALATE only what needs a human. A final-/"
-        "delivery-report/summary-email flagged before close means a close is UNDERWAY or was "
-        "interrupted - resume and FINISH it (`set-status closing`, complete the close "
-        "artifacts, `check_artifacts --fix`, `set-status closed`); NEVER delete completed "
-        "close deliverables to satisfy the gate. If the engagement is genuinely still "
-        'blocked, end the turn saying so plainly ("NOT closed - outstanding: ...") rather '
-        "than stopping silently. (One-time nudge - it will not fire again this stop cycle, "
+        f"{head}"
+        f"{other_block}"
+        "\n\n(One-time nudge - it will not fire again this stop cycle, "
         f"and once you record `{log_note}` it will not repeat for this SAME finding set in "
         "any later turn or session either - only a new or changed finding re-arms it.)"
     )
@@ -204,33 +229,60 @@ def main() -> int:
         if not gated:
             return 0
 
-        findings = []
+        # Which of the gated workspaces is the SESSION's active one (ADR-008's
+        # .active-engagement.json, read via the same loader check_artifacts.py itself
+        # uses)? 2026-08-11 fix, live report: a multi-engagement project opened for a
+        # code review in ONE workspace got a single undifferentiated nudge covering
+        # every open pack project-wide, and the reason text said "AUTO-FIX... and
+        # re-close" with no scoping - the session got pulled into fixing unrelated,
+        # unattended engagements it was never asked to touch. The SCAN stays broad on
+        # purpose (that is the whole point of this backstop - catch a close that
+        # silently never ran, anywhere in the project) but the FIX instruction now only
+        # applies to the active engagement; other gated packs are surfaced, not
+        # actioned. No active marker, or only one gated pack: no scoping question to
+        # answer - falls back to the pre-fix, undifferentiated behaviour exactly.
+        active_slug = None
+        es = ca._load_engagement_state_module()
+        if es is not None:
+            try:
+                active_slug = es.read_active(artifacts)
+            except Exception:  # nosec B110
+                active_slug = None
+
+        active_findings: list[str] = []
+        other_findings: list[str] = []
         for name, pack in gated:
             if not name and packs:
                 # Flat pack alongside workspaces: deep rglob checks would cross into the
-                # sibling workspaces - mirror check_artifacts and demand migration instead.
-                findings.append(
+                # sibling workspaces - mirror check_artifacts and demand migration
+                # instead. Structural, not any one engagement's - always active-bucket.
+                active_findings.append(
                     "FLAT-PACK-UNMIGRATED: legacy flat pack coexists with workspaces - "
                     "run `python -m scripts.engagement_state migrate`"
                 )
                 continue
             prefix = f"[{name}] " if name else ""
-            findings.extend(f"{prefix}{f}" for f in ca.check(pack))
+            pack_findings = [f"{prefix}{f}" for f in ca.check(pack)]
+            if active_slug is None or len(gated) == 1 or name == active_slug:
+                active_findings.extend(pack_findings)
+            else:
+                other_findings.extend(pack_findings)
         if packs:
-            # G8: surface registry drift at turn end too; the orphan scan is read-only
-            # here (the CLI checker owns the grandfather snapshot).
-            findings.extend(ca.check_registry(artifacts))
-            findings.extend(ca.check_root_orphans(artifacts))
+            # G8: project-level, not any one engagement's - always surfaced now, same as
+            # before this fix (the orphan scan is read-only here - the CLI checker owns
+            # the grandfather snapshot).
+            active_findings.extend(ca.check_registry(artifacts))
+            active_findings.extend(ca.check_root_orphans(artifacts))
         map_path = ca.find_codebase_map(cwd)
         if map_path is not None and map_path.is_file():
-            findings.extend(ca.check_map(map_path))
+            active_findings.extend(ca.check_map(map_path))
     except Exception:
         return 0  # fail open - never brick a stop over a checker error
 
-    if not findings:
+    if not active_findings and not other_findings:
         return 0
 
-    findings_hash = _findings_hash(findings)
+    findings_hash = _findings_hash(active_findings + other_findings)
     # Marker home: prefer the flat pack when it's among the gated set (it's what most
     # single-engagement projects have), else the first gated workspace. Which specific pack
     # holds the marker is not semantically load-bearing - it is just a durable place to
@@ -240,7 +292,8 @@ def main() -> int:
         return 0
 
     slug = marker_name or None
-    print(json.dumps({"decision": "block", "reason": _reason(findings, slug, findings_hash)}))
+    reason = _reason(active_findings, other_findings, slug, findings_hash)
+    print(json.dumps({"decision": "block", "reason": reason}))
     return 0
 
 

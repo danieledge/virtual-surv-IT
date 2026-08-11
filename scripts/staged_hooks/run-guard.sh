@@ -64,11 +64,88 @@ export PYTHONUTF8=1
 #     holder crashed or was SIGKILLed - not catchable by the EXIT trap below) and is removed
 #     immediately rather than waited out, so one dead holder can't starve every call behind it
 #     for the rest of the session.
-LOCK_DIR="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/.guard-lock"
+# Strip trailing slash(es) from the resolved root (2026-08-11 corp report): a
+# CLAUDE_PLUGIN_ROOT ending in "/" produces a doubled "//" in LOCK_DIR/CACHE below. mkdir
+# tolerates that fine, but on at least one real Windows/Git-Bash environment the SUBSEQUENT
+# `date +%s >"$LOCK_STAMP"` write does not - it fails silently, which permanently disables
+# the stale-lock reclaim below (a lock with no stamp can never be recognised as stale) for
+# the rest of the session. POSIX parameter expansion only, no external command.
+_root="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}"
+while [ "${_root%/}" != "$_root" ] && [ -n "$_root" ]; do
+	_root="${_root%/}"
+done
+[ -n "$_root" ] || _root="/"
+
+LOCK_DIR="$_root/.claude/.guard-lock"
 LOCK_STAMP="$LOCK_DIR/acquired-at"
+# Same normalized root as LOCK_DIR above - defined here (once) rather than at its original,
+# later point of use, so the cold-start probe below and the real interpreter-cache lookup
+# further down read and write the exact same path instead of two independently-computed
+# variables that could silently diverge the same way LOCK_DIR/LOCK_STAMP just did.
+CACHE="$_root/.claude/.guard-interpreter"
 LOCK_MAX_AGE_SECONDS=10  # generous upper bound for one interpreter start + guard check;
 # older means the holder is gone, not genuinely still working.
-LOCK_WAIT_BUDGET_MS=1500
+
+# LOCK_WAIT_BUDGET_MS must exceed real interpreter cold-start time on THIS host, or a
+# waiting caller gives up and races ahead unlocked before the current holder could
+# realistically finish - defeating serialization for exactly the slow-host case it exists
+# for (2026-08-11 corp report: this was a flat 1500ms while observed cold starts on a
+# corp-AV-scanned Windows box ran 2-9s normally, 25-90s under fan-out contention). The floor
+# stays the original 1500ms, NOT tied to LOCK_MAX_AGE_SECONDS - an earlier version of this
+# fix raised the floor above LOCK_MAX_AGE_SECONDS*1000 reasoning a waiter should always be
+# able to reach the stale-lock reclaim check, but that reasoning was wrong and conflicted
+# with this launcher's own deliberate design: the reclaim check compares the LOCK's absolute
+# age each poll, not the waiter's own elapsed time, so a short budget does not block reclaim
+# - and test_run_guard_lock.py::test_a_genuinely_held_lock_fails_open_within_the_wait_budget
+# already encodes the correct intent here on purpose: a genuinely (non-stale) held lock
+# should fail this caller open QUICKLY, not wait around hoping it goes stale. Only the
+# ADAPTIVE part (scaling with measured cold start) is this fix; the floor for a fast host or
+# a not-yet-cached one is unchanged from before it. Measured using the ALREADY-CACHED interpreter
+# only (.guard-interpreter, populated by the selection loop further down) - never a fresh,
+# unvalidated probe here, which would risk reintroducing the exact Windows "python3
+# resolves to the Store stub" multi-second hang that selection loop is specifically ordered
+# to avoid. On a session's very first call (no cache yet) this measurement is skipped and
+# the floor below applies - that first call already pays its own one-time
+# interpreter-resolution cost separately; a second, possibly stub-prone probe here would
+# only add to it, not save anything.
+COLDSTART_CACHE="$_root/.claude/.guard-coldstart-ms"
+_measured_ms=""
+if [ -f "$COLDSTART_CACHE" ]; then
+	_measured_ms=$(cat "$COLDSTART_CACHE" 2>/dev/null)
+fi
+case "$_measured_ms" in
+	''|*[!0-9]*) _measured_ms="" ;;  # missing, empty or non-numeric cache -> (re)measure
+esac
+if [ -z "$_measured_ms" ] && [ -f "$CACHE" ]; then
+	_known_good=$(cat "$CACHE" 2>/dev/null)
+	if [ -n "$_known_good" ] && command -v "$_known_good" >/dev/null 2>&1; then
+		# Whole-second `date +%s` only, matching the rest of this script - `%N` (sub-second)
+		# is a GNU extension BSD/macOS `date` does not reliably support, and the costs this
+		# measures are already multi-second under the conditions that motivate this fix, so
+		# second-level precision is coarse but adequate; it only ever errs toward the floor
+		# on a genuinely fast host, which is the safe direction to be wrong in.
+		_t0=$(date +%s 2>/dev/null) || _t0=""
+		"$_known_good" -c 'pass' >/dev/null 2>&1
+		_t1=$(date +%s 2>/dev/null) || _t1=""
+		if [ -n "$_t0" ] && [ -n "$_t1" ] && [ "$_t1" -ge "$_t0" ] 2>/dev/null; then
+			_measured_ms=$(( (_t1 - _t0) * 1000 ))
+		else
+			_measured_ms=0
+		fi
+		mkdir -p "$(dirname "$COLDSTART_CACHE")" 2>/dev/null
+		printf '%s' "$_measured_ms" >"$COLDSTART_CACHE" 2>/dev/null
+	fi
+fi
+[ -n "$_measured_ms" ] || _measured_ms=0
+# Budget = 4x measured cold start (headroom for AV-scan variance and shallow queueing under
+# fan-out), floored at the original 1500ms (never LESS generous than before this fix - a
+# fast host or one with no measurement yet behaves exactly as it did previously) and capped
+# so a wait this long stops being "serialization" and starts being a hang - the reclaim and
+# the budget-exhausted fail-open below both still apply as backstops beyond this cap either
+# way.
+LOCK_WAIT_BUDGET_MS=$(( _measured_ms * 4 ))
+[ "$LOCK_WAIT_BUDGET_MS" -ge 1500 ] 2>/dev/null || LOCK_WAIT_BUDGET_MS=1500
+[ "$LOCK_WAIT_BUDGET_MS" -le 20000 ] 2>/dev/null || LOCK_WAIT_BUDGET_MS=20000
 LOCK_POLL_MS=25
 
 # Ensure the PARENT exists once, up front - mkdir "$LOCK_DIR" below deliberately has no -p
@@ -82,8 +159,24 @@ _lock_acquired=0
 _elapsed_ms=0
 while [ "$_elapsed_ms" -lt "$LOCK_WAIT_BUDGET_MS" ]; do
 	if mkdir "$LOCK_DIR" 2>/dev/null; then
-		date +%s >"$LOCK_STAMP" 2>/dev/null
-		_lock_acquired=1
+		if date +%s >"$LOCK_STAMP" 2>/dev/null; then
+			_lock_acquired=1
+		else
+			# Stamp write failed even though mkdir succeeded (2026-08-11 corp report: seen
+			# with a trailing-slash root producing a doubled "//" before the strip above
+			# existed - kept as a defensive backstop in case another path-translation edge
+			# case on Windows/Git Bash produces the same mkdir/write asymmetry some other
+			# way). A lock with no stamp can NEVER be recognised as stale by the reclaim
+			# logic below, so holding it would risk exactly the stuck-lock-for-the-rest-
+			# of-the-session failure the reclaim exists to prevent - worse than just not
+			# serializing this one call. Visible (stderr, never stdout - this script's
+			# stdout must stay clean for the wrapped guard's own output), then release and
+			# fail open rather than risk a lock nobody can ever reclaim.
+			echo "run-guard.sh: warning: lock acquired but stale-lock stamp write failed" \
+				"($LOCK_STAMP) - releasing lock, proceeding without serialization for" \
+				"this call" >&2
+			rm -rf "$LOCK_DIR" 2>/dev/null
+		fi
 		break
 	fi
 	if [ -f "$LOCK_STAMP" ]; then
@@ -106,9 +199,9 @@ fi
 
 # Below: same interpreter resolution as before, just "run and wait" instead of "exec" (exec
 # replaces this process image, which would skip the lock-release above entirely - it must
-# run after the guard completes, not instead of this script continuing).
+# run after the guard completes, not instead of this script continuing). CACHE is already
+# set above (same normalized $_root as LOCK_DIR).
 
-CACHE="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/.guard-interpreter"
 if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)
 	if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
