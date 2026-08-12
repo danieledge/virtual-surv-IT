@@ -3,6 +3,24 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.59] - 2026-08-12 - ADR-014 v0.3: guard-daemon spike validated live on the actual reporting Windows box, 8/8 checks passed
+
+Via the new Diagnostics-menu entry (0.33.58), on the real corp box this whole investigation
+has been about: daemon started correctly, served a harmless payload (allowed) and a
+raw-data payload (blocked, with the real `guard-raw-data.py` message verbatim - proof it
+runs actual current guard logic in-process), 10 genuinely concurrent mixed requests each
+got their own correct exit code with zero cross-talk (the concurrency-safety lock fix,
+confirmed live, not just designed), staleness detection correctly flagged a touched file
+and the daemon actually exited. **Measured speedup: 12.6ms daemon-backed median vs. 307ms
+cold-start median.**
+
+ADR-014 open questions 1 (IPC/concurrency) and 2 (staleness) move from "prototyped" to
+"confirmed" with this evidence. Still open: idle-timeout actually firing (not covered by
+the automated smoke test by design - needs a manual 60s+ run), whether the Windows detached
+spawn stays genuinely invisible (no console popup), and open questions 3 (attack surface)
+and 5 (testing strategy), untouched by this prototype. `docs/internal/adr-014-spike/` is
+still not wired into any live hook path - `.claude/hooks/run-guard.sh` remains unchanged.
+
 ## [0.33.58] - 2026-08-12 - New: ADR-014 spike smoke test exposed via Diagnostics menu / `--check-adr014-spike`
 
 User request, explicitly overriding this session's own initial caution about exposing

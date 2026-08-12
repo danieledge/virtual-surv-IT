@@ -3,17 +3,18 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-014` · Version `0.2` · Status `Proposed` · Classification
+> **Document control** · ID `ADR-014` · Version `0.3` · Status `Proposed` · Classification
 > `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-08-12`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-08-11 | live corp bug report (Windows debug-log monitoring) + same-session remediation | Initial proposal - design space and recommendation, no code |
 > | 0.2 | 2026-08-12 | build-plan step 1 measured live on the reporting box; build-plan step 2 (design spike) built | Step 1 done with real numbers (below). Step 2: a working prototype at `docs/internal/adr-014-spike/` - `guard_daemon.py` + `guard_daemon_client.py` + a live smoke test + pytest coverage for the pure-logic pieces. One real, previously-unanticipated finding from actually building it: `bash_hook_dispatcher.main()` reads `sys.stdin`/writes `sys.stderr` directly (process-global), so a naive threaded daemon risked one request's payload leaking into another's guard evaluation - dispatch is now serialized behind a lock. Not yet validated on the actual Windows/Git-Bash box - see the spike README's "still genuinely open" section. |
+> | 0.3 | 2026-08-12 | spike smoke-tested live on the actual reporting Windows box (via the new Diagnostics-menu entry, 0.33.58) | **8/8 checks passed.** Concurrency safety, staleness detection and IPC all confirmed working on the real box, not just Linux - open questions 1 and 2 move from "prototyped" to "confirmed." Measured daemon-backed latency: **12.6ms median vs. 307ms cold-start median** (dispatcher invoked directly, not through the full `run-guard.sh` launcher - a cleaner isolation of dispatch-import cost specifically than the ~15x figure in v0.2). Idle-timeout still unconfirmed (needs a manual 60s+ run, out of scope for the automated smoke test by design). |
 
 | | |
 |---|---|
-| **Status** | **Proposed - spike built, not yet validated on Windows, not wired into any live hook path.** Items 1-4 of the same bug report (trailing-slash path bug, silent stamp-write failure, undersized wait budget, active-engagement scoping on the DoD Stop hook) are fixed separately, staged, and out of scope here - see `scripts/staged_hooks/run-guard.sh` and `scripts/staged_hooks/dod_stop_gate.py`. This ADR is about the one item from that report those fixes cannot reach: the cold-start cost itself. |
+| **Status** | **Proposed - spike validated on Windows (8/8 smoke-test checks), not yet wired into any live hook path.** Items 1-4 of the same bug report (trailing-slash path bug, silent stamp-write failure, undersized wait budget, active-engagement scoping on the DoD Stop hook) are fixed separately, staged, and out of scope here - see `scripts/staged_hooks/run-guard.sh` and `scripts/staged_hooks/dod_stop_gate.py`. This ADR is about the one item from that report those fixes cannot reach: the cold-start cost itself. |
 | **Date** | 2026-08-11, updated 2026-08-12 |
 | **Deciders** | Human approver (not yet decided) |
 | **Traceability** | ADR-002 (safety-hook threat model - this proposal changes the enforcement boundary's own architecture); `.claude/hooks/run-guard.sh`; `scripts/bash_hook_dispatcher.py`; `docs/internal/adr-014-spike/` (the prototype) |
@@ -79,25 +80,31 @@ IPC and relay the response (exit code + stdout) unchanged. The guard's documente
 
 ### Open questions - answers needed before this is buildable, not just conceivable
 
-1. **IPC that is genuinely portable, not "portable in the common case."** ◐ **Prototyped,
-   not yet Windows-validated.** The spike uses TCP on `127.0.0.1` with an OS-assigned
-   ephemeral port written to a port file (`.claude/.guard-daemon-port`) - same
-   file-based-coordination pattern `.guard-interpreter`/`.guard-lock` already use, which
-   sidesteps port-collision logic entirely rather than picking a fixed port. Still needs a
-   real run on the actual Windows/Git-Bash box before this question is genuinely closed, not
-   just "should work."
-   **A second, previously unanticipated finding from actually building it**: `bash_hook_
-   dispatcher.main()` reads `sys.stdin` and writes `sys.stderr` directly - process-global
-   state, not a function parameter (found by reading its actual source before assuming an
-   interface, not by guessing). A naive threaded daemon serving concurrent connections would
-   risk one request's payload leaking into another's guard evaluation mid-dispatch -
-   genuinely dangerous for a security boundary, not a theoretical concern. The spike
-   serializes dispatch behind a lock even though the TCP server itself accepts concurrent
-   connections, trading some of the theoretical concurrency benefit for correctness. This is
-   exactly the class of thing a working prototype surfaces that reasoning about the ADR text
-   alone would not have caught.
+1. **IPC that is genuinely portable, not "portable in the common case."** ✅ **Confirmed on
+   Windows, 2026-08-12.** The spike uses TCP on `127.0.0.1` with an OS-assigned ephemeral
+   port written to a port file (`.claude/.guard-daemon-port`) - same file-based-coordination
+   pattern `.guard-interpreter`/`.guard-lock` already use, sidestepping port-collision logic
+   entirely rather than picking a fixed port. Live-run on the actual reporting box: daemon
+   started, wrote its port file, served a harmless payload (allowed) and a raw-data payload
+   (blocked, with the real `guard-raw-data.py` message verbatim - proof it's running actual
+   current guard logic in-process, not a stand-in) correctly.
+   **A second, previously unanticipated finding from actually building it, also now
+   confirmed fixed**: `bash_hook_dispatcher.main()` reads `sys.stdin` and writes `sys.stderr`
+   directly - process-global state, not a function parameter (found by reading its actual
+   source before assuming an interface, not by guessing). A naive threaded daemon serving
+   concurrent connections would risk one request's payload leaking into another's guard
+   evaluation mid-dispatch - genuinely dangerous for a security boundary, not a theoretical
+   concern. Dispatch is serialized behind a lock even though the TCP server itself accepts
+   concurrent connections. **Live-tested, 10 genuinely concurrent mixed requests (thread
+   pool, not a loop): expected exit codes `[0,2,0,2,0,2,0,2,0,2]`, got exactly that - zero
+   cross-talk.** This is exactly the class of thing a working prototype surfaces, and the
+   live concurrency test is exactly what makes "we fixed it" a checked claim, not an assumed
+   one.
+   **Measured speedup**: daemon-backed median **12.6ms** vs. cold-start median **307ms**
+   (dispatcher invoked directly for this specific comparison, not through the full
+   `run-guard.sh` launcher) - real, on the actual box, not projected.
 2. **Staleness of a long-lived process is a safety question here, not a performance one.**
-   ◐ **Prototyped, not yet Windows-validated.** Everywhere else in this codebase, "the guard
+   ✅ **Confirmed on Windows, 2026-08-12.** Everywhere else in this codebase, "the guard
    logic changed but the running thing hasn't picked it up yet" is caught by the staged/live
    sync test (`test_hooks_in_sync.py`, hard-failure by design, born from the exact 2026-08-01
    audit where a guard drifted from its staged copy while the suite stayed green). A daemon
@@ -108,9 +115,12 @@ IPC and relay the response (exit code + stdout) unchanged. The guard's documente
    question's own original recommendation): on detected staleness the daemon answers the
    in-flight request with a "stale, retry" signal and self-terminates rather than attempting
    in-process module reload (failure-prone for interdependent modules) - the next client
-   request that finds no daemon just starts a fresh one, which re-imports current code. The
-   live smoke test checks this fires on a real touched-file mtime change; it does not yet
-   check it on the real Windows box.
+   request that finds no daemon just starts a fresh one, which re-imports current code.
+   **Live-tested on the real box**: touching `guard_daemon.py`'s own mtime correctly
+   produced `daemon_stale: True` on the next request, and the daemon process actually exited
+   afterward - both confirmed, not just designed. **Still open**: idle-timeout actually
+   firing was deliberately out of scope for the automated smoke test (needs a 60s+ wait with
+   no requests) and has not been run manually either.
 3. **Attack surface.** A short-lived CLI process that runs, decides, and exits has no
    window where another local process can interact with it. A long-lived localhost listener
    does. Binding strictly to `127.0.0.1` is necessary but likely not sufficient on a
@@ -186,14 +196,19 @@ code exactly as it does to every other file in `.claude/hooks/`.
    "smaller step" alternative (`-S`/pyc pre-warming) would not address this, since it only
    reduces in-process work, not file-read count. Concurrent fan-out reproduced the originally
    reported symptom's order of magnitude on demand.
-2. ◐ **In progress.** A working prototype exists at `docs/internal/adr-014-spike/`
-   (`guard_daemon.py`, `guard_daemon_client.py`, a live smoke test, pytest coverage for the
-   pure-logic pieces) - built and statically verified (syntax, lint, hand-traced logic) but
-   **not yet executed by anyone**, on this box or the Windows one. Real evidence for open
-   questions 1 and 2 above depends on someone actually running it - `docs/internal/
-   adr-014-spike/README.md` has the exact commands and lists what specifically still needs
-   Windows-side confirmation (the `DETACHED_PROCESS`/`CREATE_NO_WINDOW` branch, Git-Bash
-   process-tree behaviour). Open questions 3 (attack surface) and 5 (testing strategy) remain
-   genuinely open even once the above is validated - not addressed by this prototype.
-3. **Not started.** Real implementation, staged the same way every other hook change is,
-   only once step 2 has actual execution evidence behind it, not just code that compiles.
+2. ✅ **Done, 2026-08-12 - validated live on the reporting Windows box, 8/8 smoke-test
+   checks passed.** A working prototype at `docs/internal/adr-014-spike/` (`guard_daemon.py`,
+   `guard_daemon_client.py`, a live smoke test, pytest coverage for the pure-logic pieces),
+   exposed via the Diagnostics menu (0.33.58) for easy remote access. Open questions 1
+   (IPC/concurrency) and 2 (staleness) are now confirmed with live evidence, not just design
+   - see above. **Still open within step 2's own scope**: idle-timeout actually firing
+   (deliberately out of the automated smoke test, never run manually either), and whether the
+   `DETACHED_PROCESS`/`CREATE_NO_WINDOW` detached-spawn stays genuinely invisible (the smoke
+   test starts the daemon itself and watches for the port file, not for a visible window - a
+   visual check during a live run would close this). Open questions 3 (attack surface) and 5
+   (testing strategy) remain genuinely open regardless - not addressed by this prototype at
+   all, design questions still to answer before step 3.
+3. **Not started.** Real implementation, staged the same way every other hook change is.
+   Step 2's core execution risk (does this actually work, safely, on the real box) is now
+   retired with evidence; open questions 3 and 5 should still be answered explicitly before
+   this step begins, not discovered mid-implementation.
