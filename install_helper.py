@@ -77,7 +77,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Optional
 
 REPO_URL = "https://github.com/danieledge/virtual-surv-IT.git"
@@ -3545,11 +3545,26 @@ def write_guard_interpreter_cache(project: Path) -> None:
     version-check it; on a Windows box where python3.exe is the Microsoft Store
     execution-alias stub, that first discovery costs a multi-second Store-redirect
     hang (live corporate report 2026-07-30). Writing it here means even that one
-    hang never happens. Best-effort: never fails project enablement."""
+    hang never happens. Best-effort: never fails project enablement.
+
+    Written with forward slashes (PureWindowsPath(...).as_posix() on Windows, a no-op
+    everywhere else) - live corporate report, 2026-08-12: sys.executable on Windows is
+    always backslash-separated (e.g. "C:\\Program Files\\PSF\\Python312\\python.EXE"),
+    and every consumer of this cache (run-guard.sh, the engage-open.md bootstrap) reads
+    it into a POSIX-shell variable and tests it with `command -v "$cached"` under Git
+    Bash/MSYS - a context where backslash is the shell's own escape character and
+    forward-slash absolute paths (MSYS's own native representation of a Windows drive
+    path) are the well-established reliable form. A cached path this installer itself
+    can always exec fine (sys.executable is definitionally a real, running interpreter)
+    was still observed falling through to the full discovery loop on a real Windows
+    box even after the word-splitting bug (2026-08-12, this same report) was fixed -
+    the backslash form is the leading suspect, since it's the one difference between
+    "this path resolves" and "this path silently doesn't" between a plain Python
+    process and a POSIX shell's own path handling."""
     try:
         cache = project / ".claude" / ".guard-interpreter"
         cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(sys.executable, encoding="utf-8")
+        cache.write_text(PureWindowsPath(sys.executable).as_posix(), encoding="utf-8")
     except OSError:
         pass
 

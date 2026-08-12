@@ -2854,6 +2854,22 @@ def test_write_guard_interpreter_cache_uses_sys_executable(tmp_path):
     assert cache.read_text(encoding="utf-8") == sys.executable
 
 
+def test_write_guard_interpreter_cache_normalizes_windows_backslashes(tmp_path, monkeypatch):
+    """Live corp-Windows report, 2026-08-12: sys.executable there is backslash-separated
+    (e.g. "C:\\Program Files\\PSF\\Python312\\python.EXE"), and every consumer of this
+    cache tests it with `command -v "$cached"` under Git Bash/MSYS, where forward-slash
+    absolute paths are the reliable form - a cached path was observed still falling
+    through to the full discovery loop even after the (separate) word-splitting bug was
+    fixed. Platform-independent to test: PureWindowsPath parses the literal string
+    regardless of the host OS actually running this test."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.sys, "executable", r"C:\Program Files\PSF\Python312\python.EXE")
+    ih.write_guard_interpreter_cache(tmp_path)
+    cache = tmp_path / ".claude" / ".guard-interpreter"
+    assert cache.read_text(encoding="utf-8") == "C:/Program Files/PSF/Python312/python.EXE"
+
+
 def test_write_guard_interpreter_cache_best_effort_on_unwritable_dir(tmp_path, monkeypatch):
     from install_helper import write_guard_interpreter_cache
 
