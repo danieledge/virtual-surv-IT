@@ -2776,6 +2776,30 @@ def test_run_enable_project_already_enabled_is_ok_not_fail(tmp_path, capsys):
     assert not (project / ".claude" / "settings.json").exists()  # nothing needed writing
 
 
+def test_plugin_step_shows_a_wait_message_before_the_blocking_call(monkeypatch, capsys):
+    """Live report, 2026-08-12: the plugin install/update call is fully blocking (up to
+    a 300s timeout) with nothing printed in between - reads as hung on a slow network or
+    corporate proxy. Must print a wait message BEFORE the blocking call, not after, and
+    never in demo mode (nothing there actually blocks)."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _proc(returncode=0))
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.mode = "install"
+    inst.plugin()
+    assert "can take a moment" in capsys.readouterr().out
+
+
+def test_plugin_step_never_shows_wait_message_in_demo_mode(monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _proc(returncode=0))
+    inst = ih.Installer(_args(yes=True, demo=True), ih.Style(False), ih.marks(), subset="full")
+    inst.mode = "install"
+    inst.plugin()
+    assert "can take a moment" not in capsys.readouterr().out
+
+
 def test_installer_plugin_step_already_installed_is_ok_not_fail(monkeypatch, tmp_path, capsys):
     """Same 2026-08-07 fix, for the full-run install path: `claude plugin install`
     reporting "already installed" must not abort the whole run via step_fail's fatal

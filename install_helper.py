@@ -1872,6 +1872,15 @@ class Installer:
     def plugin(self) -> None:
         verb = "Updating" if self.mode == "update" else "Installing"
         self.step_intro(f"{verb} the team plugin from that marketplace.")
+        if not self.demo:
+            # Live report, 2026-08-12: the claude CLI call below is fully blocking (up to
+            # a 300s timeout) with nothing printed between this line and the eventual
+            # result - on a slow network or corporate proxy this can genuinely take real
+            # time, and with zero visual feedback in between it reads as hung rather than
+            # working. One dim line to set the expectation; a real progress indicator
+            # would need run_cmd to stream rather than fully capture output, a bigger
+            # change not attempted here.
+            self.say(self.style.dim("    (can take a moment - slow network or corporate proxy)"))
         if getattr(self, "direct_registered", False):
             # register_plugin_directly already wrote the installed-plugin record.
             self.step_ok(f"Plugin {PLUGIN_ID} registered directly (see previous step)")
