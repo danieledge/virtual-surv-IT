@@ -1794,17 +1794,27 @@ def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, 
     OUT of the default full-install path and into its own standalone Advanced-submenu
     item (subset="dashboard") - a rebuild is a one-off action a user reaches for, not
     something every install/update should pay for unconditionally. Machine defaults is
-    the last step again, as it was before dashboard_step existed."""
+    the last step again, as it was before dashboard_step existed. 2026-08-12: an
+    onboarding UX audit found quick_setup_choice's own text promising "project
+    enablement (permissions, env tuning, the LLM-gateway workaround, docx, Morgan's
+    model)" as part of this run, but build_plan never actually called enable_step for
+    subset="full" - the promise was never wired up. Fixed by adding it between alias
+    setup and machine defaults, matching quick_setup_choice's own listed order."""
     import install_helper as ih
 
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
     plan = inst.build_plan()
     titles = [t() if callable(t) else t for t, _ in plan]
     assert "Alias setup" in titles
+    assert "Enable for a project (optional)" in titles
     assert "Machine defaults (optional)" in titles
     assert "Dashboard (optional)" not in titles  # no longer part of the default flow
     assert titles[-1] == "Machine defaults (optional)"  # last step, now that dashboard moved out
-    assert titles.index("Alias setup") == titles.index("Machine defaults (optional)") - 1
+    assert (
+        titles.index("Alias setup")
+        == titles.index("Enable for a project (optional)") - 1
+        == titles.index("Machine defaults (optional)") - 2
+    )
 
 
 def test_dashboard_subset_reaches_dashboard_step_standalone(monkeypatch, tmp_path):
@@ -2895,17 +2905,21 @@ def test_run_enable_project_pre_seeds_the_guard_cache(tmp_path):
     assert cache.is_file() and cache.read_text(encoding="utf-8") == sys.executable
 
 
-def test_demo_project_enablement_never_calls_the_real_writer():
-    """Demo mode is a dry run: its project-enablement branch must call run_cmd (the
-    swappable dry-run stand-in) directly, never run_enable_project - the function that
-    performs the real write_guard_interpreter_cache side effect."""
-    import inspect
-
+def test_demo_project_enablement_never_calls_the_real_writer(tmp_path, monkeypatch):
+    """Demo mode is a dry run: enable_step must forward demo=True into run_configure
+    (2026-08-12: enable_step delegates entirely to run_configure now - see
+    test_run_configure_demo_writes_nothing for the guarantee that demo=True itself
+    writes nothing; this test only confirms enable_step actually threads the flag
+    through rather than silently dropping it)."""
     import install_helper as ih
 
-    src = inspect.getsource(ih.Installer.enable_step)
-    demo_branch = src.split("if self.demo:", 1)[1].split("\n        if run_enable_project", 1)[0]
-    assert "run_enable_project" not in demo_branch
+    calls = []
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: calls.append(k) or 0)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(tmp_path))
+    inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
+    inst.enable_step()
+    assert calls == [{"assume_yes": False, "demo": True}]
 
 
 # ------------------------------------------------ team-preferences.json (docx opt-in)
@@ -2949,19 +2963,6 @@ def test_write_team_preferences_best_effort(tmp_path, monkeypatch):
         Path, "write_text", lambda *a, **k: (_ for _ in ()).throw(OSError("locked"))
     )
     assert write_team_preferences(tmp_path, extra_formats=["docx"]) is False
-
-
-def test_demo_project_enablement_never_writes_team_preferences():
-    """The docx-default question in demo mode must only print a dim 'would write' line,
-    never call write_team_preferences."""
-    import inspect
-
-    import install_helper as ih
-
-    src = inspect.getsource(ih.Installer.enable_step)
-    demo_branch = src.split("if self.demo:", 1)[1].split("\n        if run_enable_project", 1)[0]
-    assert "write_team_preferences(" not in demo_branch
-    assert "would write" in demo_branch
 
 
 # ------------------------------------------------ self-relocation (running the script from inside the clone)
@@ -3972,6 +3973,26 @@ def test_model_step_never_offers_global_scope(monkeypatch, tmp_path):
 # --- run_configure ---------------------------------------------------------------------------
 
 
+def test_run_configure_model_call_never_offers_global_scope(tmp_path, monkeypatch):
+    """run_configure's own "Set Morgan's model for this project?" call had the identical
+    bug test_model_step_never_offers_global_scope was written for (2026-08-12 onboarding
+    UX audit: not caught when model_step was fixed) - must pass offer_global_scope=False
+    too, or a project-scoped question silently offers to change the global default."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    calls = []
+    monkeypatch.setattr(
+        ih,
+        "ask_and_set_model",
+        lambda proj, style, assume_yes, demo, **kw: calls.append(kw) or (True, "ok"),
+    )
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    assert calls == [{"offer_global_scope": False}]
+
+
 def test_run_configure_happy_path_yes(tmp_path, monkeypatch, capsys):
     import install_helper as ih
 
@@ -4031,6 +4052,50 @@ def test_run_configure_not_a_directory():
 
     rc = ih.run_configure(Path("/no/such/dir"), ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 1
+
+
+def test_run_configure_shows_step_progress_headers(tmp_path, monkeypatch, capsys):
+    """2026-08-12 onboarding UX audit: this flow had no progress indicator at all, unlike
+    every Installer-driven flow's "Step N of M" headers - fixed by reusing rule_header
+    for the same 7 sections every run always has, real or --demo."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    for n, title in enumerate(
+        [
+            "Enable the plugin",
+            "Permission allow-list",
+            "API/env tuning",
+            "LLM-gateway workaround",
+            "Project preferences",
+            "Refreshing the analyser-availability cache",
+            "Morgan's model",
+        ],
+        start=1,
+    ):
+        assert f"Step {n} of 7: {title}" in out
+
+
+def test_run_configure_declined_answer_gets_immediate_feedback(tmp_path, monkeypatch):
+    """2026-08-12 onboarding UX audit: declining permissions/env-tuning/betas/model
+    produced no output at all until the closing summary table - fixed with an immediate
+    skip mark + '(declined)' right where the question was asked."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
+    lines = []
+    monkeypatch.setattr("builtins.print", lambda *a, **k: lines.append(" ".join(str(x) for x in a)))
+    ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
+    out = "\n".join(lines)
+    assert "Permission allow-list" in out and "(declined)" in out
+    assert "API/env tuning" in out
+    assert "LLM-gateway workaround" in out
+    assert "Morgan's model" in out
 
 
 def test_run_configure_recommended_settings_is_a_one_click_fast_path(tmp_path, monkeypatch, capsys):
@@ -4820,6 +4885,36 @@ def test_advanced_submenu_full_mapping():
         "7": "dashboard",
         "b": "back",
     }
+
+
+def test_choose_submenu_divider_row_not_selectable_and_not_counted_in_error_range(
+    monkeypatch, capsys
+):
+    """2026-08-12 onboarding UX audit: Diagnostics mixed everyday checks with internal/
+    prototype items with no visual grouping - fixed with a divider row (empty-string
+    key). Must render as plain text (no numbered prefix), never match an answer, and
+    the "1-N or b" error hint must count real choices only, not the divider itself."""
+    import install_helper as ih
+
+    # "" (the divider row's own key) is never a valid answer, matching every other
+    # invalid input - but empty input is ALSO how "back" is spelled (a bare Enter), so
+    # use a genuinely out-of-range answer ("9") to exercise the retry/error path
+    # without also exiting the menu.
+    answers = iter(["9", "1"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    options = (
+        ("1", "Real choice one"),
+        ("", "-- a divider --"),
+        ("2", "Real choice two"),
+        ("b", "Back"),
+    )
+    actions = {"1": "one", "2": "two", "b": "back"}
+    result = ih._choose_submenu(ih.Style(False), "Test menu", options, actions)
+    out = capsys.readouterr().out
+    assert "1) Real choice one" in out
+    assert "-- a divider --" in out and ")-- a divider --" not in out  # no numbered prefix
+    assert "1-2 or b, please." in out  # 2 real choices, divider excluded from the count
+    assert result == "one"
 
 
 def test_choose_action_diagnostics_then_back_redraws_top_menu(monkeypatch):
@@ -5807,134 +5902,90 @@ def test_run_hook_latency_diagnostic_measures_real_launcher_when_present(
     assert "guard overhead beyond bare interpreter" in out
 
 
-# --- enable_step's betas question: asked normally, or skipped under quick_defaults (2026-08-10) ---
+# --- enable_step delegates to run_configure (2026-08-12 consolidation) ---
+#
+# An onboarding UX audit found enable_step had grown its own ~180-line copy of
+# run_configure's permissions/env-tuning/betas/docx/model questions - divergent wording
+# from run_configure, six of its thirteen preferences never asked here at all, and a
+# model-scope bug already fixed at the OTHER "set the model" call site (model_step,
+# 2026-08-05) reproduced here. Fixed by making enable_step delegate entirely to
+# run_configure once the target directory is known - so these tests now verify the
+# DELEGATION (what enable_step calls run_configure with, under which conditions), not
+# run_configure's own internal question flow, which is already covered by its own
+# extensive test suite above.
 
 
-def _enable_step_confirm_fake(enable_answer=True):
-    """Answers only the top-level 'enable now?' question - everything else
-    (permissions/env-tuning/betas/docx/model) declines, so those unrelated
-    collaborators never need mocking for a test focused on one question."""
-
-    def _fn(prompt, default, assume_yes, style=None):
-        if "enable the team for a project now" in prompt:
-            return enable_answer
-        return False
-
-    return _fn
-
-
-def _mock_enable_flow_collaborators(monkeypatch, ih, project):
-    """Every function enable_step can now call under quick_defaults (2026-08-12: the
-    auto-apply idiom that used to cover only the betas workaround extends to
-    permissions/env-tuning/docx/model too) - mocked so a quick_defaults test never
-    triggers real file I/O, and each call is individually observable."""
-    calls = {"permissions": [], "env_tuning": [], "betas": [], "docx": []}
-    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    monkeypatch.setattr(ih, "run_enable_project", lambda *a, **k: 0)
-    monkeypatch.setattr(
-        ih, "run_permissions", lambda *a, **k: calls["permissions"].append(a) or 0
-    )
-    monkeypatch.setattr(
-        ih, "run_env_tuning", lambda *a, **k: calls["env_tuning"].append(a) or 0
-    )
-    monkeypatch.setattr(
-        ih, "run_env_tuning_betas", lambda *a, **k: calls["betas"].append(a) or 0
-    )
-    monkeypatch.setattr(
-        ih,
-        "write_team_preferences",
-        lambda *a, **k: calls["docx"].append((a, k)) or True,
-    )
-    return calls
-
-
-def test_enable_step_asks_every_question_when_not_quick_defaults(tmp_path, monkeypatch):
-    """Manually walking through project enablement (quick_defaults False, the pre-existing
-    behavior) still asks for each of the five, and a decline must not call any of them."""
+def test_enable_step_declining_never_calls_run_configure(tmp_path, monkeypatch):
     import install_helper as ih
 
-    _isolate_home(monkeypatch, tmp_path)
-    project = tmp_path / "proj"
-    project.mkdir()
-    calls = _mock_enable_flow_collaborators(monkeypatch, ih, project)
-    monkeypatch.setattr(ih, "confirm", _enable_step_confirm_fake())
+    calls = []
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: calls.append((a, k)) or 0)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.enable_step()
+    assert calls == []
+
+
+def test_enable_step_delegates_to_run_configure_with_the_chosen_directory(tmp_path, monkeypatch):
+    """The "which directory?" prompt's answer must reach run_configure unchanged."""
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: calls.append(a) or 0)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(tmp_path / "proj"))
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.enable_step()
+    assert len(calls) == 1
+    target = calls[0][0]
+    assert target == Path(str(tmp_path / "proj"))
+
+
+def test_enable_step_passes_quick_defaults_as_assume_yes_on_full_subset(tmp_path, monkeypatch):
+    """'Go with the recommended defaults' (quick_setup_choice) must reach run_configure
+    as assume_yes=True, so its own quick-defaults gate applies every default with zero
+    further questions - the same behavior the old inline implementation hand-replicated
+    per collaborator, now delegated to the one place that already implements it."""
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: calls.append(k) or 0)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(tmp_path))
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_defaults = True
+    inst.enable_step()
+    assert calls == [{"assume_yes": True, "demo": False}]
+
+
+def test_enable_step_does_not_pass_assume_yes_when_not_quick_defaults(tmp_path, monkeypatch):
+    """Manually walking through project enablement (quick_defaults False) must leave
+    run_configure to ask its own questions interactively."""
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: calls.append(k) or 0)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(tmp_path))
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
     inst.quick_defaults = False
     inst.enable_step()
-    assert calls == {"permissions": [], "env_tuning": [], "betas": [], "docx": []}
-
-
-def test_enable_step_applies_every_default_without_asking_under_quick_defaults(
-    tmp_path, monkeypatch
-):
-    """'Go with the recommended defaults for everything' (quick_setup_choice, extended
-    2026-08-12 to cover the whole enable flow, not just the betas workaround) must apply
-    permissions, env-tuning and the betas workaround directly, and never ask any of their
-    questions - the model question is correctly skipped (its own sensible default is
-    "no"), and docx only fires if the machine's own default_docx is already true."""
-    import install_helper as ih
-
-    _isolate_home(monkeypatch, tmp_path)
-    project = tmp_path / "proj"
-    project.mkdir()
-    calls = _mock_enable_flow_collaborators(monkeypatch, ih, project)
-    asked = []
-
-    def _confirm(prompt, default, assume_yes, style=None):
-        asked.append(prompt)
-        if "enable the team for a project now" in prompt:
-            return True
-        return False
-
-    monkeypatch.setattr(ih, "confirm", _confirm)
-    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
-    inst.quick_defaults = True
-    inst.enable_step()
-    assert len(calls["permissions"]) == 1
-    assert len(calls["env_tuning"]) == 1
-    assert len(calls["betas"]) == 1
-    assert calls["docx"] == []  # default_docx defaults to False - correctly not applied
-    # Only the mandatory top-level "enable now?" question is ever asked - none of the
-    # five gated ones (permissions/env-tuning/betas/docx/model) reach confirm() at all.
-    assert asked == ["  Shall I enable the team for a project now (per-project scope)?"]
-
-
-def test_enable_step_quick_defaults_applies_docx_when_machine_default_is_on(
-    tmp_path, monkeypatch
-):
-    """The docx question's sensible default is dynamic (this machine's own
-    default_docx), not a fixed True/False like the others - quick_defaults must apply
-    THAT value directly, not silently assume off."""
-    import install_helper as ih
-
-    _isolate_home(monkeypatch, tmp_path)
-    project = tmp_path / "proj"
-    project.mkdir()
-    calls = _mock_enable_flow_collaborators(monkeypatch, ih, project)
-    monkeypatch.setattr(ih, "confirm", _enable_step_confirm_fake())
-    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
-    inst.quick_defaults = True
-    inst.cfg["default_docx"] = True
-    inst.enable_step()
-    assert len(calls["docx"]) == 1
+    assert calls == [{"assume_yes": False, "demo": False}]
 
 
 def test_enable_step_quick_defaults_does_not_affect_the_standalone_enable_subset(
     tmp_path, monkeypatch
 ):
     """quick_defaults only ever gets set True via quick_setup_choice, which is part of the
-    'full' install/update flow - the standalone menu 'enable' subset never runs it, so
-    self.quick_defaults stays at its class default (False) there regardless. Belt-and-
-    braces: even if something set it True out of band, the subset != 'full' guard must
-    still require asking, for all five gated questions, not just betas."""
+    'full' install/update flow - the standalone menu 'enable' subset never runs it.
+    Belt-and-braces: even if something set it True out of band, the subset != 'full'
+    guard must still force assume_yes=False through to run_configure."""
     import install_helper as ih
 
-    _isolate_home(monkeypatch, tmp_path)
-    project = tmp_path / "proj"
-    project.mkdir()
-    calls = _mock_enable_flow_collaborators(monkeypatch, ih, project)
-    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
+    calls = []
+    monkeypatch.setattr(ih, "run_configure", lambda *a, **k: calls.append(k) or 0)
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(tmp_path))
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="enable")
     inst.quick_defaults = True  # out-of-band - should not happen in practice, tested anyway
     inst.enable_step()
-    assert calls == {"permissions": [], "env_tuning": [], "betas": [], "docx": []}
+    assert calls == [{"assume_yes": False, "demo": False}]

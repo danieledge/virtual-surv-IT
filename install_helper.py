@@ -1135,12 +1135,20 @@ _ADVANCED_ACTIONS = {
 
 def _choose_submenu(style: Style, title: str, options: tuple, actions: dict) -> Optional[str]:
     """Shared submenu loop: prints options, returns the resolved action string, or None
-    if the user chose 'back' (caller should redraw the top-level menu)."""
+    if the user chose 'back' (caller should redraw the top-level menu). A row with an
+    empty-string key (`("", "some label")`) renders as a plain dim divider line instead
+    of a numbered choice - never added to `actions`, never selectable - for grouping
+    unrelated option classes within one submenu (2026-08-12 onboarding UX audit:
+    Diagnostics mixed everyday checks with internal/prototype items with no visual
+    separation)."""
     s = style
     print("")
     print(s.bold(title))
     for key, text in options:
-        print(f"  {s.cyan(key + ')')} {text}")
+        if key == "":
+            print(f"  {s.dim(text)}")
+        else:
+            print(f"  {s.cyan(key + ')')} {text}")
     while True:
         try:
             answer = input(f"{s.cyan('  Which one?')} {s.bold('[b]')}: ").strip().lower()
@@ -1151,7 +1159,10 @@ def _choose_submenu(style: Style, title: str, options: tuple, actions: dict) -> 
         if answer in actions:
             resolved = actions[answer]
             return None if resolved == "back" else resolved
-        print(f"  1-{len(options) - 1} or b, please.")
+        # len(actions), not len(options): options may include non-selectable divider
+        # rows (empty-string key), which actions never does - actions is the
+        # authoritative set of real choices, options is only what gets printed.
+        print(f"  1-{len(actions) - 1} or b, please.")
 
 
 def choose_action(style: Style) -> str:
@@ -1198,6 +1209,7 @@ def choose_action(style: Style) -> str:
                     ("2", "Quick: analyser output cleanliness only"),
                     ("3", "Comprehensive: the full environment + synthetic-engagement report"),
                     ("4", "Self-test only: just the synthetic engagement"),
+                    ("", "-- internal / prototype diagnostics --"),
                     ("5", "Hook latency: feeds the ADR-014 daemon decision (slower - repeated + concurrent)"),
                     ("6", "ADR-014 spike smoke test (PROTOTYPE - starts a real daemon process)"),
                     ("b", "Back"),
@@ -2422,8 +2434,10 @@ class Installer:
             style=self.style,
         )
         map_skeleton_wanted = confirm(
-            "  New projects get codebase-skeleton drift checking (MAP-DRIFT/"
-            "MAP-DEAD-POINTER) by default - experimental, ADR-007 Phase 1?",
+            "  New projects get codebase-skeleton drift checking by default - flags when "
+            "the codebase-map docs go stale (a mapped area's code changed since it was "
+            "last verified, or a cited file:line no longer exists), useful if the team "
+            "relies on the map to brief new work accurately. Experimental, ADR-007 Phase 1?",
             default=map_skeleton_current,
             assume_yes=False,
             style=self.style,
@@ -2650,10 +2664,20 @@ class Installer:
             )
 
     def enable_step(self) -> None:
-        """Optional: enable the team for a project right now, and offer the recommended
-        permission allow-list for the same project. Interactive only - non-interactive
-        runs use the --enable-project / --permissions flags. In demo the directory check
-        stays real but nothing is executed or written."""
+        """Optional: enable the team for a project right now. Interactive only - non-
+        interactive runs use the --enable-project / --permissions flags. Delegates to
+        run_configure() for everything after "which directory" (2026-08-12 consolidation -
+        an onboarding UX audit found this method had grown its own ~180-line copy of
+        run_configure's permissions/env-tuning/betas/docx/model questions, with wording
+        that had drifted from it, six of run_configure's thirteen preferences never asked
+        at all here (citations/split/workflow-dispatch/standards-critique/map-skeleton/
+        statusline-map), and a model-scope bug reproduced from before it was fixed at the
+        other "set the model" call site (model_step, 2026-08-05: asking a project-scoped
+        question then silently offering to also change the GLOBAL default). One call into
+        run_configure now means exactly one place that knows what "project enablement"
+        means - see run_configure's own docstring for the full question list, its own
+        quick-defaults gate, and its demo-mode support (this method no longer needs its
+        own separate demo branch at all)."""
         self.step_intro("Switching the team on per project - that keeps your token cost down.")
         if self.args.yes:
             self.step_skip(
@@ -2679,207 +2703,24 @@ class Installer:
                 # (this machine's default) are both directly reachable any time.
                 self.step_skip(
                     "Project enablement",
-                    "later: run /plugin inside Claude Code from the project",
+                    "later: run /plugin inside Claude Code from the project, or "
+                    "`virt-surv configure`",
                 )
                 return
         raw = ask(f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style)
         target = Path(raw)
-        if self.demo:
-            project = target.expanduser().resolve()
-            if not project.is_dir():
-                self.step_fail("Project enablement", f"not a directory: {project}", fatal=False)
-                return
-            run_cmd(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID], cwd=project)
-            self.step_ok("Project enablement", f"would enable for {project}")
-            if self.subset == "full" and self.quick_defaults:
-                # "Go with the recommended defaults" (quick_setup_choice) means exactly
-                # that across the WHOLE enable flow (2026-08-12 user request - originally
-                # this auto-apply idiom only covered the betas-workaround block below;
-                # permissions/env-tuning/docx/model now match it too, so "go with
-                # defaults" genuinely means zero further questions, not "mostly").
-                self._demo_permissions(project)
-            elif confirm(
-                "  Shall I also add the recommended permission allow-list (fewer prompts)?",
-                default=True,
-                assume_yes=False,
-                style=self.style,
-            ):
-                self._demo_permissions(project)
-            _env_tuning_msg = self.style.dim(
-                f"    would upsert {len(RECOMMENDED_ENV)} env vars into "
-                f"{project / '.claude' / 'settings.json'} (other env vars untouched)"
-            )
-            if self.subset == "full" and self.quick_defaults:
-                self.say(_env_tuning_msg)
-            elif confirm(
-                "  Also tune API timeout / stream-idle / output-size env vars for this "
-                "project (helps on slow networks or behind a corporate proxy; trade-off: "
-                "transient API/throttling errors then retry quietly for up to hours "
-                "instead of failing fast)?",
-                default=True,
-                assume_yes=False,
-                style=self.style,
-            ):
-                self.say(_env_tuning_msg)
-            if self.subset == "full" and self.quick_defaults:
-                # "Go with the recommended defaults" (quick_setup_choice) means exactly
-                # that - no further question, same idiom optional_pip already uses. Only
-                # in this specific mode: someone individually walking through project
-                # enablement (quick_defaults False, or reached via the standalone --enable
-                # path where quick_defaults never applies) still gets asked, default off -
-                # the real MCP-tool-search cost stays a deliberate choice there.
-                self.say(
-                    self.style.dim(
-                        f"    would upsert {len(EXPERIMENTAL_BETAS_ENV)} env var into "
-                        f"{project / '.claude' / 'settings.json'} (recommended defaults - "
-                        "LLM-gateway compatibility workaround)"
-                    )
-                )
-            elif confirm(
-                "  Seeing subagent tool calls fail with \"tools.0.custom."
-                "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
-                "rejecting Claude Code's beta tool-schema fields)? Recommended default is "
-                "ON (most corporate LLM-gateway setups hit this) - it has a real cost, MCP "
-                "tool search turns off and every MCP tool loads upfront, so say no if you "
-                "rely on MCP tool search and aren't seeing this error.",
-                default=True,
-                assume_yes=False,
-                style=self.style,
-            ):
-                self.say(
-                    self.style.dim(
-                        f"    would upsert {len(EXPERIMENTAL_BETAS_ENV)} env var into "
-                        f"{project / '.claude' / 'settings.json'} (other env vars untouched)"
-                    )
-                )
-            _docx_default = bool(self.cfg.get("default_docx", False))
-            _docx_msg = self.style.dim(
-                f"    would write {project / '.claude' / 'team-preferences.json'}"
-            )
-            if self.subset == "full" and self.quick_defaults:
-                if _docx_default:
-                    self.say(_docx_msg)
-            elif confirm(
-                "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
-                "produce a Word (.docx) copy by default, for reviewers who redline in Word?",
-                default=_docx_default,
-                assume_yes=False,
-                style=self.style,
-            ):
-                self.say(_docx_msg)
-            if not (self.subset == "full" and self.quick_defaults) and confirm(
-                "  Set Morgan's (the orchestrator's) model for this project too - sonnet is "
-                "the documented default (testing to date hasn't shown opus outperforming it "
-                "for orchestration); want to set opus instead for this project?",
-                default=False,
-                assume_yes=False,
-                style=self.style,
-            ):
-                _, message = ask_and_set_model(project, self.style, self.args.yes, self.demo)
-                self.say(self.style.dim(f"    {message}"))
-            return
-        if run_enable_project(target, self.style, self.marks) == 0:
-            self.step_ok("Project enablement", str(target.expanduser().resolve()))
-            # "Go with the recommended defaults" (quick_setup_choice) means exactly that
-            # across the WHOLE enable flow (2026-08-12 user request - originally this
-            # auto-apply idiom only covered the betas-workaround block below;
-            # permissions/env-tuning/docx/model now match it too, so "go with defaults"
-            # genuinely means zero further questions, not "mostly"). Only someone
-            # individually walking through project enablement (quick_defaults False, or
-            # reached via the standalone --enable path where quick_defaults never
-            # applies) still gets asked each of these.
-            if self.subset == "full" and self.quick_defaults:
-                run_permissions(target, self.style, self.marks)
-            elif confirm(
-                "  Shall I also add the recommended permission allow-list (fewer prompts)?",
-                default=True,
-                assume_yes=False,
-                style=self.style,
-            ):
-                run_permissions(target, self.style, self.marks)
-            if self.subset == "full" and self.quick_defaults:
-                run_env_tuning(target.expanduser().resolve(), self.style, self.marks)
-            elif confirm(
-                "  Also tune API timeout / stream-idle / output-size env vars for this "
-                "project (helps on slow networks or behind a corporate proxy; trade-off: "
-                "transient API/throttling errors then retry quietly for up to hours "
-                "instead of failing fast)?",
-                default=True,
-                assume_yes=False,
-                style=self.style,
-            ):
-                run_env_tuning(target.expanduser().resolve(), self.style, self.marks)
-            if self.subset == "full" and self.quick_defaults:
-                run_env_tuning_betas(target.expanduser().resolve(), self.style, self.marks)
-            elif confirm(
-                "  Seeing subagent tool calls fail with \"tools.0.custom."
-                "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
-                "rejecting Claude Code's beta tool-schema fields)? Recommended default is "
-                "ON (most corporate LLM-gateway setups hit this) - it has a real cost, MCP "
-                "tool search turns off and every MCP tool loads upfront, so say no if you "
-                "rely on MCP tool search and aren't seeing this error.",
-                default=True,
-                assume_yes=False,
-                style=self.style,
-            ):
-                run_env_tuning_betas(target.expanduser().resolve(), self.style, self.marks)
-            _docx_default = bool(self.cfg.get("default_docx", False))
-            if self.subset == "full" and self.quick_defaults:
-                if _docx_default:
-                    write_team_preferences(
-                        target.expanduser().resolve(),
-                        extra_formats=["docx"],
-                        regulatory_citations=self.cfg.get("default_regulatory_citations"),
-                    )
-            elif confirm(
-                "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
-                "produce a Word (.docx) copy by default, for reviewers who redline in Word?",
-                default=_docx_default,
-                assume_yes=False,
-                style=self.style,
-            ):
-                write_team_preferences(
-                    target.expanduser().resolve(),
-                    extra_formats=["docx"],
-                    regulatory_citations=self.cfg.get("default_regulatory_citations"),
-                )
-            if not (self.subset == "full" and self.quick_defaults) and confirm(
-                "  Set Morgan's (the orchestrator's) model for this project too - sonnet is "
-                "the documented default (testing to date hasn't shown opus outperforming it "
-                "for orchestration); want to set opus instead for this project?",
-                default=False,
-                assume_yes=False,
-                style=self.style,
-            ):
-                ok, message = ask_and_set_model(
-                    target.expanduser().resolve(), self.style, self.args.yes, self.demo
-                )
-                if ok:
-                    self.say(self.style.dim(f"    {message}"))
-                else:
-                    self.say(self.style.yellow(f"    {message}"))
-        else:
-            self.step_fail("Project enablement", "see message above", fatal=False)
-
-    def _demo_permissions(self, project: Path) -> None:
-        """Dry-run twin of run_permissions: read the real settings file (read-only) to
-        count what a real run would add; on an unreadable file, report the upper bound."""
-        target = project / ".claude" / "settings.json"
-        count = str(len(RECOMMENDED_ALLOW))
-        if target.is_file():
-            count = f"up to {len(RECOMMENDED_ALLOW)}"
-            try:
-                settings = json.loads(target.read_text(encoding="utf-8-sig"))
-                if isinstance(settings, dict):
-                    _, added = merge_allow(settings)  # throwaway copy, nothing written
-                    count = str(len(added))
-            except (OSError, ValueError, InstallAbort):
-                pass
-        self.say(
-            self.style.dim(
-                f"    would add {count} allow entries to {target} "
-                "(add-only; deny rules and hooks untouched)"
-            )
+        # quick_defaults only ever means anything on the "full" install/update plan (set
+        # by quick_setup_choice, which only that plan runs) - the standalone "enable"
+        # subset always walks through run_configure's own questions individually,
+        # matching this method's pre-2026-08-12 behavior exactly (belt-and-braces even if
+        # quick_defaults were ever set True out of band here, same guard the old inline
+        # implementation used throughout).
+        run_configure(
+            target,
+            self.style,
+            self.marks,
+            assume_yes=(self.subset == "full" and self.quick_defaults),
+            demo=self.demo,
         )
 
     # ---- orchestration
@@ -2963,6 +2804,7 @@ class Installer:
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
             ("Status line", self.statusline_step),
             ("Alias setup", self.alias_step),
+            ("Enable for a project (optional)", self.enable_step),
             ("Machine defaults (optional)", self.machine_defaults_offer),
         ]
 
@@ -3736,8 +3578,24 @@ def run_configure(
     ):
         assume_yes = True
     rc = 0
+    skip = mark_map["skip"]
+    # 2026-08-12 onboarding UX audit: this flow had no progress indicator at all (unlike
+    # every Installer-driven flow, which shows "Step N of M" throughout) and declined
+    # answers produced no visible feedback until the closing summary table, well after
+    # the fact - both fixed here by reusing rule_header (already a free function) for
+    # numbered headers and printing an immediate ok/skip mark after every yes/no
+    # decision, matching the Installer class's own step_ok/step_skip format exactly
+    # (this is a free function with no Installer instance/tracker to call those on
+    # directly, so the print format is replicated rather than shared).
+    TOTAL_STEPS = 7
 
-    print(style.dim("\n  Enable the plugin:"))
+    def _mark(accepted: bool, label: str, detail: str = "") -> None:
+        suffix = f" {style.dim('(' + detail + ')')}" if detail else ""
+        glyph = style.green(ok) if accepted else style.yellow(skip)
+        print(f"  {glyph} {label}{suffix}")
+
+    print("")
+    print(rule_header(1, TOTAL_STEPS, "Enable the plugin", style))
     if demo:
         print(style.dim(f"    would enable for {project}"))
         enabled_ok = True
@@ -3746,8 +3604,10 @@ def run_configure(
         rc = max(rc, enable_rc)
         enabled_ok = enable_rc == 0
 
+    print("")
+    print(rule_header(2, TOTAL_STEPS, "Permission allow-list", style))
     permissions_wanted = confirm(
-        "\n  Add the recommended permission allow-list (fewer prompts)?",
+        "  Add the recommended permission allow-list (fewer prompts)?",
         default=True,
         assume_yes=assume_yes,
         style=style,
@@ -3757,9 +3617,13 @@ def run_configure(
             print(style.dim(f"    would add up to {len(RECOMMENDED_ALLOW)} allow entries"))
         else:
             rc = max(rc, run_permissions(project, style, mark_map))
+    else:
+        _mark(False, "Permission allow-list", "declined")
 
+    print("")
+    print(rule_header(3, TOTAL_STEPS, "API/env tuning", style))
     env_tuning_wanted = confirm(
-        "\n  Tune API timeout / stream-idle / output-size env vars (helps on slow "
+        "  Tune API timeout / stream-idle / output-size env vars (helps on slow "
         "networks or behind a corporate proxy; trade-off: transient API/throttling "
         "errors then retry quietly for up to hours instead of failing fast)?",
         default=True,
@@ -3771,9 +3635,13 @@ def run_configure(
             print(style.dim(f"    would upsert {len(RECOMMENDED_ENV)} tuning env vars"))
         else:
             rc = max(rc, run_env_tuning(project, style, mark_map))
+    else:
+        _mark(False, "API/env tuning", "declined")
 
+    print("")
+    print(rule_header(4, TOTAL_STEPS, "LLM-gateway workaround", style))
     betas_wanted = confirm(
-        "\n  Work around an LLM-gateway compatibility issue (a subagent call fails with "
+        "  Work around an LLM-gateway compatibility issue (a subagent call fails with "
         "'tools.0.custom.eager_input_streaming: Extra inputs are not permitted', most "
         "often on a haiku-tier call)? Recommended default is ON (most corporate LLM-gateway "
         "setups hit this) - it has a real cost, MCP tool search turns off, so say no if you "
@@ -3791,8 +3659,11 @@ def run_configure(
             )
         else:
             rc = max(rc, run_env_tuning_betas(project, style, mark_map))
+    else:
+        _mark(False, "LLM-gateway workaround", "declined")
 
-    print(style.dim("\n  Project preferences:"))
+    print("")
+    print(rule_header(5, TOTAL_STEPS, "Project preferences", style))
     existing = _read_json_dict(project / ".claude" / "team-preferences.json")
     machine_defaults = load_config(config_path())
     (
@@ -3854,9 +3725,11 @@ def run_configure(
         style=style,
     )
     map_skeleton_wanted = confirm(
-        "  Enable codebase-skeleton drift checking (MAP-DRIFT/MAP-DEAD-POINTER) for a "
-        "codebase map with a Paths column - experimental, ADR-007 Phase 1, off by "
-        "default?",
+        "  Enable codebase-skeleton drift checking for a codebase map with a Paths "
+        "column - flags when the map docs go stale (a mapped area's code changed since "
+        "it was last verified, or a cited file:line no longer exists), useful if the "
+        "team relies on the map to brief new work accurately. Experimental, ADR-007 "
+        "Phase 1, off by default?",
         default=map_skeleton_current,
         assume_yes=assume_yes,
         style=style,
@@ -3904,7 +3777,8 @@ def run_configure(
         print(f"  {fail} could not write team-preferences.json")
         rc = 1
 
-    print(style.dim("\n  Refreshing the analyser-availability cache:"))
+    print("")
+    print(rule_header(6, TOTAL_STEPS, "Refreshing the analyser-availability cache", style))
     rc = max(rc, run_tool_cache_refresh(project, style, mark_map, demo=demo))
 
     # 2026-08-12 user request: "recommended should set the model to sonnet" - under the
@@ -3917,15 +3791,27 @@ def run_configure(
     # the only change needed; the manual walkthrough (assume_yes False) is untouched -
     # still asks, still declines by default, matching every other "set the model"
     # question's deliberately-opt-in posture.
+    print("")
+    print(rule_header(7, TOTAL_STEPS, "Morgan's model", style))
     model_requested = assume_yes or confirm(
-        "\n  Set Morgan's model for this project (default: sonnet)?",
+        "  Set Morgan's model for this project (default: sonnet)?",
         default=False,
         assume_yes=assume_yes,
         style=style,
     )
     model_display = "not requested (unset - inherits account/global default)"
+    if not model_requested:
+        _mark(False, "Morgan's model", "declined")
     if model_requested:
-        ok_model, message = ask_and_set_model(project, style, assume_yes, demo=demo)
+        # offer_global_scope=False (2026-08-12 fix, onboarding UX audit): without it, a
+        # "for this project" question was silently followed by an unscoped "also make
+        # this the default for new/unconfigured projects?" - the exact contradiction
+        # model_step was already fixed for (2026-08-05, "fable UX review": a menu item
+        # labeled "per project only" was asking a global-scope question). This call had
+        # the identical bug, just not caught at the time.
+        ok_model, message = ask_and_set_model(
+            project, style, assume_yes, demo=demo, offer_global_scope=False
+        )
         print(f"  {ok if ok_model else fail} {message}")
         rc = max(rc, 0 if ok_model else 1)
         model_display = message.split("-> ", 1)[1] if ok_model and "-> " in message else message
