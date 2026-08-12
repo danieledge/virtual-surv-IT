@@ -192,7 +192,14 @@ creates the engagement's own WORKSPACE `artifacts/<slug>/` with its `engagement-
 workspace's `START-HERE.md` + `.html` from it** (the derived root registry
 `artifacts/ENGAGEMENTS.md` lists every engagement). Every artifact path from here on is
 WORKSPACE-relative, and when several engagements exist target yours with `--slug <slug>`; then
-`add-artifact engagement-brief.md --title "..."` lists the brief. From here on the state file is
+`add-artifact engagement-brief.md --title "..."` lists the brief. **Write the brief's actual
+content (and render its HTML) before this call, not after** - registering the row first leaves
+`added_before_file_existed: true` on the entry, which the DoD backstop correctly flags as
+STALE-INDEX (live report, 2026-08-12: this happened on a session's very first turn, before the
+brief had actually been drafted) if the file is still missing whenever a turn ends. If you
+genuinely must register before the write for some reason, finish the write in the SAME turn and
+re-run `add-artifact` on the same path afterward to clear the flag - never leave it stuck.
+From here on the state file is
 authoritative and START-HERE is its rendered view: **never hand-edit START-HERE**. Record every
 artifact with `add-artifact`, every status change with `set-status`, every open question with
 `add-outstanding` - each mutator re-renders the index in the same command (lifecycle discipline,

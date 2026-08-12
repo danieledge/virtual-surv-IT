@@ -50,7 +50,11 @@ round-trip; light stays low-ceremony, not lower-safety. Open the state with the 
 `$PLUGIN_ROOT/.claude/skills/engage/references/resume-menu.md`) and follow it - one question via
 the question tool, resume-or-new - and target yours with `--slug` thereafter):
 `<python> -m scripts.engagement_state init --title "..." --slug <slug> --profile light`
-then `add-artifact engagement-brief.md --title "..."`. **Go-ahead gate stays** - one
+then `add-artifact engagement-brief.md --title "..."` - **write the one-page brief's actual
+content first, this call second** (registering the row before the file exists leaves
+`added_before_file_existed: true` on the entry, which the DoD backstop correctly flags as
+STALE-INDEX if the file is still missing whenever a turn ends - live report, 2026-08-12, on a
+session's very first turn). **Go-ahead gate stays** - one
 single-select question (Proceed / Adjust / Stop).
 
 **3. Deliver lean.** Right-size out loud as ever, but capped: **2-3 agents, no parallel
