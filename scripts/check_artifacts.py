@@ -1137,6 +1137,7 @@ def check_findings_scoring(artifacts_dir: Path) -> list[str]:
     fp_io = _load_findings_pack_io_module()
     if fp_io is None:
         return findings  # loader unavailable - fail open, same posture as before
+    unscored: list[tuple[Path, int]] = []
     for pack_path in sorted(data_dir.rglob("findings-*.jsonl")):
         try:
             pack = fp_io.read_pack(pack_path)
@@ -1154,6 +1155,11 @@ def check_findings_scoring(artifacts_dir: Path) -> list[str]:
         scoring = pack.get("scoring")
         if isinstance(scoring, str) and _SCORER_ATTEST_RE.search(scoring):
             continue
+        unscored.append((pack_path, n))
+    if not unscored:
+        return findings
+    if len(unscored) == 1:
+        pack_path, n = unscored[0]
         findings.append(
             f"PACK-UNSCORED: {pack_path.name} carries {n} finding(s) but its envelope "
             "records no review-scorer pass - code/performance findings are scored and "
@@ -1164,6 +1170,24 @@ def check_findings_scoring(artifacts_dir: Path) -> list[str]:
             "scorer already ran, record that pass there (judgement item, never "
             "auto-fixed)"
         )
+        return findings
+    # 2026-08-12 live report: with the old one-string-per-pack shape, several unscored
+    # packs in the same engagement (a live corp session hit 3 in one, plus more across
+    # sibling engagements in the same project) each repeated the full explanatory
+    # paragraph verbatim - a wall of near-identical text for what is really one
+    # instruction ("dispatch review-scorer") applied to a short list of packs. State the
+    # shared explanation once; list the affected packs concisely rather than repeating it.
+    packs_desc = "; ".join(f"{p.name} ({n} finding(s))" for p, n in unscored)
+    findings.append(
+        f"PACK-UNSCORED: {len(unscored)} packs carry findings but their envelopes "
+        "record no review-scorer pass - code/performance findings are scored and "
+        "filtered by review-scorer, even after self-scoring "
+        "(docs/code-review-method.md). Dispatch review-scorer over each pack, apply "
+        "its numbers, then record the pass in the envelope's `scoring` field (e.g. "
+        '"scored by review-scorer: Found N · Reported R · Filtered F"); if the '
+        "scorer already ran, record that pass there (judgement item, never "
+        f"auto-fixed). Affected: {packs_desc}"
+    )
     return findings
 
 

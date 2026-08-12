@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
 
 import scripts.dod_stop_gate as gate
 
@@ -178,3 +179,46 @@ def test_only_blocked_workspaces_stay_silent(tmp_path, monkeypatch, capsys):
     )
     rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
     assert rc == 0 and out == ""
+
+
+# --- deferral permission when the user's most recent ask is unrelated new work (2026-08-12) ---
+#
+# Live report: the nudge's own directive tone ("resume and FINISH it") led a session to divert
+# into completing an old engagement's DoD work instead of a just-requested new engagement -
+# the hook has no visibility into what the user actually asked for, only that a pack is gated.
+# Fixed at the instruction level: an explicit, bounded permission to defer, with a hard
+# constraint against silently suppressing the finding via the log-note marker while deferring
+# (that marker means "acted on", and recording it without acting would be a real loophole -
+# a way to make a gap disappear from the nudge without ever having addressed it).
+#
+# Loads scripts/staged_hooks/dod_stop_gate.py directly (importlib, by path) rather than
+# importing scripts.dod_stop_gate - this fix is staged, not yet human-applied to the live
+# copy (test_hooks_in_sync.py's test_staged_matches_live correctly flags that as pending,
+# same posture as every other staged hook change), so testing the live import would test
+# unfixed code.
+
+
+def _load_staged_gate():
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "staged_hooks" / "dod_stop_gate.py"
+    spec = importlib.util.spec_from_file_location("staged_dod_stop_gate", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_reason_permits_deferring_for_unrelated_new_work():
+    staged = _load_staged_gate()
+    reason = staged._reason(["PACK-UNSCORED: findings-t.jsonl carries 3 finding(s)..."], [], "slug", "abc123")
+    assert "clearly asked for" in reason and "something else" in reason
+    assert "proceed with THAT first" in reason
+
+
+def test_reason_forbids_recording_the_suppression_marker_while_deferring():
+    """The deferral permission must not double as a silent-suppress loophole - recording
+    the log-note marker means "acted on", not "saw and moved past"."""
+    staged = _load_staged_gate()
+    reason = staged._reason(["PACK-UNSCORED: findings-t.jsonl carries 3 finding(s)..."], [], "slug", "abc123")
+    assert "do **NOT** record" in reason
+    assert 'log-note "dod-nudged:abc123"' in reason
