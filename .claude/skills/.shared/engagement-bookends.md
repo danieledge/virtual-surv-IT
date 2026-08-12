@@ -53,12 +53,17 @@ work-in-progress rather than artifacts appearing with no state transition to exp
 <python> -m scripts.engagement_state set-team "Name (role)" "Name2 (role2)" --slug <slug>
 <python> -m scripts.engagement_state finalise-artifacts --slug <slug>
 <python> -m scripts.engagement_state set-footprint --agents N --tokens "<estimate>" --slug <slug>
-<python> -m scripts.check_artifacts --slug <slug> --fix
+<python> -m scripts.check_artifacts --fix
 <python> -m scripts.engagement_state set-status closed --slug <slug>
 ```
 
 (the `--fix` mode auto-renders missing `.html` siblings and renames a mis-typed summary email to
-`.txt`). Write the **engagement-summary email**
+`.txt`). **`check_artifacts` takes no `--slug`** (2026-08-12 live report, ironically hitting the
+exact "guessing a flag and correcting after a usage error" this section warns against - a stray
+`--slug <slug>` had been copied onto this one line from the `engagement_state` commands around
+it, which DO take it; `check_artifacts` always scans the whole `artifacts/` root and discovers
+every engagement's own workspace itself, same as the DoD backstop Stop hook does). Write the
+**engagement-summary email**
 (`docs/templates/engagement-summary-email.md`) as a `.txt` in the workspace, **signed off as
 Morgan**, right after `set-status closing` (during the closing window it just opened, alongside
 the delivery report) and before the rest of the sequence. Act on anything the gate still flags
