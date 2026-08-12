@@ -3,6 +3,85 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.60] - 2026-08-12 - Two live corp-Windows field reports fixed at the root; code-review token-duplication and onboarding-flow consolidation
+
+**Field-report fixes, both traced to real screenshots from a live corp-Windows session:**
+- The `/engage` step-0 probe's cached-interpreter fast path did `ORDER="$CACHED"` then
+  `for I in $ORDER` - unquoted, so a cached interpreter path containing a space (a real
+  Windows path, `C:\Program Files\PSF\Python312\python.EXE`) got word-split into two
+  bogus tokens and the whole probe failed. Fixed by executing the cached path directly,
+  quoted, before ever touching the word-split fallback loop.
+- Even after that fix, the same box's probe was still observed falling through to the
+  full discovery loop (hitting the Windows Store execution-alias stub) instead of using
+  its own pre-seeded cache. `write_guard_interpreter_cache()` writes `sys.executable`
+  verbatim - always backslash-separated on Windows - and `command -v` under Git Bash/MSYS
+  is far more reliable with forward-slash absolute paths. Now written normalized
+  (`PureWindowsPath(...).as_posix()`, a no-op on POSIX). Flagged as the strongest
+  available hypothesis from two field reports, not confirmed against a live Git Bash
+  session - real confirmation needs a retest on that box after it updates.
+- `scripts/engage_probe.py`'s own internal `subprocess.run` calls (`git_branch`,
+  `run_tool_probe`, `run_extensions_show`) used plain `text=True`, which decodes using
+  the *parent* process's locale-preferred encoding (cp1252 on a plain Windows console) -
+  the identical failure mode `install_helper.py`'s `run_cmd` hit and fixed on 2026-07-30,
+  reproduced here because this script runs standalone and never got the same fix. Now
+  `encoding="utf-8", errors="replace"`, matching `run_cmd`'s proven pattern.
+
+**`virt-surv configure` / recommended defaults:**
+- "Go with the recommended defaults" now genuinely covers the whole flow (permissions,
+  env tuning, the LLM-gateway beta-fields workaround, docx, Morgan's model) instead of
+  stopping partway, and explicitly pins Morgan's model to sonnet rather than leaving it
+  unset. The LLM-gateway workaround's own recommended default flipped off->on (most
+  corporate gateway setups hit it); `large_context_review_split`'s interactive prompt
+  default flipped true->false, fixing drift against every other place that preference's
+  default was already documented as off.
+- `run_configure` now prints a full box-drawn summary table of everything set, real or
+  `--demo`.
+
+**ADR-014 persistent guard daemon - staged, off by default:**
+`scripts/guard_daemon.py`/`guard_daemon_client.py` promoted from the validated design
+spike (0.33.57-0.33.59: 8/8 live smoke-test checks passed on the reporting Windows box,
+including genuinely concurrent request safety and staleness detection), plus the
+daemon-aware branch in `run-guard.sh` and `scripts/apply-guard-daemon.sh`, the human-run
+installer for all three together. Applying it changes nothing live - the daemon only
+engages once a project explicitly sets `"guard_daemon": true`. Also: retired the now-
+superseded `apply-guard-interpreter-cache.sh` to a thin redirect (it would otherwise
+install a launcher whose daemon branch references files that were never installed
+alongside it); rewrote `apply-outstanding.sh` from a hand-maintained static list of
+apply scripts (already caught stale - missing `apply-guard-daemon.sh` itself) to a
+dynamic glob; fixed a real, reproduced test-isolation bug where the ADR-014 spike's own
+tests could silently import the wrong `guard_daemon` module depending on which other
+test file ran first, via `sys.path`-ordering.
+
+**Code-review path - closed a confirmed token-duplication gap, independently audited:**
+A research pass found `review-scorer` (Pip) runs first and detects file lists/languages,
+but `code-reviewer`/`compliance-reviewer` never reused that output - both re-ran their
+own `git diff` regardless. Fixed with an explicit hand-off (labelled, count-verified so a
+truncated forward can't silently pass as complete) and a size guard on raw analyser
+output so it summarizes by rule-ID-and-count rather than being held verbatim across
+every lens pass. An independent adversarial audit of the change then caught three real
+regressions before ship: the forwarded context was missing a caveat that change-mode
+review still needs the actual diff hunks for new-vs-pre-existing attribution;
+`compliance-reviewer`'s half of the fix was dead code (nothing actually forwarded
+context to it); and Pip's own output-length budget could have silently truncated the
+file list it was supposed to hand off. All three fixed in the same pass.
+
+**Onboarding UX - consolidated four overlapping preference surfaces into one:**
+The installer had grown four separately hand-maintained places asking overlapping
+project-preference questions, with wording that had drifted apart. Highest-severity
+finding: the "go with defaults" text promised project enablement as part of a full
+install, but the install plan never actually reached that step - traced to this same
+session's own earlier defaults work, where the promise text was updated without wiring
+the plan to deliver it. Fixed by retiring the Advanced-menu enable step's own ~180-line
+duplicate (six of `virt-surv configure`'s thirteen preferences were never asked there at
+all) into a delegation to that one flow, wiring it into the full-install plan so the
+promise is now kept, and fixing a model-scope bug at `run_configure`'s own "set the
+model" call site (the identical bug already fixed at a different call site in 2026-08-05,
+not caught here at the time). Also added step-progress headers and immediate
+accept/decline feedback to `virt-surv configure` (previously no progress indicator at
+all, unlike the rest of the installer), replaced two internal-jargon-only prompts with a
+plain-language benefit clause, and split the Diagnostics submenu so prototype/internal
+items read separately from everyday checks.
+
 ## [0.33.59] - 2026-08-12 - ADR-014 v0.3: guard-daemon spike validated live on the actual reporting Windows box, 8/8 checks passed
 
 Via the new Diagnostics-menu entry (0.33.58), on the real corp box this whole investigation
