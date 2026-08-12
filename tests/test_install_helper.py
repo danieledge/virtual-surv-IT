@@ -511,16 +511,17 @@ def test_run_env_tuning_betas_refuses_unparseable_settings(tmp_path, capsys):
     assert (claude / "settings.json").read_text(encoding="utf-8") == "{broken"  # untouched
 
 
-def test_run_configure_env_tuning_betas_off_by_default(tmp_path, monkeypatch):
-    """Unlike --env-tuning (on by default under assume_yes), the beta-fields workaround
-    stays off even when the user accepts every other recommended default."""
+def test_run_configure_env_tuning_betas_on_by_default(tmp_path, monkeypatch):
+    """2026-08-12 user request, reversing the prior stance: the beta-fields workaround
+    (LLM-gateway compatibility) is now recommended ON by default, same as --env-tuning -
+    accepting every recommended default under assume_yes applies it."""
     import install_helper as ih
 
     _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
-    assert "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS" not in settings.get("env", {})
+    assert settings.get("env", {}).get("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS") == "1"
 
 
 # --- run_tool_cache_refresh: run automatically at the end of --configure (2026-08-07) -----
@@ -3970,16 +3971,43 @@ def test_run_configure_happy_path_yes(tmp_path, monkeypatch, capsys):
     assert "enabled for" in out
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
     assert "permissions" in settings  # --yes defaults the permissions confirm to True
+    # 2026-08-12 user request: "recommended should set the model to sonnet" - the
+    # recommended-defaults path now explicitly pins it rather than leaving `model` unset.
+    assert settings["model"] == ih.ORCHESTRATOR_MODEL_IDS["sonnet"]
     prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
     assert prefs == {
         "extra_formats": [],
         "regulatory_citations": False,
-        "large_context_review_split": True,
+        "large_context_review_split": False,  # 2026-08-12: default flipped off
         "parallel_dispatch_via_workflow": True,
+        "standards_critique": False,  # pre-existing gap in this assertion, caught now -
+        # run_configure has passed this explicitly since standards_critique was added
+        # earlier this session; this test's dict just never got updated to match
         "map_skeleton": True,
         "statusline_show_map": False,
     }
     assert "Configuration complete" in out
+
+
+def test_run_configure_manual_walkthrough_leaves_model_unset_when_declined(tmp_path, monkeypatch):
+    """The manual walkthrough (assume_yes False, "n" to recommended settings) must stay
+    opt-in for the model question - only the recommended-defaults path auto-pins sonnet
+    (see test_run_configure_happy_path_yes); declining here should leave `model` absent
+    from settings.json entirely, same as before 2026-08-12."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    # "n" to recommended settings, then "" (accept every default) all the way through -
+    # 4 leading confirms + 7 preference confirms + review-tools override + "" declines
+    # the final "set Morgan's model?" question (default False).
+    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
+    assert rc == 0
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+    assert "model" not in settings
 
 
 def test_run_configure_not_a_directory():
@@ -4102,10 +4130,11 @@ def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkey
     # "n" to "use recommended settings?" (walk through each choice instead), "no" to the
     # permissions question, "no" to the env-tuning question, "no" to the beta-fields-
     # workaround question (keeps "nothing creates the file" true below), "" (accept
-    # defaults) to the six preference prompts (docx, citations, review-split,
-    # workflow-dispatch, map-skeleton, statusline-map), "" (no change) to the
-    # review-tools override prompt, "" to the model prompt (declines - default is False).
-    answers = iter(["n", "n", "n", "n", "", "", "", "", "", "", "", ""])
+    # defaults) to the seven preference prompts (docx, citations, review-split,
+    # workflow-dispatch, standards-critique, map-skeleton, statusline-map), "" (no
+    # change) to the review-tools override prompt, "" to the model prompt (declines -
+    # default is False).
+    answers = iter(["n", "n", "n", "n", "", "", "", "", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -4756,6 +4785,8 @@ def test_diagnostics_submenu_full_mapping():
         "2": "toolcheck",
         "3": "envcheck",
         "4": "selftest",
+        "5": "hooklatency",
+        "6": "adr014smoke",
         "b": "back",
     }
 
@@ -4770,6 +4801,7 @@ def test_advanced_submenu_full_mapping():
         "4": "model",
         "5": "demo",
         "6": "machinedefaults",
+        "7": "dashboard",
         "b": "back",
     }
 
@@ -5188,10 +5220,10 @@ def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     # "n" to "use recommended settings?" (blank there would default to Yes and skip
     # every prompt below via assume_yes, defeating this test), "" enable-permissions
-    # default(Y), "" env-tuning default(Y), "" beta-fields-workaround default(N), ""
-    # docx, "" citations, "" split, "" workflow-dispatch, "" map-skeleton, ""
-    # statusline-map, "mypy=off" review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "", "", "", "mypy=off", ""])
+    # default(Y), "" env-tuning default(Y), "" beta-fields-workaround default(Y), ""
+    # docx, "" citations, "" split, "" workflow-dispatch, "" standards-critique, ""
+    # map-skeleton, "" statusline-map, "mypy=off" review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "mypy=off", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -5213,9 +5245,9 @@ def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch)
     # "n" to "use recommended settings?" first (blank there would default to Yes and
     # skip every prompt below via assume_yes, defeating this test). Then "" enable-
     # permissions, "" env-tuning, "" beta-fields-workaround, "" docx, "" citations, ""
-    # split, "" workflow-dispatch, "" map-skeleton, "" statusline-map, "mypy=on"
-    # review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "", "", "", "mypy=on", ""])
+    # split, "" workflow-dispatch, "" standards-critique, "" map-skeleton, ""
+    # statusline-map, "mypy=on" review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "mypy=on", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -5642,12 +5674,22 @@ def test_measure_concurrent_returns_n_samples_and_a_total(monkeypatch):
     assert total >= 0
 
 
-def test_run_adr014_smoke_test_returns_none_when_spike_absent(tmp_path):
+def test_run_adr014_smoke_test_returns_none_when_spike_absent(tmp_path, monkeypatch):
     """A repo checkout without docs/internal/adr-014-spike/ (predates it, or the spike
     was removed) must SKIP, not error - same "absent prerequisite" posture as every
-    other diagnostic in this file."""
+    other diagnostic in this file. tmp_path must actually satisfy looks_like_repo()
+    (.git + .claude-plugin/plugin.json) - otherwise _resolve_repo_root rejects it as a
+    candidate entirely and falls through to its own __file__-parent fallback, which is
+    unconditionally a real repo (THIS checkout) with the spike genuinely present -
+    silently testing the wrong repo instead of skipping. _isolate_home also needed:
+    without it, the load_config(...).get("repo_path") candidate in between can still
+    point at this machine's real clone if it has ever been configured here."""
     import install_helper as ih
 
+    _isolate_home(monkeypatch, tmp_path)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text("{}", encoding="utf-8")
     assert ih.run_adr014_smoke_test(ih.Style(False), ih.marks(), repo_hint=str(tmp_path)) is None
 
 
@@ -5753,9 +5795,9 @@ def test_run_hook_latency_diagnostic_measures_real_launcher_when_present(
 
 
 def _enable_step_confirm_fake(enable_answer=True):
-    """Answers only the top-level 'enable now?' question and the betas question (by its
-    distinctive text) - everything else (permissions/env-tuning/docx/model) declines, so
-    those unrelated collaborators never need mocking for a test focused on one question."""
+    """Answers only the top-level 'enable now?' question - everything else
+    (permissions/env-tuning/betas/docx/model) declines, so those unrelated
+    collaborators never need mocking for a test focused on one question."""
 
     def _fn(prompt, default, assume_yes, style=None):
         if "enable the team for a project now" in prompt:
@@ -5765,59 +5807,100 @@ def _enable_step_confirm_fake(enable_answer=True):
     return _fn
 
 
-def test_enable_step_asks_the_betas_question_when_not_quick_defaults(tmp_path, monkeypatch):
+def _mock_enable_flow_collaborators(monkeypatch, ih, project):
+    """Every function enable_step can now call under quick_defaults (2026-08-12: the
+    auto-apply idiom that used to cover only the betas workaround extends to
+    permissions/env-tuning/docx/model too) - mocked so a quick_defaults test never
+    triggers real file I/O, and each call is individually observable."""
+    calls = {"permissions": [], "env_tuning": [], "betas": [], "docx": []}
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
+    monkeypatch.setattr(ih, "run_enable_project", lambda *a, **k: 0)
+    monkeypatch.setattr(
+        ih, "run_permissions", lambda *a, **k: calls["permissions"].append(a) or 0
+    )
+    monkeypatch.setattr(
+        ih, "run_env_tuning", lambda *a, **k: calls["env_tuning"].append(a) or 0
+    )
+    monkeypatch.setattr(
+        ih, "run_env_tuning_betas", lambda *a, **k: calls["betas"].append(a) or 0
+    )
+    monkeypatch.setattr(
+        ih,
+        "write_team_preferences",
+        lambda *a, **k: calls["docx"].append((a, k)) or True,
+    )
+    return calls
+
+
+def test_enable_step_asks_every_question_when_not_quick_defaults(tmp_path, monkeypatch):
     """Manually walking through project enablement (quick_defaults False, the pre-existing
-    behavior) still asks, and a decline must not call run_env_tuning_betas."""
+    behavior) still asks for each of the five, and a decline must not call any of them."""
     import install_helper as ih
 
     _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
-    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    monkeypatch.setattr(ih, "run_enable_project", lambda *a, **k: 0)
+    calls = _mock_enable_flow_collaborators(monkeypatch, ih, project)
     monkeypatch.setattr(ih, "confirm", _enable_step_confirm_fake())
-    betas_calls = []
-    monkeypatch.setattr(
-        ih, "run_env_tuning_betas", lambda *a, **k: betas_calls.append(a) or 0
-    )
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
     inst.quick_defaults = False
     inst.enable_step()
-    assert betas_calls == []  # declined (fake answers False) - must not have run
+    assert calls == {"permissions": [], "env_tuning": [], "betas": [], "docx": []}
 
 
-def test_enable_step_applies_betas_workaround_without_asking_under_quick_defaults(
+def test_enable_step_applies_every_default_without_asking_under_quick_defaults(
     tmp_path, monkeypatch
 ):
-    """'Go with the recommended defaults for everything' (quick_setup_choice) must apply
-    the workaround directly - same 'no further question' idiom optional_pip already uses
-    for that mode - not silently skip it just because nothing answered its question."""
+    """'Go with the recommended defaults for everything' (quick_setup_choice, extended
+    2026-08-12 to cover the whole enable flow, not just the betas workaround) must apply
+    permissions, env-tuning and the betas workaround directly, and never ask any of their
+    questions - the model question is correctly skipped (its own sensible default is
+    "no"), and docx only fires if the machine's own default_docx is already true."""
     import install_helper as ih
 
     _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
-    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    monkeypatch.setattr(ih, "run_enable_project", lambda *a, **k: 0)
-    asked_betas_question = []
+    calls = _mock_enable_flow_collaborators(monkeypatch, ih, project)
+    asked = []
 
     def _confirm(prompt, default, assume_yes, style=None):
-        if "eager_input_streaming" in prompt:
-            asked_betas_question.append(prompt)
+        asked.append(prompt)
         if "enable the team for a project now" in prompt:
             return True
         return False
 
     monkeypatch.setattr(ih, "confirm", _confirm)
-    betas_calls = []
-    monkeypatch.setattr(
-        ih, "run_env_tuning_betas", lambda *a, **k: betas_calls.append(a) or 0
-    )
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
     inst.quick_defaults = True
     inst.enable_step()
-    assert len(betas_calls) == 1  # applied directly
-    assert asked_betas_question == []  # and never asked as a question at all
+    assert len(calls["permissions"]) == 1
+    assert len(calls["env_tuning"]) == 1
+    assert len(calls["betas"]) == 1
+    assert calls["docx"] == []  # default_docx defaults to False - correctly not applied
+    # Only the mandatory top-level "enable now?" question is ever asked - none of the
+    # five gated ones (permissions/env-tuning/betas/docx/model) reach confirm() at all.
+    assert asked == ["  Shall I enable the team for a project now (per-project scope)?"]
+
+
+def test_enable_step_quick_defaults_applies_docx_when_machine_default_is_on(
+    tmp_path, monkeypatch
+):
+    """The docx question's sensible default is dynamic (this machine's own
+    default_docx), not a fixed True/False like the others - quick_defaults must apply
+    THAT value directly, not silently assume off."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    calls = _mock_enable_flow_collaborators(monkeypatch, ih, project)
+    monkeypatch.setattr(ih, "confirm", _enable_step_confirm_fake())
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_defaults = True
+    inst.cfg["default_docx"] = True
+    inst.enable_step()
+    assert len(calls["docx"]) == 1
 
 
 def test_enable_step_quick_defaults_does_not_affect_the_standalone_enable_subset(
@@ -5827,32 +5910,15 @@ def test_enable_step_quick_defaults_does_not_affect_the_standalone_enable_subset
     'full' install/update flow - the standalone menu 'enable' subset never runs it, so
     self.quick_defaults stays at its class default (False) there regardless. Belt-and-
     braces: even if something set it True out of band, the subset != 'full' guard must
-    still require asking."""
+    still require asking, for all five gated questions, not just betas."""
     import install_helper as ih
 
     _isolate_home(monkeypatch, tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
-    monkeypatch.setattr(ih, "ask", lambda *a, **k: str(project))
-    monkeypatch.setattr(ih, "run_enable_project", lambda *a, **k: 0)
-    asked_betas_question = []
-
-    def _confirm(prompt, default, assume_yes, style=None):
-        if "eager_input_streaming" in prompt:
-            asked_betas_question.append(prompt)
-        return False  # "enable" subset skips the top-level ask entirely (implied by menu choice)
-
-    monkeypatch.setattr(ih, "confirm", _confirm)
-    betas_calls = []
-    monkeypatch.setattr(
-        ih, "run_env_tuning_betas", lambda *a, **k: betas_calls.append(a) or 0
-    )
+    calls = _mock_enable_flow_collaborators(monkeypatch, ih, project)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
     inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="enable")
     inst.quick_defaults = True  # out-of-band - should not happen in practice, tested anyway
     inst.enable_step()
-    assert betas_calls == []  # subset != "full", so the direct-apply branch never fires
-    assert asked_betas_question == ["  Seeing subagent tool calls fail with \"tools.0.custom."
-        "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
-        "rejecting Claude Code's beta tool-schema fields)? A workaround exists, but "
-        "it has a real cost - MCP tool search turns off and every MCP tool loads "
-        "upfront - only worth it if you're actually hitting this."]
+    assert calls == {"permissions": [], "env_tuning": [], "betas": [], "docx": []}

@@ -313,6 +313,32 @@ def render_banner(lines, style: Style, stream=None) -> list:
     return [style.cyan(style.bold(row)) for row in rows]
 
 
+def render_kv_table(rows: list, style: Style, stream=None) -> list:
+    """Two-column box-drawn summary table, box_chars-based like render_banner for visual
+    consistency. rows: (label, value, state) - state True colors the whole row green
+    (on/applied), False dims it (off/declined), None leaves it unstyled (informational,
+    not an on/off toggle - e.g. a list of overrides or a free-text value). Colors the
+    WHOLE row rather than per-cell: Style._paint wraps text in its own reset code, so
+    nesting a second color inside an already-painted line only reliably colors the
+    innermost span, not the border/label around it - painting one flat string per row
+    sidesteps that instead of fighting it."""
+    c = box_chars(stream)
+    label_w = max(len(r[0]) for r in rows)
+    value_w = max(len(r[1]) for r in rows)
+    border = c["h"] * (label_w + value_w + 5)
+    lines = [c["tl"] + border + c["tr"]]
+    for label, value, state in rows:
+        plain = f"{c['v']} {label.ljust(label_w)} {c['v']} {value.ljust(value_w)} {c['v']}"
+        if state is True:
+            lines.append(style.green(plain))
+        elif state is False:
+            lines.append(style.dim(plain))
+        else:
+            lines.append(plain)
+    lines.append(c["bl"] + border + c["br"])
+    return lines
+
+
 def rule_header(number: int, total: int, title: str, style: Style, stream=None) -> str:
     """A ruled step header padded to RULE_WIDTH, e.g. '── Step 3 of 9: Local clone ────'."""
     h = box_chars(stream)["h"]
@@ -1697,9 +1723,15 @@ class Installer:
     def quick_setup_choice(self) -> None:
         """First of the optional post-install steps for a full install/update
         (2026-08-07 user request): one upfront choice instead of a question per step -
-        "go with defaults" (fast: dev requirements, status line and the 'virt-surv' alias
-        are all wired with no further questions) or "manually configure" (walk through
-        each one individually, exactly as this installer did before). --yes always
+        "go with defaults" (fast: dev requirements, status line, the 'virt-surv' alias,
+        and - 2026-08-12 user request, extending the ORIGINAL narrower scope - every
+        remaining project-enablement question too: permissions allow-list, env tuning,
+        the LLM-gateway beta-fields workaround, docx, and Morgan's model, all wired or
+        skipped per their own sensible default with zero further questions) or "manually
+        configure" (walk through each one individually, exactly as this installer did
+        before). "Go with defaults" genuinely means that now - only this machine's own
+        defaults (machine_defaults_offer) stay a deliberate ask either way, since that
+        changes what every FUTURE project inherits, not just this one. --yes always
         implies the fast path (a scripted/CI run can't answer an interactive question),
         matching this installer's `--yes` semantics everywhere else."""
         if self.args.yes:
@@ -1707,7 +1739,9 @@ class Installer:
             return
         self.step_intro(
             "A few more optional bits follow: dev requirements, the status line, the "
-            "'virt-surv' shell alias, and this machine's default settings."
+            "'virt-surv' shell alias, project enablement (permissions, env tuning, the "
+            "LLM-gateway workaround, docx, Morgan's model), and this machine's default "
+            "settings."
         )
         self.quick_defaults = confirm(
             "  Go with the recommended defaults for all of these (fast, recommended), "
@@ -2305,16 +2339,23 @@ class Installer:
         user request: "we are missing an option to be able to modify settings on install
         too" - project-level setup moved entirely to virt-surv configure/engage, but
         THIS MACHINE's own defaults deserve a way back in during install instead of only
-        being reachable via the separate Advanced -> Machine defaults menu item).
-        Always asks (never auto-applied by quick_defaults - changing what every future
-        project inherits is a deliberate action, not a "no real downside" default like
-        the status line or the alias) unless --yes, matching machine_defaults_step's own
-        interactive-only nature."""
+        being reachable via the separate Advanced -> Machine defaults menu item). Under
+        quick_defaults, auto-skips rather than asking (2026-08-12 user request extending
+        "go with defaults" to mean zero further questions everywhere) - its own default
+        answer is already "no, don't walk through it", so respecting that without asking
+        is skipping, never an auto-APPLIED machine-wide change; still asks otherwise,
+        unless --yes, matching machine_defaults_step's own interactive-only nature."""
         if self.args.yes:
             self.step_skip(
                 "Machine defaults",
                 "non-interactive - Advanced -> Machine defaults any time, or edit "
                 f"{self.cfg_path} directly",
+            )
+            return
+        if self.subset == "full" and self.quick_defaults:
+            self.step_skip(
+                "Machine defaults",
+                "go-with-defaults chosen - unchanged, Advanced -> Machine defaults any time",
             )
             return
         if not confirm(
@@ -2650,14 +2691,27 @@ class Installer:
                 return
             run_cmd(["claude", "plugin", "enable", "--scope", "project", PLUGIN_ID], cwd=project)
             self.step_ok("Project enablement", f"would enable for {project}")
-            if confirm(
+            if self.subset == "full" and self.quick_defaults:
+                # "Go with the recommended defaults" (quick_setup_choice) means exactly
+                # that across the WHOLE enable flow (2026-08-12 user request - originally
+                # this auto-apply idiom only covered the betas-workaround block below;
+                # permissions/env-tuning/docx/model now match it too, so "go with
+                # defaults" genuinely means zero further questions, not "mostly").
+                self._demo_permissions(project)
+            elif confirm(
                 "  Shall I also add the recommended permission allow-list (fewer prompts)?",
                 default=True,
                 assume_yes=False,
                 style=self.style,
             ):
                 self._demo_permissions(project)
-            if confirm(
+            _env_tuning_msg = self.style.dim(
+                f"    would upsert {len(RECOMMENDED_ENV)} env vars into "
+                f"{project / '.claude' / 'settings.json'} (other env vars untouched)"
+            )
+            if self.subset == "full" and self.quick_defaults:
+                self.say(_env_tuning_msg)
+            elif confirm(
                 "  Also tune API timeout / stream-idle / output-size env vars for this "
                 "project (helps on slow networks or behind a corporate proxy; trade-off: "
                 "transient API/throttling errors then retry quietly for up to hours "
@@ -2666,12 +2720,7 @@ class Installer:
                 assume_yes=False,
                 style=self.style,
             ):
-                self.say(
-                    self.style.dim(
-                        f"    would upsert {len(RECOMMENDED_ENV)} env vars into "
-                        f"{project / '.claude' / 'settings.json'} (other env vars untouched)"
-                    )
-                )
+                self.say(_env_tuning_msg)
             if self.subset == "full" and self.quick_defaults:
                 # "Go with the recommended defaults" (quick_setup_choice) means exactly
                 # that - no further question, same idiom optional_pip already uses. Only
@@ -2689,10 +2738,11 @@ class Installer:
             elif confirm(
                 "  Seeing subagent tool calls fail with \"tools.0.custom."
                 "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
-                "rejecting Claude Code's beta tool-schema fields)? A workaround exists, but "
-                "it has a real cost - MCP tool search turns off and every MCP tool loads "
-                "upfront - only worth it if you're actually hitting this.",
-                default=False,
+                "rejecting Claude Code's beta tool-schema fields)? Recommended default is "
+                "ON (most corporate LLM-gateway setups hit this) - it has a real cost, MCP "
+                "tool search turns off and every MCP tool loads upfront, so say no if you "
+                "rely on MCP tool search and aren't seeing this error.",
+                default=True,
                 assume_yes=False,
                 style=self.style,
             ):
@@ -2702,19 +2752,22 @@ class Installer:
                         f"{project / '.claude' / 'settings.json'} (other env vars untouched)"
                     )
                 )
-            if confirm(
+            _docx_default = bool(self.cfg.get("default_docx", False))
+            _docx_msg = self.style.dim(
+                f"    would write {project / '.claude' / 'team-preferences.json'}"
+            )
+            if self.subset == "full" and self.quick_defaults:
+                if _docx_default:
+                    self.say(_docx_msg)
+            elif confirm(
                 "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
                 "produce a Word (.docx) copy by default, for reviewers who redline in Word?",
-                default=bool(self.cfg.get("default_docx", False)),
+                default=_docx_default,
                 assume_yes=False,
                 style=self.style,
             ):
-                self.say(
-                    self.style.dim(
-                        f"    would write {project / '.claude' / 'team-preferences.json'}"
-                    )
-                )
-            if confirm(
+                self.say(_docx_msg)
+            if not (self.subset == "full" and self.quick_defaults) and confirm(
                 "  Set Morgan's (the orchestrator's) model for this project too - sonnet is "
                 "the documented default (testing to date hasn't shown opus outperforming it "
                 "for orchestration); want to set opus instead for this project?",
@@ -2727,14 +2780,26 @@ class Installer:
             return
         if run_enable_project(target, self.style, self.marks) == 0:
             self.step_ok("Project enablement", str(target.expanduser().resolve()))
-            if confirm(
+            # "Go with the recommended defaults" (quick_setup_choice) means exactly that
+            # across the WHOLE enable flow (2026-08-12 user request - originally this
+            # auto-apply idiom only covered the betas-workaround block below;
+            # permissions/env-tuning/docx/model now match it too, so "go with defaults"
+            # genuinely means zero further questions, not "mostly"). Only someone
+            # individually walking through project enablement (quick_defaults False, or
+            # reached via the standalone --enable path where quick_defaults never
+            # applies) still gets asked each of these.
+            if self.subset == "full" and self.quick_defaults:
+                run_permissions(target, self.style, self.marks)
+            elif confirm(
                 "  Shall I also add the recommended permission allow-list (fewer prompts)?",
                 default=True,
                 assume_yes=False,
                 style=self.style,
             ):
                 run_permissions(target, self.style, self.marks)
-            if confirm(
+            if self.subset == "full" and self.quick_defaults:
+                run_env_tuning(target.expanduser().resolve(), self.style, self.marks)
+            elif confirm(
                 "  Also tune API timeout / stream-idle / output-size env vars for this "
                 "project (helps on slow networks or behind a corporate proxy; trade-off: "
                 "transient API/throttling errors then retry quietly for up to hours "
@@ -2745,28 +2810,31 @@ class Installer:
             ):
                 run_env_tuning(target.expanduser().resolve(), self.style, self.marks)
             if self.subset == "full" and self.quick_defaults:
-                # "Go with the recommended defaults" (quick_setup_choice) means exactly
-                # that - no further question, same idiom optional_pip already uses. Only
-                # in this specific mode: someone individually walking through project
-                # enablement (quick_defaults False, or reached via the standalone --enable
-                # path where quick_defaults never applies) still gets asked, default off -
-                # the real MCP-tool-search cost stays a deliberate choice there.
                 run_env_tuning_betas(target.expanduser().resolve(), self.style, self.marks)
             elif confirm(
                 "  Seeing subagent tool calls fail with \"tools.0.custom."
                 "eager_input_streaming: Extra inputs are not permitted\" (a gateway/proxy "
-                "rejecting Claude Code's beta tool-schema fields)? A workaround exists, but "
-                "it has a real cost - MCP tool search turns off and every MCP tool loads "
-                "upfront - only worth it if you're actually hitting this.",
-                default=False,
+                "rejecting Claude Code's beta tool-schema fields)? Recommended default is "
+                "ON (most corporate LLM-gateway setups hit this) - it has a real cost, MCP "
+                "tool search turns off and every MCP tool loads upfront, so say no if you "
+                "rely on MCP tool search and aren't seeing this error.",
+                default=True,
                 assume_yes=False,
                 style=self.style,
             ):
                 run_env_tuning_betas(target.expanduser().resolve(), self.style, self.marks)
-            if confirm(
+            _docx_default = bool(self.cfg.get("default_docx", False))
+            if self.subset == "full" and self.quick_defaults:
+                if _docx_default:
+                    write_team_preferences(
+                        target.expanduser().resolve(),
+                        extra_formats=["docx"],
+                        regulatory_citations=self.cfg.get("default_regulatory_citations"),
+                    )
+            elif confirm(
                 "  Controlled documents (BRD, FSD, etc.) always get .md + .html - also "
                 "produce a Word (.docx) copy by default, for reviewers who redline in Word?",
-                default=bool(self.cfg.get("default_docx", False)),
+                default=_docx_default,
                 assume_yes=False,
                 style=self.style,
             ):
@@ -2775,7 +2843,7 @@ class Installer:
                     extra_formats=["docx"],
                     regulatory_citations=self.cfg.get("default_regulatory_citations"),
                 )
-            if confirm(
+            if not (self.subset == "full" and self.quick_defaults) and confirm(
                 "  Set Morgan's (the orchestrator's) model for this project too - sonnet is "
                 "the documented default (testing to date hasn't shown opus outperforming it "
                 "for orchestration); want to set opus instead for this project?",
@@ -3657,42 +3725,49 @@ def run_configure(
     print(style.dim("\n  Enable the plugin:"))
     if demo:
         print(style.dim(f"    would enable for {project}"))
+        enabled_ok = True
     else:
-        rc = max(rc, run_enable_project(project, style, mark_map))
+        enable_rc = run_enable_project(project, style, mark_map)
+        rc = max(rc, enable_rc)
+        enabled_ok = enable_rc == 0
 
-    if confirm(
+    permissions_wanted = confirm(
         "\n  Add the recommended permission allow-list (fewer prompts)?",
         default=True,
         assume_yes=assume_yes,
         style=style,
-    ):
+    )
+    if permissions_wanted:
         if demo:
             print(style.dim(f"    would add up to {len(RECOMMENDED_ALLOW)} allow entries"))
         else:
             rc = max(rc, run_permissions(project, style, mark_map))
 
-    if confirm(
+    env_tuning_wanted = confirm(
         "\n  Tune API timeout / stream-idle / output-size env vars (helps on slow "
         "networks or behind a corporate proxy; trade-off: transient API/throttling "
         "errors then retry quietly for up to hours instead of failing fast)?",
         default=True,
         assume_yes=assume_yes,
         style=style,
-    ):
+    )
+    if env_tuning_wanted:
         if demo:
             print(style.dim(f"    would upsert {len(RECOMMENDED_ENV)} tuning env vars"))
         else:
             rc = max(rc, run_env_tuning(project, style, mark_map))
 
-    if confirm(
+    betas_wanted = confirm(
         "\n  Work around an LLM-gateway compatibility issue (a subagent call fails with "
         "'tools.0.custom.eager_input_streaming: Extra inputs are not permitted', most "
-        "often on a haiku-tier call) - off unless you're actually hitting this, since it "
-        "also disables MCP tool search?",
-        default=False,
+        "often on a haiku-tier call)? Recommended default is ON (most corporate LLM-gateway "
+        "setups hit this) - it has a real cost, MCP tool search turns off, so say no if you "
+        "rely on MCP tool search and aren't seeing this error.",
+        default=True,
         assume_yes=assume_yes,
         style=style,
-    ):
+    )
+    if betas_wanted:
         if demo:
             print(
                 style.dim(
@@ -3712,10 +3787,15 @@ def run_configure(
         map_skeleton_current,
         statusline_show_map_current,
     ) = _project_preference_defaults(existing, machine_defaults)
-    # Built-in default True (2026-08-07 user request: "split on") - large_context_review_split
-    # deliberately has no machine-wide tier (see write_team_preferences' own docstring), so this
-    # literal is its only fallback.
-    split_current = existing.get("large_context_review_split", True)
+    # Built-in default False (2026-08-12 user request, reversing the 2026-08-07 "split on"
+    # decision) - large_context_review_split deliberately has no machine-wide tier (see
+    # write_team_preferences' own docstring), so this literal is its only fallback. This now
+    # matches what was already true everywhere else (write_team_preferences' own docstring,
+    # .claude/skills/preferences/SKILL.md, and engage_probe.py's actual runtime resolution
+    # all already said "defaults to False/off when absent") - only this interactive
+    # pre-filled prompt default was still out of sync with them, silently nudging anyone who
+    # ran Configure-a-project toward writing "true" even though the true baseline was off.
+    split_current = existing.get("large_context_review_split", False)
     # Built-in default True - same no-machine-wide-tier precedent as
     # large_context_review_split above; this literal is its only fallback.
     workflow_dispatch_current = existing.get("parallel_dispatch_via_workflow", True)
@@ -3812,15 +3892,73 @@ def run_configure(
     print(style.dim("\n  Refreshing the analyser-availability cache:"))
     rc = max(rc, run_tool_cache_refresh(project, style, mark_map, demo=demo))
 
-    if confirm(
+    # 2026-08-12 user request: "recommended should set the model to sonnet" - under the
+    # recommended-defaults path (assume_yes True here) this now explicitly PINS sonnet in
+    # the project's .claude/settings.json rather than silently skipping the question and
+    # leaving `model` unset. ask_and_set_model already resolves to exactly that under
+    # assume_yes (its own confirm/ask calls short-circuit to their defaults - global scope
+    # declined, model picker returns "default" -> None -> ORCHESTRATOR_MODEL_DEFAULT), so
+    # bypassing the outer confirm's own default=False (which means "no, leave unset") is
+    # the only change needed; the manual walkthrough (assume_yes False) is untouched -
+    # still asks, still declines by default, matching every other "set the model"
+    # question's deliberately-opt-in posture.
+    model_requested = assume_yes or confirm(
         "\n  Set Morgan's model for this project (default: sonnet)?",
         default=False,
         assume_yes=assume_yes,
         style=style,
-    ):
+    )
+    model_display = "not requested (unset - inherits account/global default)"
+    if model_requested:
         ok_model, message = ask_and_set_model(project, style, assume_yes, demo=demo)
         print(f"  {ok if ok_model else fail} {message}")
         rc = max(rc, 0 if ok_model else 1)
+        model_display = message.split("-> ", 1)[1] if ok_model and "-> " in message else message
+
+    # 2026-08-12 user request: "display a nice table after configuring to explain to the
+    # user what's set" - every step above already prints its own real-time confirmation
+    # (counts, backup filenames, etc.), but nothing previously showed the FULL picture -
+    # enable + permissions/env-tuning/betas + all seven preferences + review-tool
+    # overrides + model - in one scannable place. Built from the same variables already
+    # driving the steps above, so it can't drift from what was actually asked/applied.
+    summary_rows = [
+        ("Plugin enabled", "yes" if enabled_ok else "failed - see above", enabled_ok),
+        (
+            "Permission allow-list",
+            f"on ({len(RECOMMENDED_ALLOW)} entries)" if permissions_wanted else "off",
+            permissions_wanted,
+        ),
+        (
+            "API/env tuning",
+            f"on ({len(RECOMMENDED_ENV)} vars)" if env_tuning_wanted else "off",
+            env_tuning_wanted,
+        ),
+        ("LLM-gateway workaround", "on" if betas_wanted else "off", betas_wanted),
+        ("Docx output", "on" if docx_wanted else "off", docx_wanted),
+        ("Regulatory citations", "on" if citations_wanted else "off", citations_wanted),
+        ("Review split by component", "on" if split_wanted else "off", split_wanted),
+        (
+            "Workflow-tool dispatch",
+            "on" if workflow_dispatch_wanted else "off",
+            workflow_dispatch_wanted,
+        ),
+        (
+            "Standards-critique pass",
+            "on" if standards_critique_wanted else "off",
+            standards_critique_wanted,
+        ),
+        ("Codebase map-skeleton", "on" if map_skeleton_wanted else "off", map_skeleton_wanted),
+        (
+            "Statusline shows map",
+            "on" if statusline_show_map_wanted else "off",
+            statusline_show_map_wanted,
+        ),
+        ("Review-tool overrides", _format_review_tools(review_tools_wanted), None),
+        ("Morgan's model", model_display, None),
+    ]
+    print(style.dim("\n  Summary:" + (" (preview - nothing written)" if demo else "")))
+    for line in render_kv_table(summary_rows, style):
+        print("  " + line)
 
     print("")
     if rc == 0:
@@ -4841,8 +4979,9 @@ def _resolve_sh() -> Optional[str]:
         p = Path(override)
         candidates = []
         if p.is_file():
-            candidates.append(p)  # might already BE sh.exe
-            candidates.append(p.parent / "sh.exe")  # or bash.exe/git-bash.exe alongside it
+            candidates.append(p.parent / "sh.exe")  # bash.exe/git-bash.exe with sh.exe alongside it
+            candidates.append(p)  # or it might already BE sh.exe (checked second, so a real
+            # sibling sh.exe always wins over treating a bash.exe-named override as sh itself)
         elif p.is_dir():
             candidates.append(p / "sh.exe")
             candidates.append(p / "bin" / "sh.exe")
