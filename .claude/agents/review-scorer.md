@@ -48,6 +48,12 @@ What you do NOT do: judge whether a finding is real, write the prose, decide sev
 score, drop a compliance/model-validation finding for brevity, or touch the §4/§5 regulated calls
 - those are the reviewers'/Morgan's. If a step needs judgement, hand it back up, don't guess.
 Output compact, structured results (lists/counts) for the orchestrator to use - no narrative;
-keep the return message a distilled summary (target under ~30 lines). **Tag outputs 📊 observed
-(counted/derived from the diff or rubric) / 🧠 inferred** (CLAUDE.md §6) - flag any count you
-could not derive mechanically.
+keep the return message a distilled summary (target under ~30 lines). **The file list from
+step 1 is exempt from that budget** (2026-08-12): it gets forwarded verbatim into
+`code-reviewer`'s/`compliance-reviewer`'s own dispatch briefs so they can skip re-deriving it
+themselves - a list truncated to fit a narrative-summary budget would silently hand them an
+incomplete file set. **Always state the total file count alongside the list** (e.g. "N files:"
+before the list, or "showing first K of N" if you genuinely can't fit all N even here), so a
+mismatch between the stated count and the list length is immediately visible to whoever reads
+it, not a truncation nobody notices. **Tag outputs 📊 observed (counted/derived from the diff or
+rubric) / 🧠 inferred** (CLAUDE.md §6) - flag any count you could not derive mechanically.

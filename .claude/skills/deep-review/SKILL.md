@@ -79,7 +79,17 @@ and states what's applicable vs not.
    check for CLAUDE.md, and select the minimal lens set per the router. This is rote work - run
    it on the cheap tier, not opus, and not inline on whatever tier the orchestrator is already
    running.
-2. **Load lenses** progressively via the router - only those `review-scorer` selected.
+2. **Load lenses** progressively via the router - only those `review-scorer` selected. **Forward
+   Pip's context, not just the lens list** - include the file list and language breakdown Pip
+   already detected verbatim in `code-reviewer`'s dispatch prompt, **labeled `Context from
+   review-scorer:` right before it** (so it reads as a fixed, recognizable marker rather than
+   something the reviewer has to infer from unlabeled brief text), instead of re-running
+   `git diff`/re-deriving language grouping for context that already exists (2026-08-12:
+   `code-reviewer.md`'s own step 1 is written to look for that exact label, and to fall back to
+   deriving it itself only when the label isn't there - e.g. a lightweight path with no
+   `review-scorer` call). **Not `performance-reviewer`** - it never derived a file list via
+   `git diff` in the first place (its own step 1 establishes workload characteristics, not file/
+   language detection), so there's nothing there for it to reuse.
 3. **Analyse** - drive `code-reviewer` to run the loaded lenses in the topology the router defines
    (`docs/review/agent-router.md`, canonical for pipeline shape: today that is sequential focused
    passes inside `code-reviewer`, one lens at a time, with the trade-off stated there),
@@ -126,7 +136,11 @@ and states what's applicable vs not.
    **evidence basis** (📊 measured / 🧠 inferred). **Never** filter regulated findings (secrets,
    PII/raw data §5, undocumented thresholds / broken traceability §4) - those stay with
    `code-reviewer`/`compliance-reviewer`, not the scorer.
-5. For anything touching detection logic, hand to **compliance-reviewer** for the §4/§5 trail.
+5. For anything touching detection logic, hand to **compliance-reviewer** for the §4/§5 trail -
+   **forward Pip's file list here too, same `Context from review-scorer:` label as step 2**
+   (2026-08-12: this dispatch is sequential, after step 1's Pip call has already returned, so
+   the same context-forwarding step 2's dispatch of `code-reviewer` already does applies here
+   too - `compliance-reviewer.md`'s own step 2 is written to look for that label).
 6. **Morgan's challenge pass** *(the orchestrator's own tier - sonnet by default, opus if
    configured for this engagement)* - a **spot-check, not a re-score**: the scorer already
    applied the rubric (step 4), and re-scoring everything on opus pays twice for the same

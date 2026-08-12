@@ -44,7 +44,11 @@ Run an **evaluator-optimizer loop**:
    independent - separate packs (`findings-<slug>.jsonl`, `findings-compliance-<slug>.jsonl`),
    merged only in the consolidation step below - so once intake is answered, dispatch
    `compliance-reviewer` together with step 1's `code-reviewer` pass(es) per the operating
-   guide's dispatch rule. **Default path**: when `PARALLEL_DISPATCH_VIA_WORKFLOW=on` (the probe
+   guide's dispatch rule. **No `review-scorer` context to forward here** (unlike
+   `deep-review/SKILL.md`'s step 5, a sequential hand-off): step 1's embedded `/deep-review` runs
+   its own Pip context call internally, concurrently with this dispatch, so nothing is available
+   yet to forward when `compliance-reviewer` goes out - it derives its own file list via
+   `git diff` this way, which is correct here, not a gap. **Default path**: when `PARALLEL_DISPATCH_VIA_WORKFLOW=on` (the probe
    line; on by default) and the `Workflow` tool is available this session, its
    `{label, prompt, agentType: "compliance-reviewer"}` spec joins the same `args` array as the
    `agentType: "code-reviewer"` spec(s), through the fixed script in
@@ -55,7 +59,10 @@ Run an **evaluator-optimizer loop**:
    guide's literal procedure ("Dispatch independent calls concurrently").
 3. If any **Critical/Warning** findings (and fixes are in scope), route fixes to the right
    builder, then **re-review** - and **fix everything you safely can in this pass, don't defer
-   fixable work to a later sprint**. **Record every pass as it happens** in the Delivery
+   fixable work to a later sprint**. **The re-review pass needs fresh context, not the first
+   pass's** (2026-08-12): the fixes just applied changed the files, so any file list/language
+   breakdown forwarded into the first pass is now stale - re-run `review-scorer`'s context step
+   (or let `code-reviewer` derive it itself) rather than re-forwarding what step 1/2 used. **Record every pass as it happens** in the Delivery
    Report's iteration log (§1a: journey strip + append-only hand-off row per review pass, fix
    routing and re-review - operating guide, Outcome discipline 5); earlier pass verdicts are
    never rewritten. Loop until everything fixable is fixed; the only items left

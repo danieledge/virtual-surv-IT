@@ -52,7 +52,11 @@ for the §4/§5 trail.
 ## Progressive loading
 
 ```
-1. Detect languages   → file extensions in the target / git diff
+1. Detect languages   → review-scorer's own procedure: file extensions in the target / git
+                        diff. code-reviewer/compliance-reviewer reuse review-scorer's already-
+                        detected file list/language breakdown when their dispatch brief already
+                        has it (the standard pipeline's step 1, see deep-review/SKILL.md) rather
+                        than re-deriving it themselves via their own git diff (2026-08-12)
 2. Pick depth/mode    → quick (change) vs deep/audit (keep pre-existing, +architecture)
 3. Load minimum lenses→ core (bugs+security) + per-language + architecture (deep)
 4. Run analysers      → ONCE, up front, inside code-reviewer - only the tools the step-0

@@ -36,7 +36,17 @@ When invoked:
    user directly) - obligations differ sharply by jurisdiction. **State explicitly which regimes
    are in scope and which are not**, and assess only against the applicable ones - don't apply
    rules from a region that doesn't apply, and flag if scope is unstated.
-2. Run `git diff` to see what changed and focus on modified files.
+2. **Use `review-scorer`'s (Pip's) file list if your dispatch brief already includes it under a
+   `Context from review-scorer:` label, and verify it's complete before trusting it** - don't
+   re-run `git diff` for a file list you
+   already have (2026-08-12: same duplication fix as `code-reviewer.md`'s step 1). Pip states
+   the total file count alongside the list - **if what you were given doesn't match that
+   count, it was truncated to fit Pip's own summary budget; fall back to `git diff` yourself.**
+   Only run `git diff` yourself from the start if you were invoked without that context at all.
+   **This is the file list only, not the diff hunks** - you still need the actual diff content
+   to establish what changed, same as before; the file list just saves you from re-deriving
+   which files and languages are in scope. Either way, this never substitutes for reading the
+   files yourself.
 3. Check the change against the team handbook (CLAUDE.md), especially auditability and
    data-handling rules, **and the in-scope regulatory obligations** for the stated region(s).
 4. When the work is heading for handover, verify it against the Definition of Done - you

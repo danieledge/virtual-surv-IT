@@ -153,13 +153,44 @@ Regulated exceptions are never filtered: secrets, PII/MNPI/raw data (§5), undoc
 thresholds or a broken alert→logic→obligation trace (§4).
 
 When invoked:
-1. `git diff` (or the named target); group changed files by language; pick depth.
+1. **Use `review-scorer`'s (Pip's) file list and language breakdown if your dispatch brief
+   already includes it under a `Context from review-scorer:` label, and verify it's complete
+   before trusting it** - don't re-run `git diff`
+   or re-derive language grouping for context you already have (2026-08-12: closes a confirmed
+   duplication - Pip runs this exact detection step first in the standard pipeline, per
+   `deep-review/SKILL.md`, and its output was going unused). Pip states the total file count
+   alongside the list (`review-scorer.md`) - **if the list you were given doesn't match that
+   count, it was truncated to fit Pip's own summary budget; fall back to `git diff` yourself
+   rather than review an incomplete file set.** Only run `git diff` (or inspect the named
+   target) yourself to establish the file list/languages if you were invoked without that
+   context at all - e.g. a lightweight path with no `review-scorer` call. **What Pip's context
+   does NOT include: the diff hunks themselves.** A change-mode review still needs the actual
+   diff to attribute findings correctly (new-in-this-change vs. pre-existing, per
+   `docs/code-review-method.md`'s filter rule) - fetching the diff content for that is not
+   "re-deriving context you already have," it's a separate, still-required step regardless of
+   whether Pip ran. Either way, **pick depth yourself** - that's judgement, not mechanical
+   detection - and none of this substitutes for reading the actual files under review: reusing
+   the file list/language breakdown skips redundant bookkeeping, not the review itself.
 2. **Run the available analysers ONCE, up front - before any lens pass.** Only the tools the
    step-0 probe reported available for the languages in scope (table above). Hold their output
    as grounding input for every lens pass and cite it per finding (an analyser hit is 📊
    measured); a lens pass run before the tools can only rediscover their output as 🧠 inferred.
    One run, reused across all passes - never re-run a tool per lens, and never leave the tools
-   as an after-check on a review already written.
+   as an after-check on a review already written. **If a single tool's output exceeds ~150
+   lines** (a large diff can produce a long mypy/bandit/ruff dump), **don't hold it verbatim
+   across every subsequent lens pass** - summarize it once right after running it. **Summarize
+   by distinct finding type (rule ID) with a count and a representative location per type** -
+   that preserves every category of hit even when truncated; do NOT summarize by just keeping
+   "the first ~50 lines," since analyser output is ordered by file and that form can silently
+   drop every hit in every file after the cut. Cite the omitted count explicitly so it reads as
+   a summary, never as the full record - and if a later lens pass needs a hit that got
+   summarized away, re-run that one tool rather than guess at what it would have said (cite the
+   rediscovered hit as 📊 measured, same as the first run, not 🧠 inferred - it's a live rerun,
+   not a recollection). This is NOT the same shape as the cap this project enforces on the
+   output side (`guard-findings-pack-write.py`'s findings-per-write limit chunks a WRITE across
+   multiple calls with nothing lost - append continues where the last call stopped; this
+   summarization genuinely discards detail) - don't reach for that as precedent for this being
+   equally safe. Nothing analogous existed for raw analyser input before this.
 3. Load the relevant lenses per `docs/review/agent-router.md` and run them as sequential
    focused passes, as described above; then merge and dedupe.
 4. Score every candidate finding; filter per the method. **Scoring is `review-scorer`'s whenever
