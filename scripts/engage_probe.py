@@ -318,7 +318,8 @@ def git_branch(root: Path) -> str:
         proc = subprocess.run(  # fixed argv, shell=False, literal "git" on PATH  # nosec B603 B607
             ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
             capture_output=True,
-            text=True,
+            encoding="utf-8",  # not text=True - see run_tool_probe's comment below
+            errors="replace",
             timeout=10,
         )
     except (OSError, subprocess.SubprocessError):
@@ -450,7 +451,17 @@ def run_tool_probe(root: Path, project_dir: Path) -> str:
                     [_find_bash(), str(candidate)],
                     cwd=project_dir,
                     capture_output=True,
-                    text=True,
+                    # Not text=True: on Windows that decodes with cp1252, whose
+                    # undefined bytes (0x81/0x8d/...) raise UnicodeDecodeError inside
+                    # subprocess's own reader thread ("Exception in Thread-N ...") -
+                    # live corp report, 2026-08-12, check-review-tools.sh's own ✓/✗
+                    # marks or an analyser's output tripping it. install_helper.py's
+                    # run_cmd hit and fixed the identical failure mode on 2026-07-30;
+                    # this call is independent of run_cmd (this script runs standalone,
+                    # without importing install_helper - see _find_bash's docstring) so
+                    # it needed the same fix applied separately here.
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=30,
                 )
                 return proc.stdout
@@ -475,7 +486,8 @@ def run_extensions_show(root: Path, project_dir: Path) -> str:
             [sys.executable, str(ext), "show"],
             cwd=project_dir,
             capture_output=True,
-            text=True,
+            encoding="utf-8",  # not text=True - see run_tool_probe's comment above
+            errors="replace",
             timeout=30,
         )
         return proc.stdout[:2000]  # same cap as the no-script fallback above

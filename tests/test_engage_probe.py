@@ -696,6 +696,47 @@ def test_git_branch_empty_without_git_at_all(tmp_path):
     assert git_branch(tmp_path) == ""
 
 
+def test_subprocess_calls_never_use_bare_text_true(monkeypatch, tmp_path):
+    """Regression pin, live corp report 2026-08-12: plain text=True decodes subprocess
+    output using the PARENT's locale-preferred encoding (cp1252 on a plain Windows
+    console), whose undefined bytes raise UnicodeDecodeError inside subprocess's own
+    reader thread ("Exception in Thread-N (_readerthread)", visible on the console as a
+    dangling traceback from threading.py). install_helper.py's run_cmd hit and fixed the
+    identical failure mode on 2026-07-30, but git_branch/run_tool_probe/
+    run_extensions_show are independent of run_cmd (this script runs standalone without
+    importing install_helper - see _find_bash's own docstring) and hadn't been fixed the
+    same way - all three must pass encoding="utf-8", errors="replace" instead."""
+    from types import SimpleNamespace
+
+    import scripts.engage_probe as ep
+
+    calls = []
+
+    def fake_run(*a, **k):
+        calls.append(k)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(ep.subprocess, "run", fake_run)
+
+    (tmp_path / ".git").mkdir()
+    ep.git_branch(tmp_path)
+
+    (tmp_path / "scripts").mkdir(exist_ok=True)
+    (tmp_path / "scripts" / "check-review-tools.sh").write_text("", encoding="utf-8")
+    ep.run_tool_probe(tmp_path, tmp_path)
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "team-extensions.md").write_text("# x", encoding="utf-8")
+    (tmp_path / "scripts" / "extensions.py").write_text("", encoding="utf-8")
+    ep.run_extensions_show(tmp_path, tmp_path)
+
+    assert len(calls) == 3  # every candidate above must actually have reached subprocess.run
+    for kwargs in calls:
+        assert kwargs.get("text") is not True
+        assert kwargs.get("encoding") == "utf-8"
+        assert kwargs.get("errors") == "replace"
+
+
 def test_git_branch_empty_on_detached_head(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
