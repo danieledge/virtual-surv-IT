@@ -2980,6 +2980,34 @@ def test_write_team_preferences_parallel_dispatch_via_workflow(tmp_path):
     assert json.loads(target.read_text())["parallel_dispatch_via_workflow"] is False
 
 
+def test_write_team_preferences_guard_daemon(tmp_path):
+    """2026-08-12 user request: guard_daemon should be on by default when configuring a
+    project. write_team_preferences itself is neutral (only writes when explicitly
+    passed, like every other preference here) - the "on by default" behavior lives in
+    run_configure actively passing True, tested separately below."""
+    from install_helper import write_team_preferences
+
+    target = tmp_path / ".claude" / "team-preferences.json"
+    write_team_preferences(tmp_path, guard_daemon=False)
+    assert json.loads(target.read_text())["guard_daemon"] is False
+    # Omitted argument leaves the key untouched (merge-only contract) - same as every
+    # other preference, guard_daemon included.
+    write_team_preferences(tmp_path, extra_formats=["docx"])
+    assert json.loads(target.read_text())["guard_daemon"] is False
+
+
+def test_run_configure_guard_daemon_defaults_on(tmp_path, monkeypatch):
+    """The one preference in run_configure's block that defaults True."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
+    rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs["guard_daemon"] is True
+
+
 def test_write_team_preferences_best_effort(tmp_path, monkeypatch):
     from install_helper import write_team_preferences
 
@@ -4046,6 +4074,7 @@ def test_run_configure_happy_path_yes(tmp_path, monkeypatch, capsys):
         # earlier this session; this test's dict just never got updated to match
         "map_skeleton": True,
         "statusline_show_map": False,
+        "guard_daemon": True,  # 2026-08-12 user request: on by default
     }
     assert "Configuration complete" in out
 
@@ -4061,9 +4090,10 @@ def test_run_configure_manual_walkthrough_leaves_model_unset_when_declined(tmp_p
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     # "n" to recommended settings, then "" (accept every default) all the way through -
-    # 4 leading confirms + 7 preference confirms + review-tools override + "" declines
-    # the final "set Morgan's model?" question (default False).
-    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "", ""])
+    # 4 leading confirms + 8 preference confirms (guard_daemon added 2026-08-12) +
+    # review-tools override + "" declines the final "set Morgan's model?" question
+    # (default False).
+    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -4235,11 +4265,11 @@ def test_run_configure_declines_permissions_when_not_assume_yes(tmp_path, monkey
     # "n" to "use recommended settings?" (walk through each choice instead), "no" to the
     # permissions question, "no" to the env-tuning question, "no" to the beta-fields-
     # workaround question (keeps "nothing creates the file" true below), "" (accept
-    # defaults) to the seven preference prompts (docx, citations, review-split,
-    # workflow-dispatch, standards-critique, map-skeleton, statusline-map), "" (no
-    # change) to the review-tools override prompt, "" to the model prompt (declines -
-    # default is False).
-    answers = iter(["n", "n", "n", "n", "", "", "", "", "", "", "", "", ""])
+    # defaults) to the eight preference prompts (docx, citations, review-split,
+    # workflow-dispatch, standards-critique, map-skeleton, statusline-map, guard_daemon -
+    # added 2026-08-12), "" (no change) to the review-tools override prompt, "" to the
+    # model prompt (declines - default is False).
+    answers = iter(["n", "n", "n", "n", "", "", "", "", "", "", "", "", "", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -5357,8 +5387,9 @@ def test_run_configure_writes_review_tool_overrides(tmp_path, monkeypatch):
     # every prompt below via assume_yes, defeating this test), "" enable-permissions
     # default(Y), "" env-tuning default(Y), "" beta-fields-workaround default(Y), ""
     # docx, "" citations, "" split, "" workflow-dispatch, "" standards-critique, ""
-    # map-skeleton, "" statusline-map, "mypy=off" review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "mypy=off", ""])
+    # map-skeleton, "" statusline-map, "" guard_daemon (added 2026-08-12), "mypy=off"
+    # review-tools override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "", "mypy=off", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0
@@ -5381,8 +5412,9 @@ def test_run_configure_forced_on_tool_gets_live_validated(tmp_path, monkeypatch)
     # skip every prompt below via assume_yes, defeating this test). Then "" enable-
     # permissions, "" env-tuning, "" beta-fields-workaround, "" docx, "" citations, ""
     # split, "" workflow-dispatch, "" standards-critique, "" map-skeleton, ""
-    # statusline-map, "mypy=on" review-tools override, "" model.
-    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "mypy=on", ""])
+    # statusline-map, "" guard_daemon (added 2026-08-12), "mypy=on" review-tools
+    # override, "" model.
+    answers = iter(["n", "", "", "", "", "", "", "", "", "", "", "", "mypy=on", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=False)
     assert rc == 0

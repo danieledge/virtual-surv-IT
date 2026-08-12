@@ -3156,6 +3156,7 @@ def write_team_preferences(
     map_skeleton: Optional[bool] = None,
     statusline_show_map: Optional[bool] = None,
     review_tools: Optional[dict] = None,
+    guard_daemon: Optional[bool] = None,
 ) -> bool:
     """Project-scoped preferences (`.claude/team-preferences.json`), merge-only (a
     pre-existing file's other keys, and any key not passed here, are preserved) and
@@ -3194,6 +3195,18 @@ def write_team_preferences(
     - review_tools: {tool: "on"|"off"} overrides for the _REVIEW_TOOLS set; "auto" (the
       implicit default for any tool not listed) means "use it if present, skip silently
       if not" - never stored literally, so the file only ever records actual overrides.
+    - guard_daemon: whether run-guard.sh's PreToolUse guards route through the persistent
+      ADR-014 daemon instead of a fresh interpreter per call (this preference alone does
+      nothing on a project that hasn't applied the daemon files - see
+      scripts/apply-guard-daemon.sh - since run-guard.sh checks `[ -f "$DAEMON_CLIENT" ]`
+      before ever using it). **Unlike every other preference in this function, absence of
+      this key does NOT mean "off"** - run-guard.sh's own check (`grep -q '"guard_daemon"
+      *: *true'`) only ever matches an explicit `true`; there is no "default true when
+      absent" logic at the shell level to lean on. 2026-08-12 user request: "should be on
+      by default" - the caller (run_configure) is responsible for actively passing
+      `True` during configuration so the key gets WRITTEN, not for relying on any implicit
+      default here. Deliberately no machine-wide tier, same precedent as
+      large_context_review_split/standards_critique.
 
     Pass only the preference(s) you want to change; omitted arguments leave the
     corresponding key untouched (or unset, which reads as the default)."""
@@ -3214,6 +3227,8 @@ def write_team_preferences(
             prefs["map_skeleton"] = bool(map_skeleton)
         if statusline_show_map is not None:
             prefs["statusline_show_map"] = bool(statusline_show_map)
+        if guard_daemon is not None:
+            prefs["guard_daemon"] = bool(guard_daemon)
         if review_tools is not None:
             cleaned = {k: v for k, v in review_tools.items() if v != "auto"}
             if cleaned:
@@ -3698,6 +3713,13 @@ def run_configure(
     # standards_critique deliberately has no machine-wide tier, same as
     # large_context_review_split above; this literal is its only fallback.
     standards_critique_current = existing.get("standards_critique", False)
+    # Built-in default True (2026-08-12 user request: "should be on by default") - the one
+    # preference in this whole block that defaults ON. No machine-wide tier, same
+    # precedent as the two above; this literal is its only fallback. Harmless to write
+    # True on a project that hasn't applied the ADR-014 daemon files yet - run-guard.sh
+    # checks the files exist before ever using the flag (write_team_preferences' own
+    # docstring), so this just pre-seeds the preference for whenever they are applied.
+    guard_daemon_current = existing.get("guard_daemon", True)
     docx_wanted = confirm(
         "  Produce .docx by default for controlled documents?",
         default=docx_current,
@@ -3750,6 +3772,14 @@ def run_configure(
         assume_yes=assume_yes,
         style=style,
     )
+    guard_daemon_wanted = confirm(
+        "  Route the safety guards through the persistent ADR-014 daemon instead of a "
+        "fresh interpreter per call, once its files are applied (measured ~12ms "
+        "daemon-backed vs. ~300ms cold-start median) - on by default?",
+        default=guard_daemon_current,
+        assume_yes=assume_yes,
+        style=style,
+    )
     review_tools_wanted = _ask_review_tool_overrides(style, assume_yes, review_tools_current)
     # Live-validates every newly forced-"on" tool even in demo mode - read-only against a
     # throwaway synthetic file, nothing project-related is touched, and the whole point is
@@ -3766,6 +3796,7 @@ def run_configure(
         f"standards-critique={'on' if standards_critique_wanted else 'off'}, "
         f"map-skeleton={'on' if map_skeleton_wanted else 'off'}, "
         f"statusline-map={'on' if statusline_show_map_wanted else 'off'}, "
+        f"guard-daemon={'on' if guard_daemon_wanted else 'off'}, "
         f"review-tools={_format_review_tools(review_tools_wanted)}"
     )
     if demo:
@@ -3779,6 +3810,7 @@ def run_configure(
         standards_critique=standards_critique_wanted,
         map_skeleton=map_skeleton_wanted,
         statusline_show_map=statusline_show_map_wanted,
+        guard_daemon=guard_daemon_wanted,
         review_tools=review_tools_wanted,
     ):
         print(f"  {ok} preferences: {summary}")
@@ -3862,6 +3894,11 @@ def run_configure(
             "Statusline shows map",
             "on" if statusline_show_map_wanted else "off",
             statusline_show_map_wanted,
+        ),
+        (
+            "Guard daemon (ADR-014)",
+            "on" if guard_daemon_wanted else "off",
+            guard_daemon_wanted,
         ),
         ("Review-tool overrides", _format_review_tools(review_tools_wanted), None),
         ("Morgan's model", model_display, None),

@@ -8,7 +8,7 @@ You are **Morgan**. The user invoked `/preferences` - show and optionally change
 gate (unlike hooks/settings.json) - you may read and write it directly.
 
 **1. Read the current state.** `Read .claude/team-preferences.json` if it exists (absent
-is the common, valid default - not an error). Resolve the six known preferences:
+is the common, valid default - not an error). Resolve the seven known preferences:
 
 - `extra_formats` (list, default `[]`): whether controlled documents (BRD, FSD, delivery
   report, etc.) also get a Word `.docx` copy alongside the always-required `.md` + `.html`
@@ -36,6 +36,12 @@ is the common, valid default - not an error). Resolve the six known preferences:
   runs MAP-DRIFT/MAP-DEAD-POINTER for a codebase map with a `Paths` column - experimental,
   ADR-007 Phase 1. Unlike `large_context_review_split`, this one also has a machine-wide
   default (installer.json `default_map_skeleton`) - same 3-tier precedence as docx/citations.
+- `guard_daemon` (bool, **default `true` when the key is absent** - the one preference here
+  that defaults on): whether `run-guard.sh`'s PreToolUse guards route through the
+  persistent ADR-014 daemon instead of a fresh interpreter per call, once its files are
+  applied (`scripts/apply-guard-daemon.sh` - a human-run step; this preference alone does
+  nothing on a project that hasn't applied them). Like `large_context_review_split`, no
+  machine-wide tier.
 
 **Also read your own model, read-only.** `Read .claude/settings.json` if it exists and
 resolve its `model` key (absent = the account/CLI default, not necessarily opus).
@@ -54,6 +60,7 @@ for critical/high-stakes engagements.
 > - Independent review passes dispatched via the Workflow tool when available: **on/off**
 > - Standards-critique pass (a second agent checking a finished review): **on/off**
 > - Codebase-skeleton drift checking (experimental): **on/off**
+> - Guard daemon (ADR-014, faster PreToolUse checks once applied): **on/off**
 > - My own model: **opus/sonnet/sonnet-4-6/(account default)** - each written as an exact
 >   model ID, never Claude Code's generic `sonnet` alias (which resolves to a different
 >   actual model per API provider) - change this yourself, I can't write `settings.json`:
