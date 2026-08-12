@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# Wrapper: runs every apply-*.sh script currently pending. HUMAN-RUN by design, same as
+# Wrapper: runs every apply-*.sh script in this directory. HUMAN-RUN by design, same as
 # everything it calls (hook/config edits are human-only, ADR-002 rec 5) - this script does
 # not grant itself any exemption, it just sequences already-approved human-run scripts.
-# Each one it calls is independently idempotent, so re-running this wrapper (e.g. after
-# only some scripts were applied, or to pick up a later round's new staged content) is
-# always safe - an already-applied script just no-ops.
+# Each one it calls is independently idempotent (confirmed across all of them, 2026-08-12
+# audit: every apply-*.sh in this directory documents itself as idempotent, none prompts
+# interactively), so re-running this wrapper - whether nothing, some, or everything is
+# actually pending - is always safe: an already-applied script just no-ops.
 #
-# This list is a static snapshot of what was pending at the time it was last edited, not a
-# dynamic scan - as new apply-*.sh scripts appear from future audits, add them here by
-# hand. Confirm nothing is left pending with:
-#   python3 -m pytest tests/test_hooks_in_sync.py -q
+# DYNAMIC glob, not a hand-maintained list (2026-08-12 rewrite). The previous version was
+# a static array that had to be hand-edited every time a new apply-*.sh script was added -
+# and had already drifted stale (missing apply-guard-daemon.sh, among others) by the time
+# this was caught. A static allowlist here is exactly the "looks healthy, silently
+# doesn't cover something new" failure mode this project's own tests warn about elsewhere
+# (test_staged_matches_live's docstring, FCA Market Watch 79) - so this now discovers
+# every apply-*.sh in the directory automatically and always runs the current set,
+# nothing to remember to update.
 #
 #   Usage:  bash scripts/apply-outstanding.sh
 set -euo pipefail
@@ -17,21 +22,22 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$here"
 
-scripts=(
-  apply-project-anchor.sh          # dod_stop_gate.py + persona_anchor.py: project-root anchoring
-  apply-post-edit-lint.sh          # post_edit_lint.py: in-process py_compile, no subprocess
-  apply-guard-raw-segment-fix.sh   # guard-raw-data.py: compound-command segments, quote-aware
-  apply-guard-exec-allow.sh        # guard-code-execution.py: same quote-aware segment fix
-  apply-todo-panel-nudge.sh        # todo_panel_nudge.py: code only (wiring below)
-  apply-stop-hook-dispatcher.sh    # consolidates dod_stop_gate + todo_panel_nudge into one Stop hook
-  apply-guard-findings-pack-write.sh  # new PreToolUse guard for the 4 reviewers' scoped Write
-  apply-bash-hook-dispatcher.sh    # re-syncs the PreToolUse dispatcher to include the new guard
-)
+self="$(basename "$0")"
+ran=0
 
-for s in "${scripts[@]}"; do
-  echo "=== $s ==="
-  bash "scripts/$s"
+for path in scripts/apply-*.sh; do
+  name="$(basename "$path")"
+  [ "$name" = "$self" ] && continue  # never invoke this wrapper from inside itself
+  echo "=== $name ==="
+  bash "$path"
   echo
+  ran=$((ran + 1))
 done
 
-echo "All done. Confirm: python3 -m pytest tests/test_hooks_in_sync.py -q"
+if [ "$ran" -eq 0 ]; then
+  echo "No apply-*.sh scripts found other than this wrapper - nothing to run."
+  exit 1
+fi
+
+echo "All done ($ran script(s) run). Confirm nothing is still pending:"
+echo "  python3 -m pytest tests/test_hooks_in_sync.py tests/test_run_guard_interpreter_cache.py -q"

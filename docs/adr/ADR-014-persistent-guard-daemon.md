@@ -143,7 +143,7 @@ IPC and relay the response (exit code + stdout) unchanged. The guard's documente
    test) or a documented, deliberate split between "test the client/IPC contract" and "test
    the daemon's own logic" - undecided which, and the wrong choice risks exactly the kind
    of theoretically-sound-but-untested-in-practice fix this codebase has been burned by
-   before (three failed prompt-only concurrency fixes, `workflow-dispatch.md`).
+   before (three failed prompt-only concurrency fixes, `.claude/skills/.shared/workflow-dispatch.md`).
 
 ### What this does NOT change
 

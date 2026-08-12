@@ -157,5 +157,9 @@ def test_staged_and_live_launchers_match_when_installed():
     )
     live = LIVE_LAUNCHER.read_text(encoding="utf-8")
     assert live == LAUNCHER.read_text(encoding="utf-8"), (
-        "staged launcher not yet applied - run: bash scripts/apply-guard-interpreter-cache.sh"
+        "staged launcher not yet applied - run: bash scripts/apply-guard-daemon.sh "
+        "(supersedes apply-guard-interpreter-cache.sh as of ADR-014 - the staged launcher "
+        "now carries the daemon-aware branch too, so applying it alone without the other "
+        "two staged daemon files would leave a launcher that references files that don't "
+        "exist yet; apply-guard-daemon.sh installs all three together)"
     )

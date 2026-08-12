@@ -76,6 +76,26 @@ while [ "${_root%/}" != "$_root" ] && [ -n "$_root" ]; do
 done
 [ -n "$_root" ] || _root="/"
 
+# Daemon path (ADR-014, docs/adr/ADR-014-persistent-guard-daemon.md) - checked once here,
+# used at both invocation points below. Deliberately narrow: only ever engages when the
+# target script ($1 - this launcher's own usage is always `run-guard.sh <script>`, never a
+# flag first) is EXACTLY bash_hook_dispatcher.py by basename - locked_menu_guard.py and any
+# other target this launcher is used for are completely unaffected, identical cold-start
+# path as always. Off by default (no team-preferences.json, or an explicit false): this
+# whole block resolves to _use_daemon=0 and NOTHING else in this file's behaviour changes,
+# not even one byte - opt-in via .claude/team-preferences.json "guard_daemon": true
+# (scripts/guard_daemon.py + scripts/guard_daemon_client.py, promoted 2026-08-12 from the
+# design spike after live validation on the actual reporting Windows box - 8/8 smoke-test
+# checks passed, including genuinely concurrent request safety).
+_use_daemon=0
+if [ "$(basename "$1" 2>/dev/null)" = "bash_hook_dispatcher.py" ]; then
+	_prefs="$_root/.claude/team-preferences.json"
+	if [ -f "$_prefs" ] && grep -q '"guard_daemon" *: *true' "$_prefs" 2>/dev/null; then
+		_use_daemon=1
+	fi
+fi
+DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
+
 LOCK_DIR="$_root/.claude/.guard-lock"
 LOCK_STAMP="$LOCK_DIR/acquired-at"
 # Same normalized root as LOCK_DIR above - defined here (once) rather than at its original,
@@ -205,6 +225,10 @@ fi
 if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)
 	if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
+		if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
+			"$cached" "$DAEMON_CLIENT" "$_root"
+			exit $?
+		fi
 		"$cached" "$@"
 		exit $?
 	fi
@@ -225,6 +249,10 @@ for interpreter in $order; do
 		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
 			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
 			printf '%s' "$interpreter" >"$CACHE" 2>/dev/null
+			if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
+				"$interpreter" "$DAEMON_CLIENT" "$_root"
+				exit $?
+			fi
 			"$interpreter" "$@"
 			exit $?
 		fi
