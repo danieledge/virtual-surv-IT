@@ -117,12 +117,21 @@ not exist.
 character, nothing else.** Live report (2026-08-07): after a hiccup, a session constructed its own
 ad hoc check instead - `python -c "import sys; print(sys.executable)"` - reaching for the common
 "let me just check X directly" instinct rather than following this section's own instruction to
-retry the exact block. `python -c` (or any inline `-c`/stdin code execution, in any language) is
-**always** blocked by the execution guard, unconditionally, regardless of what you're trying to
-inspect or how harmless it looks - CLAUDE.md §7, and it will fire on a hand-typed diagnostic exactly
-as readily as on anything else. It is not a false positive to work around; it is the same gate
-`/engage`'s own probe block is deliberately written to never trigger (the heredoc form above exists
-*specifically* so this class of command never has to run). If you genuinely need the interpreter's
-own path or version outside what `INTERPRETER=`/`PYTHON_VERSION=` already gave you, `python
---version` or `python -V` are not `-c` and are not blocked - use one of those, never a `-c`
-one-liner, however small.
+retry the exact block. **Second live report, same shape, different field (2026-08-12):** a session
+that had reason to doubt whether its `PLUGIN_VERSION=` was current (a resumed session, or general
+uncertainty about install freshness) reached for `python -c "import importlib.metadata;
+print('PLUGIN_VERSION=' + importlib.metadata.version('compliance-surveillance-team'))"` instead of
+either trusting the value the probe already printed this open, or - if a fresh read is genuinely
+warranted - just reading `.claude-plugin/plugin.json`'s own `"version"` field directly (a plain
+file read, no execution at all; this is exactly what `read_plugin_version()` in
+`scripts/engage_probe.py` itself does). **The pattern generalises: whatever field you're tempted to
+re-verify - interpreter path, plugin version, branch, anything else the probe already printed -
+reuse that value or re-read the underlying file directly. Never reach for `python -c`/stdin code
+execution to re-derive it**, in any language, regardless of what you're trying to inspect or how
+harmless it looks. `python -c` is **always** blocked by the execution guard, unconditionally -
+CLAUDE.md §7 - and it will fire on a hand-typed diagnostic exactly as readily as on anything else.
+It is not a false positive to work around; it is the same gate `/engage`'s own probe block is
+deliberately written to never trigger (the heredoc form above exists *specifically* so this class
+of command never has to run). If you genuinely need the interpreter's own path or version outside
+what `INTERPRETER=`/`PYTHON_VERSION=` already gave you, `python --version` or `python -V` are not
+`-c` and are not blocked - use one of those, never a `-c` one-liner, however small.
