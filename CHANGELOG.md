@@ -3,6 +3,26 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.57] - 2026-08-12 - New: ADR-014 guard-daemon design spike (prototype, not production, not wired into any live hook path)
+
+`run_hook_latency_diagnostic` finally reached the real guard-launcher path on the reporting
+corp box (0.33.56's `sh`-resolution fix): bare interpreter cold start measured 82-106ms, but
+the real `run-guard.sh` -> `bash_hook_dispatcher.py` path measured 1372-3808ms (median
+1404ms) - roughly 15x higher, pointing at the guard-dispatch path's own imports/logic (or
+file-read-triggered scanning of them) as the dominant cost, not raw interpreter start-up.
+8-way concurrent fan-out's worst single call: 21017ms, the same order of magnitude as the
+originally reported 25-90s - reproducing the symptom on demand.
+
+That's the evidence ADR-014 said was needed before committing to a persistent daemon. Per
+its own build plan step 2, a working prototype now exists at `docs/internal/adr-014-spike/`
+(`guard_daemon.py`, `guard_daemon_client.py`, a live smoke test, pytest coverage) -
+**unverified by execution, not wired into `.claude/hooks/run-guard.sh` or any live hook
+path.** One real finding from building it: `bash_hook_dispatcher.main()` reads
+`sys.stdin`/writes `sys.stderr` directly (process-global, not a parameter) - a naive threaded
+daemon would risk one concurrent request's payload leaking into another's guard evaluation;
+dispatch is now serialized behind a lock. `docs/adr/ADR-014-persistent-guard-daemon.md`
+updated to v0.2 with the measured evidence and this finding.
+
 ## [0.33.56] - 2026-08-11 - Fix: hook-latency diagnostic couldn't find `sh` on Windows/PowerShell, skipping the two measurements that matter most
 
 Live corp report, same day: the diagnostic shipped in 0.33.55 ran on the actual reporting

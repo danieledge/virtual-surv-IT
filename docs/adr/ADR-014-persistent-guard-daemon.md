@@ -3,19 +3,20 @@
 > Architecture Decision Record (Nygard format). One file per significant decision, so the
 > *why* is auditable later. Authored in `.md`, rendered to `.html`.
 
-> **Document control** · ID `ADR-014` · Version `0.1` · Status `Proposed` · Classification
-> `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-08-11`
+> **Document control** · ID `ADR-014` · Version `0.2` · Status `Proposed` · Classification
+> `Internal` · Owner 🤖 Morgan (PM), Virtual Surveillance IT · As-of `2026-08-12`
 >
 > | Version | Date | Author | Change |
 > |---|---|---|---|
 > | 0.1 | 2026-08-11 | live corp bug report (Windows debug-log monitoring) + same-session remediation | Initial proposal - design space and recommendation, no code |
+> | 0.2 | 2026-08-12 | build-plan step 1 measured live on the reporting box; build-plan step 2 (design spike) built | Step 1 done with real numbers (below). Step 2: a working prototype at `docs/internal/adr-014-spike/` - `guard_daemon.py` + `guard_daemon_client.py` + a live smoke test + pytest coverage for the pure-logic pieces. One real, previously-unanticipated finding from actually building it: `bash_hook_dispatcher.main()` reads `sys.stdin`/writes `sys.stderr` directly (process-global), so a naive threaded daemon risked one request's payload leaking into another's guard evaluation - dispatch is now serialized behind a lock. Not yet validated on the actual Windows/Git-Bash box - see the spike README's "still genuinely open" section. |
 
 | | |
 |---|---|
-| **Status** | **Proposed - design only, not built.** Items 1-4 of the same bug report (trailing-slash path bug, silent stamp-write failure, undersized wait budget, active-engagement scoping on the DoD Stop hook) are fixed separately, staged, and out of scope here - see `scripts/staged_hooks/run-guard.sh` and `scripts/staged_hooks/dod_stop_gate.py`. This ADR is about the one item from that report those fixes cannot reach: the cold-start cost itself. |
-| **Date** | 2026-08-11 |
+| **Status** | **Proposed - spike built, not yet validated on Windows, not wired into any live hook path.** Items 1-4 of the same bug report (trailing-slash path bug, silent stamp-write failure, undersized wait budget, active-engagement scoping on the DoD Stop hook) are fixed separately, staged, and out of scope here - see `scripts/staged_hooks/run-guard.sh` and `scripts/staged_hooks/dod_stop_gate.py`. This ADR is about the one item from that report those fixes cannot reach: the cold-start cost itself. |
+| **Date** | 2026-08-11, updated 2026-08-12 |
 | **Deciders** | Human approver (not yet decided) |
-| **Traceability** | ADR-002 (safety-hook threat model - this proposal changes the enforcement boundary's own architecture); `.claude/hooks/run-guard.sh`; `scripts/bash_hook_dispatcher.py` |
+| **Traceability** | ADR-002 (safety-hook threat model - this proposal changes the enforcement boundary's own architecture); `.claude/hooks/run-guard.sh`; `scripts/bash_hook_dispatcher.py`; `docs/internal/adr-014-spike/` (the prototype) |
 
 ## Context
 
@@ -35,6 +36,28 @@ again, in full, on every single tool call, all session long. The 2026-08-10 mkdi
 (serializing concurrent launches under fan-out) and the wait-budget fix above manage the
 *consequences* of N simultaneous cold starts; neither removes a single cold start from the
 total bill. Only not paying it repeatedly does that.
+
+**Measured live, 2026-08-12, on the actual reporting box** (`run_hook_latency_diagnostic`,
+0.33.56, after the fallback-path fix that let it actually reach the real guard path):
+
+| Measurement | Result |
+|---|---|
+| Bare interpreter cold start | 82-106ms, median 86ms |
+| Repetition trend | flat (106ms → ~86ms) - no meaningful drop-off, consistent with per-*something* scanning regardless of repetition, not a one-time trust cache |
+| **Real guard-launcher cost** (`run-guard.sh` → `bash_hook_dispatcher.py`, actual dispatch) | **1372-3808ms, median 1404ms** |
+| Guard overhead beyond bare interpreter | **~1319ms** |
+| Concurrent fan-out (8 genuinely concurrent calls) | worst single call **21017ms**, total wall-clock 21021ms |
+
+The gap between bare interpreter (86ms) and the real guard-launcher path (1404ms median) is
+the actual finding: the dominant cost is not raw interpreter start-up, it's something in the
+guard-dispatch path itself - importing five separate `.py` files from disk plus their own
+imports, versus a bare `python -c 'pass'` which touches no files beyond the interpreter. If
+the endpoint-security product scans file *reads* rather than (or in addition to) process
+*launches*, that asymmetry is exactly what you'd expect - stated here as the better-fitting
+inference from this data, not as something independently confirmed against Defender's own
+logs. The 8-way concurrent fan-out's worst case (21s) lands in the same order of magnitude as
+the originally reported 25-90s, reproducing the reported symptom on demand rather than
+waiting for it to happen organically - the diagnostic doing the job it was built for.
 
 ## Decision (proposed)
 
@@ -56,27 +79,38 @@ IPC and relay the response (exit code + stdout) unchanged. The guard's documente
 
 ### Open questions - answers needed before this is buildable, not just conceivable
 
-1. **IPC that is genuinely portable, not "portable in the common case."** Unix domain
-   sockets are the natural choice on Linux/macOS but are not a given on native Windows;
-   named pipes exist on Windows but are not naturally reachable from `sh`/Git Bash without
-   extra tooling. A TCP socket bound to `127.0.0.1` is the most likely candidate precisely
-   because it is available identically everywhere `run-guard.sh` already needs to run - but
-   "everywhere" needs to be verified against Git Bash specifically, the same way every other
-   fix in this launcher has been (2026-07-30/31 corp reports, both bugs found live, not
-   anticipated in the abstract).
+1. **IPC that is genuinely portable, not "portable in the common case."** ◐ **Prototyped,
+   not yet Windows-validated.** The spike uses TCP on `127.0.0.1` with an OS-assigned
+   ephemeral port written to a port file (`.claude/.guard-daemon-port`) - same
+   file-based-coordination pattern `.guard-interpreter`/`.guard-lock` already use, which
+   sidesteps port-collision logic entirely rather than picking a fixed port. Still needs a
+   real run on the actual Windows/Git-Bash box before this question is genuinely closed, not
+   just "should work."
+   **A second, previously unanticipated finding from actually building it**: `bash_hook_
+   dispatcher.main()` reads `sys.stdin` and writes `sys.stderr` directly - process-global
+   state, not a function parameter (found by reading its actual source before assuming an
+   interface, not by guessing). A naive threaded daemon serving concurrent connections would
+   risk one request's payload leaking into another's guard evaluation mid-dispatch -
+   genuinely dangerous for a security boundary, not a theoretical concern. The spike
+   serializes dispatch behind a lock even though the TCP server itself accepts concurrent
+   connections, trading some of the theoretical concurrency benefit for correctness. This is
+   exactly the class of thing a working prototype surfaces that reasoning about the ADR text
+   alone would not have caught.
 2. **Staleness of a long-lived process is a safety question here, not a performance one.**
-   Everywhere else in this codebase, "the guard logic changed but the running thing hasn't
-   picked it up yet" is caught by the staged/live sync test (`test_hooks_in_sync.py`,
-   hard-failure by design, born from the exact 2026-08-01 audit where a guard drifted from
-   its staged copy while the suite stayed green). A daemon that imports the guard modules
-   once and keeps running introduces a NEW staleness window that mechanism doesn't cover:
-   a guard fix gets applied to disk, but a daemon already running keeps serving decisions
-   from the old, in-memory version until it restarts. This needs either a file-watch +
-   reload, a mtime check per request (cheap, no watcher dependency), or an explicit
-   "restart the daemon" step folded into the SAME apply scripts that promote staged guards
-   today - the third option is the safest but relies on the human remembering, which is
-   exactly the class of failure this project's own hooks-over-prompts philosophy exists to
-   avoid.
+   ◐ **Prototyped, not yet Windows-validated.** Everywhere else in this codebase, "the guard
+   logic changed but the running thing hasn't picked it up yet" is caught by the staged/live
+   sync test (`test_hooks_in_sync.py`, hard-failure by design, born from the exact 2026-08-01
+   audit where a guard drifted from its staged copy while the suite stayed green). A daemon
+   that imports the guard modules once and keeps running introduces a NEW staleness window
+   that mechanism doesn't cover: a guard fix gets applied to disk, but a daemon already
+   running keeps serving decisions from the old, in-memory version until it restarts. The
+   spike implements the mtime-per-request option (cheap, no watcher dependency, per this
+   question's own original recommendation): on detected staleness the daemon answers the
+   in-flight request with a "stale, retry" signal and self-terminates rather than attempting
+   in-process module reload (failure-prone for interdependent modules) - the next client
+   request that finds no daemon just starts a fresh one, which re-imports current code. The
+   live smoke test checks this fires on a real touched-file mtime change; it does not yet
+   check it on the real Windows box.
 3. **Attack surface.** A short-lived CLI process that runs, decides, and exits has no
    window where another local process can interact with it. A long-lived localhost listener
    does. Binding strictly to `127.0.0.1` is necessary but likely not sufficient on a
@@ -144,16 +178,22 @@ code exactly as it does to every other file in `.claude/hooks/`.
   import cost, may dominate - if so, a daemon is the only real lever; if not, a cheaper fix
   exists and should be tried first.
 
-## Build plan (not started)
+## Build plan
 
-1. Measure first: instrument `run-guard.sh`'s cold-start probe (already staged, item 3 of
-   the 2026-08-11 fixes) across a real session on the reporting corp box, and separately
-   measure how much of that is interpreter startup vs. module import - this tells us
-   whether the "smaller step" alternative above is worth trying before the daemon.
-2. If the daemon is still the answer after (1): a design spike answering open questions 1-4
-   above with evidence (a working prototype on both a POSIX box and a real Windows/Git-Bash
-   box), not assumptions - the exact discipline every other fix in this file's history has
-   required (2026-07-30, 2026-07-31, 2026-08-01, 2026-08-10, 2026-08-11 were all live
-   reproductions, not design-time reasoning alone).
-3. Only then: implementation, staged the same way every other hook change is, with test
-   coverage for the daemon's own lifecycle before it's trusted with the client/IPC contract.
+1. ✅ **Done, 2026-08-12.** Measured live on the reporting corp box (table above): real
+   guard-launcher cost is ~15x bare interpreter cost, pointing at import/dispatch-path cost
+   (or file-read-triggered scanning of it) rather than raw interpreter start-up alone - the
+   "smaller step" alternative (`-S`/pyc pre-warming) would not address this, since it only
+   reduces in-process work, not file-read count. Concurrent fan-out reproduced the originally
+   reported symptom's order of magnitude on demand.
+2. ◐ **In progress.** A working prototype exists at `docs/internal/adr-014-spike/`
+   (`guard_daemon.py`, `guard_daemon_client.py`, a live smoke test, pytest coverage for the
+   pure-logic pieces) - built and statically verified (syntax, lint, hand-traced logic) but
+   **not yet executed by anyone**, on this box or the Windows one. Real evidence for open
+   questions 1 and 2 above depends on someone actually running it - `docs/internal/
+   adr-014-spike/README.md` has the exact commands and lists what specifically still needs
+   Windows-side confirmation (the `DETACHED_PROCESS`/`CREATE_NO_WINDOW` branch, Git-Bash
+   process-tree behaviour). Open questions 3 (attack surface) and 5 (testing strategy) remain
+   genuinely open even once the above is validated - not addressed by this prototype.
+3. **Not started.** Real implementation, staged the same way every other hook change is,
+   only once step 2 has actual execution evidence behind it, not just code that compiles.
