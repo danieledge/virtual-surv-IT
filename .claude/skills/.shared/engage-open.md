@@ -43,12 +43,7 @@ written:
 
 ```
 CACHED=$(cat "${CLAUDE_PROJECT_DIR:-.}/.claude/.guard-interpreter" 2>/dev/null); \
-if [ -n "$CACHED" ] && command -v "$CACHED" >/dev/null 2>&1; then ORDER="$CACHED"; \
-elif [ "${OS:-}" = "Windows_NT" ]; then ORDER="python py python3"; \
-else ORDER="python3 python py"; fi; \
-OUT=""; \
-for I in $ORDER; do \
-  OUT=$(PYTHONIOENCODING=utf-8 "$I" - "$I" <<'PY'
+_try() { PYTHONIOENCODING=utf-8 "$1" - "$1" <<'PY'
 import sys, json, re, subprocess
 from pathlib import Path
 
@@ -108,9 +103,16 @@ proc = subprocess.run(
 sys.stdout.write(proc.stdout)
 sys.exit(0 if proc.returncode == 0 and proc.stdout else 1)
 PY
-) && break; \
-  OUT=""; \
-done; \
+}; \
+OUT=""; \
+if [ -n "$CACHED" ] && command -v "$CACHED" >/dev/null 2>&1; then OUT=$(_try "$CACHED"); fi; \
+if [ -z "$OUT" ]; then \
+  if [ "${OS:-}" = "Windows_NT" ]; then ORDER="python py python3"; else ORDER="python3 python py"; fi; \
+  for I in $ORDER; do \
+    OUT=$(_try "$I") && break; \
+    OUT=""; \
+  done; \
+fi; \
 if [ -n "$OUT" ]; then echo "$OUT"; else \
 echo "PROBE_FAILED - retry this exact block once by hand with your working interpreter to see the real error"; fi
 ```
