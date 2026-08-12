@@ -1092,6 +1092,7 @@ _DIAGNOSTICS_ACTIONS = {
     "3": "envcheck",
     "4": "selftest",
     "5": "hooklatency",
+    "6": "adr014smoke",
     "b": "back",
 }
 _ADVANCED_ACTIONS = {
@@ -1172,6 +1173,7 @@ def choose_action(style: Style) -> str:
                     ("3", "Comprehensive: the full environment + synthetic-engagement report"),
                     ("4", "Self-test only: just the synthetic engagement"),
                     ("5", "Hook latency: feeds the ADR-014 daemon decision (slower - repeated + concurrent)"),
+                    ("6", "ADR-014 spike smoke test (PROTOTYPE - starts a real daemon process)"),
                     ("b", "Back"),
                 ),
                 _DIAGNOSTICS_ACTIONS,
@@ -2579,6 +2581,33 @@ class Installer:
                 fatal=False,
             )
 
+    def adr014_smoke_step(self) -> None:
+        """Standalone (Diagnostics menu option 6, subset="adr014smoke"): thin wrapper
+        around run_adr014_smoke_test, same shape as hook_latency_step around
+        run_hook_latency_diagnostic - keeps the CLI flag (--check-adr014-spike) and the
+        menu path sharing one implementation instead of two."""
+        self.step_intro(
+            "ADR-014 spike: starts a REAL guard-daemon prototype process, sends it real "
+            "concurrent requests, and measures actual daemon-vs-cold-start latency - "
+            "prototype code, not production, not wired into any live hook path (see "
+            "docs/internal/adr-014-spike/README.md for exactly what this does and doesn't "
+            "answer). Takes under a minute; output prints in full once it finishes."
+        )
+        rc = run_adr014_smoke_test(self.style, self.marks, self.args.repo)
+        if rc == 0:
+            self.step_ok("ADR-014 spike smoke test", "all checks passed - see output above for the numbers")
+        elif rc is None:
+            self.step_skip(
+                "ADR-014 spike smoke test", "docs/internal/adr-014-spike/smoke_test.py not found"
+            )
+        else:
+            self.step_fail(
+                "ADR-014 spike smoke test",
+                "one or more checks failed - see output above; this is prototype code, a "
+                "failure here is real evidence for ADR-014, not a plugin defect",
+                fatal=False,
+            )
+
     def enable_step(self) -> None:
         """Optional: enable the team for a project right now, and offer the recommended
         permission allow-list for the same project. Interactive only - non-interactive
@@ -2849,6 +2878,10 @@ class Installer:
         if self.subset == "hooklatency":
             return [
                 ("Hook latency diagnostic", self.hook_latency_step),
+            ]
+        if self.subset == "adr014smoke":
+            return [
+                ("ADR-014 spike smoke test", self.adr014_smoke_step),
             ]
         return [
             ("Preflight checks", self.preflight),
@@ -5043,6 +5076,38 @@ def run_hook_latency_diagnostic(
     return 1 if bad else 0
 
 
+# ------------------------------------------------------------------ ADR-014 spike smoke test wrapper
+#
+# 2026-08-12 user request: expose the ADR-014 guard-daemon design-spike's own live smoke
+# test (docs/internal/adr-014-spike/smoke_test.py) through the same Diagnostics menu /
+# --check-* CLI convention as every other check here, for easy access from a remote
+# (Windows) session under investigation. PROTOTYPE, not production: this wrapper runs the
+# spike's own script unmodified via run_cmd (demo-mode safe, monkeypatchable in tests,
+# same as every other check in this file) - it does not duplicate or reimplement the
+# spike's logic, and .claude/hooks/run-guard.sh remains untouched regardless of whether
+# this is ever run.
+
+
+def run_adr014_smoke_test(
+    style: Style, mark_map: dict, repo_hint: Optional[str] = None
+) -> Optional[int]:
+    """Runs docs/internal/adr-014-spike/smoke_test.py via run_cmd and relays its captured
+    output in full. Returns the smoke test's own exit code (0 = all checks passed, 1 = at
+    least one failed), or None if the spike script is not present (a plugin install that
+    predates it, or the spike having been removed) - the caller SKIPs on None, same
+    "absent prerequisite" posture every other diagnostic in this file already uses."""
+    repo_root = _resolve_repo_root(repo_hint) or Path(__file__).resolve().parent
+    smoke_test = repo_root / "docs" / "internal" / "adr-014-spike" / "smoke_test.py"
+    if not smoke_test.is_file():
+        return None
+    proc = run_cmd([sys.executable, str(smoke_test)], cwd=repo_root, timeout=180)
+    if proc.stdout:
+        print(proc.stdout)
+    if proc.stderr:
+        print(style.dim(proc.stderr))
+    return proc.returncode
+
+
 # ------------------------------------------------------------------ self-test (mechanical smoke test)
 #
 # 2026-08-04 user request: a lightweight but MEANINGFUL validation of a "review this code"
@@ -5423,6 +5488,14 @@ def parse_args(argv=None) -> argparse.Namespace:
         "writes the full numbers to a file, pass or fail, and exit",
     )
     parser.add_argument(
+        "--check-adr014-spike",
+        action="store_true",
+        help="standalone: runs the ADR-014 guard-daemon design-spike's live smoke test "
+        "(docs/internal/adr-014-spike/) - starts a REAL prototype daemon process, sends "
+        "it real concurrent requests, measures actual daemon-vs-cold-start latency, and "
+        "exit. PROTOTYPE, not production - not wired into any live hook path",
+    )
+    parser.add_argument(
         "--configure",
         metavar="DIR",
         nargs="?",
@@ -5688,6 +5761,7 @@ def _main(argv=None) -> int:
         or args.check_env
         or args.selftest
         or args.check_hook_latency
+        or args.check_adr014_spike
         or args.configure
         or args.archive
         or args.list_engagements
@@ -5717,6 +5791,9 @@ def _main(argv=None) -> int:
             rc = max(rc, run_selftest(style, marks(), args.repo))
         if args.check_hook_latency:
             rc = max(rc, run_hook_latency_diagnostic(style, marks(), args.repo))
+        if args.check_adr014_spike:
+            spike_rc = run_adr014_smoke_test(style, marks(), args.repo)
+            rc = max(rc, spike_rc if spike_rc is not None else 0)
         if args.configure:
             rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
         if args.archive:
@@ -5808,7 +5885,14 @@ def _main(argv=None) -> int:
                 # Read-only diagnostics never change anything regardless of demo -
                 # "nothing changed" stays true after running one of these, unlike the
                 # write-capable subsets.
-                if subset not in ("check", "toolcheck", "envcheck", "selftest", "hooklatency"):
+                if subset not in (
+                    "check",
+                    "toolcheck",
+                    "envcheck",
+                    "selftest",
+                    "hooklatency",
+                    "adr014smoke",
+                ):
                     did_anything = did_anything or not args.demo
 
     subset = "full"

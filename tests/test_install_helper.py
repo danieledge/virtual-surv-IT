@@ -5642,6 +5642,33 @@ def test_measure_concurrent_returns_n_samples_and_a_total(monkeypatch):
     assert total >= 0
 
 
+def test_run_adr014_smoke_test_returns_none_when_spike_absent(tmp_path):
+    """A repo checkout without docs/internal/adr-014-spike/ (predates it, or the spike
+    was removed) must SKIP, not error - same "absent prerequisite" posture as every
+    other diagnostic in this file."""
+    import install_helper as ih
+
+    assert ih.run_adr014_smoke_test(ih.Style(False), ih.marks(), repo_hint=str(tmp_path)) is None
+
+
+def test_run_adr014_smoke_test_relays_captured_output_and_exit_code(monkeypatch, tmp_path, capsys):
+    """Confirms the wrapper actually calls run_cmd (demo-mode-safe, not a raw subprocess
+    call) and prints what it captured - does not re-test the spike's own smoke_test.py
+    logic, which is covered separately."""
+    import install_helper as ih
+
+    spike_dir = tmp_path / "docs" / "internal" / "adr-014-spike"
+    spike_dir.mkdir(parents=True)
+    (spike_dir / "smoke_test.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        ih, "run_cmd", lambda argv, cwd=None, timeout=300: _proc(1, stdout="3 passed, 1 failed.", stderr="")
+    )
+    rc = ih.run_adr014_smoke_test(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "3 passed, 1 failed." in out
+
+
 def test_run_hook_latency_diagnostic_no_interpreter_skips_and_returns_1(monkeypatch, capsys):
     import install_helper as ih
 

@@ -3,6 +3,18 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.58] - 2026-08-12 - New: ADR-014 spike smoke test exposed via Diagnostics menu / `--check-adr014-spike`
+
+User request, explicitly overriding this session's own initial caution about exposing
+unverified spike code through the production installer surface: the ADR-014 guard-daemon
+prototype's live smoke test (`docs/internal/adr-014-spike/smoke_test.py`) is now reachable
+as Diagnostics menu option 6 and `--check-adr014-spike`, same convention as every other
+check in `install_helper.py` - a thin `run_adr014_smoke_test()` wrapper around `run_cmd`
+(demo-mode-safe: `--demo` genuinely skips it, never starts a real daemon process), relaying
+the spike's own captured output in full. SKIPs cleanly (does not error) on a checkout that
+predates the spike. Does not modify or duplicate the spike's own logic, and
+`.claude/hooks/run-guard.sh` remains untouched regardless of whether this is ever run.
+
 ## [0.33.57] - 2026-08-12 - New: ADR-014 guard-daemon design spike (prototype, not production, not wired into any live hook path)
 
 `run_hook_latency_diagnostic` finally reached the real guard-launcher path on the reporting
