@@ -76,6 +76,30 @@ while [ "${_root%/}" != "$_root" ] && [ -n "$_root" ]; do
 done
 [ -n "$_root" ] || _root="/"
 
+# 2026-08-13 live report: team-preferences.json, the interpreter cache, the fan-out lock
+# and the cold-start cache are all PER-PROJECT state (install_helper.py's own
+# write_guard_interpreter_cache() writes .guard-interpreter under the PROJECT directory,
+# never a plugin install directory) - but until now they were resolved via the SAME
+# $_root as DAEMON_CLIENT below, which is deliberately CLAUDE_PLUGIN_ROOT-first (correct
+# for THAT one case: bash_hook_dispatcher.py is a file the plugin itself ships, genuinely
+# found under the plugin's own install directory). In plugin-install mode, whenever
+# CLAUDE_PLUGIN_ROOT happens to be set in the hook's own process (probe-contract.md
+# already documents this exact env var as "not reliably expanded" - sometimes it is,
+# sometimes it silently isn't), that conflation pointed all four project-state paths at
+# the plugin's own directory instead of the project's. Confirmed live: a project's
+# team-preferences.json had "guard_daemon": true recorded, but the daemon never
+# activated - the hook was checking a team-preferences.json under the plugin's install
+# path, which does not exist, not the one under the actual project. A separate root,
+# CLAUDE_PROJECT_DIR only (deliberately never CLAUDE_PLUGIN_ROOT as a fallback here -
+# unlike $_root, there is no correct case where a project's own state should live under
+# the plugin's install directory instead of the project itself), same trailing-slash
+# treatment as $_root above and for the identical reason.
+_project_root="${CLAUDE_PROJECT_DIR:-.}"
+while [ "${_project_root%/}" != "$_project_root" ] && [ -n "$_project_root" ]; do
+	_project_root="${_project_root%/}"
+done
+[ -n "$_project_root" ] || _project_root="/"
+
 # Daemon path (ADR-014, docs/adr/ADR-014-persistent-guard-daemon.md) - checked once here,
 # used at both invocation points below. Deliberately narrow: only ever engages when the
 # target script ($1 - this launcher's own usage is always `run-guard.sh <script>`, never a
@@ -89,20 +113,20 @@ done
 # checks passed, including genuinely concurrent request safety).
 _use_daemon=0
 if [ "$(basename "$1" 2>/dev/null)" = "bash_hook_dispatcher.py" ]; then
-	_prefs="$_root/.claude/team-preferences.json"
+	_prefs="$_project_root/.claude/team-preferences.json"
 	if [ -f "$_prefs" ] && grep -q '"guard_daemon" *: *true' "$_prefs" 2>/dev/null; then
 		_use_daemon=1
 	fi
 fi
 DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
 
-LOCK_DIR="$_root/.claude/.guard-lock"
+LOCK_DIR="$_project_root/.claude/.guard-lock"
 LOCK_STAMP="$LOCK_DIR/acquired-at"
 # Same normalized root as LOCK_DIR above - defined here (once) rather than at its original,
 # later point of use, so the cold-start probe below and the real interpreter-cache lookup
 # further down read and write the exact same path instead of two independently-computed
 # variables that could silently diverge the same way LOCK_DIR/LOCK_STAMP just did.
-CACHE="$_root/.claude/.guard-interpreter"
+CACHE="$_project_root/.claude/.guard-interpreter"
 LOCK_MAX_AGE_SECONDS=10  # generous upper bound for one interpreter start + guard check;
 # older means the holder is gone, not genuinely still working.
 
@@ -128,7 +152,7 @@ LOCK_MAX_AGE_SECONDS=10  # generous upper bound for one interpreter start + guar
 # the floor below applies - that first call already pays its own one-time
 # interpreter-resolution cost separately; a second, possibly stub-prone probe here would
 # only add to it, not save anything.
-COLDSTART_CACHE="$_root/.claude/.guard-coldstart-ms"
+COLDSTART_CACHE="$_project_root/.claude/.guard-coldstart-ms"
 _measured_ms=""
 if [ -f "$COLDSTART_CACHE" ]; then
 	_measured_ms=$(cat "$COLDSTART_CACHE" 2>/dev/null)
@@ -220,7 +244,7 @@ fi
 # Below: same interpreter resolution as before, just "run and wait" instead of "exec" (exec
 # replaces this process image, which would skip the lock-release above entirely - it must
 # run after the guard completes, not instead of this script continuing). CACHE is already
-# set above (same normalized $_root as LOCK_DIR).
+# set above (same normalized $_project_root as LOCK_DIR).
 
 if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)

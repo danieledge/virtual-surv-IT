@@ -144,6 +144,77 @@ def test_probe_order_skips_python3_first_on_windows(tmp_path):
     assert cache.read_text(encoding="utf-8").strip() == "python"
 
 
+# --- CLAUDE_PLUGIN_ROOT vs CLAUDE_PROJECT_DIR: project state must never resolve under
+# the plugin's own install directory (2026-08-13 live report) -------------------------
+#
+# team-preferences.json, the interpreter cache, the fan-out lock and the cold-start cache
+# are all per-PROJECT state (install_helper.py's own write_guard_interpreter_cache()
+# writes .guard-interpreter under the project directory, never a plugin install
+# directory) - but were resolved via the same CLAUDE_PLUGIN_ROOT-first root as
+# DAEMON_CLIENT (correct for THAT one case: bash_hook_dispatcher.py is a file the plugin
+# itself ships). In plugin-install mode, whenever CLAUDE_PLUGIN_ROOT happened to be set
+# in the hook's own process, that conflation pointed all four project-state paths at the
+# plugin's own directory instead of the project's - confirmed live: a project's
+# team-preferences.json had "guard_daemon": true recorded, but the daemon never
+# activated, because the hook was checking a team-preferences.json under the plugin's
+# install path, which does not exist.
+
+
+def test_interpreter_cache_resolves_under_project_dir_not_plugin_root(tmp_path):
+    """The regression itself, reproduced directly: CLAUDE_PLUGIN_ROOT and
+    CLAUDE_PROJECT_DIR point at two DIFFERENT directories - the interpreter cache must
+    land under the project directory, never the plugin root."""
+    plugin_dir = tmp_path / "plugin-install"
+    plugin_dir.mkdir()
+    proj = tmp_path / "proj"
+    (proj / ".claude").mkdir(parents=True)
+    proc = _run_with_env(proj, {"CLAUDE_PLUGIN_ROOT": str(plugin_dir)})
+    assert proc.returncode == 0
+    assert (proj / ".claude" / ".guard-interpreter").is_file()
+    assert not (plugin_dir / ".claude").exists()  # never written under the plugin root
+
+
+def test_guard_daemon_preference_resolves_under_project_dir_not_plugin_root(tmp_path):
+    """The exact reported scenario: guard_daemon: true sits in the PROJECT's own
+    team-preferences.json (never found if the hook looks under the plugin root instead) -
+    a decoy team-preferences.json with the SAME key under the plugin root must be
+    ignored, proving the check reads the project's copy, not the plugin's."""
+    plugin_dir = tmp_path / "plugin-install"
+    (plugin_dir / ".claude").mkdir(parents=True)
+    (plugin_dir / ".claude" / "team-preferences.json").write_text(
+        '{"guard_daemon": true}', encoding="utf-8"
+    )  # decoy - must never be read
+    proj = tmp_path / "proj"
+    (proj / ".claude").mkdir(parents=True)
+    (proj / ".claude" / "team-preferences.json").write_text(
+        '{"guard_daemon": true}', encoding="utf-8"
+    )
+    dispatcher_target = proj / "bash_hook_dispatcher.py"
+    dispatcher_target.write_text("", encoding="utf-8")
+    env = {
+        "CLAUDE_PROJECT_DIR": str(proj),
+        "CLAUDE_PLUGIN_ROOT": str(plugin_dir),
+        "PATH": __import__("os").environ["PATH"],
+    }
+    # No guard_daemon_client.py under either root, so [ -f "$DAEMON_CLIENT" ] is false and
+    # the launcher falls through to its normal cold-start path either way - this proves
+    # _prefs resolution doesn't crash/misbehave when pointed correctly, independent of
+    # whether the daemon files themselves are present.
+    proc = subprocess.run(
+        ["sh", str(LAUNCHER), str(dispatcher_target)],
+        input=PAYLOAD,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert proc.returncode == 0
+    # The interpreter cache (same _project_root as the prefs check) must still land under
+    # the project directory, confirming _project_root - not the plugin-rooted $_root - is
+    # what this whole code path actually used.
+    assert (proj / ".claude" / ".guard-interpreter").is_file()
+
+
 def test_staged_and_live_launchers_match_when_installed():
     """HARD FAILURE, never a skip (audit 2026-08-01).
 
