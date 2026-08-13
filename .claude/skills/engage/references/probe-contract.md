@@ -135,3 +135,36 @@ deliberately written to never trigger (the heredoc form above exists *specifical
 of command never has to run). If you genuinely need the interpreter's own path or version outside
 what `INTERPRETER=`/`PYTHON_VERSION=` already gave you, `python --version` or `python -V` are not
 `-c` and are not blocked - use one of those, never a `-c` one-liner, however small.
+
+**Third live report, same underlying rule, a sharper variant (2026-08-14, corporate Windows
+box):** a session hit `PROBE_FAILED` after the shell's cwd was silently reset mid-open (a
+`Bash` tool call landed back in an unrelated project directory rather than where a prior `cd`
+had left it - itself worth watching for independently, since it can misdirect more than just
+the probe). The session's own narration read "Per the contract I retry once, and since I know
+the plugin root I'll call the probe script directly" - correctly citing the contract by name,
+then not actually following it: it ran a *different* invocation (`python
+scripts/engage_probe.py --plugin-root <root>`, hand-assembled from what it already knew) instead
+of the exact compound block above, character for character. The two prior incidents at least
+didn't claim compliance while deviating; this one is more insidious precisely because the
+citation reads as if the rule were being honoured. Constructing a plausible-looking equivalent
+is still the improvisation this section exists to rule out - it throws away the one thing a
+verbatim retry is for (seeing whether the SAME failure recurs, which is the actual diagnostic
+signal), and on a machine where the cwd is already misbehaving, a hand-assembled relative path
+is exactly the kind of command that silently resolves somewhere unintended. Saying "per the
+contract" is not a substitute for reading what the contract actually says immediately above
+this line - if a plausible-looking alternative command occurs to you at all on `PROBE_FAILED`,
+that impulse is the signal to stop and re-run the exact block instead, not evidence that you've
+found a smarter path through it.
+
+*Root cause of the cwd reset itself, diagnosed the same session via a separate debug-log read:*
+Claude Code's shell-snapshot mechanism (which captures/restores shell state - cwd included -
+between `Bash` tool calls) timed out and was `SIGTERM`-killed because this machine's `.bashrc`
+took over 10 seconds to source non-interactively. This is a host shell-profile problem, not a
+plugin bug: nothing in this repo can compensate for the snapshot mechanism losing shell state
+between calls. The concrete fix lives in the user's own `~/.bashrc` - guard slow steps (network
+calls, nvm/pyenv/mise/conda init, cloud-auth checks) behind `[[ $- == *i* ]] || return` at the
+top so they're skipped in a non-interactive shell, or profile with `time source ~/.bashrc` to
+find the actual culprit first. Worth knowing precisely because it explains why the retry-exact-
+block instruction matters even more than usual here: on a machine where shell state is already
+dropping between calls, an improvised command is *more* likely to silently resolve against the
+wrong directory, not less.
