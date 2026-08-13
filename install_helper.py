@@ -4523,6 +4523,89 @@ def run_setup_alias(
     return 1 if had_error else 0
 
 
+_BASHRC_GUARD_MARKER = "# --fix-bashrc: non-interactive shell guard"
+_BASHRC_GUARD_SNIPPET = (
+    f"{_BASHRC_GUARD_MARKER} (added by install_helper.py)\n"
+    "# Claude Code's Bash tool sources this file non-interactively before every call, so a\n"
+    "# slow .bashrc costs every single tool call - and past a certain point (Claude Code's\n"
+    "# own shell-snapshot timeout) can make it silently lose shell state (cwd, PATH,\n"
+    "# functions) between calls entirely. This line skips everything below for\n"
+    "# non-interactive shells; normal interactive terminal use is unaffected. If a Bash\n"
+    "# tool call later seems to be missing a PATH entry or env var this file used to set,\n"
+    "# narrow this to wrap just the slow block (nvm/pyenv/conda init, cloud-auth checks,\n"
+    "# etc.) in `if [[ $- == *i* ]]; then ... fi` instead of this blanket early return.\n"
+    "[[ $- == *i* ]] || return\n"
+)
+
+
+def run_fix_bashrc(
+    style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
+) -> int:
+    """Standalone (--fix-bashrc / menu): offers to add a non-interactive-shell early-return
+    guard to ~/.bashrc, so slow interactive-only setup (nvm/pyenv/conda init, cloud-auth
+    checks, network calls) doesn't run on every Claude Code Bash tool call - the root cause
+    traced in a live corp-Windows dogfooding session (2026-08-14) where a .bashrc taking
+    >10s to source non-interactively made Claude Code's shell-snapshot process hit its own
+    timeout and get killed, dropping shell state between calls.
+
+    `--check-env`'s `_check_shell_startup_time` only detects and warns (that check must stay
+    non-blocking/informational); this is the explicit, consent-gated, opt-in counterpart -
+    never silent, previews the exact snippet before writing, backs up the existing file
+    first (dated, collision-safe - same pattern the settings.json writers use), and is
+    idempotent (skips, doesn't duplicate, if the marker is already present). demo=True
+    previews and writes nothing. Deliberately does NOT try to guess which specific lines in
+    an unseen .bashrc are the slow ones - a blanket early-return is the only thing that can
+    be offered without reading the file's actual content, so the preview says so plainly and
+    the snippet's own comment tells the user how to narrow it by hand if it turns out to be
+    too broad (some non-interactive tool calls may need PATH/env vars this file sets)."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    bashrc = Path.home() / ".bashrc"
+    if not bashrc.is_file():
+        print(f"{fail} no ~/.bashrc found - nothing to fix")
+        return 1
+    existing = bashrc.read_text(encoding="utf-8", errors="replace")
+    if _BASHRC_GUARD_MARKER in existing:
+        print(f"{style.dim('-')} ~/.bashrc: guard already present, skipped")
+        return 0
+    print(f"  Would prepend to {bashrc}:")
+    for line in _BASHRC_GUARD_SNIPPET.splitlines():
+        print(style.dim(f"    {line}"))
+    print(
+        style.yellow(
+            "  ! this guards EVERYTHING below it for non-interactive shells - if this file "
+            "sets PATH/env vars a Bash tool call genuinely needs (not just interactive "
+            "conveniences), narrow the guard by hand afterwards (see the comment in the "
+            "snippet above)"
+        )
+    )
+    if demo:
+        print(style.dim("    (demo mode - nothing written)"))
+        return 0
+    # default=assume_yes (not a hardcoded False): an explicit --yes IS the consent for a
+    # flag the user named on purpose, so it should proceed, not silently decline via
+    # confirm()'s assume_yes-shortcuts-to-default path. A genuinely interactive session
+    # (assume_yes=False, real TTY) still shows the prompt and defaults to declining if the
+    # user just presses Enter - the write is consequential enough to want an explicit yes.
+    if not confirm("  Add it?", default=assume_yes, assume_yes=assume_yes, style=style):
+        print(f"{style.dim('-')} ~/.bashrc: skipped")
+        return 0
+    today = datetime.now().strftime("%Y-%m-%d")
+    backup = bashrc.with_name(f".bashrc.bak-{today}")
+    n = 1
+    while backup.exists():
+        n += 1
+        backup = bashrc.with_name(f".bashrc.bak-{today}.{n}")
+    try:
+        backup.write_text(existing, encoding="utf-8")
+        _atomic_write_text(bashrc, _BASHRC_GUARD_SNIPPET + "\n" + existing)
+    except OSError as exc:
+        print(f"{fail} could not write {bashrc}: {exc}")
+        return 1
+    print(f"{ok} guard added to {bashrc} (backup: {backup})")
+    print(style.dim("  Verify: time bash -c 'source ~/.bashrc' - should now be near-instant."))
+    return 0
+
+
 # ------------------------------------------------------------------ analyser output check
 #
 # 2026-08-04: code-reviewer's own analysers (gitleaks, bandit, mypy) were found to leak
@@ -4793,10 +4876,11 @@ def _check_shell_startup_time(bash_path: Optional[str]) -> tuple:
     else:
         elapsed = time.monotonic() - start
     fix = (
-        "guard slow steps (nvm/pyenv/mise/conda init, cloud-auth checks, network calls) "
-        "behind `[[ $- == *i* ]] || return` at the top of ~/.bashrc so they're skipped for "
-        "non-interactive shells, or profile with `time source ~/.bashrc` to find the exact "
-        "culprit line"
+        "run `install_helper.py --fix-bashrc` (previews the exact change, asks first, backs "
+        "up ~/.bashrc before writing) to guard slow steps (nvm/pyenv/mise/conda init, "
+        "cloud-auth checks, network calls) behind `[[ $- == *i* ]] || return` so they're "
+        "skipped for non-interactive shells, or profile with `time source ~/.bashrc` to find "
+        "the exact culprit line first"
     )
     if elapsed >= 10.0:
         return (
@@ -6217,6 +6301,13 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="standalone: offer to add a 'virt-surv' shell alias/function pointing at "
         "this clone, so it's runnable from any folder - and exit",
     )
+    parser.add_argument(
+        "--fix-bashrc",
+        action="store_true",
+        help="standalone: offer to add a non-interactive-shell guard to ~/.bashrc so slow "
+        "interactive-only setup doesn't run on every Claude Code Bash tool call (see "
+        "--check-env's '.bashrc source time' row) - and exit",
+    )
     return parser.parse_args(argv)
 
 
@@ -6463,6 +6554,7 @@ def _main(argv=None) -> int:
         or args.archive
         or args.list_engagements
         or args.setup_alias
+        or args.fix_bashrc
     ):
         # Scripting path: no banner, no menu.
         #
@@ -6558,6 +6650,8 @@ def _main(argv=None) -> int:
             rc = max(rc, run_list_engagements(Path(args.list_engagements), style, marks()))
         if args.setup_alias:
             rc = max(rc, run_setup_alias(style, marks(), args.yes, args.demo, args.repo))
+        if args.fix_bashrc:
+            rc = max(rc, run_fix_bashrc(style, marks(), args.yes, args.demo))
         return rc
 
     if not args.demo:

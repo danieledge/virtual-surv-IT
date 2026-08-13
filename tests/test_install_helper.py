@@ -5434,6 +5434,84 @@ def test_run_setup_alias_demo_writes_nothing(tmp_path, monkeypatch):
     assert (home / ".bashrc").read_text(encoding="utf-8") == ""  # untouched
 
 
+# --- run_fix_bashrc (2026-08-14: consent-gated counterpart to _check_shell_startup_time) -------
+
+
+def test_run_fix_bashrc_no_file(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    _isolate_home_for_alias(monkeypatch, tmp_path)  # bashrc=None: no file at all
+    rc = ih.run_fix_bashrc(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 1
+
+
+def test_run_fix_bashrc_writes_guard_at_the_top(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="export FOO=bar\n")
+    rc = ih.run_fix_bashrc(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert content.index("$- == *i*") < content.index("export FOO=bar")  # guard comes first
+    assert "export FOO=bar" in content  # existing content preserved, not clobbered
+
+
+def test_run_fix_bashrc_backs_up_existing_file(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="export FOO=bar\n")
+    rc = ih.run_fix_bashrc(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    today = ih.datetime.now().strftime("%Y-%m-%d")
+    backup = home / f".bashrc.bak-{today}"
+    assert backup.is_file()
+    assert backup.read_text(encoding="utf-8") == "export FOO=bar\n"
+
+
+def test_run_fix_bashrc_idempotent_skip(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(
+        monkeypatch, tmp_path, bashrc=ih._BASHRC_GUARD_MARKER + "\nexport FOO=bar\n"
+    )
+    rc = ih.run_fix_bashrc(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    assert "already present, skipped" in capsys.readouterr().out
+    assert not (home / f".bashrc.bak-{ih.datetime.now().strftime('%Y-%m-%d')}").exists()
+
+
+def test_run_fix_bashrc_declined_is_not_an_error(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="export FOO=bar\n")
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
+    rc = ih.run_fix_bashrc(ih.Style(False), ih.marks(), assume_yes=False)
+    assert rc == 0
+    assert (home / ".bashrc").read_text(encoding="utf-8") == "export FOO=bar\n"  # untouched
+
+
+def test_run_fix_bashrc_demo_writes_nothing(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="export FOO=bar\n")
+    rc = ih.run_fix_bashrc(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
+    assert rc == 0
+    assert (home / ".bashrc").read_text(encoding="utf-8") == "export FOO=bar\n"  # untouched
+
+
+def test_run_fix_bashrc_write_error_is_reported(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="export FOO=bar\n")
+
+    def boom(path, text):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(ih, "_atomic_write_text", boom)
+    rc = ih.run_fix_bashrc(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 1
+
+
 def test_run_archive_engagements_demo_skips_real_call(tmp_path, monkeypatch):
     import install_helper as ih
 
