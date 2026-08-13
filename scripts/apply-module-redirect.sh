@@ -1,107 +1,38 @@
-#!/bin/bash
-# HUMAN-run (ADR-002 rec 5: hook wiring is a human act): wires the module-form
-# redirect hook into the plugin's hooks.json AND the repo's .claude/settings.json
-# (test_hooks_in_sync requires the two PreToolUse sets identical). The hook script
-# itself is already staged AND live (scripts/module_form_redirect.py, byte-synced
-# with scripts/staged_hooks/); this only adds the PreToolUse(Bash) entries.
-# Idempotent - safe to re-run.
+#!/usr/bin/env bash
+# SUPERSEDED - module_form_redirect is already registered in
+# scripts/bash_hook_dispatcher.py's own _CHECKS table (the 2026-07-31 P4 consolidation
+# that collapsed five separate Bash-matching hooks, this one included, into ONE process
+# per call). This script predates that consolidation and was never updated afterwards -
+# every time it (or scripts/apply-outstanding.sh, which runs it automatically) ran, it
+# silently RE-WIRED a standalone "Bash" PreToolUse entry for
+# scripts/module_form_redirect.py on top of the dispatcher's own entry, duplicating the
+# check on every Bash call and spawning an extra cold-start process per call the P4
+# consolidation exists specifically to avoid. Caught twice: once by a 2026-08-13
+# Fable-model audit (reverted by hand), and again the same day when a later
+# apply-outstanding.sh run silently reintroduced it - this script was the actual root
+# cause both times, never fixed at the source until now.
 #
-#   bash scripts/apply-module-redirect.sh
+# Kept as a thin redirect (not deleted outright) in case anything still references this
+# filename directly - deleting a named, documented human-run script out from under a
+# stale doc link is worse than a clear pointer. scripts/module_form_redirect.py itself
+# is unaffected and still current; only THIS script's wiring behaviour is retired.
+#
+# Exits 0 (not 1): a redirect that makes no changes is a legitimate, expected outcome -
+# scripts/apply-outstanding.sh loops over every apply-*.sh unconditionally and relies on
+# each one being a safe, always-succeeds no-op when there's nothing for it to do;
+# exiting nonzero here would abort that whole batch under set -e for a script whose only
+# job now is explaining why it does nothing.
+#
+#   Usage:  bash scripts/apply-module-redirect.sh
 set -euo pipefail
-cd "$(dirname "$0")/.."
-
-python3 - <<'PY' || python - <<'PY2'
-import json
-from pathlib import Path
-
-p = Path("hooks/hooks.json")
-data = json.loads(p.read_text(encoding="utf-8"))
-pre = data["hooks"]["PreToolUse"]
-cmd = (
-    'sh "${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh" '
-    '"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/module_form_redirect.py"'
-)
-def wire(entries):
-    """Exact-command idempotency + dedupe. The first version of this script tested
-    `cmd in json.dumps(entry)` - dumps escapes the quotes, so the check NEVER matched
-    and a re-run appended a duplicate (live 2026-07-30). Compare the command value
-    itself, and remove any extra copies a previous run left behind."""
-    keep, seen, changed = [], 0, False
-    for e in entries:
-        cmds = [h.get("command") for h in e.get("hooks", [])]
-        if cmds == [cmd]:
-            seen += 1
-            if seen > 1:
-                changed = True
-                continue  # drop the duplicate
-        keep.append(e)
-    if seen == 0:
-        keep.append({"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]})
-        changed = True
-    entries[:] = keep
-    return changed, seen
-
-changed, seen = wire(pre)
-if changed:
-    p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print(("deduped" if seen > 1 else "wired") + " module_form_redirect in hooks/hooks.json")
-else:
-    print("module_form_redirect already wired in hooks/hooks.json")
-
-sp = Path(".claude/settings.json")
-sdata = json.loads(sp.read_text(encoding="utf-8"))
-spre = sdata.setdefault("hooks", {}).setdefault("PreToolUse", [])
-changed, seen = wire(spre)
-if changed:
-    sp.write_text(json.dumps(sdata, indent=2) + "\n", encoding="utf-8")
-    print(("deduped" if seen > 1 else "wired") + " module_form_redirect in project settings")
-else:
-    print("module_form_redirect already wired in project settings")
-PY
-import json
-from pathlib import Path
-
-p = Path("hooks/hooks.json")
-data = json.loads(p.read_text(encoding="utf-8"))
-pre = data["hooks"]["PreToolUse"]
-cmd = (
-    'sh "${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh" '
-    '"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/module_form_redirect.py"'
-)
-def wire(entries):
-    """Exact-command idempotency + dedupe. The first version of this script tested
-    `cmd in json.dumps(entry)` - dumps escapes the quotes, so the check NEVER matched
-    and a re-run appended a duplicate (live 2026-07-30). Compare the command value
-    itself, and remove any extra copies a previous run left behind."""
-    keep, seen, changed = [], 0, False
-    for e in entries:
-        cmds = [h.get("command") for h in e.get("hooks", [])]
-        if cmds == [cmd]:
-            seen += 1
-            if seen > 1:
-                changed = True
-                continue  # drop the duplicate
-        keep.append(e)
-    if seen == 0:
-        keep.append({"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]})
-        changed = True
-    entries[:] = keep
-    return changed, seen
-
-changed, seen = wire(pre)
-if changed:
-    p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print(("deduped" if seen > 1 else "wired") + " module_form_redirect in hooks/hooks.json")
-else:
-    print("module_form_redirect already wired in hooks/hooks.json")
-
-sp = Path(".claude/settings.json")
-sdata = json.loads(sp.read_text(encoding="utf-8"))
-spre = sdata.setdefault("hooks", {}).setdefault("PreToolUse", [])
-changed, seen = wire(spre)
-if changed:
-    sp.write_text(json.dumps(sdata, indent=2) + "\n", encoding="utf-8")
-    print(("deduped" if seen > 1 else "wired") + " module_form_redirect in project settings")
-else:
-    print("module_form_redirect already wired in project settings")
-PY2
+echo "apply-module-redirect.sh is superseded - nothing to apply."
+echo ""
+echo "module_form_redirect is already covered by scripts/bash_hook_dispatcher.py's own"
+echo "consolidated dispatch (its _CHECKS table) - the single PreToolUse entry already wired"
+echo "for Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit|NotebookRead|WebFetch|Bash runs"
+echo "it, along with every other consolidated check, in ONE process per call. A standalone"
+echo "entry for this script alone would only duplicate that check and cost an extra"
+echo "cold-start process per Bash call - exactly what the P4 consolidation exists to avoid."
+echo "If a standalone entry exists in hooks/hooks.json or .claude/settings.json, remove it"
+echo "(git checkout, or a targeted edit) rather than running this script."
+exit 0
