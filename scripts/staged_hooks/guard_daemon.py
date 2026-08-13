@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Persistent guard daemon - eliminates per-call interpreter cold start.
 
-ADR-014 (docs/adr/ADR-014-persistent-guard-daemon.md). Opt-in, OFF BY DEFAULT
+ADR-014 (docs/adr/ADR-014-persistent-guard-daemon.md). Preference-gated
 (.claude/team-preferences.json `guard_daemon`, no machine-wide tier - same pattern
-as `standards_critique`). run-guard.sh only ever talks to this when that
-preference is explicitly on AND the target script is bash_hook_dispatcher.py -
-every other case (preference off, or any other target script such as
-locked_menu_guard.py) is completely unaffected; run-guard.sh's own cold-start
-path is byte-for-byte what it was before this file existed.
+as `standards_critique`; on by default for any project set up via `/preferences`
+or the installer's configure flow - see that skill's own docstring for the exact
+"off if the key is genuinely absent" mechanics). run-guard.sh only ever talks to
+this when the preference resolves true AND the target script is
+bash_hook_dispatcher.py - every other case (preference off, or any other target
+script such as locked_menu_guard.py) is completely unaffected; run-guard.sh's own
+cold-start path is byte-for-byte what it was before this file existed.
 
 Promoted from the design spike (docs/internal/adr-014-spike/) after live
 validation on the actual reporting Windows box, 2026-08-12: 8/8 smoke-test
@@ -22,6 +24,25 @@ ONCE, serving requests over a TCP socket bound to 127.0.0.1 on an OS-assigned
 ephemeral port. The bound port (and an auth token, see below) are written to
 .claude/.guard-daemon-port (project-scoped, same file-based-coordination pattern
 .guard-interpreter/.guard-lock already use).
+
+2026-08-13 fix (same bug class run-guard.sh's own $_root/$_project_root split
+already fixed elsewhere - live audit caught one instance the earlier fix missed):
+this module now takes TWO roots, not one. `module_root` is where the real
+scripts.bash_hook_dispatcher and the guard-*.py files actually live - genuinely
+CLAUDE_PLUGIN_ROOT-first in plugin-install mode, since those are files the plugin
+ships, not the consuming project. `state_root` is where per-project daemon state
+(the port file) belongs - CLAUDE_PROJECT_DIR only, same reasoning as
+run-guard.sh's own $_project_root: there is no correct case where one project's
+port file/token should be shared with another project just because both happen
+to use the same plugin install. Passing a single root for both (the old
+behaviour) meant every project sharing one plugin install would share ONE
+daemon and ONE port file - and since this daemon inherits CLAUDE_PROJECT_DIR at
+its own startup and never re-reads it, a stale/wrong project's exec-consent
+marker could get evaluated against a different project's request. Latent in
+plugin-install mode only; a project-mode checkout (module_root == state_root,
+e.g. this repo dogfooding itself) was never affected. Both parameters default to
+each other when only one is given, so a caller that still passes just one root
+keeps today's (project-mode-correct) behaviour unchanged.
 
 Concurrency (found live while building the spike, not anticipated in ADR-014's
 original text): bash_hook_dispatcher.main() reads sys.stdin and writes
@@ -210,11 +231,19 @@ class GuardDaemon(socketserver.ThreadingTCPServer):
         self.shutdown()
 
 
-def run(repo_root: Path, idle_timeout: int = IDLE_TIMEOUT_SECONDS_DEFAULT) -> int:
+def run(
+    module_root: Path,
+    state_root: Path | None = None,
+    idle_timeout: int = IDLE_TIMEOUT_SECONDS_DEFAULT,
+) -> int:
     """Starts the daemon and blocks until it shuts down (idle timeout or
-    detected staleness) - the caller (main(), or a test) owns process lifetime."""
-    daemon = GuardDaemon(repo_root, idle_timeout=idle_timeout)
-    port_file = repo_root / ".claude" / PORT_FILE_NAME
+    detected staleness) - the caller (main(), or a test) owns process lifetime.
+    state_root defaults to module_root (today's project-mode behaviour,
+    unchanged) when not given - only plugin-install mode needs them to differ."""
+    if state_root is None:
+        state_root = module_root
+    daemon = GuardDaemon(module_root, idle_timeout=idle_timeout)
+    port_file = state_root / ".claude" / PORT_FILE_NAME
     port_file.parent.mkdir(parents=True, exist_ok=True)
     port_file.write_text(f"{daemon.server_address[1]}\n{daemon.token}\n", encoding="utf-8")
     watchdog = threading.Thread(target=daemon.idle_watchdog, daemon=True)
@@ -234,12 +263,13 @@ def run(repo_root: Path, idle_timeout: int = IDLE_TIMEOUT_SECONDS_DEFAULT) -> in
     return 0
 
 
-def read_port_and_token(repo_root: Path):
+def read_port_and_token(state_root: Path):
     """Fail-open ((None, None)) on any read/parse error - a corrupt or
     half-written port file must never crash a client; it just means "no daemon
     available right now", the exact same posture as no port file existing at
-    all."""
-    port_file = repo_root / ".claude" / PORT_FILE_NAME
+    all. Takes the PROJECT root (per-project state), never the plugin root -
+    see the module docstring's 2026-08-13 note."""
+    port_file = state_root / ".claude" / PORT_FILE_NAME
     try:
         lines = port_file.read_text(encoding="utf-8").splitlines()
         return int(lines[0].strip()), lines[1].strip()
@@ -251,10 +281,18 @@ def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("repo_root", nargs="?", default=".")
+    parser.add_argument("module_root", nargs="?", default=".")
+    parser.add_argument(
+        "state_root",
+        nargs="?",
+        default=None,
+        help="Per-project daemon state (port file). Defaults to module_root when omitted.",
+    )
     parser.add_argument("--idle-timeout", type=int, default=IDLE_TIMEOUT_SECONDS_DEFAULT)
     args = parser.parse_args()
-    return run(Path(args.repo_root).resolve(), idle_timeout=args.idle_timeout)
+    module_root = Path(args.module_root).resolve()
+    state_root = Path(args.state_root).resolve() if args.state_root else None
+    return run(module_root, state_root, idle_timeout=args.idle_timeout)
 
 
 if __name__ == "__main__":

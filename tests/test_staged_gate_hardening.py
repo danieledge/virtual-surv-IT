@@ -195,7 +195,9 @@ def test_anchor_asks_for_active_when_no_marker(tmp_path, monkeypatch, capsys):
 # a long engagement used to pay the full ~9-line anchor on every single prompt forever. -----
 
 
-def test_fresh_engagement_gets_the_full_anchor_with_a_log_note_instruction(tmp_path, monkeypatch, capsys):
+def test_fresh_engagement_gets_the_full_anchor_with_a_log_note_instruction(
+    tmp_path, monkeypatch, capsys
+):
     _ws(tmp_path, "solo")
     capsys.readouterr()
     rc, out = _run_anchor(monkeypatch, capsys, {"cwd": str(tmp_path)}, tmp_path)
@@ -239,7 +241,9 @@ def test_nudge_says_finish_the_close_never_delete(tmp_path, monkeypatch, capsys)
 # stop_hook_active cycle; a NEW/DIFFERENT finding set must re-arm it. ----------------------
 
 
-def test_unchanged_finding_nudges_once_then_stays_silent_across_calls(tmp_path, monkeypatch, capsys):
+def test_unchanged_finding_nudges_once_then_stays_silent_across_calls(
+    tmp_path, monkeypatch, capsys
+):
     from scripts.engagement_state import main as es_main
 
     art = _ws(tmp_path, "solo")  # root artifacts/ dir; the workspace itself is art/"solo"
@@ -270,7 +274,9 @@ def test_unchanged_finding_nudges_once_then_stays_silent_across_calls(tmp_path, 
     assert out2 == ""
 
 
-def test_a_new_finding_re_arms_the_nudge_even_with_an_old_marker_present(tmp_path, monkeypatch, capsys):
+def test_a_new_finding_re_arms_the_nudge_even_with_an_old_marker_present(
+    tmp_path, monkeypatch, capsys
+):
     from scripts.engagement_state import main as es_main
 
     art = _ws(tmp_path, "solo")
@@ -293,9 +299,7 @@ def test_a_new_finding_re_arms_the_nudge_even_with_an_old_marker_present(tmp_pat
     assert rc2 == 0
     decision2 = json.loads(out2)
     assert decision2["decision"] == "block"
-    new_marker = _re.search(
-        r'log-note "(dod-nudged:[0-9a-f]+)"', decision2["reason"]
-    ).group(1)
+    new_marker = _re.search(r'log-note "(dod-nudged:[0-9a-f]+)"', decision2["reason"]).group(1)
     assert new_marker != old_marker  # a different finding set really does re-arm it
 
 

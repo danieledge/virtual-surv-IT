@@ -316,7 +316,9 @@ def test_dod_compliance_reviewed_bullet_is_conditional():
     text = _read("docs/DEFINITION-OF-DONE.md")
     m = re.search(r"- \[ \] \*\*Compliance-reviewed\*\*.*?(?=\n- \[ \]|\Z)", text, re.S)
     assert m, "DEFINITION-OF-DONE.md: 'Compliance-reviewed' checklist bullet not found"
-    _assert_conditional("docs/DEFINITION-OF-DONE.md", m.group(0), "the 'Compliance-reviewed' bullet")
+    _assert_conditional(
+        "docs/DEFINITION-OF-DONE.md", m.group(0), "the 'Compliance-reviewed' bullet"
+    )
 
 
 def test_build_solution_review_step_is_conditional():

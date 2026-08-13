@@ -533,7 +533,11 @@ def parse_transcripts(transcript_dir: Path) -> dict:
                 }
             )
     sessions.sort(key=lambda s: s["date"], reverse=True)
-    return {"sessions": sessions, "unparsable_files": unparsable_files, "total_seconds": total_seconds}
+    return {
+        "sessions": sessions,
+        "unparsable_files": unparsable_files,
+        "total_seconds": total_seconds,
+    }
 
 
 def transcripts_dir_for(project: Path, claude_home: Path) -> Path:
@@ -907,7 +911,9 @@ def _match_engagement(session_date: str | None, engagements: list[dict]) -> str 
                 continue
         else:
             last_activity = _last_known_activity_date(e) or opened
-            cap = (_dt.date.fromisoformat(last_activity) + _dt.timedelta(days=_STILL_OPEN_GRACE_DAYS)).isoformat()
+            cap = (
+                _dt.date.fromisoformat(last_activity) + _dt.timedelta(days=_STILL_OPEN_GRACE_DAYS)
+            ).isoformat()
             if session_date > cap:
                 continue
         candidates.append(e)
@@ -1050,7 +1056,9 @@ def _timeline_events(e: dict) -> list[dict]:
     events = []
     opened = e.get("opened")
     if opened:
-        events.append({"date": opened, "icon": "&#128681;", "text": "Engagement opened", "loop": False})
+        events.append(
+            {"date": opened, "icon": "&#128681;", "text": "Engagement opened", "loop": False}
+        )
     for art in e.get("artifacts") or []:
         if not isinstance(art, dict) or not art.get("added"):
             continue
@@ -1082,11 +1090,18 @@ def _timeline_events(e: dict) -> list[dict]:
         if m:
             date, text = m.groups()
             events.append(
-                {"date": date, "icon": "&#128221;", "text": _humanize_agents(text, role_map), "loop": False}
+                {
+                    "date": date,
+                    "icon": "&#128221;",
+                    "text": _humanize_agents(text, role_map),
+                    "loop": False,
+                }
             )  # 📝
     closed = e.get("closed")
     if closed:
-        events.append({"date": closed, "icon": "&#9989;", "text": "Engagement closed", "loop": False})
+        events.append(
+            {"date": closed, "icon": "&#9989;", "text": "Engagement closed", "loop": False}
+        )
     events.sort(key=lambda ev: ev["date"])
     return events
 
@@ -1105,7 +1120,7 @@ def _timeline_html(e: dict) -> str:
         node_htmls.append(
             f'<div class="{node_cls}"><span class="tl-dot">{ev["icon"]}</span>'
             f'<span class="tl-date muted">{_E(ev["date"])}</span>'
-            f'{badge}{_E(ev["text"])}</div>'
+            f"{badge}{_E(ev['text'])}</div>"
         )
     nodes = "".join(node_htmls)
     return (
@@ -1138,7 +1153,9 @@ def _engagement_table(engagements: list[dict], archived_count: int) -> str:
             outcome, '<span class="muted">-</span>'
         )
         span = _day_span(e.get("opened"), e.get("closed"))
-        span_cell = f'<span class="muted">{_E(span)}</span>' if span else '<span class="muted">-</span>'
+        span_cell = (
+            f'<span class="muted">{_E(span)}</span>' if span else '<span class="muted">-</span>'
+        )
         rows.append(
             f"<tr><td>{_E(e.get('slug') or '-')}</td><td>{status_cell}</td>"
             f"<td>{_E(e.get('title') or '-')}</td><td class='num'>{outstanding_cell}</td>"
@@ -1151,9 +1168,7 @@ def _engagement_table(engagements: list[dict], archived_count: int) -> str:
     table = (
         "<div class='table-wrap'><table><tr><th>Slug</th><th>Status</th><th>Title</th>"
         "<th>Outstanding</th><th>Ratifications</th><th>Consent asked?</th><th>Opened</th>"
-        "<th>Closed</th><th>Span</th></tr>"
-        + "".join(rows)
-        + "</table></div>"
+        "<th>Closed</th><th>Span</th></tr>" + "".join(rows) + "</table></div>"
     )
     if archived_count:
         table += (
@@ -1231,7 +1246,9 @@ def _heatmap_html(tally: dict[str, int], max_days: int = 120) -> str:
     for _ in range(((total_days + 6) // 7) * 7):
         c = by_day.get(cur, 0)
         level = 0 if c == 0 else 1 if c == 1 else 2 if c <= 3 else 3
-        cells.append(f'<div class="heat heat-{level}" title="{_E(cur.isoformat())}: {c} event(s)"></div>')
+        cells.append(
+            f'<div class="heat heat-{level}" title="{_E(cur.isoformat())}: {c} event(s)"></div>'
+        )
         cur += _dt.timedelta(days=1)
     legend = "".join(f'<div class="heat heat-{lvl}"></div>' for lvl in range(4))
     return (
@@ -1279,7 +1296,12 @@ def obligation_coverage(projects: list[dict]) -> list[dict]:
                     row["count"] += 1
                     row["sources"][source_key] = source
     rows = [
-        {"citation": k, "count": v["count"], "verified": v["verified"], "sources": list(v["sources"].values())}
+        {
+            "citation": k,
+            "count": v["count"],
+            "verified": v["verified"],
+            "sources": list(v["sources"].values()),
+        }
         for k, v in tally.items()
     ]
     return sorted(rows, key=lambda r: (-r["count"], r["citation"]))
@@ -1291,7 +1313,9 @@ def _obligation_table_html(rows: list[dict]) -> str:
     body = []
     for r in rows:
         verdict = (
-            '<span class="ok">verified</span>' if r["verified"] else '<span class="warn">unverified</span>'
+            '<span class="ok">verified</span>'
+            if r["verified"]
+            else '<span class="warn">unverified</span>'
         )
         body.append(
             f"<tr><td>{_E(r['citation'])}</td><td class='num'>{r['count']}</td><td>{verdict}</td></tr>"
@@ -1343,7 +1367,11 @@ def _kpi_strip_html(projects: list[dict], obligation_rows: list[dict]) -> str:
             status_counts.get("in_progress", 0) + status_counts.get("closing", 0),
             None,
         ),
-        ("Blocked", status_counts.get("blocked", 0), "warn" if status_counts.get("blocked") else None),
+        (
+            "Blocked",
+            status_counts.get("blocked", 0),
+            "warn" if status_counts.get("blocked") else None,
+        ),
         ("Artifacts", total_artifacts, None),
         ("Team members", len(team_members), None),
         ("Obligations cited", len(obligation_rows), None),

@@ -126,7 +126,15 @@ def _reason(
             "artifacts, `check_artifacts --fix`, `set-status closed`); NEVER delete completed "
             "close deliverables to satisfy the gate. If the engagement is genuinely still "
             'blocked, end the turn saying so plainly ("NOT closed - outstanding: ...") rather '
-            "than stopping silently."
+            "than stopping silently. **If the user's own most recent message clearly asked for "
+            "something else - new/different work, not this engagement** - proceed with THAT "
+            "first; note this nudge in one line rather than diverting into fixing it now, and "
+            f"do **NOT** record `{log_note}` (that marker means the findings were actually acted "
+            "on - recording it while deferring would wrongly suppress a real gap, not postpone "
+            "it). Nothing is lost by deferring this way: this finding set re-arms and nudges "
+            "again the next time a turn ends while this same engagement is still active and "
+            "gated, so it cannot silently drop out of sight - it just doesn't override an "
+            "explicit request you were just given."
         )
     else:
         # The active engagement itself is clean - only OTHER open engagements have

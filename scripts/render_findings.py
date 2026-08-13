@@ -175,7 +175,9 @@ def _default_out(pack_path: Path, slug: str, prefix: str = "REVIEW") -> Path:
     return root / f"{prefix}-{slug}.md"
 
 
-def render_pack_file(pack_path: Path, out_path: Path | None = None, want_html: bool = False) -> Path:
+def render_pack_file(
+    pack_path: Path, out_path: Path | None = None, want_html: bool = False
+) -> Path:
     """Validate + render one findings pack to its canonical REVIEW-<slug>.md, in-process.
     Shared by main() (CLI) and check_artifacts.apply_fixes() (2026-08-05 perf fix - apply_fixes
     used to shell out to this script once per pack, immediately followed by a subprocess per

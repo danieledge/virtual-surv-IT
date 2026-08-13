@@ -750,7 +750,8 @@ def test_map_drift_silent_when_fingerprint_matches(tmp_path):
     (repo / "src").mkdir()
     (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
     _write_fingerprint_sidecar(
-        repo, {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], repo)}}
+        repo,
+        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], repo)}},
     )
     (repo / ".claude").mkdir()
     (repo / ".claude" / "team-preferences.json").write_text(
@@ -770,7 +771,8 @@ def test_map_drift_fires_when_file_changed_since_fingerprinted(tmp_path):
     f = repo / "src" / "x.py"
     f.write_text("threshold = 1\n", encoding="utf-8")
     _write_fingerprint_sidecar(
-        repo, {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], repo)}}
+        repo,
+        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], repo)}},
     )
     f.write_text("threshold = 2\n", encoding="utf-8")  # changed AFTER fingerprinting
     (repo / ".claude").mkdir()
@@ -1003,7 +1005,8 @@ def test_many_entry_anchors_spawn_exactly_one_subprocess(tmp_path, monkeypatch):
     repo, sha = _map_repo(tmp_path)
     m = repo / "docs" / "codebase-map.md"
     rows = "".join(
-        f"| {i} | area{i} | entry {i} | 📊 seen | 2026-07-18 | `{sha[:9]}` |\n" for i in range(2, 12)
+        f"| {i} | area{i} | entry {i} | 📊 seen | 2026-07-18 | `{sha[:9]}` |\n"
+        for i in range(2, 12)
     )
     _touch(m, _good_map(sha) + rows)
 

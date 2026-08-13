@@ -29,7 +29,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _run(project_dir: Path, payload: dict, path_env: str | None = None) -> subprocess.CompletedProcess:
+def _run(
+    project_dir: Path, payload: dict, path_env: str | None = None
+) -> subprocess.CompletedProcess:
     env = {"HOME": str(project_dir), "CLAUDE_PROJECT_DIR": str(project_dir)}
     env["PATH"] = path_env if path_env is not None else "/usr/bin:/bin"
     # Absolute path to bash itself (not a bare "bash" lookup): a test that restricts PATH
@@ -208,9 +210,7 @@ def test_invalid_cached_entry_falls_back_to_the_probe_loop(tmp_path):
     statusline - `command -v` on it fails, so it falls through exactly like no cache."""
     cache_dir = tmp_path / ".claude"
     cache_dir.mkdir(parents=True)
-    (cache_dir / ".guard-interpreter").write_text(
-        "nonexistent-interpreter-xyz", encoding="utf-8"
-    )
+    (cache_dir / ".guard-interpreter").write_text("nonexistent-interpreter-xyz", encoding="utf-8")
     proc = _run(tmp_path, _basic_payload(tmp_path))
     assert proc.returncode == 0
     # the fallback probe ran and overwrote the bogus entry with a real one

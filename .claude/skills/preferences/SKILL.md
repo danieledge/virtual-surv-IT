@@ -36,12 +36,20 @@ is the common, valid default - not an error). Resolve the seven known preference
   runs MAP-DRIFT/MAP-DEAD-POINTER for a codebase map with a `Paths` column - experimental,
   ADR-007 Phase 1. Unlike `large_context_review_split`, this one also has a machine-wide
   default (installer.json `default_map_skeleton`) - same 3-tier precedence as docx/citations.
-- `guard_daemon` (bool, **default `true` when the key is absent** - the one preference here
-  that defaults on): whether `run-guard.sh`'s PreToolUse guards route through the
-  persistent ADR-014 daemon instead of a fresh interpreter per call, once its files are
-  applied (`scripts/apply-guard-daemon.sh` - a human-run step; this preference alone does
-  nothing on a project that hasn't applied them). Like `large_context_review_split`, no
-  machine-wide tier.
+- `guard_daemon` (bool, **on by convention for any project set up via `/preferences` or
+  the installer's configure flow, off if the key is genuinely absent**): whether
+  `run-guard.sh`'s PreToolUse guards route through the persistent ADR-014 daemon instead
+  of a fresh interpreter per call. Not a shell-level default - `run-guard.sh` matches the
+  literal string `"guard_daemon": true` in this file, so an absent key means off, not on;
+  "on by default" only holds because `run_configure` actively writes `true` during setup
+  (see its own docstring in `install_helper.py`). A project whose preferences file
+  predates that (or was hand-edited without the key) has the daemon off even though this
+  skill's own default framing might suggest otherwise - check the file, don't assume. The
+  daemon files (`scripts/guard_daemon.py`, `scripts/guard_daemon_client.py`, the
+  daemon-aware `run-guard.sh`) ship live as of 2026-08-13 - a current checkout needs no
+  separate apply step; an older checkout needs a human to run
+  `scripts/apply-guard-daemon.sh` once (ADR-002 rec 5: hook files are never applied
+  automatically). Like `large_context_review_split`, no machine-wide tier.
 
 **Also read your own model, read-only.** `Read .claude/settings.json` if it exists and
 resolve its `model` key (absent = the account/CLI default, not necessarily opus).

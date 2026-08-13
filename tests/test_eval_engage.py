@@ -573,7 +573,9 @@ def test_raw_evidence_is_bounded_and_tolerant(tmp_path):
     assert ee.raw_evidence_findings(tmp_path / "missing", "") == []
     # Separator-only and blank lines contribute nothing.
     (art / "rule.md").write_text("---\n\n| --- | --- |\n", encoding="utf-8")
-    assert not any(set(f["title"]) <= {"-", "|", " "} for f in ee.raw_evidence_findings(tmp_path, ""))
+    assert not any(
+        set(f["title"]) <= {"-", "|", " "} for f in ee.raw_evidence_findings(tmp_path, "")
+    )
 
 
 # --------------------------------------------------------------- false-pass guards
@@ -632,6 +634,8 @@ def test_transcript_prose_is_never_crowded_out_by_artifacts(tmp_path):
     art = tmp_path / "artifacts"
     art.mkdir(parents=True)
     for i in range(6):
-        (art / f"doc{i}.md").write_text("\n".join(f"artifact line {j}" for j in range(200)), "utf-8")
+        (art / f"doc{i}.md").write_text(
+            "\n".join(f"artifact line {j}" for j in range(200)), "utf-8"
+        )
     out = ee.raw_evidence_findings(tmp_path, "\n".join(f"pm prose {i}" for i in range(300)), {})
     assert any("pm prose" in f["title"] for f in out), "PM prose was crowded out entirely"

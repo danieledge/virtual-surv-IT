@@ -311,8 +311,10 @@ def main() -> None:
                 )
             # A Bash mutation of a guard file neuters the gate; reads/static analysis stay allowed.
             if _HOOK_MUTATE.search(seg):
-                _block(f"the safety hooks themselves via Bash ({seg[:120]}) - editing a guard "
-                       "can neuter it")
+                _block(
+                    f"the safety hooks themselves via Bash ({seg[:120]}) - editing a guard "
+                    "can neuter it"
+                )
             if not _protected(seg):
                 continue
             # A redirect can turn any verb into a write (`cat > marker`, `echo x >> settings`) -

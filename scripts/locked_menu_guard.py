@@ -67,9 +67,7 @@ def _labels(q: dict) -> set:
     if not isinstance(opts, list):
         return set()
     return {
-        _strip_recommended(o.get("label"))
-        for o in opts
-        if isinstance(o, dict) and o.get("label")
+        _strip_recommended(o.get("label")) for o in opts if isinstance(o, dict) and o.get("label")
     }
 
 

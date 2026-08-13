@@ -158,15 +158,11 @@ def test_scoped_agents_cannot_edit_outside_the_findings_pack_shape():
 def test_scoped_agent_cannot_write_the_rendered_report_directly():
     """The rendered .md/.html is the RENDERER's output (check_artifacts --fix), never
     hand-authored - these agents author the JSON pack only."""
-    assert _blocks(
-        "Write", {"file_path": "artifacts/my-slug/REVIEW-my-slug.md"}, "code-reviewer"
-    )
+    assert _blocks("Write", {"file_path": "artifacts/my-slug/REVIEW-my-slug.md"}, "code-reviewer")
 
 
 def test_scoped_agent_cannot_edit_the_rendered_report_directly():
-    assert _blocks(
-        "Edit", {"file_path": "artifacts/my-slug/REVIEW-my-slug.md"}, "code-reviewer"
-    )
+    assert _blocks("Edit", {"file_path": "artifacts/my-slug/REVIEW-my-slug.md"}, "code-reviewer")
 
 
 def test_scoped_agent_cannot_write_a_findings_looking_path_in_the_wrong_directory():
@@ -206,9 +202,17 @@ def test_non_dict_tool_input_treated_as_empty():
 
 def _finding_lines(n_findings: int, start: int = 0) -> str:
     finding = {
-        "id": "F1", "title": "t", "severity": "warning", "location": "a.py:1",
-        "basis": "coded", "standard": "s", "problem": "p", "likely_cause": "c",
-        "impact": "i", "fix": {"diff": "-x\n+y", "why": "w"}, "disposition": "open",
+        "id": "F1",
+        "title": "t",
+        "severity": "warning",
+        "location": "a.py:1",
+        "basis": "coded",
+        "standard": "s",
+        "problem": "p",
+        "likely_cause": "c",
+        "impact": "i",
+        "fix": {"diff": "-x\n+y", "why": "w"},
+        "disposition": "open",
     }
     return "\n".join(
         json.dumps(dict(finding, id=f"F{i}")) for i in range(start, start + n_findings)
@@ -248,7 +252,10 @@ def test_size_limit_silent_when_split_off_by_default(tmp_path):
     _write_prefs(tmp_path, None)  # no team-preferences.json at all
     payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(20)},
+        "tool_input": {
+            "file_path": "artifacts/x/data/findings-x.jsonl",
+            "content": _pack_content(20),
+        },
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 0
@@ -258,7 +265,10 @@ def test_size_limit_silent_when_split_explicitly_off(tmp_path):
     _write_prefs(tmp_path, False)
     payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(20)},
+        "tool_input": {
+            "file_path": "artifacts/x/data/findings-x.jsonl",
+            "content": _pack_content(20),
+        },
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 0
@@ -268,7 +278,10 @@ def test_size_limit_blocks_oversized_orchestrator_write_when_split_on(tmp_path):
     _write_prefs(tmp_path, True)
     payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(9)},
+        "tool_input": {
+            "file_path": "artifacts/x/data/findings-x.jsonl",
+            "content": _pack_content(9),
+        },
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 2
@@ -280,7 +293,10 @@ def test_size_limit_allows_write_at_the_threshold(tmp_path):
     _write_prefs(tmp_path, True)
     payload = {
         "tool_name": "Write",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(8)},
+        "tool_input": {
+            "file_path": "artifacts/x/data/findings-x.jsonl",
+            "content": _pack_content(8),
+        },
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 0
@@ -291,7 +307,10 @@ def test_size_limit_applies_to_scoped_agent_too_when_split_on(tmp_path):
     payload = {
         "tool_name": "Write",
         "agent_type": "code-reviewer",
-        "tool_input": {"file_path": "artifacts/x/data/findings-x.jsonl", "content": _pack_content(9)},
+        "tool_input": {
+            "file_path": "artifacts/x/data/findings-x.jsonl",
+            "content": _pack_content(9),
+        },
     }
     proc = _run_with_project(payload, tmp_path)
     assert proc.returncode == 2

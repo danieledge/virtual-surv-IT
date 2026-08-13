@@ -109,6 +109,7 @@ _NET_TOOLS = {"WebFetch", "WebSearch"}
 
 _TRANSCRIPT_CAP = 80_000  # chars of transcript handed to the normalizer / judge
 
+
 def _cap_transcript(transcript: str, cap: int = _TRANSCRIPT_CAP) -> str:
     """Keep BOTH ends of a long transcript, not just the tail.
 
@@ -624,9 +625,7 @@ async def run_engage_session(
         while True:
             try:
                 if first_message:
-                    message = await asyncio.wait_for(
-                        stream.__anext__(), timeout=STARTUP_TIMEOUT_S
-                    )
+                    message = await asyncio.wait_for(stream.__anext__(), timeout=STARTUP_TIMEOUT_S)
                 else:
                     message = await stream.__anext__()
             except StopAsyncIteration:
@@ -699,9 +698,7 @@ async def run_engage_session(
                         "usage": message.usage,
                         # ModelUsage is a TypedDict (plain dict at runtime) - dict(v) copies
                         # it without assuming any particular key set beyond what the SDK sent.
-                        "model_usage": {
-                            k: dict(v) for k, v in (message.model_usage or {}).items()
-                        },
+                        "model_usage": {k: dict(v) for k, v in (message.model_usage or {}).items()},
                     }
                     cap.usage_series.append(usage_entry)
                     if usage_fh is not None:
@@ -1053,9 +1050,7 @@ async def run_case(
         )
     except asyncio.TimeoutError:
         cap.timed_out = True
-        print(
-            f"  [{case_id}] TIMED OUT after {timeout_s}s - scoring what exists", file=sys.stderr
-        )
+        print(f"  [{case_id}] TIMED OUT after {timeout_s}s - scoring what exists", file=sys.stderr)
     except Exception as exc:  # session died - score whatever it left behind, report the error
         cap.is_error = True
         cap.error = f"{type(exc).__name__}: {exc}"
@@ -1255,8 +1250,7 @@ def gate_findings(out_dir: Path) -> list[dict]:
                 "location": "",
                 # The full question text, so keyword matching sees the team's OWN words.
                 "title": f"Asked the user via the question tool{f' [{header}]' if header else ''}: "
-                f"{question}"
-                + (f" (answered: {answer})" if answer else ""),
+                f"{question}" + (f" (answered: {answer})" if answer else ""),
                 "kind": "behaviour",
             }
         )
@@ -1307,7 +1301,7 @@ def fixture_baseline(sandbox: Path) -> dict[str, str]:
         if path.is_file():
             try:
                 out[str(path.relative_to(sandbox))] = hashlib.sha256(path.read_bytes()).hexdigest()
-            except Exception:
+            except Exception:  # nosec B112 - fail open, an unreadable file just drops from the hash set
                 continue
     return out
 
@@ -1362,7 +1356,7 @@ def raw_evidence_findings(
             rel = str(path.relative_to(sandbox))
             try:
                 raw = path.read_bytes()
-            except Exception:
+            except Exception:  # nosec B112 - fail open, an unreadable file just drops from scoring
                 continue
             # Unchanged since seeding => the case's own INPUT, not the team's work. Skip it.
             if baseline.get(rel) == hashlib.sha256(raw).hexdigest():
@@ -1822,12 +1816,16 @@ def main() -> int:
         s = summarise_results(rows)
         pr = s["pass_rate_scorable"]
         print(f"rows: {s['total']}   scorable: {s['scorable']}   unscorable: {s['unscorable']}")
-        print(f"pass rate (scorable):  {s['passed']}/{s['scorable']}" + (f" = {pr:.0%}" if pr else ""))
+        print(
+            f"pass rate (scorable):  {s['passed']}/{s['scorable']}" + (f" = {pr:.0%}" if pr else "")
+        )
         print(
             f"pass rate (all rows):  {s['passed']}/{s['total']} = {s['pass_rate_all']:.0%}"
             "   <- counts dead runs as failures; do NOT quote this as a quality number"
         )
-        print(f"unscorable rate:       {s['unscorable_rate']:.0%} (harness health, not team quality)")
+        print(
+            f"unscorable rate:       {s['unscorable_rate']:.0%} (harness health, not team quality)"
+        )
         if s["unscorable"]:
             print("\nunscorable runs (no gradeable output - timeout or session error):")
             for r in rows:
@@ -1857,7 +1855,9 @@ def main() -> int:
             ap.error(f"{out_dir} has no transcript.md - not a saved run dir")
         # A --resume-run writes its output to "<case>-resume", which is not a case id. Strip the
         # suffix so rescoring a resumed run loads the right manifest instead of crashing.
-        manifest = _load_case(case_id[: -len("-resume")] if case_id.endswith("-resume") else case_id)
+        manifest = _load_case(
+            case_id[: -len("-resume")] if case_id.endswith("-resume") else case_id
+        )
         rubric = (RUBRICS_ROOT / f"{manifest['rubric']}.md").read_text(encoding="utf-8")
         result = asyncio.run(
             score_run(

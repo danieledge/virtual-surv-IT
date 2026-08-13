@@ -5,17 +5,6 @@
       "Read(data/raw/**)",
       "Read(/*/data/raw/**)",
       "Read(/**/data/raw/**)",
-      "Grep(./data/raw/**)",
-      "Grep(data/raw/**)",
-      "Grep(/*/data/raw/**)",
-      "Grep(/**/data/raw/**)",
-      "Glob(./data/raw/**)",
-      "Glob(data/raw/**)",
-      "Glob(/*/data/raw/**)",
-      "Glob(/**/data/raw/**)",
-      "Write(./data/raw/**)",
-      "Write(data/raw/**)",
-      "Write(/**/data/raw/**)",
       "Edit(./data/raw/**)",
       "Edit(data/raw/**)",
       "Edit(/**/data/raw/**)",
@@ -44,11 +33,9 @@
       "Bash(black:*)",
       "Bash(mypy:*)",
       "Bash(bandit:*)",
-      "Bash(pip-audit:*)",
       "Bash(shellcheck:*)",
       "Bash(shfmt:*)",
       "Bash(bashate:*)",
-      "Bash(semgrep:*)",
       "Bash(gitleaks:*)",
       "Bash(checkstyle:*)",
       "Bash(pmd:*)",
@@ -76,6 +63,24 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/bash_hook_dispatcher.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/document_input_redirect.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/module_form_redirect.py\""
           }
         ]
       }

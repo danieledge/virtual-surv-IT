@@ -98,7 +98,9 @@ _SCOPED_AGENTS = frozenset(
 # .../artifacts/data/findings-<anything>.jsonl (flat pack), absolute or relative, either
 # slash style. Anchored at the end so a path that merely CONTAINS this shape somewhere in
 # the middle (not as its actual target) does not slip through.
-_ALLOWED_PATH_RE = re.compile(r"(^|[/\\])artifacts[/\\](?:[^/\\]+[/\\])?data[/\\]findings-[^/\\]+\.jsonl$")
+_ALLOWED_PATH_RE = re.compile(
+    r"(^|[/\\])artifacts[/\\](?:[^/\\]+[/\\])?data[/\\]findings-[^/\\]+\.jsonl$"
+)
 
 # Keep in sync with docs/team-operating-guide.md's orchestration-discipline bullet ("roughly
 # >8 findings to merge... build the pack incrementally").

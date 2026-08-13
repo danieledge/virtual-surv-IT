@@ -213,9 +213,7 @@ def _symbols_floor(path: Path) -> list[str]:
     except OSError:
         return []
     return [
-        line.strip("# ").strip()
-        for line in text.splitlines()
-        if line.lstrip().startswith("#")
+        line.strip("# ").strip() for line in text.splitlines() if line.lstrip().startswith("#")
     ][:20]  # a runaway heading-shaped file (rare) still can't blow the per-file budget
 
 
@@ -491,7 +489,12 @@ def build_skeleton(
                 # remaining file to the compact tier instead of dropping it outright.
                 compact_from = i
                 block = _file_block(
-                    rel_path, symbols, tier, compact=True, churn=churn, churn_measured=churn_measured
+                    rel_path,
+                    symbols,
+                    tier,
+                    compact=True,
+                    churn=churn,
+                    churn_measured=churn_measured,
                 )
                 block_tokens = _estimate_tokens(block) + 1
                 if used_tokens + block_tokens > budget_tokens:

@@ -23,8 +23,6 @@ import sys
 import types
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DISPATCHER = REPO_ROOT / "scripts" / "stop_hook_dispatcher.py"
 STAGED = REPO_ROOT / "scripts" / "staged_hooks" / "stop_hook_dispatcher.py"

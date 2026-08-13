@@ -212,13 +212,20 @@ def test_recommended_marker_on_multiple_options_passes():
 
 
 def test_recommended_marker_on_artifact_menu_stage1_passes():
-    good = [_q("Artifacts", ["Consolidated Delivery Report (Recommended)", "Separate artifacts", "Both"])]
+    good = [
+        _q(
+            "Artifacts",
+            ["Consolidated Delivery Report (Recommended)", "Separate artifacts", "Both"],
+        )
+    ]
     proc = _run(good)
     assert proc.returncode == 0
 
 
 def test_recommended_marker_on_artifact_menu_stage2_passes():
-    good = [_q("Reviews", ["Code & Compliance Review (Recommended)", "Performance Review"], multi=True)]
+    good = [
+        _q("Reviews", ["Code & Compliance Review (Recommended)", "Performance Review"], multi=True)
+    ]
     proc = _run(good)
     assert proc.returncode == 0
 

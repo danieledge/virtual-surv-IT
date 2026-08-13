@@ -18,7 +18,6 @@ silently. The render now embeds a content hash: hand-edits surface as INDEX-HAND
 from __future__ import annotations
 
 import copy
-import json
 
 from scripts.check_artifacts import apply_fixes, check, main as ca_main
 

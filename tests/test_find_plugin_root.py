@@ -13,9 +13,7 @@ from scripts.find_plugin_root import find_plugin_root
 def _write_manifest(plugin_dir, name="compliance-surveillance-team@virtual-surv-it"):
     manifest_dir = plugin_dir / ".claude-plugin"
     manifest_dir.mkdir(parents=True, exist_ok=True)
-    (manifest_dir / "plugin.json").write_text(
-        json.dumps({"name": name}), encoding="utf-8"
-    )
+    (manifest_dir / "plugin.json").write_text(json.dumps({"name": name}), encoding="utf-8")
 
 
 def test_repo_as_project_when_cwd_has_operating_guide(tmp_path):
@@ -132,7 +130,9 @@ def test_registry_takes_priority_over_filesystem_fallback(tmp_path):
         json.dumps({"plugins": {"x": [{"installPath": str(registry_dir)}]}}), encoding="utf-8"
     )
     # ALSO plant a filesystem-fallback-discoverable copy - registry must win
-    cache = home / ".claude" / "plugins" / "cache" / "compliance-surveillance-team" / "9.9.9" / "docs"
+    cache = (
+        home / ".claude" / "plugins" / "cache" / "compliance-surveillance-team" / "9.9.9" / "docs"
+    )
     cache.mkdir(parents=True)
     (cache / "team-operating-guide.md").write_text("x", encoding="utf-8")
     cwd = tmp_path / "project"

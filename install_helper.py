@@ -1661,6 +1661,78 @@ class Installer:
             return
         self.step_ok(f"Cached: {chosen}")
 
+    def check_pending_hook_fixes(self) -> None:
+        """Read-only nudge, on by default (no toggle) - never applies anything itself.
+
+        Prompted by a live question: guard_daemon now defaults to true (see
+        run_configure), but the daemon files it needs are staged, not live, until a
+        human runs scripts/apply-guard-daemon.sh - so a fresh clone could carry a
+        preference that quietly does nothing, with no way to notice short of reading
+        docs or running pytest by hand. install_helper.py is the one place every
+        install/update already passes through, so it is the right place to surface
+        the gap loudly.
+
+        Deliberately does NOT copy the files itself, even though install_helper.py
+        is always human-invoked. ADR-002 rec 5's boundary ("the model cannot edit
+        .claude/hooks/**") has to hold regardless of who is nominally driving - and in
+        practice, THIS script gets run by the model via Bash constantly, same as every
+        other step in this file. Teaching it to self-apply staged hooks would hand the
+        model an indirect route to modify its own guard files just by running the
+        installer normally - exactly the loophole that boundary exists to close (see
+        scripts/apply-outstanding.sh's own docstring: it sequences already-approved
+        human-run scripts and grants itself no exemption; this step affords the same
+        courtesy - and gives the same test command in dont-edit-safety-hooks spirit).
+
+        Uses the identical staged-vs-live discovery as tests/test_hooks_in_sync.py's
+        _live_path_for (kept in sync by convention, not import: this module runs
+        standalone before any pip/test setup exists, so it can't depend on the tests
+        package) - guard-prefixed files and run-guard.sh live under .claude/hooks/,
+        everything else staged is a scripts/ tool. Best-effort: any read error on a
+        given file just skips that one file rather than failing the whole step."""
+        self.step_intro(
+            "Checking whether any staged safety-hook fixes are waiting on a human to apply them."
+        )
+        staged_dir = self.repo / "scripts" / "staged_hooks"
+        if not staged_dir.is_dir():
+            self.step_skip("Pending hook fixes", "no staged_hooks directory in this clone")
+            return
+
+        def live_path_for(staged: Path) -> Path:
+            if staged.name.startswith("guard-") or staged.name == "run-guard.sh":
+                return self.repo / ".claude" / "hooks" / staged.name
+            return self.repo / "scripts" / staged.name
+
+        pending = []
+        for staged in sorted(staged_dir.iterdir()):
+            if not staged.is_file() or staged.name.startswith("."):
+                continue
+            live = live_path_for(staged)
+            try:
+                staged_text = staged.read_text(encoding="utf-8")
+                live_text = live.read_text(encoding="utf-8") if live.is_file() else None
+            except OSError:
+                continue
+            if live_text != staged_text:
+                pending.append(staged.name)
+
+        if not pending:
+            self.step_ok("Pending hook fixes", "none - staged and live hooks match")
+            return
+
+        self.say(
+            self.style.yellow(
+                f"  {len(pending)} staged fix(es) not yet applied: {', '.join(pending)}"
+            )
+        )
+        self.say(
+            self.style.yellow(
+                "  Inert until applied - e.g. a true guard_daemon preference does nothing "
+                "until this runs. A human (not this script) should run:"
+            )
+        )
+        self.say("    bash scripts/apply-outstanding.sh")
+        self.step_skip("Pending hook fixes", f"{len(pending)} waiting - see command above")
+
     def print_update_preview(self, preview: dict, branch: str, local_version) -> None:
         """Console rendering of gather_update_preview's result. Purely informational:
         missing fields simply do not print; degradation notes print dimmed."""
@@ -2742,6 +2814,7 @@ class Installer:
                 ("Preflight checks", self.preflight),
                 ("Locate existing clone", self.locate_clone_asis),
                 ("Guard interpreter cache", self.prewarm_guard_cache),
+                ("Pending hook fixes", self.check_pending_hook_fixes),
                 ("Claude Code marketplace", self.marketplace),
                 (
                     lambda: "Plugin " + ("update" if self.mode == "update" else "install"),
@@ -2807,6 +2880,7 @@ class Installer:
             ("Local clone", self.resolve_repo),
             (lambda: f"Sync to origin/{self.branch}", self.sync_branch),
             ("Guard interpreter cache", self.prewarm_guard_cache),
+            ("Pending hook fixes", self.check_pending_hook_fixes),
             ("Quick setup or manual?", self.quick_setup_choice),
             ("Optional pip requirements", self.optional_pip),
             ("Claude Code marketplace", self.marketplace),

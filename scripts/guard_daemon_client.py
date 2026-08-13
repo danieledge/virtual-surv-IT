@@ -15,7 +15,14 @@ would have done without the daemon), and separately, best-effort, start a
 detached daemon for next time. A daemon that fails to start is not this call's
 problem; the fallback already covers it.
 
-Usage: guard_daemon_client.py <repo_root>
+2026-08-13 fix: TWO roots now, not one - see guard_daemon.py's module docstring
+for the full rationale. `module_root` locates the real bash_hook_dispatcher.py
+(plugin-shipped, CLAUDE_PLUGIN_ROOT-first). `state_root` locates this project's
+port file (CLAUDE_PROJECT_DIR only). Passing only module_root keeps today's
+project-mode behaviour (they default to each other) - only plugin-install mode,
+where the two genuinely differ, needs both.
+
+Usage: guard_daemon_client.py <module_root> [state_root]
 Stdin: the PreToolUse JSON payload (same contract as bash_hook_dispatcher.py).
 Exit code: 2 = block, 0 = allow - identical contract either path.
 """
@@ -24,7 +31,7 @@ from __future__ import annotations
 
 import json
 import socket
-import subprocess
+import subprocess  # nosec B404 - fixed argv, shell=False, invoking our own sibling scripts only
 import sys
 from pathlib import Path
 
@@ -35,11 +42,11 @@ _CONNECT_TIMEOUT = 0.5
 _RESPONSE_TIMEOUT = 20.0
 
 
-def _try_daemon(repo_root: Path, payload_text: str):
+def _try_daemon(state_root: Path, payload_text: str):
     """Returns (exit_code, stderr_text) on success, None on ANY failure - never
     raises, since a broken daemon connection must fall back cleanly, not crash
     the tool call it's guarding."""
-    port, token = read_port_and_token(repo_root)
+    port, token = read_port_and_token(state_root)
     if port is None:
         return None
     try:
@@ -68,7 +75,7 @@ def _try_daemon(repo_root: Path, payload_text: str):
     return response.get("exit_code", 0), response.get("stderr", "")
 
 
-def _start_daemon_detached(repo_root: Path) -> None:
+def _start_daemon_detached(module_root: Path, state_root: Path) -> None:
     """Best-effort, never blocks and never raises - a failed daemon start is not
     this call's problem, only a missed optimisation for next time."""
     try:
@@ -83,8 +90,8 @@ def _start_daemon_detached(repo_root: Path) -> None:
             kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
         else:
             kwargs["start_new_session"] = True  # POSIX: detach from this process group
-        subprocess.Popen(
-            [sys.executable, str(daemon_script), str(repo_root)],
+        subprocess.Popen(  # nosec B603 - fixed argv, shell=False
+            [sys.executable, str(daemon_script), str(module_root), str(state_root)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -94,13 +101,13 @@ def _start_daemon_detached(repo_root: Path) -> None:
         pass
 
 
-def _cold_start_fallback(repo_root: Path, payload_text: str):
+def _cold_start_fallback(module_root: Path, payload_text: str):
     """Exactly today's path - a fresh subprocess against the real dispatcher.
     Fails open on any launch problem, same posture as run-guard.sh's own
     no-interpreter-found case: a broken fallback must not brick the tool call."""
-    dispatcher = repo_root / "scripts" / "bash_hook_dispatcher.py"
+    dispatcher = module_root / "scripts" / "bash_hook_dispatcher.py"
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B603 - fixed argv, shell=False
             [sys.executable, str(dispatcher)],
             input=payload_text,
             capture_output=True,
@@ -113,13 +120,14 @@ def _cold_start_fallback(repo_root: Path, payload_text: str):
 
 
 def main() -> int:
-    repo_root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
+    module_root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
+    state_root = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else module_root
     payload_text = sys.stdin.read()
 
-    result = _try_daemon(repo_root, payload_text)
+    result = _try_daemon(state_root, payload_text)
     if result is None:
-        _start_daemon_detached(repo_root)
-        result = _cold_start_fallback(repo_root, payload_text)
+        _start_daemon_detached(module_root, state_root)
+        result = _cold_start_fallback(module_root, payload_text)
 
     exit_code, stderr_text = result
     if stderr_text:

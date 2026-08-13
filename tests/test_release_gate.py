@@ -248,7 +248,9 @@ def test_one_case_slice_cannot_promote(tmp_path, monkeypatch):
     root = _repo(
         tmp_path,
         baseline="Scope: full\n",
-        verdict=_verdict(verdict="pass", cases_total=1, cases_passed_raw=1, cases_adjudicated_pass=0),
+        verdict=_verdict(
+            verdict="pass", cases_total=1, cases_passed_raw=1, cases_adjudicated_pass=0
+        ),
     )
     assert any("stands on 1 case(s)" in f for f in rg.gate(root))
 
@@ -278,9 +280,7 @@ def test_verdict_without_runs_is_self_reported(tmp_path, monkeypatch):
 def test_deterministic_only_baseline_needs_no_runs(tmp_path, monkeypatch):
     # A pytest + scorer record has no live runs to cite; the slice floor still applies.
     _fresh(monkeypatch)
-    root = _repo(
-        tmp_path, baseline="Scope: deterministic-only\n", verdict=_verdict(runs="")
-    )
+    root = _repo(tmp_path, baseline="Scope: deterministic-only\n", verdict=_verdict(runs=""))
     assert rg.gate(root, allow_deterministic=True) == []
 
 
@@ -340,7 +340,9 @@ def test_a_case_passing_in_any_cited_run_counts_once(tmp_path, monkeypatch):
     root = _repo(
         tmp_path,
         baseline="Scope: full\n",
-        verdict=_verdict(cases_passed_raw=2, cases_adjudicated_pass=4, runs=f"{_RUN}, 20260801T204756Z"),
+        verdict=_verdict(
+            cases_passed_raw=2, cases_adjudicated_pass=4, runs=f"{_RUN}, 20260801T204756Z"
+        ),
         results=_results_log(passed=1) + rerun + "\n",
     )
     assert rg.gate(root) == []
@@ -350,8 +352,9 @@ def test_two_verdict_blocks_are_rejected(tmp_path, monkeypatch):
     # report.md tells the human to paste its drafted block, so a leftover raw draft above the
     # adjudicated one is a realistic accident - the gate refuses to pick a claim.
     _fresh(monkeypatch)
-    draft = _verdict(verdict="fail", cases_passed_raw=1, cases_adjudicated_pass=0,
-                     unadjudicated_failures=5)
+    draft = _verdict(
+        verdict="fail", cases_passed_raw=1, cases_adjudicated_pass=0, unadjudicated_failures=5
+    )
     root = _repo(tmp_path, baseline="Scope: full\n", verdict=draft + "\nprose\n" + _verdict())
     findings = rg.gate(root)
     assert any("more than one" in f for f in findings)

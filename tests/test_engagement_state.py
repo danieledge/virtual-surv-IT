@@ -393,6 +393,7 @@ def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeyp
         "regulatory_citations": False,
         "large_context_review_split": True,
         "parallel_dispatch_via_workflow": True,
+        "standards_critique": False,
         "map_skeleton": False,
     }
     assert validate_state(state) == []
@@ -406,6 +407,7 @@ def test_init_settings_snapshot_builtin_defaults_when_no_preferences_file(tmp_pa
         "regulatory_citations": True,
         "large_context_review_split": False,
         "parallel_dispatch_via_workflow": True,
+        "standards_critique": False,
         "map_skeleton": False,
     }
 
@@ -848,8 +850,6 @@ def test_write_state_does_not_reread_the_pack_it_just_wrote(tmp_path, monkeypatc
 def test_write_state_still_reads_every_other_pack_fresh(tmp_path, monkeypatch):
     """No-drift guarantee: mutating one pack must not stop the registry from reflecting a
     sibling pack that changed between renders (e.g. edited by a different session)."""
-    import scripts.engagement_state as es_module
-
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
     _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
     art = tmp_path / "artifacts"

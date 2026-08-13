@@ -96,7 +96,9 @@ def test_lock_acquires_promptly_when_claude_dir_does_not_exist_yet(tmp_path):
     proc = _run(proj_dir)
     elapsed = time.monotonic() - start
     assert proc.returncode == 0
-    assert elapsed < 1.0, f"took {elapsed:.2f}s - should acquire immediately, not wait out the budget"
+    assert elapsed < 1.0, (
+        f"took {elapsed:.2f}s - should acquire immediately, not wait out the budget"
+    )
     assert not _lock_dir(proj_dir).exists()  # released after this call's own completion
 
 
@@ -159,7 +161,9 @@ def test_a_genuinely_held_lock_fails_open_within_the_wait_budget(proj):
     proc = _run(proj, timeout=10)
     elapsed = time.monotonic() - start
     assert proc.returncode == 0  # proceeded anyway - fail open, not a hang
-    assert elapsed < 5.0, f"took {elapsed:.2f}s - the wait budget is ~1.5s, this should not be near the 10s test timeout"
+    assert elapsed < 5.0, (
+        f"took {elapsed:.2f}s - the wait budget is ~1.5s, this should not be near the 10s test timeout"
+    )
     # This call never owned the lock (gave up waiting), so it must not have torn down
     # the still-fresh lock it doesn't own.
     assert lock.exists()

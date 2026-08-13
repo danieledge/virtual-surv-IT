@@ -303,7 +303,9 @@ def test_build_report_project_setting_overrides_machine_default(tmp_path, monkey
     assert "REGULATORY_CITATIONS=on" in out
 
 
-def test_build_report_falls_back_to_builtin_default_when_no_machine_config_either(tmp_path, monkeypatch):
+def test_build_report_falls_back_to_builtin_default_when_no_machine_config_either(
+    tmp_path, monkeypatch
+):
     """No project preference AND no machine config at all - the original hardcoded
     built-in default (docx off, citations on) still applies."""
     _isolate_home_for_probe(monkeypatch, tmp_path)
@@ -526,7 +528,12 @@ def test_map_drift_summary_silent_when_fingerprint_matches(tmp_path):
     (tmp_path / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
     _write_sidecar(
         tmp_path / "docs",
-        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], tmp_path)}},
+        {
+            "rules": {
+                "paths": ["src/x.py"],
+                "fingerprint": compute_fingerprint(["src/x.py"], tmp_path),
+            }
+        },
     )
     assert map_drift_summary(tmp_path, map_skeleton_on=True) == ""
 
@@ -541,7 +548,12 @@ def test_map_drift_summary_fires_when_file_changed_since_fingerprinted(tmp_path)
     f.write_text("threshold = 1\n", encoding="utf-8")
     _write_sidecar(
         tmp_path / "docs",
-        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], tmp_path)}},
+        {
+            "rules": {
+                "paths": ["src/x.py"],
+                "fingerprint": compute_fingerprint(["src/x.py"], tmp_path),
+            }
+        },
     )
     f.write_text("threshold = 2\n", encoding="utf-8")  # changed AFTER fingerprinting
     summary = map_drift_summary(tmp_path, map_skeleton_on=True)
@@ -615,7 +627,12 @@ def test_build_report_omits_map_drift_line_when_nothing_drifted(tmp_path):
     (tmp_path / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
     _write_sidecar(
         tmp_path / "docs",
-        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], tmp_path)}},
+        {
+            "rules": {
+                "paths": ["src/x.py"],
+                "fingerprint": compute_fingerprint(["src/x.py"], tmp_path),
+            }
+        },
     )
     out = build_report("", tmp_path)
     assert "MAP_DRIFT=" not in out
@@ -802,14 +819,17 @@ def test_no_interpreter_line_when_flag_omitted(tmp_path, capsys):
 def test_ascii_safe_substitutes_known_repo_glyphs():
     text = "🎩 Morgan: 📊 observed, 🧠 inferred, next → then, done ✓, missing ✗"
     out = _ascii_safe(text)
-    assert out == "[Morgan] Morgan: [observed] observed, [inferred] inferred, next -> then, done [x], missing [ ]"
+    assert (
+        out
+        == "[Morgan] Morgan: [observed] observed, [inferred] inferred, next -> then, done [x], missing [ ]"
+    )
     out.encode("ascii")  # must not raise
 
 
 def test_ascii_safe_falls_back_to_generic_replace_for_unknown_glyphs():
     # An arbitrary unicode character from a user-edited project file, not in the
     # known-glyph map - must still come out pure ASCII, not raise or pass through.
-    out = _ascii_safe("café 中文 \U0001F600")
+    out = _ascii_safe("café 中文 \U0001f600")
     out.encode("ascii")  # must not raise
     assert "é" not in out and "中" not in out
 

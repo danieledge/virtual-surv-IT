@@ -52,26 +52,74 @@ _PATHY_RE = re.compile(r"^[\w./-]+\.(?:md|py|sh|json|yaml|yml|html|txt)$")
 # A bare basename is a legitimate way to refer to a file the reader can find. These are the
 # directories a basename may resolve in, so `agent-design.md` finds docs/agent-design.md.
 _SEARCH_DIRS = (
-    "", "docs", "docs/templates", "docs/review", "docs/review/lenses", "docs/adr",
-    "docs/internal", "docs/scenarios", "docs/releases", "docs/demos", "scripts",
-    "scripts/staged_hooks", ".claude", ".claude/hooks", ".claude/agents", ".claude-plugin",
-    "hooks", "evals", "evals/rubrics", "config", "rules", "tests",
+    "",
+    "docs",
+    "docs/templates",
+    "docs/review",
+    "docs/review/lenses",
+    "docs/adr",
+    "docs/internal",
+    "docs/scenarios",
+    "docs/releases",
+    "docs/demos",
+    "scripts",
+    "scripts/staged_hooks",
+    ".claude",
+    ".claude/hooks",
+    ".claude/agents",
+    ".claude-plugin",
+    "hooks",
+    "evals",
+    "evals/rubrics",
+    "config",
+    "rules",
+    "tests",
 )
 
 # Created by the team at runtime, or living in the user's working project. Never in this repo.
 _MARKER = "." + "exec-consent"
 _RUNTIME_PARTS = (
-    "artifacts/", "START-HERE", "ENGAGEMENTS", "engagements.json", "engagement-state.json",
-    ".active-engagement", ".dod-root-allowlist", "CODEBASE-MAP", "codebase-map", ".mcp.json",
-    "INSTRUCTIONS.md", "team-preferences.json", "team-extensions.md", _MARKER,
-    "dashboard.html", "scst-dashboard.html", "dashboard-data.json",
-    ".guard-interpreter", "SKILL.md", "report.md", "score.json", "findings.json", "gates.json",
-    "transcript.md", "events.jsonl", "expected.yaml", "scenario.md", "notes.md",
-    "results.jsonl", "fixture-baseline.json",
+    "artifacts/",
+    "START-HERE",
+    "ENGAGEMENTS",
+    "engagements.json",
+    "engagement-state.json",
+    ".active-engagement",
+    ".dod-root-allowlist",
+    "CODEBASE-MAP",
+    "codebase-map",
+    ".mcp.json",
+    "INSTRUCTIONS.md",
+    "team-preferences.json",
+    "team-extensions.md",
+    _MARKER,
+    "dashboard.html",
+    "scst-dashboard.html",
+    "dashboard-data.json",
+    ".guard-interpreter",
+    "SKILL.md",
+    "report.md",
+    "score.json",
+    "findings.json",
+    "gates.json",
+    "transcript.md",
+    "events.jsonl",
+    "expected.yaml",
+    "scenario.md",
+    "notes.md",
+    "results.jsonl",
+    "fixture-baseline.json",
     # Pass-scoped artifact names the placement rule PRESCRIBES; they are examples of what the
     # team should call things, not files that exist here.
-    "review-pass", "qa-cycle", "interim-findings", "delivery-report.md", "qa-handover",
-    "engagement-brief", "rtm.md", "decision-log.md", "user-stories.md",
+    "review-pass",
+    "qa-cycle",
+    "interim-findings",
+    "delivery-report.md",
+    "qa-handover",
+    "engagement-brief",
+    "rtm.md",
+    "decision-log.md",
+    "user-stories.md",
 )
 
 # Absent on purpose. Each needs a reason: this is a judgement list, not a way to silence a
@@ -95,7 +143,11 @@ _SCAN_FILES = ("CLAUDE.md", "README.md", "CONTRIBUTING.md", "SECURITY.md")
 # makes about itself. Rewriting one to satisfy a link check would destroy the only property
 # that makes it worth keeping.
 _SKIP_PARTS = (
-    "/runs/", "/cases/", "/node_modules/", "/__pycache__/", "/demos/transcripts/",
+    "/runs/",
+    "/cases/",
+    "/node_modules/",
+    "/__pycache__/",
+    "/demos/transcripts/",
 )
 
 
@@ -105,11 +157,7 @@ def _scanned_files(root: Path) -> list[Path]:
         base = root / directory
         if not base.is_dir():
             continue
-        files += [
-            p
-            for p in base.rglob("*.md")
-            if not any(part in str(p) for part in _SKIP_PARTS)
-        ]
+        files += [p for p in base.rglob("*.md") if not any(part in str(p) for part in _SKIP_PARTS)]
     return sorted(files)
 
 

@@ -176,7 +176,6 @@ _NEGATION_RE = re.compile(
 )
 
 
-
 def _matches(spec: dict, finding: dict) -> bool:
     """A finding matches a planted/forbidden spec if location OR any keyword matches.
 

@@ -1781,8 +1781,11 @@ def main(argv: list[str] | None = None) -> int:
         help="record several decisions in one process (renders once) - batch form of "
         "set-decision, for intake sequences that used to chain N separate invocations",
     )
-    p.add_argument("--json", required=True, help='JSON object, e.g. \'{"data-attestation": '
-        '"...", "fix-cycle": "..."}\'')
+    p.add_argument(
+        "--json",
+        required=True,
+        help='JSON object, e.g. \'{"data-attestation": "...", "fix-cycle": "..."}\'',
+    )
     p.set_defaults(fn=_cmd_set_decisions)
 
     p = sub.add_parser(

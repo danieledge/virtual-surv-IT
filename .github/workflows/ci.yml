@@ -82,9 +82,18 @@ jobs:
         run: |
           # Cover the pipeline's own formats too: .jsonl is the ingest/masking format and
           # .xlsx/.xls/.tsv are first-class converter inputs, not just csv/parquet/pcap.
-          if git ls-files '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls' | grep -q .; then
+          #
+          # 2026-08-13: two tracked .jsonl files are legitimate non-sensitive content that
+          # happen to share the flagged extension, not raw surveillance data - excluded by
+          # exact path (never by extension) so nothing else can quietly ride along on the
+          # same exception:
+          #   - docs/review/gold-findings.jsonl - a documentation template ("example-review")
+          #   - evals/results.jsonl             - eval run metrics (cost/duration/pass-fail)
+          if git ls-files '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls' \
+              ':!docs/review/gold-findings.jsonl' ':!evals/results.jsonl' | grep -q .; then
             echo "::error::Raw data files committed. Use synthetic data only (CLAUDE.md §5)."
-            git ls-files '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls'
+            git ls-files '*.csv' '*.tsv' '*.parquet' '*.pcap' '*.jsonl' '*.xlsx' '*.xls' \
+                ':!docs/review/gold-findings.jsonl' ':!evals/results.jsonl'
             exit 1
           fi
           echo "OK - no raw data files tracked."

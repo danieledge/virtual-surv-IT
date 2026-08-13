@@ -84,7 +84,7 @@ def _run_hook(module: ModuleType, payload_text: str) -> dict | None:
         module.main()
     except SystemExit:
         pass
-    except Exception:
+    except Exception:  # nosec B110 - deliberate fail-open, see docstring above
         pass
     finally:
         sys.stdin = old_stdin

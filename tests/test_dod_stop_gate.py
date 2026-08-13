@@ -210,7 +210,9 @@ def _load_staged_gate():
 
 def test_reason_permits_deferring_for_unrelated_new_work():
     staged = _load_staged_gate()
-    reason = staged._reason(["PACK-UNSCORED: findings-t.jsonl carries 3 finding(s)..."], [], "slug", "abc123")
+    reason = staged._reason(
+        ["PACK-UNSCORED: findings-t.jsonl carries 3 finding(s)..."], [], "slug", "abc123"
+    )
     assert "clearly asked for" in reason and "something else" in reason
     assert "proceed with THAT first" in reason
 
@@ -219,6 +221,8 @@ def test_reason_forbids_recording_the_suppression_marker_while_deferring():
     """The deferral permission must not double as a silent-suppress loophole - recording
     the log-note marker means "acted on", not "saw and moved past"."""
     staged = _load_staged_gate()
-    reason = staged._reason(["PACK-UNSCORED: findings-t.jsonl carries 3 finding(s)..."], [], "slug", "abc123")
+    reason = staged._reason(
+        ["PACK-UNSCORED: findings-t.jsonl carries 3 finding(s)..."], [], "slug", "abc123"
+    )
     assert "do **NOT** record" in reason
     assert 'log-note "dod-nudged:abc123"' in reason

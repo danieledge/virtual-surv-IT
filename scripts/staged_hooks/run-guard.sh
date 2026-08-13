@@ -94,6 +94,14 @@ done
 # unlike $_root, there is no correct case where a project's own state should live under
 # the plugin's install directory instead of the project itself), same trailing-slash
 # treatment as $_root above and for the identical reason.
+#
+# 2026-08-13 follow-up (live audit caught one instance this fix missed the first time):
+# DAEMON_CLIENT itself has the exact same conflation one layer down - it was invoked
+# with only $_root, which it needs correctly to locate the real bash_hook_dispatcher.py,
+# but was ALSO using that same value to place ITS OWN per-project port file
+# (.claude/.guard-daemon-port) and to decide which project's exec-consent marker a
+# spawned daemon evaluates requests against. Now invoked with BOTH roots -
+# guard_daemon_client.py's own docstring has the full rationale.
 _project_root="${CLAUDE_PROJECT_DIR:-.}"
 while [ "${_project_root%/}" != "$_project_root" ] && [ -n "$_project_root" ]; do
 	_project_root="${_project_root%/}"
@@ -250,7 +258,7 @@ if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)
 	if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
 		if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
-			"$cached" "$DAEMON_CLIENT" "$_root"
+			"$cached" "$DAEMON_CLIENT" "$_root" "$_project_root"
 			exit $?
 		fi
 		"$cached" "$@"
@@ -274,7 +282,7 @@ for interpreter in $order; do
 			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
 			printf '%s' "$interpreter" >"$CACHE" 2>/dev/null
 			if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
-				"$interpreter" "$DAEMON_CLIENT" "$_root"
+				"$interpreter" "$DAEMON_CLIENT" "$_root" "$_project_root"
 				exit $?
 			fi
 			"$interpreter" "$@"

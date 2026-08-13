@@ -311,7 +311,7 @@ def _block(cmd: str, segment: str | None = None) -> None:
             "replacement instead of re-running the exact probe block character for character "
             "(see PROBE_FAILED in .claude/skills/engage/references/probe-contract.md); (2) "
             "checking a JSON/text file (e.g. verifying a findings pack parses and counting its "
-            "entries) by running `python -c \"...json.load...\"` instead of just reading the "
+            'entries) by running `python -c "...json.load..."` instead of just reading the '
             "file - it is already text you can Read and count directly, no execution needed "
             "(docs/team-operating-guide.md's findings-count-verification guidance). If you "
             "genuinely need the interpreter's own path or version, use `python --version` or "

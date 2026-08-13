@@ -350,7 +350,9 @@ def read_machine_defaults() -> dict:
     base = os.environ.get("XDG_CONFIG_HOME")
     root = Path(base) if base else Path.home() / ".config"
     try:
-        data = json.loads((root / "virt-surv-it" / "installer.json").read_text(encoding="utf-8-sig"))
+        data = json.loads(
+            (root / "virt-surv-it" / "installer.json").read_text(encoding="utf-8-sig")
+        )
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}

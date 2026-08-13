@@ -58,7 +58,9 @@ def project_with_raw(tmp_path):
     raw.mkdir(parents=True)
     (raw / "trades.csv").write_text("account,amount\nACC1,100\n", encoding="utf-8")
     (tmp_path / ".claude").mkdir()
-    (tmp_path / ".claude" / "settings.json").write_text('{"deny": ["data/raw/**"]}', encoding="utf-8")
+    (tmp_path / ".claude" / "settings.json").write_text(
+        '{"deny": ["data/raw/**"]}', encoding="utf-8"
+    )
     return tmp_path
 
 
@@ -109,9 +111,7 @@ def test_unknown_tool_gets_defence_in_depth_scan(project_with_raw):
 
 
 def test_unknown_tool_unrelated_input_allowed(project_with_raw):
-    assert not _blocks(
-        project_with_raw, "mcp__jira__create_issue", {"summary": "fix the parser"}
-    )
+    assert not _blocks(project_with_raw, "mcp__jira__create_issue", {"summary": "fix the parser"})
 
 
 @pytest.mark.parametrize("tool", ["Write", "Edit", "MultiEdit", "NotebookEdit"])
@@ -155,9 +155,7 @@ def test_ancestor_search_allowed_when_no_raw_data(project_without_raw):
 
 def test_sibling_scoped_search_still_allowed(project_with_raw):
     """Searching the masked lane must keep working even with raw data present."""
-    assert not _blocks(
-        project_with_raw, "Grep", {"pattern": "account", "path": "data/masked"}
-    )
+    assert not _blocks(project_with_raw, "Grep", {"pattern": "account", "path": "data/masked"})
 
 
 def test_direct_raw_path_still_blocks(project_with_raw):

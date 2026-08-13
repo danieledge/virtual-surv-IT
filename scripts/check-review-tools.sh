@@ -87,7 +87,7 @@ review_tool_state_for() {
   # $1 = tool name; prints its resolved state, "auto" if the resolver produced nothing
   # (e.g. python3 unavailable) - fails toward existing presence-only behaviour, never
   # toward silently disabling a tool nobody asked to disable.
-  local wanted="$1" line
+  local wanted="$1"
   while IFS='=' read -r name state; do
     if [ "$name" = "$wanted" ]; then
       echo "$state"

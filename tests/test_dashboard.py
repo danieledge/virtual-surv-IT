@@ -462,7 +462,13 @@ def test_session_json_camel_cases_cost_by_model():
     s = {
         "session": "abc",
         "cost_by_model": {
-            "claude-sonnet-5": {"in": 10, "out": 5, "cache_read": 1, "cache_write": 2, "cost_usd": 0.5}
+            "claude-sonnet-5": {
+                "in": 10,
+                "out": 5,
+                "cache_read": 1,
+                "cache_write": 2,
+                "cost_usd": 0.5,
+            }
         },
     }
     out = _session_json(s, engagement_slug=None)
@@ -475,21 +481,65 @@ def test_cost_by_model_rows_aggregates_across_sessions_and_projects():
     usage_by_project = {
         "proj-a": {
             "sessions": [
-                {"cost_by_model": {"claude-sonnet-5": {"in": 100, "out": 0, "cache_read": 0, "cache_write": 0, "cost_usd": 1.0}}},
-                {"cost_by_model": {"claude-sonnet-5": {"in": 50, "out": 0, "cache_read": 0, "cache_write": 0, "cost_usd": 0.5}}},
+                {
+                    "cost_by_model": {
+                        "claude-sonnet-5": {
+                            "in": 100,
+                            "out": 0,
+                            "cache_read": 0,
+                            "cache_write": 0,
+                            "cost_usd": 1.0,
+                        }
+                    }
+                },
+                {
+                    "cost_by_model": {
+                        "claude-sonnet-5": {
+                            "in": 50,
+                            "out": 0,
+                            "cache_read": 0,
+                            "cache_write": 0,
+                            "cost_usd": 0.5,
+                        }
+                    }
+                },
             ]
         },
         "proj-b": {
             "sessions": [
-                {"cost_by_model": {"claude-opus-5": {"in": 10, "out": 0, "cache_read": 0, "cache_write": 0, "cost_usd": 5.0}}},
+                {
+                    "cost_by_model": {
+                        "claude-opus-5": {
+                            "in": 10,
+                            "out": 0,
+                            "cache_read": 0,
+                            "cache_write": 0,
+                            "cost_usd": 5.0,
+                        }
+                    }
+                },
             ]
         },
     }
     rows = _cost_by_model_rows(usage_by_project)
     # sorted by costUsd descending
     assert rows == [
-        {"model": "claude-opus-5", "in": 10, "out": 0, "cacheRead": 0, "cacheWrite": 0, "costUsd": 5.0},
-        {"model": "claude-sonnet-5", "in": 150, "out": 0, "cacheRead": 0, "cacheWrite": 0, "costUsd": 1.5},
+        {
+            "model": "claude-opus-5",
+            "in": 10,
+            "out": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "costUsd": 5.0,
+        },
+        {
+            "model": "claude-sonnet-5",
+            "in": 150,
+            "out": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "costUsd": 1.5,
+        },
     ]
 
 
@@ -527,7 +577,14 @@ def test_emit_json_top_level_carries_cost_by_model(tmp_path):
     }
     payload = emit_json([s], usage, "2026-08-08 12:00")
     assert payload["costByModel"] == [
-        {"model": "claude-sonnet-5", "in": 100, "out": 0, "cacheRead": 0, "cacheWrite": 0, "costUsd": 0.3}
+        {
+            "model": "claude-sonnet-5",
+            "in": 100,
+            "out": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "costUsd": 0.3,
+        }
     ]
 
 
@@ -535,7 +592,13 @@ def test_emit_json_top_level_carries_cost_by_model(tmp_path):
 
 
 def _eng(slug, opened, closed=None, log=None, artifacts=None):
-    return {"slug": slug, "opened": opened, "closed": closed, "log": log or [], "artifacts": artifacts or []}
+    return {
+        "slug": slug,
+        "opened": opened,
+        "closed": closed,
+        "log": log or [],
+        "artifacts": artifacts or [],
+    }
 
 
 def test_match_engagement_falls_inside_open_window():
@@ -567,7 +630,9 @@ def test_match_engagement_still_open_window_uses_latest_log_or_artifact_date_not
     engagements = [
         _eng("eng-a", "2026-08-01", closed=None, log=["2026-08-06: still working on this"]),
     ]
-    assert _match_engagement("2026-08-09", engagements) == "eng-a"  # 3 days after the 08-06 log line
+    assert (
+        _match_engagement("2026-08-09", engagements) == "eng-a"
+    )  # 3 days after the 08-06 log line
     assert _match_engagement("2026-08-10", engagements) is None
 
     artifact_engagements = [
@@ -578,7 +643,9 @@ def test_match_engagement_still_open_window_uses_latest_log_or_artifact_date_not
             artifacts=[{"added": "2026-08-07"}],
         ),
     ]
-    assert _match_engagement("2026-08-10", artifact_engagements) == "eng-b"  # 3 days after the artifact
+    assert (
+        _match_engagement("2026-08-10", artifact_engagements) == "eng-b"
+    )  # 3 days after the artifact
     assert _match_engagement("2026-08-11", artifact_engagements) is None
 
 
@@ -970,7 +1037,12 @@ def test_team_role_map_parses_the_eval_harness_comma_convention():
 
 
 def test_humanize_agents_resolves_eval_harness_style_roster():
-    role_map = _team_role_map(["🤖 Ravi, Code Reviewer (Virtual Surveillance IT)", "🤖 Kenji, Platform Engineer (Virtual Surveillance IT)"])
+    role_map = _team_role_map(
+        [
+            "🤖 Ravi, Code Reviewer (Virtual Surveillance IT)",
+            "🤖 Kenji, Platform Engineer (Virtual Surveillance IT)",
+        ]
+    )
     out = _humanize_agents("code-reviewer -> platform-engineer: resubmit", role_map)
     assert out == "Ravi (code review) -> Kenji (data pipelines): resubmit"
 
@@ -1059,7 +1131,9 @@ def test_kpi_strip_counts_engagements_and_obligations(tmp_path):
     _closed_engagement(p, "eng-a")
     _open_engagement(p, "eng-b")
     s = project_summary(p)
-    html_out = _kpi_strip_html([s], [{"citation": "MAR Art.12(1)(a)", "count": 1, "verified": True}])
+    html_out = _kpi_strip_html(
+        [s], [{"citation": "MAR Art.12(1)(a)", "count": 1, "verified": True}]
+    )
     assert '<div class="kpi-value">2</div>' in html_out  # 2 engagements
     assert '<div class="kpi-value">1</div>' in html_out  # 1 obligation cited
 

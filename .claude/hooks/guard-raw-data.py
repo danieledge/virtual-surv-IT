@@ -100,10 +100,34 @@ _OUT_OF_SCOPE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
 # pattern nor a file operand. Conservative list - an unknown flag is treated as valueless,
 # which at worst leaves an extra token in the file list (fail-closed direction).
 _FLAGS_WITH_VALUE = {
-    "-e", "-f", "-m", "-A", "-B", "-C", "-D", "-d", "--regexp", "--file", "--max-count",
-    "--include", "--exclude", "--exclude-dir", "--after-context", "--before-context",
-    "--context", "--devices", "--directories", "--color", "--colour", "-g", "--glob",
-    "--type", "-t", "--type-not", "-T", "--max-depth",
+    "-e",
+    "-f",
+    "-m",
+    "-A",
+    "-B",
+    "-C",
+    "-D",
+    "-d",
+    "--regexp",
+    "--file",
+    "--max-count",
+    "--include",
+    "--exclude",
+    "--exclude-dir",
+    "--after-context",
+    "--before-context",
+    "--context",
+    "--devices",
+    "--directories",
+    "--color",
+    "--colour",
+    "-g",
+    "--glob",
+    "--type",
+    "-t",
+    "--type-not",
+    "-T",
+    "--max-depth",
 }
 
 # Compound-command segment splitter, mirroring guard-code-execution.py's _segments(): a
@@ -368,7 +392,11 @@ def _git_message_operands(segment: str) -> list[str] | None:
         tokens = shlex.split(segment)
     except Exception:
         return None
-    if len(tokens) < 2 or os.path.basename(tokens[0]) != "git" or tokens[1] not in _GIT_MESSAGE_VERBS:
+    if (
+        len(tokens) < 2
+        or os.path.basename(tokens[0]) != "git"
+        or tokens[1] not in _GIT_MESSAGE_VERBS
+    ):
         return None
     out: list[str] = []
     i = 0

@@ -689,9 +689,7 @@ def test_write_orchestrator_model_default_preserves_other_user_settings(monkeypa
 
     fake_home_settings = tmp_path / "claude" / "settings.json"
     fake_home_settings.parent.mkdir(parents=True)
-    fake_home_settings.write_text(
-        '{"statusLine": {"type": "command"}}', encoding="utf-8"
-    )
+    fake_home_settings.write_text('{"statusLine": {"type": "command"}}', encoding="utf-8")
     monkeypatch.setattr(ih, "user_settings_path", lambda: fake_home_settings)
     ok, _ = ih.write_orchestrator_model_default("opus")
     assert ok
@@ -1238,7 +1236,7 @@ def test_menu_setup_only_skips_sync_and_uses_clone_asis(monkeypatch, tmp_path, c
     # OWN plan must still never sync - no fetch of its own, no checkout, no clone.
     assert len(fetch_calls) == 1
     assert not any("checkout" in c or "clone" in c for c in git_calls)
-    assert "Step 2 of 7" in out  # truthful numbering for the shorter plan (+ guard cache step)
+    assert "Step 2 of 8" in out  # truthful numbering (+ guard cache + pending-hook-fixes steps)
     assert "code not updated" in out and "Code not updated" in out
     assert "Summon the team" in out
 
@@ -1365,7 +1363,9 @@ def test_menu_quit_after_real_action_does_not_claim_nothing_changed(monkeypatch,
     assert "See you next time" in out
 
 
-def test_menu_quit_after_readonly_diagnostic_still_says_nothing_changed(monkeypatch, tmp_path, capsys):
+def test_menu_quit_after_readonly_diagnostic_still_says_nothing_changed(
+    monkeypatch, tmp_path, capsys
+):
     """A read-only diagnostic (Diagnostics -> Check for updates) genuinely changes
     nothing - the reassurance must still be accurate after running one."""
     import install_helper as ih
@@ -1466,7 +1466,9 @@ def test_sync_reexec_passes_resolved_mode_not_args_mode(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.setattr(ih, "run_cmd", lambda argv, cwd=None, timeout=300: _FakeProc(0, stdout=""))
     spawned = {}
-    monkeypatch.setattr(sp, "run", lambda argv, **k: spawned.setdefault("argv", argv) and _FakeProc(7))
+    monkeypatch.setattr(
+        sp, "run", lambda argv, **k: spawned.setdefault("argv", argv) and _FakeProc(7)
+    )
     # mode=None (as parse_args gives when the user picked from the menu, not a CLI arg) -
     # but self.mode gets resolved to "update" by run() before sync_branch ever executes,
     # exactly as it would on a real menu-driven run.
@@ -1660,6 +1662,81 @@ def test_prewarm_guard_cache_never_runs_in_demo_mode(monkeypatch, tmp_path):
     inst.repo = clone
     inst.prewarm_guard_cache()  # no assertion error - never reaches run_cmd
     assert inst.tracker.steps[-1][1] == "ok"
+
+
+# ---- check_pending_hook_fixes: a read-only nudge, never a self-apply (ADR-002 rec 5) ------
+
+
+def test_pending_hook_fixes_skips_cleanly_without_a_staged_dir(tmp_path):
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)  # no scripts/staged_hooks/ at all
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.check_pending_hook_fixes()
+    assert inst.tracker.steps[-1][1] == "skip"
+
+
+def test_pending_hook_fixes_ok_when_staged_matches_live(tmp_path):
+    """Staged and live byte-for-byte identical - reported ok, nothing to nudge about."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    staged_dir = clone / "scripts" / "staged_hooks"
+    staged_dir.mkdir(parents=True)
+    (staged_dir / "guard-example.py").write_text("print('hook')\n", encoding="utf-8")
+    live_dir = clone / ".claude" / "hooks"
+    live_dir.mkdir(parents=True)
+    (live_dir / "guard-example.py").write_text("print('hook')\n", encoding="utf-8")
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.check_pending_hook_fixes()
+    assert inst.tracker.steps[-1][1] == "ok"
+
+
+def test_pending_hook_fixes_flags_a_staged_but_unapplied_fix(tmp_path, capsys):
+    """The actual case this exists for: a staged fix (e.g. the daemon launcher) that
+    differs from - or is missing from - its live counterpart must be flagged, not
+    silently applied, and the human-run command must be printed."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    staged_dir = clone / "scripts" / "staged_hooks"
+    staged_dir.mkdir(parents=True)
+    (staged_dir / "run-guard.sh").write_text("# new daemon-aware launcher\n", encoding="utf-8")
+    live_dir = clone / ".claude" / "hooks"
+    live_dir.mkdir(parents=True)
+    (live_dir / "run-guard.sh").write_text("# old launcher\n", encoding="utf-8")
+    # a scripts/ tool staged fix with no live counterpart at all yet
+    (staged_dir / "guard_daemon.py").write_text("# daemon\n", encoding="utf-8")
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.check_pending_hook_fixes()
+    assert inst.tracker.steps[-1][1] == "skip"
+    out = capsys.readouterr().out
+    assert "run-guard.sh" in out
+    assert "guard_daemon.py" in out
+    assert "apply-outstanding.sh" in out
+
+
+def test_pending_hook_fixes_never_writes_anything(tmp_path):
+    """The whole point: this step is read-only. A pending fix must never be copied into
+    place by install_helper.py itself, no matter how convenient - ADR-002 rec 5's
+    boundary must hold regardless of who is nominally driving the installer."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    staged_dir = clone / "scripts" / "staged_hooks"
+    staged_dir.mkdir(parents=True)
+    (staged_dir / "run-guard.sh").write_text("# staged\n", encoding="utf-8")
+    live_dir = clone / ".claude" / "hooks"
+    live_dir.mkdir(parents=True)
+    live_file = live_dir / "run-guard.sh"
+    live_file.write_text("# live, unchanged\n", encoding="utf-8")
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.check_pending_hook_fixes()
+    assert live_file.read_text(encoding="utf-8") == "# live, unchanged\n"
 
 
 # --- statusline conflict detection refinement (2026-07-30) --------------------------------
@@ -1861,10 +1938,9 @@ def test_alias_step_runs_setup_alias_when_confirmed(monkeypatch, tmp_path):
     monkeypatch.setattr(
         ih,
         "run_setup_alias",
-        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append(
-            (assume_yes, demo)
-        )
-        or 0,
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: (
+            calls.append((assume_yes, demo)) or 0
+        ),
     )
     monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
     inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
@@ -1886,10 +1962,9 @@ def test_alias_step_auto_enabled_when_quick_defaults_chosen(monkeypatch, tmp_pat
     monkeypatch.setattr(
         ih,
         "run_setup_alias",
-        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append(
-            (assume_yes, demo)
-        )
-        or 0,
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: (
+            calls.append((assume_yes, demo)) or 0
+        ),
     )
     monkeypatch.setattr(ih, "confirm", boom)
     inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
@@ -2039,9 +2114,7 @@ def test_alias_step_asks_when_manual_configure_chosen(monkeypatch, tmp_path):
     inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
     assert inst.quick_defaults is False  # the __init__ default
     calls = []
-    monkeypatch.setattr(
-        ih, "run_setup_alias", lambda *a, **k: calls.append(a) or 0
-    )
+    monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: calls.append(a) or 0)
     inst.alias_step()
     assert calls == []  # confirm() declined -> never called
 
@@ -2061,7 +2134,9 @@ def test_statusline_step_auto_enabled_when_quick_defaults_chosen(monkeypatch, tm
     inst.repo = tmp_path
     inst.quick_defaults = True
     inst.statusline_step()
-    out_ok = any(name == "Status line" and status == "ok" for name, status, _d in inst.tracker.steps)
+    out_ok = any(
+        name == "Status line" and status == "ok" for name, status, _d in inst.tracker.steps
+    )
     assert out_ok
 
 
@@ -3466,8 +3541,6 @@ def test_probe_analyser_output_no_longer_names_semgrep_or_pip_audit():
     assert "pip-audit" not in checked_names
 
 
-
-
 def test_run_tool_check_reports_ok_when_all_clean(capsys, monkeypatch):
     import install_helper as ih
     from install_helper import Style, marks, run_tool_check
@@ -3492,7 +3565,9 @@ def test_run_tool_check_reports_failure_when_something_noisy(capsys, monkeypatch
     monkeypatch.setattr(
         ih,
         "probe_analyser_output",
-        lambda tmpdir, runner=None: [("bandit", "NOISY", "ANSI escape codes leaked through the flags")],
+        lambda tmpdir, runner=None: [
+            ("bandit", "NOISY", "ANSI escape codes leaked through the flags")
+        ],
     )
     rc = run_tool_check(Style(False), marks())
     out = capsys.readouterr().out
@@ -3565,7 +3640,9 @@ def test_model_project_without_model_is_an_error_not_a_silent_reset(monkeypatch,
     import install_helper as ih
 
     called = []
-    monkeypatch.setattr(ih, "run_orchestrator_model", lambda *a, **k: called.append(1) or (True, "x"))
+    monkeypatch.setattr(
+        ih, "run_orchestrator_model", lambda *a, **k: called.append(1) or (True, "x")
+    )
     rc = ih._main(["--model-project", str(tmp_path)])
     assert rc == 1
     assert called == []
@@ -3575,9 +3652,7 @@ def test_model_default_without_model_is_an_error(monkeypatch):
     import install_helper as ih
 
     called = []
-    monkeypatch.setattr(
-        ih, "run_orchestrator_model_default", lambda *a, **k: called.append(1) or 0
-    )
+    monkeypatch.setattr(ih, "run_orchestrator_model_default", lambda *a, **k: called.append(1) or 0)
     rc = ih._main(["--model-default"])
     assert rc == 1
     assert called == []
@@ -3600,10 +3675,10 @@ def test_model_project_with_model_still_works(monkeypatch, tmp_path):
 def test_check_interpreters_finds_the_first_working_one(monkeypatch):
     import install_helper as ih
 
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "python3" else None)
     monkeypatch.setattr(
-        ih.subprocess, "run", lambda argv, **kw: _proc(0, stdout="3.12.3\n")
+        ih.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "python3" else None
     )
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0, stdout="3.12.3\n"))
     rows, winner = ih._check_interpreters(["python3", "python", "py"])
     assert winner == "python3"
     statuses = {name: status for name, status, _ in rows}
@@ -3656,7 +3731,9 @@ def test_check_encoding_roundtrip_ok(monkeypatch):
 def test_check_encoding_roundtrip_detects_bad_bytes(monkeypatch):
     import install_helper as ih
 
-    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0, stdout=b"\xff\xfe not utf-8"))
+    monkeypatch.setattr(
+        ih.subprocess, "run", lambda argv, **kw: _proc(0, stdout=b"\xff\xfe not utf-8")
+    )
     status, detail = ih._check_encoding_roundtrip("python3")
     assert status == "ERROR"
     assert "not valid UTF-8" in detail
@@ -3862,7 +3939,9 @@ def test_check_repo_py_syntax_skips_bootstrap_only_copy(tmp_path):
 def test_check_runtime_dependencies_reports_git_and_claude(monkeypatch):
     import install_helper as ih
 
-    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "git" else None)
+    monkeypatch.setattr(
+        ih.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "git" else None
+    )
     monkeypatch.setattr(ih, "find_claude", lambda refresh=True: ("/usr/local/bin/claude", "path"))
     rows = ih._check_runtime_dependencies()
     assert ("git", "OK", "found") in rows
@@ -3914,12 +3993,18 @@ def test_run_env_check_aggregates_and_reports_clean(capsys, monkeypatch):
     import install_helper as ih
     from install_helper import Style, marks, run_env_check
 
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([("python3", "OK", "Python 3.12")], "python3"))
+    monkeypatch.setattr(
+        ih, "_check_interpreters", lambda order: ([("python3", "OK", "Python 3.12")], "python3")
+    )
     monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
     monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("OK", "clean"))
     monkeypatch.setattr(ih, "_check_plugin_root_bootstrap", lambda root: ("OK", "resolves"))
-    monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [("Bash", "OK", "clean")])
-    monkeypatch.setattr(ih, "probe_analyser_output", lambda tmp, runner=None: iter([("ruff", "OK", "clean")]))
+    monkeypatch.setattr(
+        ih, "_check_guard_hooks", lambda interp, root, tmp: [("Bash", "OK", "clean")]
+    )
+    monkeypatch.setattr(
+        ih, "probe_analyser_output", lambda tmp, runner=None: iter([("ruff", "OK", "clean")])
+    )
     rc = run_env_check(Style(False), marks())
     out = capsys.readouterr().out
     assert rc == 0
@@ -3930,11 +4015,15 @@ def test_run_env_check_aggregates_and_reports_issues(capsys, monkeypatch):
     import install_helper as ih
     from install_helper import Style, marks, run_env_check
 
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([("python3", "ERROR", "broken")], ""))
+    monkeypatch.setattr(
+        ih, "_check_interpreters", lambda order: ([("python3", "ERROR", "broken")], "")
+    )
     monkeypatch.setattr(ih, "find_bash", lambda: None)
     monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("SKIP", "no interpreter"))
     monkeypatch.setattr(ih, "_check_plugin_root_bootstrap", lambda root: ("WARN", "nothing found"))
-    monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [("Bash", "SKIP", "no interpreter")])
+    monkeypatch.setattr(
+        ih, "_check_guard_hooks", lambda interp, root, tmp: [("Bash", "SKIP", "no interpreter")]
+    )
     monkeypatch.setattr(ih, "probe_analyser_output", lambda tmp, runner=None: iter([]))
     rc = run_env_check(Style(False), marks())
     out = capsys.readouterr().out
@@ -4180,9 +4269,7 @@ def test_run_configure_already_yes_skips_the_recommended_settings_question(tmp_p
     _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     called = []
-    monkeypatch.setattr(
-        ih, "confirm", lambda prompt, *a, **k: called.append(prompt) or True
-    )
+    monkeypatch.setattr(ih, "confirm", lambda prompt, *a, **k: called.append(prompt) or True)
     ih.run_configure(tmp_path, ih.Style(False), ih.marks(), assume_yes=True)
     assert not any("recommended settings" in p.lower() for p in called)
 
@@ -4200,8 +4287,8 @@ def test_project_preference_defaults_falls_back_to_machine_default(tmp_path):
         "default_map_skeleton": True,
         "default_statusline_show_map": True,
     }
-    docx, citations, review_tools, map_skeleton, statusline_show_map = (
-        _project_preference_defaults({}, machine_defaults)
+    docx, citations, review_tools, map_skeleton, statusline_show_map = _project_preference_defaults(
+        {}, machine_defaults
     )
     assert docx is True
     assert citations is False
@@ -4230,8 +4317,8 @@ def test_project_preference_defaults_project_choice_overrides_machine(tmp_path):
         "default_map_skeleton": True,
         "default_statusline_show_map": True,
     }
-    docx, citations, review_tools, map_skeleton, statusline_show_map = (
-        _project_preference_defaults(existing, machine_defaults)
+    docx, citations, review_tools, map_skeleton, statusline_show_map = _project_preference_defaults(
+        existing, machine_defaults
     )
     assert docx is True  # project's own "docx on" wins over machine's "off"
     assert citations is True  # project's own "on" wins over machine's "off"
@@ -4246,8 +4333,8 @@ def test_project_preference_defaults_no_machine_config_uses_builtin(tmp_path):
     applies."""
     from install_helper import _project_preference_defaults
 
-    docx, citations, review_tools, map_skeleton, statusline_show_map = (
-        _project_preference_defaults({}, {})
+    docx, citations, review_tools, map_skeleton, statusline_show_map = _project_preference_defaults(
+        {}, {}
     )
     assert docx is False
     assert citations is False
@@ -4297,7 +4384,10 @@ def test_run_list_engagements_bridges_with_cwd_scoped_to_target(tmp_path, monkey
     rc = ih.run_list_engagements(tmp_path, ih.Style(False), ih.marks())
     assert rc == 0
     (argv, cwd) = calls[0]
-    assert argv[1:] == [str(Path(ih.__file__).resolve().parent / "scripts" / "engagement_state.py"), "list"]
+    assert argv[1:] == [
+        str(Path(ih.__file__).resolve().parent / "scripts" / "engagement_state.py"),
+        "list",
+    ]
     assert cwd == tmp_path.resolve()
 
 
@@ -4416,7 +4506,7 @@ def test_setup_alias_warns_when_no_real_clone_found_anywhere(tmp_path, monkeypat
     clear warning, not silently."""
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "no-such-xdg"))
 
     boot_copy = tmp_path / "boot" / "install_helper.py"
@@ -4454,9 +4544,7 @@ def test_setup_alias_defaults_to_no_when_no_real_clone_found(tmp_path, monkeypat
 def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):
     import install_helper as ih
 
-    home = _isolate_home_for_alias(
-        monkeypatch, tmp_path, bashrc="alias virt-surv='already here'\n"
-    )
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="alias virt-surv='already here'\n")
     _stub_interpreters(monkeypatch, ih)
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     out = capsys.readouterr().out
@@ -4470,7 +4558,9 @@ def test_setup_alias_no_interpreter_found(tmp_path, monkeypatch):
     import install_helper as ih
 
     _isolate_home_for_alias(monkeypatch, tmp_path)
-    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([("python3", "SKIP", "not on PATH")], ""))
+    monkeypatch.setattr(
+        ih, "_check_interpreters", lambda order: ([("python3", "SKIP", "not on PATH")], "")
+    )
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 1
 
@@ -4500,7 +4590,7 @@ def test_setup_alias_declined_is_not_an_error(tmp_path, monkeypatch):
 def test_setup_alias_write_error_is_reported(tmp_path, monkeypatch):
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
     _stub_interpreters(monkeypatch, ih)
 
     real_open = Path.open
@@ -4556,7 +4646,9 @@ def test_setup_alias_write_error_from_verification_sets_had_error(tmp_path, monk
 
     home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
     _stub_interpreters(monkeypatch, ih)
-    monkeypatch.setattr(ih, "_verify_alias_line", lambda label, rc_path, line: (False, "simulated broken alias"))
+    monkeypatch.setattr(
+        ih, "_verify_alias_line", lambda label, rc_path, line: (False, "simulated broken alias")
+    )
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 1
     # The file write itself still succeeded - verification failing doesn't undo it.
@@ -4722,10 +4814,9 @@ def test_dispatch_folder_subcommand_parses_demo_and_yes_flags(monkeypatch, tmp_p
     monkeypatch.setattr(
         ih,
         "run_configure",
-        lambda target, style, mm, assume_yes=False, demo=False: calls.append(
-            (target, assume_yes, demo)
-        )
-        or 0,
+        lambda target, style, mm, assume_yes=False, demo=False: (
+            calls.append((target, assume_yes, demo)) or 0
+        ),
     )
     ih._dispatch_folder_subcommand(["configure", str(tmp_path), "--demo", "--yes"])
     assert calls == [(Path(tmp_path), True, True)]
@@ -4761,20 +4852,23 @@ def test_dispatch_folder_subcommand_engage_always_assume_yes(tmp_path, monkeypat
     monkeypatch.setattr(
         ih,
         "run_configure",
-        lambda target, style, mm, assume_yes=False, demo=False: calls.append(
-            (target, assume_yes, demo)
-        )
-        or 0,
+        lambda target, style, mm, assume_yes=False, demo=False: (
+            calls.append((target, assume_yes, demo)) or 0
+        ),
     )
     rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
     assert rc == 0
     assert calls == [(Path(tmp_path), True, False)]
 
 
-def test_dispatch_folder_subcommand_engage_prints_ready_message_on_success(tmp_path, monkeypatch, capsys):
+def test_dispatch_folder_subcommand_engage_prints_ready_message_on_success(
+    tmp_path, monkeypatch, capsys
+):
     import install_helper as ih
 
-    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    monkeypatch.setattr(
+        ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
+    )
     rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
     assert rc == 0
     out = capsys.readouterr().out
@@ -4782,19 +4876,27 @@ def test_dispatch_folder_subcommand_engage_prints_ready_message_on_success(tmp_p
     assert "Morgan" in out
 
 
-def test_dispatch_folder_subcommand_engage_no_ready_message_on_failure(tmp_path, monkeypatch, capsys):
+def test_dispatch_folder_subcommand_engage_no_ready_message_on_failure(
+    tmp_path, monkeypatch, capsys
+):
     import install_helper as ih
 
-    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 1)
+    monkeypatch.setattr(
+        ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 1
+    )
     rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
     assert rc == 1
     assert "ready to launch" not in capsys.readouterr().out.lower()
 
 
-def test_dispatch_folder_subcommand_engage_demo_never_prints_ready_message(tmp_path, monkeypatch, capsys):
+def test_dispatch_folder_subcommand_engage_demo_never_prints_ready_message(
+    tmp_path, monkeypatch, capsys
+):
     import install_helper as ih
 
-    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    monkeypatch.setattr(
+        ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
+    )
     rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path), "--demo"])
     assert rc == 0
     assert "ready to launch" not in capsys.readouterr().out.lower()
@@ -4809,10 +4911,9 @@ def test_dispatch_folder_subcommand_onboard_is_identical_to_engage(tmp_path, mon
     monkeypatch.setattr(
         ih,
         "run_configure",
-        lambda target, style, mm, assume_yes=False, demo=False: calls.append(
-            (target, assume_yes, demo)
-        )
-        or 0,
+        lambda target, style, mm, assume_yes=False, demo=False: (
+            calls.append((target, assume_yes, demo)) or 0
+        ),
     )
     rc = ih._dispatch_folder_subcommand(["onboard", str(tmp_path)])
     assert rc == 0
@@ -4851,7 +4952,9 @@ def test_project_root_warning_flags_filesystem_root():
 def test_dispatch_engage_prints_warning_for_home_directory(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
-    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    monkeypatch.setattr(
+        ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
+    )
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
     assert rc == 0
@@ -4865,7 +4968,9 @@ def test_dispatch_engage_no_warning_for_ordinary_project(tmp_path, monkeypatch, 
 
     project = tmp_path / "my-project"
     project.mkdir()
-    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    monkeypatch.setattr(
+        ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
+    )
     rc = ih._dispatch_folder_subcommand(["engage", str(project)])
     assert rc == 0
     out = capsys.readouterr().out
@@ -4879,7 +4984,9 @@ def test_dispatch_engage_ready_message_names_the_resolved_folder(tmp_path, monke
 
     project = tmp_path / "my-project"
     project.mkdir()
-    monkeypatch.setattr(ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0)
+    monkeypatch.setattr(
+        ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
+    )
     rc = ih._dispatch_folder_subcommand(["engage", str(project)])
     assert rc == 0
     out = capsys.readouterr().out
@@ -5103,8 +5210,7 @@ def test_menu_loops_back_and_runs_a_second_action_before_quit(monkeypatch, tmp_p
     monkeypatch.setattr(
         ih,
         "run_setup_alias",
-        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append("alias")
-        or 0,
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append("alias") or 0,
     )
     monkeypatch.setattr(
         ih,
@@ -5160,7 +5266,9 @@ def test_demo_flag_protects_every_action_in_one_session(monkeypatch, tmp_path, c
     tests; this test is only about the menu loop's own demo plumbing."""
     import install_helper as ih
 
-    sentinel_runner = lambda *a, **k: _FakeProc(0)
+    def sentinel_runner(*a, **k):
+        return _FakeProc(0)
+
     monkeypatch.setattr(ih, "make_demo_runner", lambda style: sentinel_runner)
     installer_calls = []
 
@@ -5195,7 +5303,9 @@ def test_demo_menu_selection_is_one_shot_not_sticky(monkeypatch, tmp_path):
     session (that would be a confusing silent side effect)."""
     import install_helper as ih
 
-    sentinel_runner = lambda *a, **k: _FakeProc(0)
+    def sentinel_runner(*a, **k):
+        return _FakeProc(0)
+
     monkeypatch.setattr(ih, "make_demo_runner", lambda style: sentinel_runner)
 
     class _FakeInstaller:
@@ -5210,7 +5320,9 @@ def test_demo_menu_selection_is_one_shot_not_sticky(monkeypatch, tmp_path):
     monkeypatch.setattr(
         ih,
         "run_configure",
-        lambda target, style, mm, assume_yes=False, demo=False: called_demo_values.append(demo) or 0,
+        lambda target, style, mm, assume_yes=False, demo=False: (
+            called_demo_values.append(demo) or 0
+        ),
     )
     # 6,5 = Advanced -> Demo (one-shot full-flow preview via the FakeInstaller), loop
     # back, 2 = Configure, directory prompt, loop back, then exhausted -> "q".
@@ -5249,9 +5361,7 @@ def test_parse_review_tool_overrides_ignores_unknown_tool_and_state():
     intentionally-unsupported name like 'semgrep' used to vanish with zero feedback."""
     import install_helper as ih
 
-    overrides, rejected = ih._parse_review_tool_overrides(
-        "notarealtool=off, mypy=maybe, black=on"
-    )
+    overrides, rejected = ih._parse_review_tool_overrides("notarealtool=off, mypy=maybe, black=on")
     assert overrides == {"black": "on"}
     assert rejected == ["notarealtool=off", "mypy=maybe"]
 
@@ -5512,11 +5622,15 @@ def test_selftest_probe_bandit_crash_distinct_from_missed(monkeypatch, tmp_path)
     identically to bandit running fine and simply missing the planted issue."""
     import install_helper as ih
 
-    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/bandit" if name == "bandit" else None)
+    monkeypatch.setattr(
+        ih.shutil, "which", lambda name: "/usr/bin/bandit" if name == "bandit" else None
+    )
     monkeypatch.setattr(
         ih.subprocess, "run", lambda *a, **k: _proc(2, stderr="ModuleNotFoundError: no ast")
     )
-    rows = [r for r in ih._selftest_engagement_probe(tmp_path, "python3") if r[0].startswith("bandit")]
+    rows = [
+        r for r in ih._selftest_engagement_probe(tmp_path, "python3") if r[0].startswith("bandit")
+    ]
     assert rows[0][1] == "ERROR"
     assert "crashed" in rows[0][2] and "exit 2" in rows[0][2]
 
@@ -5526,9 +5640,15 @@ def test_selftest_probe_bandit_ran_but_missed_the_issue(monkeypatch, tmp_path):
     genuinely ran and missed it - a real config problem, not a crash."""
     import install_helper as ih
 
-    monkeypatch.setattr(ih.shutil, "which", lambda name: "/usr/bin/bandit" if name == "bandit" else None)
-    monkeypatch.setattr(ih.subprocess, "run", lambda *a, **k: _proc(0, stdout="No issues identified."))
-    rows = [r for r in ih._selftest_engagement_probe(tmp_path, "python3") if r[0].startswith("bandit")]
+    monkeypatch.setattr(
+        ih.shutil, "which", lambda name: "/usr/bin/bandit" if name == "bandit" else None
+    )
+    monkeypatch.setattr(
+        ih.subprocess, "run", lambda *a, **k: _proc(0, stdout="No issues identified.")
+    )
+    rows = [
+        r for r in ih._selftest_engagement_probe(tmp_path, "python3") if r[0].startswith("bandit")
+    ]
     assert rows[0][1] == "ERROR"
     assert "may be off" in rows[0][2]
     assert "crashed" not in rows[0][2]
@@ -5539,8 +5659,12 @@ def test_run_selftest_all_ok_returns_zero_and_writes_no_bundle(monkeypatch, tmp_
 
     monkeypatch.chdir(tmp_path)
     _stub_interpreters(monkeypatch, ih)
-    monkeypatch.setattr(ih, "_check_guard_hooks", lambda interp, root, tmp: [("guard", "OK", "clean")])
-    monkeypatch.setattr(ih, "_check_repo_py_syntax", lambda interp, root: [("syntax", "OK", "clean")])
+    monkeypatch.setattr(
+        ih, "_check_guard_hooks", lambda interp, root, tmp: [("guard", "OK", "clean")]
+    )
+    monkeypatch.setattr(
+        ih, "_check_repo_py_syntax", lambda interp, root: [("syntax", "OK", "clean")]
+    )
     monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found")])
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)  # bandit -> SKIP
 
@@ -5567,7 +5691,9 @@ def test_run_selftest_failure_writes_debug_bundle(monkeypatch, tmp_path, capsys)
         "_check_guard_hooks",
         lambda interp, root, tmp: [("Bash (guard test)", "ERROR", "simulated failure")],
     )
-    monkeypatch.setattr(ih, "_check_repo_py_syntax", lambda interp, root: [("syntax", "OK", "clean")])
+    monkeypatch.setattr(
+        ih, "_check_repo_py_syntax", lambda interp, root: [("syntax", "OK", "clean")]
+    )
     monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found")])
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
 
@@ -5870,7 +5996,9 @@ def test_run_adr014_smoke_test_relays_captured_output_and_exit_code(monkeypatch,
     spike_dir.mkdir(parents=True)
     (spike_dir / "smoke_test.py").write_text("", encoding="utf-8")
     monkeypatch.setattr(
-        ih, "run_cmd", lambda argv, cwd=None, timeout=300: _proc(1, stdout="3 passed, 1 failed.", stderr="")
+        ih,
+        "run_cmd",
+        lambda argv, cwd=None, timeout=300: _proc(1, stdout="3 passed, 1 failed.", stderr=""),
     )
     rc = ih.run_adr014_smoke_test(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
     out = capsys.readouterr().out

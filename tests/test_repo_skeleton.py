@@ -9,8 +9,6 @@ import json
 import subprocess
 import time
 
-import pytest
-
 from scripts.repo_skeleton import (
     build_reference_graph,
     build_skeleton,
@@ -33,7 +31,6 @@ from scripts.repo_skeleton import (
     _TIER_AST,
     _TIER_CTAGS,
     _TIER_FLOOR,
-    _TIER_TREE_SITTER,
 )
 
 

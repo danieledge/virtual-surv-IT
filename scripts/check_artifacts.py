@@ -154,6 +154,7 @@ def _read_map_skeleton_toggle(project_dir: Path) -> bool:
         pass
     return False
 
+
 # Code-without-QA gate: a live engagement (2026-07-21) delivered phase-2 implementation
 # code from inside an analysis workflow and no QA pass ever ran - the DoD items are
 # PM-attested, so nothing mechanical caught it. This check does: deliverable code in
@@ -1102,7 +1103,7 @@ def check_findings_packs(artifacts_dir: Path) -> list[str]:
         except (OSError, ValueError) as exc:
             findings.append(f"FINDINGS-INVALID: {pack.name} - cannot read/parse {pack}: {exc}")
             continue
-        except Exception:
+        except Exception:  # nosec B112 - deliberate fail-open, see comment below
             continue  # an unexpected validator crash must not brick the gate (fail open)
         if errs:
             findings.append(f"FINDINGS-INVALID: {pack.name} - " + "; ".join(errs))
@@ -1143,7 +1144,7 @@ def check_findings_scoring(artifacts_dir: Path) -> list[str]:
             pack = fp_io.read_pack(pack_path)
         except (OSError, ValueError):
             continue  # FINDINGS-INVALID already covers unreadable/malformed packs
-        except Exception:
+        except Exception:  # nosec B112 - deliberate fail-open, see comment below
             continue  # fail open - an unexpected reader crash must not brick the gate
         if not isinstance(pack, dict):
             continue
@@ -1586,9 +1587,7 @@ def check(artifacts_dir: Path) -> list[str]:
     # user-navigable set. Exclude the data/ subtree from the .md/.html-sibling and index scans.
     data_dir = artifacts_dir / "data"
     md_files = [
-        m
-        for m in all_md
-        if data_dir not in m.parents and not _under_archive(m, artifacts_dir)
+        m for m in all_md if data_dir not in m.parents and not _under_archive(m, artifacts_dir)
     ]
     for md in md_files:
         # The summary email must be a .txt; a .md copy is the wrong type, not a missing render -
@@ -1847,7 +1846,7 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
             for pack in sorted(data_dir.glob("findings-*.jsonl")):  # check_findings_packs()
                 try:
                     out = rf.render_pack_file(pack)
-                except Exception:
+                except Exception:  # nosec B112 - deliberate fail-open, see comment below
                     continue  # invalid pack; FINDINGS-INVALID reports it, don't double-flag
                 fixed.append(f"FIXED: rendered {out} from {pack.name}")
 

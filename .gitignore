@@ -23,6 +23,13 @@ artifacts/
 # above, so the same policy applies.
 legacy-artifacts/
 
+# Architecture Decision Records (2026-08-13): considered internal docs, not for the public
+# GitHub remote - untracked going forward (git rm --cached). Files stay on disk so
+# cross-references and scripts/validate_references.py's "docs/adr" search dir keep working
+# locally; only future git history stops carrying them. Already-pushed history predating this
+# change is untouched by this alone - a separate decision if that's ever wanted too.
+docs/adr/
+
 # Code-execution consent marker (per-engagement; never commit — it's a local authorisation)
 .claude/.exec-consent
 
