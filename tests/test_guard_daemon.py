@@ -314,3 +314,72 @@ def test_launcher_invokes_daemon_client_with_both_roots_when_they_differ(tmp_pat
     assert len(lines) == 2, f"expected exactly 2 args (module_root, state_root), got {lines}"
     assert lines[0] == str(plugin_root)
     assert lines[1] == str(project_dir)
+
+
+@pytestmark_sh
+def test_launcher_self_locates_when_claude_plugin_root_is_unset(tmp_path):
+    """The exact reported live scenario: CLAUDE_PLUGIN_ROOT is completely UNSET in this
+    process (not just pointing somewhere unexpected - genuinely absent, as when Claude
+    Code's hook templating substitutes it correctly into the command line but doesn't
+    also export it into the spawned process's environment). Without self-location, $_root
+    falls back to CLAUDE_PROJECT_DIR, and DAEMON_CLIENT resolves to
+    <project>/scripts/guard_daemon_client.py - a file that only ever lives in the
+    plugin's own tree, never copied into a consuming project - so the daemon silently
+    never engages. The launcher is placed at its real, documented location
+    (.claude/hooks/run-guard.sh under a fake plugin root) and invoked by that literal
+    path, exactly as Claude Code's own templating would construct the command - proving
+    $0-based self-location recovers the correct root even with the env var entirely
+    missing."""
+    import json
+    import os
+    import shutil
+
+    plugin_root = tmp_path / "plugin-install"
+    project_dir = tmp_path / "project"
+    (plugin_root / "scripts").mkdir(parents=True)
+    hooks_dir = plugin_root / ".claude" / "hooks"
+    hooks_dir.mkdir(parents=True)
+    shutil.copy2(LAUNCHER, hooks_dir / "run-guard.sh")
+    (project_dir / ".claude").mkdir(parents=True)
+    (project_dir / ".claude" / "team-preferences.json").write_text(
+        '{"guard_daemon": true}', encoding="utf-8"
+    )
+    dispatcher_target = project_dir / "bash_hook_dispatcher.py"
+    dispatcher_target.write_text("", encoding="utf-8")
+
+    argv_log = plugin_root / "argv.log"
+    fake_client = plugin_root / "scripts" / "guard_daemon_client.py"
+    fake_client.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        f"open({str(argv_log)!r}, 'w').write('\\n'.join(sys.argv[1:]))\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    fake_client.chmod(0o755)
+
+    env = {
+        "CLAUDE_PROJECT_DIR": str(project_dir),
+        # CLAUDE_PLUGIN_ROOT deliberately absent - the exact reported failure condition.
+        "PATH": os.environ["PATH"],
+    }
+    payload = json.dumps({"tool_name": "Read", "tool_input": {"file_path": "/tmp/harmless"}})
+    proc = subprocess.run(
+        ["sh", str(hooks_dir / "run-guard.sh"), str(dispatcher_target)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert proc.returncode == 0
+    assert argv_log.is_file(), (
+        "the fake daemon client was never invoked - self-location did not recover the plugin root"
+    )
+    lines = argv_log.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2
+    assert lines[0] == str(plugin_root), (
+        f"module_root resolved to {lines[0]!r}, expected the plugin root {str(plugin_root)!r} "
+        "- self-location fell back to something else"
+    )
+    assert lines[1] == str(project_dir)

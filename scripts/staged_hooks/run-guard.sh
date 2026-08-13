@@ -70,7 +70,42 @@ export PYTHONUTF8=1
 # `date +%s >"$LOCK_STAMP"` write does not - it fails silently, which permanently disables
 # the stale-lock reclaim below (a lock with no stamp can never be recognised as stale) for
 # the rest of the session. POSIX parameter expansion only, no external command.
-_root="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}"
+# 2026-08-13 (reported via log analysis of a real session): $CLAUDE_PLUGIN_ROOT can be
+# genuinely unset in THIS process even when Claude Code's hook templating correctly
+# substituted it into the command line that invoked us - the substitution is a
+# command-construction-time string replacement, which does not guarantee the variable is
+# also exported into the spawned process's own environment. Live case: $_root fell back
+# to $CLAUDE_PROJECT_DIR, and DAEMON_CLIENT then resolved to
+# <project>/scripts/guard_daemon_client.py - a file that only ever lives in the PLUGIN's
+# own install tree, never copied into a consuming project, so it silently didn't exist.
+#
+# Derive $_root from $0 first wherever possible: this script's own invocation path IS the
+# one thing Claude Code's templating already resolved correctly (it had to, to find THIS
+# file and run it) - unlike an env var read after the fact, it cannot be silently empty
+# while the invocation still worked. $0 is always ".../.claude/hooks/run-guard.sh" (the
+# one documented invocation shape, matched by every hooks.json/settings.json entry and
+# this repo's own test suite), so stripping that fixed suffix gives the plugin/project
+# root directly. Pure parameter expansion (no dirname/readlink subprocess) - deliberately
+# as cheap as the trailing-slash strip below, not another unconditional process spawn to
+# add to the exact Windows overhead problem the rest of this file already works to
+# minimise. A relative $0 (rare - every real invocation of this launcher passes an
+# absolute path) is anchored to the shell's own cwd first so the suffix-strip still has
+# something absolute to work with.
+_self="$0"
+case "$_self" in
+	/*) : ;;
+	*) _self="$(pwd)/$_self" ;;
+esac
+_self_root="${_self%/.claude/hooks/run-guard.sh}"
+if [ "$_self_root" != "$_self" ] && [ -f "$_self_root/.claude/hooks/run-guard.sh" ]; then
+	_root="$_self_root"
+else
+	# Self-location didn't pan out (unusual invocation, sourced rather than run, or this
+	# copy genuinely isn't at the expected .claude/hooks/ path) - fall back to the env-var
+	# approach exactly as before. Same fail-open posture as everywhere else in this file:
+	# a broken fast path must never brick the guard, only cost it this one optimisation.
+	_root="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}"
+fi
 while [ "${_root%/}" != "$_root" ] && [ -n "$_root" ]; do
 	_root="${_root%/}"
 done
