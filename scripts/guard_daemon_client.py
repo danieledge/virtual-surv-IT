@@ -87,7 +87,24 @@ def _start_daemon_detached(module_root: Path, state_root: Path) -> None:
             # known Windows-specific bug class (a conhost.exe popup per
             # subprocess spawn) found in upstream Claude Code issue tracking
             # during this same investigation - missing windowsHide.
-            kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+            # CREATE_BREAKAWAY_FROM_JOB (2026-08-13, reported via log analysis of a real
+            # session): DETACHED_PROCESS/CREATE_NO_WINDOW control console inheritance, NOT
+            # Windows Job Object membership - a child process is, by default, still added
+            # to the SAME job as its parent regardless of those two flags. Many terminal/IDE
+            # process launchers (and Git Bash's own process management) put their process
+            # tree in a job with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, specifically so closing
+            # the terminal kills every descendant - which silently kills this "detached"
+            # daemon the moment the invoking session ends, defeating the entire point of a
+            # persistent daemon. If the current job doesn't permit breakaway (rare, some
+            # locked-down sandboxes), CreateProcess fails and Python raises OSError here -
+            # already caught below, same fail-open posture as any other daemon-start
+            # failure: the caller just falls back to cold-start, same as if this succeeded
+            # and the daemon crashed a second later.
+            kwargs["creationflags"] = (
+                subprocess.DETACHED_PROCESS
+                | subprocess.CREATE_NO_WINDOW
+                | subprocess.CREATE_BREAKAWAY_FROM_JOB
+            )
         else:
             kwargs["start_new_session"] = True  # POSIX: detach from this process group
         subprocess.Popen(  # nosec B603 - fixed argv, shell=False

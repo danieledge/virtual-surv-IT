@@ -192,6 +192,46 @@ def test_client_start_daemon_detached_passes_both_roots_to_the_subprocess(tmp_pa
     assert captured["argv"][-2:] == [str(module_root), str(state_root)]
 
 
+def test_client_windows_spawn_sets_breakaway_from_job(tmp_path, monkeypatch):
+    """2026-08-13 (reported via log analysis of a real session): DETACHED_PROCESS and
+    CREATE_NO_WINDOW control console inheritance, NOT Windows Job Object membership - a
+    child is still added to the SAME job as its parent by default regardless of those two
+    flags. Many terminal/IDE launchers put their process tree in a job with
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, which would silently kill this "detached" daemon
+    the moment the invoking session ends - defeating the entire point of a persistent
+    daemon. CREATE_BREAKAWAY_FROM_JOB must be set alongside the other two.
+
+    None of the three creationflags constants exist as real subprocess module attributes
+    on non-Windows Python (confirmed: hasattr is False for all three on this Linux box) -
+    injected here (raising=False) so this test can exercise the Windows branch on any
+    platform, same technique tests elsewhere in this project already use for OS-specific
+    code paths."""
+    client = _load_guard_daemon_client(monkeypatch)
+
+    monkeypatch.setattr(client.sys, "platform", "win32")
+    monkeypatch.setattr(client.subprocess, "DETACHED_PROCESS", 0x00000008, raising=False)
+    monkeypatch.setattr(client.subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
+    monkeypatch.setattr(client.subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000, raising=False)
+
+    captured = {}
+
+    def fake_popen(argv, **kwargs):
+        captured["kwargs"] = kwargs
+
+        class _P:
+            pass
+
+        return _P()
+
+    monkeypatch.setattr(client.subprocess, "Popen", fake_popen)
+    client._start_daemon_detached(tmp_path / "plugin-install", tmp_path / "project")
+
+    flags = captured["kwargs"]["creationflags"]
+    assert flags & 0x00000008  # DETACHED_PROCESS
+    assert flags & 0x08000000  # CREATE_NO_WINDOW
+    assert flags & 0x01000000  # CREATE_BREAKAWAY_FROM_JOB - the actual fix
+
+
 def test_client_main_defaults_state_root_to_module_root_with_one_arg(tmp_path, monkeypatch):
     """CLI backward compatibility: `guard_daemon_client.py <module_root>` alone
     (today's call shape from an unmodified run-guard.sh, or any other caller that

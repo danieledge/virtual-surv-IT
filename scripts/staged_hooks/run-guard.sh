@@ -128,6 +128,33 @@ if [ "$(basename "$1" 2>/dev/null)" = "bash_hook_dispatcher.py" ]; then
 fi
 DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
 
+# 2026-08-13 fast path (reported via log analysis of a real session): the lock/coldstart
+# machinery below exists solely to serialize concurrent COLD STARTS - many interpreters
+# racing to start at once under subagent fan-out. A daemon-routed call has no cold-start
+# race to serialize against: every such call shares ONE persistent daemon process that
+# already serializes its own requests internally (guard_daemon.py's own _dispatch_lock).
+# Paying the lock-acquisition/coldstart-measurement overhead unconditionally on a
+# daemon-routed call is pure waste - on a corporate Windows/Git-Bash host under AV
+# scanning, each step below is its own process spawn (mkdir x2, date, cat, rm - roughly
+# 3+ seconds stacked up under real conditions), swamping whatever latency benefit the
+# daemon exists to provide, and paid BEFORE this launcher even reaches the daemon
+# decision. Steady state (interpreter already cached from a prior call - the
+# overwhelmingly common case in a real session) skips straight to the daemon invocation
+# here. A cold cache (this project's very first call) falls through to the full machinery
+# below unchanged - it still finds and caches an interpreter, and its own
+# daemon-invocation branch further down handles that first call correctly; this fast path
+# only ever engages once the interpreter is already known, never before.
+if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
+	_fastcache="$_project_root/.claude/.guard-interpreter"
+	if [ -f "$_fastcache" ]; then
+		_fastcached=$(cat "$_fastcache" 2>/dev/null)
+		if [ -n "$_fastcached" ] && command -v "$_fastcached" >/dev/null 2>&1; then
+			"$_fastcached" "$DAEMON_CLIENT" "$_root" "$_project_root"
+			exit $?
+		fi
+	fi
+fi
+
 LOCK_DIR="$_project_root/.claude/.guard-lock"
 LOCK_STAMP="$LOCK_DIR/acquired-at"
 # Same normalized root as LOCK_DIR above - defined here (once) rather than at its original,
