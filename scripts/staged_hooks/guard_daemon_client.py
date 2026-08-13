@@ -1,30 +1,38 @@
 #!/usr/bin/env python3
 """Client for guard_daemon.py - ADR-014 (docs/adr/ADR-014-persistent-guard-daemon.md).
 
-Invoked by run-guard.sh ONLY when both hold: the target script is
-bash_hook_dispatcher.py, and .claude/team-preferences.json has "guard_daemon": true.
-Every other case never reaches this file - run-guard.sh's own cold-start path is
-unchanged.
+Invoked by run-guard.sh ONLY when both hold: the target script is one of the
+daemon-servable set (guard_daemon.py's _TARGET_MODULE_NAMES), and
+.claude/team-preferences.json has "guard_daemon": true. Every other case never
+reaches this file - run-guard.sh's own cold-start path is unchanged.
 
 Behaviour: try to connect to a running daemon (via the port file, token included
 in the request per ADR-014 question 3); if that fails for ANY reason - no port
 file, connection refused, timeout, a malformed or unauthorized/stale-flagged
 response - fall back to the existing cold-start path for THIS call only
-(subprocess against bash_hook_dispatcher.py directly, exactly what run-guard.sh
+(subprocess against the real target script directly, exactly what run-guard.sh
 would have done without the daemon), and separately, best-effort, start a
 detached daemon for next time. A daemon that fails to start is not this call's
 problem; the fallback already covers it.
 
-2026-08-13 fix: TWO roots now, not one - see guard_daemon.py's module docstring
-for the full rationale. `module_root` locates the real bash_hook_dispatcher.py
-(plugin-shipped, CLAUDE_PLUGIN_ROOT-first). `state_root` locates this project's
-port file (CLAUDE_PROJECT_DIR only). Passing only module_root keeps today's
-project-mode behaviour (they default to each other) - only plugin-install mode,
-where the two genuinely differ, needs both.
+2026-08-13 fix: TWO roots, not one - see guard_daemon.py's module docstring for
+the full rationale. `module_root` locates the real target scripts (plugin-shipped,
+CLAUDE_PLUGIN_ROOT-first). `state_root` locates this project's port file
+(CLAUDE_PROJECT_DIR only). Passing only module_root keeps today's project-mode
+behaviour (they default to each other) - only plugin-install mode, where the two
+genuinely differ, needs both.
 
-Usage: guard_daemon_client.py <module_root> [state_root]
-Stdin: the PreToolUse JSON payload (same contract as bash_hook_dispatcher.py).
-Exit code: 2 = block, 0 = allow - identical contract either path.
+2026-08-14 multi-target extension: a THIRD argument names which target script this
+call is for (defaults to "bash_hook_dispatcher" for a caller that predates this -
+today's ONLY behaviour before this extension). Relays captured stdout as well as
+stderr now - stop_hook_dispatcher.py answers via stdout, not stderr; every other
+target never writes stdout at all, so this is a no-op for them.
+
+Usage: guard_daemon_client.py <module_root> [state_root] [target]
+Stdin: the PreToolUse/PostToolUse/Stop JSON payload (same contract as the real
+target script would read directly).
+Exit code: whatever the target script itself would exit - identical contract
+either path (daemon-served or cold-start fallback).
 """
 
 from __future__ import annotations
@@ -42,17 +50,17 @@ _CONNECT_TIMEOUT = 0.5
 _RESPONSE_TIMEOUT = 20.0
 
 
-def _try_daemon(state_root: Path, payload_text: str):
-    """Returns (exit_code, stderr_text) on success, None on ANY failure - never
-    raises, since a broken daemon connection must fall back cleanly, not crash
-    the tool call it's guarding."""
+def _try_daemon(state_root: Path, target: str, payload_text: str):
+    """Returns (exit_code, stderr_text, stdout_text) on success, None on ANY
+    failure - never raises, since a broken daemon connection must fall back
+    cleanly, not crash the tool call it's guarding."""
     port, token = read_port_and_token(state_root)
     if port is None:
         return None
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=_CONNECT_TIMEOUT) as sock:
             sock.settimeout(_RESPONSE_TIMEOUT)
-            request = json.dumps({"token": token, "payload": payload_text}) + "\n"
+            request = json.dumps({"token": token, "target": target, "payload": payload_text}) + "\n"
             sock.sendall(request.encode("utf-8"))
             sock.shutdown(socket.SHUT_WR)
             chunks = []
@@ -67,12 +75,14 @@ def _try_daemon(state_root: Path, payload_text: str):
         return None
     if response.get("daemon_stale") or response.get("stderr") == "unauthorized":
         # Both treated exactly like "no daemon" - cold-start THIS call. A stale
-        # daemon has already self-terminated on its side; an "unauthorized"
-        # response means the port file and this client's read of it raced (a
-        # new daemon started between the two reads) - either way, the fresh
-        # daemon start below picks up a consistent state for next time.
+        # daemon (or an unknown-target response, which reuses this same signal -
+        # see guard_daemon.py's _Handler.handle()) has already self-terminated or
+        # answered safely on its side; an "unauthorized" response means the port
+        # file and this client's read of it raced (a new daemon started between
+        # the two reads) - either way, the fresh daemon start below picks up a
+        # consistent state for next time.
         return None
-    return response.get("exit_code", 0), response.get("stderr", "")
+    return response.get("exit_code", 0), response.get("stderr", ""), response.get("stdout", "")
 
 
 def _start_daemon_detached(module_root: Path, state_root: Path) -> None:
@@ -118,11 +128,11 @@ def _start_daemon_detached(module_root: Path, state_root: Path) -> None:
         pass
 
 
-def _cold_start_fallback(module_root: Path, payload_text: str):
-    """Exactly today's path - a fresh subprocess against the real dispatcher.
+def _cold_start_fallback(module_root: Path, target: str, payload_text: str):
+    """Exactly today's path - a fresh subprocess against the real target script.
     Fails open on any launch problem, same posture as run-guard.sh's own
     no-interpreter-found case: a broken fallback must not brick the tool call."""
-    dispatcher = module_root / "scripts" / "bash_hook_dispatcher.py"
+    dispatcher = module_root / "scripts" / f"{target}.py"
     try:
         proc = subprocess.run(  # nosec B603 - fixed argv, shell=False
             [sys.executable, str(dispatcher)],
@@ -131,22 +141,27 @@ def _cold_start_fallback(module_root: Path, payload_text: str):
             text=True,
             timeout=30,
         )
-        return proc.returncode, proc.stderr
+        return proc.returncode, proc.stderr, proc.stdout
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return 0, f"cold-start fallback failed: {exc}"
+        return 0, f"cold-start fallback failed: {exc}", ""
 
 
 def main() -> int:
     module_root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
     state_root = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else module_root
+    # Backward-compat default: a caller that predates the multi-target extension
+    # never passes a third argument - it only ever meant bash_hook_dispatcher.
+    target = sys.argv[3] if len(sys.argv) > 3 else "bash_hook_dispatcher"
     payload_text = sys.stdin.read()
 
-    result = _try_daemon(state_root, payload_text)
+    result = _try_daemon(state_root, target, payload_text)
     if result is None:
         _start_daemon_detached(module_root, state_root)
-        result = _cold_start_fallback(module_root, payload_text)
+        result = _cold_start_fallback(module_root, target, payload_text)
 
-    exit_code, stderr_text = result
+    exit_code, stderr_text, stdout_text = result
+    if stdout_text:
+        sys.stdout.write(stdout_text)
     if stderr_text:
         sys.stderr.write(stderr_text)
     return exit_code

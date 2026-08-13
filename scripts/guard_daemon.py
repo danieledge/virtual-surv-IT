@@ -6,10 +6,13 @@ ADR-014 (docs/adr/ADR-014-persistent-guard-daemon.md). Preference-gated
 as `standards_critique`; on by default for any project set up via `/preferences`
 or the installer's configure flow - see that skill's own docstring for the exact
 "off if the key is genuinely absent" mechanics). run-guard.sh only ever talks to
-this when the preference resolves true AND the target script is
-bash_hook_dispatcher.py - every other case (preference off, or any other target
-script such as locked_menu_guard.py) is completely unaffected; run-guard.sh's own
-cold-start path is byte-for-byte what it was before this file existed.
+this when the preference resolves true AND the target script is one of the
+daemon-servable set (_TARGET_MODULE_NAMES below - originally bash_hook_
+dispatcher.py alone, extended 2026-08-14 to the four other hook scripts this
+daemon was audited safe to serve) - every other case (preference off, or any
+target NOT in that set, e.g. persona_anchor.py, deliberately excluded pending
+its own fixes) is completely unaffected; run-guard.sh's own cold-start path is
+byte-for-byte what it was before this file existed.
 
 Promoted from the design spike (docs/internal/adr-014-spike/) after live
 validation on the actual reporting Windows box, 2026-08-12: 8/8 smoke-test
@@ -19,11 +22,12 @@ detection. This file adds the one thing the spike deliberately left open
 else is the validated spike design, not a rewrite.
 
 Mechanism: a per-project daemon, started lazily by run-guard.sh's client-mode
-branch, holding scripts.bash_hook_dispatcher's real, UNMODIFIED main() imported
-ONCE, serving requests over a TCP socket bound to 127.0.0.1 on an OS-assigned
-ephemeral port. The bound port (and an auth token, see below) are written to
-.claude/.guard-daemon-port (project-scoped, same file-based-coordination pattern
-.guard-interpreter/.guard-lock already use).
+branch, holding every daemon-servable target's real, UNMODIFIED main() imported
+ONCE each (_TARGET_MODULE_NAMES), serving requests over a TCP socket bound to
+127.0.0.1 on an OS-assigned ephemeral port - the request names which target it
+wants (see _Handler.handle()). The bound port (and an auth token, see below) are
+written to .claude/.guard-daemon-port (project-scoped, same file-based-
+coordination pattern .guard-interpreter/.guard-lock already use).
 
 2026-08-13 fix (same bug class run-guard.sh's own $_root/$_project_root split
 already fixed elsewhere - live audit caught one instance the earlier fix missed):
@@ -83,14 +87,18 @@ filesystem access can no longer reach the daemon just by port-scanning
 elsewhere in this project's file-based coordination.
 
 Protocol: one newline-delimited JSON request per connection -
-{"token": "<from the port file>", "payload": "<the PreToolUse JSON as text>"} -
-and one newline-delimited JSON response -
-{"exit_code": int, "stderr": str, "daemon_stale": bool (only if true)}. A
-missing/wrong token gets {"exit_code": 0, "stderr": "unauthorized"} - fails
-open at the PROTOCOL level (never blocks a tool call over an auth mismatch),
-relying on the client falling back to cold-start, not on the daemon itself
-enforcing a block. No stdout field - bash_hook_dispatcher.main() never writes
-stdout (verified by reading its actual source, not assumed).
+{"token": "<from the port file>", "target": "<name from _TARGET_MODULE_NAMES,
+defaults to bash_hook_dispatcher if omitted - a pre-2026-08-14 client never sends
+this field>", "payload": "<the hook's own stdin JSON as text>"} - and one
+newline-delimited JSON response - {"exit_code": int, "stderr": str, "stdout": str,
+"daemon_stale": bool (only if true)}. A missing/wrong token gets {"exit_code": 0,
+"stderr": "unauthorized"} - fails open at the PROTOCOL level (never blocks a tool
+call over an auth mismatch), relying on the client falling back to cold-start, not
+on the daemon itself enforcing a block. An unrecognised target reuses the same
+daemon_stale signal for the identical reason. stdout is almost always empty -
+only stop_hook_dispatcher.py among the current targets writes real stdout
+(verified by reading its actual source, not assumed); every other target's
+capture is empty every time, same as bash_hook_dispatcher.main() always was.
 """
 
 from __future__ import annotations
@@ -107,15 +115,54 @@ from pathlib import Path
 IDLE_TIMEOUT_SECONDS_DEFAULT = 30 * 60
 PORT_FILE_NAME = ".guard-daemon-port"
 
+# 2026-08-14 (multi-target extension): originally hosted exactly ONE script
+# (bash_hook_dispatcher.py). Four more hook scripts fire on their own PreToolUse/
+# PostToolUse/Stop matchers via the SAME run-guard.sh launcher and pay the identical
+# cold-start cost with zero daemon benefit - audited first (a general-purpose agent read
+# all five in full against this file's own dispatch() mechanism) to confirm each is safe
+# to serve from one long-lived process: locked_menu_guard.py, post_edit_lint.py and
+# subagent_return_budget.py all read sys.stdin and write sys.stderr directly, the exact
+# same shape bash_hook_dispatcher.py already has, and carry no module-level mutable
+# state - safe with ONLY the existing dispatch lock, no changes to the scripts
+# themselves. stop_hook_dispatcher.py writes its real answer to stdout, not stderr (Stop
+# hooks signal via stdout JSON) - dispatch() now captures stdout too, a strict superset
+# of before (bash_hook_dispatcher.py never writes stdout, so its capture is always empty
+# and nothing downstream changes for it). persona_anchor.py was audited too and INITIALLY
+# left out (two genuine bugs that only mattered once daemonized: unbounded sys.path
+# growth per call, and a module-level check_artifacts cache with no staleness watch) -
+# both fixed (the sys.path insert is deduped now; check_artifacts.py is in the watch
+# list below) and it's included as of the same day. Fires on every user message, the
+# highest-frequency point in this set besides Bash calls.
+_TARGET_MODULE_NAMES = (
+    "bash_hook_dispatcher",
+    "locked_menu_guard",
+    "post_edit_lint",
+    "subagent_return_budget",
+    "stop_hook_dispatcher",
+    "persona_anchor",
+)
+
 
 def _guard_module_paths(repo_root: Path) -> list:
     """Files whose mtime, if changed since load, mean this daemon's in-memory guard
-    logic is stale. The same set bash_hook_dispatcher.py itself dispatches to, plus
-    the dispatcher module and this daemon's own file (a daemon-code change should
-    also trigger a restart, not just a guard change)."""
+    logic is stale. The set bash_hook_dispatcher.py itself dispatches to, every
+    daemon-servable target script (an edit to any of them must restart the daemon -
+    they're each imported ONCE at startup, same reasoning as bash_hook_dispatcher.py
+    itself), check_artifacts.py (persona_anchor.py's own _load_checker caches it at
+    module level in its fallback path - restarting the whole daemon on a live edit is
+    simpler and more robust than bespoke per-hook cache invalidation, and correctly
+    resets that cache to None too since a restart is a fresh process), and this
+    daemon's own file (a daemon-code change should also trigger a restart, not just a
+    guard change). Deliberately excludes dod_stop_gate.py and todo_panel_nudge.py -
+    stop_hook_dispatcher.py loads those two fresh via importlib on every call rather
+    than caching them at daemon-startup time (confirmed by the same audit that scoped
+    this registry), so a live edit to either is already picked up on the very next
+    call with no staleness risk at all - watching them here would only cause
+    unnecessary restarts."""
     hooks = repo_root / ".claude" / "hooks"
     return [
-        repo_root / "scripts" / "bash_hook_dispatcher.py",
+        *(repo_root / "scripts" / f"{name}.py" for name in _TARGET_MODULE_NAMES),
+        repo_root / "scripts" / "check_artifacts.py",
         hooks / "guard-raw-data.py",
         hooks / "guard-code-execution.py",
         hooks / "guard-consent-writes.py",
@@ -134,17 +181,20 @@ def _mtimes(paths: list) -> dict:
     return out
 
 
-def _load_dispatcher(repo_root: Path):
-    """Imports the REAL, unmodified scripts.bash_hook_dispatcher - never a
-    reimplementation. If this import fails, the daemon must not start at all
-    (fail closed: no daemon is safer than a daemon with no guard logic loaded)."""
+def _load_targets(repo_root: Path) -> dict:
+    """Imports every daemon-servable target module ONCE, by name, never a
+    reimplementation - same "real, unmodified" posture the single-target version
+    already had. If ANY import fails, the daemon must not start at all (fail closed:
+    no daemon serving some targets but silently missing others is worse than no
+    daemon - a caller for the missing target would get a KeyError deep in dispatch()
+    instead of a clean cold-start fallback)."""
     import sys as _sys
 
     if str(repo_root) not in _sys.path:
         _sys.path.insert(0, str(repo_root))
-    from scripts import bash_hook_dispatcher
+    import importlib
 
-    return bash_hook_dispatcher
+    return {name: importlib.import_module(f"scripts.{name}") for name in _TARGET_MODULE_NAMES}
 
 
 class _Handler(socketserver.StreamRequestHandler):
@@ -158,6 +208,10 @@ class _Handler(socketserver.StreamRequestHandler):
             request = json.loads(raw.decode("utf-8"))
             payload_text = request.get("payload", "")
             token = request.get("token", "")
+            # Backward-compat default: an older client that predates the multi-target
+            # extension never sends "target" at all - it only ever meant
+            # bash_hook_dispatcher, so that stays the default rather than a hard error.
+            target = request.get("target", "bash_hook_dispatcher")
         except (ValueError, UnicodeDecodeError) as exc:
             self._respond({"exit_code": 0, "stderr": f"bad request: {exc}"})
             return
@@ -170,6 +224,17 @@ class _Handler(socketserver.StreamRequestHandler):
             self._respond({"exit_code": 0, "stderr": "unauthorized"})
             return
 
+        if target not in server.dispatcher_modules:
+            # A genuinely unknown target (protocol mismatch, or a typo somewhere
+            # upstream) - reuse the existing daemon_stale signal rather than invent a
+            # new one: the client already treats it as "cold-start THIS call, start a
+            # fresh daemon for next time", which is exactly the safe degraded
+            # behaviour here too (fails open, never silently drops the request).
+            self._respond(
+                {"exit_code": 0, "stderr": f"unknown daemon target: {target}", "daemon_stale": True}
+            )
+            return
+
         current = _mtimes(server.guard_paths)
         if current != server.loaded_mtimes:
             server.stale = True
@@ -178,8 +243,8 @@ class _Handler(socketserver.StreamRequestHandler):
             )
             return
 
-        exit_code, stderr_text = server.dispatch(payload_text)
-        self._respond({"exit_code": exit_code, "stderr": stderr_text})
+        exit_code, stderr_text, stdout_text = server.dispatch(target, payload_text)
+        self._respond({"exit_code": exit_code, "stderr": stderr_text, "stdout": stdout_text})
 
     def _respond(self, obj: dict) -> None:
         self.wfile.write((json.dumps(obj) + "\n").encode("utf-8"))
@@ -196,30 +261,37 @@ class GuardDaemon(socketserver.ThreadingTCPServer):
         self.token = secrets.token_hex(16)
         self.guard_paths = _guard_module_paths(repo_root)
         self.loaded_mtimes = _mtimes(self.guard_paths)
-        self.dispatcher_module = _load_dispatcher(repo_root)
+        self.dispatcher_modules = _load_targets(repo_root)
         self.last_activity = time.monotonic()
         self.stale = False
         self._dispatch_lock = threading.Lock()
 
-    def dispatch(self, payload_text: str):
-        """Runs bash_hook_dispatcher.main() in-process - no subprocess, no cold
-        start. Serialized (see module docstring: sys.stdin/sys.stderr are
-        process-global, unsafe to swap concurrently across threads). Captures
-        stderr exactly the same way the cold-start subprocess path already does
-        (dispatcher writes block-reason text there, e.g. "guard_raw_data crashed
-        unexpectedly; failing closed (blocked)."), so a client sees identical
-        behaviour to today's cold-start path."""
+    def dispatch(self, target: str, payload_text: str):
+        """Runs <target>.main() in-process - no subprocess, no cold start. Serialized
+        (see module docstring: sys.stdin/sys.stdout/sys.stderr are process-global,
+        unsafe to swap concurrently across threads) across ALL targets, not just
+        per-target - two different targets dispatched at once would race on the same
+        process-global streams exactly like two of the same target would. Captures
+        stdout as well as stderr (2026-08-14 multi-target extension - stop_hook_
+        dispatcher.py answers via stdout, not stderr; bash_hook_dispatcher.py and the
+        other original targets never write stdout at all, so their capture is always
+        empty and nothing changes for them), so a client sees identical behaviour to
+        today's cold-start path either way."""
+        module = self.dispatcher_modules[target]
         with self._dispatch_lock:
-            old_stdin, old_stderr = sys.stdin, sys.stderr
+            old_stdin, old_stdout, old_stderr = sys.stdin, sys.stdout, sys.stderr
+            stdout_capture = io.StringIO()
             stderr_capture = io.StringIO()
             try:
                 sys.stdin = io.StringIO(payload_text)
+                sys.stdout = stdout_capture
                 sys.stderr = stderr_capture
-                exit_code = self.dispatcher_module.main()
+                exit_code = module.main()
             finally:
                 sys.stdin = old_stdin
+                sys.stdout = old_stdout
                 sys.stderr = old_stderr
-            return exit_code, stderr_capture.getvalue()
+            return exit_code, stderr_capture.getvalue(), stdout_capture.getvalue()
 
     def idle_watchdog(self) -> None:
         while True:

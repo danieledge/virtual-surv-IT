@@ -146,16 +146,35 @@ done
 # Daemon path (ADR-014, docs/adr/ADR-014-persistent-guard-daemon.md) - checked once here,
 # used at both invocation points below. Deliberately narrow: only ever engages when the
 # target script ($1 - this launcher's own usage is always `run-guard.sh <script>`, never a
-# flag first) is EXACTLY bash_hook_dispatcher.py by basename - locked_menu_guard.py and any
-# other target this launcher is used for are completely unaffected, identical cold-start
-# path as always. Off by default (no team-preferences.json, or an explicit false): this
-# whole block resolves to _use_daemon=0 and NOTHING else in this file's behaviour changes,
-# not even one byte - opt-in via .claude/team-preferences.json "guard_daemon": true
+# flag first) is EXACTLY one of the daemon-servable set by basename - any OTHER target
+# this launcher is used for is completely unaffected, identical cold-start path as always.
+# Off by default (no team-preferences.json, or an explicit false): this whole block
+# resolves to _use_daemon=0 and NOTHING else in this file's behaviour changes, not even
+# one byte - opt-in via .claude/team-preferences.json "guard_daemon": true
 # (scripts/guard_daemon.py + scripts/guard_daemon_client.py, promoted 2026-08-12 from the
 # design spike after live validation on the actual reporting Windows box - 8/8 smoke-test
 # checks passed, including genuinely concurrent request safety).
+#
+# 2026-08-14 multi-target extension: originally bash_hook_dispatcher.py alone. Five more
+# hook scripts fire on their own PreToolUse/PostToolUse/Stop/UserPromptSubmit matchers
+# via this SAME launcher and paid the identical cold-start cost with zero daemon benefit
+# - added here after an audit (guard_daemon.py's own module docstring has the full
+# rationale, including persona_anchor.py's two fixes before it was safe to include).
+# $_daemon_target names which one for DAEMON_CLIENT below - a case match, not basename
+# compared six times, and ${1##*/} instead of a basename subprocess call (this check
+# runs unconditionally on every single call regardless of daemon status, so it's worth
+# the same subprocess-avoidance care as the rest of this file).
 _use_daemon=0
-if [ "$(basename "$1" 2>/dev/null)" = "bash_hook_dispatcher.py" ]; then
+_daemon_target=""
+case "${1##*/}" in
+	bash_hook_dispatcher.py) _daemon_target="bash_hook_dispatcher" ;;
+	locked_menu_guard.py) _daemon_target="locked_menu_guard" ;;
+	post_edit_lint.py) _daemon_target="post_edit_lint" ;;
+	subagent_return_budget.py) _daemon_target="subagent_return_budget" ;;
+	stop_hook_dispatcher.py) _daemon_target="stop_hook_dispatcher" ;;
+	persona_anchor.py) _daemon_target="persona_anchor" ;;
+esac
+if [ -n "$_daemon_target" ]; then
 	_prefs="$_project_root/.claude/team-preferences.json"
 	if [ -f "$_prefs" ] && grep -q '"guard_daemon" *: *true' "$_prefs" 2>/dev/null; then
 		_use_daemon=1
@@ -184,7 +203,7 @@ if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
 	if [ -f "$_fastcache" ]; then
 		_fastcached=$(cat "$_fastcache" 2>/dev/null)
 		if [ -n "$_fastcached" ] && command -v "$_fastcached" >/dev/null 2>&1; then
-			"$_fastcached" "$DAEMON_CLIENT" "$_root" "$_project_root"
+			"$_fastcached" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 			exit $?
 		fi
 	fi
@@ -320,7 +339,7 @@ if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)
 	if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
 		if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
-			"$cached" "$DAEMON_CLIENT" "$_root" "$_project_root"
+			"$cached" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 			exit $?
 		fi
 		"$cached" "$@"
@@ -344,7 +363,7 @@ for interpreter in $order; do
 			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
 			printf '%s' "$interpreter" >"$CACHE" 2>/dev/null
 			if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
-				"$interpreter" "$DAEMON_CLIENT" "$_root" "$_project_root"
+				"$interpreter" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 				exit $?
 			fi
 			"$interpreter" "$@"

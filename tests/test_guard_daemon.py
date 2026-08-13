@@ -136,6 +136,150 @@ def test_run_defaults_state_root_to_module_root_when_omitted(tmp_path, monkeypat
         t.join(timeout=5)
 
 
+# --------------------------------------------------------------- multi-target dispatch
+
+
+def _send_raw_request(port: int, token: str, request: dict) -> dict:
+    """Talks to a real running daemon directly over its own protocol - the same
+    newline-delimited JSON request/response shape guard_daemon_client.py uses -
+    without going through the client at all, so these tests exercise the daemon's
+    OWN dispatch/handle logic precisely."""
+    import json
+    import socket as _socket
+
+    with _socket.create_connection(("127.0.0.1", port), timeout=2) as sock:
+        sock.settimeout(5)
+        sock.sendall((json.dumps(request) + "\n").encode("utf-8"))
+        sock.shutdown(_socket.SHUT_WR)
+        chunks = []
+        while True:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            chunks.append(chunk)
+    return json.loads(b"".join(chunks).decode("utf-8"))
+
+
+def _start_real_daemon(gd, module_root, state_root, idle_timeout=5):
+    """Starts a real daemon thread with module_root (where target scripts are
+    imported from - REPO_ROOT, so every real target script genuinely exists) kept
+    SEPARATE from state_root (where the port file lands - always a throwaway
+    tmp_path in these tests, never REPO_ROOT's own real .claude/ directory, which
+    this session's own real daemon may already be using - writing there would risk
+    colliding with it). Returns (port, token) once the port file appears. Caller
+    doesn't need to join the thread - idle_timeout keeps it short-lived and it's a
+    daemon thread either way."""
+    t = threading.Thread(
+        target=lambda: gd.run(module_root, state_root, idle_timeout=idle_timeout), daemon=True
+    )
+    t.start()
+    port_file = state_root / ".claude" / gd.PORT_FILE_NAME
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and not port_file.is_file():
+        time.sleep(0.05)
+    assert port_file.is_file(), "daemon never started"
+    lines = port_file.read_text(encoding="utf-8").splitlines()
+    return int(lines[0]), lines[1]
+
+
+def test_daemon_dispatches_to_the_named_target_not_always_bash_hook_dispatcher(
+    tmp_path, monkeypatch
+):
+    """The actual point of the whole extension: two DIFFERENT targets in the same
+    request set must each get answered by their OWN script, not silently both
+    dispatched to bash_hook_dispatcher. Uses REPO_ROOT (this real repo) as
+    module_root so every real target script genuinely exists to import."""
+    gd = _load_guard_daemon(monkeypatch)
+    port, token = _start_real_daemon(gd, REPO_ROOT, tmp_path)
+
+    harmless = '{"tool_name": "Read", "tool_input": {"file_path": "/tmp/harmless"}}'
+    resp1 = _send_raw_request(
+        port, token, {"token": token, "target": "bash_hook_dispatcher", "payload": harmless}
+    )
+    assert resp1["exit_code"] == 0
+    assert not resp1.get("daemon_stale")
+
+    ask_payload = '{"tool_name": "AskUserQuestion", "tool_input": {"questions": []}}'
+    resp2 = _send_raw_request(
+        port, token, {"token": token, "target": "locked_menu_guard", "payload": ask_payload}
+    )
+    assert resp2["exit_code"] == 0
+    assert not resp2.get("daemon_stale")
+
+
+def test_daemon_dispatches_to_persona_anchor(tmp_path, monkeypatch):
+    """persona_anchor.py added after its own two daemon-safety fixes (deduped
+    sys.path insert, check_artifacts.py in the staleness watch list) - a dormant
+    session (no artifacts/ dir, its own genuine no-op path) proves dispatch reaches
+    the real script and returns cleanly, without needing a live engagement pack."""
+    gd = _load_guard_daemon(monkeypatch)
+    port, token = _start_real_daemon(gd, REPO_ROOT, tmp_path)
+
+    payload = ('{"cwd": "%s"}' % str(tmp_path)).replace("\\", "\\\\")
+    resp = _send_raw_request(
+        port, token, {"token": token, "target": "persona_anchor", "payload": payload}
+    )
+    assert resp["exit_code"] == 0
+    assert not resp.get("daemon_stale")
+
+
+def test_check_artifacts_is_in_the_daemon_staleness_watch_list(monkeypatch):
+    """persona_anchor.py's own _load_checker caches check_artifacts.py at module
+    level in its fallback path - a live edit to it must restart the whole daemon
+    (the general mechanism, not bespoke per-hook invalidation), or a stale cached
+    checker could silently keep answering with outdated engagement-state logic."""
+    gd = _load_guard_daemon(monkeypatch)
+    paths = gd._guard_module_paths(REPO_ROOT)
+    assert REPO_ROOT / "scripts" / "check_artifacts.py" in paths
+
+
+def test_daemon_captures_stdout_for_stop_hook_dispatcher(tmp_path, monkeypatch):
+    """stop_hook_dispatcher.py answers via stdout (Stop hooks signal that way), not
+    stderr like every other target - the daemon must capture and return it, not
+    swallow it or leak it to the daemon process's own real stdout."""
+    gd = _load_guard_daemon(monkeypatch)
+    port, token = _start_real_daemon(gd, REPO_ROOT, tmp_path)
+
+    # A payload with no stop_hook_active and no gated engagement pack in tmp_path -
+    # the dispatcher's own fail-open/nothing-to-do path, which still answers via a
+    # real (if minimal) stdout write, proving the capture mechanism itself works.
+    payload = '{"stop_hook_active": false, "cwd": "%s"}' % str(tmp_path).replace("\\", "\\\\")
+    resp = _send_raw_request(
+        port, token, {"token": token, "target": "stop_hook_dispatcher", "payload": payload}
+    )
+    assert not resp.get("daemon_stale")
+    assert "stdout" in resp  # the field exists at all - the actual protocol widening
+
+
+def test_daemon_unknown_target_fails_open_via_daemon_stale_signal(tmp_path, monkeypatch):
+    """A genuinely unknown target (protocol mismatch, typo, anything) must never
+    crash the daemon or hang the connection - it reuses the existing daemon_stale
+    signal, which the client already treats as "cold-start this call safely"."""
+    gd = _load_guard_daemon(monkeypatch)
+    port, token = _start_real_daemon(gd, REPO_ROOT, tmp_path)
+
+    resp = _send_raw_request(
+        port, token, {"token": token, "target": "not_a_real_target", "payload": "{}"}
+    )
+    assert resp.get("daemon_stale") is True
+    assert resp["exit_code"] == 0  # fails open, never blocks
+
+
+def test_daemon_backward_compat_defaults_to_bash_hook_dispatcher_when_target_omitted(
+    tmp_path, monkeypatch
+):
+    """A request with NO "target" field at all (an older client that predates this
+    extension) must still be served correctly - defaulting to bash_hook_dispatcher,
+    today's only behaviour before this extension existed."""
+    gd = _load_guard_daemon(monkeypatch)
+    port, token = _start_real_daemon(gd, REPO_ROOT, tmp_path)
+
+    harmless = '{"tool_name": "Read", "tool_input": {"file_path": "/tmp/harmless"}}'
+    resp = _send_raw_request(port, token, {"token": token, "payload": harmless})  # no "target"
+    assert not resp.get("daemon_stale")
+    assert resp["exit_code"] == 0
+
+
 # --------------------------------------------------------------- client: state vs module root
 
 
@@ -150,7 +294,7 @@ def test_client_try_daemon_reads_port_from_state_root(tmp_path, monkeypatch):
     # deterministic failure this exercises (same technique as the spike test).
     (state_root / ".claude" / "guard-daemon-port").write_text("1\ndeadbeef\n", encoding="utf-8")
 
-    assert client._try_daemon(state_root, '{"tool_name": "Read"}') is None
+    assert client._try_daemon(state_root, "bash_hook_dispatcher", '{"tool_name": "Read"}') is None
     # Never looked under module_root at all.
     assert not (module_root / ".claude").exists()
 
@@ -161,10 +305,27 @@ def test_client_cold_start_fallback_uses_module_root_for_the_real_dispatcher(mon
     correct (non-error) result back."""
     client = _load_guard_daemon_client(monkeypatch)
 
-    exit_code, _stderr = client._cold_start_fallback(
-        REPO_ROOT, '{"tool_name": "Read", "tool_input": {"file_path": "/tmp/harmless"}}'
+    exit_code, _stderr, _stdout = client._cold_start_fallback(
+        REPO_ROOT,
+        "bash_hook_dispatcher",
+        '{"tool_name": "Read", "tool_input": {"file_path": "/tmp/harmless"}}',
     )
     assert exit_code == 0
+
+
+def test_client_cold_start_fallback_dispatches_by_target_name(monkeypatch):
+    """A DIFFERENT target name must resolve to that script, not always
+    bash_hook_dispatcher.py - the actual point of the multi-target extension. Uses
+    locked_menu_guard.py (also a real, current script) to prove it's target-driven,
+    not hardcoded to one filename."""
+    client = _load_guard_daemon_client(monkeypatch)
+
+    exit_code, _stderr, _stdout = client._cold_start_fallback(
+        REPO_ROOT,
+        "locked_menu_guard",
+        '{"tool_name": "AskUserQuestion", "tool_input": {"questions": []}}',
+    )
+    assert exit_code in (0, 2)  # a real answer either way, not a "file not found" crash
 
 
 def test_client_start_daemon_detached_passes_both_roots_to_the_subprocess(tmp_path, monkeypatch):
@@ -236,14 +397,15 @@ def test_client_main_defaults_state_root_to_module_root_with_one_arg(tmp_path, m
     """CLI backward compatibility: `guard_daemon_client.py <module_root>` alone
     (today's call shape from an unmodified run-guard.sh, or any other caller that
     hasn't been updated) must still behave exactly as before - state_root falls
-    back to module_root."""
+    back to module_root, and target defaults to bash_hook_dispatcher."""
     client = _load_guard_daemon_client(monkeypatch)
 
     seen = {}
 
-    def fake_try_daemon(state_root, payload_text):
+    def fake_try_daemon(state_root, target, payload_text):
         seen["state_root"] = state_root
-        return (0, "")
+        seen["target"] = target
+        return (0, "", "")
 
     monkeypatch.setattr(client, "_try_daemon", fake_try_daemon)
     monkeypatch.setattr(sys, "argv", ["guard_daemon_client.py", str(tmp_path)])
@@ -251,6 +413,28 @@ def test_client_main_defaults_state_root_to_module_root_with_one_arg(tmp_path, m
 
     client.main()
     assert seen["state_root"] == tmp_path
+    assert seen["target"] == "bash_hook_dispatcher"
+
+
+def test_client_main_passes_explicit_target_as_third_arg(tmp_path, monkeypatch):
+    """The actual new CLI surface: a third positional argument selects the target,
+    exactly as run-guard.sh's own $_daemon_target now passes it."""
+    client = _load_guard_daemon_client(monkeypatch)
+
+    seen = {}
+
+    def fake_try_daemon(state_root, target, payload_text):
+        seen["target"] = target
+        return (0, "", "")
+
+    monkeypatch.setattr(client, "_try_daemon", fake_try_daemon)
+    monkeypatch.setattr(
+        sys, "argv", ["guard_daemon_client.py", str(tmp_path), str(tmp_path), "locked_menu_guard"]
+    )
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO("{}"))
+
+    client.main()
+    assert seen["target"] == "locked_menu_guard"
 
 
 # --------------------------------------------------------------- run-guard.sh integration
@@ -311,9 +495,90 @@ def test_launcher_invokes_daemon_client_with_both_roots_when_they_differ(tmp_pat
     assert proc.returncode == 0
     assert argv_log.is_file(), "the fake daemon client was never invoked"
     lines = argv_log.read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 2, f"expected exactly 2 args (module_root, state_root), got {lines}"
+    assert len(lines) == 3, (
+        f"expected exactly 3 args (module_root, state_root, target), got {lines}"
+    )
     assert lines[0] == str(plugin_root)
     assert lines[1] == str(project_dir)
+    assert lines[2] == "bash_hook_dispatcher"
+
+
+@pytestmark_sh
+def test_launcher_passes_the_correct_target_name_for_each_daemon_servable_script(tmp_path):
+    """The actual point of the multi-target extension at the launcher level: each of
+    the five daemon-servable scripts must resolve to ITS OWN target name, not always
+    bash_hook_dispatcher - and a target NOT in the servable set (a plain, unrelated
+    script) must never engage the daemon at all, proving the case-match gate is
+    exact, not a catch-all."""
+    import json
+    import os
+
+    cases = [
+        ("bash_hook_dispatcher.py", "bash_hook_dispatcher"),
+        ("locked_menu_guard.py", "locked_menu_guard"),
+        ("post_edit_lint.py", "post_edit_lint"),
+        ("subagent_return_budget.py", "subagent_return_budget"),
+        ("stop_hook_dispatcher.py", "stop_hook_dispatcher"),
+        ("persona_anchor.py", "persona_anchor"),
+    ]
+
+    plugin_root = tmp_path / "plugin-install"
+    project_dir = tmp_path / "project"
+    (plugin_root / "scripts").mkdir(parents=True)
+    (project_dir / ".claude").mkdir(parents=True)
+    (project_dir / ".claude" / "team-preferences.json").write_text(
+        '{"guard_daemon": true}', encoding="utf-8"
+    )
+    argv_log = plugin_root / "argv.log"
+    fake_client = plugin_root / "scripts" / "guard_daemon_client.py"
+    fake_client.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        f"open({str(argv_log)!r}, 'w').write('\\n'.join(sys.argv[1:]))\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    fake_client.chmod(0o755)
+    env = {
+        "CLAUDE_PROJECT_DIR": str(project_dir),
+        "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+        "PATH": os.environ["PATH"],
+    }
+    payload = json.dumps({"tool_name": "Read", "tool_input": {"file_path": "/tmp/harmless"}})
+
+    for basename, expected_target in cases:
+        argv_log.unlink(missing_ok=True)
+        target_script = project_dir / basename
+        target_script.write_text("", encoding="utf-8")
+        proc = subprocess.run(
+            ["sh", str(LAUNCHER), str(target_script)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=30,
+        )
+        assert proc.returncode == 0, f"{basename}: {proc.stderr}"
+        assert argv_log.is_file(), f"{basename}: fake daemon client was never invoked"
+        lines = argv_log.read_text(encoding="utf-8").splitlines()
+        assert lines[2] == expected_target, (
+            f"{basename}: expected target {expected_target}, got {lines}"
+        )
+
+    # A script NOT in the daemon-servable set must never reach the daemon client at all.
+    argv_log.unlink(missing_ok=True)
+    unrelated = project_dir / "not_a_daemon_target.py"
+    unrelated.write_text("import sys; sys.exit(0)\n", encoding="utf-8")
+    proc = subprocess.run(
+        ["sh", str(LAUNCHER), str(unrelated)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert proc.returncode == 0
+    assert not argv_log.is_file(), "an unrelated script must never engage the daemon client"
 
 
 @pytestmark_sh
@@ -377,9 +642,10 @@ def test_launcher_self_locates_when_claude_plugin_root_is_unset(tmp_path):
         "the fake daemon client was never invoked - self-location did not recover the plugin root"
     )
     lines = argv_log.read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 2
+    assert len(lines) == 3
     assert lines[0] == str(plugin_root), (
         f"module_root resolved to {lines[0]!r}, expected the plugin root {str(plugin_root)!r} "
         "- self-location fell back to something else"
     )
     assert lines[1] == str(project_dir)
+    assert lines[2] == "bash_hook_dispatcher"

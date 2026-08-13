@@ -118,3 +118,27 @@ def test_all_workspaces_closed_is_silent(tmp_path, monkeypatch, capsys):
     )
     _, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
     assert out == ""
+
+
+def test_load_checker_does_not_grow_sys_path_on_repeat_calls(tmp_path, monkeypatch):
+    """2026-08-14 daemon-safety fix: this hook used to run once per prompt in its own
+    fresh process, where an unconditional sys.path.insert was harmless (it died with
+    the process every time). Serving it from a long-lived daemon changes that -
+    without the dedup, every call would grow sys.path by one more entry for the same
+    project_root. Calling _load_checker twice with the SAME project_root must not
+    add a second entry."""
+    import sys
+
+    project_root = tmp_path
+    before = list(sys.path)
+    pa._load_checker(project_root)
+    after_first = list(sys.path)
+    pa._load_checker(project_root)
+    after_second = list(sys.path)
+
+    added_by_first = [p for p in after_first if p not in before]
+    assert len(added_by_first) <= 1  # at most the one, deliberate insert
+    assert after_second == after_first, (
+        "a second call with the same project_root grew sys.path again - the dedup "
+        "check did not hold"
+    )

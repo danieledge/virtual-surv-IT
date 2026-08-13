@@ -37,6 +37,16 @@ on any error - a presentation aid must never break a prompt. UTF-8-forced (Windo
 
 Wire via hooks -> "UserPromptSubmit" in .claude/settings.json + hooks/hooks.json
 (scripts/apply-persona-anchor.sh - human-run; hook/config edits are human-only, ADR-002 rec 5).
+
+2026-08-14 (ADR-014 daemon, multi-target extension): daemon-servable (fires on every
+user message, the highest-frequency point besides Bash calls, so the biggest single
+win in the daemon's target set) - was excluded from the FIRST daemon pass pending two
+fixes an audit found: the sys.path insert above is now deduped (see its own comment),
+and scripts/check_artifacts.py - the one real staleness risk, since _load_checker's
+fallback path caches it at module level - is in guard_daemon.py's own watch list, so a
+live edit to it correctly restarts the daemon (a fresh process re-imports everything,
+including this module's own _CHECK_ARTIFACTS_MODULE_CACHE reset to None) rather than
+silently serving a stale cached module.
 """
 
 from __future__ import annotations
@@ -96,7 +106,16 @@ def _load_checker(project_root: Path):
     with another in one process, the way the Stop hooks were)."""
     global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
-        sys.path.insert(0, str(project_root))
+        # 2026-08-14 (daemon-safety audit): deduped, not an unconditional insert - this
+        # hook used to run once per prompt in its own fresh process, where an unbounded
+        # sys.path (dying with the process every time) was harmless. Serving it from a
+        # long-lived daemon changes that: without the dedup check, every call would grow
+        # sys.path by one more entry for the same project_root, and if this daemon ever
+        # served more than one project's requests over its lifetime, stale entries from
+        # an earlier project would sit ahead of a later one, silently shadowing it. Same
+        # dedup pattern guard_daemon.py's own _load_targets() already uses.
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
         from scripts import check_artifacts
 
         return check_artifacts
