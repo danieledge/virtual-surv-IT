@@ -53,6 +53,16 @@ Wired in `.claude/settings.json` + `hooks/hooks.json` -> `hooks.Stop` (it ships 
 config edits are human-only under ADR-002 rec 5). Patches to this file are staged at
 `scripts/staged_hooks/dod_stop_gate.py` and installed by the human via
 `bash scripts/apply-project-anchor.sh`.
+
+2026-08-14 live report (corp Windows dogfooding session, screenshots): a session was nudged
+about an unrelated OPEN engagement while its own most recent message had just asked for a new,
+different review - exactly the case the "proceed with THAT first" branch below exists for. It
+narrated "quick note - fixing the two ... state issues ... before we proceed" and then actually
+fixed them, before starting the new work: diverting into the fix, just a fast one. The wording
+at the time said "rather than diverting into fixing it now," which apparently reads as
+compatible with "but this one's quick" - tightened below to name that exact rationalization and
+rule it out explicitly, and to give a concrete one-line deferral so there's a specific correct
+action to take instead of an abstract instruction to not do something.
 """
 
 from __future__ import annotations
@@ -128,13 +138,16 @@ def _reason(
             'blocked, end the turn saying so plainly ("NOT closed - outstanding: ...") rather '
             "than stopping silently. **If the user's own most recent message clearly asked for "
             "something else - new/different work, not this engagement** - proceed with THAT "
-            "first; note this nudge in one line rather than diverting into fixing it now, and "
-            f"do **NOT** record `{log_note}` (that marker means the findings were actually acted "
-            "on - recording it while deferring would wrongly suppress a real gap, not postpone "
-            "it). Nothing is lost by deferring this way: this finding set re-arms and nudges "
-            "again the next time a turn ends while this same engagement is still active and "
-            "gated, so it cannot silently drop out of sight - it just doesn't override an "
-            "explicit request you were just given."
+            'first. Note this nudge in one line (e.g. "noted: N DoD finding(s) on <slug>, '
+            'deferred") and move on - **not even a fast, looks-harmless fix first.** '
+            '"I\'ll just quickly fix this before starting" is still diverting; it is not the '
+            "same as proceeding with THAT first, however small the detour looks, and do **NOT** "
+            f"record `{log_note}` (that marker means the findings were actually acted on - "
+            "recording it while deferring would wrongly suppress a real gap, not postpone it). "
+            "Nothing is lost by deferring this way: this finding set re-arms and nudges again "
+            "the next time a turn ends while this same engagement is still active and gated, so "
+            "it cannot silently drop out of sight - it just doesn't override an explicit request "
+            "you were just given, no matter how quick the detour looks."
         )
     else:
         # The active engagement itself is clean - only OTHER open engagements have
