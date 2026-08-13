@@ -1119,6 +1119,7 @@ _DIAGNOSTICS_ACTIONS = {
     "4": "selftest",
     "5": "hooklatency",
     "6": "adr014smoke",
+    "7": "daemonstart",
     "b": "back",
 }
 _ADVANCED_ACTIONS = {
@@ -1210,8 +1211,15 @@ def choose_action(style: Style) -> str:
                     ("3", "Comprehensive: the full environment + synthetic-engagement report"),
                     ("4", "Self-test only: just the synthetic engagement"),
                     ("", "-- internal / prototype diagnostics --"),
-                    ("5", "Hook latency: feeds the ADR-014 daemon decision (slower - repeated + concurrent)"),
+                    (
+                        "5",
+                        "Hook latency: feeds the ADR-014 daemon decision (slower - repeated + concurrent)",
+                    ),
                     ("6", "ADR-014 spike smoke test (PROTOTYPE - starts a real daemon process)"),
+                    (
+                        "7",
+                        "Guard daemon start diagnostic (starts the REAL daemon - why isn't it starting)",
+                    ),
                     ("b", "Back"),
                 ),
                 _DIAGNOSTICS_ACTIONS,
@@ -1579,7 +1587,9 @@ class Installer:
                     "  install_helper.py itself was updated - restarting with the new version..."
                 )
             )
-            child_argv = _argv_from_args(self.args, repo=self.repo, branch=self.branch, mode=self.mode)
+            child_argv = _argv_from_args(
+                self.args, repo=self.repo, branch=self.branch, mode=self.mode
+            )
             proc = subprocess.run(  # fixed argv (sys.executable + freshly-pulled script), shell=False  # nosec B603
                 [sys.executable, str(new_script), *child_argv]
             )
@@ -2084,7 +2094,11 @@ class Installer:
             # 2026-08-07 user request: project-level setup is no longer part of this
             # default run - point at `virt-surv configure`, run FROM the project's own
             # root folder (the same folder you'll run `claude` from), instead.
-            fallback = f"python {self.repo / 'install_helper.py'} --configure ." if self.repo else "install_helper.py --configure ."
+            fallback = (
+                f"python {self.repo / 'install_helper.py'} --configure ."
+                if self.repo
+                else "install_helper.py --configure ."
+            )
             self.say(
                 "  1. Set up a project: cd into its root folder - the same folder you'll "
                 f"run `claude` from - and run 'virt-surv configure' (or '{fallback}' if "
@@ -2262,7 +2276,9 @@ class Installer:
                 style=self.style,
             )
         if not wanted:
-            self.step_skip("Alias setup", "skipped - python install_helper.py --setup-alias any time")
+            self.step_skip(
+                "Alias setup", "skipped - python install_helper.py --setup-alias any time"
+            )
             return
         rc = run_setup_alias(self.style, self.marks, self.args.yes, self.demo, self.args.repo)
         if rc == 0:
@@ -2299,7 +2315,9 @@ class Installer:
             "codebase-skeleton drift-checking preferences aren't asked here - they're "
             "set via 'Configure a project' instead.)"
         )
-        raw = ask(f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style)
+        raw = ask(
+            f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style
+        )
         project = Path(raw).expanduser().resolve()
         if not project.is_dir():
             self.step_fail("Project preferences", f"not a directory: {project}")
@@ -2413,12 +2431,16 @@ class Installer:
         node = _find_node()
         npm = shutil.which("npm.cmd") or shutil.which("npm")
         if not node or not npm:
-            self.step_skip("Dashboard", "Node/npm not found - run /dashboard later once Node is set up")
+            self.step_skip(
+                "Dashboard", "Node/npm not found - run /dashboard later once Node is set up"
+            )
             return
         if not (ui_dir / "node_modules").is_dir():
             proc = run_cmd([npm, "install"], cwd=ui_dir, timeout=600)
             if proc.returncode != 0:
-                self.step_fail("Dashboard", "npm install failed - run /dashboard later to retry", fatal=False)
+                self.step_fail(
+                    "Dashboard", "npm install failed - run /dashboard later to retry", fatal=False
+                )
                 return
         proc = run_cmd([npm, "run", "dashboard"], cwd=ui_dir, timeout=300)
         if proc.returncode != 0:
@@ -2618,7 +2640,9 @@ class Installer:
             "reset back to sonnet. (This machine's own default model lives under "
             "Advanced -> Machine defaults instead.)"
         )
-        raw = ask(f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style)
+        raw = ask(
+            f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style
+        )
         project = Path(raw).expanduser().resolve()
         if not project.is_dir():
             self.step_fail("Morgan's model", f"not a directory: {project}")
@@ -2731,7 +2755,9 @@ class Installer:
         )
         rc = run_adr014_smoke_test(self.style, self.marks, self.args.repo)
         if rc == 0:
-            self.step_ok("ADR-014 spike smoke test", "all checks passed - see output above for the numbers")
+            self.step_ok(
+                "ADR-014 spike smoke test", "all checks passed - see output above for the numbers"
+            )
         elif rc is None:
             self.step_skip(
                 "ADR-014 spike smoke test", "docs/internal/adr-014-spike/smoke_test.py not found"
@@ -2741,6 +2767,28 @@ class Installer:
                 "ADR-014 spike smoke test",
                 "one or more checks failed - see output above; this is prototype code, a "
                 "failure here is real evidence for ADR-014, not a plugin defect",
+                fatal=False,
+            )
+
+    def daemon_start_step(self) -> None:
+        """Standalone (Diagnostics menu option 7, subset="daemonstart"): thin wrapper
+        around run_daemon_start_diagnostic, same shape as adr014_smoke_step - keeps the
+        CLI flag (--check-daemon-start) and the menu path sharing one implementation."""
+        self.step_intro(
+            "Actually starts the real guard daemon (foreground AND the exact detached "
+            "spawn production uses) in a throwaway temp directory, and reports exactly "
+            "what happens - built because a failed detached spawn is silent by design "
+            "in production (must never brick a hook call), which makes 'why isn't the "
+            "daemon starting' otherwise impossible to debug from the outside."
+        )
+        rc = run_daemon_start_diagnostic(self.style, self.marks, self.args.repo)
+        if rc == 0:
+            self.step_ok("Guard daemon start diagnostic", "both checks passed - see output above")
+        else:
+            self.step_fail(
+                "Guard daemon start diagnostic",
+                "see output above and the data file - this is the actual production spawn "
+                "failure, hand the file back whole",
                 fatal=False,
             )
 
@@ -2788,7 +2836,9 @@ class Installer:
                     "`virt-surv configure`",
                 )
                 return
-        raw = ask(f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style)
+        raw = ask(
+            f"  Which project directory? (blank = {Path.cwd()})", ".", False, style=self.style
+        )
         target = Path(raw)
         # quick_defaults only ever means anything on the "full" install/update plan (set
         # by quick_setup_choice, which only that plan runs) - the standalone "enable"
@@ -2873,6 +2923,10 @@ class Installer:
         if self.subset == "adr014smoke":
             return [
                 ("ADR-014 spike smoke test", self.adr014_smoke_step),
+            ]
+        if self.subset == "daemonstart":
+            return [
+                ("Guard daemon start diagnostic", self.daemon_start_step),
             ]
         return [
             ("Preflight checks", self.preflight),
@@ -3063,7 +3117,9 @@ def run_env_tuning_betas(project_dir: Path, style: Style, mark_map: dict) -> int
     )
 
 
-def run_orchestrator_model(project_dir: Path, model: Optional[str], style: Style, mark_map: dict) -> int:
+def run_orchestrator_model(
+    project_dir: Path, model: Optional[str], style: Style, mark_map: dict
+) -> int:
     """Standalone opt-in step: set or reset Morgan's model for one project. Human-run by
     definition (this script is a terminal tool) - Claude Code itself blocks the model from
     writing settings.json (ADR-002)."""
@@ -3073,7 +3129,9 @@ def run_orchestrator_model(project_dir: Path, model: Optional[str], style: Style
         print(f"{fail} not a directory: {project}")
         return 1
     if model is not None and model not in ORCHESTRATOR_MODELS:
-        print(f"{fail} model must be one of {ORCHESTRATOR_MODELS} or omitted (reset), not {model!r}")
+        print(
+            f"{fail} model must be one of {ORCHESTRATOR_MODELS} or omitted (reset), not {model!r}"
+        )
         return 1
     if model == "opus":
         print(style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
@@ -3090,7 +3148,9 @@ def run_orchestrator_model_default(model: Optional[str], style: Style, mark_map:
     projects, at Claude Code's user-level settings. Human-run by definition."""
     ok, fail = mark_map["ok"], mark_map["fail"]
     if model is not None and model not in ORCHESTRATOR_MODELS:
-        print(f"{fail} model must be one of {ORCHESTRATOR_MODELS} or omitted (clear), not {model!r}")
+        print(
+            f"{fail} model must be one of {ORCHESTRATOR_MODELS} or omitted (clear), not {model!r}"
+        )
         return 1
     if model == "opus":
         print(style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
@@ -3401,14 +3461,11 @@ def ask_and_set_model(
     now covers the global case directly, so duplicating it here just to have a "no, per
     project" answer available adds a needless extra question). run_configure keeps the
     default True - it has no separate machine-defaults entry point of its own."""
-    global_default = (
-        offer_global_scope
-        and confirm(
-            "  Also make this the default for new/unconfigured projects, not just this one?",
-            default=False,
-            assume_yes=assume_yes,
-            style=style,
-        )
+    global_default = offer_global_scope and confirm(
+        "  Also make this the default for new/unconfigured projects, not just this one?",
+        default=False,
+        assume_yes=assume_yes,
+        style=style,
     )
     picked = (
         ask(
@@ -3665,7 +3722,9 @@ def run_configure(
     if not project.is_dir():
         print(f"{fail} not a directory: {project}")
         return 1
-    print(style.bold(f"Configuring {project}" + (" (DEMO - nothing will be written)" if demo else "")))
+    print(
+        style.bold(f"Configuring {project}" + (" (DEMO - nothing will be written)" if demo else ""))
+    )
     if not assume_yes and confirm(
         "  Use the recommended settings (enable + permission allow-list + this "
         "machine's defaults) - the fastest way to get running? 'No' walks through each "
@@ -4005,7 +4064,9 @@ def _review_tools_script() -> Optional[Path]:
     return candidate if candidate.is_file() else None
 
 
-def run_tool_cache_refresh(project_dir: Path, style: Style, mark_map: dict, demo: bool = False) -> int:
+def run_tool_cache_refresh(
+    project_dir: Path, style: Style, mark_map: dict, demo: bool = False
+) -> int:
     """Run automatically at the end of every --configure pass (2026-08-07 user request:
     "always run check-review-tools.sh --refresh when configuring via virt-surv configure") -
     forces a fresh analyser-availability probe for the TARGET project instead of leaving it to
@@ -4032,7 +4093,9 @@ def run_tool_cache_refresh(project_dir: Path, style: Style, mark_map: dict, demo
         return 1
     bash = find_bash()
     if bash is None:
-        print(f"{fail} no bash found (needed for check-review-tools.sh) - analyser-cache refresh skipped")
+        print(
+            f"{fail} no bash found (needed for check-review-tools.sh) - analyser-cache refresh skipped"
+        )
         return 1
     if demo:
         print(style.dim(f"    would run: bash {script} --refresh (in {project})"))
@@ -4045,7 +4108,9 @@ def run_tool_cache_refresh(project_dir: Path, style: Style, mark_map: dict, demo
     if proc.returncode != 0:
         print(f"{fail} check-review-tools.sh --refresh exited {proc.returncode}")
         return 1
-    print(f"{ok} analyser-availability cache refreshed ({project / '.claude' / '.tool-availability'})")
+    print(
+        f"{ok} analyser-availability cache refreshed ({project / '.claude' / '.tool-availability'})"
+    )
     return 0
 
 
@@ -4324,10 +4389,14 @@ def run_setup_alias(
         if rc_path.suffix == ".ps1":
             line = f'function {_ALIAS_MARKER} {{ {interpreter} "{script_path}" @args }}'
         else:
-            line = f'alias {_ALIAS_MARKER}=\'{interpreter} "{script_path}"\''
-        existing = rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
+            line = f"alias {_ALIAS_MARKER}='{interpreter} \"{script_path}\"'"
+        existing = (
+            rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
+        )
         if _ALIAS_MARKER in existing:
-            print(f"{style.dim('-')} {label} ({rc_path}): a '{_ALIAS_MARKER}' entry already exists, skipped")
+            print(
+                f"{style.dim('-')} {label} ({rc_path}): a '{_ALIAS_MARKER}' entry already exists, skipped"
+            )
             continue
         print(f"  Would add to {label} ({rc_path}):")
         print(style.dim(f"    {line}"))
@@ -4418,7 +4487,12 @@ _TOOL_OUTPUT_CHECKS = (
     ("black", ["--check", "--quiet"], "py-file", 20),
     ("sqlfluff", ["lint", "--dialect", "ansi"], "sql-file", 20),
     ("shfmt", ["-d"], "sh-file", 20),
-    ("gitleaks", ["detect", "--no-git", "--no-banner", "--log-level", "error", "--source"], "dir", 20),
+    (
+        "gitleaks",
+        ["detect", "--no-git", "--no-banner", "--log-level", "error", "--source"],
+        "dir",
+        20,
+    ),
 )
 
 
@@ -4465,7 +4539,9 @@ def probe_analyser_output(tmpdir: Path, runner=None, only=None):
         arg_target = str(tmpdir) if target_kind == "dir" else str(targets[target_kind])
         argv = [name, *flags, arg_target]
         try:
-            proc = runner(argv, capture_output=True, text=True, cwd=tmpdir, timeout=per_call_timeout)
+            proc = runner(
+                argv, capture_output=True, text=True, cwd=tmpdir, timeout=per_call_timeout
+            )
         except subprocess.TimeoutExpired:
             yield (
                 name,
@@ -4580,7 +4656,9 @@ def _check_interpreters(order: list) -> tuple:
             rows.append((name, "ERROR", f"failed to launch: {exc}"))
             continue
         if proc.returncode != 0:
-            rows.append((name, "ERROR", f"exit {proc.returncode}: {(proc.stderr or '').strip()[:100]}"))
+            rows.append(
+                (name, "ERROR", f"exit {proc.returncode}: {(proc.stderr or '').strip()[:100]}")
+            )
             continue
         version = proc.stdout.strip()
         try:
@@ -4589,7 +4667,9 @@ def _check_interpreters(order: list) -> tuple:
             rows.append((name, "ERROR", f"unparseable version output: {version!r}"))
             continue
         if (major, minor) < (3, 9):
-            rows.append((name, "ERROR", f"Python {version} - below the 3.9 floor the guards require"))
+            rows.append(
+                (name, "ERROR", f"Python {version} - below the 3.9 floor the guards require")
+            )
             continue
         rows.append((name, "OK", f"Python {version} at {path}"))
         if not winner:
@@ -4617,7 +4697,10 @@ def _check_encoding_roundtrip(interpreter: str) -> tuple:
     except (OSError, subprocess.TimeoutExpired) as exc:
         return ("ERROR", f"failed to launch: {exc}")
     if proc.returncode != 0:
-        return ("ERROR", f"exit {proc.returncode}: {(proc.stderr or b'').decode('utf-8', 'replace')[:150]}")
+        return (
+            "ERROR",
+            f"exit {proc.returncode}: {(proc.stderr or b'').decode('utf-8', 'replace')[:150]}",
+        )
     try:
         stdout_text = proc.stdout.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -4701,12 +4784,12 @@ def _check_repo_py_syntax(interpreter: str, repo_root: Path) -> list:
     try:
         bad = json.loads(proc.stdout.strip() or "[]")
     except ValueError:
-        return [("repo script syntax", "ERROR", f"could not parse checker output: {proc.stdout[:200]}")]
+        return [
+            ("repo script syntax", "ERROR", f"could not parse checker output: {proc.stdout[:200]}")
+        ]
     if not bad:
         return [("repo script syntax", "OK", f"{len(targets)} file(s) compile cleanly")]
-    rows = [
-        ("repo script syntax", "ERROR", f"{len(bad)}/{len(targets)} file(s) fail to compile")
-    ]
+    rows = [("repo script syntax", "ERROR", f"{len(bad)}/{len(targets)} file(s) fail to compile")]
     for path, err in bad[:8]:  # capped - the count above is the honest total, this is detail
         rows.append((f"    {Path(path).name}", "ERROR", err[:150]))
     return rows
@@ -4775,9 +4858,18 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
     harmless = tmpdir / "env-check-harmless.txt"
     harmless.write_text("harmless\n", encoding="utf-8")
     payloads = (
-        ("Bash (raw-data/code-exec/redirects)", {"tool_name": "Bash", "tool_input": {"command": "echo hello"}, "cwd": str(tmpdir)}),
-        ("Write (consent-write/findings-pack)", {"tool_name": "Write", "tool_input": {"file_path": str(harmless), "content": "hello"}}),
-        ("Read (raw-data/document-redirect)", {"tool_name": "Read", "tool_input": {"file_path": str(harmless)}}),
+        (
+            "Bash (raw-data/code-exec/redirects)",
+            {"tool_name": "Bash", "tool_input": {"command": "echo hello"}, "cwd": str(tmpdir)},
+        ),
+        (
+            "Write (consent-write/findings-pack)",
+            {"tool_name": "Write", "tool_input": {"file_path": str(harmless), "content": "hello"}},
+        ),
+        (
+            "Read (raw-data/document-redirect)",
+            {"tool_name": "Read", "tool_input": {"file_path": str(harmless)}},
+        ),
     )
     rows = []
     for label, payload in payloads:
@@ -4799,7 +4891,11 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
             rows.append((label, "ERROR", f"a guard crashed: {proc.stderr.strip()[:150]}"))
         else:
             rows.append(
-                (label, "ERROR", f"blocked a harmless action (exit {proc.returncode}): {(proc.stderr or '').strip()[:150]}")
+                (
+                    label,
+                    "ERROR",
+                    f"blocked a harmless action (exit {proc.returncode}): {(proc.stderr or '').strip()[:150]}",
+                )
             )
     locked_menu = repo_root / "scripts" / "locked_menu_guard.py"
     if locked_menu.is_file():
@@ -4828,7 +4924,11 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
                 rows.append(("AskUserQuestion (locked-menu guard)", "OK", "clean pass-through"))
             else:
                 rows.append(
-                    ("AskUserQuestion (locked-menu guard)", "ERROR", (proc.stderr or "").strip()[:150])
+                    (
+                        "AskUserQuestion (locked-menu guard)",
+                        "ERROR",
+                        (proc.stderr or "").strip()[:150],
+                    )
                 )
         except (OSError, subprocess.TimeoutExpired) as exc:
             rows.append(("AskUserQuestion (locked-menu guard)", "ERROR", f"failed to run: {exc}"))
@@ -5120,7 +5220,9 @@ def run_hook_latency_diagnostic(
         print(f"  {mark} {label}: {detail}", flush=True)
 
     print(style.bold("Hook latency diagnostic (feeds the ADR-014 daemon decision)"))
-    print(style.dim("  Repeated + concurrent measurement - slower than the other checks on purpose."))
+    print(
+        style.dim("  Repeated + concurrent measurement - slower than the other checks on purpose.")
+    )
 
     order = ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
     interp_rows, interpreter = _check_interpreters(order)
@@ -5164,7 +5266,9 @@ def run_hook_latency_diagnostic(
         )
         guard_good = [s for s in guard_samples if s is not None]
         record(
-            "real guard-launcher cost", "OK" if guard_good else "ERROR", _fmt_latency_stats(guard_samples)
+            "real guard-launcher cost",
+            "OK" if guard_good else "ERROR",
+            _fmt_latency_stats(guard_samples),
         )
         if good_bare and guard_good:
             bare_median = sorted(good_bare)[len(good_bare) // 2]
@@ -5204,7 +5308,9 @@ def run_hook_latency_diagnostic(
         ps = shutil.which("powershell") or shutil.which("pwsh")
         if ps:
             print(style.dim(f"\n  PowerShell cold start ({ps}, diagnostic signal only, 5 calls):"))
-            ps_samples = _measure_repeated(lambda: ([ps, "-NoProfile", "-Command", "exit 0"], {}), n=5)
+            ps_samples = _measure_repeated(
+                lambda: ([ps, "-NoProfile", "-Command", "exit 0"], {}), n=5
+            )
             record(
                 "PowerShell cold start (diagnostic signal only - not a proposed fix, see ADR-014)",
                 "OK" if any(s is not None for s in ps_samples) else "ERROR",
@@ -5266,6 +5372,253 @@ def run_adr014_smoke_test(
     if proc.stderr:
         print(style.dim(proc.stderr))
     return proc.returncode
+
+
+# ------------------------------------------------------------------ daemon start diagnostic
+#
+# 2026-08-14 (live report): the daemon still wasn't starting on a real box after the
+# module_root/state_root split, CREATE_BREAKAWAY_FROM_JOB and $0 self-location fixes were
+# all confirmed applied - and there was no way to find out WHY, because
+# scripts/guard_daemon_client.py's _start_daemon_detached() deliberately swallows any
+# spawn failure (correct for production: a hook must never brick a tool call over a
+# missed optimisation) but that same design means a genuine spawn problem produces zero
+# diagnostic trace, just "no port file, no clue why". Built specifically to give that
+# trace, on demand, without touching the production fire-and-forget behaviour at all.
+
+
+def run_daemon_start_diagnostic(
+    style: Style, mark_map: dict, repo_hint: Optional[str] = None
+) -> int:
+    """Standalone diagnostic (--check-daemon-start / Diagnostics menu): actually starts the
+    REAL scripts/guard_daemon.py (not the archived docs/internal/adr-014-spike prototype -
+    see adr014_smoke_step for that) in a throwaway temp directory and reports exactly what
+    happens. Two checks, deliberately separated to isolate WHERE a failure is:
+
+      A. Foreground - runs guard_daemon.py as a plain, fully-captured subprocess. Proves
+         the daemon's own code works (imports, binds a port, writes the port file,
+         answers a real request) independent of how it gets spawned.
+      B. Detached - mirrors the EXACT Popen call production makes (same creationflags on
+         Windows: DETACHED_PROCESS | CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB), but
+         WITHOUT swallowing the exception, so a spawn-specific failure (permissions, a
+         flag Windows on THIS host rejects, anything about detached/job-object behaviour
+         that differs from a plain foreground run) surfaces instead of silently nothing.
+
+    Kept in sync with _start_daemon_detached() by comment, not code, same trade-off this
+    file already accepts elsewhere (see prewarm_guard_cache's own docstring) - this
+    diagnostic must never itself become the production spawn path, only mirror it closely
+    enough to catch what production's fail-open design can't show.
+
+    Runs entirely in throwaway temp directories - never touches this project's own
+    .claude/.guard-daemon-port or any real daemon that might already be running."""
+    import socket
+
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    repo_root = _resolve_repo_root(repo_hint) or Path(__file__).resolve().parent
+    rows = []
+    bundle_lines = []
+
+    def record(label: str, status: str, detail: str) -> None:
+        rows.append((label, status, detail))
+        bundle_lines.append(f"--- {label} [{status}] ---\n{detail}\n")
+        mark = {"OK": ok, "SKIP": style.dim("-"), "WARN": style.yellow("!")}.get(status, fail)
+        print(f"  {mark} {label}: {detail}", flush=True)
+
+    print(style.bold("Guard daemon start diagnostic (production module, not the archived spike)"))
+    print(style.dim(f"  Repo root: {repo_root}"))
+
+    daemon_py = repo_root / "scripts" / "guard_daemon.py"
+    if not daemon_py.is_file():
+        record("guard_daemon.py present", "ERROR", f"not found at {daemon_py}")
+        _print_diagnostic_summary(style, mark_map, rows)
+        return 1
+    record("guard_daemon.py present", "OK", str(daemon_py))
+
+    prefs_path = repo_root / ".claude" / "team-preferences.json"
+    if prefs_path.is_file():
+        try:
+            prefs_text = prefs_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            prefs_text = ""
+            record("team-preferences.json readable", "ERROR", str(exc))
+        if prefs_text:
+            import re as _re
+
+            is_on = bool(_re.search(r'"guard_daemon"\s*:\s*true', prefs_text))
+            record(
+                "guard_daemon preference",
+                "OK" if is_on else "WARN",
+                "true - run-guard.sh routes to the daemon"
+                if is_on
+                else f"not true in {prefs_path} - run-guard.sh never routes to the daemon at "
+                "all right now (the checks below still run, to test the mechanism itself "
+                "independent of this gate)",
+            )
+    else:
+        record(
+            "guard_daemon preference",
+            "WARN",
+            f"{prefs_path} not found - daemon routing is off (checks below still run)",
+        )
+
+    def _poll_for_port_file(port_file: Path, seconds: float) -> bool:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if port_file.is_file():
+                return True
+            time.sleep(0.1)
+        return port_file.is_file()
+
+    # --- Check A: foreground, fully captured - proves the daemon's own code works ---
+    print(style.dim("\n  Check A - foreground (plain subprocess, full output captured):"))
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-daemon-diag-fg-") as tmp:
+        state_root = Path(tmp)
+        port_file = state_root / ".claude" / ".guard-daemon-port"
+        proc = None
+        try:
+            proc = subprocess.Popen(  # nosec B603 - fixed argv, shell=False
+                [
+                    sys.executable,
+                    str(daemon_py),
+                    str(repo_root),
+                    str(state_root),
+                    "--idle-timeout",
+                    "5",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except OSError as exc:
+            record("foreground daemon spawn", "ERROR", f"Popen itself raised: {exc!r}")
+        if proc is not None:
+            appeared = _poll_for_port_file(port_file, 10)
+            if appeared:
+                record("foreground daemon spawn", "OK", f"port file appeared at {port_file}")
+                try:
+                    lines = port_file.read_text(encoding="utf-8").splitlines()
+                    port, token = int(lines[0]), lines[1]
+                    with socket.create_connection(("127.0.0.1", port), timeout=2) as sock:
+                        sock.settimeout(5)
+                        payload = json.dumps(
+                            {
+                                "tool_name": "Read",
+                                "tool_input": {"file_path": str(repo_root / "README.md")},
+                            }
+                        )
+                        req = json.dumps({"token": token, "payload": payload}) + "\n"
+                        sock.sendall(req.encode("utf-8"))
+                        sock.shutdown(socket.SHUT_WR)
+                        chunks = []
+                        while True:
+                            chunk = sock.recv(65536)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                    resp = json.loads(b"".join(chunks).decode("utf-8"))
+                    record(
+                        "foreground daemon responds",
+                        "OK" if "exit_code" in resp else "ERROR",
+                        str(resp),
+                    )
+                except (OSError, ValueError, IndexError) as exc:
+                    record("foreground daemon responds", "ERROR", f"{type(exc).__name__}: {exc}")
+            else:
+                try:
+                    proc.terminate()
+                    out, err = proc.communicate(timeout=5)
+                except (OSError, subprocess.TimeoutExpired):
+                    out, err = "", ""
+                still_running = proc.poll() is None
+                record(
+                    "foreground daemon spawn",
+                    "ERROR",
+                    f"no port file after 10s (process {'still running - killed for cleanup' if still_running else f'exited {proc.returncode}'}) "
+                    f"stdout={out!r} stderr={err!r}",
+                )
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                    proc.wait(timeout=5)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+
+    # --- Check B: the ACTUAL production detached-spawn path, exception surfaced ---
+    print(style.dim("\n  Check B - detached spawn (mirrors the real production code path):"))
+    with tempfile.TemporaryDirectory(prefix="virt-surv-it-daemon-diag-bg-") as tmp2:
+        state_root2 = Path(tmp2)
+        port_file2 = state_root2 / ".claude" / ".guard-daemon-port"
+        kwargs = {}
+        if sys.platform == "win32":
+            kwargs["creationflags"] = (
+                subprocess.DETACHED_PROCESS
+                | subprocess.CREATE_NO_WINDOW
+                | subprocess.CREATE_BREAKAWAY_FROM_JOB
+            )
+        else:
+            kwargs["start_new_session"] = True
+        spawn_error = None
+        try:
+            subprocess.Popen(  # nosec B603 - fixed argv, shell=False; mirrors
+                # scripts/guard_daemon_client.py's own _start_daemon_detached exactly,
+                # WITHOUT its exception-swallowing, so a spawn failure surfaces here.
+                [
+                    sys.executable,
+                    str(daemon_py),
+                    str(repo_root),
+                    str(state_root2),
+                    "--idle-timeout",
+                    "5",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                **kwargs,
+            )
+        except OSError as exc:
+            spawn_error = exc
+        if spawn_error is not None:
+            record(
+                "detached daemon spawn",
+                "ERROR",
+                f"{type(spawn_error).__name__}: {spawn_error} "
+                f"(errno={getattr(spawn_error, 'errno', None)}, "
+                f"winerror={getattr(spawn_error, 'winerror', None)}) - THIS is the production "
+                "code path; an error here is exactly why the daemon never starts for real "
+                "hook calls",
+            )
+        else:
+            appeared = _poll_for_port_file(port_file2, 10)
+            if appeared:
+                record("detached daemon spawn", "OK", f"port file appeared at {port_file2}")
+            else:
+                record(
+                    "detached daemon spawn",
+                    "ERROR",
+                    "Popen succeeded (no exception) but no port file appeared within 10s - the "
+                    "process may have started and crashed immediately with no visible output "
+                    "(stdout/stderr are DEVNULL here, matching production exactly - this is "
+                    "the actual blind spot; Check A above captures output for the same code, "
+                    "just not spawned the detached way, so compare the two results)",
+                )
+
+    _print_diagnostic_summary(style, mark_map, rows)
+
+    ts = datetime.now().strftime("%Y%m%dT%H%M%S")
+    bundle_path = Path.cwd() / f"virt-surv-daemon-start-diagnostic-{ts}.txt"
+    header = (
+        "virt-surv-it guard daemon start diagnostic\n"
+        f"Python: {sys.version}\nPlatform: {sys.platform}\nRepo root: {repo_root}\n\n"
+    )
+    try:
+        bundle_path.write_text(header + "\n".join(bundle_lines), encoding="utf-8")
+        print("")
+        print(style.dim(f"Full detail written to: {bundle_path} - hand this back whole."))
+    except OSError as exc:
+        print("")
+        print(style.yellow(f"Could not write the data file: {exc}"))
+
+    bad = sum(1 for _label, status, _detail in rows if status == "ERROR")
+    return 1 if bad else 0
 
 
 # ------------------------------------------------------------------ self-test (mechanical smoke test)
@@ -5336,7 +5689,9 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
                 if found:
                     yield ("bandit (planted issue)", "OK", "planted issue detected", combined)
                 elif proc.returncode not in (0, 1):
-                    first_line = combined.strip().splitlines()[0] if combined.strip() else "(no output)"
+                    first_line = (
+                        combined.strip().splitlines()[0] if combined.strip() else "(no output)"
+                    )
                     yield (
                         "bandit (planted issue)",
                         "ERROR",
@@ -5348,8 +5703,7 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
                     yield (
                         "bandit (planted issue)",
                         "ERROR",
-                        "planted issue NOT detected - bandit ran but its ruleset/config "
-                        "may be off",
+                        "planted issue NOT detected - bandit ran but its ruleset/config may be off",
                         combined,
                     )
             except (OSError, subprocess.TimeoutExpired) as exc:
@@ -5370,8 +5724,9 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
             if extra_check:
                 passed, note = extra_check(proc, combined)
             else:
-                passed, note = proc.returncode == 0, (
-                    "clean" if proc.returncode == 0 else f"exit {proc.returncode}"
+                passed, note = (
+                    proc.returncode == 0,
+                    ("clean" if proc.returncode == 0 else f"exit {proc.returncode}"),
                 )
             return (label, "OK" if passed else "ERROR", note, combined)
 
@@ -5454,7 +5809,9 @@ def run_selftest(style: Style, mark_map: dict, repo_hint: Optional[str] = None) 
         print(f"  {mark} {label}: {detail}", flush=True)
 
     print(style.bold("Self-test: a mechanical smoke test of a 'review this code' engagement"))
-    print(style.dim("  No LLM/Claude Code invocation - stdlib + the team's own scripts, no network."))
+    print(
+        style.dim("  No LLM/Claude Code invocation - stdlib + the team's own scripts, no network.")
+    )
 
     print(style.dim("\n  Guard hooks:"))
     with tempfile.TemporaryDirectory(prefix="virt-surv-it-selftest-guard-") as gtmp:
@@ -5497,7 +5854,11 @@ def run_selftest(style: Style, mark_map: dict, repo_hint: Optional[str] = None) 
                 )
             )
         except OSError as exc:
-            print(style.yellow(f"{len(bad)} issue(s) found, and the debug bundle could not be written: {exc}"))
+            print(
+                style.yellow(
+                    f"{len(bad)} issue(s) found, and the debug bundle could not be written: {exc}"
+                )
+            )
         return 1
     print(style.dim("Self-test passed - the engagement substrate works on this machine."))
     return 0
@@ -5656,6 +6017,16 @@ def parse_args(argv=None) -> argparse.Namespace:
         "exit. PROTOTYPE, not production - not wired into any live hook path",
     )
     parser.add_argument(
+        "--check-daemon-start",
+        action="store_true",
+        help="standalone: starts the REAL PRODUCTION scripts/guard_daemon.py (foreground, "
+        "fully captured, AND the exact detached spawn production uses) in a throwaway "
+        "temp directory and reports exactly what happens, and exit. Built because a "
+        "failed detached spawn is silent by design in production (must never brick a "
+        "hook call) - use this when the daemon simply never starts and there's no other "
+        "clue why. Writes a debug bundle either way",
+    )
+    parser.add_argument(
         "--configure",
         metavar="DIR",
         nargs="?",
@@ -5693,7 +6064,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _argv_from_args(args: argparse.Namespace, repo: Path, branch: str, mode: Optional[str] = None) -> list:
+def _argv_from_args(
+    args: argparse.Namespace, repo: Path, branch: str, mode: Optional[str] = None
+) -> list:
     """Rebuild an equivalent CLI argv from a parsed Namespace, with repo/branch pinned to
     what THIS run already resolved. Used only for the self-update re-exec
     (Installer._reexec_if_self_updated) - --repo/--branch stop the restarted process from
@@ -5765,7 +6138,14 @@ def _relocate_if_running_inside_target_repo(
         pass
 
 
-_FOLDER_SUBCOMMANDS = ("configure", "engage", "onboard", "archive", "list-engagements", "setup-alias")
+_FOLDER_SUBCOMMANDS = (
+    "configure",
+    "engage",
+    "onboard",
+    "archive",
+    "list-engagements",
+    "setup-alias",
+)
 
 
 def _project_root_warning(target: Path) -> Optional[str]:
@@ -5922,6 +6302,7 @@ def _main(argv=None) -> int:
         or args.selftest
         or args.check_hook_latency
         or args.check_adr014_spike
+        or args.check_daemon_start
         or args.configure
         or args.archive
         or args.list_engagements
@@ -5954,6 +6335,8 @@ def _main(argv=None) -> int:
         if args.check_adr014_spike:
             spike_rc = run_adr014_smoke_test(style, marks(), args.repo)
             rc = max(rc, spike_rc if spike_rc is not None else 0)
+        if args.check_daemon_start:
+            rc = max(rc, run_daemon_start_diagnostic(style, marks(), args.repo))
         if args.configure:
             rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
         if args.archive:
@@ -6052,6 +6435,7 @@ def _main(argv=None) -> int:
                     "selftest",
                     "hooklatency",
                     "adr014smoke",
+                    "daemonstart",
                 ):
                     did_anything = did_anything or not args.demo
 

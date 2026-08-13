@@ -5029,6 +5029,7 @@ def test_diagnostics_submenu_full_mapping():
         "4": "selftest",
         "5": "hooklatency",
         "6": "adr014smoke",
+        "7": "daemonstart",
         "b": "back",
     }
 
@@ -6004,6 +6005,110 @@ def test_run_adr014_smoke_test_relays_captured_output_and_exit_code(monkeypatch,
     out = capsys.readouterr().out
     assert rc == 1
     assert "3 passed, 1 failed." in out
+
+
+def _make_fake_repo(tmp_path):
+    """_resolve_repo_root only accepts a repo_hint that satisfies looks_like_repo() -
+    without these markers, a bare tmp_path is silently REJECTED and resolution falls
+    through to __file__'s own parent (THIS real checkout), which would make every test
+    below run against the real project instead of the fake one it just built."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text("{}", encoding="utf-8")
+
+
+def test_run_daemon_start_diagnostic_errors_when_guard_daemon_missing(
+    tmp_path, monkeypatch, capsys
+):
+    """No scripts/guard_daemon.py at all - must report ERROR and return 1 immediately,
+    never attempt to spawn anything."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    _make_fake_repo(tmp_path)
+    rc = ih.run_daemon_start_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "guard_daemon.py present" in out
+    assert "not found" in out
+
+
+def test_run_daemon_start_diagnostic_surfaces_popen_exception(tmp_path, monkeypatch, capsys):
+    """The entire point of this diagnostic: a Popen failure that production's own
+    _start_daemon_detached() would silently swallow must be visible here, with the
+    actual exception detail, not just 'no port file, no clue why'."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    _make_fake_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)  # the debug bundle writes to Path.cwd() - keep it in tmp_path
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "guard_daemon.py").write_text("", encoding="utf-8")
+
+    def boom(*a, **k):
+        raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr(ih.subprocess, "Popen", boom)
+    rc = ih.run_daemon_start_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "foreground daemon spawn" in out
+    assert "detached daemon spawn" in out
+    assert "Permission denied" in out
+    # The detached-path failure must be called out as the actual production code path,
+    # not just another generic error line - that's the framing that makes this useful.
+    assert "THIS is the production" in out
+
+
+def test_run_daemon_start_diagnostic_full_success_against_a_real_stub_daemon(
+    tmp_path, monkeypatch, capsys
+):
+    """End-to-end against a minimal but REAL stub daemon (a real subprocess, a real
+    socket, a real port file) - proves the diagnostic's own polling/connect/report
+    mechanics work correctly, without depending on the full production guard_daemon.py's
+    complexity. Both checks (foreground + detached) must report OK, and a genuine
+    request/response round-trip must succeed."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    _make_fake_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)  # the debug bundle writes to Path.cwd() - keep it in tmp_path
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    stub = scripts_dir / "guard_daemon.py"
+    stub.write_text(
+        "import json, socket, sys, threading, time\n"
+        "from pathlib import Path\n"
+        "module_root, state_root = sys.argv[1], sys.argv[2]\n"
+        "srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+        "srv.bind(('127.0.0.1', 0))\n"
+        "srv.listen(5)\n"
+        "port = srv.getsockname()[1]\n"
+        "port_dir = Path(state_root) / '.claude'\n"
+        "port_dir.mkdir(parents=True, exist_ok=True)\n"
+        "(port_dir / '.guard-daemon-port').write_text(f'{port}\\ntesttoken\\n')\n"
+        "def serve():\n"
+        "    conn, _ = srv.accept()\n"
+        "    raw = conn.makefile('r').readline()\n"
+        "    req = json.loads(raw)\n"
+        "    resp = {'exit_code': 0, 'stderr': ''} if req.get('token') == 'testtoken' "
+        "else {'exit_code': 0, 'stderr': 'unauthorized'}\n"
+        "    conn.sendall((json.dumps(resp) + '\\n').encode())\n"
+        "    conn.close()\n"
+        "t = threading.Thread(target=serve, daemon=True)\n"
+        "t.start()\n"
+        "time.sleep(3)\n",
+        encoding="utf-8",
+    )
+
+    rc = ih.run_daemon_start_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "foreground daemon spawn: port file appeared" in out
+    assert "foreground daemon responds" in out
+    assert "'exit_code': 0" in out
+    assert "detached daemon spawn: port file appeared" in out
 
 
 def test_run_hook_latency_diagnostic_no_interpreter_skips_and_returns_1(monkeypatch, capsys):
