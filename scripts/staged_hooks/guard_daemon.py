@@ -96,9 +96,11 @@ newline-delimited JSON response - {"exit_code": int, "stderr": str, "stdout": st
 call over an auth mismatch), relying on the client falling back to cold-start, not
 on the daemon itself enforcing a block. An unrecognised target reuses the same
 daemon_stale signal for the identical reason. stdout is almost always empty -
-only stop_hook_dispatcher.py among the current targets writes real stdout
-(verified by reading its actual source, not assumed); every other target's
-capture is empty every time, same as bash_hook_dispatcher.main() always was.
+only stop_hook_dispatcher.py and persona_anchor.py among the current targets
+write real stdout (verified by reading their actual source, not assumed; this
+line went stale once before, when persona_anchor.py was added without updating
+it - checked again now); every other target's capture is empty every time, same
+as bash_hook_dispatcher.main() always was.
 """
 
 from __future__ import annotations

@@ -133,6 +133,16 @@ def test_version_changed_yes_when_different_even_with_v_prefix():
     assert version_changed("0.34.0", "v0.33.1") == "yes"
 
 
+def test_version_changed_yes_when_plugin_version_unreadable(tmp_path):
+    """M5 (2026-08 Fable audit): read_plugin_version() returns "" on any read/parse
+    failure of plugin.json (unreadable, missing, corrupt) - an empty plugin_version with
+    a real prior team version on record used to fall through to "no" (`plugin_version
+    and ...` short-circuits false), silently indistinguishable from a confirmed
+    same-version read and suppressing the what's-new banner on a genuine I/O failure
+    rather than surfacing it."""
+    assert version_changed("", "0.33.1") == "yes"
+
+
 def test_first_changelog_entry_stops_at_second_release_header(tmp_path):
     root = tmp_path
     (root / "CHANGELOG.md").write_text(
@@ -885,6 +895,103 @@ def test_find_bash_falls_back_to_git_root_on_windows(monkeypatch, tmp_path):
 
 
 # ------------------------------------------------------ tool-probe cache fast path (P3)
+
+
+def test_resolve_root_trusts_an_explicit_plugin_root(tmp_path):
+    import scripts.engage_probe as ep
+
+    root, display, trusted = ep.resolve_root(str(tmp_path), tmp_path / "project")
+    assert root == tmp_path
+    assert display == str(tmp_path)
+    assert trusted is True
+
+
+def test_resolve_root_trusts_repo_as_project_when_manifest_names_the_team(tmp_path):
+    """The genuine dogfood case: no --plugin-root, but project_dir's own plugin.json
+    identifies it as the team repo - the check the old docstring claimed but the code
+    never actually made."""
+    import scripts.engage_probe as ep
+
+    plugin_dir = tmp_path / ".claude-plugin"
+    plugin_dir.mkdir()
+    (plugin_dir / "plugin.json").write_text(
+        '{"name": "compliance-surveillance-team"}', encoding="utf-8"
+    )
+    root, display, trusted = ep.resolve_root("", tmp_path)
+    assert root == tmp_path
+    assert display == "repo-as-project"
+    assert trusted is True
+
+
+def test_resolve_root_does_not_trust_an_unverified_foreign_project(tmp_path):
+    """2026-08-14 Fable-model audit finding (C1): no --plugin-root AND the project
+    does not look like the team repo - resolution genuinely failed. root still falls
+    back to project_dir (nothing better available for display/version reads), but
+    trusted must be False - this is the exact condition run_tool_probe/
+    run_extensions_show must refuse to execute anything under root for."""
+    import scripts.engage_probe as ep
+
+    root, display, trusted = ep.resolve_root("", tmp_path)
+    assert root == tmp_path
+    assert display == "repo-as-project"
+    assert trusted is False
+
+
+def test_run_tool_probe_never_executes_an_untrusted_roots_script(tmp_path):
+    """The actual fix, proven directly: even though root == project_dir in the
+    untrusted-resolution shape (exactly what a failed resolve_root call produces), a
+    planted check-review-tools.sh must never run when root_is_trusted is False."""
+    import scripts.engage_probe as ep
+
+    marker = tmp_path / "pwned-by-review"
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    planted = scripts_dir / "check-review-tools.sh"
+    planted.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    planted.chmod(0o755)
+
+    out = ep.run_tool_probe(tmp_path, tmp_path, root_is_trusted=False)
+    assert out == ""
+    assert not marker.exists()
+
+
+def test_run_tool_probe_still_works_normally_when_root_is_trusted(tmp_path):
+    """Confirms the fix didn't just make this function always refuse - a genuinely
+    trusted root (the default, matching every pre-existing caller) still probes."""
+    import scripts.engage_probe as ep
+
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    real = scripts_dir / "check-review-tools.sh"
+    real.write_text("#!/bin/sh\necho real-output\n", encoding="utf-8")
+    real.chmod(0o755)
+
+    out = ep.run_tool_probe(tmp_path, tmp_path, root_is_trusted=True)
+    assert "real-output" in out
+
+
+def test_run_extensions_show_never_executes_an_untrusted_roots_script(tmp_path):
+    """Same fix, same shape, for extensions.py - a planted scripts/extensions.py must
+    never run when root_is_trusted is False, even though the project genuinely has a
+    docs/team-extensions.md (the only gate that currently exists on this path)."""
+    import scripts.engage_probe as ep
+
+    marker = tmp_path / "pwned-by-extensions"
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "team-extensions.md").write_text("# Extensions\nreal markdown\n", encoding="utf-8")
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    planted = scripts_dir / "extensions.py"
+    planted.write_text(
+        f"import pathlib; pathlib.Path({str(marker)!r}).touch()\nprint('pwned')\n",
+        encoding="utf-8",
+    )
+
+    out = ep.run_extensions_show(tmp_path, tmp_path, root_is_trusted=False)
+    assert "real markdown" in out
+    assert "pwned" not in out
+    assert not marker.exists()
 
 
 def test_run_tool_probe_reads_fresh_cache_without_spawning_bash(monkeypatch, tmp_path):

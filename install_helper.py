@@ -70,6 +70,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess  # fixed-argv calls to git/claude/pip, no shell  # nosec B404
 import sys
@@ -451,7 +452,11 @@ def changelog_headline(changelog: Path, version: str) -> Optional[str]:
         for line in changelog.read_text(encoding="utf-8-sig").splitlines():
             if line.startswith(f"## [{version}]"):
                 return line[3:].strip()
-    except OSError:
+    except (OSError, UnicodeDecodeError):
+        # UnicodeDecodeError is NOT an OSError (found in review, 2026-08-13): a
+        # CHANGELOG.md that isn't clean UTF-8 used to crash the installer here instead of
+        # just skipping the headline, same class of gap fixed below in
+        # check_pending_hook_fixes/run_daemon_start_diagnostic.
         pass
     return None
 
@@ -516,6 +521,15 @@ def statusline_command(repo: Path, bash: str = "bash") -> str:
     return f'{bash_part} "{(repo / "scripts" / "statusline.sh").resolve()}"'
 
 
+# statusline_command() always ends the quoted path with .../scripts/statusline.sh" (both
+# slash directions, since a Windows-written command may use backslashes) - matched exactly
+# here, anchored to the end of the string, rather than a bare "statusline.sh" substring
+# (found in review, 2026-08-13: that could false-positive on any unrelated script merely
+# named *statusline.sh, e.g. "my-statusline.sh" or "notstatusline.sh", silently overwriting
+# a genuinely foreign statusLine instead of showing the conflict prompt).
+_OUR_STATUSLINE_COMMAND_RE = re.compile(r'[/\\]scripts[/\\]statusline\.sh"$')
+
+
 def merge_statusline(settings: dict, command: str):
     """Set statusLine in a settings dict. Returns (settings, verdict):
     'added' (none existed), 'already' (identical command present, nothing to do),
@@ -525,7 +539,9 @@ def merge_statusline(settings: dict, command: str):
     current = settings.get("statusLine")
     if isinstance(current, dict) and current.get("command") == command:
         return settings, "already"
-    if isinstance(current, dict) and "statusline.sh" in str(current.get("command", "")):
+    if isinstance(current, dict) and _OUR_STATUSLINE_COMMAND_RE.search(
+        str(current.get("command", ""))
+    ):
         settings["statusLine"] = {"type": "command", "command": command}
         return settings, "ours-moved"
     if current is not None:
@@ -581,13 +597,30 @@ def _read_json_dict(path: Path) -> dict:
         return {}
 
 
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write `text` to `path` atomically: temp file in the same directory, then
+    os.replace - same pattern as save_config/_write_json_backup above and
+    engagement_state.py's _write_state. Shared by the settings.json writers below
+    (run_permissions/_run_env_upsert/statusline_step/_write_model_to_settings_file) so an
+    interrupted write (Ctrl-C, crash, disk full) never leaves the target truncated or
+    corrupt (found in review, 2026-08-13 - each of those previously wrote straight to the
+    target path)."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def _write_json_backup(path: Path, data: dict) -> None:
-    """utf-8, trailing newline, .bak of any existing content first."""
+    """utf-8, trailing newline, .bak of any existing content first. The final write is
+    atomic (temp file in the same directory, then os.replace - same pattern as save_config
+    above and engagement_state.py's _write_state): an interrupted write (Ctrl-C, crash,
+    disk full) leaves either the old content or the new content, never a truncated file
+    (found in review, 2026-08-13 - this previously wrote straight to `path`)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_file():
         backup = path.with_suffix(path.suffix + ".bak")
         backup.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_text(path, json.dumps(data, indent=2) + "\n")
 
 
 def register_plugin_directly(repo: Path, claude_dir: Path, version: Optional[str]) -> list:
@@ -610,6 +643,27 @@ def register_plugin_directly(repo: Path, claude_dir: Path, version: Optional[str
     plugins_dir = claude_dir / "plugins"
     touched = []
     source = {"source": "directory", "path": str(repo)}
+
+    # settings.json is the shared, higher-stakes file (hooks/permissions can live there
+    # too) - refuse to touch ANYTHING here if it's present but unparseable, same safety
+    # bar run_permissions/_write_model_to_settings_file already hold for this exact file,
+    # rather than silently discarding its content via _read_json_dict's garbage-becomes-{}
+    # fallback (found in review, 2026-08-13: this was the one settings.json write site that
+    # skipped the refuse-on-unparseable check every other call site already had). Checked
+    # BEFORE km_path/ip_path are written so a corrupt settings.json aborts with no partial
+    # state at all, not just a skipped last file.
+    st_path = claude_dir / "settings.json"
+    if st_path.is_file():
+        try:
+            st = json.loads(st_path.read_text(encoding="utf-8-sig"))
+            if not isinstance(st, dict):
+                raise ValueError("settings root is not an object")
+        except (OSError, ValueError) as exc:
+            raise InstallAbort(
+                f"{st_path} is not readable JSON ({exc}) - refusing to touch it"
+            ) from exc
+    else:
+        st = {}
 
     km_path = plugins_dir / "known_marketplaces.json"
     km = _read_json_dict(km_path)
@@ -640,8 +694,6 @@ def register_plugin_directly(repo: Path, claude_dir: Path, version: Optional[str
     _write_json_backup(ip_path, ip)
     touched.append(str(ip_path))
 
-    st_path = claude_dir / "settings.json"
-    st = _read_json_dict(st_path)
     enabled = st.get("enabledPlugins")
     if not isinstance(enabled, dict):
         enabled = {}
@@ -1720,7 +1772,11 @@ class Installer:
             try:
                 staged_text = staged.read_text(encoding="utf-8")
                 live_text = live.read_text(encoding="utf-8") if live.is_file() else None
-            except OSError:
+            except (OSError, UnicodeDecodeError):
+                # UnicodeDecodeError is NOT an OSError (found in review, 2026-08-13): a
+                # non-UTF-8 staged/live file used to crash this step instead of just
+                # skipping it, contradicting this method's own "any read error on a given
+                # file just skips that one file" docstring promise.
                 continue
             if live_text != staged_text:
                 pending.append(staged.name)
@@ -1910,7 +1966,11 @@ class Installer:
                 self.say(self.style.dim(f"    would update ~/.claude/.../{name}"))
         else:
             version = installed_version(self.repo) if self.repo else None
-            register_plugin_directly(self.repo, user_settings_path().parent, version)
+            try:
+                register_plugin_directly(self.repo, user_settings_path().parent, version)
+            except InstallAbort as exc:
+                self.step_fail("Marketplace + plugin registration", str(exc))
+                return
         self.direct_registered = True
         self.step_ok(
             "Marketplace + plugin " + self.did("registered directly", "would register directly"),
@@ -2233,7 +2293,7 @@ class Installer:
                 backup = target.with_name(f"settings.json.bak-{today}.{n}")
             backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        _atomic_write_text(target, json.dumps(settings, indent=2) + "\n")
         self.step_ok("Status line", f"wired in {target} (restart to see it)")
 
     def alias_step(self) -> None:
@@ -3025,7 +3085,7 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
         backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
         print(f"{ok} backed up existing settings to {backup.name}")
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_text(target, json.dumps(settings, indent=2) + "\n")
     print(
         f"{ok} {target}: added {len(added)} allow entr{'y' if len(added) == 1 else 'ies'} (add-only; deny rules and hooks untouched)"
     )
@@ -3082,7 +3142,7 @@ def _run_env_upsert(
         backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
         print(f"{ok} backed up existing settings to {backup.name}")
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_text(target, json.dumps(settings, indent=2) + "\n")
     bits = []
     if added:
         bits.append(f"added {len(added)}")
@@ -3429,7 +3489,7 @@ def _write_model_to_settings_file(target: Path, model: Optional[str]) -> tuple[b
             backup = target.with_suffix(target.suffix + ".bak")
             backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        _atomic_write_text(target, json.dumps(settings, indent=2) + "\n")
     except OSError as exc:
         return False, f"could not write {target} ({exc})"
     return True, f"{target}: model -> {settings['model']}"
@@ -3614,9 +3674,22 @@ def run_enable_project(project_dir: Path, style: Style, mark_map: dict, runner=N
             return 1
         blocked = combined
     # The CLI is only writing enabledPlugins into the project settings - do it directly.
+    # Refuse on unparseable JSON rather than clobbering, same safety bar as
+    # run_permissions/_write_model_to_settings_file for this exact file (found in review,
+    # 2026-08-13: this fallback used _read_json_dict, whose garbage-becomes-{} fallback
+    # would have silently overwritten a corrupt settings.json instead of refusing).
+    target = project / ".claude" / "settings.json"
+    if target.is_file():
+        try:
+            settings = json.loads(target.read_text(encoding="utf-8-sig"))
+            if not isinstance(settings, dict):
+                raise ValueError("settings root is not an object")
+        except (OSError, ValueError) as exc:
+            print(f"{fail} {target} is not readable JSON ({exc}) - refusing to touch it")
+            return 1
+    else:
+        settings = {}
     try:
-        target = project / ".claude" / "settings.json"
-        settings = _read_json_dict(target)
         enabled = settings.get("enabledPlugins")
         if not isinstance(enabled, dict):
             enabled = {}
@@ -4140,7 +4213,8 @@ def run_archive_engagements(target: Path, style: Style, mark_map: dict, demo: bo
             [sys.executable, str(script), "archive", "--all-closed"],
             cwd=project,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -4173,7 +4247,8 @@ def run_list_engagements(target: Path, style: Style, mark_map: dict) -> int:
             [sys.executable, str(script), "list"],
             cwd=project,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -4264,7 +4339,8 @@ def _powershell_profile_candidates() -> list:
                 proc = subprocess.run(
                     [found, "-NoProfile", "-NonInteractive", "-Command", "Write-Output $PROFILE"],
                     capture_output=True,
-                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=10,
                 )
                 stdout = proc.stdout.strip() if proc.stdout else ""
@@ -4332,7 +4408,9 @@ def _verify_alias_line(label: str, rc_path: Path, line: str) -> tuple:
         # a perfectly correct alias line - must be enabled explicitly first.
         cmd = [bash, "-c", f"shopt -s expand_aliases\n{line}\ntype {_ALIAS_MARKER} >/dev/null"]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        proc = subprocess.run(
+            cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=10
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return (False, f"verification failed to run: {exc}")
     if proc.returncode == 0:
@@ -4540,7 +4618,12 @@ def probe_analyser_output(tmpdir: Path, runner=None, only=None):
         argv = [name, *flags, arg_target]
         try:
             proc = runner(
-                argv, capture_output=True, text=True, cwd=tmpdir, timeout=per_call_timeout
+                argv,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=tmpdir,
+                timeout=per_call_timeout,
             )
         except subprocess.TimeoutExpired:
             yield (
@@ -4649,7 +4732,8 @@ def _check_interpreters(order: list) -> tuple:
             proc = subprocess.run(
                 [name, "-c", "import sys; print(sys.version.split()[0])"],
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -4768,7 +4852,8 @@ def _check_repo_py_syntax(interpreter: str, repo_root: Path) -> list:
         proc = subprocess.run(
             [interpreter, "-c", checker, *[str(t) for t in targets]],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -4878,7 +4963,8 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
                 [interpreter, str(dispatcher)],
                 input=json.dumps(payload),
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=15,
                 cwd=repo_root,
             )
@@ -4917,7 +5003,8 @@ def _check_guard_hooks(interpreter: str, repo_root: Path, tmpdir: Path) -> list:
                 [interpreter, str(locked_menu)],
                 input=json.dumps(payload),
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=15,
             )
             if proc.returncode == 0:
@@ -5437,7 +5524,10 @@ def run_daemon_start_diagnostic(
     if prefs_path.is_file():
         try:
             prefs_text = prefs_path.read_text(encoding="utf-8")
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
+            # UnicodeDecodeError is NOT an OSError (found in review, 2026-08-13): a
+            # non-UTF-8 team-preferences.json used to crash this diagnostic instead of
+            # just reporting it as unreadable.
             prefs_text = ""
             record("team-preferences.json readable", "ERROR", str(exc))
         if prefs_text:
@@ -5486,7 +5576,8 @@ def run_daemon_start_diagnostic(
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
         except OSError as exc:
             record("foreground daemon spawn", "ERROR", f"Popen itself raised: {exc!r}")
@@ -5677,7 +5768,11 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
         else:
             try:
                 proc = subprocess.run(
-                    ["bandit", "-q", str(target)], capture_output=True, text=True, timeout=20
+                    ["bandit", "-q", str(target)],
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=20,
                 )
                 combined = (proc.stdout or "") + (proc.stderr or "")
                 found = "hardcoded_password" in combined
@@ -5717,7 +5812,14 @@ def _selftest_engagement_probe(repo_root: Path, interpreter: str):
 
         def run_step(label, argv, extra_check=None):
             try:
-                proc = subprocess.run(argv, cwd=project, capture_output=True, text=True, timeout=30)
+                proc = subprocess.run(
+                    argv,
+                    cwd=project,
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=30,
+                )
             except (OSError, subprocess.TimeoutExpired) as exc:
                 return (label, "ERROR", f"failed to run: {exc}", None)
             combined = (proc.stdout or "") + (proc.stderr or "")
@@ -6309,21 +6411,78 @@ def _main(argv=None) -> int:
         or args.setup_alias
     ):
         # Scripting path: no banner, no menu.
+        #
+        # --demo gap (found in review, 2026-08-13): unlike --configure/--archive/
+        # --setup-alias just below (which all thread args.demo through to their run_*
+        # function), these six flags' run_* functions take no demo parameter at all, so
+        # `--demo --permissions DIR` (etc.) used to silently perform the REAL write -
+        # exactly the "nothing executed or written" promise --demo makes everywhere else,
+        # broken here. Each is now gated explicitly at the call site instead - a preview
+        # line, no write - rather than threading a new demo kwarg through run_permissions/
+        # run_enable_project/run_orchestrator_model* (a larger change to those shared
+        # functions' signatures for no behavioural gain here).
         rc = 0
         for target in args.enable_project or []:
-            rc = max(rc, run_enable_project(Path(target), style, marks()))
+            if args.demo:
+                print(
+                    style.dim(f"    would enable the plugin for {target} (demo - nothing written)")
+                )
+            else:
+                rc = max(rc, run_enable_project(Path(target), style, marks()))
         if args.permissions:
-            rc = max(rc, run_permissions(Path(args.permissions), style, marks()))
+            if args.demo:
+                print(
+                    style.dim(
+                        f"    would add the recommended permission allow-list to "
+                        f"{args.permissions} (demo - nothing written)"
+                    )
+                )
+            else:
+                rc = max(rc, run_permissions(Path(args.permissions), style, marks()))
         if args.env_tuning:
-            rc = max(rc, run_env_tuning(Path(args.env_tuning), style, marks()))
+            if args.demo:
+                print(
+                    style.dim(
+                        f"    would upsert the recommended tuning env vars into "
+                        f"{args.env_tuning} (demo - nothing written)"
+                    )
+                )
+            else:
+                rc = max(rc, run_env_tuning(Path(args.env_tuning), style, marks()))
         if args.env_tuning_betas:
-            rc = max(rc, run_env_tuning_betas(Path(args.env_tuning_betas), style, marks()))
+            if args.demo:
+                print(
+                    style.dim(
+                        f"    would upsert the beta-fields-workaround env var into "
+                        f"{args.env_tuning_betas} (demo - nothing written)"
+                    )
+                )
+            else:
+                rc = max(rc, run_env_tuning_betas(Path(args.env_tuning_betas), style, marks()))
         if args.model_project:
-            wanted = None if (args.model or "default") == "default" else args.model
-            rc = max(rc, run_orchestrator_model(Path(args.model_project), wanted, style, marks()))
+            if args.demo:
+                print(
+                    style.dim(
+                        f"    would set Morgan's model for {args.model_project} "
+                        "(demo - nothing written)"
+                    )
+                )
+            else:
+                wanted = None if (args.model or "default") == "default" else args.model
+                rc = max(
+                    rc, run_orchestrator_model(Path(args.model_project), wanted, style, marks())
+                )
         if args.model_default:
-            wanted = None if (args.model or "default") == "default" else args.model
-            rc = max(rc, run_orchestrator_model_default(wanted, style, marks()))
+            if args.demo:
+                print(
+                    style.dim(
+                        "    would set Morgan's default model for new/unconfigured projects "
+                        "(demo - nothing written)"
+                    )
+                )
+            else:
+                wanted = None if (args.model or "default") == "default" else args.model
+                rc = max(rc, run_orchestrator_model_default(wanted, style, marks()))
         if args.check_tools:
             rc = max(rc, run_tool_check(style, marks()))
         if args.check_env:

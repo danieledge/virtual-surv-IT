@@ -16,9 +16,12 @@ import json
 import pytest
 
 from scripts.engagement_state import (
+    ACTIVE_MARKER,
+    compute_fingerprint,
     embedded_hash,
     load_state,
     main,
+    read_active,
     render_markdown,
     state_hash,
     state_path,
@@ -254,6 +257,85 @@ def test_close_requires_team_and_finalised_artifacts(tmp_path):
     assert all(a["status"] == "final" for a in state["artifacts"])
 
 
+# -------------------------------------------------------- close-gate strand (2026-08 audit, C4)
+
+
+def test_close_refuses_upfront_when_pre_close_state_is_already_invalid(tmp_path):
+    """C4a: the close path writes the CLOSED state to disk first, then rolls back to the
+    pre-close snapshot if the gate refuses. If that snapshot is itself invalid, the
+    rollback write would raise before the CLOSE-REFUSED explanation ever printed,
+    stranding the pack CLOSED on disk despite no gate having passed it. The fix checks
+    the snapshot up front, before any write, so an already-broken state file refuses the
+    close cleanly with nothing written."""
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    state = json.loads(state_path(tmp_path).read_text(encoding="utf-8"))
+    state["engagement"]["title"] = ""  # now fails validate_state
+    state_path(tmp_path).write_text(json.dumps(state), encoding="utf-8")
+
+    assert _run(tmp_path, "set-status", "closed", "--verdict", "ready") == 1
+
+    on_disk = json.loads(state_path(tmp_path).read_text(encoding="utf-8"))
+    assert on_disk["status"] != "closed"  # never got the chance to strand as closed
+    assert on_disk["engagement"]["title"] == ""  # untouched - no write happened at all
+
+
+def test_close_rolls_back_when_the_gate_checker_itself_crashes(tmp_path, monkeypatch):
+    """C4b: a checker crash used to fail OPEN (close kept, 'run the checker by hand') -
+    a crash proves nothing about whether the pack meets the DoD. Now it fails closed,
+    same as a real findings list: rolled back, close refused."""
+    import scripts.engagement_state as es_module
+
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    _run(tmp_path, "set-team", "Amara (BA)")
+    (tmp_path / "engagement-summary-t.txt").write_text(
+        "Done.\n\n\U0001f916 Morgan\nPM & Orchestrator - Virtual Surveillance IT (AI agent)\n",
+        encoding="utf-8",
+    )
+    _run(tmp_path, "add-artifact", "engagement-summary-t.txt", "--title", "Email", "--final")
+    before_status = load_state(tmp_path)["status"]
+
+    class _CrashingChecker:
+        @staticmethod
+        def check(_dir):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(es_module, "_load_checker", lambda: _CrashingChecker)
+
+    assert _run(tmp_path, "set-status", "closed", "--verdict", "ready") == 1
+
+    state = load_state(tmp_path)
+    assert state["status"] == before_status  # rolled back, not left closed
+    assert not state["engagement"]["closed"]
+
+
+def test_compute_fingerprint_changes_when_state_file_is_tampered(tmp_path):
+    """M3 (2026-08 Fable audit): compute_fingerprint used to EXCLUDE engagement-state.json
+    entirely from the closed-pack fingerprint (stat-only walk AND content) - a hand-edit
+    to the state file after close (verdict flipped, status tampered) left every
+    stat-only deliverable untouched, so the fingerprint still matched and a later scan
+    silently skipped re-validating the very record that had changed."""
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    fp_before = compute_fingerprint(tmp_path)
+    state = json.loads(state_path(tmp_path).read_text(encoding="utf-8"))
+    state["verdict"] = "tampered-by-hand"
+    state_path(tmp_path).write_text(json.dumps(state), encoding="utf-8")
+    fp_after = compute_fingerprint(tmp_path)
+    assert fp_before != fp_after, "fingerprint must move when the state file's own content changes"
+
+
+def test_compute_fingerprint_is_stable_once_stored_in_the_state_it_was_computed_from(tmp_path):
+    """The state-content hash must pop its OWN key before hashing, or storing the
+    fingerprint back into the file it was computed from would invalidate itself on
+    every subsequent comparison (self-reference), permanently defeating the fast-path
+    skip the fingerprint exists to provide."""
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    fp = compute_fingerprint(tmp_path)
+    state = json.loads(state_path(tmp_path).read_text(encoding="utf-8"))
+    state["scan_fingerprint"] = fp
+    state_path(tmp_path).write_text(json.dumps(state), encoding="utf-8")
+    assert compute_fingerprint(tmp_path) == fp
+
+
 def test_resolve_outstanding_unmatched_is_an_error(tmp_path):
     _run(tmp_path, "init", "--title", "T", "--slug", "t")
     assert _run(tmp_path, "resolve-outstanding", "no-such-item") == 2
@@ -375,6 +457,125 @@ def test_single_workspace_auto_resolves_without_slug(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "Audit", "--slug", "audit")
     assert _run_env(monkeypatch, tmp_path, "set-status", "blocked") == 0
     assert load_state(tmp_path / "artifacts" / "audit")["status"] == "blocked"
+
+
+# ------------------------------------------------------------- concurrent mutation (2026-08 audit, C5)
+
+
+def test_concurrent_mutations_do_not_lose_updates(tmp_path):
+    """C5: parallel Workflow-tool dispatch can run several mutating commands against the
+    SAME pack concurrently. Without a lock around the read-modify-write cycle, this is a
+    classic lost-update race - confirmed live (2026-08 audit repro): 12 concurrent
+    add-outstanding calls with the lock disabled lost 7 of 12 items, plus two calls hit a
+    transient 'no engagement-state.json - run init first' from reading mid-replace. Uses
+    real threads against the on-disk pack so it exercises the actual OS-level file lock,
+    not a mocked stand-in."""
+    import threading
+
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+
+    errors = []
+
+    def _add(i):
+        rc = _run(tmp_path, "add-outstanding", f"item-{i}")
+        if rc != 0:
+            errors.append((i, rc))
+
+    threads = [threading.Thread(target=_add, args=(i,)) for i in range(12)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    outstanding = load_state(tmp_path)["outstanding"]
+    for i in range(12):
+        assert f"item-{i}" in outstanding
+
+
+def test_stale_lock_is_reclaimed_not_left_jamming_the_pack(tmp_path):
+    """A process that dies mid-mutation leaves the lock file behind forever otherwise.
+    Staleness is age-based (not a live PID check - Windows has no clean signal-0
+    equivalent) so a later command reclaims it instead of jamming against a lock nobody
+    will ever release."""
+    import os
+    import time
+
+    from scripts.engagement_state import _LOCK_STALE_SECONDS
+
+    _run(tmp_path, "init", "--title", "T", "--slug", "t")
+    lock_path = tmp_path / ".engagement-state.lock"
+    lock_path.write_text("", encoding="utf-8")
+    old = time.time() - _LOCK_STALE_SECONDS - 5
+    os.utime(lock_path, (old, old))
+
+    assert _run(tmp_path, "add-outstanding", "still works") == 0
+    assert "still works" in load_state(tmp_path)["outstanding"]
+
+
+# --------------------------------------------------- artifacts-root resolution (2026-08-14 audit, C2)
+
+
+def test_default_artifacts_dir_trusts_claude_project_dir_even_named_artifacts(
+    tmp_path, monkeypatch
+):
+    """The actual fix: a project whose OWN path happens to contain a directory
+    literally named "artifacts" somewhere ABOVE it (unrelated to any engagement
+    pack - just directory naming) must not have its artifacts root resolve to that
+    unrelated ancestor. CLAUDE_PROJECT_DIR being explicitly set is authoritative and
+    must be trusted directly, never walked past."""
+    from scripts.engagement_state import _default_artifacts_dir
+
+    project = tmp_path / "artifacts" / "myproject"
+    project.mkdir(parents=True)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    result = _default_artifacts_dir()
+    assert result == project / "artifacts"
+    assert result != tmp_path / "artifacts"  # the unrelated ancestor - must never be chosen
+
+
+def test_default_artifacts_dir_cwd_fallback_finds_nearest_enclosing_workspace(
+    tmp_path, monkeypatch
+):
+    """The ORIGINAL 2026-07-30 fix, still correct: with no CLAUDE_PROJECT_DIR, a
+    session that has genuinely cd'd inside an existing artifacts/<slug>/ workspace
+    must resolve to that same artifacts/ dir, not nest a new one underneath it."""
+    from scripts.engagement_state import _default_artifacts_dir
+
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    pack = tmp_path / "artifacts" / "old-slug"
+    pack.mkdir(parents=True)
+    monkeypatch.chdir(pack)
+    assert _default_artifacts_dir() == tmp_path / "artifacts"
+
+
+def test_default_artifacts_dir_cwd_fallback_picks_nearest_not_outermost(tmp_path, monkeypatch):
+    """If the cwd fallback path has TWO ancestors named "artifacts" (an unrelated
+    outer one plus the real enclosing workspace), the nearest one - the workspace
+    actually being cd'd into - must win, not the outermost."""
+    from scripts.engagement_state import _default_artifacts_dir
+
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    outer_artifacts = tmp_path / "artifacts"
+    real_project = outer_artifacts / "myproject"
+    pack = real_project / "artifacts" / "old-slug"
+    pack.mkdir(parents=True)
+    monkeypatch.chdir(pack)
+    assert _default_artifacts_dir() == real_project / "artifacts"
+    assert _default_artifacts_dir() != outer_artifacts
+
+
+def test_project_root_for_picks_nearest_artifacts_ancestor(tmp_path):
+    """Mirrors _default_artifacts_dir's own fix in reverse - given a pack dir, the
+    project root is the parent of the NEAREST artifacts/ ancestor, not the
+    outermost, for the identical reason."""
+    from scripts.engagement_state import _project_root_for
+
+    outer_artifacts = tmp_path / "artifacts"
+    real_project = outer_artifacts / "myproject"
+    pack = real_project / "artifacts" / "my-slug"
+    pack.mkdir(parents=True)
+    assert _project_root_for(pack) == real_project
 
 
 # --------------------------------------------------- settings snapshot (2026-08-08, dashboard v2)
@@ -598,6 +799,36 @@ def test_multiple_workspaces_require_slug_without_active_marker(tmp_path, monkey
     assert load_state(tmp_path / "artifacts" / "scoping")["status"] == "in_progress"
 
 
+def test_standalone_flat_pack_writes_no_registry_anywhere(tmp_path, monkeypatch):
+    """2026-08-14 Fable-model audit finding (C3): a genuinely standalone flat pack (no
+    sibling workspaces at all) used to have _registry_root_for misidentify the pack
+    itself as a "sibling workspace" of the PROJECT ROOT (tmp_path here), writing
+    engagements.json/ENGAGEMENTS.md/.html into the user's own git-tracked project
+    directory. Fixed: no registry needed for a standalone flat pack at all - none
+    should appear at the project root OR the artifacts dir."""
+    art = tmp_path / "artifacts"
+    _run(art, "init", "--title", "Solo", "--slug", "solo-job")  # flat via --dir
+    assert not (tmp_path / "engagements.json").is_file(), (
+        "registry leaked into the project root - the exact regression this guards"
+    )
+    assert not (art / "engagements.json").is_file()  # no siblings yet, none needed either
+
+
+def test_flat_pack_with_genuine_sibling_workspace_gets_a_registry(tmp_path, monkeypatch):
+    """The OTHER half of the same fix: a flat pack that DOES have a real sibling
+    workspace under the same artifacts root must still get a registry - at the
+    artifacts root (the parent both share), not the project root above it. Proves
+    the fix didn't just make registry creation never fire for flat packs."""
+    art = tmp_path / "artifacts"
+    _run(art, "init", "--title", "Flat", "--slug", "flat-job")  # flat via --dir
+    _run_env(monkeypatch, tmp_path, "init", "--title", "Workspace", "--slug", "ws-job")
+    reg = art / "engagements.json"
+    assert reg.is_file()
+    assert not (tmp_path / "engagements.json").is_file()
+    slugs = {r["slug"] for r in json.loads(reg.read_text(encoding="utf-8"))["engagements"]}
+    assert slugs == {"flat-job", "ws-job"}
+
+
 def test_registry_tracks_independent_states(tmp_path, monkeypatch):
     _run_env(monkeypatch, tmp_path, "init", "--title", "A", "--slug", "audit")
     _run_env(monkeypatch, tmp_path, "init", "--title", "B", "--slug", "scoping")
@@ -622,6 +853,26 @@ def test_migrate_moves_flat_pack_into_workspace(tmp_path, monkeypatch):
     assert not (art / "engagement-state.json").exists()
     rows = json.loads((art / "engagements.json").read_text(encoding="utf-8"))["engagements"]
     assert rows[0]["slug"] == "legacy-job"
+
+
+def test_migrate_leaves_root_active_marker_in_place(tmp_path, monkeypatch):
+    """M2 (2026-08 Fable audit): a root that has BOTH a flat pack and a genuine sibling
+    workspace (the C3-supported case) can carry the root-level ACTIVE_MARKER too - the
+    workspaced init below writes it. migrate's keep-set used to list only the registry
+    and existing workspace dirs, so the marker (not a dir, not the registry) got swept
+    into the newly migrated pack's directory instead of staying at the root it describes -
+    read_active(root) silently went back to None after a migrate that had nothing to do
+    with the active engagement at all."""
+    art = tmp_path / "artifacts"
+    _run(art, "init", "--title", "Legacy", "--slug", "legacy-job")  # flat via --dir
+    _run_env(monkeypatch, tmp_path, "init", "--title", "WS", "--slug", "ws-job")  # workspaced
+    assert read_active(art) == "ws-job"  # workspaced init marks itself ACTIVE
+    assert _run_env(monkeypatch, tmp_path, "--dir", str(art), "migrate") == 0
+    assert (art / ACTIVE_MARKER).is_file(), "ACTIVE marker must stay at the artifacts root"
+    assert not (art / "legacy-job" / ACTIVE_MARKER).exists(), (
+        "ACTIVE marker must not be swept into the migrated pack's directory"
+    )
+    assert read_active(art) == "ws-job"  # unaffected by migrating an unrelated flat pack
 
 
 def test_old_flat_engagement_then_new_workspace_and_migrate(tmp_path, monkeypatch):

@@ -83,11 +83,13 @@ with validate + render.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as _dt
 import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 STATE_FILENAME = "engagement-state.json"
@@ -137,29 +139,50 @@ def _force_utf8_output() -> None:
 
 def _default_artifacts_dir() -> Path:
     root = os.environ.get("CLAUDE_PROJECT_DIR")
-    base = Path(root) if root else Path.cwd()
+    # 2026-08-14 Fable-model audit finding (C2): the ancestor-walk below used to run
+    # UNCONDITIONALLY, even when CLAUDE_PROJECT_DIR is explicitly set - but that value
+    # is already authoritative (Claude Code's own notion of "the project"), so walking
+    # ABOVE it to find some OTHER directory named "artifacts" can only ever escape the
+    # intended project, never correctly refine it. Concrete failure: a project at
+    # /home/user/artifacts/myproject (nothing to do with an engagement pack, just an
+    # unrelated directory name one level up) resolved to /home/user/artifacts as the
+    # "artifacts root" - outside the project entirely, and every engagement pack wrote
+    # there. The walk is only safe, and only needed, for the cwd FALLBACK case this
+    # comment already documents (a session that has genuinely cd'd inside an existing
+    # artifacts/<slug>/ workspace of the CURRENT project) - CLAUDE_PROJECT_DIR being
+    # set means that ambiguity doesn't exist; trust it directly.
+    if root:
+        return Path(root) / "artifacts"
+    base = Path.cwd()
     # A session that has cd'd INSIDE artifacts/ (e.g. into an existing workspace) must
     # not nest a new pack there - a live init from artifacts/<old>/ created
-    # artifacts/<old>/artifacts/<new>/ (2026-07-30). Resolve to the OUTERMOST
-    # `artifacts` directory on the path instead of blindly appending another one.
+    # artifacts/<old>/artifacts/<new>/ (2026-07-30). Resolve to the NEAREST `artifacts`
+    # ancestor on the path (the one we're actually inside), not blindly appending
+    # another one - and not the outermost either (2026-08-14: the original fix took
+    # the outermost match, which has the identical escape risk one level down if any
+    # ancestor further up cwd also happened to be named "artifacts").
     resolved = base.resolve()
     tops = [p for p in (resolved, *resolved.parents) if p.name == "artifacts"]
     if tops:
-        return tops[-1]  # outermost = the project's real artifacts root
+        return tops[0]  # nearest match = the workspace we're actually inside
     return base / "artifacts"
 
 
 def _project_root_for(pack_dir: Path) -> Path:
     """Best-effort working-project root for a pack dir (init's settings-snapshot lookup
-    only - never load-bearing for validation or the registry): the parent of the outermost
-    `artifacts` ancestor, mirroring _default_artifacts_dir()'s logic in reverse. Falls back
-    to the pack's own parent for a bespoke --dir layout with no `artifacts` ancestor at all
-    (e.g. some test fixtures) - team-preferences.json simply won't be found there, which
-    resolve_preferences() already treats as "no project preferences set" (built-in defaults)."""
+    only - never load-bearing for validation or the registry): the parent of the NEAREST
+    `artifacts` ancestor, mirroring _default_artifacts_dir()'s logic in reverse
+    (2026-08-14: both now take the nearest match, not the outermost - the outermost had
+    the same project-escape risk _default_artifacts_dir's own audit finding (C2)
+    describes, if any ancestor further up pack_dir also happened to be named
+    "artifacts"). Falls back to the pack's own parent for a bespoke --dir layout with no
+    `artifacts` ancestor at all (e.g. some test fixtures) - team-preferences.json simply
+    won't be found there, which resolve_preferences() already treats as "no project
+    preferences set" (built-in defaults)."""
     resolved = pack_dir.resolve()
     tops = [p for p in (resolved, *resolved.parents) if p.name == "artifacts"]
     if tops:
-        return tops[-1].parent
+        return tops[0].parent
     return resolved.parent
 
 
@@ -270,19 +293,32 @@ def archived_slugs(root: Path) -> list[str]:
     return sorted(p.name for p in root.iterdir() if p.is_dir() and is_archived(p))
 
 
-# Files the closed-pack fingerprint ignores: the state file (the fingerprint is stored
-# inside it), the generated index renders (re-rendered by the same mutation that stores
-# the fingerprint) and the archive marker itself. Everything else - the deliverables -
-# is covered by name, size and mtime.
+# Files the closed-pack fingerprint's STAT-ONLY walk ignores: the state file (hashed by
+# CONTENT instead - see compute_fingerprint's docstring, M3), the generated index renders
+# (re-rendered by the same mutation that stores the fingerprint) and the archive marker
+# itself. Everything else - the deliverables - is covered by name, size and mtime.
 _FINGERPRINT_EXCLUDE = {STATE_FILENAME, "START-HERE.md", "START-HERE.html", ARCHIVE_MARKER}
 
 
 def compute_fingerprint(pack: Path) -> str:
-    """A cheap stat-only fingerprint of the pack's deliverable files.
+    """A cheap stat-only fingerprint of the pack's deliverable files, PLUS the state
+    file's own content.
 
     Stored in the state at a successful close; while it still matches, scanners skip
     the full content re-scan (the verification the pack passed at close still stands).
-    Any edit to a deliverable changes size or mtime and forces a real re-scan."""
+    Any edit to a deliverable changes size or mtime and forces a real re-scan.
+
+    M3 (2026-08 Fable audit): the state file itself used to be excluded from the walk
+    below with nothing to replace it - a hand-edit to engagement-state.json after close
+    (status flipped back, verdict tampered, an outstanding item quietly removed) left
+    every stat-only deliverable untouched, so the fingerprint still matched and a later
+    scan silently skipped re-validating the very record that had changed. The exclusion
+    from the stat-only walk stays (self-referential otherwise: the fingerprint gets
+    written back INTO the file it was computed from, so its own size/mtime would never
+    stabilise) but its CONTENT is now hashed in separately, with the `scan_fingerprint`
+    key itself popped first - that key is what the self-reference is in, not the record;
+    popping only it keeps the hash stable across the write-back while still moving on
+    every edit to status/verdict/artifacts/outstanding/etc."""
     entries = []
     for p in sorted(pack.rglob("*")):
         if not p.is_file() or p.name in _FINGERPRINT_EXCLUDE:
@@ -292,6 +328,15 @@ def compute_fingerprint(pack: Path) -> str:
         except OSError:
             continue
         entries.append(f"{p.relative_to(pack)}|{st.st_size}|{int(st.st_mtime)}")
+    try:
+        state_for_hash = json.loads((pack / STATE_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state_for_hash = None
+    if isinstance(state_for_hash, dict):
+        state_for_hash.pop("scan_fingerprint", None)
+        entries.append(
+            f"{STATE_FILENAME}|" + json.dumps(state_for_hash, sort_keys=True, ensure_ascii=False)
+        )
     return hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
 
 
@@ -448,12 +493,34 @@ def render_registry(root: Path, known: tuple[Path, dict] | None = None) -> list[
 
 def _registry_root_for(pack_dir: Path) -> Path | None:
     """The artifacts root whose registry covers this pack, or None for a standalone flat
-    pack (e.g. a test tmp dir with no sibling workspaces and no registry)."""
+    pack (e.g. a test tmp dir with no sibling workspaces and no registry).
+
+    2026-08-14 Fable-model audit finding (C3): this used to compute `pack_dir.parent`
+    and treat it uniformly as "the artifacts root" - correct for a WORKSPACE pack
+    (pack_dir = artifacts/<slug>/, parent = artifacts/, genuinely the registry-worthy
+    level) but wrong for a FLAT pack, where pack_dir IS the artifacts root itself
+    (artifacts/engagement-state.json directly) and pack_dir.parent is the PROJECT
+    ROOT one level too high. workspace_states(project_root) then found artifacts/
+    (with its own state file) indistinguishable from any genuine workspace
+    subdirectory, so a standalone flat pack with NO real siblings still satisfied the
+    "has a workspace" check and returned the project root as the registry root -
+    every flat-pack mutation wrote engagements.json/ENGAGEMENTS.md/.html into the
+    user's own git-tracked repo. Fixed by branching on pack_dir's own shape instead
+    of always trusting pack_dir.parent: a flat pack (pack_dir.name == "artifacts")
+    only ever consults its OWN subdirectories for genuine siblings, never its parent;
+    a workspace pack keeps the original, correct parent-based logic - including
+    "trivially counts as its own sibling", which is intentional there (ANY workspace
+    pack gets a registry, single or not - see test_init_default_creates_workspace_
+    and_registry, unaffected by this fix). Note: this does not migrate a registry
+    file a pre-fix run may have already written at the wrong location - a separate,
+    one-time cleanup concern, not something to silently move here."""
+    if pack_dir.name == "artifacts":
+        if state_path(pack_dir).is_file() and workspace_states(pack_dir):
+            return pack_dir  # flat pack that ALSO has genuine sibling workspaces
+        return None
     parent = pack_dir.parent
     if workspace_states(parent) or (parent / REGISTRY_JSON).is_file():
         return parent
-    if state_path(pack_dir).is_file() and workspace_states(pack_dir):
-        return pack_dir  # flat pack that ALSO has sibling workspaces under it
     return None
 
 
@@ -946,6 +1013,50 @@ def render_files(artifacts_dir: Path, known_state: dict | None = None) -> list[P
     return written
 
 
+LOCK_FILENAME = ".engagement-state.lock"
+_LOCK_STALE_SECONDS = 30  # a single CLI mutation is a short in-process op; older = a dead holder
+_LOCK_WAIT_SECONDS = 5
+
+
+@contextlib.contextmanager
+def _state_lock(artifacts_dir: Path):
+    """Advisory cross-process mutex around one read-modify-write cycle on
+    engagement-state.json. 2026-08 audit (C5): parallel Workflow-tool dispatch can run
+    several mutating commands (set-status, add-artifact, log-note, ...) against the SAME
+    pack concurrently - without this, two concurrent load_state()/_write_state() cycles
+    race (classic lost-update: second writer silently clobbers the first's change) with
+    no error from either process. Portable (os.O_CREAT | os.O_EXCL only, no fcntl/msvcrt
+    dependency) since this project's install targets include Windows; a stale lock from a
+    process that died mid-mutation is reclaimed by age rather than left to jam every
+    future command against the pack forever."""
+    lock_path = artifacts_dir / LOCK_FILENAME
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    deadline = time.time() + _LOCK_WAIT_SECONDS
+    fd = None
+    while fd is None:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                age = time.time() - lock_path.stat().st_mtime
+            except FileNotFoundError:
+                continue  # released between our open() and stat() - retry immediately
+            if age > _LOCK_STALE_SECONDS:
+                lock_path.unlink(missing_ok=True)  # holder is gone - reclaim it
+                continue
+            if time.time() >= deadline:
+                raise SystemExit(
+                    f"another engagement_state process holds the lock on {artifacts_dir} "
+                    f"(age {age:.1f}s) - if it's genuinely dead, delete {lock_path} by hand"
+                )
+            time.sleep(0.05)
+    try:
+        os.close(fd)
+        yield
+    finally:
+        lock_path.unlink(missing_ok=True)
+
+
 def _write_state(artifacts_dir: Path, state: dict) -> None:
     """Validate, then atomically write the state and re-render the human view."""
     problems = validate_state(state)
@@ -1173,6 +1284,26 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
     state = load_state(args.dir)
     _upgrade(state)
     before = json.loads(json.dumps(state))  # rollback snapshot (register R6)
+    if args.status == "closed":
+        # C4a (2026-08 Fable audit): the close path below writes the closed state to
+        # disk FIRST, then rolls back to `before` if the gate refuses. That rollback is
+        # itself a validated write - if `before` (the pre-close snapshot) is not
+        # itself schema-valid, the rollback write raises SystemExit before the
+        # CLOSE-REFUSED explanation ever prints, stranding the pack CLOSED on disk with
+        # no findings gate having actually passed it. Check this upfront, before any
+        # write happens, so a close attempt against an already-invalid state fails
+        # loudly here instead of silently later.
+        before_problems = validate_state(before)
+        if before_problems:
+            for problem in before_problems:
+                print(f"INVALID (pre-close state): {problem}", file=sys.stderr)
+            print(
+                "CLOSE-REFUSED: the state file is not valid before this close attempt - "
+                "fixing the underlying state (not the close command) resolves this. No "
+                "write was made.",
+                file=sys.stderr,
+            )
+            return 1
     state["status"] = args.status
     if args.verdict:
         state["verdict"] = args.verdict
@@ -1212,13 +1343,27 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
         return 0
     try:
         gate_findings = ca.check(args.dir)
-    except Exception as exc:  # a broken checker must not strand the state half-written
+    except Exception as exc:
+        # C4b (2026-08 Fable audit): this used to fail OPEN - keep the close, tell the
+        # user to run the checker by hand. A checker crash proves nothing about whether
+        # the pack actually meets the DoD; keeping an unevidenced close on a crash
+        # contradicts the whole "done is evidenced, not claimed" posture this gate
+        # exists to enforce. Fail closed instead, the same as a real findings list: roll
+        # back to `before` (already validated above, so this write cannot itself fail)
+        # and refuse the close.
         print(
-            f"note: close gate errored ({exc}) - close kept, run the checker by hand",
+            f"CLOSE-REFUSED: the close gate crashed ({exc}) - treating this as a gate "
+            "failure, not a pass.",
             file=sys.stderr,
         )
-        clear_active(args.dir.parent, args.dir.name)
-        return 0
+        _write_state(args.dir, before)
+        print(
+            f"CLOSE-REFUSED: rolled back to '{before.get('status')}'. Run `python -m "
+            "scripts.check_artifacts` by hand to see the underlying error, fix it, and "
+            "re-run `set-status closed`.",
+            file=sys.stderr,
+        )
+        return 1
     if not gate_findings:
         # 0.33.2 fast path: the pack just passed the full gate - fingerprint it so later
         # scans can skip an unchanged closed pack instead of re-reading every file.
@@ -1625,7 +1770,8 @@ def _cmd_list(args: argparse.Namespace) -> int:
 
 def _cmd_migrate(args: argparse.Namespace) -> int:
     """Move a legacy FLAT pack into its own workspace artifacts/<slug>/ (everything in the
-    root except existing workspace dirs and the registry), then regenerate the registry."""
+    root except existing workspace dirs, the registry, and the root-level ACTIVE/lock
+    markers), then regenerate the registry."""
     root = args.dir or _default_artifacts_dir()
     if not state_path(root).is_file():
         print(f"no flat pack at {root} - nothing to migrate", file=sys.stderr)
@@ -1644,7 +1790,21 @@ def _cmd_migrate(args: argparse.Namespace) -> int:
         print(f"refusing: {target} already exists", file=sys.stderr)
         return 2
     target.mkdir(parents=True)
-    keep = {REGISTRY_JSON, REGISTRY_MD, Path(REGISTRY_MD).stem + ".html", slug}
+    # M2 (2026-08 Fable audit): ACTIVE_MARKER and LOCK_FILENAME are root-level, cross-
+    # workspace bookkeeping - not part of any one pack's own files. A root that already
+    # has a genuine sibling workspace (the flat-pack-with-siblings case _registry_root_for
+    # supports) can carry both alongside the flat pack being migrated; leaving them out of
+    # `keep` swept them into the new workspace dir instead, losing the root's ACTIVE
+    # tracking (read_active(root) silently goes back to None) and stranding a stale lock
+    # file inside the migrated pack instead of at the root it actually locks.
+    keep = {
+        REGISTRY_JSON,
+        REGISTRY_MD,
+        Path(REGISTRY_MD).stem + ".html",
+        ACTIVE_MARKER,
+        LOCK_FILENAME,
+        slug,
+    }
     workspace_dirs = {sp.parent.name for sp in workspace_states(root)}
     import shutil
 
@@ -1657,6 +1817,37 @@ def _cmd_migrate(args: argparse.Namespace) -> int:
     print(f"migrated flat pack -> {target} ({moved} item(s))")
     render_registry(root)
     return 0
+
+
+# C5: commands that read-modify-write engagement-state.json (directly or via _mutate()) -
+# gated through _state_lock in main()'s dispatch below. _cmd_init/_cmd_archive lock the
+# ROOT they resolve args.dir to (they can create/touch more than one pack), which is a
+# coarser-grained but still-correct simplification: one mutation at a time per root, not
+# per pack. Deliberately excludes genuinely read-only commands (_cmd_validate, _cmd_show,
+# _cmd_list), _cmd_render (rewrites the human view/registry, never engagement-state.json
+# itself - _write_state's atomic os.replace already makes concurrent reads of that file
+# safe without a lock), and _cmd_set_active/_cmd_clear_active/_cmd_unarchive/_cmd_migrate
+# (single-value marker writes or one-off structural moves, not read-modify-write races).
+_MUTATING_CMDS = {
+    _cmd_init,
+    _cmd_set_status,
+    _cmd_set_phase,
+    _cmd_set_profile,
+    _cmd_add_artifact,
+    _cmd_add_outstanding,
+    _cmd_resolve_outstanding,
+    _cmd_set_decision,
+    _cmd_set_decisions,
+    _cmd_log_note,
+    _cmd_add_ratification,
+    _cmd_ratify,
+    _cmd_set_team,
+    _cmd_archive,
+    _cmd_record_consent_outcome,
+    _cmd_set_runtime,
+    _cmd_finalise_artifacts,
+    _cmd_set_footprint,
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1923,6 +2114,13 @@ def main(argv: list[str] | None = None) -> int:
     ):
         args.dir = resolve_pack_dir(args)
     try:
+        if args.fn in _MUTATING_CMDS:
+            # _cmd_init/_cmd_archive resolve their own root when args.dir wasn't given
+            # (see the exclusion list above) - lock the same directory they'll actually
+            # touch, not None.
+            lock_dir = args.dir if args.dir is not None else _default_artifacts_dir()
+            with _state_lock(lock_dir):
+                return args.fn(args)
         return args.fn(args)
     except FileNotFoundError:
         print(f"no {STATE_FILENAME} in {args.dir} - run init first", file=sys.stderr)

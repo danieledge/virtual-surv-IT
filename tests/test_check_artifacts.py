@@ -301,6 +301,53 @@ def test_summary_email_before_close_flagged(tmp_path):
     assert len(findings) == 1 and "SUMMARY-BEFORE-CLOSE" in findings[0]
 
 
+def test_summary_email_under_archived_nested_dir_is_not_flagged(tmp_path):
+    """C6 (2026-08 audit): the summaries rglob was the one recursive summary-email scan
+    in check() that did not exclude .archive'd subtrees (every sibling rglob a few lines
+    up/down does). A leftover summary email under an archived NESTED subdirectory used to
+    get flagged as SUMMARY-BEFORE-CLOSE against the outer, still-open pack that never
+    wrote it."""
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md")
+    _touch(art / "review-pass-1.html")
+    nested = art / "old-subpack"
+    _touch(nested / "engagement-summary-old.txt", "Hi,\n\nAll done.\n")
+    _touch(nested / ".archive", "archived\n")
+    _index(art, status=STATUS_OPEN, listed=["review-pass-1.md"])
+    findings = check(art)
+    assert not any("SUMMARY-BEFORE-CLOSE" in f for f in findings)
+
+
+def test_close_gate_trusts_the_state_file_over_a_stale_index(tmp_path):
+    """C8 (2026-08 audit): check() used to read the overall engagement status from the
+    RENDERED INDEX TEXT only, never engagement-state.json - register G5 made pack_status()
+    (state file authoritative, index a fallback) the one shared status rule for exactly
+    this class of bug. The dangerous direction: a stale or hand-edited index that LOOKS
+    closed while the state file says otherwise used to silently waive the close-only gate
+    for a pack that was never actually closed."""
+    import re
+
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"]) == 0
+    state = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "in_progress"  # genuinely open - authoritative
+
+    # Index hand-edited/stale: falsely reads as closed.
+    index_path = art / "START-HERE.md"
+    text = index_path.read_text(encoding="utf-8")
+    text = re.sub(r"\|\s*\*\*Status\*\*\s*\|.*\|", "| **Status** | ✅ closed |", text)
+    index_path.write_text(text, encoding="utf-8")
+    assert _index_status(text) == "closed"  # confirms the fixture actually reads as closed
+
+    # An early summary email - only legitimate once genuinely closed.
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nDone.\n")
+
+    findings = check(art)
+    assert any("SUMMARY-BEFORE-CLOSE" in f for f in findings)
+
+
 def test_blocked_engagement_with_interim_names_passes(tmp_path):
     art = tmp_path / "artifacts"
     for stem in ("engagement-brief", "review-pass-1"):
@@ -798,6 +845,32 @@ def test_map_drift_fires_when_never_fingerprinted(tmp_path):
     # No sidecar file written at all.
     codes = "".join(check_map(m, project_dir=repo))
     assert "MAP-DRIFT" in codes
+
+
+def test_map_drift_corrupt_sidecar_surfaces_its_own_finding_not_never_fingerprinted(tmp_path):
+    """M6 (2026-08 Fable audit): a PRESENT-but-corrupt fingerprints sidecar used to be
+    caught by the same `except (OSError, ValueError)` as a genuinely MISSING one, both
+    collapsing to `entries = {}` - so a corrupt sidecar produced the exact same
+    "never fingerprinted" MAP-DRIFT text as no sidecar at all, hiding the real problem
+    (the sidecar itself is broken) behind a misleading diagnosis."""
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    docs = repo / "docs"
+    docs.mkdir()
+    (docs / "codebase-map.fingerprints.json").write_text("{not valid json", encoding="utf-8")
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    findings = check_map(m, project_dir=repo)
+    codes = "".join(findings)
+    assert "MAP-FINGERPRINTS-INVALID" in codes, (
+        "a corrupt sidecar must surface its own distinct finding, not silently masquerade "
+        "as 'never fingerprinted'"
+    )
 
 
 def test_map_dead_pointer_fires_on_missing_citation(tmp_path):
@@ -1460,6 +1533,30 @@ def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
     _pack(art, scored)
     joined = "\n".join(check(art))
     assert "findings-t.jsonl" not in joined  # never named by MISSING-HTML / STALE-INDEX
+
+
+def test_apply_fixes_never_touches_an_archived_nested_pack(tmp_path):
+    """C7 (2026-08 audit): apply_fixes()'s rglobs did not exclude .archive'd subtrees the
+    way check()'s equivalent scans do - archived is meant to be frozen, but --fix would
+    rename a mis-typed summary email, DELETE a stray rendered .html copy, and render new
+    .html siblings inside an archived pack it should never touch at all."""
+    art = tmp_path / "artifacts"
+    _index(art, listed=["review-pass-1.md"])
+    _touch(art / "review-pass-1.md", "# Review\n")
+    _touch(art / "review-pass-1.html")
+
+    archived = art / "old-engagement"
+    _touch(archived / "engagement-summary-old.md", "Hi,\n\nDone.\n")  # would be renamed
+    _touch(archived / "engagement-summary-stray.html")  # would be DELETED
+    _touch(archived / "notes.md", "# notes\n")  # would get a new .html rendered
+    _touch(archived / ".archive", "archived\n")
+
+    apply_fixes(art)
+
+    assert (archived / "engagement-summary-old.md").is_file()  # not renamed
+    assert not (archived / "engagement-summary-old.txt").exists()
+    assert (archived / "engagement-summary-stray.html").is_file()  # not deleted
+    assert not (archived / "notes.html").exists()  # not rendered
 
 
 def test_apply_fixes_renders_report_from_pack_at_close(tmp_path):

@@ -78,12 +78,48 @@ def _ascii_safe(text: str) -> str:
     return text.encode("ascii", errors="replace").decode("ascii")
 
 
-def resolve_root(plugin_root: str, project_dir: Path) -> tuple[Path, str]:
-    """(root_for_reading_plugin_files, PLUGIN_ROOT display string). Repo-as-project when
-    plugin_root is empty AND the project itself looks like the team repo."""
+_TEAM_NAME = "compliance-surveillance-team"
+
+
+def _looks_like_team_repo(project_dir: Path) -> bool:
+    """Same check scripts/find_plugin_root.py's own registry search already uses: a
+    substring match for the team name in plugin.json - crude but proven, deliberately
+    not tightened to a parsed field (matches that existing convention exactly)."""
+    manifest = project_dir / ".claude-plugin" / "plugin.json"
+    try:
+        text = manifest.read_text(encoding="utf-8-sig")
+    except OSError:
+        return False
+    return _TEAM_NAME in text
+
+
+def resolve_root(plugin_root: str, project_dir: Path) -> tuple[Path, str, bool]:
+    """(root_for_reading_plugin_files, PLUGIN_ROOT display string, root_is_trusted).
+
+    2026-08-14 Fable-model audit finding (C1): this used to return project_dir as root
+    whenever plugin_root arrived empty - UNCONDITIONALLY. The docstring claimed this
+    only happened "when the project itself looks like the team repo", but the code
+    never actually checked that. If the skill's own bash preamble ever failed to
+    resolve --plugin-root (a documented, expected failure mode - the module docstring
+    above notes $CLAUDE_PLUGIN_ROOT is unreliable) while running in genuine PLUGIN mode
+    against a FOREIGN project, this silently treated that foreign, untrusted project as
+    if it were the plugin's own trusted source - the same class of bug run_tool_probe's
+    fix just above closes, reached via a different path (an empty --plugin-root rather
+    than tool-probe's own candidate ordering).
+
+    root_is_trusted is False exactly when plugin_root arrived empty AND project_dir does
+    not genuinely look like the team repo - the true "we don't actually know where the
+    plugin is" case. Callers that execute anything found under `root` (run_tool_probe,
+    run_extensions_show) must refuse to trust root-derived paths when this is False,
+    never silently execute a guess. root still gets set to project_dir even when
+    untrusted (there is nothing better to fall back to for the REST of this report -
+    version/branch/changelog reads are display-only, not execution), only the
+    execution-sensitive callers need to gate on the trust bit specifically."""
     if plugin_root:
-        return Path(plugin_root), plugin_root
-    return project_dir, "repo-as-project"
+        return Path(plugin_root), plugin_root, True
+    if _looks_like_team_repo(project_dir):
+        return project_dir, "repo-as-project", True
+    return project_dir, "repo-as-project", False
 
 
 def read_plugin_version(root: Path) -> str:
@@ -120,14 +156,18 @@ def _bare_version(v: str) -> str:
 
 def version_changed(plugin_version: str, prev_team_version: str) -> str:
     """'yes' | 'no'. No prior record (empty prev) counts as changed - "first engagement"
-    per the skill's own rule, never silently treated as "no change"."""
-    if not prev_team_version:
+    per the skill's own rule, never silently treated as "no change".
+
+    M5 (2026-08 Fable audit): an EMPTY plugin_version is not "no change" either -
+    read_plugin_version() returns "" on ANY read/parse failure of plugin.json
+    (unreadable, missing, corrupt), and `plugin_version and ...` used to let that flow
+    straight into "no", indistinguishable from a confirmed same-version read. A failure
+    to determine the plugin's current version proves nothing about whether it changed -
+    fail toward showing the what's-new banner (the same conservative default the
+    no-prior-record branch above already uses), not toward silently suppressing it."""
+    if not prev_team_version or not plugin_version:
         return "yes"
-    return (
-        "yes"
-        if plugin_version and _bare_version(plugin_version) != _bare_version(prev_team_version)
-        else "no"
-    )
+    return "yes" if _bare_version(plugin_version) != _bare_version(prev_team_version) else "no"
 
 
 _SECTION3_MAX_ROWS = 5
@@ -439,14 +479,54 @@ def _read_cached_tool_probe(project_dir: Path) -> str | None:
     )
 
 
-def run_tool_probe(root: Path, project_dir: Path) -> str:
+def run_tool_probe(root: Path, project_dir: Path, root_is_trusted: bool = True) -> str:
+    """2026-08-14 Fable-model audit finding, BLOCKER: this used to check project_dir's
+    own check-review-tools.sh BEFORE root's - harmless in project/dogfood mode (root ==
+    project_dir, same file either way), but a genuine consent-gate bypass in plugin
+    mode: engage_probe.py is on guard-code-execution.py's own _TEAM_ALLOW list (trusted
+    team tooling, no consent prompt), and that guard has no visibility into what an
+    ALLOWED script subsequently executes internally via subprocess.run() - so a project
+    brought in for review that plants its own scripts/check-review-tools.sh gets it
+    executed the moment /engage runs, no consent marker, no prompt, directly
+    contradicting CLAUDE.md §7's non-negotiable ("never execute the code under review
+    without authorisation") and ADR-002's "never untrusted provenance". Every existing
+    test for this function passed root == project_dir, so the divergent (actually
+    security-relevant) case had zero coverage.
+
+    Fix: when root and project_dir genuinely differ (plugin mode against a foreign
+    project - the only case this distinction can matter), ONLY the plugin's own
+    trusted copy is ever considered; the project's copy is not even looked at, let
+    alone executed. When they're the same directory (project/dogfood mode), behaviour
+    is unchanged - there is no trust boundary to cross when reviewing this repo
+    against itself. root_is_trusted (from resolve_root's own trust bit, see its
+    docstring) must ALSO hold before the project's own copy is ever considered - a
+    root that only equals project_dir because resolution genuinely failed (not because
+    this really is dogfood mode) must not be treated as safe either; defaults True for
+    any caller that hasn't been updated to pass it (this function's own project-mode
+    tests, which never exercise the divergent case at all)."""
     cached = _read_cached_tool_probe(project_dir)
     if cached is not None:
         return cached
-    for candidate in (
-        project_dir / "scripts" / "check-review-tools.sh",
-        root / "scripts" / "check-review-tools.sh",
-    ):
+    if not root_is_trusted:
+        # root came from a FAILED resolution (resolve_root's fallback), which means it
+        # equals project_dir despite not being genuinely verified - "only check root's
+        # copy" would silently check the untrusted project's copy anyway under a
+        # different variable name. Nothing under either root is safe to execute here;
+        # refuse the probe entirely rather than guess.
+        return ""
+    try:
+        same_root = project_dir.resolve() == root.resolve()
+    except OSError:
+        same_root = project_dir == root
+    candidates = (
+        (
+            project_dir / "scripts" / "check-review-tools.sh",
+            root / "scripts" / "check-review-tools.sh",
+        )
+        if same_root
+        else (root / "scripts" / "check-review-tools.sh",)
+    )
+    for candidate in candidates:
         if candidate.is_file():
             try:
                 proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
@@ -472,11 +552,20 @@ def run_tool_probe(root: Path, project_dir: Path) -> str:
     return ""
 
 
-def run_extensions_show(root: Path, project_dir: Path) -> str:
+def run_extensions_show(root: Path, project_dir: Path, root_is_trusted: bool = True) -> str:
+    """2026-08-14 Fable-model audit finding (C1), same class as run_tool_probe just
+    above: this always executes `root / "scripts" / "extensions.py"` - fine when root
+    is genuinely the plugin's own directory, but if resolve_root's own resolution
+    failed (see its docstring), root silently became project_dir, and this would
+    execute the FOREIGN, untrusted project's own extensions.py, triggered by nothing
+    more than the project containing docs/team-extensions.md. root_is_trusted (from
+    resolve_root's own trust bit) gates the execution branch - untrusted root falls
+    back to the safe, non-executing "just read the markdown" path instead, same as
+    the script-genuinely-absent case already does."""
     if not (project_dir / "docs" / "team-extensions.md").is_file():
         return ""
-    ext = root / "scripts" / "extensions.py"
-    if not ext.is_file():
+    ext = root / "scripts" / "extensions.py" if root_is_trusted else None
+    if not ext or not ext.is_file():
         try:
             return (project_dir / "docs" / "team-extensions.md").read_text(
                 encoding="utf-8", errors="replace"
@@ -548,7 +637,7 @@ def resolve_preferences(project_dir: Path) -> dict:
 
 
 def build_report(plugin_root_arg: str, project_dir: Path) -> str:
-    root, pr_display = resolve_root(plugin_root_arg, project_dir)
+    root, pr_display, root_is_trusted = resolve_root(plugin_root_arg, project_dir)
     plugin_version = read_plugin_version(root)
     branch = git_branch(root)
     map_header, map_section3 = read_map(project_dir)
@@ -564,8 +653,8 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     workflow_dispatch_on = resolved["parallel_dispatch_via_workflow"]
     standards_critique_on = resolved["standards_critique"]
     map_skeleton_on = resolved["map_skeleton"]
-    tool_report = run_tool_probe(root, project_dir)
-    extensions_block = run_extensions_show(root, project_dir)
+    tool_report = run_tool_probe(root, project_dir, root_is_trusted)
+    extensions_block = run_extensions_show(root, project_dir, root_is_trusted)
     drift = map_drift_summary(project_dir, map_skeleton_on)
 
     lines = [

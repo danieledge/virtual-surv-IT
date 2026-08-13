@@ -681,19 +681,41 @@ def _check_map_drift(
     documented default location (docs/codebase-map.md), where the two paths differ. Fixed on
     both sides together; project_dir stays a parameter (used elsewhere in this function,
     below, for globs resolved relative to the project root) but no longer decides where the
-    sidecar itself is looked up."""
+    sidecar itself is looked up.
+
+    M6 (2026-08 Fable audit): MISSING and CORRUPT sidecars used to collapse to the same
+    `entries = {}` fallback - a genuinely absent sidecar (nothing fingerprinted yet, one
+    MAP-DRIFT "never fingerprinted" per row is the right answer) and a PRESENT-but-corrupt
+    one (a real integrity problem - drift cannot be judged at all, and every row reporting
+    "never fingerprinted" is actively misleading about why) read identically to a human
+    fixing it. Missing (OSError - no file) still degrades to the per-row fallback; corrupt
+    (present, but invalid JSON or the wrong shape) now raises its own distinct finding
+    instead of masquerading as "nothing to see here"."""
     if not drift_rows:
         return []
     mf = _load_map_fingerprint_module()
     if mf is None:
         return []  # fail open, same posture as every other optional-module load in this file
     sidecar_path = map_path.parent / _FINGERPRINTS_FILENAME
-    try:
-        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
-        entries = sidecar.get("entries") or {}
-    except (OSError, ValueError):
-        entries = {}
+    entries: dict = {}
     findings: list[str] = []
+    try:
+        raw = sidecar_path.read_text(encoding="utf-8")
+    except OSError:
+        pass  # genuinely no sidecar yet - the per-row "never fingerprinted" fallback is correct
+    else:
+        try:
+            sidecar = json.loads(raw)
+            if isinstance(sidecar, dict):
+                entries = sidecar.get("entries") or {}
+            else:
+                raise ValueError("fingerprints sidecar is not a JSON object")
+        except ValueError as exc:
+            findings.append(
+                f"MAP-FINGERPRINTS-INVALID: {sidecar_path} exists but is not readable as "
+                f"fingerprint data ({exc}) - drift cannot be checked against it; regenerate "
+                f"via `<python> -m scripts.repo_skeleton --fingerprint {map_path}`"
+            )
     for lineno, area, globs in drift_rows:
         recorded = entries.get(area)
         if recorded is None:
@@ -1720,13 +1742,25 @@ def check(artifacts_dir: Path) -> list[str]:
         )
     if start_here is not None:
         index_text = start_here.read_text(encoding="utf-8", errors="replace")
-        status = _index_status(index_text)
-        if status is None:
+        if _index_status(index_text) is None:
             findings.append(
                 f"INDEX-NO-STATUS: {start_here} has no readable engagement Status line "
                 "(⏳ in progress / ⛔ blocked - awaiting input / ✅ closed) - state must be "
                 "visible so an interim pack is never mistaken for a delivery"
             )
+        # C8 (2026-08 audit): this used to be _index_status(index_text) directly - reading
+        # ONLY the rendered index, never the state file. Register G5 made pack_status()
+        # the one shared status rule (state file authoritative, index fallback) precisely
+        # to kill exactly this class of divergent parser; check() alone kept the old
+        # index-only read, so a not-yet-rendered index could either spuriously trip
+        # FINAL-BEFORE-CLOSE/SUMMARY-BEFORE-CLOSE against a pack the state file already
+        # calls closed, or - the dangerous direction - a stale/hand-edited index reading
+        # "closed" while the state file says otherwise would silently WAIVE the close-only
+        # gate for a pack that was never actually closed. INDEX-NO-STATUS above still
+        # checks the index text specifically (a human reader needs a visible status line
+        # regardless of what the state file says); everything gating on the overall
+        # engagement status now agrees with apply_fixes() and the hooks.
+        status = pack_status(artifacts_dir)
         # Every artifact file must be listed in the index (by name), and every local link
         # in the index must resolve - the two directions of index staleness.
         listable = (
@@ -1769,7 +1803,16 @@ def check(artifacts_dir: Path) -> list[str]:
     # branch, disarming every close-only guard exactly when the team forgot the index
     # (the 2026-07-22 failure class). A 🔒 closing pack is the sanctioned close window:
     # close artifacts are legitimate there, and nothing demands them yet (register R5).
-    summaries = sorted(artifacts_dir.rglob("engagement-summary-*.txt"))
+    # C6 (2026-08 audit): this rglob was the one recursive summary-email scan in check()
+    # that did NOT exclude .archive'd subtrees (compare the same pattern applied a few
+    # lines up for stray START-HERE.html/summary files and code artifacts) - a summary
+    # email left behind under an archived nested pack was flagged as SUMMARY-BEFORE-CLOSE
+    # against the OUTER, still-open pack that never wrote it.
+    summaries = sorted(
+        s
+        for s in artifacts_dir.rglob("engagement-summary-*.txt")
+        if not _under_archive(s, artifacts_dir)
+    )
     not_closed = status in ("open", "blocked") or status is None
     if not_closed:
         state = status or ("no index" if start_here is None else "not readable")
@@ -1830,7 +1873,15 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
         register P3: the tool used to manufacture mid-engagement the very artifact the
         prose declares close-only);
       * normalise a mis-typed engagement-summary email (.md / .html) to the required .txt;
+      * re-render START-HERE.md from the authoritative state when its embedded content
+        hash is stale (STATE-STALE-RENDER), or back up and re-render it when its content
+        no longer matches its own embedded hash (INDEX-HAND-EDITED - ADR-006: the index
+        is a generated view, so a hand-edit is preserved to a `.bak` sibling, never lost,
+        then overwritten by the regenerated render);
       * render every remaining .md that lacks its .html sibling.
+    M4 (2026-08 Fable audit): this docstring used to list only 3 of these 4 fix classes -
+    the STATE-STALE-RENDER/INDEX-HAND-EDITED re-render (below, before the generic .md
+    render pass) is real behaviour that predates this note, just previously undocumented.
     Returns a log of what changed; idempotent (a second run is a no-op)."""
     fixed: list[str] = []
     if not artifacts_dir.is_dir():
@@ -1851,7 +1902,14 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
                 fixed.append(f"FIXED: rendered {out} from {pack.name}")
 
     # Normalise the email FIRST so the render pass never renders a mis-typed .md email.
+    # C7 (2026-08 audit): every rglob below is now filtered through _under_archive, the
+    # same guard check() itself uses for the equivalent scans - an archived pack is
+    # frozen (out of scope everywhere else), so --fix must not rename, delete or
+    # re-render anything inside one. The .html rglob two blocks down used to UNLINK
+    # archived historical copies outright; that was real, not just cosmetic.
     for bad in sorted(artifacts_dir.rglob("engagement-summary-*.md")):
+        if _under_archive(bad, artifacts_dir):
+            continue
         target = bad.with_suffix(".txt")
         if target.exists():
             continue  # a correct .txt already exists - leave the duplicate for a human
@@ -1882,6 +1940,8 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
                 fixed.append(f"COULD-NOT-SYNC state after email rename: {exc}")
         else:
             for idx in artifacts_dir.rglob("START-HERE.md"):
+                if _under_archive(idx, artifacts_dir):
+                    continue
                 itext = idx.read_text(encoding="utf-8", errors="replace")
                 if bad.name in itext:
                     idx.write_text(itext.replace(bad.name, target.name), encoding="utf-8")
@@ -1891,6 +1951,8 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
                         f"{target.name}"
                     )
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
+        if _under_archive(stray, artifacts_dir):
+            continue  # C7: archived is frozen - never delete a historical copy in there
         stray.unlink()
         fixed.append(f"FIXED SUMMARY-WRONG-EXT: removed rendered email copy {stray.name}")
 
@@ -1938,6 +2000,8 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
     # _load_render_html_module above).
     rh = _load_render_html_module()
     for md in sorted(artifacts_dir.rglob("*.md")):
+        if _under_archive(md, artifacts_dir):
+            continue  # C7: don't write a new render into a frozen archived subtree
         if md.with_suffix(".html").is_file():
             continue
         if rh is None:

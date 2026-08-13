@@ -898,6 +898,17 @@ def test_changelog_headline_extracts_the_entry_line(tmp_path):
     assert changelog_headline(tmp_path / "missing.md", "0.33.1") is None
 
 
+def test_changelog_headline_survives_non_utf8_bytes(tmp_path):
+    """Found in review, 2026-08-13: UnicodeDecodeError is NOT an OSError, so a
+    CHANGELOG.md with invalid UTF-8 bytes used to crash the installer here (only OSError
+    was caught) instead of the documented fail-soft None."""
+    from install_helper import changelog_headline
+
+    log = tmp_path / "CHANGELOG.md"
+    log.write_bytes(b"## [0.33.1] - \xff\xfe not valid utf-8\n")
+    assert changelog_headline(log, "0.33.1") is None
+
+
 # --- statusline wired by the helper (2026-07-30) ------------------------------------------
 
 
@@ -1719,6 +1730,23 @@ def test_pending_hook_fixes_flags_a_staged_but_unapplied_fix(tmp_path, capsys):
     assert "apply-outstanding.sh" in out
 
 
+def test_pending_hook_fixes_skips_a_non_utf8_staged_file_instead_of_crashing(tmp_path):
+    """Found in review, 2026-08-13: UnicodeDecodeError is NOT an OSError, so a staged (or
+    live) file with invalid UTF-8 bytes used to crash this step instead of being skipped,
+    contradicting its own docstring ('any read error on a given file just skips that one
+    file')."""
+    import install_helper as ih
+
+    clone = _fake_clone(tmp_path)
+    staged_dir = clone / "scripts" / "staged_hooks"
+    staged_dir.mkdir(parents=True)
+    (staged_dir / "guard-example.py").write_bytes(b"print('\xff\xfe not valid utf-8')\n")
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks())
+    inst.repo = clone
+    inst.check_pending_hook_fixes()  # must not raise
+    assert inst.tracker.steps[-1][1] == "ok"  # the bad file was skipped, not flagged pending
+
+
 def test_pending_hook_fixes_never_writes_anything(tmp_path):
     """The whole point: this step is read-only. A pending fix must never be copied into
     place by install_helper.py itself, no matter how convenient - ADR-002 rec 5's
@@ -1760,6 +1788,20 @@ def test_merge_statusline_foreign_still_conflicts(tmp_path):
     assert verdict == "conflict"
     assert settings["statusLine"]["command"] == "starship prompt"  # untouched
     assert current_statusline_command(settings) == "starship prompt"
+
+
+def test_merge_statusline_bare_substring_lookalike_still_conflicts(tmp_path):
+    """Found in review, 2026-08-13: the 'ours-moved' check used to be a naive
+    `"statusline.sh" in command` substring test, which false-positives on any unrelated
+    script merely NAMED *statusline.sh (not ours, and not under a scripts/ dir) - that
+    used to be silently overwritten instead of raising the conflict prompt."""
+    from install_helper import current_statusline_command, merge_statusline, statusline_command
+
+    lookalike = {"statusLine": {"type": "command", "command": 'bash "/home/user/my-statusline.sh"'}}
+    settings, verdict = merge_statusline(lookalike, statusline_command(tmp_path))
+    assert verdict == "conflict"
+    assert settings["statusLine"]["command"] == 'bash "/home/user/my-statusline.sh"'
+    assert current_statusline_command(settings) == 'bash "/home/user/my-statusline.sh"'
 
 
 # --- Windows hardening (2026-07-30) -------------------------------------------------------
@@ -2164,6 +2206,27 @@ def test_save_config_is_atomic_and_best_effort(tmp_path):
     blocker.write_text("x", encoding="utf-8")
     # Parent "directory" is a file: unwritable location degrades to False, no raise.
     assert save_config(blocker / "nested" / "cfg.json", {"a": 1}) is False
+
+
+def test_atomic_write_text_leaves_target_untouched_if_replace_fails(tmp_path, monkeypatch):
+    """Found in review, 2026-08-13: the settings.json writers (run_permissions,
+    _run_env_upsert, statusline_step, _write_model_to_settings_file, _write_json_backup)
+    used to write straight to the target path - an interrupted write could leave it
+    truncated/corrupt. _atomic_write_text writes to a temp file first and only replaces
+    the target in one atomic os.replace call, same pattern as save_config/_write_state -
+    if the replace step never happens, the original content must survive untouched."""
+    import install_helper as ih
+
+    target = tmp_path / "settings.json"
+    target.write_text('{"original": true}', encoding="utf-8")
+
+    def boom(_src, _dst):
+        raise OSError("simulated interruption before replace")
+
+    monkeypatch.setattr(ih.os, "replace", boom)
+    with pytest.raises(OSError):
+        ih._atomic_write_text(target, '{"new": true}')
+    assert target.read_text(encoding="utf-8") == '{"original": true}'
 
 
 def test_persist_warns_when_config_unwritable(monkeypatch, tmp_path, capsys):
@@ -2654,6 +2717,67 @@ def test_run_cmd_decodes_utf8_with_replacement_not_console_codepage(monkeypatch)
         assert "text" not in kwargs
 
 
+def test_other_subprocess_call_sites_also_pin_utf8_replace(monkeypatch, tmp_path):
+    """Found in review, 2026-08-13: the same cp1252-on-Windows lesson run_cmd already
+    applies (see test above) was missing from ~8 other subprocess.run/Popen call sites,
+    each using bare text=True - a corporate Windows locale could raise UnicodeDecodeError
+    reading a tool's non-cp1252 output (emoji, box-drawing, UTF-8) at any of them. Every
+    site fixed must now record encoding='utf-8', errors='replace', and never bare text.
+    The one Popen call site (run_daemon_start_diagnostic) is covered separately below."""
+    import install_helper as ih
+
+    seen = []
+
+    def fake_run(*args, **kwargs):
+        seen.append(kwargs)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(ih.subprocess, "run", fake_run)
+
+    ih.run_list_engagements(tmp_path, ih.Style(False), ih.marks())
+    ih.run_archive_engagements(tmp_path, ih.Style(False), ih.marks())
+    ih._check_interpreters(["python3"])
+    list(ih.probe_analyser_output(tmp_path, only={"ruff"}))
+    monkeypatch.setattr(ih.shutil, "which", lambda n: f"/usr/bin/{n}")
+    ih._check_repo_py_syntax("/usr/bin/python3", tmp_path)
+    monkeypatch.setattr(ih.sys, "platform", "win32")
+    ih._powershell_profile_candidates()
+    monkeypatch.setattr(ih.sys, "platform", "linux")
+    ih._verify_alias_line("bash", tmp_path / ".bashrc", "alias virt-surv='echo hi'")
+
+    assert len(seen) >= 6
+    for kwargs in seen:
+        assert kwargs.get("encoding") == "utf-8"
+        assert kwargs.get("errors") == "replace"
+        assert "text" not in kwargs
+
+
+def test_daemon_foreground_spawn_popen_also_pins_utf8_replace(tmp_path, monkeypatch):
+    """Same finding as above, isolated to run_daemon_start_diagnostic's foreground Popen
+    call - the one call site using subprocess.Popen directly rather than subprocess.run."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    _make_fake_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "guard_daemon.py").write_text("", encoding="utf-8")
+
+    seen = []
+
+    def fake_popen(*args, **kwargs):
+        seen.append(kwargs)
+        raise OSError("stop before it actually spawns anything")
+
+    monkeypatch.setattr(ih.subprocess, "Popen", fake_popen)
+    ih.run_daemon_start_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    assert seen  # the foreground Popen call was reached
+    assert seen[0]["encoding"] == "utf-8"
+    assert seen[0]["errors"] == "replace"
+    assert "text" not in seen[0]
+
+
 # ------------------------------------------------------ group-policy-safe node launch
 
 
@@ -2796,6 +2920,26 @@ def test_register_plugin_directly_from_empty_claude_dir(tmp_path):
     assert ip["plugins"][PLUGIN_ID][0]["version"] == "unknown"
 
 
+def test_register_plugin_directly_refuses_unparseable_settings(tmp_path):
+    """Found in review, 2026-08-13: unlike run_permissions/_write_model_to_settings_file
+    (which both refuse on unparseable JSON rather than clobber it), this call site used
+    to read settings.json via _read_json_dict, whose garbage-becomes-{} fallback would
+    have silently discarded the file's existing content on write. Must now raise
+    InstallAbort and leave every file - including the marketplace/plugin ones - untouched."""
+    from install_helper import InstallAbort, register_plugin_directly
+
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir(parents=True)
+    (claude_dir / "settings.json").write_text("{not valid json", encoding="utf-8")
+    with pytest.raises(InstallAbort):
+        register_plugin_directly(tmp_path / "clone", claude_dir, None)
+    # No partial state: the marketplace/plugin files were never written either.
+    assert not (claude_dir / "plugins" / "known_marketplaces.json").exists()
+    assert not (claude_dir / "plugins" / "installed_plugins.json").exists()
+    # The corrupt settings.json itself is untouched, not overwritten.
+    assert (claude_dir / "settings.json").read_text(encoding="utf-8") == "{not valid json"
+
+
 def _blocked_by_oserror(argv, **kw):
     raise OSError("[WinError 1260] This program is blocked by group policy")
 
@@ -2822,6 +2966,24 @@ def test_run_enable_project_falls_back_to_direct_write_on_policy_block(tmp_path,
     settings = json.loads((project / ".claude" / "settings.json").read_text())
     assert settings["enabledPlugins"][PLUGIN_ID] is True
     assert "written directly" in capsys.readouterr().out
+
+
+def test_run_enable_project_direct_write_refuses_unparseable_settings(tmp_path, capsys):
+    """Found in review, 2026-08-13: the group-policy-blocked fallback used to use
+    _read_json_dict (garbage-becomes-{}) and would have silently overwritten a corrupt
+    project settings.json instead of refusing, unlike run_permissions' identical fallback
+    for the same file."""
+    from install_helper import Style, run_enable_project
+
+    project = tmp_path / "proj"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "settings.json").write_text("{not valid json", encoding="utf-8")
+    rc = run_enable_project(
+        project, Style(enabled=False), {"ok": "OK", "fail": "X"}, runner=_blocked_by_oserror
+    )
+    assert rc == 1
+    assert "refusing to touch it" in capsys.readouterr().out
+    assert (project / ".claude" / "settings.json").read_text(encoding="utf-8") == "{not valid json"
 
 
 def test_run_enable_project_ordinary_failure_still_fails(tmp_path):
@@ -3670,6 +3832,62 @@ def test_model_project_with_model_still_works(monkeypatch, tmp_path):
     rc = ih._main(["--model-project", str(tmp_path), "--model", "opus"])
     assert rc == 0
     assert called == ["opus"]
+
+
+# --- --demo gap in the scripting-path flags (found in review, 2026-08-13) -----------------
+
+
+def test_demo_permissions_env_tuning_enable_project_write_nothing(monkeypatch, tmp_path):
+    """--demo combined with --permissions/--env-tuning/--env-tuning-betas/--enable-project
+    used to be silently ignored - the real write functions ran anyway, breaking --demo's
+    'nothing executed or written' promise for exactly these four scripting-path flags."""
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(ih, "run_permissions", lambda *a, **k: called.append("permissions") or 0)
+    monkeypatch.setattr(ih, "run_env_tuning", lambda *a, **k: called.append("env_tuning") or 0)
+    monkeypatch.setattr(
+        ih, "run_env_tuning_betas", lambda *a, **k: called.append("env_tuning_betas") or 0
+    )
+    monkeypatch.setattr(
+        ih, "run_enable_project", lambda *a, **k: called.append("enable_project") or 0
+    )
+    rc = ih._main(
+        [
+            "--demo",
+            "--permissions",
+            str(tmp_path),
+            "--env-tuning",
+            str(tmp_path),
+            "--env-tuning-betas",
+            str(tmp_path),
+            "--enable-project",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 0
+    assert called == []
+
+
+def test_demo_model_project_and_model_default_write_nothing(monkeypatch, tmp_path):
+    """Same --demo gap as above, for --model-project/--model-default: the real
+    orchestrator-model writers ran even under --demo."""
+    import install_helper as ih
+
+    called = []
+    monkeypatch.setattr(
+        ih, "run_orchestrator_model", lambda *a, **k: called.append("model_project") or (True, "x")
+    )
+    monkeypatch.setattr(
+        ih,
+        "run_orchestrator_model_default",
+        lambda *a, **k: called.append("model_default") or (True, "x"),
+    )
+    rc = ih._main(
+        ["--demo", "--model-project", str(tmp_path), "--model-default", "--model", "opus"]
+    )
+    assert rc == 0
+    assert called == []
 
 
 def test_check_interpreters_finds_the_first_working_one(monkeypatch):
@@ -4701,7 +4919,7 @@ def test_powershell_profile_candidates_prefers_live_profile_query(tmp_path, monk
     )
     redirected = r"\\corp-server\redirected\daniel\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1"
 
-    def fake_run(argv, capture_output=True, text=True, timeout=None):
+    def fake_run(argv, capture_output=True, timeout=None, **kw):
         # Both powershell.exe and pwsh.exe get queried - return the SAME redirected path
         # for simplicity; the point under test is that the query result wins, not that
         # the two hosts differ.
@@ -5669,7 +5887,7 @@ def test_run_selftest_all_ok_returns_zero_and_writes_no_bundle(monkeypatch, tmp_
     monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found")])
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)  # bandit -> SKIP
 
-    def fake_run(argv, cwd=None, capture_output=True, text=True, timeout=None):
+    def fake_run(argv, cwd=None, capture_output=True, timeout=None, **kw):
         if "set-status" in argv and "closed" in argv:
             return _proc(1, stdout="", stderr="CLOSE-REFUSED: simulated")
         return _proc(0, stdout="", stderr="")
@@ -5698,7 +5916,7 @@ def test_run_selftest_failure_writes_debug_bundle(monkeypatch, tmp_path, capsys)
     monkeypatch.setattr(ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found")])
     monkeypatch.setattr(ih.shutil, "which", lambda name: None)
 
-    def fake_run(argv, cwd=None, capture_output=True, text=True, timeout=None):
+    def fake_run(argv, cwd=None, capture_output=True, timeout=None, **kw):
         if "set-status" in argv and "closed" in argv:
             return _proc(1, stdout="", stderr="CLOSE-REFUSED: simulated")
         return _proc(0, stdout="", stderr="")
@@ -6059,6 +6277,35 @@ def test_run_daemon_start_diagnostic_surfaces_popen_exception(tmp_path, monkeypa
     # The detached-path failure must be called out as the actual production code path,
     # not just another generic error line - that's the framing that makes this useful.
     assert "THIS is the production" in out
+
+
+def test_run_daemon_start_diagnostic_survives_non_utf8_team_preferences(
+    tmp_path, monkeypatch, capsys
+):
+    """Found in review, 2026-08-13: UnicodeDecodeError is NOT an OSError, so a
+    team-preferences.json with invalid UTF-8 bytes used to crash this diagnostic (only
+    OSError was caught) instead of reporting it as unreadable and carrying on."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    _make_fake_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "guard_daemon.py").write_text("", encoding="utf-8")
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "team-preferences.json").write_bytes(b'{"guard_daemon": \xff\xfe true}')
+
+    def boom(*a, **k):
+        raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr(ih.subprocess, "Popen", boom)
+    # Must not raise UnicodeDecodeError.
+    rc = ih.run_daemon_start_diagnostic(ih.Style(False), ih.marks(), repo_hint=str(tmp_path))
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "team-preferences.json readable" in out
 
 
 def test_run_daemon_start_diagnostic_full_success_against_a_real_stub_daemon(

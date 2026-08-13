@@ -22,7 +22,17 @@ matcher widened, or its process never starts. That happened once already: the 20
 raw-data-guard coverage fix (ADR-002 rec 22) taught guard-raw-data.py to handle WebFetch and
 NotebookRead, but neither the matcher nor this file's own tool set were updated to match, so
 the new code path was dead until the 2026-08-05 review caught it and this comment plus the
-_CHECKS entry below were corrected. Check both places when a guard's tool coverage changes.)
+_CHECKS entry below were corrected. Check both places when a guard's tool coverage changes.
+It happened AGAIN, on a security boundary this time: guard-findings-pack-write.py was
+extended (2026-08-06) to scope Edit as well as Write for the four advisory review agents
+(CLAUDE.md §6's "mechanically enforced ... neither grant can widen in practice" claim) -
+the guard's own main() checks `tool_name not in ("Write", "Edit")`, but this file's _CHECKS
+entry was never widened past {"Write"}, so an Edit call from a scoped agent never reached
+this guard at all in the live dispatched path. The guard's OWN test suite invoked it as a
+direct subprocess, bypassing this file entirely, so it stayed green while the real
+enforcement was dead code. Found by a 2026-08-14 Fable-model audit, fixed the same day -
+see tests/test_bash_hook_dispatcher.py's dispatcher-level Edit test, which the guard-direct
+test suite could never have caught on its own.)
 
 Design constraints, all deliberate:
   - Each guard's own main() is called directly, never re-executed via its own
@@ -80,7 +90,7 @@ _CHECKS = (
     (
         "guard_findings_pack_write",
         _HOOKS_DIR / "guard-findings-pack-write.py",
-        {"Write"},
+        {"Write", "Edit"},
         True,
     ),
     (

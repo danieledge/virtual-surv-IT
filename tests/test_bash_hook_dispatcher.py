@@ -157,6 +157,46 @@ def test_malformed_stdin_allows_and_never_raises():
     assert "Traceback" not in result.stderr
 
 
+def test_findings_pack_guard_blocks_edit_through_the_real_dispatched_path():
+    """2026-08-14 Fable-model audit finding, BLOCKER: guard-findings-pack-write.py's own
+    main() checks `tool_name not in ("Write", "Edit")` and CLAUDE.md documents its scope
+    as "Write and Edit, both scoped ... mechanically enforced" - but this dispatcher's own
+    _CHECKS entry only ever registered {"Write"}, so an Edit call from one of the four
+    scoped review agents never reached this guard at all in the live dispatched path
+    (the ONLY path a real Claude Code session actually uses - there is no standalone
+    hooks.json entry for this guard). The guard's own test suite invoked it as a direct
+    subprocess, bypassing this dispatcher entirely, so it stayed green while the real
+    enforcement was dead code for Edit. This test exercises the REAL dispatcher against
+    the REAL guard (both unmodified, exactly like every other fidelity test in this
+    file) with an Edit call outside the allowed findings-pack path from a scoped agent -
+    the one case that must be blocked and, before this fix, silently wasn't."""
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "src/app.py"},
+        "agent_type": "code-reviewer",
+    }
+    result = _run_dispatcher(payload)
+    assert result.returncode == 2, (
+        "an Edit outside the findings-pack path from a scoped review agent must be "
+        "BLOCKED - if this is 0, the dispatcher's _CHECKS entry for "
+        "guard_findings_pack_write has regressed back to {'Write'} only"
+    )
+
+
+def test_findings_pack_guard_still_allows_edit_inside_the_pack_path():
+    """The other half of the same fix, proven together so a too-broad fix (blocking
+    ALL Edits) would be caught just as fast as the too-narrow one above: a scoped
+    agent editing its OWN findings pack must still be allowed through the real
+    dispatched path."""
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "artifacts/my-slug/data/findings-code-reviewer.jsonl"},
+        "agent_type": "code-reviewer",
+    }
+    result = _run_dispatcher(payload)
+    assert result.returncode == 0
+
+
 def test_staged_and_live_are_byte_synced():
     if not STAGED.is_file():
         pytest.skip("not staged yet")

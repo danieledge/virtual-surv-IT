@@ -3,6 +3,55 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.61] - 2026-08-13 - Fable-model audit of the engagement-lifecycle core and install_helper.py; all findings fixed
+
+Three parallel Fable-model reviews scoped to the core plugin (guard/hook/daemon layer,
+engagement lifecycle, `install_helper.py`), followed by a full fix pass over every finding.
+
+**Close gate (the highest-stakes transition in the system):** could strand a pack falsely
+CLOSED on disk two ways - a rollback write that could itself fail if the pre-close
+snapshot was already invalid, and a checker crash that used to fail OPEN (keep the close)
+rather than fail closed. Both now refuse/roll back instead.
+
+**Concurrency:** `engagement_state.py` had no locking around its read-modify-write cycle -
+parallel Workflow-tool dispatch mutating the same pack concurrently silently lost updates
+(reproduced live: 7 of 12 concurrent writes lost). Added a portable cross-process lock
+with stale-lock reclamation.
+
+**Archived packs:** `check()` and `apply_fixes --fix` were missing the `.archive` exclusion
+some of their sibling scans already had - archived history could trip false
+SUMMARY-BEFORE-CLOSE findings, and `--fix` would rename, DELETE, and re-render files
+inside a pack that's supposed to be frozen.
+
+**Status source of truth:** `check()` read engagement status from the rendered index text
+only, never the authoritative state file - a stale or hand-edited index reading "closed"
+could silently waive the close-only gate for a pack that was never actually closed. Now
+state-authoritative, consistent with `apply_fixes()` and the hooks (register G5's rule,
+closed for real this time).
+
+**Also fixed:** a missing `\n`/`\r` in the analyser-command shell-metacharacter blocklist
+(same effect as `;`, wasn't blocked); `migrate` losing the root's ACTIVE marker/lock file
+into the pack it moves; the close-fingerprint being blind to state-file tampering after
+close; `version_changed` failing open (suppressing the what's-new banner) on an unreadable
+manifest; a corrupt map-fingerprints sidecar being indistinguishable from a missing one;
+`add-tool` silently deleting pre-existing invalid registry entries on upsert.
+
+**`install_helper.py`:** two `--demo` gaps that performed real writes despite the
+"nothing written" promise (six scripting-path flags had no demo parameter at all);
+unparseable-settings write holes in two fallback paths; five non-atomic settings writes
+(now temp-file + `os.replace`, matching `engagement_state.py`'s own pattern);
+three `UnicodeDecodeError` crash sites where `except OSError` didn't catch it (a
+`ValueError` subclass); twelve `text=True` subprocess calls missing explicit UTF-8
+handling (the cp1252-on-Windows crash class fixed elsewhere before, missed here); a
+substring-match false positive in the statusline merge check (`"statusline.sh" in
+command` matching any unrelated `*statusline.sh`).
+
+Every fix carries a regression test confirmed to genuinely fail against the pre-fix code
+before being confirmed to pass restored (`git stash` round-trip on each). Full suite green,
+lint clean throughout. Two low-priority guard-hook items (a `sed -n` false-positive block,
+a stylistic `return`/`sys.exit` mix) were left untouched deliberately - both would require
+editing `guard-*.py` matching logic, which stays human-only.
+
 ## [0.33.60] - 2026-08-12 - Two live corp-Windows field-report fixes; code-review token-duplication and onboarding-flow consolidation
 
 **Field reports (live corp-Windows session):** the `/engage` probe's cached-interpreter
