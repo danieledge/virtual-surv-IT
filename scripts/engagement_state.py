@@ -277,6 +277,11 @@ def workspace_states(root: Path) -> list[Path]:
 
 ARCHIVE_MARKER = ".archive"
 
+# C5's per-pack mutation lock (see _state_lock below) - moved up here, next to the other
+# filename constants, so _FINGERPRINT_EXCLUDE can reference it without a forward-reference
+# NameError.
+LOCK_FILENAME = ".engagement-state.lock"
+
 
 def is_archived(pack: Path) -> bool:
     """True when the directory carries the `.archive` marker."""
@@ -295,9 +300,21 @@ def archived_slugs(root: Path) -> list[str]:
 
 # Files the closed-pack fingerprint's STAT-ONLY walk ignores: the state file (hashed by
 # CONTENT instead - see compute_fingerprint's docstring, M3), the generated index renders
-# (re-rendered by the same mutation that stores the fingerprint) and the archive marker
-# itself. Everything else - the deliverables - is covered by name, size and mtime.
-_FINGERPRINT_EXCLUDE = {STATE_FILENAME, "START-HERE.md", "START-HERE.html", ARCHIVE_MARKER}
+# (re-rendered by the same mutation that stores the fingerprint), the archive marker, and
+# the mutation lock file itself. LOCK_FILENAME was added after a real regression (2026-08
+# full-suite run): compute_fingerprint runs from INSIDE _cmd_set_status, i.e. inside the
+# C5 lock - the lock file exists on disk at that exact moment, gets stat-walked into the
+# stored fingerprint, and is then deleted (the lock releases) before anything else ever
+# recomputes it - so a later, unlocked recomputation could never match the stored value.
+# Purely operational bookkeeping, same category as the state file and index renders -
+# never a deliverable, never legitimately part of what the fingerprint is verifying.
+_FINGERPRINT_EXCLUDE = {
+    STATE_FILENAME,
+    "START-HERE.md",
+    "START-HERE.html",
+    ARCHIVE_MARKER,
+    LOCK_FILENAME,
+}
 
 
 def compute_fingerprint(pack: Path) -> str:
@@ -315,10 +332,15 @@ def compute_fingerprint(pack: Path) -> str:
     scan silently skipped re-validating the very record that had changed. The exclusion
     from the stat-only walk stays (self-referential otherwise: the fingerprint gets
     written back INTO the file it was computed from, so its own size/mtime would never
-    stabilise) but its CONTENT is now hashed in separately, with the `scan_fingerprint`
-    key itself popped first - that key is what the self-reference is in, not the record;
-    popping only it keeps the hash stable across the write-back while still moving on
-    every edit to status/verdict/artifacts/outstanding/etc."""
+    stabilise) but a CURATED subset of its content is now hashed in separately - the
+    fields that actually determine whether the close is still valid (status, close date,
+    verdict, outstanding, team, artifacts), not the whole state dict. Whole-dict hashing
+    was the first attempt and broke a real, deliberate pre-existing contract
+    (test_fingerprint_ignores_state_and_renders): a `log-note` after close only appends to
+    `log` - harmless, no bearing on close validity - and must not force a full re-scan any
+    more than a routine index re-render should. Narrowing to the validity-relevant fields
+    catches every tampering case the docstring above actually names while leaving that
+    contract intact."""
     entries = []
     for p in sorted(pack.rglob("*")):
         if not p.is_file() or p.name in _FINGERPRINT_EXCLUDE:
@@ -329,13 +351,21 @@ def compute_fingerprint(pack: Path) -> str:
             continue
         entries.append(f"{p.relative_to(pack)}|{st.st_size}|{int(st.st_mtime)}")
     try:
-        state_for_hash = json.loads((pack / STATE_FILENAME).read_text(encoding="utf-8"))
+        full_state = json.loads((pack / STATE_FILENAME).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        state_for_hash = None
-    if isinstance(state_for_hash, dict):
-        state_for_hash.pop("scan_fingerprint", None)
+        full_state = None
+    if isinstance(full_state, dict):
+        eng = full_state.get("engagement") or {}
+        validity_subset = {
+            "status": full_state.get("status"),
+            "closed": eng.get("closed") if isinstance(eng, dict) else None,
+            "verdict": full_state.get("verdict"),
+            "outstanding": full_state.get("outstanding"),
+            "team": full_state.get("team"),
+            "artifacts": full_state.get("artifacts"),
+        }
         entries.append(
-            f"{STATE_FILENAME}|" + json.dumps(state_for_hash, sort_keys=True, ensure_ascii=False)
+            f"{STATE_FILENAME}|" + json.dumps(validity_subset, sort_keys=True, ensure_ascii=False)
         )
     return hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
 
@@ -1013,7 +1043,6 @@ def render_files(artifacts_dir: Path, known_state: dict | None = None) -> list[P
     return written
 
 
-LOCK_FILENAME = ".engagement-state.lock"
 _LOCK_STALE_SECONDS = 30  # a single CLI mutation is a short in-process op; older = a dead holder
 _LOCK_WAIT_SECONDS = 5
 

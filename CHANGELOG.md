@@ -3,6 +3,31 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.33.62] - 2026-08-13 - Full-suite regression run catches a self-inflicted fingerprint bug from 0.33.61
+
+A full `pytest` run (not just the touched-file suites 0.33.61 was verified against) surfaced
+two real failures in `tests/test_archive.py` that a per-file run had missed.
+
+**Root cause:** C5's per-pack mutation lock (0.33.61) writes `.engagement-state.lock` for the
+duration of a command - including `set-status closed`, which computes and stores the
+close-time fingerprint from *inside* that lock. The lock file existed on disk at the exact
+moment the fingerprint's stat-walk ran, got hashed into the stored value, then was deleted
+(lock released) before anything else could recompute it - so an unlocked recomputation could
+never match what was stored. Fixed by adding the lock file to `_FINGERPRINT_EXCLUDE`, the
+same treatment already given to the state file, index renders and the archive marker - all
+operational bookkeeping, never a deliverable.
+
+**Second, unrelated finding surfaced by the same run:** M3's fix (0.33.61, hash the state
+file's content so post-close tampering moves the fingerprint) hashed the *whole* state dict,
+which broke a real, deliberate pre-existing contract: a `log-note` after close only appends to
+the log and must not force a full re-scan, any more than a routine index re-render does.
+Narrowed the hash to the fields that actually determine close validity (status, close date,
+verdict, outstanding, team, artifacts) - catches every tampering case M3 was written for while
+leaving that contract intact.
+
+Both fixes verified with the existing pre-fix tests (which now pass) plus a full clean
+`pytest` run across the whole suite, not just the files touched.
+
 ## [0.33.61] - 2026-08-13 - Fable-model audit of the engagement-lifecycle core and install_helper.py; all findings fixed
 
 Three parallel Fable-model reviews scoped to the core plugin (guard/hook/daemon layer,
