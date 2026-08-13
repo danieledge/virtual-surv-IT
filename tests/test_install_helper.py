@@ -3957,6 +3957,76 @@ def test_check_encoding_roundtrip_detects_bad_bytes(monkeypatch):
     assert "not valid UTF-8" in detail
 
 
+# --- _check_shell_startup_time (2026-08-14 live report: slow .bashrc -> snapshot timeout) -----
+
+
+def test_check_shell_startup_time_skips_without_bash():
+    from install_helper import _check_shell_startup_time
+
+    status, detail = _check_shell_startup_time(None)
+    assert status == "SKIP"
+
+
+def test_check_shell_startup_time_skips_without_bashrc(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", lambda: tmp_path)  # no .bashrc created here
+    status, detail = ih._check_shell_startup_time("/bin/bash")
+    assert status == "SKIP"
+
+
+def test_check_shell_startup_time_ok(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    (tmp_path / ".bashrc").write_text("# fast\n", encoding="utf-8")
+    monkeypatch.setattr(ih.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
+    times = iter([100.0, 100.5])
+    monkeypatch.setattr(ih.time, "monotonic", lambda: next(times))
+    status, detail = ih._check_shell_startup_time("/bin/bash")
+    assert status == "OK"
+    assert "0.50s" in detail
+
+
+def test_check_shell_startup_time_warns_when_slow(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    (tmp_path / ".bashrc").write_text("# slow\n", encoding="utf-8")
+    monkeypatch.setattr(ih.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
+    times = iter([100.0, 104.0])  # 4s elapsed
+    monkeypatch.setattr(ih.time, "monotonic", lambda: next(times))
+    status, detail = ih._check_shell_startup_time("/bin/bash")
+    assert status == "WARN"
+    assert "4.0s" in detail
+    assert "$- == *i*" in detail
+
+
+def test_check_shell_startup_time_errors_at_or_past_claude_codes_own_timeout(tmp_path, monkeypatch):
+    """10s is not an arbitrary threshold - it's the same figure the live corp-Windows debug
+    log named as Claude Code's own shell-snapshot execution timeout."""
+    import install_helper as ih
+
+    (tmp_path / ".bashrc").write_text("# very slow\n", encoding="utf-8")
+    monkeypatch.setattr(ih.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ih.subprocess, "run", lambda argv, **kw: _proc(0))
+    times = iter([100.0, 111.0])  # 11s elapsed
+    monkeypatch.setattr(ih.time, "monotonic", lambda: next(times))
+    status, detail = ih._check_shell_startup_time("/bin/bash")
+    assert status == "ERROR"
+    assert "shell-snapshot timeout" in detail
+
+
+def test_check_shell_startup_time_errors_on_real_timeout(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    (tmp_path / ".bashrc").write_text("# hangs\n", encoding="utf-8")
+    monkeypatch.setattr(ih.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ih.subprocess, "run", _timeout_runner)
+    status, detail = ih._check_shell_startup_time("/bin/bash")
+    assert status == "ERROR"
+
+
 # --- _resolve_repo_root (2026-08-04 live report: relocated-session diagnostics/alias) ---------
 
 

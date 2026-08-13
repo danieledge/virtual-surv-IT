@@ -4761,6 +4761,56 @@ def _check_interpreters(order: list) -> tuple:
     return rows, winner
 
 
+def _check_shell_startup_time(bash_path: Optional[str]) -> tuple:
+    """Times `source ~/.bashrc` non-interactively - the same cost Claude Code's own
+    shell-snapshot mechanism pays on every Bash tool call (it captures shell state, cwd
+    included, by sourcing the user's rc file). Live corp-Windows report (2026-08-14,
+    screenshots): a .bashrc taking >10s to source non-interactively made that snapshot
+    process hit Claude Code's own timeout and get SIGTERM-killed, dropping shell state
+    between tool calls - the actual root cause behind a chain of symptoms (PROBE_FAILED,
+    the cwd silently resetting mid-session, `list --menu` returning different results
+    depending on which directory a call happened to land in) that each looked like a
+    separate plugin bug until traced back here. Detect-only, matching this project's
+    convention of never touching a file it doesn't own: ~/.bashrc is the user's personal
+    shell profile, so this warns with the fix rather than auto-editing it."""
+    if not bash_path:
+        return ("SKIP", "no bash on PATH - nothing to time")
+    bashrc = Path.home() / ".bashrc"
+    if not bashrc.is_file():
+        return ("SKIP", "no ~/.bashrc - nothing to time")
+    start = time.monotonic()
+    try:
+        subprocess.run(
+            [bash_path, "-c", "source ~/.bashrc"],
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        elapsed = 20.0
+    except OSError as exc:
+        return ("ERROR", f"failed to launch {bash_path}: {exc}")
+    else:
+        elapsed = time.monotonic() - start
+    fix = (
+        "guard slow steps (nvm/pyenv/mise/conda init, cloud-auth checks, network calls) "
+        "behind `[[ $- == *i* ]] || return` at the top of ~/.bashrc so they're skipped for "
+        "non-interactive shells, or profile with `time source ~/.bashrc` to find the exact "
+        "culprit line"
+    )
+    if elapsed >= 10.0:
+        return (
+            "ERROR",
+            f"{elapsed:.1f}s to source ~/.bashrc non-interactively - at or past Claude "
+            f"Code's own shell-snapshot timeout (10s); very likely why Bash tool calls feel "
+            f"slow or silently lose shell state (cwd, PATH, functions) between calls on "
+            f"this machine - {fix}",
+        )
+    if elapsed >= 3.0:
+        return ("WARN", f"{elapsed:.1f}s to source ~/.bashrc non-interactively - {fix}")
+    return ("OK", f"{elapsed:.2f}s")
+
+
 def _check_encoding_roundtrip(interpreter: str) -> tuple:
     """Writes UTF-8 (including an emoji) through the resolved interpreter with
     PYTHONIOENCODING=utf-8 and decodes the RAW BYTES ourselves - deliberately not relying
@@ -5091,6 +5141,10 @@ def run_env_check(style: Style, mark_map: dict, repo_hint: Optional[str] = None)
         emit("bash", "OK", bash_path)
     else:
         emit("bash", "WARN", "not found (only matters for the review-tools probe script)")
+
+    print(style.dim("\n  Shell startup time (non-interactive):"))
+    status, detail = _check_shell_startup_time(bash_path)
+    emit(".bashrc source time", status, detail)
 
     print(style.dim("\n  Runtime dependencies (git, claude CLI):"))
     for label, status, detail in _check_runtime_dependencies():
