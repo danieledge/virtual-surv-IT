@@ -104,6 +104,30 @@ def test_decision_goes_to_stdout_menu_goes_to_stderr(tmp_path, monkeypatch, caps
     assert "--resume" not in out.err  # the decision string itself never leaks onto stderr
 
 
+def test_real_input_prompt_never_leaks_onto_stdout(tmp_path, monkeypatch, capsys):
+    """Live bug (2026-08-15): builtins.input(prompt) writes `prompt` to STDOUT
+    unconditionally - CPython's own behaviour, not something file=stderr elsewhere in
+    this function can override. The EARLIER version of this test mocked out
+    `builtins.input` entirely (a lambda that never touches any stream), which is exactly
+    why it never caught this - the real builtin has to actually run, with a real stdin,
+    for the leak to be observable at all. A shell capturing stdout via $(...) got
+    "Choice: --new" mashed into one corrupted argument instead of a clean "--new"."""
+    import io
+
+    project = _plugin_enabled_project(tmp_path)
+    _ws(project, "existing-thing")
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setattr("sys.stdin", io.StringIO("n\n"))  # real input(), real stdin
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.strip() == "--new"  # exactly the decision, nothing prepended
+    assert "Choice:" not in out.out  # the prompt text itself must never reach stdout
+    assert "Choice:" in out.err  # it's still shown to the human, just on the right stream
+
+
 def test_choosing_new_returns_new_flag(tmp_path, monkeypatch, capsys):
     project = _plugin_enabled_project(tmp_path)
     _ws(project, "existing-thing")

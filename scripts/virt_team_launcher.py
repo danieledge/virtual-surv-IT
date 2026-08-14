@@ -113,7 +113,16 @@ def _resume_decision(project_dir: Path) -> str:
     print("  n) start new", file=err)
     print("  [Enter] decide inside the session instead", file=err)
     try:
-        choice = input("Choice: ").strip()
+        # Live bug (2026-08-15): input(prompt) writes `prompt` to STDOUT, not stderr -
+        # CPython does this unconditionally, regardless of which stream the caller
+        # otherwise uses. Passing "Choice: " as input()'s own argument leaked it onto
+        # the exact stream this function's own output contract reserves for the
+        # decision alone, so a shell capturing stdout via $(...) got "Choice: --new"
+        # instead of a clean "--new" - garbled into a single mangled argument by the
+        # time it reached the launch command. Print the prompt text ourselves, to
+        # stderr, then call input() with NO argument so it never touches stdout.
+        print("Choice: ", end="", file=err)
+        choice = input().strip()
     except (EOFError, KeyboardInterrupt):
         return ""  # no tty / interrupted - fall through to deciding in-session
     if not choice:
