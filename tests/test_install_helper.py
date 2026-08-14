@@ -1918,21 +1918,26 @@ def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, 
     enablement (permissions, env tuning, the LLM-gateway workaround, docx, Morgan's
     model)" as part of this run, but build_plan never actually called enable_step for
     subset="full" - the promise was never wired up. Fixed by adding it between alias
-    setup and machine defaults, matching quick_setup_choice's own listed order."""
+    setup and machine defaults, matching quick_setup_choice's own listed order.
+    2026-08-14: 'virt-team alias setup' was added directly after 'Alias setup' (same
+    optional, confirm-gated pattern) - pre-warms the tool-inventory cache and resolves
+    the /engage resume-vs-new decision outside the LLM before launching Claude Code."""
     import install_helper as ih
 
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
     plan = inst.build_plan()
     titles = [t() if callable(t) else t for t, _ in plan]
     assert "Alias setup" in titles
+    assert "virt-team alias setup" in titles
     assert "Enable for a project (optional)" in titles
     assert "Machine defaults (optional)" in titles
     assert "Dashboard (optional)" not in titles  # no longer part of the default flow
     assert titles[-1] == "Machine defaults (optional)"  # last step, now that dashboard moved out
     assert (
         titles.index("Alias setup")
-        == titles.index("Enable for a project (optional)") - 1
-        == titles.index("Machine defaults (optional)") - 2
+        == titles.index("virt-team alias setup") - 1
+        == titles.index("Enable for a project (optional)") - 2
+        == titles.index("Machine defaults (optional)") - 3
     )
 
 
@@ -2039,6 +2044,152 @@ def test_quick_setup_choice_yes_run_skips_question_and_defaults_true():
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
     inst.quick_setup_choice()
     assert inst.quick_defaults is True
+
+
+def test_virt_team_alias_step_skipped_by_default_on_yes_run(monkeypatch, tmp_path, capsys):
+    """Same opt-in-only contract as alias_step - never touches shell rc files unattended."""
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(ih, "run_setup_virt_team_alias", lambda *a, **k: calls.append(a) or 0)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.virt_team_alias_step()
+    out = capsys.readouterr().out
+    assert calls == []
+    assert "skipped" in out
+
+
+def test_virt_team_alias_step_declines_when_not_confirmed(monkeypatch, tmp_path, capsys):
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(ih, "run_setup_virt_team_alias", lambda *a, **k: calls.append(a) or 0)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
+    inst.virt_team_alias_step()
+    assert calls == []
+
+
+def test_virt_team_alias_step_runs_when_confirmed(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(
+        ih,
+        "run_setup_virt_team_alias",
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: (
+            calls.append((assume_yes, demo)) or 0
+        ),
+    )
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
+    inst.virt_team_alias_step()
+    assert calls == [(False, True)]
+
+
+def test_virt_team_alias_step_auto_enabled_when_quick_defaults_chosen(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    calls = []
+
+    def boom(*a, **k):
+        raise AssertionError("must not ask - quick_defaults skips the outer gate")
+
+    monkeypatch.setattr(
+        ih,
+        "run_setup_virt_team_alias",
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: (
+            calls.append((assume_yes, demo)) or 0
+        ),
+    )
+    monkeypatch.setattr(ih, "confirm", boom)
+    inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
+    inst.quick_defaults = True
+    inst.virt_team_alias_step()
+    assert calls == [(False, True)]
+
+
+def test_virtteamalias_subset_reaches_step_standalone():
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="virtteamalias")
+    plan = inst.build_plan()
+    titles = [t() if callable(t) else t for t, _ in plan]
+    assert titles == ["virt-team alias setup"]
+
+
+def test_detect_claude_launch_command_returns_existing_without_prompting(monkeypatch, tmp_path):
+    """Explicit 2026-08-14 user request: never reprompt once known."""
+    import install_helper as ih
+
+    cfg_file = tmp_path / "installer.json"
+    cfg_file.write_text('{"claude_launch_command": "cc"}', encoding="utf-8")
+    monkeypatch.setattr(ih, "config_path", lambda: cfg_file)
+
+    def boom(*a, **k):
+        raise AssertionError("must not prompt - the command is already known")
+
+    monkeypatch.setattr(ih, "ask", boom)
+    cmd = ih.detect_or_configure_claude_launch_command(ih.Style(False), ih.marks())
+    assert cmd == "cc"
+
+
+def test_detect_claude_launch_command_prompts_and_persists_when_unset(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    cfg_file = tmp_path / "installer.json"
+    monkeypatch.setattr(ih, "config_path", lambda: cfg_file)
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "cc")
+    cmd = ih.detect_or_configure_claude_launch_command(ih.Style(False), ih.marks())
+    assert cmd == "cc"
+    assert json.loads(cfg_file.read_text())["claude_launch_command"] == "cc"
+
+
+def test_run_setup_virt_team_alias_demo_writes_nothing(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "virt_team_launcher.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        ih, "_check_interpreters", lambda names: ([("python3", "ok", "3.12.0")], "python3")
+    )
+    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
+    rc_path = tmp_path / ".bashrc"
+    rc_path.write_text("", encoding="utf-8")
+    monkeypatch.setattr(ih, "_posix_shell_rc_candidates", lambda: [("bash", rc_path)])
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda: [])
+    rc = ih.run_setup_virt_team_alias(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
+    assert rc == 0
+    assert rc_path.read_text() == ""  # demo mode - nothing written
+
+
+def test_run_setup_virt_team_alias_writes_and_skips_existing_marker(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "virt_team_launcher.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        ih, "_check_interpreters", lambda names: ([("python3", "ok", "3.12.0")], "python3")
+    )
+    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
+    monkeypatch.setattr(ih, "_verify_alias_line", lambda label, path, line: (True, "resolves"))
+    bashrc = tmp_path / ".bashrc"
+    bashrc.write_text("", encoding="utf-8")
+    zshrc = tmp_path / ".zshrc"
+    zshrc.write_text("# already has virt-team configured\n", encoding="utf-8")
+    monkeypatch.setattr(
+        ih, "_posix_shell_rc_candidates", lambda: [("bash", bashrc), ("zsh", zshrc)]
+    )
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda: [])
+    rc = ih.run_setup_virt_team_alias(ih.Style(False), ih.marks(), assume_yes=True, demo=False)
+    assert rc == 0
+    assert "virt-team" in bashrc.read_text()
+    assert "virt_team_launcher.py" in bashrc.read_text()
+    # zshrc already had the marker - untouched beyond what was already there
+    assert zshrc.read_text() == "# already has virt-team configured\n"
 
 
 def test_quick_setup_choice_real_tty_defaults_to_quick(monkeypatch):
@@ -3593,6 +3744,48 @@ def test_machine_defaults_step_sets_model_default(tmp_path, monkeypatch):
     inst.machine_defaults_step()
     settings = json.loads((tmp_path / "home" / ".claude" / "settings.json").read_text())
     assert settings["model"] == ih.ORCHESTRATOR_MODEL_IDS["opus"]
+
+
+def test_machine_defaults_step_sets_virt_team_launch_command(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        ih, "confirm", _confirm_by_prompt_machine({"docx": False, "citations": False})
+    )
+
+    def _ask(prompt, default, assume_yes, style=None):
+        if "launch command" in prompt.lower():
+            return "cc"
+        return ""  # leave model unchanged
+
+    monkeypatch.setattr(ih, "ask", _ask)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    saved = json.loads((tmp_path / "xdg" / "virt-surv-it" / "installer.json").read_text())
+    assert saved["claude_launch_command"] == "cc"
+    assert "virt-team launch command=cc" in capsys.readouterr().out
+
+
+def test_machine_defaults_step_blank_launch_command_leaves_unchanged(tmp_path, monkeypatch):
+    """Same 'blank to leave unchanged' contract as the model field - an already-set
+    launch command must survive an unrelated machine-defaults edit untouched."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    cfg_dir = tmp_path / "xdg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(
+        json.dumps({"claude_launch_command": "cc"}), encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        ih, "confirm", _confirm_by_prompt_machine({"docx": True, "citations": False})
+    )
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "")
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    saved = json.loads((cfg_dir / "installer.json").read_text())
+    assert saved["claude_launch_command"] == "cc"  # unchanged, not cleared
 
 
 def test_machine_defaults_step_invalid_model_input_leaves_unchanged(tmp_path, monkeypatch, capsys):
@@ -5410,6 +5603,7 @@ def test_advanced_submenu_full_mapping():
         "7": "dashboard",
         "8": "fixbashrc",
         "9": "cleanplugincache",
+        "10": "virtteamalias",
         "b": "back",
     }
 

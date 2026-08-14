@@ -84,8 +84,27 @@ the moment the workspace exists (step 4) - the transcript is not the record**: t
 / `record-consent-outcome` commands are in `references/safety-gates.md`, and the recorded consent
 outcome is never a grant (ADR-002).
 
-**0b. Existing engagements?** Run `<python> -m scripts.engagement_state list --menu`: it returns
-the ready-made option set as JSON, so never re-derive it in prose. If `open` is empty there is
+**0b. Existing engagements?** **First check the initial user message itself for `--resume <slug>`
+or `--new`** - the `virt-team` launch wrapper (when the user launches Claude Code through it)
+computes this SAME resume-or-new decision outside any LLM entirely and pre-encodes the answer
+into the very first prompt, precisely because letting the model work it out cost real turns and
+occasionally picked the wrong option before self-correcting. When present, this is the answer -
+**do not ask the question at all** - but validate it against the real data first (`RESUME_MENU`/
+`list --menu`, same as below) rather than trusting a slug blindly: the wrapper's own view could
+be stale (another session closed or archived it in the seconds between the wrapper computing the
+menu and this session actually starting). `--resume <slug>` where `<slug>` is genuinely in
+`open` → resume it, skip straight to the "one ACTIVE engagement" and "state file is the record"
+rules below. `--new` → skip straight to classifying as new work. Either flag naming something
+that no longer validates (slug not in `open`, or `open` came back empty for `--resume`) → fall
+back to the normal flow below and ask, same as if no flag had been given - **never silently
+proceed on stale data, and never error out unhelpfully either.**
+
+**No flag present (typed `/engage` directly, or via a plain terminal launch)** - the flow as it
+worked before the wrapper existed: if this turn's context already has a `RESUME_MENU` field
+inside an `<engage-probe-result>` block (injected by `engage_probe_prefetch` before your turn
+started, steady-state only), use that JSON directly - do NOT also run the command below for this
+open. Otherwise run `<python> -m scripts.engagement_state list --menu`: it returns the ready-made
+option set as JSON, so never re-derive it in prose. If `open` is empty there is
 nothing to resume - go straight to classifying as new work. **Otherwise read
 `references/resume-menu.md` and follow it**: one question via the question tool (resume one of
 `shown`, or start new), **scope-fit decides which you recommend** (an open pack is never a reason

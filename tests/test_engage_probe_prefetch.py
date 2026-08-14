@@ -154,6 +154,45 @@ def test_build_failure_fails_open(tmp_path, monkeypatch, capsys):
     assert rc == 0, "main() must catch a _build_block failure itself, not rely on __main__"
 
 
+def test_injected_block_carries_resume_menu(tmp_path, monkeypatch, capsys):
+    """RESUME_MENU is the same computation as `engagement_state list --menu`
+    (SKILL.md step 0b) - even with no engagements at all, the field must appear with a
+    valid empty-menu shape (open=[] etc.), proving the mechanism ran, not just that it
+    silently declined."""
+    _repo_as_project(tmp_path)
+    _warm_cache(tmp_path)
+    rc, out = _run(monkeypatch, capsys, {"user_input": "/engage"}, tmp_path)
+    assert rc == 0
+    assert "RESUME_MENU" in out
+    # the JSON blob itself: pull it out and confirm it's the real resume_menu() shape
+    start = out.index("RESUME_MENU")
+    menu_text = out[start:].split("</engage-probe-result>")[0]
+    brace = menu_text.index("{")
+    menu = json.loads(menu_text[brace:])
+    assert menu == {"open": [], "shown": [], "more": 0, "archived": 0, "default": None}
+
+
+def test_resume_menu_failure_does_not_drop_the_rest_of_the_block(tmp_path, monkeypatch, capsys):
+    """RESUME_MENU and the probe report fail open INDEPENDENTLY - a broken
+    engagement_state.resume_menu() must not cost the INTERPRETER=/PLUGIN_ROOT= part of the
+    open too, since those come from a wholly separate function call."""
+    _repo_as_project(tmp_path)
+    _warm_cache(tmp_path)
+    mod = _load()
+
+    def _boom(*a, **k):
+        raise RuntimeError("synthetic failure")
+
+    monkeypatch.setattr(mod, "_resume_menu_json", _boom)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"user_input": "/engage"})))
+    rc = mod.main()
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "<engage-probe-result>" in out and f"INTERPRETER={sys.executable}" in out
+    assert "RESUME_MENU" not in out
+
+
 def test_uses_cwd_key_when_project_dir_env_absent(tmp_path, monkeypatch, capsys):
     _repo_as_project(tmp_path)
     _warm_cache(tmp_path)

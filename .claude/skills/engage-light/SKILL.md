@@ -44,8 +44,10 @@ access, external I/O, crypto, secrets, or PII/data handling), fold the same secu
 offer standard `/engage` makes into this exchange (header `Security`, single-select: *review
 only* · *review + a dedicated security audit* (`/security-audit`)) - never a separate
 round-trip; light stays low-ceremony, not lower-safety. Open the state with the profile recorded (this creates the engagement's own workspace
-`artifacts/<slug>/`; if other engagements already exist, first run
-`<python> -m scripts.engagement_state list --menu` and, if `open` is non-empty, read
+`artifacts/<slug>/`; if other engagements already exist - check the `RESUME_MENU` field of
+an already-injected `<engage-probe-result>` block first, same as `/engage`'s own step 0b;
+only run `<python> -m scripts.engagement_state list --menu` yourself when that's absent -
+and, if `open` is non-empty, read
 `.claude/skills/engage/references/resume-menu.md` (plugin mode:
 `$PLUGIN_ROOT/.claude/skills/engage/references/resume-menu.md`) and follow it - one question via
 the question tool, resume-or-new - and target yours with `--slug` thereafter):
