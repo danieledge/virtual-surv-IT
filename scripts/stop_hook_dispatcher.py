@@ -108,6 +108,24 @@ def main() -> int:
         return 0
 
     decisions: list[dict] = []
+    # M2 (2026-08-14 perf audit): dod_stop_gate.py and todo_panel_nudge.py each carry
+    # an IDENTICAL check_artifacts.py loader (_load_checker) that, when the `scripts`
+    # package doesn't import (plugin-install mode against a foreign project), falls
+    # back to file-execing the ~120KB check_artifacts.py into its OWN module object
+    # and memoizes it in a hook-local `_CHECK_ARTIFACTS_MODULE_CACHE` global. Run
+    # back-to-back in this one dispatcher process, that meant TWO full execs of the
+    # checker for one Stop event. Fix: after each hook runs, if its own loader
+    # populated that cache (i.e. it hit the file-exec fallback), propagate the SAME
+    # module object into the NEXT hook's cache before it runs, so at most one hook
+    # ever does the real exec. Safe because `module` here is created FRESH every call
+    # to this main() (via _load() below - no memoization across dispatcher
+    # invocations, same as today), so the shared object never outlives a single Stop
+    # event - it cannot go stale the way a daemon-lifetime cache could (the exact bug
+    # class persona_anchor.py's own sys.path fix, and this daemon's restart-not-reload
+    # design, both exist to avoid). Repo mode (package import succeeds) is completely
+    # unaffected: `_CHECK_ARTIFACTS_MODULE_CACHE` is never even touched on that path,
+    # so there is nothing to propagate and this is a pure no-op there.
+    _shared_checker = None
     for name, path in _CHECKS:
         try:
             if not path.is_file():
@@ -117,7 +135,11 @@ def main() -> int:
         module = _load(name, path)
         if module is None:
             continue  # both hooks fail open on their own load errors too
+        if _shared_checker is not None and hasattr(module, "_CHECK_ARTIFACTS_MODULE_CACHE"):
+            module._CHECK_ARTIFACTS_MODULE_CACHE = _shared_checker
         decision = _run_hook(module, payload_text)
+        if _shared_checker is None:
+            _shared_checker = getattr(module, "_CHECK_ARTIFACTS_MODULE_CACHE", None)
         if decision is not None:
             decisions.append(decision)
 
