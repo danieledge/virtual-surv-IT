@@ -5097,9 +5097,14 @@ def test_setup_alias_defaults_to_no_when_no_real_clone_found(tmp_path, monkeypat
 
 
 def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):
+    """A genuinely up-to-date alias (already has the go-branch signature) is skipped, not
+    duplicated - the ORIGINAL idempotent-skip behaviour, now scoped to the case where
+    there's truly nothing to upgrade."""
     import install_helper as ih
 
-    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="alias virt-surv='already here'\n")
+    home = _isolate_home_for_alias(
+        monkeypatch, tmp_path, bashrc='virt-surv() { if [ "$1" = "go" ]; then :; fi }\n'
+    )
     _stub_interpreters(monkeypatch, ih)
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     out = capsys.readouterr().out
@@ -5107,6 +5112,29 @@ def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):
     assert "already exists, skipped" in out
     content = (home / ".bashrc").read_text(encoding="utf-8")
     assert content.count("virt-surv") == 1  # not duplicated
+
+
+def test_setup_alias_upgrades_a_pre_go_alias_instead_of_skipping(tmp_path, monkeypatch, capsys):
+    """Live report (2026-08-15): an alias written before the 'go' branch existed used to
+    hit the plain "already exists, skipped" path forever - re-running setup could never
+    upgrade it, leaving 'go' silently unreachable via the shell (falls through to
+    _run_go's own direct-invocation path instead, confusingly reporting the launch
+    command "isn't a real executable" for a perfectly valid shell alias/function).
+    Old-shape (pre-go) content must now trigger an upgrade instead: append the new
+    definition, never edit the old line's text (may be user-customised)."""
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="alias virt-surv='already here'\n")
+    _stub_interpreters(monkeypatch, ih)
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "predates the 'go' subcommand" in out
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert "alias virt-surv='already here'" in content  # old line untouched, not deleted
+    assert "unalias virt-surv 2>/dev/null" in content  # neutralises the OLD alias's shadowing
+    assert "virt-surv() {" in content
+    assert '"$1" = "go"' in content  # the new definition, appended below
 
 
 def test_setup_alias_no_interpreter_found(tmp_path, monkeypatch):

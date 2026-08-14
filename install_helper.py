@@ -4605,11 +4605,39 @@ def run_setup_alias(
         existing = (
             rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
         )
-        if _ALIAS_MARKER in existing:
+        go_signature = '$args[0] -eq "go"' if rc_path.suffix == ".ps1" else '"$1" = "go"'
+        stale = _ALIAS_MARKER in existing and go_signature not in existing
+        if _ALIAS_MARKER in existing and not stale:
             print(
                 f"{style.dim('-')} {label} ({rc_path}): a '{_ALIAS_MARKER}' entry already exists, skipped"
             )
             continue
+        if stale:
+            # Upgrade path (2026-08-15 live report): an alias written before the 'go'
+            # branch existed has no way to pick it up on its own - simply re-running
+            # setup used to hit the "already exists, skipped" branch above forever,
+            # leaving 'go' silently unreachable via the shell (falls through to
+            # _run_go's own direct-invocation fallback instead, confusingly printing
+            # "isn't a real executable" for a launch command that's perfectly valid
+            # once the shell function itself is doing the launching).
+            #
+            # Never edits the old line's text (a user may have customised it, and
+            # blind text-surgery on someone else's shell rc is exactly the kind of
+            # risk this file avoids everywhere else) - appends the new definition
+            # below it instead. POSIX needs `unalias` first: shell ALIAS expansion
+            # happens before function lookup, so an old `alias virt-surv=...` earlier
+            # in the same file would keep shadowing a same-named function defined
+            # later, even though function redefinition alone is enough in PowerShell
+            # (last definition wins there, no alias/function precedence quirk).
+            if rc_path.suffix != ".ps1":
+                line = f"unalias {_ALIAS_MARKER} 2>/dev/null; {line}"
+            print(
+                style.yellow(
+                    f"  ! {label} ({rc_path}): the existing '{_ALIAS_MARKER}' entry predates "
+                    "the 'go' subcommand - appending an updated one below it (the old line "
+                    "is left as-is, never edited)."
+                )
+            )
         print(f"  Would add to {label} ({rc_path}):")
         print(style.dim(f"    {line}"))
         if demo:
