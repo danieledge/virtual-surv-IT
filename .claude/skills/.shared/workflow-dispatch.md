@@ -86,20 +86,12 @@ Workflow
 - `agent()` without a `schema` option returns the subagent's **final text as a string** - for a
   general-purpose pass, that text IS the result. **For a findings-producing pass (`code-reviewer`,
   `performance-reviewer`, `compliance-reviewer`, `model-validator`), the prompt must instead
-  instruct it to `Write` its own findings pack directly** to a component-qualified path -
-  `artifacts/<slug>/data/findings-<slug>-<component>.jsonl`, never the shared canonical
-  `findings-<slug>.jsonl` name (operating guide §Orchestration discipline) - and return only a
-  short confirmation (finding counts + the exact path it wrote) as its text result. Each pass's
-  own path is guaranteed distinct (component-qualified), so concurrent writes never collide -
-  the old convention ("passes return findings as text, the orchestrator writes the merged pack")
-  existed specifically to avoid that collision and no longer needs to, now that each pass has
-  its own path (live-verified 2026-08-10: the findings-pack write-scoping guard fires
-  identically for a Task-dispatched or a Workflow-`agent()`-dispatched call, so the same Write
-  grant that lets a normal `code-reviewer` pass write its pack works here too). Morgan still
-  does the final cross-component merge into the canonical `findings-<slug>.jsonl` herself (same
-  file, same >8-finding Write-then-Edit batching as before) - what changed is that she now reads
-  that merge input from small, already-valid JSONL files instead of reconstructing it from
-  prose buried in `journal.jsonl`.
+  instruct it to `Write` its own findings pack directly** to its own component-qualified path,
+  never the shared canonical name, and return only a short confirmation (finding counts + the
+  path it wrote) as its text result - same convention, same rationale and live verification as
+  the operating guide's own copy (§Orchestration discipline, "Split a large, multi-component
+  review"); this file doesn't repeat it. Morgan still does the final cross-component merge into
+  the canonical `findings-<slug>.jsonl` herself.
 - A `null` slot in the returned array means that pass was skipped by the user or died on a
   terminal API error. Re-run **just that pass** via the fallback Task path; keep the others.
 
@@ -123,10 +115,8 @@ do not patch the script live):
   back to reading it plainly, which is what `check_artifacts`/the findings-count-verification
   guidance already expect). Same applies to any other JSON/text output this step reads
   (`*.meta.json`, findings packs) - `cat`/`Read` first, always.
-- **`args` arrives inside the script as a JSON-encoded string, not the array passed in the
-  tool call** - live-tested, reproduced twice, contradicts the tool's own stated contract.
-  The script above normalises it (`typeof args === "string" ? JSON.parse(args) : args`)
-  rather than trusting the documented shape - do not remove that line.
+- `args` arrives as a JSON-encoded string, not the array passed in - see the dispatch bullet
+  above for the evidence; the script's normalisation line is the fix, do not remove it.
 
 ## The two-turn flow - what Morgan says and does
 
@@ -158,10 +148,8 @@ a 3-pass run that returned text instead of writing produced a ~32k-token file - 
 string you set in `args` at dispatch, e.g. `"code-reviewer: frontend"`) is the one anchor you
 already know going in, regardless of the journal's exact JSON shape - `Grep` for it first to
 find which line(s) belong to that pass, then read only that range, not the whole file. Repeat
-per label rather than loading everything at once. This is a size/technique problem only, never
-a reason to reach for `python -c`/inline execution to parse or search it - the same
-unconditional block and the same fix (`Read`/`Grep`, plain text) applies here as to any other
-output file this step touches.
+per label rather than loading everything at once - `Read`/`Grep` only, same as above, never
+`python -c`.
 
 **Fallback - if you still end up extracting individual findings from returned text, do it in
 ONE pass, never one `Grep` call per finding.** The live case that motivated writing packs

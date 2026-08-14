@@ -93,8 +93,8 @@ fields (`standard` = the obligation or DoD item cited, `problem`, `likely_cause`
 `fix`{`diff`,`why`}); the jurisdictions in scope go in `methodology`, the per-item DoD verdict in
 `dod_status`, residual risk in `limitations`. **You author the DATA and write it - never the
 report layout** - `check_artifacts --fix` renders the report from what you wrote; anything you
-leave out of the pack is lost. A mechanical guard blocks any Write outside that exact path - don't
-attempt one. Keep the prose you return to a distilled summary (≤ ~30 lines:
+leave out of the pack is lost (write-path guard enforced as described above). Keep the prose you
+return to a distilled summary (≤ ~30 lines:
 verdict, counts, headline findings, and the path you wrote); **the pack you WROTE is uncapped in
 COUNT of distinct findings, not in verbosity per finding** - that constraint governs the file,
 not the summary you return, which stays under the same 30-line budget either way

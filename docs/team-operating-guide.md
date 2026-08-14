@@ -66,13 +66,9 @@ Route by **deliverable type**, not habit:
 - `/run-evals` - team-quality eval harness against golden cases (regression net)
 - `/preferences` - view/change project-wide settings (docx export, regulatory citations);
   quick utility, no engagement opened
-- `/dashboard` - regenerate the local, static, cross-project dashboard: every project this
-  machine has evidence the team ran in (existing auto-discovery, no separate registry),
-  each engagement's settings snapshot and a team-interaction timeline (swimlane + loop arcs
-  for review handoffs), portfolio roster/activity/obligation-coverage views (ADR-013); quick
-  utility, no engagement opened, read-only by design. Primary build is `dashboard-ui/`
-  (Vite/React, `npm run dashboard`) - repo-as-project + Node only; falls back automatically
-  to the plain Python-only HTML (`--out`, no Node required) otherwise.
+- `/dashboard` - regenerate the local, static, cross-project observability dashboard (every
+  project + engagement this machine has evidence of, ADR-013); quick utility, read-only, no
+  engagement opened.
 
 ## Asking questions (standing user preference)
 
@@ -327,26 +323,18 @@ this behaviour, so a regression here is caught by `/run-evals`.
    prose where a mechanical check exists (`check_artifacts` covers the greppable ones).
 7. **The critique/DoD gate is a FIX-LIST, not a report - these are checks on the team's OWN
    output.** A finding with a deterministic remedy is the team's to **fix and re-check**, never
-   the user's to be handed: **auto-fix** a missing `.md`/`.html` sibling (render), an off-roster
-   or wrong-role persona name (`ROSTER-UNKNOWN`/`ROSTER-ROLE-MISMATCH` - correct to the canonical
-   roster, never invent a specialist), a roster name unmarked as an agent or an agent combined
-   with a human on one sign-off line (`AGENT-UNMARKED`/`AGENT-HUMAN-COMBINED` - add the 🤖 /
-   Virtual Surveillance IT attribution, split the line - "Voice, names & console"), a missing
-   interim banner or a "final" asserted while open,
-   a non-portable absolute source path, an incomplete source index, a missing evidence tag where
-   the legend is defined. **Escalate (ask via the question tool), don't self-fix**, only what
-   needs a human: a rationale contradicted by the evidence ("the email says X but the artifact
-   says Y"), a sign-off on unverifiable authority, a scope/acceptance call. Listing an auto-fixable
+   the user's to be handed; only genuine judgement calls (contradicted rationale, unverifiable
+   authority, scope/acceptance) escalate to the user via the question tool. Full auto-fix vs.
+   escalate tiers: `docs/DEFINITION-OF-DONE.md` / `close-checklist.md`. Listing an auto-fixable
    defect as a delivered "documentation-standards failure" is itself a process failure (live
    lesson 2026-07-23; DoD "the gate is a fix-list").
 
 ## Engagement state & artifact naming (lifecycle discipline)
 
 Born of a live failure (2026-07-22): an engagement paused on an unanswered clarification, the
-close never ran so **no DoD gate ever fired**, an interim report with a final-sounding filename
-was read as the delivery - and QA had never run, with "test scripts to be developed" cited but
-never developed. A gate that only runs at close is no gate when the close never happens; state
-must be visible **between** gates.
+close never ran, and an interim report with a final-sounding filename was read as the delivery
+with QA never having run. A gate that only runs at close is no gate when the close never
+happens - state must be visible **between** gates.
 
 - **Every engagement is in exactly one state**, recorded in the START-HERE living index
   (`docs/templates/start-here.md`): **⏳ in progress** · **⛔ blocked - awaiting input** ·

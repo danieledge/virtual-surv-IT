@@ -87,15 +87,9 @@ and the **deliverable → owner routing table** all live there.
 - **Tag data insights 📊 observed / 🧠 inferred** - never present an inference as observed fact;
   state the assumption. Applies to every agent and to the PM summarising their work.
 - **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `performance-reviewer`,
-  `compliance-reviewer`, `data-quality-reviewer`) hold no general Edit (six hold Bash for
-  analysers/diffs, execution-gated by §7); build agents implement. Four of the six
-  (`code-reviewer`, `compliance-reviewer`, `model-validator`, `performance-reviewer`) hold
-  **Write and Edit, both scoped to one path only** - their own findings-pack JSONL
-  (`artifacts/<slug>/data/findings-*.jsonl`), mechanically enforced by
-  `guard-findings-pack-write.py` so neither grant can widen in practice; they author that pack
-  directly instead of returning it through the PM, and Edit lets them chunk a large pack
-  incrementally instead of dropping findings when the same guard's Write size-limit fires
-  (`large_context_review_split`; Edit is exempt from that cap by design). **Route by
+  `compliance-reviewer`, `data-quality-reviewer`) hold no general Edit; build agents implement.
+  Four hold Write+Edit scoped to their own findings-pack JSONL only, mechanically enforced
+  (`guard-findings-pack-write.py`) - grant mechanics: `docs/agent-design.md`. **Route by
   deliverable type, not habit** (table in the operating guide).
 
 ## 6a. Definition of Done

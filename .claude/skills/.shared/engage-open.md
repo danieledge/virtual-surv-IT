@@ -26,20 +26,10 @@ user's first impression and every tool call is a full model round-trip, so gathe
 open needs in **one compound Bash call**: never a probe-per-turn sequence, and **no narration
 turns between the probe and your opening banner**.
 
-2026-08-04: the plugin-root bootstrap used to be ~10 lines of hand-typed bash mixing single- and
-double-quoted fragments to hand-parse JSON (`grep -o '"installPath": *"[^"]*"' ... | cut -d'"'
--f4`) - a live corp Windows report hit `unexpected EOF while looking for matching '"'`
-reproducing it verbatim, self-corrected, but the real defect was the design: untested, hand-typed,
-quote-nested prose reproduced from scratch on every single `/engage` open, the exact class of risk
-the rest of the probe was already collapsed into a tested script to eliminate. The bootstrap now
-embeds a Python heredoc instead: `<<'PY' ... PY` is treated as fully literal by the shell (no
-expansion, no escaping, nothing to get wrong at the bash level), and the Python inside uses **only
-double quotes, never single** - so it stays safely embeddable with zero quote-collision risk
-either way. The discovery logic itself is a tested twin of `scripts/find_plugin_root.py`
-(`tests/test_find_plugin_root.py` covers the algorithm; `tests/test_engage_open_bootstrap.py`
-mechanically pins that this embedded copy and that module never drift apart - it can't `import`
-the module directly, since locating it is exactly the problem this solves). Run it exactly as
-written:
+The bootstrap below is a tested Python heredoc - a drift-pinned twin of `scripts/find_plugin_root.py`
+(`tests/test_engage_open_bootstrap.py` keeps the two from ever diverging). Run it exactly as
+written, character for character - history and full rationale in
+`.claude/skills/engage/references/probe-contract.md` if something looks wrong:
 
 ```
 CACHED=$(cat "${CLAUDE_PROJECT_DIR:-.}/.claude/.guard-interpreter" 2>/dev/null); \
@@ -118,11 +108,8 @@ echo "PROBE_FAILED - retry this exact block once by hand with your working inter
 ```
 
 The interpreter order (warm cache first, then Windows-aware) and `PYTHONIOENCODING=utf-8` are
-still load-bearing, not decoration - the cache key is now `CLAUDE_PROJECT_DIR`-scoped rather than
-plugin-root-scoped (it has to be resolvable before the plugin root is known; this matches what the
-safety-guard hooks' own cache already falls back to in plugin mode, since `CLAUDE_PLUGIN_ROOT`
-itself is the unreliable-env-var problem described below - worst case on a mismatch is one extra
-interpreter probe, never a correctness issue). **On `PROBE_FAILED`**, retry the block once by hand
+still load-bearing, not decoration - the cache key is `CLAUDE_PROJECT_DIR`-scoped, not
+plugin-root-scoped (rationale: `.claude/skills/engage/references/probe-contract.md`). **On `PROBE_FAILED`**, retry the block once by hand
 (never guess, never silently give up) and read
 `.claude/skills/engage/references/probe-contract.md` (plugin mode:
 `$PLUGIN_ROOT/.claude/skills/engage/references/probe-contract.md`) - the probe's contract, the
@@ -152,10 +139,10 @@ map. (Root map only - `docs/codebase-map.d/` area files aren't covered by this o
 only by the full sweep at close.) Then the tooling report, the codebase map header + §3, the
 newest CHANGELOG entry, and any team-extensions block.
 
-**The probe does NOT print the operating guide.** Read `docs/team-operating-guide.md` yourself
-(plugin mode: `$PLUGIN_ROOT/docs/team-operating-guide.md`): issue that `Read` in the SAME turn as
-the probe when the working project has its own copy, otherwise immediately after the probe using
-the printed `PLUGIN_ROOT`. Never proceed past the open without it.
+**The probe does NOT print the operating guide** - issue that `Read` yourself (plugin mode:
+`$PLUGIN_ROOT/docs/team-operating-guide.md`) in the SAME turn as the probe when the working
+project has its own copy, otherwise immediately after using the printed `PLUGIN_ROOT`. Never
+proceed past the open without it.
 
 What the result gives you, and the rules attached to each:
 - **Mode.** `PLUGIN_ROOT=repo-as-project` → invoke `<python> -m scripts.<name>`; any other value →

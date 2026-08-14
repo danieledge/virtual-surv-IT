@@ -44,9 +44,8 @@ read, the chained-workflow rule, the one-compound-Bash-call probe, and every ban
 (allow-list tip, document formats, model, what's new). Shared verbatim with `/engage-light` - both
 front doors open identically.
 
-**Then your VERY NEXT output is the opening banner + disclaimers + the batched question below.**
-Target: the probe call (with the operating-guide `Read` alongside or immediately after it), then
-the ask - no other turns in between. If no gated question applies and classification is
+**Then your VERY NEXT output is the opening banner + disclaimers + the batched question below** -
+same no-turns-in-between target as step 0. If no gated question applies and classification is
 unambiguous, there is nothing to ask: banner, then straight to the work.
 
 **0a. Safety gates - two verbatim disclaimers + the consent-intent question (CLAUDE.md §5 + §7).**
@@ -138,10 +137,9 @@ you haven't been given, **ask for it before anything else** and wait:
   path) before reviewing. **Do not invent or assume a target.**
 - A **spec/BRD/FSD**, **data location**, or other artifact → ask for the path or paste.
 - **Any input that is a document file (PDF / DOCX / XLSX / XLS / CSV)** → convert it FIRST:
-  `<python> -m scripts.convert_file <file>` (bundled, vendored deps, consent-free - operating
-  guide "Document inputs"). Never read the binary bytes, never hand-parse or PowerShell it. Use
-  `--layout` for table/column-shaped PDFs. If the report says pages are scanned/MISSING, ask the
-  user (question tool) for a text-bearing original - do not guess.
+  `<python> -m scripts.convert_file <file>` (consent-free; `--layout` for table/column-shaped
+  PDFs). Never read the binary bytes, never hand-parse or PowerShell it. If the report says pages
+  are scanned/MISSING, ask the user (question tool) for a text-bearing original - do not guess.
 
 If the user just typed `/engage` (or `/engage test some code`) with no concrete target, your
 **first reply** is to ask what/where the code or inputs are - don't proceed without them.
@@ -286,12 +284,6 @@ workspace's `artifacts/<slug>/engagement-summary-<slug>.txt`, **signed off as Mo
 the requester only if you know their name, otherwise open with "Hi,". It's an email, so keep it
 `.txt` (the one artifact not rendered to `.html`).
 
-Specialists: `business-analyst`, `tm-sme` / `trade-surveillance-sme` / `comms-surveillance-sme`,
-`rules-developer`, `data-analyst`, `tuning-analyst`, `ml-engineer`, `platform-engineer`,
-`qa-engineer`, `code-reviewer`, `performance-reviewer`, `model-validator`, `compliance-reviewer`,
-`data-quality-reviewer`, `review-scorer`. Advisors hold no Edit (where they hold Bash it is
-for analysers/diffs, execution-gated per CLAUDE.md §7); `code-reviewer`, `compliance-reviewer`,
-`model-validator` and `performance-reviewer` hold Write scoped to their own findings-pack JSONL
-only, mechanically enforced (`guard-findings-pack-write.py`).
+Full roster + tool grants: `docs/team-operating-guide.md` (canonical intro: `/meet-the-team`).
 
 Stop for human approval before anything that touches live systems.

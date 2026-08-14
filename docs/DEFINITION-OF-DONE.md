@@ -63,8 +63,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > (scoped per folder - a sibling engagement's QA never vouches) · `FINDING-NO-IMPACT` ·
 > `FINDINGS-CWORD-LABELS` · `FINDINGS-INVALID` · `FINDINGS-NO-DEV-GUIDANCE` (a review-shaped
 > artifact - has `## Findings` - missing or leaving empty the mandatory `## 🔵 Developer
-> guidance` section; audit finding #2, 2026-07-30 - four files each carried a prose-only
-> reminder, one claiming it was already mechanically checked, before this existed) ·
+> guidance` section; audit finding #2, 2026-07-30) ·
 > `ROSTER-UNKNOWN` / `ROSTER-ROLE-MISMATCH` ·
 > `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` · `EMAIL-NOT-MORGAN` / `EMAIL-AGENT-UNMARKED`
 > (the summary email is always FROM Morgan; every roster name in it carries a 🤖-marked
@@ -78,11 +77,10 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 > `STATE-MISSING` / `STATE-INVALID` / `STATE-STALE-RENDER` ·
 > `REGISTRY-STALE` / `REGISTRY-HTML-STALE` (the registry's HTML mirror is written
 > best-effort, so its freshness is checked explicitly) · `STALE-FINDINGS-RENDER` /
-> `COUNT-MISMATCH` (audit finding #3, 2026-07-30 - the rendered `REVIEW-<slug>.md`'s
-> finding IDs and disposition tally no longer match the current `data/findings-<slug>.jsonl`
-> pack; the close-checklist's "one authoritative number everywhere" rule, mechanised for
-> the parts a marker exists to check - late-cycle prose changes and struck-citation
-> sweeping stay judgement calls) · `NESTED-PACK` (a pack
+> `COUNT-MISMATCH` (the rendered `REVIEW-<slug>.md`'s finding IDs and disposition tally no
+> longer match the current `data/findings-<slug>.jsonl` pack - "one authoritative number
+> everywhere," mechanised where a marker exists to check it; audit finding #3, 2026-07-30) ·
+> `NESTED-PACK` (a pack
 > initialised inside another workspace; init now refuses the shape) · `ARCHIVED-OPEN`
 > (a `.archive` marker on a pack that never passed the close gate - warned, never a
 > silent skip; 0.33.2) · `FLAT-PACK-UNMIGRATED` · `ORPHAN-ARTIFACT` (workspace-mode root files;

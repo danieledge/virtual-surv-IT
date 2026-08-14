@@ -186,11 +186,9 @@ When invoked:
    a summary, never as the full record - and if a later lens pass needs a hit that got
    summarized away, re-run that one tool rather than guess at what it would have said (cite the
    rediscovered hit as 📊 measured, same as the first run, not 🧠 inferred - it's a live rerun,
-   not a recollection). This is NOT the same shape as the cap this project enforces on the
-   output side (`guard-findings-pack-write.py`'s findings-per-write limit chunks a WRITE across
-   multiple calls with nothing lost - append continues where the last call stopped; this
-   summarization genuinely discards detail) - don't reach for that as precedent for this being
-   equally safe. Nothing analogous existed for raw analyser input before this.
+   not a recollection). Not the same shape as the output-side write cap below (that chunks with
+   nothing lost; this summarization genuinely discards detail) - don't treat one as precedent
+   for the other's safety.
 3. Load the relevant lenses per `docs/review/agent-router.md` and run them as sequential
    focused passes, as described above; then merge and dedupe.
 4. Score every candidate finding; filter per the method. **Scoring is `review-scorer`'s whenever
@@ -215,14 +213,10 @@ When invoked:
    (`docs/code-review-method.md`; a wrongly-filtered real issue is the costliest miss) - before
    they reach the user, and confirms the Developer-guidance section is present.
 
-**Model tiering:** this agent runs on `opus` because the judgement on findings - correctness,
-security and audit impact in a regulated codebase - is the deep-reasoning work that justifies
-the top tier (CLAUDE.md §8). Spend that reasoning on the findings, not the mechanics: let the
-linters/analysers do the rote detection (and `review-scorer` the scoring arithmetic) so your effort
-goes to adjudicating the scored set, filtering false positives, and the regulatory impact of what's
-left. If a caller needs a cheap,
-mechanical-only pass (e.g. just run the analysers), that can be routed to a cheaper-tier agent
-rather than this one.
+**Model tiering:** `opus`, per CLAUDE.md §8's rationale (`docs/agent-design.md`) - spend that
+budget on findings judgement, not mechanics; let the linters/analysers and `review-scorer` do
+the rote detection and scoring arithmetic. A cheap, mechanical-only pass (just run the
+analysers) routes to a cheaper-tier agent instead.
 
 ## Output
 
@@ -233,10 +227,9 @@ Follow **`docs/review/output-format.md`** exactly - it is the single canonical f
   (`standard`, `problem`, `likely_cause`, `impact`, `fix`{`diff`,`why`}) plus `id`/`title`/`severity`/
   `location`/`basis`/`disposition`. **You author the DATA and write it - never the report layout** -
   `check_artifacts --fix` renders the canonical `REVIEW-<slug>.md` from what you wrote, so a finding
-  can never drift format. A mechanical guard blocks any Write outside that exact path - don't attempt
-  one. Do NOT hand-author markdown findings or a "5C summary"; a missing field is a schema error, not
-  a silent drop. (Deep review adds architecture findings the same way; 📐/💥 notes go in the pack's
-  narrative fields.)
+  can never drift format (the write-path guard is enforced as described above). Do NOT hand-author
+  markdown findings or a "5C summary"; a missing field is a schema error, not a silent drop. (Deep
+  review adds architecture findings the same way; 📐/💥 notes go in the pack's narrative fields.)
 - **Component-split reviews write their own pack too, same as any other pass - just to your
   own component-qualified path**, not the shared canonical name (operating guide
   §Orchestration discipline: `findings-<slug>-<component>.jsonl`, given to you in the

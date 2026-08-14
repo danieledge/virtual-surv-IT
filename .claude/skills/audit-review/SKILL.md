@@ -67,12 +67,9 @@ Run an **evaluator-optimizer loop**:
    routing and re-review - operating guide, Outcome discipline 5); earlier pass verdicts are
    never rewritten. Loop until everything fixable is fixed; the only items left
    are those needing a **human decision** (mark 🔴 Open / needs human review, not "deferred").
-4. **Morgan's challenge pass (the orchestrator's own tier - sonnet by default, opus if
-   configured for this engagement) - a spot-check, not a re-score** (the scorer already applied
-   the rubric; re-scoring everything on opus pays twice for the same judgement). Challenge every
-   🔴 Critical, anything §4/§5-regulated, any finding whose **evidence basis** looks thin (🧠
-   presented as 📊 - never let an inference reach the user as fact), and a sample of the rest;
-   downgrade or drop what fails. Be a sceptic, not a relay - and not a second scorer.
+4. **Morgan's challenge pass** - same step, same scope and rationale as `deep-review/SKILL.md`
+   step 6 (spot-check not re-score; every 🔴 Critical, §4/§5-regulated, thin-evidence and a
+   sample of the rest; documented/intentional bounds aren't defects) - not repeated here.
 5. Present in the shared `docs/review/output-format.md`: a clean traffic-light **scoreboard to
    the console**, with the full findings in the **clean artifact**. Give an explicit verdict
    (✅ audit-ready / ⚠️ conditional / ❌ not yet), standards cited, audit/regulatory checks, the
