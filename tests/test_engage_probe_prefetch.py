@@ -15,6 +15,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -47,7 +48,10 @@ def _repo_as_project(project: Path) -> None:
     (project / "docs" / "team-operating-guide.md").write_text("# ops guide\n", encoding="utf-8")
 
 
-def _warm_cache(project: Path, interp: str = "/usr/bin/python3") -> None:
+def _warm_cache(project: Path, interp: str = sys.executable) -> None:
+    """Default to sys.executable, not a plausible-looking fake path - _read_cache now
+    validates via shutil.which() (Fable review W2 fix), so a fixture using a fake path
+    would silently exercise the garbage-cache path instead of the warm-cache path."""
     (project / ".claude").mkdir(parents=True, exist_ok=True)
     (project / ".claude" / ".guard-interpreter").write_text(interp, encoding="utf-8")
 
@@ -96,12 +100,35 @@ def test_malformed_stdin_fails_open(tmp_path, monkeypatch, capsys):
 
 def test_injected_block_carries_interpreter_and_plugin_root(tmp_path, monkeypatch, capsys):
     _repo_as_project(tmp_path)
-    _warm_cache(tmp_path, interp="/opt/python3.12/bin/python3")
+    _warm_cache(tmp_path, interp=sys.executable)
     rc, out = _run(monkeypatch, capsys, {"user_input": "/engage"}, tmp_path)
     assert rc == 0
-    assert "INTERPRETER=/opt/python3.12/bin/python3" in out
+    assert f"INTERPRETER={sys.executable}" in out
     assert "PLUGIN_ROOT=" in out  # repo-as-project -> empty value, but the key is present
     assert "do NOT run the Bash bootstrap heredoc" in out
+
+
+def test_garbage_cache_declines_silently(tmp_path, monkeypatch, capsys):
+    """Fable review W2: a corrupted-but-non-empty cache used to be injected verbatim as
+    authoritative - probe-contract.md tells the model never to re-probe the printed word,
+    so a bad cache would poison the whole open. A single-token value that doesn't resolve
+    to anything executable must decline exactly like a cold/missing cache."""
+    _repo_as_project(tmp_path)
+    _warm_cache(tmp_path, interp="not-a-real-interpreter-xyz")
+    rc, out = _run(monkeypatch, capsys, {"user_input": "/engage"}, tmp_path)
+    assert rc == 0 and out == ""
+
+
+def test_multiline_cache_declines_silently(tmp_path, monkeypatch, capsys):
+    """A cache file is meant to hold one token/path - multi-line content (corruption, or a
+    concurrent writer interleaving) must not be treated as a valid single interpreter."""
+    _repo_as_project(tmp_path)
+    (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".claude" / ".guard-interpreter").write_text(
+        f"{sys.executable}\nsome garbage second line\n", encoding="utf-8"
+    )
+    rc, out = _run(monkeypatch, capsys, {"user_input": "/engage"}, tmp_path)
+    assert rc == 0 and out == ""
 
 
 def test_build_failure_fails_open(tmp_path, monkeypatch, capsys):

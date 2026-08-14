@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -60,10 +61,21 @@ def _force_utf8_output() -> None:
 
 
 def _read_cache(project_dir: Path) -> str:
+    """A garbage-but-non-empty cache file used to be injected verbatim as authoritative
+    (Fable review, 2026-08-14): probe-contract.md tells the model never to re-probe the
+    printed INTERPRETER= word, so a corrupted cache would have been trusted for the whole
+    open. Validate it actually resolves to something executable before returning it - the
+    same bar the live heredoc's own cache check already applies (`command -v`) - so a bad
+    cache degrades to the cold-cache path (no injected block, live probe runs normally)
+    instead of poisoning the open."""
     try:
-        return (project_dir / ".claude" / ".guard-interpreter").read_text(encoding="utf-8").strip()
+        raw = (project_dir / ".claude" / ".guard-interpreter").read_text(encoding="utf-8")
     except OSError:
         return ""
+    interp = raw.strip()
+    if not interp or "\n" in raw.strip("\n"):
+        return ""  # empty, or a multi-line file - not a single interpreter token/path
+    return interp if shutil.which(interp) else ""
 
 
 def _scripts_dir() -> Path:

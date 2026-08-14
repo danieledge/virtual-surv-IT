@@ -123,8 +123,12 @@ plugin-root-scoped (rationale: `.claude/skills/engage/references/probe-contract.
 rationale for each part of the bootstrap, and the known failure modes. That file is for failures
 only; a healthy open never reads it.
 
-The script prints, in order: `INTERPRETER=` (the literal word - python3/python/py - that worked;
-this IS `<python>` for every later script call in this session: use it verbatim, **never
+The script prints, in order: `INTERPRETER=` (python3/python/py, **or a full absolute path** -
+the cache can be pre-seeded with one, e.g. `C:\Python313\python.EXE`; live corp-Windows report,
+2026-08-14: an unquoted absolute path used directly in a later Bash command lost its backslashes
+to the shell, `command not found`. This IS `<python>` for every later script call in this
+session: use it verbatim, **always double-quoted** (`"<python>" -m scripts.<name>`, never bare)
+since a path can contain spaces or backslashes an unquoted shell word will corrupt - **never
 re-probe**), `PLUGIN_ROOT=`, `OS=Windows|POSIX` (the host, computed - **use it instead of
 inferring Windows-ness later**; the exec-consent command in
 `.claude/skills/engage/references/safety-gates.md` reads this field directly, so a Windows host

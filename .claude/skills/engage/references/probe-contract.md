@@ -168,3 +168,20 @@ find the actual culprit first. Worth knowing precisely because it explains why t
 block instruction matters even more than usual here: on a machine where shell state is already
 dropping between calls, an improvised command is *more* likely to silently resolve against the
 wrong directory, not less.
+
+**Fourth live report, a different field, same root cause class (2026-08-14, separate corporate
+Windows box):** a session had already learned `INTERPRETER=C:\Python313\python.EXE` from an
+earlier successful probe this session, then typed it directly, unquoted, into a later ad hoc
+`Bash` call (`C:\Python313\python.EXE -m scripts.engagement_state ...`). Git Bash/MSYS consumes
+an unquoted backslash as its own escape character, so the shell received `C:Python313python.EXE`
+and failed with `command not found` (exit 127) - the interpreter word was never wrong, it was
+just used bare. The retry (correctly, per this section) re-ran the exact probe block by hand, but
+the probe itself then also returned `PROBE_FAILED` on that box - a separate, unresolved failure,
+not a repeat of the quoting mistake. `.claude/skills/.shared/engage-open.md`'s own definition of
+`INTERPRETER=` used to
+describe it as "the literal word - python3/python/py", undersizing the actual value space: the
+cache can be pre-seeded with a full absolute path (`write_guard_interpreter_cache` in
+`install_helper.py` does exactly this), which is exactly what this box had. Fixed at the source:
+that section now says explicitly the value can be a full path and to **always double-quote it**
+(`"<python>" -m scripts.<name>`), not just "use it verbatim" - the old wording was true but
+incomplete, and incomplete in the direction that made this exact mistake look safe.
