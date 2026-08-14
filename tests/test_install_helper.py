@@ -2061,6 +2061,63 @@ def test_machine_defaults_offer_skipped_on_yes_run(capsys):
     assert "non-interactive" in capsys.readouterr().out
 
 
+def test_fixbashrc_step_reports_ok_and_does_not_offer_a_fix_when_healthy(monkeypatch, capsys):
+    """2026-08-14 user request: 'check if there is an issue with bash then auto apply if
+    there is' - a healthy .bashrc must be reported and left alone, never routed into
+    run_fix_bashrc at all."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "find_bash", lambda: "/bin/bash")
+    monkeypatch.setattr(ih, "_check_shell_startup_time", lambda bash_path: ("OK", "0.05s"))
+    called = []
+    monkeypatch.setattr(ih, "run_fix_bashrc", lambda *a, **k: called.append(1) or 0)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.fixbashrc_step()
+    out = capsys.readouterr().out
+    assert "0.05s" in out
+    assert not called
+
+
+def test_fixbashrc_step_applies_automatically_when_an_issue_is_found(monkeypatch, capsys):
+    """The other half of the same request: a genuine issue must be fixed without a
+    second, separate confirmation round-trip - choosing this menu item IS the consent."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "find_bash", lambda: "/bin/bash")
+    monkeypatch.setattr(
+        ih, "_check_shell_startup_time", lambda bash_path: ("WARN", "4.0s to source ~/.bashrc")
+    )
+    calls = []
+
+    def fake_fix(style, marks, assume_yes=False, demo=False):
+        calls.append((assume_yes, demo))
+        return 0
+
+    monkeypatch.setattr(ih, "run_fix_bashrc", fake_fix)
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
+    inst.fixbashrc_step()
+    out = capsys.readouterr().out
+    assert "4.0s to source" in out
+    assert calls == [(True, False)]  # assume_yes=True - no second confirmation prompt
+
+
+def test_fixbashrc_step_demo_mode_still_previews_nothing_written(monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "find_bash", lambda: "/bin/bash")
+    monkeypatch.setattr(ih, "_check_shell_startup_time", lambda bash_path: ("ERROR", "12.0s"))
+    calls = []
+
+    def fake_fix(style, marks, assume_yes=False, demo=False):
+        calls.append((assume_yes, demo))
+        return 0
+
+    monkeypatch.setattr(ih, "run_fix_bashrc", fake_fix)
+    inst = ih.Installer(_args(yes=True, demo=True), ih.Style(False), ih.marks(), subset="full")
+    inst.fixbashrc_step()
+    assert calls == [(True, True)]  # demo propagated through to run_fix_bashrc
+
+
 def test_machine_defaults_offer_declined_does_not_call_machine_defaults_step(monkeypatch):
     import install_helper as ih
 
@@ -5333,6 +5390,7 @@ def test_advanced_submenu_full_mapping():
         "5": "demo",
         "6": "machinedefaults",
         "7": "dashboard",
+        "8": "fixbashrc",
         "b": "back",
     }
 

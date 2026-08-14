@@ -1182,6 +1182,7 @@ _ADVANCED_ACTIONS = {
     "5": "demo",
     "6": "machinedefaults",
     "7": "dashboard",
+    "8": "fixbashrc",
     "b": "back",
 }
 
@@ -1291,6 +1292,7 @@ def choose_action(style: Style) -> str:
                         "This machine's defaults (view/edit - no project needed)",
                     ),
                     ("7", "Rebuild the local team dashboard"),
+                    ("8", "Fix a slow ~/.bashrc (checks first, applies only if needed)"),
                     ("b", "Back"),
                 ),
                 _ADVANCED_ACTIONS,
@@ -2509,6 +2511,48 @@ class Installer:
         out = ui_dir / "dist" / "index.html"
         self.step_ok("Dashboard " + self.did("rebuilt", "would be rebuilt"), str(out))
 
+    def fixbashrc_step(self) -> None:
+        """Standalone (Advanced submenu option 8, subset="fixbashrc"): checks whether
+        ~/.bashrc is slow to source non-interactively (the same check --check-env's
+        '.bashrc source time' row runs) and, ONLY if it finds a real issue, applies the
+        fix automatically - no separate 'run --fix-bashrc after you see the warning'
+        round trip, since choosing this menu item IS the consent (2026-08-14 user
+        request: 'check if there is an issue with bash then auto apply if there is').
+        Reuses run_fix_bashrc's own backup + idempotency-check + atomic-write path
+        unchanged (assume_yes=True here is what skips its interactive 'Add it?' prompt -
+        the write itself is exactly as safe as the standalone --fix-bashrc flag)."""
+        self.step_intro(
+            "Checks whether ~/.bashrc is slow to source non-interactively - the same cost "
+            "Claude Code's Bash tool pays on every call - and fixes it automatically if so."
+        )
+        bash_path = find_bash()
+        status, detail = _check_shell_startup_time(bash_path)
+        if status in ("OK", "SKIP"):
+            self.step_ok("Bash startup", detail)
+            return
+        print(f"  {self.style.yellow('!')} Bash startup: {detail}")
+        # 2026-08-14 user request: describe what's about to happen BEFORE it happens -
+        # this path has no interactive "Add it?" pause to convey that at write-time (see
+        # docstring above), so state it explicitly here instead. run_fix_bashrc's own
+        # preview (the exact snippet + the "guards everything below" risk note) still
+        # prints too, right after this - this is the what/why, that's the literal diff.
+        print(
+            self.style.dim(
+                f"  About to modify: {Path.home() / '.bashrc'}\n"
+                "  What: prepends a 2-line guard that skips the rest of the file for "
+                "non-interactive shells (like Claude Code's Bash tool calls), so slow "
+                "startup steps stop running on every call. Your interactive terminal use "
+                "is unaffected.\n"
+                "  Safety: the existing file is backed up first (dated, never overwritten); "
+                "nothing runs or is removed, only prepended."
+            )
+        )
+        rc = run_fix_bashrc(self.style, self.marks, assume_yes=True, demo=self.demo)
+        if rc == 0:
+            self.step_ok("~/.bashrc " + self.did("fixed", "would be fixed"))
+        else:
+            self.step_fail("~/.bashrc fix", "see output above", fatal=False)
+
     def machine_defaults_offer(self) -> None:
         """Last of the optional post-install steps for a full install/update (2026-08-07
         user request: "we are missing an option to be able to modify settings on install
@@ -2963,6 +3007,10 @@ class Installer:
         if self.subset == "dashboard":
             return [
                 ("Dashboard", self.dashboard_step),
+            ]
+        if self.subset == "fixbashrc":
+            return [
+                ("Fix ~/.bashrc", self.fixbashrc_step),
             ]
         if self.subset == "toolcheck":
             return [
