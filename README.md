@@ -1184,6 +1184,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 | [`docs/demos/README.md`](docs/demos/README.md) | Real captured demo transcripts (build, review, data-safety) - see the team work without running anything |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | Extending the team for your organisation: recipes + the extensions contract, analyser registry, tool allowlist |
 | [`docs/team-operating-guide.md`](docs/team-operating-guide.md) | Standing rules, roster + routing table, question construction (read on-engage) |
+| [`docs/team-operating-guide-orchestration.md`](docs/team-operating-guide-orchestration.md) | Delegation/dispatch discipline - right-sizing, concurrent dispatch, review-splitting (read on first delegation, not at open) |
 | [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) | Frameworks, the canonical template catalogue, the traceability spine |
 | [`docs/agent-design.md`](docs/agent-design.md) | Per-agent rationale + the Anthropic best-practice conformance matrix |
 | [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) | The evidenced gate every delivery must pass before handover |
