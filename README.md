@@ -1380,6 +1380,24 @@ Fix direction: script the sim-user to follow up after an async defer, and add a 
 per-case override) for zero-workspace self-handled cases. Not yet done - tracked here rather than
 guessed at under time pressure.
 
+**PreToolUse daemon-routed calls still pay a Python interpreter spawn per call (found and partly
+fixed 2026-08-14, backlogged).** A live corp-Windows measurement found a consistent 2-3s cost on
+every daemon-routed Bash/Read call. Investigated: the daemon and its TCP roundtrip are both fast
+(12.6ms measured, ADR-014 v0.3) - the cost is the CLIENT-SIDE process-spawn chain reaching it
+(`sh` -> `cat` -> a fresh `python.exe`), matching ADR-014's own pre-daemon baseline (1,372-3,808ms)
+almost exactly. The daemon itself is a net win and should stay; reverting it would add cost, not
+remove it. One fork in that chain is already fixed (`run-guard.sh`'s fast path used to `cat` a
+one-line cache file - now the `read` builtin, zero forks). **Not yet done, two bigger options,
+either fixes the larger remaining cost (the Python interpreter spawn itself):**
+- Bypass the Python client entirely on the fast path using bash's native `/dev/tcp` to talk to the
+  daemon directly from the already-running shell (Git Bash's `sh` is bash, so this works on the
+  affected platform; needs a fallback for shells without `/dev/tcp`, e.g. `dash`).
+- Bake the discovered interpreter into `settings.json` at configure time (the `.guard-interpreter`
+  cache already exists; this would let the hook command invoke the client directly, dropping the
+  `sh` layer for daemon-eligible targets).
+Both are higher-complexity, more platform-specific changes than the `cat` fix - deferred rather
+than rushed.
+
 Previously reported issues and their resolutions:
 [`docs/internal/resolved-issues.md`](docs/internal/resolved-issues.md).
 
