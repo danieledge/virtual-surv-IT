@@ -215,6 +215,118 @@ def test_guard_daemon_preference_resolves_under_project_dir_not_plugin_root(tmp_
     assert (proj / ".claude" / ".guard-interpreter").is_file()
 
 
+# --------------------------------------- daemon fast path: cat -> read builtin (2026-08-14) --
+#
+# Live corp-Windows measurement traced a consistent 2-3s PreToolUse cost, on the highest-
+# frequency code path in the whole guard system, partly to this fast path forking `cat` just
+# to read one cached line. `read` is a builtin - same result, zero forks. These tests prove
+# the fix is behaviourally identical (still reads and uses the cached interpreter correctly)
+# AND that the fork is genuinely gone (a `cat` shadowed onto PATH must never be invoked).
+
+DAEMON_TARGET = "bash_hook_dispatcher.py"  # one of run-guard.sh's six daemon-servable basenames
+
+
+def _set_up_daemon_fast_path(proj: Path) -> None:
+    (proj / ".claude").mkdir(parents=True, exist_ok=True)
+    (proj / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"guard_daemon": True}), encoding="utf-8"
+    )
+    (proj / ".claude" / ".guard-interpreter").write_text(sys.executable, encoding="utf-8")
+    # DAEMON_CLIENT resolves to $_root/scripts/guard_daemon_client.py, and _root falls back
+    # to CLAUDE_PROJECT_DIR here (LAUNCHER's own path doesn't match the .claude/hooks/
+    # suffix _self_root looks for) - a fake stand-in proves what the fast path actually
+    # invoked, without needing a real daemon running.
+    client = proj / "scripts" / "guard_daemon_client.py"
+    client.parent.mkdir(parents=True, exist_ok=True)
+    client.write_text(
+        "import sys\nprint('FAKE_CLIENT_ARGS:' + '|'.join(sys.argv[1:]))\nsys.exit(0)\n",
+        encoding="utf-8",
+    )
+
+
+def _fake_cat_dir(tmp_path: Path) -> Path:
+    """A `cat` on PATH that proves whether it was invoked, ahead of the real one - if the
+    fast path still forks cat, this one intercepts the call instead."""
+    bindir = tmp_path / "fakecat"
+    bindir.mkdir()
+    fake_cat = bindir / "cat"
+    fake_cat.write_text(
+        '#!/bin/sh\ntouch "' + str(tmp_path / "cat-was-invoked") + '"\nexec /bin/cat "$@"\n',
+        encoding="utf-8",
+    )
+    fake_cat.chmod(0o755)
+    return bindir
+
+
+def test_daemon_fast_path_reads_and_uses_the_cached_interpreter_correctly(tmp_path):
+    """Behavioural equivalence: the read-builtin version must still thread the cached
+    interpreter through to the daemon client exactly as the old cat-based version did."""
+    import os
+
+    proj = tmp_path / "proj"
+    _set_up_daemon_fast_path(proj)
+    env = {"CLAUDE_PROJECT_DIR": str(proj), "PATH": os.environ["PATH"]}
+    proc = subprocess.run(
+        ["sh", str(LAUNCHER), DAEMON_TARGET],
+        input=PAYLOAD,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert proc.returncode == 0
+    # argv[1:] the fast path invokes the client with: root, project_root, daemon_target -
+    # both roots resolve to `proj` here (CLAUDE_PLUGIN_ROOT unset, so _root falls back to
+    # CLAUDE_PROJECT_DIR, same as _project_root).
+    assert f"FAKE_CLIENT_ARGS:{proj}|{proj}|bash_hook_dispatcher" in proc.stdout
+
+
+def test_daemon_fast_path_never_forks_cat(tmp_path):
+    """The actual perf property under test: `cat` must never be invoked on this path,
+    proven by shadowing it with a marker-writing stand-in ahead of PATH."""
+    import os
+
+    proj = tmp_path / "proj"
+    _set_up_daemon_fast_path(proj)
+    catdir = _fake_cat_dir(tmp_path)
+    env = {"CLAUDE_PROJECT_DIR": str(proj), "PATH": f"{catdir}:{os.environ['PATH']}"}
+    proc = subprocess.run(
+        ["sh", str(LAUNCHER), DAEMON_TARGET],
+        input=PAYLOAD,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert proc.returncode == 0
+    assert not (tmp_path / "cat-was-invoked").exists(), "cat was forked - the fix regressed"
+
+
+def test_daemon_fast_path_falls_through_safely_on_a_corrupt_cache(tmp_path):
+    """The read builtin's failure mode must match cat's: an empty/corrupt cache value is
+    treated as absent (falls through to the full probe below, never crashes the launcher)."""
+    import os
+
+    proj = tmp_path / "proj"
+    _set_up_daemon_fast_path(proj)
+    (proj / ".claude" / ".guard-interpreter").write_text("", encoding="utf-8")  # corrupt: empty
+    env = {"CLAUDE_PROJECT_DIR": str(proj), "PATH": os.environ["PATH"]}
+    proc = subprocess.run(
+        ["sh", str(LAUNCHER), DAEMON_TARGET],
+        input=PAYLOAD,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    # Falls through to the full cold-start probe below (same fallback the pre-existing
+    # stale-cache test exercises) rather than crashing - which specific path that probe
+    # takes afterward (it may still reach the daemon client once a real interpreter is
+    # found) is out of scope here; this test is only about the read builtin's own failure
+    # mode matching cat's on an empty/corrupt value, not the full script's later behaviour.
+    assert proc.returncode == 0
+
+
 def test_staged_and_live_launchers_match_when_installed():
     """HARD FAILURE, never a skip (audit 2026-08-01).
 
