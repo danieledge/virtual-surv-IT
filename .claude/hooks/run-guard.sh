@@ -198,10 +198,18 @@ DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
 # below unchanged - it still finds and caches an interpreter, and its own
 # daemon-invocation branch further down handles that first call correctly; this fast path
 # only ever engages once the interpreter is already known, never before.
+#
+# 2026-08-14 perf audit (live corp-Windows measurement, guard-daemon roundtrip
+# investigation): this fast path is the highest-frequency code path in the whole guard
+# system (every daemon-routed PreToolUse call), so its own process-spawn count matters
+# more than anywhere else in this script. `cat "$_fastcache"` forked a process just to
+# read one line from a file - `read` is a shell builtin, same job, zero forks. IFS=
+# preserves the same "only the trailing newline is stripped" behavior $(cat ...) had
+# (a bare `read` would otherwise also trim leading/trailing whitespace via word-splitting).
 if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
 	_fastcache="$_project_root/.claude/.guard-interpreter"
 	if [ -f "$_fastcache" ]; then
-		_fastcached=$(cat "$_fastcache" 2>/dev/null)
+		IFS= read -r _fastcached <"$_fastcache" 2>/dev/null
 		if [ -n "$_fastcached" ] && command -v "$_fastcached" >/dev/null 2>&1; then
 			"$_fastcached" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 			exit $?
