@@ -2085,6 +2085,11 @@ def test_run_setup_alias_posix_line_has_go_branch(tmp_path, monkeypatch):
     assert '"$1" = "go"' in content
     assert "virt_team_launcher.py" in content
     assert '"claude"' in content  # the stubbed launch command, baked in
+    # Live bug (2026-08-15): the decision the launcher prints is only ever the bare flag
+    # ("--new" / "--resume <slug>") - "missing the engage" was a live report of exactly
+    # this: the /engage prefix was never actually added anywhere, so Claude Code
+    # received a bare flag as its initial prompt, not a recognised command at all.
+    assert "/engage $__vt_d" in content
 
 
 def test_run_setup_alias_powershell_line_has_go_branch(tmp_path, monkeypatch):
@@ -2106,6 +2111,7 @@ def test_run_setup_alias_powershell_line_has_go_branch(tmp_path, monkeypatch):
     assert "function virt-surv {" in content
     assert '$args[0] -eq "go"' in content
     assert "virt_team_launcher.py" in content
+    assert "/engage $__vtDecision" in content  # same "missing the engage" fix as POSIX
 
 
 def test_run_go_demo_never_launches(tmp_path, monkeypatch, capsys):
@@ -2174,6 +2180,33 @@ def test_run_go_launches_a_real_executable(tmp_path, monkeypatch, capsys):
     # success (replaces the process entirely) - what matters is that it was called
     # correctly, which is exactly what the mock captures.
     assert calls == [("/usr/bin/claude", ["claude"])]  # no launcher script -> no decision arg
+
+
+def test_run_go_prefixes_the_decision_with_engage(tmp_path, monkeypatch, capsys):
+    """Live bug (2026-08-15), reported as "missing the engage": virt_team_launcher.py's
+    own output contract only ever returns the bare flag ("--new" / "--resume <slug>") -
+    the /engage prefix was never actually added anywhere, so Claude Code received a bare
+    flag as its initial prompt (not a recognised command at all, just a plain message
+    reading literally "--new"). Uses a REAL subprocess (a fake launcher script printing
+    "--new") rather than mocking the subprocess call, so the actual argv construction
+    downstream of a genuine decision is what's under test, not a stand-in for it."""
+    import install_helper as ih
+
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "virt_team_launcher.py").write_text("print('--new')\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
+    monkeypatch.setattr(
+        ih, "_check_interpreters", lambda names: ([(sys.executable, "ok", "3.x")], sys.executable)
+    )
+    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(ih.os, "chdir", lambda p: None)
+    calls = []
+    monkeypatch.setattr(ih.os, "execvp", lambda cmd, argv: calls.append((cmd, argv)))
+    ih._run_go(tmp_path, ih.Style(False), ih.marks(), "🎩 ", demo=False)
+    assert calls == [("/usr/bin/claude", ["claude", "/engage --new"])]
 
 
 def test_quick_setup_choice_real_tty_defaults_to_quick(monkeypatch):

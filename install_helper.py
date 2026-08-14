@@ -4588,7 +4588,7 @@ def run_setup_alias(
                 f'if ($args.Count -gt 0 -and $args[0] -eq "go") {{ '
                 f"$__vtRest = @(); if ($args.Count -gt 1) {{ $__vtRest = $args[1..($args.Count-1)] }}; "
                 f'$__vtDecision = & "{interpreter}" "{launcher_path}"; '
-                f'if ($__vtDecision) {{ & "{launch_cmd}" $__vtDecision @__vtRest }} '
+                f'if ($__vtDecision) {{ & "{launch_cmd}" "/engage $__vtDecision" @__vtRest }} '
                 f'else {{ & "{launch_cmd}" @__vtRest }} '
                 f"}} else {{ "
                 f'& "{interpreter}" "{script_path}" @args '
@@ -4599,7 +4599,7 @@ def run_setup_alias(
                 f"{_ALIAS_MARKER}() {{ "
                 f'if [ "$1" = "go" ]; then shift; local __vt_d; '
                 f'__vt_d="$("{interpreter}" "{launcher_path}")"; '
-                f'"{launch_cmd}" ${{__vt_d:+"$__vt_d"}} "$@"; '
+                f'"{launch_cmd}" ${{__vt_d:+"/engage $__vt_d"}} "$@"; '
                 f'else "{interpreter}" "{script_path}" "$@"; fi; }}'
             )
         existing = (
@@ -6853,7 +6853,13 @@ def _run_go(target: Path, style: Style, mark_map: dict, hat: str, demo: bool = F
             except (OSError, subprocess.TimeoutExpired):
                 decision = ""
     launch_cmd = detect_or_configure_claude_launch_command(style, mark_map)
-    argv = [launch_cmd] + ([decision] if decision else [])
+    # Live bug (2026-08-15): virt_team_launcher.py's own output contract only ever
+    # returns the bare flag ("--new" / "--resume <slug>") - the "/engage" prefix was
+    # never actually added anywhere, on either this Python path or the shell "go"
+    # branch (fixed identically there). Passing the bare flag as Claude Code's initial
+    # prompt isn't a recognised command at all - just a plain message reading literally
+    # "--new", which is exactly what a live report described as "missing the engage".
+    argv = [launch_cmd] + ([f"/engage {decision}"] if decision else [])
     if demo:
         print(style.dim(f"    would launch: {' '.join(argv)} (demo - nothing launched)"))
         return 0
