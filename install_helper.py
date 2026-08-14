@@ -2488,6 +2488,9 @@ class Installer:
             "Rebuilds the local team dashboard (dashboard-ui/) so there's a fresh link as "
             "soon as setup finishes - the same thing /dashboard does later, run once now."
         )
+        if not self.repo:
+            self.step_skip("Dashboard", "no usable clone found - run a full install first")
+            return
         ui_dir = self.repo / "dashboard-ui"
         if not ui_dir.is_dir():
             self.step_skip("Dashboard", "dashboard-ui/ not present in this checkout")
@@ -3026,6 +3029,7 @@ class Installer:
             ]
         if self.subset == "dashboard":
             return [
+                ("Locate existing clone", self.locate_clone_asis),
                 ("Dashboard", self.dashboard_step),
             ]
         if self.subset == "fixbashrc":

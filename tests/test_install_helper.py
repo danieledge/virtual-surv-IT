@@ -1939,13 +1939,31 @@ def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, 
 def test_dashboard_subset_reaches_dashboard_step_standalone(monkeypatch, tmp_path):
     """The Advanced-submenu path (subset="dashboard") reaches dashboard_step on its own,
     not bundled with anything else - the standalone equivalent of --check-env/--selftest
-    for the diagnostics, just for a build action instead of a check."""
+    for the diagnostics, just for a build action instead of a check. It locates the clone
+    first (same as "statusline") so self.repo is set before dashboard_step needs it - a
+    live crash (2026-08-14, Windows: TypeError dividing None by "dashboard-ui") traced to
+    this plan skipping straight to the build step with self.repo still None."""
     import install_helper as ih
 
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="dashboard")
     plan = inst.build_plan()
     titles = [t() if callable(t) else t for t, _ in plan]
-    assert titles == ["Dashboard"]
+    assert titles == ["Locate existing clone", "Dashboard"]
+
+
+def test_dashboard_step_skips_cleanly_when_repo_unset(tmp_path, capsys):
+    """Live crash (2026-08-14, Windows temp-extraction run): dashboard_step used to
+    dereference self.repo unconditionally (`self.repo / "dashboard-ui"`), so a run where
+    the clone was never located (self.repo still None, its __init__ default) crashed with
+    `TypeError: unsupported operand type(s) for /: 'NoneType' and 'str'` instead of
+    reporting a clean skip like every other repo-dependent step in this class."""
+    import install_helper as ih
+
+    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="dashboard")
+    assert inst.repo is None
+    inst.dashboard_step()  # must not raise
+    out = capsys.readouterr().out
+    assert "no usable clone found" in out
 
 
 def test_alias_step_skipped_by_default_on_yes_run(monkeypatch, tmp_path, capsys):
