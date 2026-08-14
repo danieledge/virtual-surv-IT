@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """UserPromptSubmit hook - pre-run the /engage step-0 probe before the model's turn.
 
-The step-0 probe (`engage-open.md`) currently costs a full model round-trip on every
-`/engage`/`/engage-light`/`/map-codebase` open: the model has to issue a Bash tool call
-(the heredoc), wait for it, then read the result - a real turn, not free, even though the
-probe's own substance is already cheap (tool inventory is 7-day TTL cached, map-drift is
-mtime-shortcut cached). This hook removes that round-trip for the steady-state case: it
-runs the SAME probe (calling `find_plugin_root.find_plugin_root` and
-`engage_probe.build_report` directly - no logic duplicated, no new drift surface) from a
+The step-0 open (`engage-open.md` + `engage/SKILL.md` step 0b) used to cost 2 separate
+Bash-tool round-trips on every `/engage`/`/engage-light`/`/map-codebase` open - the probe
+heredoc, then `engagement_state list --menu` - each a real model turn, not free, even
+though both are already cheap in substance (tool inventory 7-day TTL cached, map-drift
+mtime-shortcut cached, the menu computation itself sub-second). This hook removes both
+round-trips for the steady-state case: it calls the SAME functions
+(`find_plugin_root.find_plugin_root`, `engage_probe.build_report`,
+`engagement_state.resume_menu` - no logic duplicated, no new drift surface) from a
 `UserPromptSubmit` hook, which Claude Code fires BEFORE the model's turn and whose plain
 stdout (exit 0) is added straight to context - the identical mechanism
 `persona_anchor.py`/`session_resume_brief.py` already rely on. When the result lands in
-context already wrapped as `<engage-probe-result>`, `engage-open.md`'s step 0 uses it
-directly and skips the Bash heredoc for that open.
+context already wrapped as `<engage-probe-result>`, `engage-open.md`'s step 0 and
+`engage/SKILL.md`'s step 0b both use it directly instead of running their own command.
 
 Dormancy-exact, two gates, in order:
 1. `user_input` must actually look like one of the three commands that read
@@ -91,6 +92,23 @@ def _scripts_dir() -> Path:
     return here  # neither has it - let the import below fail naturally (fail-open)
 
 
+def _resume_menu_json(project_dir: Path) -> str | None:
+    """Same computation as `<python> -m scripts.engagement_state list --menu`
+    (SKILL.md step 0b), called directly rather than reimplemented. Separate try/except
+    from `_build_block`'s: a failure here must not cost the probe report too - the two
+    are independent pieces of the same injected block, fail open independently."""
+    try:
+        scripts_dir = _scripts_dir()
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        import engagement_state
+
+        menu = engagement_state.resume_menu(project_dir / "artifacts")
+        return json.dumps(menu, ensure_ascii=False, indent=2)
+    except Exception:
+        return None
+
+
 def _build_block(interp: str, project_dir: Path) -> str | None:
     """Returns the full injected block, or None on any failure (fail-open)."""
     try:
@@ -114,8 +132,22 @@ def _build_block(interp: str, project_dir: Path) -> str | None:
         "the probe never prints it.",
         f"INTERPRETER={interp}",
         report,
-        "</engage-probe-result>",
     ]
+    try:
+        menu_json = _resume_menu_json(project_dir)
+    except Exception:
+        # Belt-and-braces, same reasoning as main()'s outer guard around _build_block
+        # itself: _resume_menu_json already fails open internally, but the call site
+        # must not trust that alone - a failure here must cost only RESUME_MENU, never
+        # the report this function already successfully built above.
+        menu_json = None
+    if menu_json is not None:
+        lines += [
+            "RESUME_MENU (same shape as `<python> -m scripts.engagement_state list --menu` -",
+            "use this directly, do NOT also run that command for this open):",
+            menu_json,
+        ]
+    lines.append("</engage-probe-result>")
     return "\n".join(lines)
 
 
