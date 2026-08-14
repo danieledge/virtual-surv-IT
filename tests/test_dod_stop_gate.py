@@ -226,3 +226,28 @@ def test_reason_forbids_recording_the_suppression_marker_while_deferring():
     )
     assert "do **NOT** record" in reason
     assert 'log-note "dod-nudged:abc123"' in reason
+
+
+def test_load_checker_does_not_grow_sys_path_on_repeat_calls(tmp_path):
+    """M3 (2026-08-14 daemon-safety audit): same bug class already fixed in
+    persona_anchor.py's own _load_checker, missed here - this hook is re-exec'd fresh
+    per Stop event INSIDE the daemon when daemon-served (stop_hook_dispatcher.py loads
+    it via importlib on every call), so an unconditional sys.path.insert would grow
+    the daemon's process-global sys.path without bound over its life. Calling
+    _load_checker twice with the SAME project_root must not add a second entry."""
+    import sys
+
+    staged = _load_staged_gate()
+    project_root = tmp_path
+    before = list(sys.path)
+    staged._load_checker(project_root)
+    after_first = list(sys.path)
+    staged._load_checker(project_root)
+    after_second = list(sys.path)
+
+    added_by_first = [p for p in after_first if p not in before]
+    assert len(added_by_first) <= 1  # at most the one, deliberate insert
+    assert after_second == after_first, (
+        "a second call with the same project_root grew sys.path again - the dedup "
+        "check did not hold"
+    )

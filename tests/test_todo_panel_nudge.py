@@ -161,3 +161,44 @@ def test_staged_and_live_match_when_installed():
     assert live.read_bytes() == staged.read_bytes(), (
         "staged todo-panel nudge not yet applied - run: bash scripts/apply-todo-panel-nudge.sh"
     )
+
+
+def _load_staged_nudge():
+    """Loads scripts/staged_hooks/todo_panel_nudge.py directly (importlib, by path)
+    rather than importing scripts.todo_panel_nudge - the M3 fix below is staged, not
+    yet human-applied to the live copy (test_staged_and_live_match_when_installed
+    above correctly flags that as pending), so testing the live import would test
+    unfixed code. Same pattern as test_dod_stop_gate.py's own _load_staged_gate()."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "staged_hooks" / "todo_panel_nudge.py"
+    spec = importlib.util.spec_from_file_location("staged_todo_panel_nudge", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_load_checker_does_not_grow_sys_path_on_repeat_calls(tmp_path):
+    """M3 (2026-08-14 daemon-safety audit): same bug class already fixed in
+    persona_anchor.py's own _load_checker, missed here (and in dod_stop_gate.py,
+    covered by its own identical test) - this hook is re-exec'd fresh per Stop event
+    INSIDE the daemon when daemon-served, so an unconditional sys.path.insert would
+    grow the daemon's process-global sys.path without bound over its life. Calling
+    _load_checker twice with the SAME project_root must not add a second entry."""
+    import sys
+
+    staged = _load_staged_nudge()
+    project_root = tmp_path
+    before = list(sys.path)
+    staged._load_checker(project_root)
+    after_first = list(sys.path)
+    staged._load_checker(project_root)
+    after_second = list(sys.path)
+
+    added_by_first = [p for p in after_first if p not in before]
+    assert len(added_by_first) <= 1  # at most the one, deliberate insert
+    assert after_second == after_first, (
+        "a second call with the same project_root grew sys.path again - the dedup "
+        "check did not hold"
+    )

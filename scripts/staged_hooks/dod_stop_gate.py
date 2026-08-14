@@ -184,7 +184,15 @@ def _load_checker(project_root: Path):
     stops THIS hook's own repeated calls from re-parsing+re-executing it."""
     global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
-        sys.path.insert(0, str(project_root))
+        # M3 (2026-08-14 daemon-safety audit): deduped, not an unconditional insert -
+        # same fix as persona_anchor.py's own _load_checker (see its comment for the
+        # full rationale). This hook is re-exec'd fresh per Stop event INSIDE the
+        # daemon when daemon-served (stop_hook_dispatcher.py loads it via importlib on
+        # every call); an unconditional insert would grow the daemon's process-global
+        # sys.path by one more entry per Stop event without bound over the daemon's
+        # life, and risk a stale project's entry shadowing a later one.
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
         from scripts import check_artifacts
 
         return check_artifacts

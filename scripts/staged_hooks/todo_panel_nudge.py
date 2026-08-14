@@ -79,7 +79,13 @@ def _load_checker(project_root: Path):
     same way, for the same reason (2026-08-03 perf audit)."""
     global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
-        sys.path.insert(0, str(project_root))
+        # M3 (2026-08-14 daemon-safety audit): deduped, not an unconditional insert -
+        # mirrors dod_stop_gate.py's own identical fix (and persona_anchor.py's
+        # original one). Re-exec'd fresh per Stop event inside the daemon when
+        # daemon-served, so an unconditional insert would grow the daemon's
+        # process-global sys.path without bound over its life.
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
         from scripts import check_artifacts
 
         return check_artifacts

@@ -416,6 +416,154 @@ def test_client_windows_spawn_sets_breakaway_from_job(tmp_path, monkeypatch):
     assert flags & 0x01000000  # CREATE_BREAKAWAY_FROM_JOB - the actual fix
 
 
+# --------------------------------------------------------------- H3: start-attempt backoff
+
+
+def _fake_popen_recorder(client, monkeypatch):
+    """Patches subprocess.Popen to record call count instead of really spawning anything."""
+    calls = {"n": 0}
+
+    def fake_popen(argv, **kwargs):
+        calls["n"] += 1
+
+        class _P:
+            pass
+
+        return _P()
+
+    monkeypatch.setattr(client.subprocess, "Popen", fake_popen)
+    return calls
+
+
+def test_maybe_start_daemon_attempts_when_no_prior_backoff_marker(tmp_path, monkeypatch):
+    """The common case (first-ever miss, or a prior success cleared the marker): no
+    marker on disk means no backoff - the Popen attempt happens exactly as before this
+    fix existed, and the marker is written recording a streak of 1."""
+    client = _load_guard_daemon_client(monkeypatch)
+    calls = _fake_popen_recorder(client, monkeypatch)
+    state_root = tmp_path / "project"
+
+    client._maybe_start_daemon(tmp_path / "module", state_root)
+
+    assert calls["n"] == 1
+    count, age = client._read_start_backoff(state_root)
+    assert count == 1
+    assert age is not None and age < 5
+
+
+def test_maybe_start_daemon_backs_off_after_threshold_within_ttl(tmp_path, monkeypatch):
+    """H3 - the actual fix: once a streak of _START_BACKOFF_THRESHOLD attempts has
+    produced no confirmed-working daemon, a call arriving while still within the TTL
+    window must NOT spawn another Popen - this is the "every call, forever" bug the
+    finding describes."""
+    client = _load_guard_daemon_client(monkeypatch)
+    calls = _fake_popen_recorder(client, monkeypatch)
+    state_root = tmp_path / "project"
+    client._record_start_attempt(state_root, client._START_BACKOFF_THRESHOLD)
+
+    client._maybe_start_daemon(tmp_path / "module", state_root)
+
+    assert calls["n"] == 0, "Popen must not be attempted while backed off within the TTL"
+
+
+def test_maybe_start_daemon_retries_once_ttl_expires(tmp_path, monkeypatch):
+    """A daemon that WAS broken but got fixed must not be permanently locked out -
+    once _START_BACKOFF_TTL_SECONDS has passed since the last attempt, the next call
+    tries again (and the streak resets to 1 for this fresh window)."""
+    import os
+
+    client = _load_guard_daemon_client(monkeypatch)
+    calls = _fake_popen_recorder(client, monkeypatch)
+    state_root = tmp_path / "project"
+    client._record_start_attempt(state_root, client._START_BACKOFF_THRESHOLD)
+    marker = client._start_backoff_marker(state_root)
+    old = time.time() - (client._START_BACKOFF_TTL_SECONDS + 5)
+    os.utime(marker, (old, old))
+
+    client._maybe_start_daemon(tmp_path / "module", state_root)
+
+    assert calls["n"] == 1, "TTL expiry must allow another attempt, not lock out forever"
+    count, _age = client._read_start_backoff(state_root)
+    assert count == 1  # fresh streak, not threshold+1
+
+
+def test_maybe_start_daemon_extends_streak_below_threshold(tmp_path, monkeypatch):
+    """Between attempt 1 and the threshold, each miss still attempts a Popen (the
+    backoff only engages once the streak actually reaches the threshold) and the
+    streak count keeps incrementing."""
+    client = _load_guard_daemon_client(monkeypatch)
+    calls = _fake_popen_recorder(client, monkeypatch)
+    state_root = tmp_path / "project"
+    client._record_start_attempt(state_root, 1)
+
+    client._maybe_start_daemon(tmp_path / "module", state_root)
+
+    assert calls["n"] == 1
+    count, _age = client._read_start_backoff(state_root)
+    assert count == 2
+
+
+def test_clear_start_backoff_removes_the_marker(tmp_path, monkeypatch):
+    client = _load_guard_daemon_client(monkeypatch)
+    state_root = tmp_path / "project"
+    client._record_start_attempt(state_root, client._START_BACKOFF_THRESHOLD)
+
+    client._clear_start_backoff(state_root)
+
+    count, age = client._read_start_backoff(state_root)
+    assert count == 0 and age is None
+    assert not client._start_backoff_marker(state_root).exists()
+
+
+def test_read_start_backoff_fails_open_on_corrupt_marker(tmp_path, monkeypatch):
+    client = _load_guard_daemon_client(monkeypatch)
+    state_root = tmp_path / "project"
+    marker = client._start_backoff_marker(state_root)
+    marker.parent.mkdir(parents=True)
+    marker.write_text("not-a-number", encoding="utf-8")
+
+    assert client._read_start_backoff(state_root) == (0, None)
+
+
+def test_main_clears_backoff_marker_when_daemon_answers_successfully(tmp_path, monkeypatch):
+    """The only signal this client ever gets that a start attempt genuinely worked:
+    _try_daemon returning a real response. That must wipe any recorded streak so a
+    LATER failure starts counting from zero again."""
+    client = _load_guard_daemon_client(monkeypatch)
+    state_root = tmp_path / "project"
+    client._record_start_attempt(state_root, client._START_BACKOFF_THRESHOLD)
+
+    monkeypatch.setattr(client, "_try_daemon", lambda state_root, target, payload: (0, "", ""))
+    monkeypatch.setattr(sys, "argv", ["guard_daemon_client.py", str(tmp_path), str(state_root)])
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO("{}"))
+
+    client.main()
+
+    count, age = client._read_start_backoff(state_root)
+    assert count == 0 and age is None
+
+
+def test_main_backs_off_the_redundant_popen_without_degrading_the_fallback(tmp_path, monkeypatch):
+    """H3 end-to-end through main(): once backed off, the cold-start FALLBACK path
+    (the call the user's tool invocation actually depends on) must still run and
+    return a real result - only the redundant Popen retry is skipped, never the
+    fallback itself."""
+    client = _load_guard_daemon_client(monkeypatch)
+    state_root = tmp_path / "project"
+    client._record_start_attempt(state_root, client._START_BACKOFF_THRESHOLD)
+    calls = _fake_popen_recorder(client, monkeypatch)
+
+    monkeypatch.setattr(client, "_try_daemon", lambda state_root, target, payload: None)
+    monkeypatch.setattr(
+        client, "_cold_start_fallback", lambda module_root, target, payload: (0, "", "fallback-ran")
+    )
+    monkeypatch.setattr(sys, "argv", ["guard_daemon_client.py", str(tmp_path), str(state_root)])
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO("{}"))
+
+    assert client.main() == 0
+    assert calls["n"] == 0, "backed off: no redundant Popen"
+
+
 def test_client_main_defaults_state_root_to_module_root_with_one_arg(tmp_path, monkeypatch):
     """CLI backward compatibility: `guard_daemon_client.py <module_root>` alone
     (today's call shape from an unmodified run-guard.sh, or any other caller that

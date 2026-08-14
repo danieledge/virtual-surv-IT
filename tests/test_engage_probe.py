@@ -570,6 +570,131 @@ def test_map_drift_summary_fires_when_file_changed_since_fingerprinted(tmp_path)
     assert "1 of 1 area(s): rules" in summary
 
 
+def test_map_drift_summary_reuses_cached_fingerprint_when_file_unchanged(tmp_path, monkeypatch):
+    """M5 (2026-08-14 perf audit): a second call against an UNCHANGED file must not
+    re-read or re-hash its content - the (path, mtime, size) shortcut cache must skip
+    straight to the cached fingerprint. Proven by counting real
+    _compute_fingerprint_probe calls: one on the first (cold-cache) call, ZERO on the
+    second."""
+    import scripts.engage_probe as ep
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+
+    calls = {"n": 0}
+    real_compute = ep._compute_fingerprint_probe
+
+    def counting_compute(globs, repo_root):
+        calls["n"] += 1
+        return real_compute(globs, repo_root)
+
+    monkeypatch.setattr(ep, "_compute_fingerprint_probe", counting_compute)
+
+    ep.map_drift_summary(tmp_path, map_skeleton_on=True)
+    assert calls["n"] == 1, "first call (cold cache) must compute for real"
+
+    ep.map_drift_summary(tmp_path, map_skeleton_on=True)
+    assert calls["n"] == 1, (
+        "second call against an unchanged file must reuse the cached fingerprint, not recompute"
+    )
+
+
+def test_map_drift_summary_cache_produces_the_same_fingerprint_as_a_fresh_compute(tmp_path):
+    """Correctness, not just the call count: the cached path's OWN comparison against
+    codebase-map.fingerprints.json must behave identically to the uncached path - a
+    real DoD-style fixture (sidecar written via scripts.map_fingerprint.compute_fingerprint
+    directly) that is silent on the first call must STAY silent on a second call once
+    the shortcut cache is warm."""
+    from scripts.map_fingerprint import compute_fingerprint
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    _write_sidecar(
+        tmp_path / "docs",
+        {
+            "rules": {
+                "paths": ["src/x.py"],
+                "fingerprint": compute_fingerprint(["src/x.py"], tmp_path),
+            }
+        },
+    )
+    assert map_drift_summary(tmp_path, map_skeleton_on=True) == ""
+    assert map_drift_summary(tmp_path, map_skeleton_on=True) == ""  # warm-cache path agrees
+
+
+def test_map_drift_summary_cache_invalidates_on_mtime_change(tmp_path, monkeypatch):
+    """The mtime half of the correctness constraint: content that actually changed,
+    with a real mtime bump (the ordinary case), must still be detected as drift even
+    once the shortcut cache is warm."""
+    import scripts.engage_probe as ep
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    f = tmp_path / "src" / "x.py"
+    f.write_text("threshold = 1\n", encoding="utf-8")
+
+    calls = {"n": 0}
+    real_compute = ep._compute_fingerprint_probe
+
+    def counting_compute(globs, repo_root):
+        calls["n"] += 1
+        return real_compute(globs, repo_root)
+
+    monkeypatch.setattr(ep, "_compute_fingerprint_probe", counting_compute)
+
+    first = ep.map_drift_summary(tmp_path, map_skeleton_on=True)
+    assert calls["n"] == 1
+
+    f.write_text("threshold = 2\n", encoding="utf-8")  # real write - mtime moves forward
+    second = ep.map_drift_summary(tmp_path, map_skeleton_on=True)
+    assert calls["n"] == 2, "a changed file must invalidate the cache and recompute for real"
+    assert first == second == "1 of 1 area(s): rules"  # never fingerprinted -> always drifted
+
+
+def test_map_drift_summary_cache_invalidates_on_size_change_with_unchanged_mtime(
+    tmp_path, monkeypatch
+):
+    """The size half of the correctness constraint, explicitly required by the finding:
+    a filesystem that doesn't move mtime on some writes, or a truncated file with an
+    unchanged mtime, must still be caught - by the size check, since mtime alone would
+    silently miss it. os.utime pins the mtime identical across the edit so only a size
+    difference can possibly explain a detected change."""
+    import os
+
+    import scripts.engage_probe as ep
+    from scripts.map_fingerprint import compute_fingerprint
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "codebase-map.md").write_text(_map_with_paths(), encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    f = tmp_path / "src" / "x.py"
+    f.write_text("threshold = 100\n", encoding="utf-8")
+    _write_sidecar(
+        tmp_path / "docs",
+        {
+            "rules": {
+                "paths": ["src/x.py"],
+                "fingerprint": compute_fingerprint(["src/x.py"], tmp_path),
+            }
+        },
+    )
+    pinned_mtime = f.stat().st_mtime
+    assert ep.map_drift_summary(tmp_path, map_skeleton_on=True) == ""  # warms the cache, silent
+
+    f.write_text("t=1\n", encoding="utf-8")  # shorter content, different size
+    os.utime(f, (pinned_mtime, pinned_mtime))  # ...but mtime pinned identical to before
+
+    summary = ep.map_drift_summary(tmp_path, map_skeleton_on=True)
+    assert "1 of 1 area(s): rules" in summary, (
+        "a size change with an unchanged mtime must still invalidate the shortcut cache"
+    )
+
+
 def test_map_drift_summary_empty_when_no_paths_column(tmp_path):
     (tmp_path / "docs").mkdir()
     # Same shape as _good_map (test_check_artifacts.py) - no Paths column at all.

@@ -91,6 +91,26 @@ def test_clean_file_stays_silent(tmp_path, monkeypatch, capsys):
     assert rc == 0 and err == ""
 
 
+def test_py_compile_check_leaves_no_pycache_next_to_the_edited_file(tmp_path, monkeypatch, capsys):
+    """nit (2026-08-14 perf audit): py_compile.compile() defaults to writing a
+    __pycache__/*.pyc bytecode file right next to the source it checks - pure litter in
+    the user's working tree for what is only ever a syntax check here, on every single
+    Write/Edit during a live engagement. cfile=os.devnull must keep that from
+    happening, on both the clean and the syntax-error path."""
+    _live(tmp_path)
+    ok = tmp_path / "rule.py"
+    ok.write_text("def detect(rows):\n    return [r for r in rows if r]\n", encoding="utf-8")
+    rc, _err = _run(monkeypatch, capsys, _edit(ok), tmp_path)
+    assert rc == 0
+    assert not (tmp_path / "__pycache__").exists()
+
+    bad = tmp_path / "broken_rule.py"
+    bad.write_text("def detect(:\n    pass\n", encoding="utf-8")
+    rc, _err = _run(monkeypatch, capsys, _edit(bad), tmp_path)
+    assert rc == 2
+    assert not (tmp_path / "__pycache__").exists()
+
+
 def test_non_python_files_ignored(tmp_path, monkeypatch, capsys):
     _live(tmp_path)
     doc = tmp_path / "notes.md"

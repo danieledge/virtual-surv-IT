@@ -238,6 +238,71 @@ def test_both_hooks_see_the_full_original_payload(monkeypatch):
     assert seen == [payload, payload]  # both hooks got the full, unconsumed payload
 
 
+def test_check_artifacts_cache_propagates_from_first_hook_to_second(monkeypatch):
+    """M2 (2026-08-14 perf audit): both real hooks carry an IDENTICAL check_artifacts.py
+    loader that memoizes into a hook-local `_CHECK_ARTIFACTS_MODULE_CACHE` global once it
+    hits the file-exec fallback (plugin mode, package import unavailable). Run back-to-back
+    in this ONE dispatcher process, that meant two full execs of the ~120KB checker for one
+    Stop event. This white-box test proves the dispatcher's OWN propagation mechanism using
+    stand-in modules shaped exactly like the real loader's fallback-cache contract -
+    fidelity against the REAL hooks (that this doesn't change dod_stop_gate.py's or
+    todo_panel_nudge.py's own decisions) is covered separately by
+    test_only_dod_finding_matches_direct_invocation et al above, which already run against
+    a bare tmp_path project (no `scripts` package resolvable), so they already exercise
+    this exact fallback path end to end."""
+    shd = _load_dispatcher_module()
+    exec_count = {"n": 0}
+    created: list = []
+
+    def make_fake_hook(name):
+        mod = types.ModuleType(name)
+        mod._CHECK_ARTIFACTS_MODULE_CACHE = None
+
+        def main():
+            sys.stdin.read()
+            if mod._CHECK_ARTIFACTS_MODULE_CACHE is None:
+                exec_count["n"] += 1
+                mod._CHECK_ARTIFACTS_MODULE_CACHE = object()  # stand-in "loaded checker"
+            return 0
+
+        mod.main = main
+        created.append(mod)
+        return mod
+
+    monkeypatch.setattr(shd, "_load", lambda name, path: make_fake_hook(name))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"cwd": "/tmp"})))
+    assert shd.main() == 0
+
+    assert exec_count["n"] == 1, (
+        "check_artifacts fallback exec ran more than once for one Stop event"
+    )
+    assert len(created) == 2
+    assert created[0]._CHECK_ARTIFACTS_MODULE_CACHE is created[1]._CHECK_ARTIFACTS_MODULE_CACHE
+
+
+def test_check_artifacts_cache_propagation_is_a_noop_in_repo_mode(monkeypatch):
+    """Repo mode (package import succeeds): neither hook's own loader ever touches
+    `_CHECK_ARTIFACTS_MODULE_CACHE` on that path, so it must stay None on both stand-in
+    modules and no propagation (or extra work) happens - proves the fix is inert, not
+    just harmless, when there is nothing to share."""
+    shd = _load_dispatcher_module()
+
+    def make_fake_hook(name):
+        mod = types.ModuleType(name)
+        mod._CHECK_ARTIFACTS_MODULE_CACHE = None  # never populated - "package import worked"
+
+        def main():
+            sys.stdin.read()
+            return 0
+
+        mod.main = main
+        return mod
+
+    monkeypatch.setattr(shd, "_load", lambda name, path: make_fake_hook(name))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"cwd": "/tmp"})))
+    assert shd.main() == 0
+
+
 def test_non_block_or_empty_output_is_ignored(monkeypatch):
     """A hook that prints something that ISN'T a decision:block JSON (or nothing) must
     not be treated as a nudge - defensive against a hook printing debug noise."""

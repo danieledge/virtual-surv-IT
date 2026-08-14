@@ -250,6 +250,81 @@ def _compute_fingerprint_probe(globs: list, repo_root: Path) -> str:
     return f"sha256:{digest.hexdigest()}"
 
 
+_FP_PROBE_CACHE_FILENAME = ".map-fingerprint-probe-cache.json"
+
+
+def _file_signature(files: list, repo_root: Path) -> list:
+    """[[rel_path, mtime, size], ...] for every file in `files` (already sorted by
+    _resolve_globs_probe) - cheap stat() calls only, never file content. A file whose
+    stat() fails (permissions, a TOCTOU race) gets [rel_path, None, None] instead of
+    being skipped, so a transition to/from unreadable is itself a detectable signature
+    change rather than silently ignored."""
+    sig = []
+    for rel_path in files:
+        try:
+            st = (repo_root / rel_path).stat()
+            sig.append([rel_path, st.st_mtime, st.st_size])
+        except OSError:
+            sig.append([rel_path, None, None])
+    return sig
+
+
+def _load_fp_probe_cache(project_dir: Path) -> dict:
+    path = project_dir / ".claude" / _FP_PROBE_CACHE_FILENAME
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}  # missing/corrupt cache is never load-bearing - falls through to a real compute
+
+
+def _save_fp_probe_cache(project_dir: Path, cache: dict) -> None:
+    """Best-effort - a failed write just means the next call recomputes from scratch,
+    never a reason to raise (this cache is a pure performance aid, never authoritative -
+    codebase-map.fingerprints.json remains the one sidecar drift is actually judged
+    against)."""
+    path = project_dir / ".claude" / _FP_PROBE_CACHE_FILENAME
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(cache), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _fingerprint_with_mtime_shortcut(area: str, globs: list, repo_root: Path, cache: dict):
+    """M5 (2026-08-14 perf audit): _compute_fingerprint_probe re-reads and re-hashes
+    every mapped file's FULL BYTES on every call, even when nothing has changed since
+    the last check - a real, repeated disk-I/O cost on every open/Stop cycle while
+    map_skeleton is on. Cached here by a cheap (path, mtime, size) SIGNATURE, never by
+    content: when every matched file's signature matches what is cached for this area
+    (same file set too - an added/removed/renamed file changes `files` itself, which
+    changes the signature), the previously computed fingerprint is reused verbatim with
+    zero file reads or hashing this call. The moment ANY file's mtime OR size differs -
+    both are checked, so a filesystem that doesn't move mtime on some writes, or a
+    truncated file with an unchanged mtime, still invalidates via the size half - this
+    falls straight through to an ordinary, UNMODIFIED _compute_fingerprint_probe call:
+    same algorithm, same output, byte-identical to today on every path. This is a pure
+    disk-I/O shortcut, never a change to the hashing algorithm itself, so it stays
+    byte-identical to scripts/map_fingerprint.py::compute_fingerprint (the authoritative
+    function check_artifacts.py's close-time check uses) exactly as
+    _compute_fingerprint_probe's own docstring requires - a DIFFERENT algorithm here
+    (e.g. caching per-file hashes and combining them, which cannot reproduce the same
+    single cumulative digest) would risk exactly the "spuriously drifted... even when
+    check_artifacts.py's own check_map() says otherwise" bug that docstring warns
+    against, so this deliberately does not do that.
+
+    Returns (fingerprint, cache_changed) - the caller only pays a sidecar write when
+    something was actually recomputed."""
+    files = _resolve_globs_probe(globs, repo_root)
+    signature = _file_signature(files, repo_root)
+    entry = cache.get(area)
+    if isinstance(entry, dict) and entry.get("sig") == signature:
+        return entry.get("fingerprint", ""), False
+    fingerprint = _compute_fingerprint_probe(globs, repo_root)
+    cache[area] = {"sig": signature, "fingerprint": fingerprint}
+    return fingerprint, True
+
+
 def map_drift_summary(project_dir: Path, map_skeleton_on: bool) -> str:
     """Minimal, standalone open-time drift check (2026-08-07 user request: surface drift at
     OPEN, not only at close, so Morgan can factor it into how she briefs agents - "otherwise
@@ -311,12 +386,17 @@ def map_drift_summary(project_dir: Path, map_skeleton_on: bool) -> str:
         sidecar = json.loads(sidecar_path.read_text(encoding="utf-8")).get("entries") or {}
     except (OSError, ValueError):
         sidecar = {}
+    fp_cache = _load_fp_probe_cache(project_dir)
+    fp_cache_changed = False
     drifted = []
     for area, globs in rows:
         recorded = sidecar.get(area)
-        current = _compute_fingerprint_probe(globs, project_dir)
+        current, changed = _fingerprint_with_mtime_shortcut(area, globs, project_dir, fp_cache)
+        fp_cache_changed = fp_cache_changed or changed
         if recorded is None or current != recorded.get("fingerprint"):
             drifted.append(area)
+    if fp_cache_changed:
+        _save_fp_probe_cache(project_dir, fp_cache)
     if not drifted:
         return ""
     shown = ", ".join(drifted[:5]) + (", ..." if len(drifted) > 5 else "")

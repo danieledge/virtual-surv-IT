@@ -41,10 +41,29 @@ import json
 import socket
 import subprocess  # nosec B404 - fixed argv, shell=False, invoking our own sibling scripts only
 import sys
+import time
 from pathlib import Path
 
 _CONNECT_TIMEOUT = 0.5
 _RESPONSE_TIMEOUT = 20.0
+
+# H3 (2026-08-14 perf audit): a daemon that can NEVER actually start (e.g.
+# CREATE_BREAKAWAY_FROM_JOB denied on a locked-down Windows sandbox, or one of the six
+# daemon target modules failing to import inside guard_daemon.py's constructor) used to
+# pay a full `_start_daemon_detached` Popen AND the cold-start fallback's own subprocess
+# on every single call, forever - strictly worse than daemon-off, silently, with no
+# backoff. The marker below rate-limits repeated Popen attempts once a streak of them has
+# produced no working daemon (inferred the only way a client CAN infer it: _try_daemon
+# still misses on a later call), same short-TTL-file-cache pattern as
+# guard-raw-data.py's `_RAW_PRESENT_CACHE` / run-guard.sh's `.guard-coldstart-ms`.
+# Conservative by construction: any read/write failure on the marker falls through to
+# "attempt the Popen" (today's behaviour, never worse), and the fallback cold-start path
+# below is completely untouched either way - only the redundant Popen-per-call is gated.
+_START_BACKOFF_MARKER_NAME = ".guard-daemon-start-backoff"
+_START_BACKOFF_THRESHOLD = 3  # consecutive failed-to-connect attempts before backing off
+_START_BACKOFF_TTL_SECONDS = 300  # retry again after this long even while backed off -
+# a daemon that WAS broken but got fixed (e.g. the user updated a target module) must
+# not be permanently locked out.
 
 # H2 (2026-08-14 perf audit): this file used to `from guard_daemon import
 # read_port_and_token` - which executes the WHOLE daemon module (socketserver/threading/
@@ -156,6 +175,64 @@ def _start_daemon_detached(module_root: Path, state_root: Path) -> None:
         pass
 
 
+def _start_backoff_marker(state_root: Path) -> Path:
+    return state_root / ".claude" / _START_BACKOFF_MARKER_NAME
+
+
+def _read_start_backoff(state_root: Path):
+    """Returns (streak_count, age_seconds) - (0, None) when the marker is absent,
+    unreadable or corrupt (fail open: an unreadable marker means "no known backoff",
+    same posture as read_port_and_token above). age_seconds is always populated
+    together with a non-zero count, since both come from the same successful read."""
+    marker = _start_backoff_marker(state_root)
+    try:
+        count = int(marker.read_text(encoding="utf-8").strip())
+        age = time.time() - marker.stat().st_mtime
+        return count, age
+    except (OSError, ValueError):
+        return 0, None
+
+
+def _record_start_attempt(state_root: Path, streak_count: int) -> None:
+    """Best-effort - a failed write just means the next call re-evaluates from
+    scratch (falls open to "attempt the Popen"), never a reason to raise."""
+    marker = _start_backoff_marker(state_root)
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(str(streak_count), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _clear_start_backoff(state_root: Path) -> None:
+    """Called once a daemon actually answers a request - the one signal this client
+    ever gets that a start attempt genuinely worked. Wipes the streak so the next
+    failure (if the daemon later dies) starts counting from zero again, not from
+    wherever an old streak left off."""
+    try:
+        _start_backoff_marker(state_root).unlink()
+    except OSError:
+        pass
+
+
+def _maybe_start_daemon(module_root: Path, state_root: Path) -> None:
+    """Rate-limited wrapper around _start_daemon_detached: after
+    _START_BACKOFF_THRESHOLD consecutive attempts with no confirmed-working daemon,
+    stop spawning a fresh Popen every call until _START_BACKOFF_TTL_SECONDS has
+    passed since the last attempt. Worst case on ANY failure in the backoff
+    bookkeeping itself is "attempt the Popen anyway" - identical to before this fix
+    existed, never worse."""
+    count, age = _read_start_backoff(state_root)
+    if count >= _START_BACKOFF_THRESHOLD and age is not None and age < _START_BACKOFF_TTL_SECONDS:
+        return  # backed off - still within the TTL window since the last attempt
+    _start_daemon_detached(module_root, state_root)
+    # A fresh streak (no marker, or the TTL window since the last attempt already
+    # expired) starts back at 1; otherwise this attempt extends the current streak.
+    still_within_ttl = age is not None and age < _START_BACKOFF_TTL_SECONDS
+    next_count = count + 1 if (count and still_within_ttl) else 1
+    _record_start_attempt(state_root, next_count)
+
+
 def _cold_start_fallback(module_root: Path, target: str, payload_text: str):
     """Exactly today's path - a fresh subprocess against the real target script.
     Fails open on any launch problem, same posture as run-guard.sh's own
@@ -184,8 +261,10 @@ def main() -> int:
 
     result = _try_daemon(state_root, target, payload_text)
     if result is None:
-        _start_daemon_detached(module_root, state_root)
+        _maybe_start_daemon(module_root, state_root)
         result = _cold_start_fallback(module_root, target, payload_text)
+    else:
+        _clear_start_backoff(state_root)
 
     exit_code, stderr_text, stdout_text = result
     if stdout_text:

@@ -29,6 +29,7 @@ import py_compile
 import shutil
 import subprocess  # nosec B404 - fixed-argv lint invocations only (ruff only - py_compile is in-process)
 import sys
+import tempfile
 from pathlib import Path
 
 _LIVE = ("in_progress", "blocked", "closing")
@@ -71,13 +72,32 @@ def _lint(path: Path) -> list[str]:
     # never executing the module - with zero process-spawn cost. str(PyCompileError) is
     # byte-for-byte the same "File ... / caret / SyntaxError: ..." text the subprocess's
     # stderr produced, so the tail-3-lines formatting below is unchanged.
+    #
+    # nit (2026-08-14 perf audit): the default cfile target is a __pycache__/*.pyc
+    # dropped right next to the user's just-edited file, on every single Write/Edit
+    # during a live engagement - pure litter in their working tree for what is only
+    # ever a syntax check here, nothing downstream ever reads it. cfile=os.devnull
+    # looks like the obvious fix but py_compile itself refuses it (FileExistsError:
+    # "/dev/null is a non-regular file..." - a stdlib safety check against exactly
+    # this shortcut). A real, throwaway temp file gets the same effect instead:
+    # written outside the user's tree, then unconditionally removed in the finally
+    # below regardless of which branch fires.
+    tmp_cfile = None
     try:
-        py_compile.compile(str(path), doraise=True)
+        with tempfile.NamedTemporaryFile(suffix=".pyc", delete=False) as tmp:
+            tmp_cfile = tmp.name
+        py_compile.compile(str(path), cfile=tmp_cfile, doraise=True)
     except py_compile.PyCompileError as exc:
         tail = str(exc).strip().splitlines()[-3:]
         problems.append("syntax (py_compile): " + " | ".join(tail))
     except Exception:  # nosec B110 - a broken linter never becomes a broken edit
         pass
+    finally:
+        if tmp_cfile:
+            try:
+                os.unlink(tmp_cfile)
+            except OSError:
+                pass
     ruff = shutil.which("ruff")
     if ruff:
         try:
