@@ -1183,6 +1183,7 @@ _ADVANCED_ACTIONS = {
     "6": "machinedefaults",
     "7": "dashboard",
     "8": "fixbashrc",
+    "9": "cleanplugincache",
     "b": "back",
 }
 
@@ -1293,6 +1294,7 @@ def choose_action(style: Style) -> str:
                     ),
                     ("7", "Rebuild the local team dashboard"),
                     ("8", "Fix a slow ~/.bashrc (checks first, applies only if needed)"),
+                    ("9", "Clean stale plugin cache (removes old installs, keeps the active one)"),
                     ("b", "Back"),
                 ),
                 _ADVANCED_ACTIONS,
@@ -2553,6 +2555,24 @@ class Installer:
         else:
             self.step_fail("~/.bashrc fix", "see output above", fatal=False)
 
+    def clean_plugin_cache_step(self) -> None:
+        """Standalone (Advanced submenu option 9, subset="cleanplugincache"): lists every
+        cached install of this plugin and offers to remove the stale ones - never the
+        currently-active install. Unlike fixbashrc_step, this does NOT auto-apply
+        (assume_yes stays whatever args.yes already was, via run_clean_plugin_cache's own
+        default=assume_yes confirm() call): removing a directory is not backed-up-and-
+        reversible the way a text-file edit is, so it keeps the normal interactive
+        confirmation unless the user already passed --yes to the whole run."""
+        self.step_intro(
+            "Lists every cached install of this plugin under ~/.claude/plugins/ and offers "
+            "to remove the stale ones - never the one actually in use."
+        )
+        rc = run_clean_plugin_cache(self.style, self.marks, self.args.yes, self.demo)
+        if rc == 0:
+            self.step_ok("Plugin cache " + self.did("cleaned", "would be cleaned"))
+        else:
+            self.step_fail("Plugin cache cleanup", "see output above", fatal=False)
+
     def machine_defaults_offer(self) -> None:
         """Last of the optional post-install steps for a full install/update (2026-08-07
         user request: "we are missing an option to be able to modify settings on install
@@ -3011,6 +3031,10 @@ class Installer:
         if self.subset == "fixbashrc":
             return [
                 ("Fix ~/.bashrc", self.fixbashrc_step),
+            ]
+        if self.subset == "cleanplugincache":
+            return [
+                ("Clean plugin cache", self.clean_plugin_cache_step),
             ]
         if self.subset == "toolcheck":
             return [
@@ -4652,6 +4676,174 @@ def run_fix_bashrc(
     print(f"{ok} guard added to {bashrc} (backup: {backup})")
     print(style.dim("  Verify: time bash -c 'source ~/.bashrc' - should now be near-instant."))
     return 0
+
+
+# --------------------------------------------------------------- stale plugin cache cleanup
+#
+# Live report (2026-08-14, corp Windows box): a bootstrap failure traced to the plugin cache
+# being stuck on a 0.22.0 install while the registry/current release had long since moved to
+# 0.33.62 - the stale directory was pure dead weight, never cleaned up by any update path.
+# _PLUGIN_CACHE_MARKER must match scripts/find_plugin_root.py's own _TEAM_NAME constant -
+# both identify a genuine install of THIS plugin the same way (a docs/team-operating-guide.md
+# file under a path segment with this literal name), so a stale-cache scan can never mistake
+# an unrelated cached plugin for one of this one's old versions. Duplicated rather than
+# imported: install_helper.py can run standalone (a curl-bootstrap temp copy with no
+# scripts/ sibling), so it must not depend on find_plugin_root.py being importable.
+
+_PLUGIN_CACHE_MARKER = "compliance-surveillance-team"
+
+
+def _plugin_cache_version_dirs(home: Path) -> list:
+    """Every version directory for this plugin under ~/.claude/plugins/{cache,marketplaces} -
+    same discovery rule as find_plugin_root.py's filesystem fallback (see module comment
+    above)."""
+    bases = (home / ".claude" / "plugins" / "cache", home / ".claude" / "plugins" / "marketplaces")
+    found: list = []
+    for base in bases:
+        if not base.is_dir():
+            continue
+        for marker in base.rglob("docs/team-operating-guide.md"):
+            if _PLUGIN_CACHE_MARKER in marker.parts:
+                version_dir = marker.parent.parent
+                if version_dir not in found:
+                    found.append(version_dir)
+    return found
+
+
+def _active_plugin_install_path(home: Path) -> Optional[Path]:
+    """The install path the registry currently points at for this plugin - the ONE version
+    directory that must never be removed, whatever it looks like, since it's what Claude
+    Code is actually configured to use right now. None if the registry is missing/unreadable/
+    silent on this plugin - callers must treat that as "don't know", never as "safe to
+    remove everything" (see run_clean_plugin_cache's own newest-wins fallback for that case,
+    which is deliberately more conservative than 'nothing is active')."""
+    registry = home / ".claude" / "plugins" / "installed_plugins.json"
+    try:
+        data = json.loads(registry.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+    install_paths: list = []
+
+    def _walk(obj) -> None:
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if key == "installPath" and isinstance(value, str):
+                    install_paths.append(value)
+                else:
+                    _walk(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                _walk(item)
+
+    _walk(data)
+    for raw_path in install_paths:
+        candidate = Path(raw_path)
+        manifest = candidate / ".claude-plugin" / "plugin.json"
+        try:
+            text = manifest.read_text(encoding="utf-8-sig")
+        except OSError:
+            continue  # this candidate doesn't actually exist on disk - not the active one
+        if _PLUGIN_CACHE_MARKER in text:
+            return candidate
+    return None
+
+
+_CACHE_VERSION_SORT_RE = re.compile(r"(\d+)|(\D+)")
+
+
+def _cache_version_sort_key(path: Path) -> list:
+    """Same `sort -V`-approximating split find_plugin_root.py's _sort_key uses (digit runs
+    compare numerically) - only reached when the registry can't confirm which install is
+    active, to pick "the newest looking" one as the conservative thing to keep."""
+    parts = _CACHE_VERSION_SORT_RE.findall(str(path))
+    return [(int(d), "") if d else (-1, s) for d, s in parts]
+
+
+def _dir_size(path: Path) -> int:
+    total = 0
+    for p in path.rglob("*"):
+        try:
+            if p.is_file():
+                total += p.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
+def _human_size(num_bytes: int) -> str:
+    size = float(num_bytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f}{unit}" if unit == "B" else f"{size:.1f}{unit}"
+        size /= 1024
+    return f"{size:.1f}GB"
+
+
+def run_clean_plugin_cache(
+    style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
+) -> int:
+    """Standalone (--clean-plugin-cache / menu): removes STALE cached install directories
+    for this plugin - old versions an update left behind under
+    ~/.claude/plugins/{cache,marketplaces}, never cleaned up by any existing path. Live
+    report (2026-08-14): a Windows box's bootstrap broke tracing to exactly this - a cached
+    0.22.0 install still sitting on disk, dozens of releases behind current.
+
+    Never removes the version the registry currently points at (`_active_plugin_install_path`),
+    even if something else made that install look broken - it is still the one Claude Code
+    is configured to use, and this tool's job is disk hygiene, not fixing that separately.
+    If the registry can't confirm an active install at all (missing/corrupt/silent on this
+    plugin), falls back to keeping only the newest-looking version and flags that this is a
+    guess, not a confirmed answer. Preview-first (every directory listed with its size before
+    anything is touched), confirm-gated (same pattern as --fix-bashrc: an explicit --yes IS
+    the consent, a real interactive prompt still defaults to declining on a bare Enter).
+    demo=True lists what would be removed and deletes nothing."""
+    ok, fail = mark_map["ok"], mark_map["fail"]
+    home = Path.home()
+    version_dirs = _plugin_cache_version_dirs(home)
+    if not version_dirs:
+        print(
+            f"{style.dim('-')} no cached installs found under "
+            f"{home / '.claude' / 'plugins'} - nothing to clean"
+        )
+        return 0
+    active = _active_plugin_install_path(home)
+    print(f"  Found {len(version_dirs)} cached install(s) under {home / '.claude' / 'plugins'}:")
+    for d in version_dirs:
+        is_active = active is not None and d.resolve() == active.resolve()
+        tag = style.green(" (ACTIVE - kept)") if is_active else ""
+        print(f"    {d} - {_human_size(_dir_size(d))}{tag}")
+    if active is not None:
+        stale = [d for d in version_dirs if d.resolve() != active.resolve()]
+    else:
+        print(
+            style.yellow(
+                "  ! could not confirm which install is active (registry missing/unreadable/"
+                "silent on this plugin) - keeping only the newest-looking version as a "
+                "conservative guess, not a confirmed answer"
+            )
+        )
+        newest = max(version_dirs, key=_cache_version_sort_key)
+        stale = [d for d in version_dirs if d != newest]
+    if not stale:
+        print(f"{style.dim('-')} nothing stale - only the active install is present")
+        return 0
+    total = sum(_dir_size(d) for d in stale)
+    print(f"  Would remove {len(stale)} stale install(s), freeing {_human_size(total)}.")
+    if demo:
+        print(style.dim("    (demo mode - nothing removed)"))
+        return 0
+    if not confirm("  Remove them?", default=assume_yes, assume_yes=assume_yes, style=style):
+        print(f"{style.dim('-')} skipped")
+        return 0
+    removed = 0
+    for d in stale:
+        try:
+            shutil.rmtree(d)
+            print(f"{ok} removed {d}")
+            removed += 1
+        except OSError as exc:
+            print(f"{fail} could not remove {d}: {exc}")
+    return 0 if removed == len(stale) else 1
 
 
 # ------------------------------------------------------------------ analyser output check
@@ -6356,6 +6548,13 @@ def parse_args(argv=None) -> argparse.Namespace:
         "interactive-only setup doesn't run on every Claude Code Bash tool call (see "
         "--check-env's '.bashrc source time' row) - and exit",
     )
+    parser.add_argument(
+        "--clean-plugin-cache",
+        action="store_true",
+        help="standalone: remove stale cached plugin installs under "
+        "~/.claude/plugins/{cache,marketplaces} left behind by prior updates - never "
+        "removes the currently-active install - and exit",
+    )
     return parser.parse_args(argv)
 
 
@@ -6603,6 +6802,7 @@ def _main(argv=None) -> int:
         or args.list_engagements
         or args.setup_alias
         or args.fix_bashrc
+        or args.clean_plugin_cache
     ):
         # Scripting path: no banner, no menu.
         #
@@ -6700,6 +6900,8 @@ def _main(argv=None) -> int:
             rc = max(rc, run_setup_alias(style, marks(), args.yes, args.demo, args.repo))
         if args.fix_bashrc:
             rc = max(rc, run_fix_bashrc(style, marks(), args.yes, args.demo))
+        if args.clean_plugin_cache:
+            rc = max(rc, run_clean_plugin_cache(style, marks(), args.yes, args.demo))
         return rc
 
     if not args.demo:

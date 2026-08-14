@@ -5391,6 +5391,7 @@ def test_advanced_submenu_full_mapping():
         "6": "machinedefaults",
         "7": "dashboard",
         "8": "fixbashrc",
+        "9": "cleanplugincache",
         "b": "back",
     }
 
@@ -5490,6 +5491,221 @@ def test_run_setup_alias_demo_writes_nothing(tmp_path, monkeypatch):
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
     assert rc == 0
     assert (home / ".bashrc").read_text(encoding="utf-8") == ""  # untouched
+
+
+# --- run_clean_plugin_cache (2026-08-14: live report - a stale 0.22.0 install left behind) -----
+
+
+def _make_fake_plugin_install(base: Path) -> None:
+    """A directory that looks like a genuine cached install of this plugin to BOTH
+    discovery paths: the docs/team-operating-guide.md marker _plugin_cache_version_dirs
+    scans for, and the .claude-plugin/plugin.json manifest _active_plugin_install_path
+    reads to confirm a registry installPath is really this plugin."""
+    (base / "docs").mkdir(parents=True, exist_ok=True)
+    (base / "docs" / "team-operating-guide.md").write_text("# guide\n", encoding="utf-8")
+    (base / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+    (base / ".claude-plugin" / "plugin.json").write_text(
+        '{"name": "compliance-surveillance-team"}', encoding="utf-8"
+    )
+
+
+def test_plugin_cache_version_dirs_finds_installs_under_cache_and_marketplaces(tmp_path):
+    import install_helper as ih
+
+    old = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.22.0"
+    )
+    new = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "marketplaces"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.33.62"
+    )
+    _make_fake_plugin_install(old)
+    _make_fake_plugin_install(new)
+    found = ih._plugin_cache_version_dirs(tmp_path)
+    assert set(found) == {old, new}
+
+
+def test_plugin_cache_version_dirs_ignores_unrelated_plugins(tmp_path):
+    import install_helper as ih
+
+    unrelated = tmp_path / ".claude" / "plugins" / "cache" / "mkt" / "some-other-plugin" / "1.0.0"
+    (unrelated / "docs").mkdir(parents=True)
+    (unrelated / "docs" / "team-operating-guide.md").write_text("# guide\n", encoding="utf-8")
+    assert ih._plugin_cache_version_dirs(tmp_path) == []
+
+
+def test_active_plugin_install_path_reads_the_registry(tmp_path):
+    import install_helper as ih
+
+    active = tmp_path / "plugins" / "compliance-surveillance-team" / "0.33.62"
+    _make_fake_plugin_install(active)
+    registry = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+    registry.parent.mkdir(parents=True)
+    registry.write_text(
+        json.dumps({"marketplaces": [{"installPath": str(active)}]}), encoding="utf-8"
+    )
+    assert ih._active_plugin_install_path(tmp_path) == active
+
+
+def test_active_plugin_install_path_none_when_registry_missing(tmp_path):
+    import install_helper as ih
+
+    assert ih._active_plugin_install_path(tmp_path) is None
+
+
+def test_run_clean_plugin_cache_removes_stale_keeps_active(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    old = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.22.0"
+    )
+    active = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.33.62"
+    )
+    _make_fake_plugin_install(old)
+    _make_fake_plugin_install(active)
+    registry = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+    registry.write_text(json.dumps({"installPath": str(active)}), encoding="utf-8")
+
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert not old.exists()  # stale install actually removed
+    assert active.is_dir()  # active install untouched
+    assert "ACTIVE - kept" in out
+
+
+def test_run_clean_plugin_cache_demo_removes_nothing(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    old = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.22.0"
+    )
+    active = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.33.62"
+    )
+    _make_fake_plugin_install(old)
+    _make_fake_plugin_install(active)
+    registry = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+    registry.write_text(json.dumps({"installPath": str(active)}), encoding="utf-8")
+
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
+    assert rc == 0
+    assert old.is_dir()  # nothing removed in demo mode
+    assert active.is_dir()
+
+
+def test_run_clean_plugin_cache_falls_back_to_newest_when_registry_missing(tmp_path, monkeypatch):
+    """No active install confirmed (registry missing) - keeps the newest-LOOKING version
+    as a conservative guess rather than refusing outright or removing everything."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    old = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.22.0"
+    )
+    newer = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.33.62"
+    )
+    _make_fake_plugin_install(old)
+    _make_fake_plugin_install(newer)
+    # No installed_plugins.json at all.
+
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    assert not old.exists()
+    assert newer.is_dir()
+
+
+def test_run_clean_plugin_cache_declined_removes_nothing(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    old = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.22.0"
+    )
+    active = (
+        tmp_path
+        / ".claude"
+        / "plugins"
+        / "cache"
+        / "mkt"
+        / "compliance-surveillance-team"
+        / "0.33.62"
+    )
+    _make_fake_plugin_install(old)
+    _make_fake_plugin_install(active)
+    registry = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+    registry.write_text(json.dumps({"installPath": str(active)}), encoding="utf-8")
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
+
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=False)
+    assert rc == 0
+    assert old.is_dir()  # declined - nothing removed
+
+
+def test_run_clean_plugin_cache_nothing_found(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    assert "nothing to clean" in capsys.readouterr().out
 
 
 # --- run_fix_bashrc (2026-08-14: consent-gated counterpart to _check_shell_startup_time) -------
