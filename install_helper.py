@@ -1184,7 +1184,6 @@ _ADVANCED_ACTIONS = {
     "7": "dashboard",
     "8": "fixbashrc",
     "9": "cleanplugincache",
-    "10": "virtteamalias",
     "b": "back",
 }
 
@@ -1296,10 +1295,6 @@ def choose_action(style: Style) -> str:
                     ("7", "Rebuild the local team dashboard"),
                     ("8", "Fix a slow ~/.bashrc (checks first, applies only if needed)"),
                     ("9", "Clean stale plugin cache (removes old installs, keeps the active one)"),
-                    (
-                        "10",
-                        "Set up the 'virt-team' alias (pre-warm tools, resume-menu outside the LLM)",
-                    ),
                     ("b", "Back"),
                 ),
                 _ADVANCED_ACTIONS,
@@ -1898,9 +1893,9 @@ class Installer:
             return
         self.step_intro(
             "A few more optional bits follow: dev requirements, the status line, the "
-            "'virt-surv' shell alias, project enablement (permissions, env tuning, the "
-            "LLM-gateway workaround, docx, Morgan's model), and this machine's default "
-            "settings."
+            "'virt-surv' shell alias, and this machine's default settings. Enabling the "
+            "plugin for a specific project is a separate step - 'virt-surv configure' "
+            "(or 'engage'/'onboard' for zero-prompt setup) from inside that project."
         )
         self.quick_defaults = confirm(
             "  Go with the recommended defaults for all of these (fast, recommended), "
@@ -2355,44 +2350,6 @@ class Installer:
         else:
             self.step_fail("Alias setup", "see above for detail", fatal=False)
 
-    def virt_team_alias_step(self) -> None:
-        """Optional, same outer-confirm pattern as alias_step: offers the 'virt-team'
-        shell alias, which pre-warms the tool-inventory cache and resolves the /engage
-        resume-vs-new decision outside the LLM before launching Claude Code (2026-08-14
-        user request, motivated by observed unreliability in the model-driven menu
-        choice). Opt-in only - never touches shell rc files on an unattended run, same
-        reasoning as alias_step (a bigger surprise than a settings.json write if nobody's
-        watching)."""
-        self.step_intro(
-            "Optional: the 'virt-team' alias pre-warms the review-tool cache and lets you "
-            "pick resume-or-new in the terminal before Claude Code even starts, instead of "
-            "inside the session."
-        )
-        if self.args.yes:
-            wanted = False
-        elif self.subset == "full" and self.quick_defaults:
-            wanted = True
-        else:
-            wanted = confirm(
-                "  Shall I also set up the 'virt-team' alias?",
-                default=True if sys.stdin.isatty() else False,
-                assume_yes=False,
-                style=self.style,
-            )
-        if not wanted:
-            self.step_skip(
-                "virt-team alias setup",
-                "skipped - python install_helper.py --setup-virt-team-alias any time",
-            )
-            return
-        rc = run_setup_virt_team_alias(
-            self.style, self.marks, self.args.yes, self.demo, self.args.repo
-        )
-        if rc == 0:
-            self.step_ok("virt-team alias setup", "see above for what was added")
-        else:
-            self.step_fail("virt-team alias setup", "see above for detail", fatal=False)
-
     def format_preferences_step(self) -> None:
         """Standalone, easily re-runnable: change a project's preferences any time (menu
         option 6) - most users install once and never re-run the full flow, so these
@@ -2693,8 +2650,8 @@ class Installer:
                 f"codebase-skeleton drift checking = {'on' if map_skeleton_current else 'off'}, "
                 f"statusline map indicator = {'on' if statusline_show_map_current else 'off'}, "
                 f"Morgan's model = {model_current or f'(unset - {ORCHESTRATOR_MODEL_DEFAULT} applies)'}, "
-                "virt-team launch command = "
-                f"{launch_cmd_current or '(unset - prompted on first virt-team alias setup)'}"
+                "'virt-surv go' launch command = "
+                f"{launch_cmd_current or '(unset - prompted on first virt-surv alias setup)'}"
             )
         )
         docx_wanted = confirm(
@@ -2760,8 +2717,8 @@ class Installer:
         if model_wanted == "opus":
             self.say(self.style.yellow(f"    {ORCHESTRATOR_OPUS_NOTE}"))
         launch_cmd_picked = ask(
-            "  virt-team's Claude Code launch command (e.g. 'claude' or your own alias like "
-            "'cc') - blank to leave unchanged",
+            "  'virt-surv go's Claude Code launch command (e.g. 'claude' or your own alias "
+            "like 'cc') - blank to leave unchanged",
             "",
             False,
             style=self.style,
@@ -2774,7 +2731,7 @@ class Installer:
             f"map-skeleton={'on' if map_skeleton_wanted else 'off'}, "
             f"statusline-map={'on' if statusline_show_map_wanted else 'off'}, "
             f"model={model_wanted or 'default'}, "
-            f"virt-team launch command={launch_cmd_wanted or '(unset)'}"
+            f"'virt-surv go' launch command={launch_cmd_wanted or '(unset)'}"
         )
         if self.demo:
             self.step_ok("Machine defaults", f"would set {summary}")
@@ -3098,10 +3055,6 @@ class Installer:
             return [
                 ("Clean plugin cache", self.clean_plugin_cache_step),
             ]
-        if self.subset == "virtteamalias":
-            return [
-                ("virt-team alias setup", self.virt_team_alias_step),
-            ]
         if self.subset == "toolcheck":
             return [
                 ("Analyser output cleanliness", self.tool_check_step),
@@ -3139,8 +3092,6 @@ class Installer:
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
             ("Status line", self.statusline_step),
             ("Alias setup", self.alias_step),
-            ("virt-team alias setup", self.virt_team_alias_step),
-            ("Enable for a project (optional)", self.enable_step),
             ("Machine defaults (optional)", self.machine_defaults_offer),
         ]
 
@@ -4517,15 +4468,24 @@ def _resolve_repo_root(repo_hint: Optional[str] = None) -> Optional[Path]:
     return fallback if looks_like_repo(fallback) else None
 
 
-def _verify_alias_line(label: str, rc_path: Path, line: str) -> tuple:
+def _verify_alias_line(label: str, rc_path: Path, line: str, marker: str = _ALIAS_MARKER) -> tuple:
     """Runs the JUST-WRITTEN alias/function definition in isolation - not the whole rc
     file, whose unrelated content is out of scope and risky to execute - and confirms
-    'virt-surv' actually resolves. Catches a syntax/quoting mistake (or, on Windows, an
+    `marker` actually resolves. Catches a syntax/quoting mistake (or, on Windows, an
     execution-policy block) immediately instead of only when the user opens a new
     terminal and it silently doesn't work (2026-08-04 user request: "harden the alias
     creation ... include test of the alias"). Best-effort: if the shell needed to verify
     isn't itself available, that's reported as a note, not a failure - the line was
-    still written correctly as far as this process can tell."""
+    still written correctly as far as this process can tell.
+
+    `marker` defaults to `_ALIAS_MARKER` ('virt-surv') so every existing call site is
+    unaffected. Added after a live bug (2026-08-15 corp Windows report): an earlier
+    iteration of this file had a SEPARATE alias (virt-team) reuse this function
+    unchanged, hardcoded to check 'virt-surv' regardless of what was actually just
+    written - a correctly-written line still reported "verification failed: virt-surv:
+    not found". That separate alias was later folded into virt-surv itself as a `go`
+    subcommand (single alias, per user request), but the parameter stays generalised in
+    case a future caller ever needs it again."""
     if rc_path.suffix == ".ps1":
         exe = "powershell.exe" if "5.1" in label else "pwsh.exe"
         found = shutil.which(exe)
@@ -4536,7 +4496,7 @@ def _verify_alias_line(label: str, rc_path: Path, line: str) -> tuple:
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            f"{line}; Get-Command {_ALIAS_MARKER} -ErrorAction Stop | Out-Null",
+            f"{line}; Get-Command {marker} -ErrorAction Stop | Out-Null",
         ]
     else:
         bash = find_bash()
@@ -4545,7 +4505,7 @@ def _verify_alias_line(label: str, rc_path: Path, line: str) -> tuple:
         # expand_aliases is OFF by default in non-interactive bash (bash -c), so a plain
         # `alias virt-surv=...; type virt-surv` would falsely report "not found" even for
         # a perfectly correct alias line - must be enabled explicitly first.
-        cmd = [bash, "-c", f"shopt -s expand_aliases\n{line}\ntype {_ALIAS_MARKER} >/dev/null"]
+        cmd = [bash, "-c", f"shopt -s expand_aliases\n{line}\ntype {marker} >/dev/null"]
     try:
         proc = subprocess.run(
             cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=10
@@ -4572,7 +4532,20 @@ def run_setup_alias(
     writes nothing (2026-08-04: demo mode must cover every menu option, not just the
     main install flow). repo_hint: see _resolve_repo_root - pass args.repo when calling
     from anywhere that might run post-relocation (the interactive menu, the full-install
-    alias_step)."""
+    alias_step).
+
+    'virt-surv go' (2026-08-15 user request: "only one alias, separate parameter to
+    launch" - a separate virt-team alias existed for one turn of this same feature and
+    was explicitly rejected as confusing) - pre-warms the review-tool cache, resolves
+    the /engage resume-vs-new decision outside the LLM entirely
+    (scripts/virt_team_launcher.py, unchanged - still the same tested decision engine,
+    just invoked from this alias now instead of its own), then launches Claude Code via
+    whichever command detect_or_configure_claude_launch_command resolved. This is WHY
+    the POSIX form below is now a shell FUNCTION, not a plain `alias`: a POSIX alias is
+    pure text substitution with no way to branch on `$1` - `go` needs real conditional
+    logic, which only a function can express. `type`/`Get-Command` (what
+    _verify_alias_line checks) resolve a function exactly the same as an alias, so
+    verification is unaffected by the change."""
     ok, fail = mark_map["ok"], mark_map["fail"]
     rows, interpreter = _check_interpreters(
         ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
@@ -4584,6 +4557,11 @@ def run_setup_alias(
         return 1
     resolved = _resolve_repo_root(repo_hint)
     script_path = (resolved / "install_helper.py") if resolved else Path(__file__).resolve()
+    launcher_path = (
+        (resolved / "scripts" / "virt_team_launcher.py")
+        if resolved
+        else Path(__file__).resolve().parent / "scripts" / "virt_team_launcher.py"
+    )
     if not resolved:
         print(
             style.yellow(
@@ -4600,13 +4578,30 @@ def run_setup_alias(
             "profile) - nothing to add the alias to"
         )
         return 1
+    launch_cmd = detect_or_configure_claude_launch_command(style, mark_map, assume_yes)
     wrote_any = False
     had_error = False
     for label, rc_path in targets:
         if rc_path.suffix == ".ps1":
-            line = f'function {_ALIAS_MARKER} {{ {interpreter} "{script_path}" @args }}'
+            line = (
+                f"function {_ALIAS_MARKER} {{ "
+                f'if ($args.Count -gt 0 -and $args[0] -eq "go") {{ '
+                f"$__vtRest = @(); if ($args.Count -gt 1) {{ $__vtRest = $args[1..($args.Count-1)] }}; "
+                f'$__vtDecision = & "{interpreter}" "{launcher_path}"; '
+                f'if ($__vtDecision) {{ & "{launch_cmd}" $__vtDecision @__vtRest }} '
+                f'else {{ & "{launch_cmd}" @__vtRest }} '
+                f"}} else {{ "
+                f'& "{interpreter}" "{script_path}" @args '
+                f"}} }}"
+            )
         else:
-            line = f"alias {_ALIAS_MARKER}='{interpreter} \"{script_path}\"'"
+            line = (
+                f"{_ALIAS_MARKER}() {{ "
+                f'if [ "$1" = "go" ]; then shift; local __vt_d; '
+                f'__vt_d="$("{interpreter}" "{launcher_path}")"; '
+                f'"{launch_cmd}" ${{__vt_d:+"$__vt_d"}} "$@"; '
+                f'else "{interpreter}" "{script_path}" "$@"; fi; }}'
+            )
         existing = (
             rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
         )
@@ -4655,8 +4650,10 @@ def run_setup_alias(
                 "same folder you'll run `claude` from) and run 'virt-surv configure' "
                 "(asks, recommended defaults pre-filled), 'virt-surv engage' or 'virt-surv "
                 "onboard' (same thing - applies every default with zero prompts, then "
-                "tells you to launch claude), 'virt-surv archive', or 'virt-surv "
-                "list-engagements'."
+                "tells you to launch claude), 'virt-surv archive', 'virt-surv "
+                f"list-engagements', or 'virt-surv go' to actually launch ('{launch_cmd}') "
+                "with the resume-or-new decision already made for you, in the terminal, "
+                "before Claude Code even starts."
             )
         )
     return 1 if had_error else 0
@@ -4668,14 +4665,14 @@ _CLAUDE_LAUNCH_CMD_KEY = "claude_launch_command"
 def detect_or_configure_claude_launch_command(
     style: Style, mark_map: dict, assume_yes: bool = False
 ) -> str:
-    """The command the `virt-team` alias execs to actually start Claude Code - not
-    necessarily `claude` itself (2026-08-14 user request): a user may already have their
-    own alias/function (e.g. `cc`) that wraps `claude` with default flags, and virt-team
-    must launch THAT, not bypass it. Machine-wide config (installer.json's
+    """The command `virt-surv go` execs to actually start Claude Code - not necessarily
+    `claude` itself (2026-08-14 user request): a user may already have their own
+    alias/function (e.g. `cc`) that wraps `claude` with default flags, and `go` must
+    launch THAT, not bypass it. Machine-wide config (installer.json's
     claude_launch_command key), same storage tier as default_review_tools - detected/
-    prompted ONCE, on first use; every later call returns the stored value silently, no
-    reprompt (explicit 2026-08-14 user request). Change it later via machine_defaults_step
-    without re-running the full alias setup.
+    prompted ONCE, as part of virt-surv's own alias setup; every later call returns the
+    stored value silently, no reprompt (explicit 2026-08-14 user request). Change it
+    later via machine_defaults_step without re-running the whole alias setup.
 
     Detection is a hint, not a verification: `shutil.which("claude")` only ever suggests
     a DEFAULT for the prompt - it cannot detect a shell alias/function (those aren't on
@@ -4708,122 +4705,6 @@ def detect_or_configure_claude_launch_command(
     if save_config(config_path(), cfg):
         print(f"{ok} remembered '{cmd}' as the Claude Code launch command for this machine")
     return cmd
-
-
-_VIRT_TEAM_ALIAS_MARKER = "virt-team"
-
-
-def run_setup_virt_team_alias(
-    style: Style,
-    mark_map: dict,
-    assume_yes: bool = False,
-    demo: bool = False,
-    repo_hint: Optional[str] = None,
-) -> int:
-    """Standalone (--setup-virt-team-alias / menu): offers a 'virt-team' alias/function
-    that pre-warms the tool-inventory cache and resolves the /engage resume-vs-new
-    decision OUTSIDE the LLM entirely (scripts/virt_team_launcher.py's own docstring has
-    the full rationale - a live-observed unreliability in the model-driven menu choice,
-    not just latency), then launches Claude Code via whichever command
-    detect_or_configure_claude_launch_command resolved, forwarding every extra argument
-    (so 'virt-team --debug' still reaches claude/cc/whatever as '--debug').
-
-    Same never-silent, per-file-confirm-gated, skip-not-duplicate pattern as
-    run_setup_alias; demo=True previews and writes nothing."""
-    ok, fail = mark_map["ok"], mark_map["fail"]
-    rows, interpreter = _check_interpreters(
-        ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
-    )
-    if not interpreter:
-        print(f"{fail} no working Python interpreter found - cannot set up the alias")
-        for name, status, detail in rows:
-            print(f"    {name}: {status} - {detail}")
-        return 1
-    resolved = _resolve_repo_root(repo_hint)
-    script_path = (
-        (resolved / "scripts" / "virt_team_launcher.py")
-        if resolved
-        else Path(__file__).resolve().parent / "scripts" / "virt_team_launcher.py"
-    )
-    if not script_path.is_file():
-        print(
-            f"{fail} {script_path} not found - run a full install (menu option 1) first, "
-            "then re-run --setup-virt-team-alias from inside the clone."
-        )
-        return 1
-    launch_cmd = detect_or_configure_claude_launch_command(style, mark_map, assume_yes)
-    targets = list(_posix_shell_rc_candidates()) + _powershell_profile_candidates()
-    if not targets:
-        print(
-            f"{fail} no shell config file found (~/.bashrc, ~/.zshrc, or a PowerShell "
-            "profile) - nothing to add the alias to"
-        )
-        return 1
-    wrote_any = False
-    had_error = False
-    for label, rc_path in targets:
-        if rc_path.suffix == ".ps1":
-            line = (
-                f"function {_VIRT_TEAM_ALIAS_MARKER} {{ "
-                f'$__vtDecision = & "{interpreter}" "{script_path}"; '
-                f"if ($__vtDecision) {{ & {launch_cmd} $__vtDecision @args }} "
-                f"else {{ & {launch_cmd} @args }} }}"
-            )
-        else:
-            line = (
-                f"{_VIRT_TEAM_ALIAS_MARKER}() {{ local __vt_d; "
-                f'__vt_d="$("{interpreter}" "{script_path}")"; '
-                f'"{launch_cmd}" ${{__vt_d:+"$__vt_d"}} "$@"; }}'
-            )
-        existing = (
-            rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
-        )
-        if _VIRT_TEAM_ALIAS_MARKER in existing:
-            print(
-                f"{style.dim('-')} {label} ({rc_path}): a '{_VIRT_TEAM_ALIAS_MARKER}' entry "
-                "already exists, skipped"
-            )
-            continue
-        print(f"  Would add to {label} ({rc_path}):")
-        print(style.dim(f"    {line}"))
-        if demo:
-            print(style.dim("    (demo mode - nothing written)"))
-            continue
-        if not confirm("  Add it?", default=bool(resolved), assume_yes=assume_yes, style=style):
-            print(f"{style.dim('-')} {label}: skipped")
-            continue
-        try:
-            rc_path.parent.mkdir(parents=True, exist_ok=True)
-            with rc_path.open("a", encoding="utf-8") as fh:
-                if existing and not existing.endswith("\n"):
-                    fh.write("\n")
-                fh.write(
-                    f"\n# Added by install_helper.py --setup-virt-team-alias (2026-08-14)\n"
-                    f"{line}\n"
-                )
-            print(f"{ok} added to {rc_path}")
-            wrote_any = True
-        except OSError as exc:
-            print(f"{fail} could not write {rc_path}: {exc}")
-            had_error = True
-            continue
-        verified, note = _verify_alias_line(label, rc_path, line)
-        if verified:
-            print(f"  {ok} verified: {note}")
-        else:
-            print(f"  {fail} verification failed: {note}")
-            had_error = True
-    if wrote_any:
-        print(
-            style.dim(
-                "\nA new terminal picks this up automatically. To use it in THIS session "
-                "instead: POSIX shells - `source` your rc file; PowerShell - `. $PROFILE`. "
-                f"Then run 'virt-team' instead of '{launch_cmd}' from inside a plugin-enabled "
-                "project - every argument (e.g. --debug) still reaches "
-                f"'{launch_cmd}' unchanged."
-            )
-        )
-    return 1 if had_error else 0
 
 
 _BASHRC_GUARD_MARKER = "# --fix-bashrc: non-interactive shell guard"
@@ -6773,13 +6654,6 @@ def parse_args(argv=None) -> argparse.Namespace:
         "this clone, so it's runnable from any folder - and exit",
     )
     parser.add_argument(
-        "--setup-virt-team-alias",
-        action="store_true",
-        help="standalone: offer to add a 'virt-team' shell alias/function that pre-warms "
-        "the review-tool cache and resolves the /engage resume-vs-new decision outside "
-        "the LLM, then launches Claude Code - and exit",
-    )
-    parser.add_argument(
         "--fix-bashrc",
         action="store_true",
         help="standalone: offer to add a non-interactive-shell guard to ~/.bashrc so slow "
@@ -6877,6 +6751,7 @@ _FOLDER_SUBCOMMANDS = (
     "archive",
     "list-engagements",
     "setup-alias",
+    "go",
 )
 
 
@@ -6897,6 +6772,80 @@ def _project_root_warning(target: Path) -> Optional[str]:
     if resolved.parent == resolved:  # filesystem root (/, C:\, ...)
         return "this is a filesystem root, not a project folder"
     return None
+
+
+def _run_go(target: Path, style: Style, mark_map: dict, hat: str, demo: bool = False) -> int:
+    """'virt-surv go': the single unified launch command (2026-08-15 user request -
+    "only one alias, separate parameter to launch" - a separate virt-team alias existed
+    for one turn of this same feature and was explicitly rejected as confusing). Shown
+    with the same Morgan-hatted presentation as every other virt-surv subcommand
+    (2026-08-15 user request), states the current version, and reuses
+    check_for_update_upfront - same 8s-timeout, fails-silently-on-no-network behaviour
+    already used right after the interactive menu's own banner, not a new code path.
+    Pre-warms the tool-inventory cache and resolves the /engage resume-vs-new decision
+    outside the LLM entirely (scripts/virt_team_launcher.py, called directly - no logic
+    duplicated), then launches Claude Code via the configured launch command with the
+    decision pre-seeded as the initial prompt.
+
+    Launching a shell alias/function (a user's own 'cc', say) is NOT possible from this
+    Python process - subprocess/exec can only invoke real executables. When virt-surv's
+    OWN shell function is what called `... go` (its "go" branch, written by
+    run_setup_alias), the SHELL does the actual launch and this function is never
+    reached for the launch step at all - only when 'go' is reached some OTHER way
+    (python install_helper.py go directly, or an alias written before the "go" branch
+    existed) does this function's own launch attempt matter, and even then only when the
+    configured command resolves to a real executable (shutil.which) - otherwise it
+    prints the exact command to type rather than failing silently."""
+    resolved_target = target.expanduser().resolve()
+    repo = _resolve_repo_root(None)
+    version = installed_version(repo) if repo else None
+    version_note = f" v{version}" if version else ""
+    print(style.dim(f"{hat}virt-surv go{version_note} - {resolved_target}"))
+    if repo and not demo:
+        cfg = load_config(config_path())
+        check_for_update_upfront(cfg, style, argparse.Namespace(repo=str(repo)))
+    scripts_dir = (repo / "scripts") if repo else Path(__file__).resolve().parent / "scripts"
+    launcher = scripts_dir / "virt_team_launcher.py"
+    decision = ""
+    if launcher.is_file():
+        _, interpreter = _check_interpreters(
+            ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
+        )
+        if interpreter:
+            try:
+                proc = subprocess.run(
+                    [interpreter, str(launcher)],
+                    cwd=resolved_target,
+                    stdout=subprocess.PIPE,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=120,
+                )
+                decision = (proc.stdout or "").strip()
+            except (OSError, subprocess.TimeoutExpired):
+                decision = ""
+    launch_cmd = detect_or_configure_claude_launch_command(style, mark_map)
+    argv = [launch_cmd] + ([decision] if decision else [])
+    if demo:
+        print(style.dim(f"    would launch: {' '.join(argv)} (demo - nothing launched)"))
+        return 0
+    resolved_cmd = shutil.which(launch_cmd)
+    if not resolved_cmd:
+        print(
+            style.yellow(
+                f"  '{launch_cmd}' isn't a real executable I can launch directly here "
+                "(likely your own shell alias/function, not yet visible to this Python "
+                "process) - type this yourself:"
+            )
+        )
+        print(f"    {' '.join(argv)}")
+        return 0
+    print(style.dim(f"  Launching: {' '.join(argv)}"))
+    if sys.platform == "win32":
+        proc = subprocess.run([resolved_cmd] + argv[1:], cwd=resolved_target)
+        return proc.returncode
+    os.chdir(resolved_target)
+    os.execvp(resolved_cmd, argv)  # replaces this process; never returns on success
 
 
 def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
@@ -6947,6 +6896,8 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     if subcommand == "setup-alias":
         return run_setup_alias(style, marks(), assume_yes, demo)
     target = Path(paths[0]) if paths else Path(".")
+    if subcommand == "go":
+        return _run_go(target, style, marks(), hat, demo)
     if subcommand == "configure":
         return run_configure(target, style, marks(), assume_yes, demo)
     if subcommand in ("engage", "onboard"):
@@ -7039,7 +6990,6 @@ def _main(argv=None) -> int:
         or args.archive
         or args.list_engagements
         or args.setup_alias
-        or args.setup_virt_team_alias
         or args.fix_bashrc
         or args.clean_plugin_cache
     ):
@@ -7137,10 +7087,6 @@ def _main(argv=None) -> int:
             rc = max(rc, run_list_engagements(Path(args.list_engagements), style, marks()))
         if args.setup_alias:
             rc = max(rc, run_setup_alias(style, marks(), args.yes, args.demo, args.repo))
-        if args.setup_virt_team_alias:
-            rc = max(
-                rc, run_setup_virt_team_alias(style, marks(), args.yes, args.demo, args.repo)
-            )
         if args.fix_bashrc:
             rc = max(rc, run_fix_bashrc(style, marks(), args.yes, args.demo))
         if args.clean_plugin_cache:

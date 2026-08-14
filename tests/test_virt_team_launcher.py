@@ -1,4 +1,4 @@
-"""The virt-team launch wrapper's decision engine (scripts/virt_team_launcher.py).
+"""`virt-surv go`'s decision engine (scripts/virt_team_launcher.py).
 
 Runs OUTSIDE Claude Code entirely, before a session starts - moves the resume-vs-new
 decision (observed unreliable when left to the model's own AskUserQuestion menu) and the
@@ -28,8 +28,14 @@ def _load():
 
 
 def _plugin_enabled_project(tmp_path: Path) -> Path:
-    (tmp_path / ".claude" / "hooks").mkdir(parents=True)
-    (tmp_path / ".claude" / "hooks" / "run-guard.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    """Live bug fix (2026-08-15): the real marker is .claude/team-preferences.json (or
+    docs/team-operating-guide.md in repo-as-project mode) - .claude/hooks/run-guard.sh
+    only exists for developers working inside the plugin's own repo, never for a normal
+    user project with the plugin installed via marketplace (hooks resolve through
+    CLAUDE_PLUGIN_ROOT there, nothing copied locally). The old fixture used the wrong
+    marker and so did the code it was testing."""
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
     return tmp_path
 
 
@@ -42,14 +48,35 @@ def _ws(project: Path, slug: str, status: str = "in_progress", title: str = "", 
     (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
 
 
-def test_non_plugin_project_is_silent(tmp_path, monkeypatch, capsys):
-    """No .claude/hooks/run-guard.sh at all - an unrelated project on the same machine
-    must do zero work and print nothing, not even to stderr."""
+def test_non_plugin_project_is_silent_on_stdout_but_explains_on_stderr(
+    tmp_path, monkeypatch, capsys
+):
+    """No team-preferences.json/team-operating-guide.md at all - an unrelated project on
+    the same machine must do zero real work and never touch stdout (the decision-capture
+    contract), but DOES explain itself on stderr now (2026-08-15 live report: a silent
+    skip was indistinguishable from a wrong-directory mistake, with no way to tell)."""
     monkeypatch.chdir(tmp_path)
     mod = _load()
     rc = mod.main()
     out = capsys.readouterr()
-    assert rc == 0 and out.out == "" and out.err == ""
+    assert rc == 0
+    assert out.out == ""
+    assert "doesn't look like a configured project" in out.err
+
+
+def test_repo_as_project_marker_also_detected(tmp_path, monkeypatch, capsys):
+    """The OTHER valid marker - docs/team-operating-guide.md - must also be recognised,
+    not just .claude/team-preferences.json. Covers developers working inside the
+    plugin's own repo (repo-as-project mode)."""
+    (tmp_path / "docs").mkdir(parents=True)
+    (tmp_path / "docs" / "team-operating-guide.md").write_text("# ops\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "doesn't look like a configured project" not in out.err
 
 
 def test_plugin_project_no_engagements_prints_nothing(tmp_path, monkeypatch, capsys):

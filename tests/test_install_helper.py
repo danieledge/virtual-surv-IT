@@ -1919,26 +1919,22 @@ def test_full_plan_includes_alias_setup_and_machine_defaults_offer(monkeypatch, 
     model)" as part of this run, but build_plan never actually called enable_step for
     subset="full" - the promise was never wired up. Fixed by adding it between alias
     setup and machine defaults, matching quick_setup_choice's own listed order.
-    2026-08-14: 'virt-team alias setup' was added directly after 'Alias setup' (same
-    optional, confirm-gated pattern) - pre-warms the tool-inventory cache and resolves
-    the /engage resume-vs-new decision outside the LLM before launching Claude Code."""
+    2026-08-15 user request: removed again - per-project enablement stays a genuinely
+    separate step ('virt-surv configure'/'engage'/'onboard'), not bundled into the
+    machine-level full install. quick_setup_choice's own promised-steps text was updated
+    in the same change so it stops promising something this flow no longer does - the
+    same class of drift the 2026-08-12 fix above closed, just in reverse this time."""
     import install_helper as ih
 
     inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
     plan = inst.build_plan()
     titles = [t() if callable(t) else t for t, _ in plan]
     assert "Alias setup" in titles
-    assert "virt-team alias setup" in titles
-    assert "Enable for a project (optional)" in titles
+    assert "Enable for a project (optional)" not in titles
     assert "Machine defaults (optional)" in titles
     assert "Dashboard (optional)" not in titles  # no longer part of the default flow
-    assert titles[-1] == "Machine defaults (optional)"  # last step, now that dashboard moved out
-    assert (
-        titles.index("Alias setup")
-        == titles.index("virt-team alias setup") - 1
-        == titles.index("Enable for a project (optional)") - 2
-        == titles.index("Machine defaults (optional)") - 3
-    )
+    assert titles[-1] == "Machine defaults (optional)"  # last step
+    assert titles.index("Alias setup") == titles.index("Machine defaults (optional)") - 1
 
 
 def test_dashboard_subset_reaches_dashboard_step_standalone(monkeypatch, tmp_path):
@@ -2046,78 +2042,6 @@ def test_quick_setup_choice_yes_run_skips_question_and_defaults_true():
     assert inst.quick_defaults is True
 
 
-def test_virt_team_alias_step_skipped_by_default_on_yes_run(monkeypatch, tmp_path, capsys):
-    """Same opt-in-only contract as alias_step - never touches shell rc files unattended."""
-    import install_helper as ih
-
-    calls = []
-    monkeypatch.setattr(ih, "run_setup_virt_team_alias", lambda *a, **k: calls.append(a) or 0)
-    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="full")
-    inst.virt_team_alias_step()
-    out = capsys.readouterr().out
-    assert calls == []
-    assert "skipped" in out
-
-
-def test_virt_team_alias_step_declines_when_not_confirmed(monkeypatch, tmp_path, capsys):
-    import install_helper as ih
-
-    calls = []
-    monkeypatch.setattr(ih, "run_setup_virt_team_alias", lambda *a, **k: calls.append(a) or 0)
-    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)
-    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="full")
-    inst.virt_team_alias_step()
-    assert calls == []
-
-
-def test_virt_team_alias_step_runs_when_confirmed(monkeypatch, tmp_path):
-    import install_helper as ih
-
-    calls = []
-    monkeypatch.setattr(
-        ih,
-        "run_setup_virt_team_alias",
-        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: (
-            calls.append((assume_yes, demo)) or 0
-        ),
-    )
-    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
-    inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
-    inst.virt_team_alias_step()
-    assert calls == [(False, True)]
-
-
-def test_virt_team_alias_step_auto_enabled_when_quick_defaults_chosen(monkeypatch, tmp_path):
-    import install_helper as ih
-
-    calls = []
-
-    def boom(*a, **k):
-        raise AssertionError("must not ask - quick_defaults skips the outer gate")
-
-    monkeypatch.setattr(
-        ih,
-        "run_setup_virt_team_alias",
-        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: (
-            calls.append((assume_yes, demo)) or 0
-        ),
-    )
-    monkeypatch.setattr(ih, "confirm", boom)
-    inst = ih.Installer(_args(yes=False, demo=True), ih.Style(False), ih.marks(), subset="full")
-    inst.quick_defaults = True
-    inst.virt_team_alias_step()
-    assert calls == [(False, True)]
-
-
-def test_virtteamalias_subset_reaches_step_standalone():
-    import install_helper as ih
-
-    inst = ih.Installer(_args(yes=True), ih.Style(False), ih.marks(), subset="virtteamalias")
-    plan = inst.build_plan()
-    titles = [t() if callable(t) else t for t, _ in plan]
-    assert titles == ["virt-team alias setup"]
-
-
 def test_detect_claude_launch_command_returns_existing_without_prompting(monkeypatch, tmp_path):
     """Explicit 2026-08-14 user request: never reprompt once known."""
     import install_helper as ih
@@ -2146,50 +2070,110 @@ def test_detect_claude_launch_command_prompts_and_persists_when_unset(monkeypatc
     assert json.loads(cfg_file.read_text())["claude_launch_command"] == "cc"
 
 
-def test_run_setup_virt_team_alias_demo_writes_nothing(tmp_path, monkeypatch):
+def test_run_setup_alias_posix_line_has_go_branch(tmp_path, monkeypatch):
+    """2026-08-15 user request: one alias, not two - 'go' is a branch inside virt-surv's
+    own function body, not a separate alias. The POSIX form must be a real shell function
+    (not a plain `alias`, which is pure text substitution with no way to branch on $1)."""
     import install_helper as ih
 
-    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
-    (tmp_path / "scripts").mkdir()
-    (tmp_path / "scripts" / "virt_team_launcher.py").write_text("", encoding="utf-8")
-    monkeypatch.setattr(
-        ih, "_check_interpreters", lambda names: ([("python3", "ok", "3.12.0")], "python3")
-    )
-    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
-    rc_path = tmp_path / ".bashrc"
-    rc_path.write_text("", encoding="utf-8")
-    monkeypatch.setattr(ih, "_posix_shell_rc_candidates", lambda: [("bash", rc_path)])
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda: [])
-    rc = ih.run_setup_virt_team_alias(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _stub_interpreters(monkeypatch, ih)
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 0
-    assert rc_path.read_text() == ""  # demo mode - nothing written
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert "virt-surv() {" in content
+    assert '"$1" = "go"' in content
+    assert "virt_team_launcher.py" in content
+    assert '"claude"' in content  # the stubbed launch command, baked in
 
 
-def test_run_setup_virt_team_alias_writes_and_skips_existing_marker(tmp_path, monkeypatch):
+def test_run_setup_alias_powershell_line_has_go_branch(tmp_path, monkeypatch):
     import install_helper as ih
 
-    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
-    (tmp_path / "scripts").mkdir()
-    (tmp_path / "scripts" / "virt_team_launcher.py").write_text("", encoding="utf-8")
-    monkeypatch.setattr(
-        ih, "_check_interpreters", lambda names: ([("python3", "ok", "3.12.0")], "python3")
-    )
+    monkeypatch.setattr(sys, "platform", "win32")
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
     monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
-    monkeypatch.setattr(ih, "_verify_alias_line", lambda label, path, line: (True, "resolves"))
-    bashrc = tmp_path / ".bashrc"
-    bashrc.write_text("", encoding="utf-8")
-    zshrc = tmp_path / ".zshrc"
-    zshrc.write_text("# already has virt-team configured\n", encoding="utf-8")
-    monkeypatch.setattr(
-        ih, "_posix_shell_rc_candidates", lambda: [("bash", bashrc), ("zsh", zshrc)]
-    )
-    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda: [])
-    rc = ih.run_setup_virt_team_alias(ih.Style(False), ih.marks(), assume_yes=True, demo=False)
+    _stub_interpreters(monkeypatch, ih)
+    profile = home / "Documents" / "PowerShell" / "Microsoft.PowerShell_profile.ps1"
+    monkeypatch.setattr(ih, "_posix_shell_rc_candidates", lambda: [])
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda: [("PowerShell 7+", profile)])
+    monkeypatch.setattr(ih, "_verify_alias_line", lambda label, path, line, **k: (True, "resolves"))
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 0
-    assert "virt-team" in bashrc.read_text()
-    assert "virt_team_launcher.py" in bashrc.read_text()
-    # zshrc already had the marker - untouched beyond what was already there
-    assert zshrc.read_text() == "# already has virt-team configured\n"
+    content = profile.read_text(encoding="utf-8")
+    assert "function virt-surv {" in content
+    assert '$args[0] -eq "go"' in content
+    assert "virt_team_launcher.py" in content
+
+
+def test_run_go_demo_never_launches(tmp_path, monkeypatch, capsys):
+    """demo=True must preview and launch nothing - same contract as every other step."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: None)
+    # No repo -> scripts_dir falls back to THIS repo's own scripts/ (install_helper.py's
+    # real __file__), which genuinely has virt_team_launcher.py - forcing no interpreter
+    # keeps this test isolated from a real subprocess spawn against that real script.
+    monkeypatch.setattr(ih, "_check_interpreters", lambda names: ([], ""))
+    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
+
+    def boom_exec(*a, **k):
+        raise AssertionError("demo must never launch anything")
+
+    monkeypatch.setattr(ih.os, "execvp", boom_exec)
+    monkeypatch.setattr(
+        ih.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no subprocess"))
+    )
+    rc = ih._run_go(tmp_path, ih.Style(False), ih.marks(), "🎩 ", demo=True)
+    assert rc == 0
+    assert "would launch" in capsys.readouterr().out
+
+
+def test_run_go_prints_instructions_when_launch_command_not_a_real_executable(
+    tmp_path, monkeypatch, capsys
+):
+    """The whole reason 'go' has to live in the shell function, not pure Python: a
+    launch command that's a shell alias/function (e.g. 'cc') isn't visible to
+    shutil.which and can't be exec'd from this process. Must degrade to printing the
+    exact command to type, never crash or silently do nothing."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: None)
+    monkeypatch.setattr(ih, "_check_interpreters", lambda names: ([], ""))
+    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "cc")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: None)
+
+    def boom_exec(*a, **k):
+        raise AssertionError("must not attempt to exec an unresolvable command")
+
+    monkeypatch.setattr(ih.os, "execvp", boom_exec)
+    rc = ih._run_go(tmp_path, ih.Style(False), ih.marks(), "🎩 ", demo=False)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "isn't a real executable" in out
+    assert "cc" in out
+
+
+def test_run_go_launches_a_real_executable(tmp_path, monkeypatch, capsys):
+    """When the launch command DOES resolve (the common case - 'claude' itself is a
+    real binary for most users), go actually launches it - execvp on POSIX."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: None)
+    monkeypatch.setattr(ih, "_check_interpreters", lambda names: ([], ""))
+    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
+    monkeypatch.setattr(ih.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(ih.os, "chdir", lambda p: None)
+    calls = []
+    monkeypatch.setattr(ih.os, "execvp", lambda cmd, argv: calls.append((cmd, argv)))
+    ih._run_go(tmp_path, ih.Style(False), ih.marks(), "🎩 ", demo=False)
+    # No meaningful return value to assert here: a REAL os.execvp never returns on
+    # success (replaces the process entirely) - what matters is that it was called
+    # correctly, which is exactly what the mock captures.
+    assert calls == [("/usr/bin/claude", ["claude"])]  # no launcher script -> no decision arg
 
 
 def test_quick_setup_choice_real_tty_defaults_to_quick(monkeypatch):
@@ -3746,7 +3730,7 @@ def test_machine_defaults_step_sets_model_default(tmp_path, monkeypatch):
     assert settings["model"] == ih.ORCHESTRATOR_MODEL_IDS["opus"]
 
 
-def test_machine_defaults_step_sets_virt_team_launch_command(tmp_path, monkeypatch, capsys):
+def test_machine_defaults_step_sets_go_launch_command(tmp_path, monkeypatch, capsys):
     import install_helper as ih
 
     _isolate_home(monkeypatch, tmp_path)
@@ -3764,7 +3748,7 @@ def test_machine_defaults_step_sets_virt_team_launch_command(tmp_path, monkeypat
     inst.machine_defaults_step()
     saved = json.loads((tmp_path / "xdg" / "virt-surv-it" / "installer.json").read_text())
     assert saved["claude_launch_command"] == "cc"
-    assert "virt-team launch command=cc" in capsys.readouterr().out
+    assert "'virt-surv go' launch command=cc" in capsys.readouterr().out
 
 
 def test_machine_defaults_step_blank_launch_command_leaves_unchanged(tmp_path, monkeypatch):
@@ -4998,24 +4982,39 @@ def test_run_manage_engagements_stops_early_if_list_fails(tmp_path, monkeypatch)
 
 def _isolate_home_for_alias(monkeypatch, tmp_path, bashrc=None):
     """bashrc=None (default): no .bashrc/.zshrc created at all. bashrc="<text>": write
-    that text to .bashrc - most callers just want an empty file (bashrc="")."""
+    that text to .bashrc - most callers just want an empty file (bashrc="").
+
+    Also stubs detect_or_configure_claude_launch_command to a fixed 'claude', no prompt,
+    no real config I/O - 2026-08-15: run_setup_alias started calling it unconditionally
+    (needed to bake the launch command into the new 'go' branch), so every existing
+    caller of this helper picks up a safe default for free rather than needing an
+    individual update at each of the ~19 call sites."""
+    import install_helper as ih
+
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
     if bashrc is not None:
         (home / ".bashrc").write_text(bashrc, encoding="utf-8")
     return home
 
 
 def test_setup_alias_writes_bashrc(tmp_path, monkeypatch):
+    """2026-08-15: virt-surv's POSIX form is now a shell FUNCTION, not a plain `alias` -
+    a `go` subcommand needs real conditional logic (branch on $1), which a text-substitution
+    alias can never express. `type`/`Get-Command` (what _verify_alias_line checks) resolve
+    a function exactly like an alias, so verification itself is unaffected."""
     import install_helper as ih
 
     home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
     _stub_interpreters(monkeypatch, ih)
+    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "claude")
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 0
     content = (home / ".bashrc").read_text(encoding="utf-8")
-    assert "alias virt-surv=" in content
+    assert "virt-surv() {" in content
+    assert '"$1" = "go"' in content  # the go-branch, the whole reason this is a function now
     assert "python3" in content
 
 
@@ -5208,7 +5207,7 @@ def test_setup_alias_write_error_from_verification_sets_had_error(tmp_path, monk
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 1
     # The file write itself still succeeded - verification failing doesn't undo it.
-    assert "alias virt-surv=" in (home / ".bashrc").read_text(encoding="utf-8")
+    assert "virt-surv() {" in (home / ".bashrc").read_text(encoding="utf-8")
 
 
 def test_powershell_profile_candidates_windows_only(tmp_path, monkeypatch):
@@ -5603,7 +5602,6 @@ def test_advanced_submenu_full_mapping():
         "7": "dashboard",
         "8": "fixbashrc",
         "9": "cleanplugincache",
-        "10": "virtteamalias",
         "b": "back",
     }
 

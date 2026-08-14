@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Decision engine for the `virt-team` shell alias/function - NOT a Claude Code hook, not
-run by the model, never invoked from inside a session. This runs BEFORE Claude Code even
-starts, from the user's own shell.
+"""Decision engine for `virt-surv go` - NOT a Claude Code hook, not run by the model,
+never invoked from inside a session. This runs BEFORE Claude Code even starts, from the
+user's own shell (the "go" branch of virt-surv's own shell function, written by
+install_helper.py's run_setup_alias - a separate `virt-team` alias existed for one turn
+of this same feature and was explicitly rejected as confusing: one alias, not two).
 
 Two things get moved entirely outside the LLM pipeline here, for two different reasons:
 
@@ -52,8 +54,20 @@ def _scripts_dir() -> Path:
 def _plugin_enabled(target: Path) -> bool:
     """Cheap marker check so an unrelated `claude` launch (any other project on this
     machine) does no work and prints nothing - never worth refreshing a cache or
-    computing a menu for a project that doesn't even have the guard system wired in."""
-    return (target / ".claude" / "hooks" / "run-guard.sh").is_file()
+    computing a menu for a project that doesn't even have the team wired in.
+
+    Live bug (2026-08-15): this used to check only `.claude/hooks/run-guard.sh`, which
+    exists in REPO-AS-PROJECT mode (developing the plugin itself) but NOT in the far more
+    common case - a normal user project with the plugin installed via marketplace, where
+    hooks resolve through `CLAUDE_PLUGIN_ROOT` pointing at the plugin's own install
+    directory and nothing gets copied locally. That made this return False, silently, for
+    every real user project - the exact live report that motivated this fix. Now checks,
+    in order: the repo-as-project marker (unchanged), OR `.claude/team-preferences.json`
+    (written by `run_configure` - the reliable signal a project has actually been set up
+    for this team, present regardless of run mode)."""
+    if (target / "docs" / "team-operating-guide.md").is_file():
+        return True
+    return (target / ".claude" / "team-preferences.json").is_file()
 
 
 def _refresh_tool_cache(project_dir: Path) -> None:
@@ -122,7 +136,21 @@ def _resume_decision(project_dir: Path) -> str:
 def main() -> int:
     project_dir = Path.cwd()
     if not _plugin_enabled(project_dir):
-        return 0  # not a plugin-enabled project - stay silent, plain launch
+        # Live report (2026-08-15): a session that ran this from the wrong directory (or
+        # hit a shell cwd-reset - a documented issue on some corp Windows hosts, see
+        # probe-contract.md) got a silent plain launch with no explanation, indistinguishable
+        # from a genuine cold-cache decline. This message goes to stderr - never stdout,
+        # which stays reserved for the decision string alone - so it's visible in the
+        # terminal without corrupting a caller's command-substitution capture.
+        print(
+            f"(virt-team: {project_dir} doesn't look like a configured project - no "
+            "docs/team-operating-guide.md or .claude/team-preferences.json here - "
+            "launching plainly, no resume-menu. Wrong directory? cd into your project "
+            "root first, or run 'virt-surv configure' if this project hasn't been set "
+            "up yet.)",
+            file=sys.stderr,
+        )
+        return 0  # not a plugin-enabled project - plain launch, but now explained
     scripts_dir = _scripts_dir()
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))

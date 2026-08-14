@@ -85,8 +85,8 @@ the moment the workspace exists (step 4) - the transcript is not the record**: t
 outcome is never a grant (ADR-002).
 
 **0b. Existing engagements?** **First check the initial user message itself for `--resume <slug>`
-or `--new`** - the `virt-team` launch wrapper (when the user launches Claude Code through it)
-computes this SAME resume-or-new decision outside any LLM entirely and pre-encodes the answer
+or `--new`** - `virt-surv go` (when the user launches Claude Code through it) computes this
+SAME resume-or-new decision outside any LLM entirely and pre-encodes the answer
 into the very first prompt, precisely because letting the model work it out cost real turns and
 occasionally picked the wrong option before self-correcting. When present, this is the answer -
 **do not ask the question at all** - but validate it against the real data first (`RESUME_MENU`/
