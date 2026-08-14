@@ -661,6 +661,76 @@ def _batch_resolve_shas(shas: list[str], repo_dir: Path) -> dict[str, bool | Non
     return out
 
 
+# H1 (2026-08-14 perf audit): dod_stop_gate.py's Stop-hook gate calls check_map() on every
+# Stop event while a codebase map exists, each call spawning up to 3 `git` subprocesses
+# (_anchor_resolves, _commits_behind, _batch_resolve_shas) even when nothing has changed
+# since the previous turn - a per-turn tax that compounds with turn count. The three
+# memoized wrappers below key on the CURRENT git HEAD sha (plus the specific sha(s) being
+# asked about), so a Stop event with no new commits since the last one reuses the prior
+# answer instead of re-spawning git. This only helps when check_artifacts runs inside the
+# ADR-014 guard daemon (a persistent process across calls, via its stop_hook_dispatcher
+# target) - a plain per-call fresh-process invocation starts with an empty cache and costs
+# exactly what it always did, never more.
+#
+# Correctness: HEAD itself is deliberately NEVER cached (computed fresh, one cheap spawn,
+# on every check_map() call) - a cached HEAD would silently miss real commits landing
+# between Stop events, permanently freezing MAP-STALE/MAP-STALE-ANCHOR findings at
+# whatever they were the first time. Only the (repo, HEAD, sha) -> answer mapping is
+# memoized, so any commit landing (HEAD moves) invalidates every cached answer for that
+# repo at once, never later - and a HEAD lookup failure (no repo, git unavailable)
+# disables caching for that call entirely rather than caching under a None key.
+_MAP_GIT_CACHE: dict[tuple, object] = {}
+
+
+def _current_head_sha(repo_dir: Path) -> str | None:
+    """One cheap `git rev-parse HEAD`. Always computed fresh by the caller - see
+    _MAP_GIT_CACHE's module comment for why this specific value must never be cached."""
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, shell=False
+            ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.decode(errors="replace").strip()
+    return sha or None
+
+
+def _cached_anchor_resolves(sha: str, repo_dir: Path, head: str | None) -> bool | None:
+    key = (str(repo_dir), head, "anchor", sha) if head else None
+    if key is not None and key in _MAP_GIT_CACHE:
+        return _MAP_GIT_CACHE[key]
+    result = _anchor_resolves(sha, repo_dir)
+    if key is not None:
+        _MAP_GIT_CACHE[key] = result
+    return result
+
+
+def _cached_commits_behind(sha: str, repo_dir: Path, head: str | None) -> int | None:
+    key = (str(repo_dir), head, "behind", sha) if head else None
+    if key is not None and key in _MAP_GIT_CACHE:
+        return _MAP_GIT_CACHE[key]
+    result = _commits_behind(sha, repo_dir)
+    if key is not None:
+        _MAP_GIT_CACHE[key] = result
+    return result
+
+
+def _cached_batch_resolve_shas(
+    shas: list[str], repo_dir: Path, head: str | None
+) -> dict[str, bool | None]:
+    key = (str(repo_dir), head, "batch", frozenset(shas)) if head else None
+    if key is not None and key in _MAP_GIT_CACHE:
+        return _MAP_GIT_CACHE[key]
+    result = _batch_resolve_shas(shas, repo_dir)
+    if key is not None:
+        _MAP_GIT_CACHE[key] = result
+    return result
+
+
 def _split_cells(line: str) -> list[str]:
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
@@ -798,8 +868,11 @@ def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
         )
     anchor_line = next((ln for ln in lines[:30] if "Anchor" in ln), "")
     anchor_sha = _SHA_RE.search(anchor_line)
+    # H1: one HEAD lookup, shared by every git-derived fact check_map() computes below -
+    # see _MAP_GIT_CACHE's module comment.
+    head = _current_head_sha(map_path.parent)
     if anchor_sha:
-        resolves = _anchor_resolves(anchor_sha.group(0), map_path.parent)
+        resolves = _cached_anchor_resolves(anchor_sha.group(0), map_path.parent, head)
         if resolves is False:
             findings.append(
                 f"MAP-STALE-ANCHOR: header anchor {anchor_sha.group(0)} does not resolve "
@@ -809,7 +882,7 @@ def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
             # M3: a resolvable anchor can still be ancient - bound it against HEAD.
             budget_m = _STALENESS_BUDGET_RE.search(header)
             budget = int(budget_m.group(1)) if budget_m else _MAP_STALENESS_BUDGET
-            behind = _commits_behind(anchor_sha.group(0), map_path.parent)
+            behind = _cached_commits_behind(anchor_sha.group(0), map_path.parent, head)
             if behind is not None and behind > budget:
                 findings.append(
                     f"MAP-STALE: header anchor is {behind} commits behind HEAD (budget "
@@ -933,7 +1006,7 @@ def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
                     f"MAP-NO-BASIS: {map_path}:{lineno} map entry has no 📊 observed / 🧠 "
                     "inferred tag - every entry must state its evidence basis"
                 )
-    resolved = _batch_resolve_shas(list(entry_shas), map_path.parent)
+    resolved = _cached_batch_resolve_shas(list(entry_shas), map_path.parent, head)
     for sha, lineno in sorted(entry_shas.items(), key=lambda kv: kv[1]):
         if resolved.get(sha) is False:
             findings.append(

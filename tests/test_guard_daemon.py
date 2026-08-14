@@ -78,6 +78,29 @@ def test_read_port_and_token_returns_written_values(tmp_path, monkeypatch):
     assert gd.read_port_and_token(tmp_path) == (54321, "abc123")
 
 
+def test_client_loads_and_reads_port_without_importing_guard_daemon_at_all(tmp_path):
+    """H2 (2026-08-14 perf audit): the client used to `from guard_daemon import
+    read_port_and_token`, which required guard_daemon.py to be importable (a
+    sys.path.insert hack) and executed its WHOLE module - a real TCP server
+    implementation (socketserver/threading/secrets/io) - just to reach a 10-line file
+    read. Deliberately does NOT call _load_guard_daemon first (unlike every other test
+    in this file): loading the client with "guard_daemon" genuinely absent from
+    sys.modules must still succeed, and its own inlined read_port_and_token must still
+    work correctly - proving the two are no longer coupled at import time."""
+    assert "guard_daemon" not in sys.modules  # nothing pre-loaded it - the point of this test
+
+    path = STAGED_DIR / "guard_daemon_client.py"
+    spec = importlib.util.spec_from_file_location("guard_daemon_client_standalone", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # must not raise ModuleNotFoundError: guard_daemon
+
+    assert "guard_daemon" not in sys.modules  # still never imported, even by loading it
+
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / module.PORT_FILE_NAME).write_text("54321\nabc123\n", encoding="utf-8")
+    assert module.read_port_and_token(tmp_path) == (54321, "abc123")
+
+
 # --------------------------------------------------------------- run(): the actual fix
 
 

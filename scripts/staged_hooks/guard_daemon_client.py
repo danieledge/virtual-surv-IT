@@ -43,11 +43,39 @@ import subprocess  # nosec B404 - fixed argv, shell=False, invoking our own sibl
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from guard_daemon import read_port_and_token  # noqa: E402
-
 _CONNECT_TIMEOUT = 0.5
 _RESPONSE_TIMEOUT = 20.0
+
+# H2 (2026-08-14 perf audit): this file used to `from guard_daemon import
+# read_port_and_token` - which executes the WHOLE daemon module (socketserver/threading/
+# secrets/io, a real TCP server implementation) just to reach a 10-line file-read helper.
+# Every daemon-routed hook call launches this client as a fresh interpreter (that per-call
+# cold start is the whole reason the daemon exists - see the module docstring), so on the
+# HAPPY PATH (daemon connects immediately) the daemon's own server-side imports were paid
+# for nothing this call ever used. Inlined below instead of imported.
+#
+# `subprocess` stays a top-level import (NOT deferred to the two functions that use it,
+# though the same reasoning would suggest it): tests/test_guard_daemon.py patches it as a
+# module attribute (`monkeypatch.setattr(client.subprocess, "Popen", ...)`), which only
+# resolves if the import is module-level - a local import inside a function is never
+# reachable as `client.subprocess` from outside. Not worth breaking that established
+# patching convention for a much smaller win than the read_port_and_token inline above.
+PORT_FILE_NAME = ".guard-daemon-port"  # must match guard_daemon.py's own PORT_FILE_NAME
+
+
+def read_port_and_token(state_root: Path):
+    """Fail-open ((None, None)) on any read/parse error - a corrupt or half-written port
+    file must never crash a client; it just means "no daemon available right now", the
+    exact same posture as no port file existing at all. Takes the PROJECT root
+    (per-project state), never the plugin root. Kept byte-identical to guard_daemon.py's
+    own copy (this file's canonical source - see the H2 comment above for why this is a
+    deliberate inline, not drift) - tests/test_guard_daemon.py pins the two in sync."""
+    port_file = state_root / ".claude" / PORT_FILE_NAME
+    try:
+        lines = port_file.read_text(encoding="utf-8").splitlines()
+        return int(lines[0].strip()), lines[1].strip()
+    except (OSError, ValueError, IndexError):
+        return None, None
 
 
 def _try_daemon(state_root: Path, target: str, payload_text: str):

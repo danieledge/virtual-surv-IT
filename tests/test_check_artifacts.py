@@ -686,6 +686,60 @@ def test_map_entry_without_basis_tag_flagged(tmp_path):
     assert "MAP-ENTRY-NO-ANCHOR" in codes
 
 
+# --------------------------------- H1: git-fact memoization (2026-08-14 perf audit) -------
+
+
+def test_check_map_caches_git_facts_within_same_head(tmp_path, monkeypatch):
+    """check_map() used to spawn up to 3 git subprocesses on EVERY call, even when HEAD
+    hadn't moved since the last one - a real per-turn tax, since dod_stop_gate.py calls
+    this on every Stop event while a codebase map exists. A second call with the SAME HEAD
+    must spawn strictly fewer git processes than the first (still one HEAD lookup - see
+    _MAP_GIT_CACHE's module comment for why that specific call is never itself cached)."""
+    import scripts.check_artifacts as ca_module
+
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map(sha))
+
+    real_run = subprocess.run
+    calls = []
+
+    def counting_run(argv, *a, **k):
+        if argv and argv[0] == "git":
+            calls.append(tuple(argv))
+        return real_run(argv, *a, **k)
+
+    monkeypatch.setattr(ca_module.subprocess, "run", counting_run)
+
+    assert check_map(m) == []
+    first = len(calls)
+    assert first > 1  # sanity: the fixture's map really does exercise anchor + entry git calls
+
+    calls.clear()
+    assert check_map(m) == []
+    second = len(calls)
+
+    assert (
+        second == 1
+    )  # just the HEAD lookup - anchor/commits-behind/batch-resolve served from cache
+    assert second < first
+
+
+def test_check_map_git_cache_invalidates_on_new_commit(tmp_path):
+    """The correctness-critical property: HEAD moving must never serve a stale cached
+    answer. A MAP-STALE finding that should newly fire once the anchor falls behind budget
+    must still fire after a fresh commit, not get silently masked by a cache keyed on the
+    OLD HEAD."""
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map(sha) + "\n> **Staleness-budget** 0\n")
+    assert not any("MAP-STALE:" in f for f in check_map(m))  # HEAD is the anchor - 0 behind
+
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "y")  # HEAD moves - anchor now 1 behind
+    findings = check_map(m)
+    assert any("MAP-STALE:" in f for f in findings)
+
+
 def test_map_secret_content_flagged(tmp_path):
     repo, sha = _map_repo(tmp_path)
     m = repo / "docs" / "codebase-map.md"
