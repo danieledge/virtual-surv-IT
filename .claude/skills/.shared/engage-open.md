@@ -26,6 +26,13 @@ user's first impression and every tool call is a full model round-trip, so gathe
 open needs in **one compound Bash call**: never a probe-per-turn sequence, and **no narration
 turns between the probe and your opening banner**.
 
+**Check for a pre-computed probe FIRST.** If this turn's context already contains an
+`<engage-probe-result>` block (injected by the `engage_probe_prefetch` hook before your turn
+started, steady-state only - a cold interpreter cache or the hook not being wired means it
+never appears), use those values directly and skip the Bash heredoc below entirely - same
+data, zero tool calls. Otherwise (no block, or anything about it looks wrong) run the heredoc
+exactly as documented; it is the fallback, still fully live and tested, not being retired.
+
 The bootstrap below is a tested Python heredoc - a drift-pinned twin of `scripts/find_plugin_root.py`
 (`tests/test_engage_open_bootstrap.py` keeps the two from ever diverging). Run it exactly as
 written, character for character - history and full rationale in
