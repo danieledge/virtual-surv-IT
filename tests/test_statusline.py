@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -24,8 +25,15 @@ STATUSLINE = REPO_ROOT / "scripts" / "statusline.sh"
 REAL_PYTHON3 = shutil.which("python3")
 REAL_BASH = shutil.which("bash")
 
+# This module's whole methodology is POSIX-specific by design (hardcoded /usr/bin:/bin,
+# symlink_to()-staged cat/dirname/mkdir fixtures below) - not just gated on tool presence
+# like every other bash-gated module (test_run_guard_lock.py, test_review_tools_config.py,
+# test_allowlist_probe.py, test_guard_daemon.py). Without the platform check, a Windows
+# box where python3/bash both happen to be on PATH runs these for real and fails on POSIX
+# assumptions the module was never meant to survive there.
 pytestmark = pytest.mark.skipif(
-    REAL_PYTHON3 is None or REAL_BASH is None, reason="no python3/bash on PATH to test against"
+    sys.platform == "win32" or REAL_PYTHON3 is None or REAL_BASH is None,
+    reason="needs a POSIX shell (python3/bash on PATH is not sufficient on Windows)",
 )
 
 

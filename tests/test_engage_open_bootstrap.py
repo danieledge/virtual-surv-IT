@@ -12,6 +12,7 @@ role test_hooks_in_sync.py plays for staged-vs-live guard files.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -40,10 +41,17 @@ def _run_discovery_only(home: Path, cwd: Path) -> str:
     marker = "script = Path(root"
     idx = src.index(marker)
     truncated = src[:idx] + "print('ROOT=' + root)\n"
+    # subprocess.run(env=...) REPLACES the child's environment - not a merge - so this
+    # must supply whatever the platform's Path.home() actually reads. Windows needs
+    # USERPROFILE (HOME alone leaves it unset and Path.home() raises); POSIX needs HOME.
+    if sys.platform == "win32":
+        env = {"USERPROFILE": str(home), "PATH": os.environ.get("SystemRoot", "C:\\Windows")}
+    else:
+        env = {"HOME": str(home), "PATH": "/usr/bin:/bin"}
     proc = subprocess.run(
         [sys.executable, "-c", truncated, "python3"],
         cwd=cwd,
-        env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+        env=env,
         capture_output=True,
         text=True,
         timeout=30,

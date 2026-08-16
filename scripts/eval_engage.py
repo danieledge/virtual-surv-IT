@@ -900,14 +900,14 @@ def _artifact_listing(
     if not files:
         return "(empty)"
 
-    out = ["## Files", *(str(p.relative_to(sandbox)) for p in files)]
+    out = ["## Files", *(p.relative_to(sandbox).as_posix() for p in files)]
     bodies: list[str] = []
     spent = 0
     omitted = 0
     for path in files:
         if path.suffix.lower() not in _ARTIFACT_BODY_SUFFIXES:
             continue
-        rel = path.relative_to(sandbox)
+        rel = path.relative_to(sandbox).as_posix()
         if spent >= total_cap:
             omitted += 1
             continue

@@ -925,8 +925,11 @@ def run_cmd(argv, cwd: Optional[Path] = None, timeout: int = 300):
     undefined bytes (0x81/0x8d/...) raise UnicodeDecodeError inside subprocess's
     reader thread ('Exception in Thread-N', seen live on a corporate box, 2026-07-30).
     errors='replace' makes the decode total: worst case is a mangled character in a
-    log line, never a crash."""
-    argv = [str(a) for a in argv]
+    log line, never a crash. Path arguments (e.g. `["git", "-C", repo, ...]`) normalize
+    via .as_posix() rather than native str() - git accepts forward slashes on every
+    platform, and a bare str(WindowsPath) renders backslashes that several call sites'
+    own tests assert against in posix form."""
+    argv = [a.as_posix() if isinstance(a, Path) else str(a) for a in argv]
     prefix = command_argv(argv[0])
     decode = {"encoding": "utf-8", "errors": "replace"}
     if prefix[0] == "cmd":
@@ -1004,7 +1007,7 @@ def validate_branch(branch: str) -> str:
 def is_dirty(repo: Path, runner=None) -> bool:
     """True when `git status --porcelain` reports anything (staged, unstaged or untracked)."""
     runner = runner or run_cmd
-    proc = runner(["git", "-C", repo, "status", "--porcelain"])
+    proc = runner(["git", "-C", repo.as_posix(), "status", "--porcelain"])
     if proc.returncode != 0:
         raise InstallAbort(f"git status failed in {repo}: {proc.stderr.strip()}")
     return bool(proc.stdout.strip())
@@ -1013,7 +1016,7 @@ def is_dirty(repo: Path, runner=None) -> bool:
 def commits_ahead(repo: Path, branch: str, runner=None) -> int:
     """Local commits on HEAD that origin/<branch> does not have (0 on any lookup failure)."""
     runner = runner or run_cmd
-    proc = runner(["git", "-C", repo, "rev-list", "--count", f"origin/{branch}..HEAD"])
+    proc = runner(["git", "-C", repo.as_posix(), "rev-list", "--count", f"origin/{branch}..HEAD"])
     if proc.returncode != 0:
         return 0
     try:
@@ -1045,7 +1048,7 @@ def gather_update_preview(repo: Path, branch: str, local_version: Optional[str],
         return proc if proc is not None and proc.returncode == 0 else None
 
     info = {"behind": None, "remote_version": None, "headlines": [], "notes": []}
-    proc = probe(["git", "-C", repo, "rev-list", "--count", f"HEAD..origin/{branch}"])
+    proc = probe(["git", "-C", repo.as_posix(), "rev-list", "--count", f"HEAD..origin/{branch}"])
     if proc is not None:
         try:
             info["behind"] = int(proc.stdout.strip())
@@ -1053,12 +1056,12 @@ def gather_update_preview(repo: Path, branch: str, local_version: Optional[str],
             pass
     if info["behind"] is None:
         info["notes"].append("could not count new commits (shallow clone or detached HEAD?)")
-    proc = probe(["git", "-C", repo, "show", f"origin/{branch}:.claude-plugin/plugin.json"])
+    proc = probe(["git", "-C", repo.as_posix(), "show", f"origin/{branch}:.claude-plugin/plugin.json"])
     if proc is not None:
         info["remote_version"] = parse_manifest_version(proc.stdout)
     if info["remote_version"] is None:
         info["notes"].append("could not read the remote manifest")
-    proc = probe(["git", "-C", repo, "show", f"origin/{branch}:CHANGELOG.md"])
+    proc = probe(["git", "-C", repo.as_posix(), "show", f"origin/{branch}:CHANGELOG.md"])
     if proc is not None and str(proc.stdout or "").strip():
         info["headlines"] = list_headlines_between(proc.stdout, local_version)
     else:
@@ -1092,7 +1095,7 @@ def check_for_update_upfront(cfg: dict, style: Style, args) -> None:
     branch = cfg.get("branch")
     branch = branch if branch in BRANCHES else "dev"
     try:
-        proc = run_cmd(["git", "-C", repo, "fetch", "origin", branch], timeout=8)
+        proc = run_cmd(["git", "-C", repo.as_posix(), "fetch", "origin", branch], timeout=8)
     except (subprocess.TimeoutExpired, OSError):
         return
     if proc is None or proc.returncode != 0:
@@ -1536,7 +1539,7 @@ class Installer:
             "your local changes are protected."
         )
         repo = self.repo
-        proc = run_cmd(["git", "-C", repo, "fetch", "origin", self.branch], timeout=300)
+        proc = run_cmd(["git", "-C", repo.as_posix(), "fetch", "origin", self.branch], timeout=300)
         if proc.returncode != 0:
             self.step_fail("Fetch origin", proc.stderr.strip() or "git fetch failed")
         self.step_ok(self.did("Fetched", "Would fetch") + f" origin/{self.branch}")
@@ -1609,10 +1612,10 @@ class Installer:
             ):
                 self.step_fail("Local commits", detail + " - left in place, aborting")
 
-        proc = run_cmd(["git", "-C", repo, "checkout", "-B", self.branch, f"origin/{self.branch}"])
+        proc = run_cmd(["git", "-C", repo.as_posix(), "checkout", "-B", self.branch, f"origin/{self.branch}"])
         if proc.returncode != 0:
             self.step_fail("Checkout branch", proc.stderr.strip() or "git checkout failed")
-        head = run_cmd(["git", "-C", repo, "rev-parse", "--short", "HEAD"])
+        head = run_cmd(["git", "-C", repo.as_posix(), "rev-parse", "--short", "HEAD"])
         commit = head.stdout.strip() if head.returncode == 0 else "?"
         self.step_ok(
             self.did(f"On {self.branch} at {commit}", f"Would be on {self.branch} at {commit}"),
@@ -1856,7 +1859,7 @@ class Installer:
                 return
         branch = self.cfg.get("branch")
         branch = branch if branch in BRANCHES else "dev"
-        proc = run_cmd(["git", "-C", repo, "fetch", "origin", branch], timeout=300)
+        proc = run_cmd(["git", "-C", repo.as_posix(), "fetch", "origin", branch], timeout=300)
         if proc.returncode != 0:
             self.step_fail(
                 "Fetch origin",

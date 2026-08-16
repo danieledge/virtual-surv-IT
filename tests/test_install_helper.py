@@ -14,7 +14,7 @@ import io
 import json
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 
 import pytest
@@ -1895,6 +1895,15 @@ def test_statusline_step_skips_without_bash_on_windows(monkeypatch, tmp_path, ca
     _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(ih.sys, "platform", "win32")
     monkeypatch.setattr(ih.shutil, "which", lambda _n: None)
+    # This test is about statusline_step()'s reaction to "no bash found", not about
+    # find_bash()'s own internal search order (shutil.which -> git-root derivation ->
+    # well-known install dirs -> a registry PATH re-read - the last stage is real,
+    # intentional behaviour that survives Git for Windows' PATH gap, not something to
+    # fake out here). Mocking shutil.which alone leaves that registry fallback live, so
+    # on a box where it genuinely finds a bash.exe (e.g. a real PortableGit install) this
+    # test's "bash absent" premise silently breaks. Mock find_bash directly instead,
+    # matching the pattern used elsewhere in this file for the same reason.
+    monkeypatch.setattr(ih, "find_bash", lambda: None)
     inst = ih.Installer(_args(), ih.Style(False), ih.marks(), subset="statusline")
     inst.repo = tmp_path
     inst.statusline_step()
@@ -3365,7 +3374,10 @@ def test_write_guard_interpreter_cache_uses_sys_executable(tmp_path):
     write_guard_interpreter_cache(tmp_path)
     cache = tmp_path / ".claude" / ".guard-interpreter"
     assert cache.is_file()
-    assert cache.read_text(encoding="utf-8") == sys.executable
+    # The cache is deliberately forward-slash normalized (see the sibling
+    # ...normalizes_windows_backslashes test below) - compare against that form, not
+    # the raw sys.executable, which is still native-separated on Windows.
+    assert cache.read_text(encoding="utf-8") == PureWindowsPath(sys.executable).as_posix()
 
 
 def test_write_guard_interpreter_cache_normalizes_windows_backslashes(tmp_path, monkeypatch):
@@ -3406,7 +3418,9 @@ def test_run_enable_project_pre_seeds_the_guard_cache(tmp_path):
         runner=lambda argv, **kw: _proc(returncode=0),
     )
     cache = project / ".claude" / ".guard-interpreter"
-    assert cache.is_file() and cache.read_text(encoding="utf-8") == sys.executable
+    assert cache.is_file() and cache.read_text(
+        encoding="utf-8"
+    ) == PureWindowsPath(sys.executable).as_posix()
 
 
 def test_demo_project_enablement_never_calls_the_real_writer(tmp_path, monkeypatch):
