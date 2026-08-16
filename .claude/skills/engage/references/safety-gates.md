@@ -85,6 +85,15 @@ must never re-ask them. As soon as `engagement_state init` has run:
 - `set-decision fix-cycle "<the review menu's Q3 answer>"`
 - `record-consent-outcome asked|declined` - a "No" or "unsure" records `declined`.
 
+**The consent outcome goes through `record-consent-outcome` ONLY - never `set-decision`, and
+never put the consent marker's filename or path (`.exec-consent`) into any decision, log-note
+or other Bash-command text.** The consent-write guard judges the whole command line lexically:
+an interpreter command whose argument text names the protected marker is blocked as a write
+attempt, however innocent the intent (live block 2026-08-16: `set-decision "execution-consent"
+"Yes - marker present at ..."` was denied mid-intake; `engagement_state` now also refuses
+consent-shaped keys mechanically). Hand the human the exact `touch` command in **chat text**,
+where the guard does not apply - not inside a Bash call.
+
 The recorded outcome is **never a grant**: the grant stays the human-created marker only, and the
 state file cannot represent one (ADR-002). Repeat the execution- and data-responsibility notes in
 the final Delivery Report.

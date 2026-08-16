@@ -38,8 +38,12 @@ The request: **$ARGUMENTS**
 
 Run the engagement like this:
 
-**0. Fast open.** Read `.claude/skills/.shared/engage-open.md` (plugin mode:
-`$PLUGIN_ROOT/.claude/skills/.shared/engage-open.md`) and follow it exactly: the operating-guide
+**0. Fast open.** Read the FILE `.claude/skills/.shared/engage-open.md` (plugin mode:
+`$PLUGIN_ROOT/.claude/skills/.shared/engage-open.md`). **`.shared/` is a SIBLING of this
+skill's own folder** - one level up, directly under `skills/`, never inside `skills/engage/`
+(live stumble 2026-08-16: a session Read the `skills/engage` directory itself, then guessed
+`skills/engage/.shared`, and burned two failed calls on a corp box where every call is
+seconds). One Read of that exact path, then follow it exactly: the operating-guide
 read, the chained-workflow rule, the one-compound-Bash-call probe, and every banner rule
 (allow-list tip, document formats, model, what's new). Shared verbatim with `/engage-light` - both
 front doors open identically.
