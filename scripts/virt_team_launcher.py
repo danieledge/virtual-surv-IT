@@ -87,6 +87,22 @@ def _refresh_tool_cache(project_dir: Path) -> None:
         pass
 
 
+def _row_resume_token(row: dict) -> str:
+    """The identifier a `--resume` decision should carry for this menu row. The
+    workspace dir is preferred (it is what the engage skill's own resume flow keys on),
+    with one exception: resume_menu() reports a flat-layout pack (a state file sitting
+    directly in artifacts/, no per-slug subfolder) as dir "(flat)" - a display label,
+    not a resumable identifier. Live finding (2026-08-16): the decision used to prefer
+    dir unconditionally and emitted literally `--resume (flat)`; the engage skill's
+    validation can only reject that and fall back to asking in-session - safe, but the
+    pre-made decision this script exists for was silently lost. Use the real slug for
+    that row instead."""
+    workspace_dir = row.get("dir")
+    if workspace_dir and workspace_dir != "(flat)":
+        return workspace_dir
+    return row.get("slug") or workspace_dir or ""
+
+
 def _resume_decision(project_dir: Path) -> str:
     """Returns the decision string (possibly empty). All interactive I/O here targets
     stderr/stdin explicitly - never print() bare, which would land on stdout and corrupt
@@ -103,7 +119,7 @@ def _resume_decision(project_dir: Path) -> str:
     err = sys.stderr
     print("Existing engagement(s) found:", file=err)
     for i, row in enumerate(shown, 1):
-        slug = row.get("dir") or row.get("slug") or "?"
+        slug = _row_resume_token(row) or "?"
         status = row.get("status") or "?"
         title = row.get("title") or ""
         print(f"  {i}) resume {slug} ({status}) - {title}", file=err)
@@ -135,7 +151,7 @@ def _resume_decision(project_dir: Path) -> str:
         print(f"'{choice}' not recognised - deciding inside the session instead.", file=err)
         return ""
     if 1 <= idx <= len(shown):
-        slug = shown[idx - 1].get("dir") or shown[idx - 1].get("slug")
+        slug = _row_resume_token(shown[idx - 1])
         if slug:
             return f"--resume {slug}"
     print(f"'{choice}' out of range - deciding inside the session instead.", file=err)

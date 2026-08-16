@@ -48,6 +48,16 @@ def _ws(project: Path, slug: str, status: str = "in_progress", title: str = "", 
     (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
 
 
+def _flat_ws(project: Path, slug: str, status: str = "in_progress", title: str = ""):
+    """A FLAT-layout pack: the state file sits directly in artifacts/, no per-slug
+    subfolder - the pre-ADR-008 single-engagement shape resume_menu() still supports
+    and reports with dir "(flat)"."""
+    art = project / "artifacts"
+    art.mkdir(parents=True, exist_ok=True)
+    state = {"schema": 2, "status": status, "engagement": {"slug": slug, "title": title}}
+    (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+
+
 def test_non_plugin_project_is_silent_on_stdout_but_explains_on_stderr(
     tmp_path, monkeypatch, capsys
 ):
@@ -126,6 +136,28 @@ def test_real_input_prompt_never_leaks_onto_stdout(tmp_path, monkeypatch, capsys
     assert out.out.strip() == "--new"  # exactly the decision, nothing prepended
     assert "Choice:" not in out.out  # the prompt text itself must never reach stdout
     assert "Choice:" in out.err  # it's still shown to the human, just on the right stream
+
+
+def test_flat_layout_resume_emits_the_real_slug_not_the_flat_label(tmp_path, monkeypatch, capsys):
+    """Live finding (2026-08-16): resume_menu() reports a flat-layout pack with dir
+    "(flat)" - a display label, not a resumable identifier - and the decision used to
+    prefer dir over slug unconditionally, so choosing that row emitted literally
+    `--resume (flat)`. The engage skill's validation can only reject that and fall back
+    to asking in-session: safe, but the pre-made decision was silently lost exactly
+    where this script exists to make it. The real slug must be emitted instead, and the
+    menu row must show it too (a human asked to pick from "(flat)" learns nothing)."""
+    project = _plugin_enabled_project(tmp_path)
+    _flat_ws(project, "legacy-flat", title="Legacy flat engagement")
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "1")
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.strip() == "--resume legacy-flat"
+    assert "(flat)" not in out.out
+    assert "legacy-flat" in out.err  # the menu names the engagement, not the layout
 
 
 def test_choosing_new_returns_new_flag(tmp_path, monkeypatch, capsys):
