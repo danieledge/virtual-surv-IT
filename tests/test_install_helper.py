@@ -3713,6 +3713,10 @@ def _confirm_by_prompt_machine(answers: dict):
             return answers.get("docx", default)
         if "new projects cite regulatory obligations" in lowered:
             return answers.get("citations", default)
+        if "refresh the 'virt-surv' shell alias" in lowered:
+            # Default False here (the REAL default is True): a test that doesn't opt in
+            # must never fall through into a real run_setup_alias call.
+            return answers.get("refresh_alias", False)
         return default
 
     return _fn
@@ -3817,6 +3821,56 @@ def test_machine_defaults_step_blank_launch_command_leaves_unchanged(tmp_path, m
     inst.machine_defaults_step()
     saved = json.loads((cfg_dir / "installer.json").read_text())
     assert saved["claude_launch_command"] == "cc"  # unchanged, not cleared
+
+
+def test_machine_defaults_step_offers_alias_refresh_when_launch_command_changes(
+    tmp_path, monkeypatch
+):
+    """Live report (2026-08-16): "it doesn't seem to stick" - saving
+    claude_launch_command alone changes nothing for an already-installed alias (the
+    command is baked into the shell function at setup-alias time). The step must offer
+    the setup-alias refresh, and accepting it must actually run it."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        ih,
+        "confirm",
+        _confirm_by_prompt_machine({"docx": False, "citations": False, "refresh_alias": True}),
+    )
+
+    def _ask(prompt, default, assume_yes, style=None):
+        if "launch command" in prompt.lower():
+            return "cc"
+        return ""  # leave model unchanged
+
+    monkeypatch.setattr(ih, "ask", _ask)
+    calls = []
+    monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: calls.append(k) or 0)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    assert calls == [{"assume_yes": True}]
+
+
+def test_machine_defaults_step_no_alias_refresh_when_launch_command_unchanged(
+    tmp_path, monkeypatch
+):
+    """The refresh offer is scoped to an actual launch-command change - an unrelated
+    machine-defaults edit must never route through setup-alias."""
+    import install_helper as ih
+
+    _isolate_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        ih,
+        "confirm",
+        _confirm_by_prompt_machine({"docx": True, "citations": False, "refresh_alias": True}),
+    )
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "")  # blank everywhere - launch unchanged
+    calls = []
+    monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: calls.append(k) or 0)
+    inst = ih.Installer(_args(yes=False), ih.Style(False), ih.marks(), subset="machinedefaults")
+    inst.machine_defaults_step()
+    assert calls == []
 
 
 def test_machine_defaults_step_invalid_model_input_leaves_unchanged(tmp_path, monkeypatch, capsys):
@@ -5144,21 +5198,46 @@ def test_setup_alias_defaults_to_no_when_no_real_clone_found(tmp_path, monkeypat
 
 
 def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):
-    """A genuinely up-to-date alias (already has the go-branch signature) is skipped, not
-    duplicated - the ORIGINAL idempotent-skip behaviour, now scoped to the case where
-    there's truly nothing to upgrade."""
+    """A genuinely current alias - the EXACT line this run would write, already present
+    (here: written by a first run moments earlier) - is skipped, not duplicated.
+    Staleness is exact-line now, not any structural signature: see _ALIAS_VERSION's
+    comment for the two shape-signature failures, and the 2026-08-16 launch-command
+    report for why "current shape" was still too weak (a rebaked VALUE must upgrade
+    too, not just a changed template)."""
     import install_helper as ih
 
-    home = _isolate_home_for_alias(
-        monkeypatch, tmp_path, bashrc='virt-surv() { if [ "$1" = "go" ]; then :; fi }\n'
-    )
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
     _stub_interpreters(monkeypatch, ih)
+    assert ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True) == 0
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     out = capsys.readouterr().out
     assert rc == 0
     assert "already exists, skipped" in out
     content = (home / ".bashrc").read_text(encoding="utf-8")
-    assert content.count("virt-surv") == 1  # not duplicated
+    # Not duplicated - count FUNCTION DEFINITIONS, not the bare marker string (the
+    # version stamp itself contains "virt-surv", so a bare count would double).
+    assert content.count("virt-surv() {") == 1
+
+
+def test_setup_alias_upgrades_when_the_launch_command_changed(tmp_path, monkeypatch, capsys):
+    """Live report (2026-08-16): changing 'virt-surv go's launch command in Machine
+    defaults "doesn't seem to stick" - the command is baked into the shell function,
+    and the old staleness check saw a current-shaped entry and skipped forever, so the
+    rc kept launching the old command. An entry whose baked values differ from what
+    this run would write must upgrade."""
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _stub_interpreters(monkeypatch, ih)
+    assert ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True) == 0
+    monkeypatch.setattr(ih, "detect_or_configure_claude_launch_command", lambda *a, **k: "cc")
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "out of date" in out
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert '"cc" ${__vt_d:+"/engage $__vt_d"}' in content  # new definition, new command
+    assert content.count("virt-surv() {") == 2  # appended below, old line untouched
 
 
 def test_setup_alias_upgrades_a_pre_go_alias_instead_of_skipping(tmp_path, monkeypatch, capsys):
@@ -5176,12 +5255,55 @@ def test_setup_alias_upgrades_a_pre_go_alias_instead_of_skipping(tmp_path, monke
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     out = capsys.readouterr().out
     assert rc == 0
-    assert "predates the 'go' subcommand" in out
+    assert "out of date" in out
     content = (home / ".bashrc").read_text(encoding="utf-8")
     assert "alias virt-surv='already here'" in content  # old line untouched, not deleted
     assert "unalias virt-surv 2>/dev/null" in content  # neutralises the OLD alias's shadowing
     assert "virt-surv() {" in content
     assert '"$1" = "go"' in content  # the new definition, appended below
+
+
+def test_setup_alias_upgrades_a_go_era_alias_missing_the_engage_prefix(
+    tmp_path, monkeypatch, capsys
+):
+    """Live Windows report (2026-08-16): a profile written between the 'go' fix and the
+    '/engage'-prefix fix (f53e907) still passed a bare "--new" to claude, which errors
+    with "unknown option '--new'" - and the old 'go'-signature staleness check judged
+    that alias CURRENT, so re-running setup skipped it forever and the shipped fix
+    could never reach the machine. Any entry without the current version stamp must now
+    upgrade instead."""
+    import install_helper as ih
+
+    go_era_line = (
+        'virt-surv() { if [ "$1" = "go" ]; then shift; local __vt_d; '
+        '__vt_d="$("python3" "/old/scripts/virt_team_launcher.py")"; '
+        '"claude" ${__vt_d:+"$__vt_d"} "$@"; '
+        'else "python3" "/old/install_helper.py" "$@"; fi; }\n'
+    )
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc=go_era_line)
+    _stub_interpreters(monkeypatch, ih)
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "out of date" in out
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert "/engage $__vt_d" in content  # the new definition carries the prefix
+    assert ih._ALIAS_STAMP in content  # and the stamp that marks it current
+
+
+def test_setup_alias_written_lines_carry_the_version_stamp(tmp_path, monkeypatch):
+    """The stamp IS the upgrade mechanism: a freshly written line without it would be
+    judged stale and re-appended on every future setup run. It must also be a comment
+    in the target shell (leading '#'), never executable text."""
+    import install_helper as ih
+
+    assert ih._ALIAS_STAMP.startswith("# ")
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _stub_interpreters(monkeypatch, ih)
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert ih._ALIAS_STAMP in content
 
 
 def test_setup_alias_no_interpreter_found(tmp_path, monkeypatch):

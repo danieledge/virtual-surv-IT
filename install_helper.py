@@ -2764,6 +2764,21 @@ class Installer:
             self.cfg[_CLAUDE_LAUNCH_CMD_KEY] = launch_cmd_wanted
         save_config(self.cfg_path, self.cfg)
         self.step_ok("Machine defaults", f"{summary} ({self.cfg_path})")
+        if launch_cmd_wanted != launch_cmd_current:
+            # The launch command is BAKED into the virt-surv shell function when
+            # setup-alias writes it - saving the config alone changes nothing for an
+            # already-installed alias (live report 2026-08-16: "it doesn't seem to
+            # stick"). Offer the refresh right here; run_setup_alias's exact-line
+            # staleness check appends an updated definition carrying the new command.
+            if confirm(
+                "  Refresh the 'virt-surv' shell alias now so 'go' launches with the "
+                "new command? (Otherwise re-run setup-alias later - the installed "
+                "alias keeps the old command baked in until then.)",
+                default=True,
+                assume_yes=False,
+                style=self.style,
+            ):
+                run_setup_alias(self.style, self.marks, assume_yes=True)
 
     def model_step(self) -> None:
         """Standalone, easily re-runnable (menu option 8): change or reset Morgan's (the
@@ -4385,6 +4400,21 @@ def run_manage_engagements(
 
 _ALIAS_MARKER = "virt-surv"
 
+# The alias template's version stamp, embedded in every written line as a trailing
+# comment (valid end-of-line comment syntax in POSIX shells and PowerShell alike).
+# run_setup_alias treats an existing entry WITHOUT the current stamp as an older
+# template and upgrades it (appends the new definition below; never edits the old
+# line). Bump _ALIAS_VERSION every time either template changes IN ANY WAY: twice a
+# template fix shipped that installed profiles could never receive, because the
+# staleness check only recognised the previous era's shape - a pre-'go' plain alias
+# (upgrade added 2026-08-15, commit 65648ec) and then a go-era function missing the
+# "/engage" prefix (f53e907; live Windows report 2026-08-16: claude errored with
+# "unknown option '--new'" because the profile still held the unprefixed line and
+# the 'go'-signature check judged it current). The stamp makes staleness
+# shape-agnostic: any future template change upgrades automatically.
+_ALIAS_VERSION = 3  # v1 plain alias · v2 'go' function · v3 'go' + "/engage" prefix
+_ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
+
 
 def _posix_shell_rc_candidates() -> list:
     """(label, path) for POSIX shell rc files that already EXIST - doesn't guess which
@@ -4585,6 +4615,9 @@ def run_setup_alias(
     wrote_any = False
     had_error = False
     for label, rc_path in targets:
+        # Changing either line template below? Bump _ALIAS_VERSION (see its comment) -
+        # the trailing stamp is the only thing that lets an already-installed profile
+        # pick the change up on a re-run.
         if rc_path.suffix == ".ps1":
             line = (
                 f"function {_ALIAS_MARKER} {{ "
@@ -4595,7 +4628,7 @@ def run_setup_alias(
                 f'else {{ & "{launch_cmd}" @__vtRest }} '
                 f"}} else {{ "
                 f'& "{interpreter}" "{script_path}" @args '
-                f"}} }}"
+                f"}} }} {_ALIAS_STAMP}"
             )
         else:
             line = (
@@ -4603,26 +4636,29 @@ def run_setup_alias(
                 f'if [ "$1" = "go" ]; then shift; local __vt_d; '
                 f'__vt_d="$("{interpreter}" "{launcher_path}")"; '
                 f'"{launch_cmd}" ${{__vt_d:+"/engage $__vt_d"}} "$@"; '
-                f'else "{interpreter}" "{script_path}" "$@"; fi; }}'
+                f'else "{interpreter}" "{script_path}" "$@"; fi; }} {_ALIAS_STAMP}'
             )
         existing = (
             rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
         )
-        go_signature = '$args[0] -eq "go"' if rc_path.suffix == ".ps1" else '"$1" = "go"'
-        stale = _ALIAS_MARKER in existing and go_signature not in existing
+        # Staleness is EXACT-LINE: skip only when the rc already contains the exact
+        # line this run would write. Any difference upgrades - a changed template
+        # (which is what the version stamp marks), but equally a changed baked-in
+        # value: the launch command ("Machine defaults" edits claude_launch_command,
+        # but an already-written alias had the old one baked in - live report
+        # 2026-08-16: "it doesn't seem to stick"), a different interpreter, or a
+        # moved clone path.
+        stale = _ALIAS_MARKER in existing and line not in existing
         if _ALIAS_MARKER in existing and not stale:
             print(
                 f"{style.dim('-')} {label} ({rc_path}): a '{_ALIAS_MARKER}' entry already exists, skipped"
             )
             continue
         if stale:
-            # Upgrade path (2026-08-15 live report): an alias written before the 'go'
-            # branch existed has no way to pick it up on its own - simply re-running
-            # setup used to hit the "already exists, skipped" branch above forever,
-            # leaving 'go' silently unreachable via the shell (falls through to
-            # _run_go's own direct-invocation fallback instead, confusingly printing
-            # "isn't a real executable" for a launch command that's perfectly valid
-            # once the shell function itself is doing the launching).
+            # Upgrade path: any existing entry without the CURRENT version stamp is an
+            # older template (see _ALIAS_VERSION's comment for the two live reports
+            # where shape-specific staleness checks left fixed code unreachable on
+            # machines that had already run setup-alias).
             #
             # Never edits the old line's text (a user may have customised it, and
             # blind text-surgery on someone else's shell rc is exactly the kind of
@@ -4636,8 +4672,9 @@ def run_setup_alias(
                 line = f"unalias {_ALIAS_MARKER} 2>/dev/null; {line}"
             print(
                 style.yellow(
-                    f"  ! {label} ({rc_path}): the existing '{_ALIAS_MARKER}' entry predates "
-                    "the 'go' subcommand - appending an updated one below it (the old line "
+                    f"  ! {label} ({rc_path}): the existing '{_ALIAS_MARKER}' entry is out "
+                    "of date (the alias template, launch command, interpreter or clone "
+                    "path has changed) - appending an updated one below it (the old line "
                     "is left as-is, never edited)."
                 )
             )
