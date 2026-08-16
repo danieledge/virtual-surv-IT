@@ -187,13 +187,13 @@ What the team gives you today, each row tied to where the claim is enforced or d
 |---|---|---|
 | A real engineering team, right-sized | Morgan (PM) + 16 specialist subagents; a typical task fires only 2-5 of them, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
 | Independent review by construction | Advisors and reviewers hold no `Write`/`Edit` tools; QA and validation run as separate agents from the build. More than rules: pipelines/ETL, scripts, ML, reviews and docs all route to their own specialist. | Tool grants in [`.claude/agents/`](.claude/agents/), pinned by [`tests/test_docs_consistency.py`](tests/test_docs_consistency.py) · routing table in [`docs/team-operating-guide.md`](docs/team-operating-guide.md) |
-| Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | [ADR-008](docs/adr/ADR-008-multi-engagement-workspaces.md) · [ADR-006](docs/adr/ADR-006-machine-readable-engagement-state.md) · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
+| Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | ADR-008 · ADR-006 · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
 | Three always-on safety guards, human-only consent | Raw data under `data/raw/` blocked from the model, execution gated on a human-created marker, and the model blocked from writing the marker, settings or the hooks themselves. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
 | Document conversion front door | Excel/CSV/PDF/DOCX read via the vendored converter - no pip needed - with a JSON evidence report every run; a PreToolUse hook redirects binary-document reads to it. | [`docs/house-rules.md`](docs/house-rules.md) · [`scripts/convert_file.py`](scripts/convert_file.py) · [`scripts/document_input_redirect.py`](scripts/document_input_redirect.py) |
 | A real review subsystem | Context-routed lenses, the standard analysers per language, schema-validated findings packs rendered to one canonical layout, and a build fingerprint tying the reviewed code to the shipped artifact. | [`docs/code-review-method.md`](docs/code-review-method.md) · [`docs/review/`](docs/review/) · the [review demo](docs/demos/review-demo.md) |
 | Independent QA + a mechanical DoD gate | A close only counts when `check_artifacts` passes - finding codes like `STALE-INDEX`, `FINAL-BEFORE-CLOSE`, `ROSTER-UNKNOWN` catch the failure modes that actually happened live. Iteration history stays visible append-only (journey strip, QA cycles). | [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) · [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
-| Engagement memory | A per-project **codebase map**: bounded, PM-curated, SHA-anchored, hygiene-checked mechanically, advisory-only - repeat engagements start warm. | [ADR-003](docs/adr/ADR-003-engagement-memory.md) · [ADR-007](docs/adr/ADR-007-codebase-map-evolution.md) |
-| Company extensions | Additive per-project standing instructions, close actions, an analyser registry and named integrations - never a safety waiver, and eval-tested. | [ADR-009](docs/adr/ADR-009-company-extensions.md) · [`docs/EXTENDING.md`](docs/EXTENDING.md) |
+| Engagement memory | A per-project **codebase map**: bounded, PM-curated, SHA-anchored, hygiene-checked mechanically, advisory-only - repeat engagements start warm. | ADR-003 · ADR-007 |
+| Company extensions | Additive per-project standing instructions, close actions, an analyser registry and named integrations - never a safety waiver, and eval-tested. | ADR-009 · [`docs/EXTENDING.md`](docs/EXTENDING.md) |
 | Self-tested quality | 9 rubrics + 45 golden cases with a deterministic scorer in CI, and a mechanical dev→main release gate that fails a promotion with no eval baseline. | [`evals/README.md`](evals/README.md) · [`scripts/release_gate.py`](scripts/release_gate.py) · [Self-test](#-self-test-eval-harness) |
 | Cost visibility | Measured per-run token numbers, and a local observability page: engagement inventory, DoD gate result, map hygiene, consent highlight, measured token cost (`python -m scripts.dashboard`). | [Token usage](#-token-usage--optimisation) · [`scripts/dashboard.py`](scripts/dashboard.py) |
 | Console & UX discipline | Progress in the native task list (TodoWrite), every clarification via the question tool, a statusline showing dormant-vs-engaged, and a clean console with detail in artifacts. | [`docs/team-operating-guide.md`](docs/team-operating-guide.md) · [`scripts/statusline.sh`](scripts/statusline.sh) |
@@ -781,7 +781,7 @@ should copy the `Read`/`Grep`/`Glob` deny entries into their own project's `.cla
 *reading the text of the command*, a strong default and a consent record, but **not a sandbox**: a
 determined user can dodge string-matching (e.g. hide a path in a variable). The real boundary for
 shell is OS file permissions / keeping raw data off the box. The full bypass analysis and the
-hardening backlog are in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
+hardening backlog are in ADR-002.
 
 </details>
 
@@ -1169,7 +1169,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
   (standing rules, roster, routing, question-tool limits) → [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md)
   (frameworks + the canonical template catalogue).
 - 🕵️ **Auditing / assessing it** → [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) →
-  [`docs/code-review-method.md`](docs/code-review-method.md) → [`docs/adr/`](docs/adr/) (citation
+  [`docs/code-review-method.md`](docs/code-review-method.md) → the internal ADRs (citation
   grounding ADR-001; safety-hook threat model ADR-002; engagement memory ADR-003) →
   [`evals/README.md`](evals/README.md).
 - 📊 **Data & tuning** → [Handling real data](#-handling-real-data) (above) →
@@ -1192,7 +1192,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 | [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
 | [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
 | [`docs/internal/engagement-flow-poster-flowchart.pdf`](docs/internal/engagement-flow-poster-flowchart.pdf) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory), kept in sync with the current version at each release (currently v0.33.6); renders directly on GitHub. The [interactive HTML](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/internal/engagement-flow-poster-flowchart.html) is also available (the [plain repo link](docs/internal/engagement-flow-poster-flowchart.html) just shows source on GitHub); see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline; the normative lifecycle spec (maintainer doc) is [`docs/internal/engagement-flow-spec.md`](docs/internal/engagement-flow-spec.md) |
-| [`docs/adr/`](docs/adr/) | Architecture decision records ADR-001 to ADR-011: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule, the session-resume brief - indexed with statuses in [`docs/adr/README.md`](docs/adr/README.md) |
+| `docs/adr/` (internal) | Architecture decision records ADR-001 to ADR-011: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule, the session-resume brief. **Internal maintainer documents, deliberately not published in this repo** - the docs that cite an ADR carry the decision's substance themselves. |
 | [`docs/releases/0.33.md`](docs/releases/0.33.md) | The 0.33.x release overview - the whole cycle (workflow robustness + platform capability adoption) on one page |
 | [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
 
@@ -1207,7 +1207,7 @@ guards robustly cover the file-read and Write/Edit tool channels, but on the **B
 are lexical checks with no OS `permissions.deny` backstop. So a determined or prompt-injected model
 could, via a shell command, disarm the guards (delete or overwrite a guard file) or obfuscate a path
 to read raw data or self-grant execution consent. This is documented as accepted residual in
-[`ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
+ADR-002.
 
 - **Shipped:** the execution guard **does** segment-split the command line (`;`, `&&`, `||`, `|`,
   newline, backtick, `$(`) and evaluates each segment on its own, so an allow-listed fragment can no

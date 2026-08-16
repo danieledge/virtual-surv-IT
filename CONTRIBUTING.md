@@ -148,7 +148,7 @@ Two things worth knowing:
 - **The three safety hooks are a separate thing** from this tooling - they run *inside Claude
   Code* to block raw-data reads, un-consented code execution, and model writes of the consent
   marker / settings / the hooks themselves. They're explained in `docs/house-rules.md` and
-  threat-modelled in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
+  threat-modelled in ADR-002.
 
 ## Adding or changing components
 
@@ -209,7 +209,7 @@ asserting parsed-JSON equality of the `PreToolUse` block (`.claude/settings.json
 the permissions list, so the whole files differ by design). **Editing the hook
 files from inside a Claude session requires the human-set `CST_ALLOW_CONFIG_EDIT=1`** (the
 consent-write guard blocks model edits of them - by design). See `docs/house-rules.md` and
-[`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
+ADR-002.
 
 ## Conventions
 

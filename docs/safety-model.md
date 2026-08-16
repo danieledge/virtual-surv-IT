@@ -2,7 +2,7 @@
 
 What the safety controls actually guarantee, channel by channel, in one place. The claims
 below are sourced from the README (safety hooks, handling real data, known issues),
-[`SECURITY.md`](../SECURITY.md) and [`ADR-002`](adr/ADR-002-safety-hook-threat-model.md);
+[`SECURITY.md`](../SECURITY.md) and ADR-002;
 this page adds no new claims and strengthens none. Where a telling elsewhere is shorter,
 this page is the reference.
 

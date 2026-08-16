@@ -33,6 +33,9 @@ docs/adr/
 # Code-execution consent marker (per-engagement; never commit — it's a local authorisation)
 .claude/.exec-consent
 
+# Homelab infra access notes (2026-08-15) - host-specific, not product docs; keep local
+docs/internal/windows-test-vm-access.md
+
 # Live-/engage eval run outputs (scripts.eval_engage): transcripts, sandboxes, scores.
 # Baselines worth keeping get written up in evals/eval-baseline-*.md instead.
 evals/runs/

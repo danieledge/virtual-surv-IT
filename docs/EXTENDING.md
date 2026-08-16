@@ -170,6 +170,6 @@ travel with it).
 
 - Contract template + field-by-field docs: [`templates/team-extensions.md`](templates/team-extensions.md)
 - Design + threat analysis (why the parser never executes, why prefixes are literal, what
-  the adversarial golden case covers): [`adr/ADR-009-company-extensions.md`](adr/ADR-009-company-extensions.md)
+  the adversarial golden case covers): ADR-009
 - No contract at all? Plain `CLAUDE.md` steering still works for everything above - the
   contract makes it structured, discoverable and eval-tested.

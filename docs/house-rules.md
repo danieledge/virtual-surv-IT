@@ -66,7 +66,7 @@ guarantee, channel by channel - is [`docs/safety-model.md`](safety-model.md).
   both `hooks/hooks.json` (plugin-install mode) and `.claude/settings.json` (repo-as-project mode);
   JSON can't carry a comment, so this note + `tests/test_hooks_in_sync.py` are the guard against
   drift. Edit one → edit the other identically. (The standard `hooks/hooks.json` is **auto-loaded**;
-  it must *not* be re-declared in `plugin.json` - that double-loads it. See [`docs/adr/ADR-002`](adr/ADR-002-safety-hook-threat-model.md).)
+  it must *not* be re-declared in `plugin.json` - that double-loads it. See ADR-002.)
 - **Reviewing code is static by default; executing it is gated.** Running tests, the script, or a
   profiler *executes* the code. `guard-code-execution.py` blocks these unless authorised by the
   `.claude/.exec-consent` marker or the human-set `CST_ALLOW_EXEC=1`. **The marker is human-only**
@@ -86,13 +86,13 @@ guarantee, channel by channel - is [`docs/safety-model.md`](safety-model.md).
   bypasses lexical checks (indirection, subshells, `eval`, `base64|sh`). The real raw-data boundary
   is the `permissions.deny` list in `.claude/settings.json`, `data/raw/` in `.gitignore`, and
   masking-at-source via `scripts/ingest.py`. Any new file-reading tool must be added to the guard
-  matcher. (Full bypass enumeration + hardening backlog: [`docs/adr/ADR-002`](adr/ADR-002-safety-hook-threat-model.md).)
+  matcher. (Full bypass enumeration + hardening backlog: ADR-002.)
 - **Plugin installs don't ship the `permissions.deny` backstop - recreate it.** A plugin can carry
   hooks (`hooks/hooks.json`) but **not** a `permissions.deny` list, so a foreign project that installs
   this plugin gets the raw-data *guard hook* but not the OS-level deny backstop the fail-open paths
   and README lean on. When you install the plugin into a real project, copy the `Read`/`Grep`/`Glob`
   `data/raw/**` deny entries from this repo's `.claude/settings.json` into that project's own
-  `.claude/settings.json`. (Acknowledged residual: [`docs/adr/ADR-002`](adr/ADR-002-safety-hook-threat-model.md).)
+  `.claude/settings.json`. (Acknowledged residual: ADR-002.)
 - **Lexical/regex redaction is best-effort and order-sensitive.** Every new PII pattern needs an
   ordering rationale *and* an overlap test (date vs phone vs account); never rely on it as the sole
   control - free-text comms needs NER (named-entity recognition) before real data. The masking engine is **basic** by design.
