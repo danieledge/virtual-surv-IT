@@ -50,7 +50,17 @@ from pathlib import Path
 # \b alone is too loose here: a hyphen counts as a word boundary, so "/engage-lighter"
 # would match via the bare "engage" branch (live test caught this). Command arguments
 # always follow a space, never a bare hyphen, so require whitespace-or-end explicitly.
-_ENGAGE_RE = re.compile(r"^/(?:engage(?:-light)?|map-codebase)(?:\s|$)")
+#
+# The optional `<plugin-name>:` prefix (2026-08-16 live finding): a plugin install
+# namespaces every command, so real plugin-mode users type (and virt-surv go now
+# pre-seeds) `/compliance-surveillance-team:engage ...` - the bare-only pattern meant
+# the prefetch NEVER fired for them and every open silently fell back to the in-session
+# probe block. It went unnoticed because the repo-as-project dev loop, and Friday's
+# pre-namespacing launcher, both used the bare spelling that did match. Any plugin name
+# is accepted rather than hardcoding this one (a fork can rename the plugin; the cost of
+# matching a foreign `/other-plugin:engage` is one probe that injects context the model
+# then ignores - fail-open, same as every other branch here).
+_ENGAGE_RE = re.compile(r"^/(?:[\w.-]+:)?(?:engage(?:-light)?|map-codebase)(?:\s|$)")
 
 
 def _force_utf8_output() -> None:
