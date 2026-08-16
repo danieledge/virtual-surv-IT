@@ -228,6 +228,21 @@ def main() -> int:
     artifacts = cwd / "artifacts"
     if not artifacts.is_dir():
         return 0
+    # Session scoping (2026-08-16 live report, same fix as the staged DoD stop gate):
+    # an open pack left behind by ANOTHER session used to re-summon Morgan into every
+    # later session in the project, however dormant. Arm only when this payload's
+    # session_id matches the acting-session stamp engagement_state writes to
+    # artifacts/.team-session.json on every mutating command. Missing either id, or a
+    # mismatch = a session that never drove the team - stay silent.
+    session_id = data.get("session_id")
+    try:
+        stamped = json.loads(
+            (artifacts / ".team-session.json").read_text(encoding="utf-8")
+        ).get("session")
+    except Exception:
+        stamped = None
+    if not session_id or stamped != session_id:
+        return 0
     ca = _load_checker(cwd)
     opens = _open_engagements(artifacts, ca)
     if not opens:

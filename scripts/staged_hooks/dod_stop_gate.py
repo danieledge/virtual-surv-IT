@@ -239,6 +239,28 @@ def main() -> int:
     if not artifacts.is_dir():
         return 0
 
+    # Session scoping (2026-08-16 live report): a pure-dormant "hello" session in a
+    # project holding another session's leftover OPEN pack got the full fix-list and
+    # was pulled into working that engagement - this gate keyed on disk state alone,
+    # so one abandoned pack made dormancy impossible project-wide. Arm only for the
+    # session that actually drove the team: engagement_state stamps the acting
+    # session's id (from CLAUDE_CODE_SESSION_ID) into artifacts/.team-session.json on
+    # every mutating command, and this payload carries this session's own id. Missing
+    # stamp, missing payload id, or mismatch = a session that never engaged - stay
+    # SILENT (user decision: fully dormant; open engagements still surface at the
+    # /engage resume menu, virt-surv go, and the statusline). Fail-direction note:
+    # this deliberately fails toward silence, the opposite of _already_nudged's
+    # fail-toward-warning - dormancy is the promise being kept here.
+    session_id = data.get("session_id")
+    try:
+        stamped = json.loads(
+            (artifacts / ".team-session.json").read_text(encoding="utf-8")
+        ).get("session")
+    except Exception:
+        stamped = None
+    if not session_id or stamped != session_id:
+        return 0
+
     ca = _load_checker(cwd)
     if ca is None:
         return 0  # fail open - never brick a stop over a missing checker

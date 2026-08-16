@@ -41,7 +41,14 @@ def _load_dispatcher_module():
     return mod
 
 
+# Session scoping (2026-08-16): the staged hooks arm only when the payload's
+# session_id matches the acting-session stamp in artifacts/.team-session.json;
+# _run and _ws below carry both so the fidelity fixtures stay armed.
+_SID = "sess-dispatcher-suite"
+
+
 def _run(script: Path, payload: dict, project: Path) -> subprocess.CompletedProcess:
+    payload.setdefault("session_id", _SID)
     return subprocess.run(
         [sys.executable, str(script)],
         input=json.dumps(payload),
@@ -61,6 +68,12 @@ def _ws(project: Path, slug: str) -> Path:
 
     art = project / "artifacts"
     assert es_main(["--dir", str(art / slug), "init", "--title", slug, "--slug", slug]) == 0
+    # Explicit, deterministic stamp: es_main itself only stamps when the pytest
+    # process env happens to carry CLAUDE_CODE_SESSION_ID (true under a live Claude
+    # session, false in CI) - never rely on that here.
+    (art / ".team-session.json").write_text(
+        json.dumps({"session": _SID}), encoding="utf-8"
+    )
     return art / slug
 
 
@@ -83,6 +96,11 @@ def _todo_nudge_only(tmp_path: Path) -> Path:
 
     ws = _ws(tmp_path, "solo")
     assert es_main(["--dir", str(ws), "set-phase", "delivery"]) == 0
+    # Re-stamp AFTER the es_main mutation above: under a live Claude session the
+    # in-process CLI stamps the REAL session id from the env, clobbering _SID.
+    (tmp_path / "artifacts" / ".team-session.json").write_text(
+        json.dumps({"session": _SID}), encoding="utf-8"
+    )
     return tmp_path
 
 
@@ -94,6 +112,11 @@ def _both_fire(tmp_path: Path) -> Path:
     ws = _ws(tmp_path, "solo")
     assert es_main(["--dir", str(ws), "set-phase", "delivery"]) == 0
     (ws / "review-pass-1.md").write_text("# interim\n", encoding="utf-8")  # MISSING-HTML
+    # Re-stamp AFTER the es_main mutation above: under a live Claude session the
+    # in-process CLI stamps the REAL session id from the env, clobbering _SID.
+    (tmp_path / "artifacts" / ".team-session.json").write_text(
+        json.dumps({"session": _SID}), encoding="utf-8"
+    )
     return tmp_path
 
 

@@ -5,14 +5,38 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
 
 import scripts.persona_anchor as pa
 
 
-def _run(monkeypatch, capsys, payload: dict):
+def _run_bare(monkeypatch, capsys, payload: dict):
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
     rc = pa.main()
     return rc, capsys.readouterr().out
+
+
+# Session scoping (2026-08-16): the STAGED hook arms only when the payload's session_id
+# matches the acting-session stamp in artifacts/.team-session.json. The live copy under
+# test here ignores both until the staged fix is applied, so adding them now is inert -
+# and it keeps this whole suite green the moment the human runs the apply script.
+_SID = "sess-live-suite"
+
+
+def _stamped_run(run_fn, monkeypatch, capsys, payload: dict):
+    payload.setdefault("session_id", _SID)
+    cwd = payload.get("cwd")
+    if cwd:
+        art = Path(cwd) / "artifacts"
+        if art.is_dir():
+            (art / ".team-session.json").write_text(
+                json.dumps({"session": _SID}), encoding="utf-8"
+            )
+    return run_fn(monkeypatch, capsys, payload)
+
+
+def _run(monkeypatch, capsys, payload: dict):
+    return _stamped_run(_run_bare, monkeypatch, capsys, payload)
 
 
 def test_dormant_no_start_here_is_silent(tmp_path, monkeypatch, capsys):

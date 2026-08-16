@@ -90,7 +90,7 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 STATE_FILENAME = "engagement-state.json"
 INDEX_FILENAME = "START-HERE.md"
@@ -255,6 +255,60 @@ def clear_active(root: Path, slug: str | None = None) -> None:
     if slug is not None and read_active(root) != slug:
         return
     (root / ACTIVE_MARKER).unlink(missing_ok=True)
+
+
+# Which Claude Code SESSION last acted on this project's engagement layer (2026-08-16
+# live report: a pure-dormant "hello" session was pulled into another session's leftover
+# open engagement, because the engagement-scoped hooks keyed on disk state alone - one
+# open pack gated every later session in the project, and true dormancy became
+# impossible there). Every mutating CLI call (plus set-active) stamps the calling
+# session's id here, read from the CLAUDE_CODE_SESSION_ID env var Claude Code exposes to
+# Bash tool commands; the persona anchor and the DoD stop gate arm only when their own
+# hook payload's session_id matches the stamp, so a session that never drove the team
+# stays genuinely dormant (user decision: fully silent - open engagements still surface
+# at every front door: the /engage resume menu, virt-surv go, and the statusline).
+# An absent env var (a human running the CLI from a plain terminal, or an older Claude
+# Code) leaves any existing stamp untouched: session ids are unique, so a stale stamp
+# can only ever match the session that wrote it, never a new one.
+TEAM_SESSION_MARKER = ".team-session.json"
+
+
+def stamp_team_session(root: Path) -> None:
+    """Record the calling session as the one driving this project's engagements.
+    Advisory marker - never fails a state mutation over it, and writes nothing when the
+    session id isn't in the environment."""
+    sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if not sid:
+        return
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        (root / TEAM_SESSION_MARKER).write_text(
+            json.dumps({"session": sid, "stamped": _dt.date.today().isoformat()}) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def read_team_session(root: Path) -> str | None:
+    """The stamped session id, or None. Fail toward None (= hooks stay dormant)."""
+    try:
+        sid = json.loads((root / TEAM_SESSION_MARKER).read_text(encoding="utf-8")).get("session")
+    except Exception:
+        return None
+    return sid if isinstance(sid, str) and sid else None
+
+
+def _stamp_root(pack_dir: Path | None) -> Path:
+    """The artifacts root the session stamp belongs to - the same level the hooks read
+    (project_root/artifacts). Mirrors _registry_root_for's shape rule: a flat pack IS
+    the artifacts root; a workspace pack's root is its parent; no pack dir resolved yet
+    (init/set-active before resolution) means the default artifacts dir."""
+    if pack_dir is None:
+        return _default_artifacts_dir()
+    if pack_dir.name == "artifacts":
+        return pack_dir
+    return pack_dir.parent
 
 
 def workspace_states(root: Path) -> list[Path]:
@@ -1423,6 +1477,47 @@ def _cmd_set_profile(args: argparse.Namespace) -> int:
 
 
 def _cmd_add_artifact(args: argparse.Namespace) -> int:
+    def _heal_path(raw: str) -> str:
+        """Paths are recorded relative to the PACK dir, but heal the two misspellings a
+        live session actually produced (2026-08-16, corp Windows): a PROJECT-relative
+        path that re-names the pack ("artifacts/<slug>/x.md" while --dir already points
+        at artifacts/<slug>/, which double-resolved and wrongly flagged the row
+        added_before_file_existed) and an absolute path inside the pack. Only rewrites
+        when the given form does NOT resolve and the healed form DOES - an honestly
+        missing file keeps its given path and its flag."""
+        # Absolute first: `pack_dir / <absolute>` IS the absolute path, so the
+        # relative-form existence check below would short-circuit and record the
+        # absolute path verbatim instead of healing it.
+        given = Path(raw)
+        if given.is_absolute():
+            try:
+                healed = given.resolve().relative_to(args.dir.resolve()).as_posix()
+            except (ValueError, OSError):
+                return raw
+            if (args.dir / healed).exists():
+                print(
+                    f"note: healed absolute path {raw} -> {healed} (artifact paths "
+                    "are recorded relative to the pack dir)",
+                    file=sys.stderr,
+                )
+                return healed
+            return raw
+        if (args.dir / raw).exists():
+            return raw
+        parts = PurePosixPath(raw.replace("\\", "/")).parts
+        if len(parts) > 2 and parts[0] == "artifacts" and parts[1] == args.dir.name:
+            healed = str(PurePosixPath(*parts[2:]))
+            if (args.dir / healed).exists():
+                print(
+                    f"note: healed project-relative path {raw} -> {healed} (artifact "
+                    "paths are recorded relative to the pack dir)",
+                    file=sys.stderr,
+                )
+                return healed
+        return raw
+
+    args.path = _heal_path(args.path)
+
     def fn(state: dict) -> None:
         entry = {
             "path": args.path,
@@ -1472,7 +1567,34 @@ def _cmd_resolve_outstanding(args: argparse.Namespace) -> int:
     return 0
 
 
+def _reject_consent_decision_keys(keys) -> bool:
+    """True (having explained why on stderr) when a decision key tries to record the
+    execution-consent answer through the generic decisions map. Live block (2026-08-16,
+    corp Windows): the model ran `set-decision "execution-consent" "Yes - marker present
+    at .claude/.exec-consent"` and the consent-write guard default-denied the whole Bash
+    call - to a lexical guard, an interpreter command whose argument text names the
+    protected marker is indistinguishable from an attempt to write it. The dedicated
+    command exists precisely to avoid that shape (`record-consent-outcome asked|declined`
+    carries no marker path, and a recorded outcome is never a grant, ADR-006 §5).
+    Refusing here makes the safe path the only path, instead of leaving two documented
+    ways to record the same fact where one of them trips the guard."""
+    for key in keys:
+        if "consent" in str(key).lower():
+            print(
+                f"refusing to record {key!r} via set-decision(s): consent outcomes have "
+                "one sanctioned, guard-safe command - `record-consent-outcome "
+                "asked|declined` - and never belong in the generic decisions map. "
+                "Keep the consent marker's filename/path out of every decision and "
+                "log-note text.",
+                file=sys.stderr,
+            )
+            return True
+    return False
+
+
 def _cmd_set_decision(args: argparse.Namespace) -> int:
+    if _reject_consent_decision_keys([args.key]):
+        return 2
     return _mutate(args, lambda s: s.setdefault("decisions", {}).__setitem__(args.key, args.value))
 
 
@@ -1491,6 +1613,8 @@ def _cmd_set_decisions(args: argparse.Namespace) -> int:
         return 2
     if not isinstance(pairs, dict) or not pairs:
         print("--json must be a non-empty JSON object of {key: value}", file=sys.stderr)
+        return 2
+    if _reject_consent_decision_keys(pairs.keys()):
         return 2
 
     def fn(state: dict) -> None:
@@ -2143,6 +2267,12 @@ def main(argv: list[str] | None = None) -> int:
     ):
         args.dir = resolve_pack_dir(args)
     try:
+        if args.fn in _MUTATING_CMDS or args.fn is _cmd_set_active:
+            # Any team-layer ACTION marks this session as the engaged one (set-active
+            # included: it is how a resumed session claims its workspace). Read-only
+            # commands (list/show/validate/render) deliberately do not stamp - a
+            # dormant session that merely inspected state must stay dormant.
+            stamp_team_session(_stamp_root(args.dir))
         if args.fn in _MUTATING_CMDS:
             # _cmd_init/_cmd_archive resolve their own root when args.dir wasn't given
             # (see the exclusion list above) - lock the same directory they'll actually
