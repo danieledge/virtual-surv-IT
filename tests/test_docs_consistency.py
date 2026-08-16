@@ -89,6 +89,13 @@ def test_readme_version_badge_matches_plugin_json():
 
 
 def test_adr002_header_version_matches_revision_table():
+    if not (_ROOT / "docs" / "adr").is_dir():
+        import pytest
+
+        pytest.skip(
+            "docs/adr/ is deliberately untracked (internal docs, .gitignore 2026-08-13) "
+            "and absent in this clone - the check runs wherever the files exist"
+        )
     text = _read("docs/adr/ADR-002-safety-hook-threat-model.md")
     header = re.search(r"Version `([\d.]+)`", text)
     assert header, "ADR-002: no header version"
