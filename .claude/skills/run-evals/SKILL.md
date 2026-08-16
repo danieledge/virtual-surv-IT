@@ -2,7 +2,7 @@
 description: Run the team-quality eval harness - score the team's own output against golden cases (regression net)
 argument-hint: <optional - a rubric, a single case id, or blank for all>
 disable-model-invocation: true
-allowed-tools: Bash(python -m scripts.eval_score:*), Bash(python3 -m scripts.eval_score:*), Bash(python -m scripts.eval_engage:*), Bash(python3 -m scripts.eval_engage:*), Bash(.venv/bin/python -m scripts.eval_engage:*)
+allowed-tools: Bash(python -m scripts.eval_score:*), Bash(python3 -m scripts.eval_score:*), Bash(python -m scripts.eval_engage:*), Bash(python3 -m scripts.eval_engage:*), Bash(.venv/bin/python -m scripts.eval_engage:*), Glob, Read, Write, Task
 ---
 
 Run the **team-quality eval harness** (`evals/`) - the regression net that checks the team still

@@ -35,11 +35,10 @@ delivery report complete on the first pass - final `Status:` lines (never a draf
 every roster name carrying its 🤖 marker on first mention, no placeholder sections - **before**
 running the gate. `set-status closed` refuses on more than a plain `check_artifacts` run reports
 (unfinalised artifacts, draft statuses, missing agent markers), so a clean gate is not proof close
-will succeed, and topping up the artifacts a little at a time between gate runs turns the gate into
-a one-item-at-a-time discovery loop instead of a single check (2026-08-03 eval trace: content kept
-being added between checks - most often the summary email - so each re-run found genuinely new
-findings against the newly-added text, costing 8 gate executions and 4 close attempts to land one
-close). Write complete, run the gate once, fix everything it lists in one pass, close.
+will succeed. Topping up the artifacts a little at a time between gate runs turns the gate into a
+one-item-at-a-time discovery loop instead of a single check - each partial re-run only surfaces
+what's new since the last edit. Write complete, run the gate once, fix everything it lists in one
+pass, close.
 
 The close sequence, in order (use these exact forms rather than guessing a flag and correcting
 after a usage error - **`set-status closing` is the FIRST command, not an implicit side effect**:
@@ -58,11 +57,9 @@ work-in-progress rather than artifacts appearing with no state transition to exp
 ```
 
 (the `--fix` mode auto-renders missing `.html` siblings and renames a mis-typed summary email to
-`.txt`). **`check_artifacts` takes no `--slug`** (2026-08-12 live report, ironically hitting the
-exact "guessing a flag and correcting after a usage error" this section warns against - a stray
-`--slug <slug>` had been copied onto this one line from the `engagement_state` commands around
-it, which DO take it; `check_artifacts` always scans the whole `artifacts/` root and discovers
-every engagement's own workspace itself, same as the DoD backstop Stop hook does). Write the
+`.txt`). **`check_artifacts` takes no `--slug`** - unlike the `engagement_state` commands around
+it, it always scans the whole `artifacts/` root and discovers every engagement's own workspace
+itself, same as the DoD backstop Stop hook does. Write the
 **engagement-summary email**
 (`docs/templates/engagement-summary-email.md`) as a `.txt` in the workspace, **signed off as
 Morgan**, right after `set-status closing` (during the closing window it just opened, alongside
