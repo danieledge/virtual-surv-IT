@@ -68,7 +68,13 @@ def test_lookalike_commands_do_not_false_positive(tmp_path, monkeypatch, capsys)
     that actually read engage-open.md (grep-confirmed: engage, engage-light, map-codebase)."""
     _repo_as_project(tmp_path)
     _warm_cache(tmp_path)
-    for prompt in ("/engagement-report", "/engage-lighter", "engage without a slash"):
+    for prompt in (
+        "/engagement-report",
+        "/engage-lighter",
+        "engage without a slash",
+        "/compliance-surveillance-team:engagement-report",
+        "/compliance-surveillance-team:engage-lighter",
+    ):
         rc, out = _run(monkeypatch, capsys, {"user_input": prompt}, tmp_path)
         assert rc == 0 and out == "", prompt
 
@@ -77,6 +83,25 @@ def test_engage_family_commands_all_match(tmp_path, monkeypatch, capsys):
     _repo_as_project(tmp_path)
     _warm_cache(tmp_path)
     for prompt in ("/engage", "/engage-light", "/map-codebase --refresh", "/engage do the thing"):
+        rc, out = _run(monkeypatch, capsys, {"user_input": prompt}, tmp_path)
+        assert rc == 0, prompt
+        assert "<engage-probe-result>" in out, prompt
+
+
+def test_namespaced_plugin_commands_match_too(tmp_path, monkeypatch, capsys):
+    """2026-08-16 live finding: a plugin install namespaces every command, so real
+    plugin-mode users type (and virt-surv go pre-seeds) the namespaced spelling - the
+    bare-only pattern meant the prefetch NEVER fired for them, and every open silently
+    paid the in-session fallback probe. Unnoticed because the repo-as-project dev loop
+    and Friday's pre-namespacing launcher both used the bare spelling that did match."""
+    _repo_as_project(tmp_path)
+    _warm_cache(tmp_path)
+    for prompt in (
+        "/compliance-surveillance-team:engage --new",
+        "/compliance-surveillance-team:engage-light",
+        "/compliance-surveillance-team:map-codebase --refresh",
+        "/renamed-fork:engage",
+    ):
         rc, out = _run(monkeypatch, capsys, {"user_input": prompt}, tmp_path)
         assert rc == 0, prompt
         assert "<engage-probe-result>" in out, prompt
