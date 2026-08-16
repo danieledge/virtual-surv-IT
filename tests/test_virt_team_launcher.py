@@ -109,7 +109,10 @@ def test_decision_goes_to_stdout_menu_goes_to_stderr(tmp_path, monkeypatch, caps
     rc = mod.main()
     out = capsys.readouterr()
     assert rc == 0
-    assert out.out.strip() == "--resume dashboard-demo"
+    # The fixture marks the project via team-preferences.json = a PLUGIN install, so
+    # the pre-seeded prompt must use the namespaced command spelling (2026-08-16 live
+    # report: bare /engage is an unknown command in a plugin-mode session).
+    assert out.out.strip() == "/compliance-surveillance-team:engage --resume dashboard-demo"
     assert "dashboard-demo" in out.err  # the menu itself is on stderr
     assert "--resume" not in out.err  # the decision string itself never leaks onto stderr
 
@@ -133,7 +136,8 @@ def test_real_input_prompt_never_leaks_onto_stdout(tmp_path, monkeypatch, capsys
     rc = mod.main()
     out = capsys.readouterr()
     assert rc == 0
-    assert out.out.strip() == "--new"  # exactly the decision, nothing prepended
+    # Exactly the decision, nothing prepended by input()'s leak
+    assert out.out.strip() == "/compliance-surveillance-team:engage --new"
     assert "Choice:" not in out.out  # the prompt text itself must never reach stdout
     assert "Choice:" in out.err  # it's still shown to the human, just on the right stream
 
@@ -155,7 +159,7 @@ def test_flat_layout_resume_emits_the_real_slug_not_the_flat_label(tmp_path, mon
     rc = mod.main()
     out = capsys.readouterr()
     assert rc == 0
-    assert out.out.strip() == "--resume legacy-flat"
+    assert out.out.strip() == "/compliance-surveillance-team:engage --resume legacy-flat"
     assert "(flat)" not in out.out
     assert "legacy-flat" in out.err  # the menu names the engagement, not the layout
 
@@ -168,7 +172,23 @@ def test_choosing_new_returns_new_flag(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
     monkeypatch.setattr("builtins.input", lambda prompt="": "n")
     out = _run(mod)
-    assert out.strip() == "--new"
+    assert out.strip() == "/compliance-surveillance-team:engage --new"
+
+
+def test_repo_as_project_mode_emits_bare_engage(tmp_path, monkeypatch, capsys):
+    """The OTHER run mode: the plugin's own repo opened as the project (marked by the
+    operating guide being present locally) loads skills unnamespaced, so the pre-seeded
+    prompt must use bare /engage there - the namespaced spelling would be equally
+    unknown in that mode. Same marker file _plugin_enabled keys on."""
+    (tmp_path / "docs").mkdir(parents=True)
+    (tmp_path / "docs" / "team-operating-guide.md").write_text("# ops\n", encoding="utf-8")
+    _ws(tmp_path, "repo-side-work")
+    monkeypatch.chdir(tmp_path)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "1")
+    out = _run(mod)
+    assert out.strip() == "/engage --resume repo-side-work"
 
 
 def test_empty_choice_defers_to_session(tmp_path, monkeypatch, capsys):
@@ -254,7 +274,7 @@ def test_tool_cache_refresh_failure_does_not_block_the_menu(tmp_path, monkeypatc
     monkeypatch.setattr(mod, "_refresh_tool_cache", _boom)
     monkeypatch.setattr("builtins.input", lambda prompt="": "n")
     out = _run(mod)
-    assert out.strip() == "--new"
+    assert out.strip() == "/compliance-surveillance-team:engage --new"
 
 
 def _run(mod) -> str:

@@ -21,12 +21,18 @@ Two things get moved entirely outside the LLM pipeline here, for two different r
 
 **Output contract (load-bearing - the caller is a shell function capturing stdout via
 command substitution):** ALL interactive text (the menu, the prompt) goes to **stderr**.
-**stdout carries ONLY the final decision**, one line, one of:
-  - `--resume <slug>` - resume that open engagement
-  - `--new` - start new work
+**stdout carries ONLY the final pre-seeded prompt**, one line, one of:
+  - `<engage-cmd> --resume <slug>` - resume that open engagement
+  - `<engage-cmd> --new` - start new work
   - `` (empty) - nothing to decide, or the human chose to decide inside the session
-Never both an interactive transcript and the decision on the same stream - a caller doing
-`decision="$(virt_team_launcher.py)"` must get exactly the flag string, nothing else.
+where `<engage-cmd>` is the spelling of the engage command THIS project answers to:
+bare `/engage` in repo-as-project mode, the namespaced
+`/compliance-surveillance-team:engage` for a plugin install (see _engage_command - live
+report 2026-08-16: a hardcoded bare `/engage` is an unknown command in a plugin-mode
+session). The caller passes the string through as ONE argument, verbatim - it must not
+prepend, split or reformat it. Never both an interactive transcript and the decision on
+the same stream - a caller doing `decision="$(virt_team_launcher.py)"` must get exactly
+the prompt string, nothing else.
 
 Never asks about execution consent or any other safety gate - deliberately out of scope.
 That gate requires the human to see what's actually being asked BEFORE granting it
@@ -87,6 +93,20 @@ def _refresh_tool_cache(project_dir: Path) -> None:
         pass
 
 
+def _engage_command(target: Path) -> str:
+    """Which spelling of the engage command THIS project answers to. A plugin install
+    namespaces every skill (`/compliance-surveillance-team:engage`); only repo-as-project
+    mode - the plugin's own repo opened as the project, marked by the operating guide
+    being present locally - loads them bare as `/engage`. Live report (2026-08-16): the
+    pre-seeded prompt hardcoded the bare form, which a plugin-mode session rejects as an
+    unknown command, so the pre-made decision arrived broken on every real plugin
+    install. Same repo-as-project marker _plugin_enabled already keys on, reused here so
+    the two can never disagree."""
+    if (target / "docs" / "team-operating-guide.md").is_file():
+        return "/engage"
+    return "/compliance-surveillance-team:engage"
+
+
 def _row_resume_token(row: dict) -> str:
     """The identifier a `--resume` decision should carry for this menu row. The
     workspace dir is preferred (it is what the engage skill's own resume flow keys on),
@@ -104,9 +124,11 @@ def _row_resume_token(row: dict) -> str:
 
 
 def _resume_decision(project_dir: Path) -> str:
-    """Returns the decision string (possibly empty). All interactive I/O here targets
-    stderr/stdin explicitly - never print() bare, which would land on stdout and corrupt
-    the caller's command-substitution capture."""
+    """Returns the full pre-seeded prompt string (possibly empty) - the engage command
+    in the spelling THIS project answers to (see _engage_command), plus the
+    resume-or-new flag. All interactive I/O here targets stderr/stdin explicitly -
+    never print() bare, which would land on stdout and corrupt the caller's
+    command-substitution capture."""
     try:
         import engagement_state
 
@@ -143,8 +165,9 @@ def _resume_decision(project_dir: Path) -> str:
         return ""  # no tty / interrupted - fall through to deciding in-session
     if not choice:
         return ""
+    engage_cmd = _engage_command(project_dir)
     if choice.lower() == "n":
-        return "--new"
+        return f"{engage_cmd} --new"
     try:
         idx = int(choice)
     except ValueError:
@@ -153,7 +176,7 @@ def _resume_decision(project_dir: Path) -> str:
     if 1 <= idx <= len(shown):
         slug = _row_resume_token(shown[idx - 1])
         if slug:
-            return f"--resume {slug}"
+            return f"{engage_cmd} --resume {slug}"
     print(f"'{choice}' out of range - deciding inside the session instead.", file=err)
     return ""
 

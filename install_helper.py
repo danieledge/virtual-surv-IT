@@ -2778,7 +2778,18 @@ class Installer:
                 assume_yes=False,
                 style=self.style,
             ):
-                run_setup_alias(self.style, self.marks, assume_yes=True)
+                if run_setup_alias(self.style, self.marks, assume_yes=True) == 0:
+                    # run_setup_alias prints the same reminder when it writes; repeat
+                    # it here anyway - THIS flow's last screen is the machine-defaults
+                    # summary, and the reload is the one step only the user can do (a
+                    # child process cannot touch its parent shell).
+                    self.say(
+                        f"  {self.style.yellow('->')} Run "
+                        f"{self.style.yellow('. $PROFILE')} (PowerShell) or "
+                        f"{self.style.yellow('source ~/.bashrc')} (bash), or open a "
+                        "new terminal, before the next 'virt-surv go' - this session "
+                        "still holds the old alias until then."
+                    )
 
     def model_step(self) -> None:
         """Standalone, easily re-runnable (menu option 8): change or reset Morgan's (the
@@ -4412,7 +4423,12 @@ _ALIAS_MARKER = "virt-surv"
 # "unknown option '--new'" because the profile still held the unprefixed line and
 # the 'go'-signature check judged it current). The stamp makes staleness
 # shape-agnostic: any future template change upgrades automatically.
-_ALIAS_VERSION = 3  # v1 plain alias · v2 'go' function · v3 'go' + "/engage" prefix
+# v1 plain alias · v2 'go' function · v3 'go' + baked "/engage" prefix · v4 the prefix
+# moved INTO the launcher (run-mode-dependent: bare /engage only exists repo-as-project;
+# a plugin install needs /compliance-surveillance-team:engage - live report 2026-08-16:
+# the baked bare form was an unknown command on every real plugin install), so the
+# shell function now passes the launcher's stdout through verbatim as one argument.
+_ALIAS_VERSION = 4
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
 
@@ -4624,7 +4640,7 @@ def run_setup_alias(
                 f'if ($args.Count -gt 0 -and $args[0] -eq "go") {{ '
                 f"$__vtRest = @(); if ($args.Count -gt 1) {{ $__vtRest = $args[1..($args.Count-1)] }}; "
                 f'$__vtDecision = & "{interpreter}" "{launcher_path}"; '
-                f'if ($__vtDecision) {{ & "{launch_cmd}" "/engage $__vtDecision" @__vtRest }} '
+                f'if ($__vtDecision) {{ & "{launch_cmd}" "$__vtDecision" @__vtRest }} '
                 f'else {{ & "{launch_cmd}" @__vtRest }} '
                 f"}} else {{ "
                 f'& "{interpreter}" "{script_path}" @args '
@@ -4635,7 +4651,7 @@ def run_setup_alias(
                 f"{_ALIAS_MARKER}() {{ "
                 f'if [ "$1" = "go" ]; then shift; local __vt_d; '
                 f'__vt_d="$("{interpreter}" "{launcher_path}")"; '
-                f'"{launch_cmd}" ${{__vt_d:+"/engage $__vt_d"}} "$@"; '
+                f'"{launch_cmd}" ${{__vt_d:+"$__vt_d"}} "$@"; '
                 f'else "{interpreter}" "{script_path}" "$@"; fi; }} {_ALIAS_STAMP}'
             )
         existing = (
@@ -4709,12 +4725,19 @@ def run_setup_alias(
             print(f"  {fail} verification failed: {note}")
             had_error = True
     if wrote_any:
+        # A child process can never modify its parent shell, so the reload HAS to be
+        # the user's own action - lead with it, unmissable, not buried mid-paragraph
+        # (2026-08-16 user request).
+        print(
+            f"\n{style.yellow('->')} Now run "
+            f"{style.yellow('. $PROFILE')} (PowerShell) or "
+            f"{style.yellow('source ~/.bashrc')} (bash; ~/.zshrc for zsh), "
+            "or just open a new terminal - the updated alias is not live in THIS "
+            "session until you do (no shell auto-reloads its profile mid-session)."
+        )
         print(
             style.dim(
-                "\nA new terminal picks this up automatically. To use it in THIS "
-                "session instead: POSIX shells - `source` your rc file (e.g. `source "
-                "~/.bashrc`); PowerShell - `. $PROFILE` (PowerShell does not auto-reload "
-                "its profile mid-session). Then: cd into your PROJECT's root folder (the "
+                "Then: cd into your PROJECT's root folder (the "
                 "same folder you'll run `claude` from) and run 'virt-surv configure' "
                 "(asks, recommended defaults pre-filled), 'virt-surv engage' or 'virt-surv "
                 "onboard' (same thing - applies every default with zero prompts, then "
@@ -6893,13 +6916,14 @@ def _run_go(target: Path, style: Style, mark_map: dict, hat: str, demo: bool = F
             except (OSError, subprocess.TimeoutExpired):
                 decision = ""
     launch_cmd = detect_or_configure_claude_launch_command(style, mark_map)
-    # Live bug (2026-08-15): virt_team_launcher.py's own output contract only ever
-    # returns the bare flag ("--new" / "--resume <slug>") - the "/engage" prefix was
-    # never actually added anywhere, on either this Python path or the shell "go"
-    # branch (fixed identically there). Passing the bare flag as Claude Code's initial
-    # prompt isn't a recognised command at all - just a plain message reading literally
-    # "--new", which is exactly what a live report described as "missing the engage".
-    argv = [launch_cmd] + ([f"/engage {decision}"] if decision else [])
+    # The launcher's stdout IS the full pre-seeded prompt now, passed through verbatim
+    # as one argument. History: 2026-08-15 the prefix was missing entirely (a bare
+    # "--new" reached claude as a plain message); the fix hardcoded "/engage" here and
+    # in the shell function - but bare /engage only exists in repo-as-project mode, so
+    # every real plugin install then got "unknown command /engage" (live report
+    # 2026-08-16). The run-mode-dependent spelling lives in the launcher's
+    # _engage_command, computed per project at run time - never composed here.
+    argv = [launch_cmd] + ([decision] if decision else [])
     if demo:
         print(style.dim(f"    would launch: {' '.join(argv)} (demo - nothing launched)"))
         return 0

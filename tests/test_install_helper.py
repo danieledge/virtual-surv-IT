@@ -2094,11 +2094,14 @@ def test_run_setup_alias_posix_line_has_go_branch(tmp_path, monkeypatch):
     assert '"$1" = "go"' in content
     assert "virt_team_launcher.py" in content
     assert '"claude"' in content  # the stubbed launch command, baked in
-    # Live bug (2026-08-15): the decision the launcher prints is only ever the bare flag
-    # ("--new" / "--resume <slug>") - "missing the engage" was a live report of exactly
-    # this: the /engage prefix was never actually added anywhere, so Claude Code
-    # received a bare flag as its initial prompt, not a recognised command at all.
-    assert "/engage $__vt_d" in content
+    # The launcher's stdout is the FULL pre-seeded prompt, passed through verbatim as
+    # one argument. History: 2026-08-15 the prefix was missing entirely; the fix baked
+    # "/engage" into this line - but that bare spelling only exists repo-as-project, so
+    # every real plugin install got "unknown command /engage" (live report 2026-08-16).
+    # The run-mode-dependent spelling now lives in the launcher's _engage_command; the
+    # shell function must never compose any part of the command itself.
+    assert '${__vt_d:+"$__vt_d"}' in content
+    assert "/engage" not in content
 
 
 def test_run_setup_alias_powershell_line_has_go_branch(tmp_path, monkeypatch):
@@ -2120,7 +2123,10 @@ def test_run_setup_alias_powershell_line_has_go_branch(tmp_path, monkeypatch):
     assert "function virt-surv {" in content
     assert '$args[0] -eq "go"' in content
     assert "virt_team_launcher.py" in content
-    assert "/engage $__vtDecision" in content  # same "missing the engage" fix as POSIX
+    # Verbatim pass-through, same contract as POSIX - the run-mode-dependent command
+    # spelling lives in the launcher, never baked here (2026-08-16 live report).
+    assert '"$__vtDecision"' in content
+    assert "/engage" not in content
 
 
 def test_run_go_demo_never_launches(tmp_path, monkeypatch, capsys):
@@ -2191,19 +2197,23 @@ def test_run_go_launches_a_real_executable(tmp_path, monkeypatch, capsys):
     assert calls == [("/usr/bin/claude", ["claude"])]  # no launcher script -> no decision arg
 
 
-def test_run_go_prefixes_the_decision_with_engage(tmp_path, monkeypatch, capsys):
-    """Live bug (2026-08-15), reported as "missing the engage": virt_team_launcher.py's
-    own output contract only ever returns the bare flag ("--new" / "--resume <slug>") -
-    the /engage prefix was never actually added anywhere, so Claude Code received a bare
-    flag as its initial prompt (not a recognised command at all, just a plain message
-    reading literally "--new"). Uses a REAL subprocess (a fake launcher script printing
-    "--new") rather than mocking the subprocess call, so the actual argv construction
-    downstream of a genuine decision is what's under test, not a stand-in for it."""
+def test_run_go_passes_the_launcher_decision_through_verbatim(tmp_path, monkeypatch, capsys):
+    """The launcher's stdout is the FULL pre-seeded prompt and _run_go must pass it
+    through as one argument, composing nothing. Two live reports pin this from both
+    sides: 2026-08-15 "missing the engage" (no prefix anywhere - a bare "--new" reached
+    claude as a plain message), then 2026-08-16 "unknown command /engage" (the fix
+    hardcoded the bare spelling here, which only exists repo-as-project - every real
+    plugin install needs /compliance-surveillance-team:engage, so the spelling moved
+    into the launcher's own _engage_command, computed per project). Uses a REAL
+    subprocess (a fake launcher script) rather than mocking the subprocess call, so the
+    actual argv construction downstream of a genuine decision is what's under test."""
     import install_helper as ih
 
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
-    (scripts_dir / "virt_team_launcher.py").write_text("print('--new')\n", encoding="utf-8")
+    (scripts_dir / "virt_team_launcher.py").write_text(
+        "print('/compliance-surveillance-team:engage --new')\n", encoding="utf-8"
+    )
     monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: tmp_path)
     monkeypatch.setattr(
         ih, "_check_interpreters", lambda names: ([(sys.executable, "ok", "3.x")], sys.executable)
@@ -2215,7 +2225,9 @@ def test_run_go_prefixes_the_decision_with_engage(tmp_path, monkeypatch, capsys)
     calls = []
     monkeypatch.setattr(ih.os, "execvp", lambda cmd, argv: calls.append((cmd, argv)))
     ih._run_go(tmp_path, ih.Style(False), ih.marks(), "🎩 ", demo=False)
-    assert calls == [("/usr/bin/claude", ["claude", "/engage --new"])]
+    assert calls == [
+        ("/usr/bin/claude", ["claude", "/compliance-surveillance-team:engage --new"])
+    ]
 
 
 def test_quick_setup_choice_real_tty_defaults_to_quick(monkeypatch):
@@ -5236,7 +5248,7 @@ def test_setup_alias_upgrades_when_the_launch_command_changed(tmp_path, monkeypa
     assert rc == 0
     assert "out of date" in out
     content = (home / ".bashrc").read_text(encoding="utf-8")
-    assert '"cc" ${__vt_d:+"/engage $__vt_d"}' in content  # new definition, new command
+    assert '"cc" ${__vt_d:+"$__vt_d"}' in content  # new definition, new command
     assert content.count("virt-surv() {") == 2  # appended below, old line untouched
 
 
@@ -5287,7 +5299,7 @@ def test_setup_alias_upgrades_a_go_era_alias_missing_the_engage_prefix(
     assert rc == 0
     assert "out of date" in out
     content = (home / ".bashrc").read_text(encoding="utf-8")
-    assert "/engage $__vt_d" in content  # the new definition carries the prefix
+    assert '${__vt_d:+"$__vt_d"}' in content  # the new pass-through definition
     assert ih._ALIAS_STAMP in content  # and the stamp that marks it current
 
 
