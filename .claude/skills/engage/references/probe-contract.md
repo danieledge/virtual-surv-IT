@@ -185,3 +185,17 @@ cache can be pre-seeded with a full absolute path (`write_guard_interpreter_cach
 that section now says explicitly the value can be a full path and to **always double-quote it**
 (`"<python>" -m scripts.<name>`), not just "use it verbatim" - the old wording was true but
 incomplete, and incomplete in the direction that made this exact mistake look safe.
+
+**Fifth live report (2026-08-16, same corporate Windows box) - the scrollback that resolved
+the "separate, unresolved failure" above.** The session's FIRST probe attempt was not the
+canonical block at all: the model hand-composed `cd C:\Users\<user>\virtual-surv-IT && python
+-m scripts.engagement_state list --menu; ...` - the same backslash-eating class as the fourth
+report, this time inside a `cd`, so bash saw `C:Usersdevvirtual-surv-IT`, the cd failed,
+and the open was judged probe-broken before the canonical block ever ran. The by-hand retry
+(direct `python "C:/Users/.../scripts/engage_probe.py"`, forward slashes) succeeded
+immediately, proving the probe itself was healthy. Two fixes at the source in engage-open.md:
+the Windows path rule is now stated for every Bash call this session (forward slashes inside
+double quotes, never a backslash path, never a hand-composed substitute probe), and the
+canonical block now surfaces the inner engage_probe stderr as `PROBE-STDERR:` lines on
+failure, so a genuine future failure arrives with its reason instead of a bare
+`PROBE_FAILED`.

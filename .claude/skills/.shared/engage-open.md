@@ -98,7 +98,11 @@ proc = subprocess.run(
     capture_output=True, text=True, encoding="utf-8",
 )
 sys.stdout.write(proc.stdout)
-sys.exit(0 if proc.returncode == 0 and proc.stdout else 1)
+if proc.returncode != 0 or not proc.stdout:
+    for line in (proc.stderr or "").strip().splitlines()[-3:]:
+        sys.stderr.write("PROBE-STDERR: " + line + "\n")
+    sys.exit(1)
+sys.exit(0)
 PY
 }; \
 OUT=""; \
@@ -113,6 +117,13 @@ fi; \
 if [ -n "$OUT" ]; then echo "$OUT"; else \
 echo "PROBE_FAILED - retry this exact block once by hand with your working interpreter to see the real error"; fi
 ```
+
+**Windows path rule, for every Bash call this session:** the Bash tool is Git Bash even on
+Windows, so an absolute Windows path is written with FORWARD slashes inside double quotes
+(`"C:/Users/x/project"`); backslashes are shell escapes and get eaten (live corp report
+2026-08-16: a hand-composed `cd C:\Users\...` arrived as `C:Usersdev...`, failed, and the
+open was wrongly judged probe-broken). **Never hand-compose a substitute probe - the block
+above IS the probe**; on failure it now prints the inner error itself as `PROBE-STDERR:` lines.
 
 The interpreter order (warm cache first, then Windows-aware) and `PYTHONIOENCODING=utf-8` are
 still load-bearing, not decoration - the cache key is `CLAUDE_PROJECT_DIR`-scoped, not
