@@ -1112,9 +1112,12 @@ def _pt_pick(p, title: str, entries: list, default_index: int = 0, subtitle: str
             else:
                 for frag_style, frag_text in label:
                     out.append(("class:sel" if sel else frag_style, frag_text, _click))
-            if hot and not sel:
-                out.append(("class:dim", "  ", _click))
-                out.append(("class:hot", f"[{hot}]", _click))
+            if hot:
+                # Always rendered - hiding it on the selected row made the badge
+                # vanish and the highlight bar change width as you moved (live report
+                # 2026-08-17); on selection it just joins the bar's styling.
+                out.append(("class:sel" if sel else "class:dim", "  ", _click))
+                out.append(("class:sel" if sel else "class:hot", f"[{hot}]", _click))
             out.append(("", "\n"))
         out.append(("class:dim", "  arrows/mouse move · Enter picks · Esc backs out"))
         return out
