@@ -542,13 +542,24 @@ def test_roster_unknown_name_flagged(tmp_path):
 
 
 def test_roster_role_mismatch_flagged(tmp_path):
-    # A real roster name in the wrong role: Ravi is the code-reviewer, not the TM-SME.
+    # A real roster name in the wrong LIVE role: Ravi is the code-reviewer, not QA.
+    findings = check_roster("Ravi (qa-engineer) signed the evidence.", tmp_path / "d.md")
+    assert len(findings) == 1
+    assert "ROSTER-ROLE-MISMATCH" in findings[0] and "Linh" in findings[0]
+
+
+def test_retired_sme_role_attribution_points_at_the_pack(tmp_path):
+    """2026-08-17: the three SME roles are retired (docs/sme/ knowledge packs) - a NEW
+    attribution to a retired role gets the pack pointer, never a suggestion to
+    re-attribute to a retired persona."""
     findings = check_roster("Ravi (tm-sme) advised on typology.", tmp_path / "d.md")
     assert len(findings) == 1
-    assert "ROSTER-ROLE-MISMATCH" in findings[0] and "Hassan" in findings[0]
+    assert "SME-PACK-ATTRIBUTION" in findings[0] and "docs/sme/" in findings[0]
 
 
 def test_roster_correct_attributions_pass(tmp_path):
+    # Hassan (tm-sme) is a RETIRED persona in its own historical role: recognised, clean -
+    # historical artifacts must not start flagging (docs/sme/README.md).
     text = "Ravi (code-reviewer), Layla (compliance-reviewer), Hassan (tm-sme), Amara (BA), Morgan (PM)."
     assert check_roster(text, tmp_path / "d.md") == []
 

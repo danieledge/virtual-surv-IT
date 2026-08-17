@@ -81,12 +81,12 @@ small iterations, returning to the user at each gate. Start with `/engage` (or a
 command); run only the stages the request needs. **On engage, read
 `docs/team-operating-guide.md`** - the standing rules (question-tool discipline, 🎩 voice, clean
 console, outcome discipline + summary email, memory scope, orchestration discipline &
-right-sizing), the **roster** (Morgan + 16 named specialists; canonical intro `/meet-the-team`)
+right-sizing), the **roster** (Morgan + 13 named specialists; canonical intro `/meet-the-team`; domain typology advice comes from the `docs/sme/` knowledge packs, consulted in-line, not from agents)
 and the **deliverable → owner routing table** all live there.
 
 - **Tag data insights 📊 observed / 🧠 inferred** - never present an inference as observed fact;
   state the assumption. Applies to every agent and to the PM summarising their work.
-- **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `performance-reviewer`,
+- **Advisory agents** (`model-validator`, `code-reviewer`, `performance-reviewer`,
   `compliance-reviewer`, `data-quality-reviewer`) hold no general Edit; build agents implement.
   Four hold Write+Edit scoped to their own findings-pack JSONL only, mechanically enforced
   (`guard-findings-pack-write.py`) - grant mechanics: `docs/agent-design.md`. **Route by

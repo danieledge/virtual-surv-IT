@@ -42,7 +42,8 @@ redundancies trimmed.
 </table>
 
 **Virtual Surv-IT is a virtual engineering team for the software that catches financial crime and
-market abuse.** A project manager (Morgan) and **16 specialist AI agents** run it inside
+market abuse.** A project manager (Morgan) and **13 specialist AI agents** (plus three in-line SME
+knowledge packs) run it inside
 [Claude Code](https://claude.com/claude-code).
 
 Banks and trading firms spot money laundering and market manipulation with software: detection
@@ -185,7 +186,7 @@ What the team gives you today, each row tied to where the claim is enforced or d
 
 | Capability | What you concretely get | Where to see it |
 |---|---|---|
-| A real engineering team, right-sized | Morgan (PM) + 16 specialist subagents; a typical task fires only 2-5 of them, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
+| A real engineering team, right-sized | Morgan (PM) + 13 specialist subagents, with domain typology advice as three in-line knowledge packs ([`docs/sme/`](docs/sme/README.md), zero spawn cost); a typical task fires only 2-5 agents, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
 | Independent review by construction | Advisors and reviewers hold no `Write`/`Edit` tools; QA and validation run as separate agents from the build. More than rules: pipelines/ETL, scripts, ML, reviews and docs all route to their own specialist. | Tool grants in [`.claude/agents/`](.claude/agents/), pinned by [`tests/test_docs_consistency.py`](tests/test_docs_consistency.py) · routing table in [`docs/team-operating-guide.md`](docs/team-operating-guide.md) |
 | Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | ADR-008 · ADR-006 · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
 | Three always-on safety guards, human-only consent | Raw data under `data/raw/` blocked from the model, execution gated on a human-created marker, and the model blocked from writing the marker, settings or the hooks themselves. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
@@ -311,7 +312,7 @@ setup.
 enabled for that project. *(One session only, any directory?
 `claude --plugin-dir /path/to/virtual-surv-IT` loads it temporarily, not saved.)*
 
-You get the 16 agents, the workflow commands and all three safety hooks in every **enabled**
+You get the 13 agents, the SME knowledge packs, the workflow commands and all three safety hooks in every **enabled**
 project. Then just **talk to the PM**. Describe whatever you've got:
 
 ```
@@ -391,12 +392,15 @@ install path for users - that's the helper above.
 
 ## 👥 Meet the team
 
-![The compliance-surveillance engineering team - a group portrait of the 17 named characters (Morgan + 16 specialists), each labelled with name and role](docs/assets/team-portrait.png)
+![The compliance-surveillance engineering team - a group portrait of the 17 named characters as of v0.33, each labelled with name and role](docs/assets/team-portrait.png)
 
-*The team, all seventeen, each labelled with name and role.*
+*The team as portrayed at v0.33 - all seventeen. Since 2026-08-17 the three SME advisors
+(Hassan, Camila and Cleo, back row) are retired: their expertise ships as the
+[`docs/sme/`](docs/sme/README.md) knowledge packs, consulted in-line at zero spawn cost, and
+the live roster is Morgan + 13.*
 
-**Morgan** (PM & orchestrator) leads **16 agents**: fifteen specialists and a tireless junior
-(Pip), the seventeen in the photo above. Each has a day job, a name, strong opinions, and a Slack
+**Morgan** (PM & orchestrator) leads **13 agents**: twelve specialists and a tireless junior
+(Pip). Each has a day job, a name, strong opinions, and a Slack
 status that tells you more than their job title does. (Type `/meet-the-team` and Morgan does the
 introductions live.) **🧠 Advisors** hold no file-editing tools, your *independent* check, so they
 can critique all day but can't change the code (segregation of duties, basically). **🔧 Builders**
@@ -412,7 +416,7 @@ flowchart LR
     Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
 ```
 
-*The shape of a full delivery: a typical task fires only **2-5** of the 16; complexity is opt-in
+*The shape of a full delivery: a typical task fires only **2-5** of the 13; complexity is opt-in
 ("use the simplest thing that works").*
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
@@ -453,16 +457,11 @@ get it past the reviewers **and** the change board. · *Slack:* "happy to take t
 
 ### 🧠 Advisors: they guide and sign off (read-only)
 
-- **Hassan**: *Transaction-Monitoring / AML SME.* The money-laundering brain. Structuring,
-  smurfing, layering, usually spotted before lunch. Will gently warn you when a "clever" scenario
-  would file a thousand defensive SARs and catch nothing. · *Slack:* "that's structuring. and
-  that. and that."
-- **Camila**: *Trade-Surveillance SME.* Thinks like a spoofer so you don't have to. Spoofing,
-  layering, marking the close, insider dealing. Reads an order book like a crime novel. ·
-  *Slack:* "…and there's the cancel. classic."
-- **Cleo**: *Comms-Surveillance SME.* Reads trader chat for a living: lexicons, NLP risk flags,
-  e-comms and voice. Fluent in euphemism; deeply unimpressed by "let's take this to my personal
-  phone". · *Slack:* "'per my last message' is doing a lot of work here."
+- *(Retired 2026-08-17: **Hassan** the AML SME, **Camila** the trade-surveillance SME and
+  **Cleo** the comms-surveillance SME - their expertise now ships as the three
+  [`docs/sme/`](docs/sme/README.md) knowledge packs, read in-line by whoever needs them: same
+  substance, no spawn, and a leaner roster that routes better. Their Slack statuses are
+  preserved in the packs' git history.)*
 - **Viktor**: *Model Validator.* Independent of Mei *by design*, and entirely comfortable telling
   her the model's wrong. Lives in **SR 11-7**; the friendly adversary every model needs. ·
   *Slack:* "prove it. then prove it again. then document it."
@@ -489,7 +488,7 @@ get it past the reviewers **and** the change board. · *Slack:* "happy to take t
 
 > Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
 > real independent check. The restriction is enforced by the tools each agent is granted: no
-> advisor holds `Write`/`Edit` (the SMEs hold only `Read, Grep, Glob`; the reviewers add `Bash`
+> advisor holds `Write`/`Edit` (the reviewers add `Bash`
 > for static analysers and `git diff`, gated by the execution hook), not by convention.
 
 </details>
@@ -623,7 +622,8 @@ pre-commit install                       # optional: enable local guardrails
 ```
 
 Add a new detection with `/new-scenario <requirement>`, which chains
-business-analyst → SME → rules-developer → code-reviewer → compliance-reviewer per the
+business-analyst (consulting the `docs/sme/` pack) → rules-developer → code-reviewer →
+compliance-reviewer per the
 handbook.
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -638,7 +638,7 @@ a convention), that's stated rather than dressed up.
 |---|---|---|
 | **Engineering first** | Assists the engineering *behind* surveillance, not compliance, legal or regulatory advice. | Scope statement + proof-of-concept framing; obligations are cited from a verified register, never interpreted as advice. |
 | **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage`, and costs ~nothing until then. | `disable-model-invocation` on all 26 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
-| **Right-sized, not all-hands** | Only the agents a task needs (typically 2-5, never all 16), the simplest thing that works. | The PM states the intended agent count at the gate (you can veto it); a golden eval case samples the behaviour. Prompt-enforced. |
+| **Right-sized, not all-hands** | Only the agents a task needs (typically 2-5, never all 13), the simplest thing that works. | The PM states the intended agent count at the gate (you can veto it); a golden eval case samples the behaviour. Prompt-enforced. |
 | **Independent review** | Reviewers, SMEs and the model validator recommend; builders fix. Advisors hold no edit tools; QA and validation run as separate agents from the build. | Advisory agents carry **no `Write`/`Edit` tools**; build/QA/validation separation is by routing distinct agents with isolated context (see `docs/agent-design.md`). |
 | **Humans hold the keys** | Execution consent and config are human-only; nothing touches a live system without sign-off. | The consent-write gate blocks the model from **writing or editing** the consent marker, `settings*.json` and the hook files; the `CST_ALLOW_*` overrides live in the launch environment the model can't reach. Bash-channel writes are lexically guarded, not sandboxed (a documented PoC limit, ADR-002). |
 | **Safe data by architecture** | Raw data under `data/raw/` is kept from the model's file-read tools; work happens downstream, on masked or synthetic data. | Raw-data hook (read tools + Bash) + OS `permissions.deny` (Read/Grep/Glob) + `.gitignore` + a CI job that fails on tracked data files + keyed masking as the sanctioned ingest path. Solid on the file-read tools; the Bash channel is lexically guarded, not a sandbox (ADR-002). |
@@ -874,7 +874,7 @@ python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked
 
 ## 📁 Layout
 
-In one line: `.claude/agents/` (16 subagents) · `.claude/skills/` (26 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
+In one line: `.claude/agents/` (13 subagents) · `docs/sme/` (3 SME knowledge packs) · `.claude/skills/` (26 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
 
 <details>
 <summary>📁 <b>One consolidated map of the repo</b></summary>
@@ -882,12 +882,12 @@ In one line: `.claude/agents/` (16 subagents) · `.claude/skills/` (26 workflows
 ```
 .claude-plugin/                 # plugin + marketplace manifests (installable via /plugin)
 CLAUDE.md                       # shared team handbook (example defaults - customise as needed)
-.claude/agents/                 # 16 subagents:
+.claude/agents/                 # 13 subagents:
    builders                       business-analyst · rules-developer · platform-engineer ·
                                   data-analyst · tuning-analyst · ml-engineer · qa-engineer
-   advisors (read-only)           tm-sme · trade-surveillance-sme · comms-surveillance-sme ·
-                                  model-validator · code-reviewer · performance-reviewer ·
+   advisors (read-only)           model-validator · code-reviewer · performance-reviewer ·
                                   compliance-reviewer · data-quality-reviewer
+   (SME typology advice lives in docs/sme/ knowledge packs - in-line, no agent)
    helper                         review-scorer (haiku - review prep, scoring, filter tallies)
 .claude/skills/                 # 26 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
                                 #   /new-scenario, /tune-thresholds, … (see "Using them")
@@ -965,7 +965,7 @@ uses and how (audited 2026-07-29 against the current Claude Code docs):
 | Feature | How the team uses it |
 |---|---|
 | **Skills / slash commands** | All 26 workflows ship as skills, costing ~nothing until you type `/engage` (mechanism: [Token usage](#-token-usage--optimisation)). `argument-hint` on every command. |
-| **Subagents** | 16 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Edit; four hold Write scoped to their own findings-pack file only, mechanically enforced by a hook. |
+| **Subagents** | 13 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Edit; four hold Write scoped to their own findings-pack file only, mechanically enforced by a hook. |
 | **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), plus engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop, a `UserPromptSubmit` persona re-anchor that survives compaction, a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint. Hook and settings edits are human-only (ADR-002); hook changes ship staged, are applied by the maintainer via the `apply-*.sh` scripts, and releases ship with everything already wired - end users apply nothing. |
 | **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
 | **Permissions** | A curated `permissions.allow` block (fewer prompts on the team's own consent-free tooling) and `permissions.deny` as the hard floor under the raw-data wall. |
@@ -1006,7 +1006,7 @@ hooks entirely).
 ## 💰 Token usage & optimisation
 
 Multi-agent setups cost tokens, so the team is built to be cost-conscious, the biggest lever being
-**right-sizing** (engaging only the agents a task needs, never all 16).
+**right-sizing** (engaging only the agents a task needs, never all 13).
 
 In one line: one code review ~51k tokens (~$2, measured) · a lean engagement ~35-50k (estimate) · a full build-review-tuning delivery ~500k (~$4-8, measured); levers: right-sizing, model tiering (4 opus / 11 sonnet / 1 haiku), artifacts-as-blackboard, dormancy.
 
@@ -1311,7 +1311,7 @@ treats a local-scope plugin as mutable and **re-validates it every startup** (gi
 settings re-merge + re-scan) - that's the trigger. The ~20-27s amplifier is **Windows filesystem
 overhead** (git working-tree operations + real-time AV scanning) over the plugin's **large file
 tree**: 754 tracked files, of which **306 are the vendored pip-less Python libs in `vendor/`** - the
-16 agents / 26 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (16
+13 agents / 26 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (13
 file-opens is milliseconds). Largely a Claude-Code-×-Windows-×-local-install interaction, not
 plugin logic. **Mitigations (not yet applied):** (a) a **Windows Defender exclusion** for the plugin
 cache dir - usually the biggest, free win, and a quick A/B test; (b) installing via a
@@ -1328,9 +1328,9 @@ the least-privilege role separation. Tracked.
 Both quirks below are **display-only**: they don't affect what the team does (routing, tool grants,
 the actual deliverables). Flagged plainly, in the spirit of the proof-of-concept notice at the top.
 
-- **Morgan sometimes narrates the wrong agent *name***: e.g. "Isla" for the AML SME or "Jordan"
-  for the tuning analyst, instead of **Hassan** / **Theo**. The *work* is unaffected: the team
-  routes by role slug (`tm-sme`, `tuning-analyst`) and the spawned specialist still runs as its real
+- **Morgan sometimes narrates the wrong agent *name***: e.g. "Jordan"
+  for the tuning analyst, instead of **Theo**. The *work* is unaffected: the team
+  routes by role slug (`qa-engineer`, `tuning-analyst`) and the spawned specialist still runs as its real
   self; only the PM's running commentary drifts.
 - **Some emoji render as a box / diamond-with-`?` on older Windows + Edge** (notably 🧑‍💻 and the
   ⚖️ / ⏭️ disposition markers). The files are clean UTF-8 and declare a UTF-8 charset, so this is a
@@ -1348,11 +1348,11 @@ the actual deliverables). Flagged plainly, in the spirit of the proof-of-concept
 <details>
 <summary>Why the name drift happens (and why it's only cosmetic)</summary>
 
-The persona names (Amara, Hassan, Theo…) are **cosmetic labels**. The system routes work and grants
-tools purely by the **role slug** (`business-analyst`, `tm-sme`, `tuning-analyst`), so a wrong *name*
+The persona names (Amara, Linh, Theo…) are **cosmetic labels**. The system routes work and grants
+tools purely by the **role slug** (`business-analyst`, `qa-engineer`, `tuning-analyst`), so a wrong *name*
 never changes who does the work or what they're allowed to touch.
 
-Each agent's own file **does** pin its name (`tm-sme.md` opens *"You are Hassan…"*), but that line
+Each agent's own file **does** pin its name (`qa-engineer.md` opens *"You are Linh…"*), but that line
 is only ever read by the **subagent** when it's spawned; it never enters **Morgan's** (the
 orchestrator's) context. So when Morgan *narrates* who's on a task, its only source for the name is a
 **single roster line** in `docs/team-operating-guide.md` (moved out of `CLAUDE.md` in 0.8.0 to keep
@@ -1363,11 +1363,11 @@ implies "Theo"; it's pure memorisation. When that one low-salience line isn't fi
 (a long session, a lot of intervening context, or after the conversation has been
 compacted/summarised), the model reconstructs the name from a fuzzy memory and, being a language
 model, emits a **plausible-but-invented** teammate name (Isla, Jordan) rather than surfacing the gap.
-It shows up more for the less-mentioned roles (the SMEs, tuning) than for the reviewers, whose names
+It shows up more for the less-mentioned roles (tuning, the data roles) than for the reviewers, whose names
 get reinforced by frequent use; and because the name is decorative, **nothing validates it**, so the
 drift goes uncorrected.
 
-**Net:** the *actual* subagent always knows it's Hassan/Theo (its own file says so) and always does
+**Net:** the *actual* subagent always knows it's Linh/Theo (its own file says so) and always does
 the right job; only the PM's commentary occasionally mislabels it. Hence: cosmetic.
 
 </details>

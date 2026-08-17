@@ -1,6 +1,6 @@
 # Comms Surveillance Lexicon Specification - <LEXICON / RISK NAME>
 
-> Produced by `business-analyst` with `comms-surveillance-sme`. Specifies and governs a comms
+> Produced by `business-analyst` consulting the `docs/sme/comms-surveillance.md` pack. Specifies and governs a comms
 > lexicon / risk-flag set for e-comms and voice monitoring. Terms and examples use
 > **synthetic/masked data only** - never paste real comms (§5). Authored in `.md`, rendered to
 > `.html`. NLP/risk-model build is owned by `ml-engineer` (then `model-validator`); this is the
@@ -79,7 +79,7 @@ synthetic/masked sample. This prevents the lexicon from being set by intuition r
 | <period; synthetic/masked> | <n> | <%> | <n> | <%> | <hold / lower / raise> | <YYYY-MM-DD> |
 
 ## 8. Hand-off
-SME review: `comms-surveillance-sme`. Build: `ml-engineer` → independent `model-validator`.
+SME pack consulted: `docs/sme/comms-surveillance.md`. Build: `ml-engineer` → independent `model-validator`.
 Tuning: `tuning-analyst`. Coverage feeds the Comms Surveillance Policy & Coverage Assessment.
 
 ## Sign-off

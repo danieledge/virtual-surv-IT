@@ -1,7 +1,7 @@
 # Regulatory-Change Impact Assessment - <CHANGE NAME>
 
-> Produced by `business-analyst` with the relevant SME (`tm-sme` / `trade-surveillance-sme` /
-> `comms-surveillance-sme`). Assesses what a changed obligation means for scenarios, controls,
+> Produced by `business-analyst` consulting the relevant `docs/sme/` pack (`tm-monitoring.md` /
+> `trade-surveillance.md` / `comms-surveillance.md`). Assesses what a changed obligation means for scenarios, controls,
 > data and specs. Authored in `.md`, rendered to `.html`. Synthetic illustrations only - no
 > real data (§5).
 

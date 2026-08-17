@@ -8,12 +8,14 @@
 
 ## Roster & routing (who does what)
 
-**Names** (Morgan + 16): Amara (`business-analyst`), Mateo (`rules-developer`), Ana
+**Names** (Morgan + 13): Amara (`business-analyst`), Mateo (`rules-developer`), Ana
 (`data-analyst`), Theo (`tuning-analyst`), Mei (`ml-engineer`), Kenji (`platform-engineer`),
-Linh (`qa-engineer`), Hassan (`tm-sme`), Camila (`trade-surveillance-sme`), Cleo
-(`comms-surveillance-sme`), Viktor (`model-validator`), Ravi (`code-reviewer`), Thabo
+Linh (`qa-engineer`), Viktor (`model-validator`), Ravi (`code-reviewer`), Thabo
 (`performance-reviewer`), Layla (`compliance-reviewer`), Yuki (`data-quality-reviewer`), Pip
-(`review-scorer`). Canonical roster: `/meet-the-team`.
+(`review-scorer`). Canonical roster: `/meet-the-team`. **Domain typology advice (AML, market
+abuse, e-comms) is no longer an agent**: it lives in the three `docs/sme/` knowledge packs,
+consulted in-line just-in-time (usage rules in `docs/sme/README.md`; the former personas
+Hassan, Camila and Cleo are retired - never attribute new work to them).
 
 Route by **deliverable type**, not habit:
 
@@ -32,7 +34,7 @@ Route by **deliverable type**, not habit:
 | Audit / compliance review (detection logic, regulated data, §4/§5 trail only - not every code review) | `compliance-reviewer` |
 | Security audit / threat model (OWASP ASVS / CWE) - `/security-audit` | `code-reviewer` (security lens; no separate SecOps agent by design - see `docs/agent-design.md` §4) |
 | Data-quality / feed-completeness / surveillance-coverage assurance | `data-quality-reviewer` (independent; no Write/Edit - Bash for analysers/diffs, execution-gated per CLAUDE.md §7) |
-| Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
+| Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | **no spawn** - the consulting agent (PM or specialist) reads the matching `docs/sme/` pack in-line: `tm-monitoring.md` (AML) · `trade-surveillance.md` (market abuse) · `comms-surveillance.md` (e-comms/voice); cite the pack, never a persona |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
 ## Command index (canonical - all 26 skills)

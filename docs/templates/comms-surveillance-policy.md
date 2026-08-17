@@ -1,6 +1,6 @@
 # Comms Surveillance Policy & Coverage - <SCOPE / BUSINESS LINE>
 
-> Produced by `business-analyst` with `comms-surveillance-sme`. Defines what comms are monitored,
+> Produced by `business-analyst` consulting the `docs/sme/comms-surveillance.md` pack. Defines what comms are monitored,
 > for whom, how they are retained, and confirms every in-scope channel is actually captured.
 > Examples and population data use **synthetic/masked data only** (§5). Authored in `.md`,
 > rendered to `.html`. Policy/coverage document - channel-capture engineering is built by

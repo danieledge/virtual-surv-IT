@@ -36,7 +36,7 @@ before, I is informed after.
 | Activity / deliverable | R | A | C | I |
 |------------------------|---|---|---|---|
 | Requirements sign-off | business-analyst | Head of Surveillance | SMEs | Audit |
-| Detection logic build | rules-developer | … | tm-sme / trade-sme | … |
+| Detection logic build | rules-developer | … | docs/sme/ packs (AML / trade) | … |
 | Threshold tuning | data-analyst | … | … | … |
 | UAT & sign-off | qa-engineer | … | … | … |
 | Deploy & operate | IT team | IT team | business-analyst | … |

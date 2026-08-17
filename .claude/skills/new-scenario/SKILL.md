@@ -39,8 +39,10 @@ each step to the right agent and chain them in this session:
    When off, skip citations entirely - but state it plainly in the spec
    ("Regulatory citations: off (project preference)") rather than silently omitting
    them; never let a reader assume the obligation was checked and cleared.
-2. **Domain SME** - pick by domain: `trade-surveillance-sme`, `tm-sme`, or
-   `comms-surveillance-sme`. Have them review the proposed detection logic and thresholds.
+2. **Domain SME pack** - the reviewing agent (business-analyst, or the PM for a light pass)
+   reads the matching `docs/sme/` knowledge pack in-line (`trade-surveillance.md`,
+   `tm-monitoring.md`, or `comms-surveillance.md`) and reviews the proposed detection logic
+   and thresholds against its protocol - no spawn; cite the pack, never a persona.
    (Advisory/read-only - they recommend, they do not edit.)
 3. **rules-developer** - implement under `rules/` with synthetic tests under `tests/`
    (synthetic data only - §5), thresholds documented with rationale + tuning date (§4).

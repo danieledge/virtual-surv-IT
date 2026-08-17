@@ -20,7 +20,7 @@
 ## Log
 | # | Question | Raised by | Owner | Disposition | Rationale / answer | Blocker? | Date closed |
 |---|----------|-----------|-------|-------------|--------------------|----------|-------------|
-| Q1 | <…> | `business-analyst` | `trade-surveillance-sme` | 🔴 Open-decision-required | <one line> | **Yes** | - |
+| Q1 | <…> | `business-analyst` | `docs/sme/trade-surveillance.md` | 🔴 Open-decision-required | <one line> | **Yes** | - |
 | Q2 | <…> | … | … | ✅ Answered | <one line> | No | <YYYY-MM-DD> |
 
 ## Disposition summary

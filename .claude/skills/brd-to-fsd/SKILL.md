@@ -14,7 +14,8 @@ at the end.
 1. Route to **business-analyst** to draft using `docs/templates/fsd.md` (plugin mode:
    `$PLUGIN_ROOT/docs/templates/fsd.md` - pass the RESOLVED absolute path in the brief; the
    template missing from the WORKING repo is never a blocker, it ships in the plugin); have the
-   relevant **SME** (`trade-surveillance-sme` / `tm-sme` / `comms-surveillance-sme`) review
+   relevant **SME knowledge pack** (`docs/sme/trade-surveillance.md` / `tm-monitoring.md` /
+   `comms-surveillance.md`, read in-line) review
    the detection logic and thresholds.
 2. Each functional requirement (FSD-001, …) must **trace to a BRD id**. Write acceptance
    criteria in **Gherkin** (Given/When/Then), including true-positive and false-positive

@@ -34,7 +34,7 @@ invoked this skill directly** rather than via `/engage`, §5 - if raw/unprepared
 exclusive (e.g. a single jurisdiction or a fixed period), make that question **single-select**.
 
 **2. Assess (drive `tuning-analyst` for the data work + `model-validator` for the independent
-verdict; `tm-sme` for typology coverage):**
+verdict; the `docs/sme/tm-monitoring.md` pack for typology coverage):**
 - **Rule/scenario coverage** - are the firm's risks & typologies all covered? Any gaps?
 - **Threshold adequacy** - are thresholds still appropriate (ATL/BTL evidence), or drifted?
 - **Data integrity** - completeness/accuracy of the feeds the model depends on (hand to

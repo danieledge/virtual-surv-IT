@@ -962,6 +962,8 @@ _ROLE_LABELS = {
     "ml-engineer": "ML/AI detection",
     "platform-engineer": "data pipelines",
     "qa-engineer": "QA & testing",
+    # The three sme rows are retired roles (docs/sme/ packs since 2026-08-17), kept
+    # so historical transcripts still label their runs.
     "tm-sme": "AML advisor",
     "trade-surveillance-sme": "market-abuse advisor",
     "comms-surveillance-sme": "e-comms advisor",

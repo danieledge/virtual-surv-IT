@@ -205,9 +205,6 @@ _ROSTER = {
     "mei": "ml-engineer",
     "kenji": "platform-engineer",
     "linh": "qa-engineer",
-    "hassan": "tm-sme",
-    "camila": "trade-surveillance-sme",
-    "cleo": "comms-surveillance-sme",
     "viktor": "model-validator",
     "ravi": "code-reviewer",
     "thabo": "performance-reviewer",
@@ -215,7 +212,20 @@ _ROSTER = {
     "yuki": "data-quality-reviewer",
     "pip": "review-scorer",
 }
-_ROLE_TO_NAME = {slug: name for name, slug in _ROSTER.items()}
+# Retired 2026-08-17 (the SME agents became docs/sme/ knowledge packs, assessment
+# rec 5) but kept RECOGNISED wherever recognition matters: historical artifacts and
+# still-open packs written before the change legitimately carry these attributions
+# and must not start flagging ROSTER-UNKNOWN. Deliberately NOT in _ROSTER: the
+# roster-gate consistency test pins _ROSTER to the operating guide's live roster,
+# and auto-rename suggestions must never propose a retired persona. New artifacts
+# cite the pack, never a persona (docs/sme/README.md).
+_RETIRED = {
+    "hassan": "tm-sme",
+    "camila": "trade-surveillance-sme",
+    "cleo": "comms-surveillance-sme",
+}
+_KNOWN_PERSONAS = {**_ROSTER, **_RETIRED}
+_ROLE_TO_NAME = {slug: name for name, slug in _KNOWN_PERSONAS.items()}
 # A `Name (role)` attribution is only treated as a team-persona claim when the parenthetical is
 # a FULL, hyphenated team role slug. Short forms (`qa`, `ba`, `orchestrator`, `pm`) are
 # DELIBERATELY excluded: they collide with real content - "Airflow (orchestrator)",
@@ -223,7 +233,7 @@ _ROLE_TO_NAME = {slug: name for name, slug in _ROSTER.items()}
 # false-alarm and drive a wrong auto-rename (2026-07-23 review). The one live failure used full
 # slugs ("Chidi (code-reviewer)"), so full-slug matching still catches the real thing. `project-
 # manager` is kept (unambiguous); a bare `sme` is ambiguous (three SMEs) and is not matched.
-_ROLE_ALIASES = {slug: slug for slug in _ROSTER.values() if slug != "pm"}
+_ROLE_ALIASES = {slug: slug for slug in _KNOWN_PERSONAS.values() if slug != "pm"}
 _ROLE_ALIASES["project-manager"] = "pm"
 # Persona attribution pattern: "Name (role)". Name is a single capitalised word.
 _PERSONA_RE = re.compile(r"\b([A-Z][a-z]{2,})\s*\(([A-Za-z][A-Za-z /_-]{1,40})\)")
@@ -238,7 +248,7 @@ _PERSONA_RE = re.compile(r"\b([A-Z][a-z]{2,})\s*\(([A-Za-z][A-Za-z /_-]{1,40})\)
 #     capitalised non-roster name on one line ("sign-off from Layla + Daniel"). Two roster
 #     names joined ("Theo + Ana") is fine; the other token must be name-shaped
 #     ([A-Z][a-z]{2,}), so "Layla + RTM" never trips it.
-_ROSTER_NAMES_RE = "|".join(sorted(n.capitalize() for n in _ROSTER))
+_ROSTER_NAMES_RE = "|".join(sorted(n.capitalize() for n in _KNOWN_PERSONAS))
 _AGENT_JOIN_RE = re.compile(
     rf"\b({_ROSTER_NAMES_RE})\b\s*[+&]\s*([A-Z][a-z]{{2,}})\b"
     rf"|\b([A-Z][a-z]{{2,}})\s*[+&]\s*\b({_ROSTER_NAMES_RE})\b"
@@ -256,7 +266,7 @@ def check_agent_identity(text: str, where: Path) -> list[str]:
     """
     findings: list[str] = []
     has_persona = any(
-        m.group(1).lower() in _ROSTER
+        m.group(1).lower() in _KNOWN_PERSONAS
         and _ROLE_ALIASES.get(re.sub(r"[\s_]+", "-", m.group(2).strip().lower())) is not None
         for m in _PERSONA_RE.finditer(text)
     )
@@ -270,7 +280,7 @@ def check_agent_identity(text: str, where: Path) -> list[str]:
     for m in _AGENT_JOIN_RE.finditer(text):
         agent = m.group(1) or m.group(4)
         other = m.group(2) or m.group(3)
-        if other.lower() in _ROSTER or m.group(0) in seen:
+        if other.lower() in _KNOWN_PERSONAS or m.group(0) in seen:
             continue  # two agents on one line is not an agent+human combination
         seen.add(m.group(0))
         findings.append(
@@ -313,7 +323,7 @@ def check_summary_email(text: str, where: Path) -> list[str]:
             "signed off as 🤖 Morgan, never the human requester (the human's sign-off lives "
             "in the delivery report; DoD / operating guide rule 3)"
         )
-    for name in sorted(_ROSTER):
+    for name in sorted(_KNOWN_PERSONAS):
         cap = name.capitalize()
         name_re = re.compile(rf"\b{cap}\b")
         if not name_re.search(text):
@@ -345,10 +355,19 @@ def check_roster(text: str, where: Path) -> list[str]:
         if name == expected or (name, role) in seen:
             continue
         seen.add((name, role))
-        if name in _ROSTER:
+        if role in _RETIRED.values():
+            # A retired SME role attributed to anyone NEW: the role has no persona any
+            # more - the fix is citing the knowledge pack, never re-attributing.
+            findings.append(
+                f"SME-PACK-ATTRIBUTION: {where} attributes '{m.group(1)} ({role_raw})' but "
+                f"the {role} role is retired (2026-08-17) - new work cites the matching "
+                "docs/sme/ knowledge pack instead of a persona (docs/sme/README.md)"
+            )
+            continue
+        if name in _KNOWN_PERSONAS:
             findings.append(
                 f"ROSTER-ROLE-MISMATCH: {where} attributes '{m.group(1)} ({role_raw})' but "
-                f"{m.group(1)} is the {_ROSTER[name]}; {role} is {expected.capitalize()} "
+                f"{m.group(1)} is the {_KNOWN_PERSONAS[name]}; {role} is {expected.capitalize()} "
                 "(auto-fix: correct to the canonical persona for the role)"
             )
         else:

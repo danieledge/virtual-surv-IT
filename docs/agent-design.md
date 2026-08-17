@@ -94,18 +94,17 @@ evidenced and re-checkable → **sonnet**. Purely mechanical → **haiku**.
 | `compliance-reviewer` | **opus** | Final audit/DoD gate before handover; a missed audit-trail/secret/PII is high-consequence and unchecked downstream. |
 | `code-reviewer` | **opus** | Subtle cross-language **security** judgement analysers miss; high blast radius. |
 | `ml-engineer` | **opus** | Novel ML/NLP **design**; subtle failure modes (leakage, overfitting) are cheaper to avoid than to catch and re-do. |
-| `business-analyst` | sonnet | Structured elicitation/spec work; re-checked by SMEs, reviewers and the PM. |
-| `rules-developer` | sonnet | Detection code + tests, built **from an SME-validated spec** and independently reviewed (code + compliance) before merge - two checks up front that `ml-engineer`'s *novel* design lacks (its validation is post-build). **A specific engagement may escalate to opus for genuinely novel/complex scenario logic** where a subtle miss is as costly as a model error; the tier is per-engagement, the default sonnet. |
+| `business-analyst` | sonnet | Structured elicitation/spec work; re-checked against the SME packs, by reviewers and the PM. |
+| `rules-developer` | sonnet | Detection code + tests, built **from a spec validated against the `docs/sme/` packs** and independently reviewed (code + compliance) before merge - two checks up front that `ml-engineer`'s *novel* design lacks (its validation is post-build). **A specific engagement may escalate to opus for genuinely novel/complex scenario logic** where a subtle miss is as costly as a model error; the tier is per-engagement, the default sonnet. |
 | `data-analyst` | sonnet | Evidenced exploratory analysis/MI; figures are checkable. |
 | `tuning-analyst` | sonnet | Threshold calibration backed by **evidence** (ATL/BTL, dry-run) and re-checked by `model-validator`/PM. |
 | `platform-engineer` | sonnet | Well-trodden pipeline/ETL/infra patterns. |
 | `qa-engineer` | sonnet | Methodical, structured test design + evidence. |
-| `tm-sme` · `trade-surveillance-sme` · `comms-surveillance-sme` | sonnet | Knowledge-heavy **advice**, re-challenged by the PM, builders and reviewers - not deep unchecked reasoning. |
 | `performance-reviewer` | sonnet | **Static-only** (profilers removed): bounded Big-O / query-shape / memory reasoning sonnet handles well. |
 | `data-quality-reviewer` | sonnet | Structured coverage mapping + reconciliation; checklist-driven. |
 | `review-scorer` | **haiku** | Purely mechanical - context detection, lens selection, scoring, tallies. |
 
-**Net: 4 opus · 11 sonnet · 1 haiku.** The two next-cheapest swing choices are `code-reviewer` and
+**Net: 4 opus · 8 sonnet · 1 haiku** (13 agents; the three knowledge-only SME advisors became `docs/sme/` packs on 2026-08-17 - assessment rec 5: knowledge belongs in on-demand reference material, agents exist for tool grants, tiers and independence; the packs are consulted in-line at zero spawn cost). The two next-cheapest swing choices are `code-reviewer` and
 `ml-engineer` (both have a backstop - analysers + PM, and `model-validator` respectively); drop them
 to sonnet if cost must be pushed harder, accepting a small risk on deep security/model-design quality.
 
@@ -138,22 +137,22 @@ weakening an agent's own definition.
 - **Explicit `model:` on every agent (not `inherit`).** Inheriting the session model is the generic
   default, but a *team* wants deterministic cost control, so each agent pins its tier per §2.
 
-## 4. Why 16 agents (and not fewer / more)
+## 4. Why 13 agents (and not fewer / more)
 
-16 is the **library** size, not a per-task spawn count. The PM engages the **minimal sufficient
+13 is the **library** size, not a per-task spawn count. The PM engages the **minimal sufficient
 subset** (typically 2-5) for the deliverable at hand, and the team is dormant by default - so the
 breadth costs nothing unless a task needs it. The roster spans the deliverables (detection rules,
 pipelines, ETL, ML, reviews across 7 languages, three surveillance domains, independent
 validation/QA/DQ). The over-fragmentation risk is controlled by: removing real overlaps (the
 `data-analyst`/`tuning-analyst` boundary), distinct non-colliding descriptions, and the right-sizing
-rule so a given task fires 2-3 agents, never all 16. We did **not** add agents for thin slices (no
+rule so a given task fires 2-3 agents, never the whole library. We did **not** add agents for thin slices (no
 separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 
 ## 5. Conformance matrix (vs Claude Code subagent guidance)
 
 | Best-practice item | Status | How |
 |---|---|---|
-| Frontmatter complete (name·description·tools·model) | ✅ | All 16. |
+| Frontmatter complete (name·description·tools·model) | ✅ | All 13. |
 | `tools:` least-privilege; advisors hold no general Edit | ✅ | Verified - zero advisors hold an unscoped Edit. (6 hold `Bash` for analysers/diffs, execution-gated §7; 4 hold `Write` and `Edit`, both scoped to their own findings-pack path only, mechanically enforced by `guard-findings-pack-write.py` - "no general Edit, Write+Edit scoped", not strictly "read-only".) |
 | Description = clear when-to-use trigger | ✅ | Standardised "When the team is engaged, use for…"; overlaps removed. |
 | Model tiering (not all-one-tier; documented) | ✅ | §2 above; 4/11/1 split. |
@@ -184,7 +183,7 @@ and this matrix are the guard against drift.*
 | Never vague briefs (they cause duplicated work / gaps) | ✅ | "the #1 failure is weak delegation" (CLAUDE.md §6). |
 | **Scale effort to complexity**; state the number of agents | ✅ | PM states intended agent count + why at the gate (`engage` §5). |
 | Budget **~15× tokens**; reserve multi-agent for high value | ✅ | "~15× the tokens" cited verbatim (CLAUDE.md §6). |
-| **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 11 sonnet / 1 haiku. |
+| **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 8 sonnet / 1 haiku. |
 | Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) + a **hard ≤~1,500-token / ~30-line return budget** stated in the delegation brief and each agent's return instruction (operating guide §Orchestration; an over-budget return is a stated defect to trim, aligned to Anthropic's 1-2k-token sub-agent return), **backstopped by a hook**: `scripts/subagent_return_budget.py` is a PostToolUse hook on the `Task` matcher (wired in `.claude/settings.json` + `hooks/hooks.json`) that measures the actual return and gives Morgan one nudge when it is clearly over budget (trigger: 2× the stated ceiling, so a borderline return is never flagged). Still 🟡, for two reasons stated plainly: the hook fires **after** the return has landed, so it prompts a trim rather than preventing the context cost; and the token count is a `chars / 4` estimate (a hook has no access to the model's tokenizer). It is advisory by design - fails open, silent outside a live engagement. |
 | **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no general Edit (Bash, where granted, is execution-gated §7; Write/Edit, where granted, are scoped to one findings-pack path and mechanically enforced). |
 | Guard the failure modes (over-spawn · duplicate · runaway · premature stop) | ✅ | Right-size + state-count (over-spawn); non-overlapping briefs (duplicate); fix-loop stop conditions (runaway); never-dead-end (premature stop). |
