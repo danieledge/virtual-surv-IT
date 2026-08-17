@@ -34,6 +34,9 @@ Usage (all consent-free team tooling, `python -m scripts.engagement_state <cmd>`
   set-team "Name (role)" ...
   finalise-artifacts
   set-footprint [--agents N] [--tokens TEXT]
+  set-budget [--daily-usd N] [--engagement-usd N]   # advisory pacing - the org spend limit
+                                                    # stays the hard stop
+  budget-status                # spent-vs-cap from this project's transcripts (read-only)
   log-note TEXT [--tag NAME]   # dated event/completion note - NOT the outstanding list;
                                 # --tag (e.g. review-loop) marks a bracketed prefix the
                                 # dashboard timeline reads to pick an icon - plain notes
@@ -1869,6 +1872,115 @@ def _cmd_set_footprint(args: argparse.Namespace) -> int:
     return _mutate(args, fn)
 
 
+def _cmd_set_budget(args: argparse.Namespace) -> int:
+    """Record the engagement's spend budget (2026-08-17, assessment recommendation 1).
+    Advisory pacing state, never enforcement: the hard stop stays the org-side spend
+    limit (workspace/member caps); this exists so the PM can SEE the cap coming at every
+    gate (budget-status below) and degrade or park deliberately instead of being
+    hard-stopped mid-review by a limit the session never knew about."""
+
+    def fn(state: dict) -> None:
+        budget = state.setdefault("budget", {})
+        if args.daily_usd is not None:
+            budget["daily_usd"] = args.daily_usd
+        if args.engagement_usd is not None:
+            budget["engagement_usd"] = args.engagement_usd
+        budget["set"] = _dt.date.today().isoformat()
+
+    return _mutate(args, fn)
+
+
+def _load_dashboard_module():
+    """dashboard.py's transcript pricing, importable in BOTH run modes - the same
+    package-then-file-relative fallback pattern as the render_html import."""
+    try:
+        from scripts import dashboard
+
+        return dashboard
+    # Probe only; fall through to the file-relative loader.
+    except Exception:  # nosec B110
+        pass
+    import importlib.util
+
+    candidate = Path(__file__).resolve().with_name("dashboard.py")
+    try:
+        spec = importlib.util.spec_from_file_location("dashboard", candidate)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
+def _cmd_budget_status(args: argparse.Namespace) -> int:
+    """Spent-vs-cap at a gate, in one compact block the PM states beside the team-sizing
+    line. Spend is 📊 measured from this project's session transcripts at list prices
+    (dashboard.py's pricing, cache tiers included) but the ATTRIBUTION is an
+    approximation and says so: transcripts are per session and project-wide, so parallel
+    work in the same project counts toward the same number. HEADROOM= gives the PM a
+    categorical to act on (ok / approaching at >=70% / exceeded) - the degrade ladder
+    lives in the engage skill, the org-side spend limit stays the hard stop. Read-only;
+    no budget recorded prints one pointer line and exits 0."""
+    state = load_state(args.dir)
+    budget = state.get("budget") or {}
+    daily = budget.get("daily_usd")
+    ceiling = budget.get("engagement_usd")
+    if not daily and not ceiling:
+        print(
+            "no budget recorded - set one with: set-budget --daily-usd <N> "
+            "[--engagement-usd <N>] (docs/INTEGRATIONS.md is unrelated; this is "
+            "advisory pacing state, ADR-006)"
+        )
+        return 0
+    spent_today = spent_since_open = None
+    dash = _load_dashboard_module()
+    if dash is not None:
+        try:
+            project_root = _stamp_root(args.dir).parent
+            parsed = dash.parse_transcripts(
+                dash.transcripts_dir_for(project_root, Path.home() / ".claude")
+            )
+            today = _dt.date.today().isoformat()
+            opened = (state.get("engagement") or {}).get("opened") or today
+            spent_today = sum(
+                s["cost_usd"] for s in parsed["sessions"] if s.get("date") == today
+            )
+            spent_since_open = sum(
+                s["cost_usd"] for s in parsed["sessions"] if (s.get("date") or "") >= opened
+            )
+        except Exception:
+            spent_today = spent_since_open = None
+
+    def verdict(spent, cap):
+        if spent is None or not cap:
+            return "unknown"
+        if spent >= cap:
+            return "exceeded"
+        if spent >= 0.7 * cap:
+            return "approaching"
+        return "ok"
+
+    def money(v):
+        return f"${v:.2f}" if v is not None else "unknown"
+
+    worst = "unknown"
+    for spent, cap in ((spent_today, daily), (spent_since_open, ceiling)):
+        v = verdict(spent, cap)
+        rank = {"unknown": 0, "ok": 1, "approaching": 2, "exceeded": 3}
+        if rank[v] > rank[worst]:
+            worst = v
+    if daily:
+        print(f"DAILY cap={money(daily)} spent_today={money(spent_today)}")
+    if ceiling:
+        print(f"ENGAGEMENT ceiling={money(ceiling)} spent_since_open={money(spent_since_open)}")
+    print(f"HEADROOM={worst}")
+    print(
+        "(spend is measured from this project's session transcripts at list prices, "
+        "project-wide - parallel work in this project counts toward the same number)"
+    )
+    return 0
+
+
 _OPEN_STATUSES = ("in_progress", "blocked", "closing")
 
 
@@ -2000,6 +2112,7 @@ _MUTATING_CMDS = {
     _cmd_set_runtime,
     _cmd_finalise_artifacts,
     _cmd_set_footprint,
+    _cmd_set_budget,
 }
 
 
@@ -2236,6 +2349,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--agents", type=int, default=None)
     p.add_argument("--tokens", default=None)
     p.set_defaults(fn=_cmd_set_footprint)
+
+    p = sub.add_parser(
+        "set-budget",
+        parents=[common],
+        help="record the engagement's spend budget - advisory pacing, never the hard stop",
+    )
+    p.add_argument("--daily-usd", dest="daily_usd", type=float, default=None)
+    p.add_argument("--engagement-usd", dest="engagement_usd", type=float, default=None)
+    p.set_defaults(fn=_cmd_set_budget)
+
+    p = sub.add_parser(
+        "budget-status",
+        parents=[common],
+        help="spent-vs-cap from this project's transcripts (read-only; safe at any gate)",
+    )
+    p.set_defaults(fn=_cmd_budget_status)
 
     p = sub.add_parser(
         "list", parents=[common], help="list this project's engagements (registry scan)"

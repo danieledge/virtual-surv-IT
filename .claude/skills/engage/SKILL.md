@@ -229,7 +229,23 @@ operating guide; render shape: `docs/templates/start-here.md`).
 **The moment the workspace exists, persist the session facts** (register R2/R7 - the transcript is
 not the record): the intake gate answers from step 0a (`set-decision` + `record-consent-outcome`,
 wording there) and the step-0 probe result, `set-runtime --mode repo|plugin [--plugin-root <path>]
---interpreter <python>`. **Get the go-ahead via the question tool** (header `Go-ahead`,
+--interpreter <python>`.
+
+**Budget and day pacing (assessment rec 1+2, 2026-08-17).** If the user has named a spend cap
+(now or at intake - many corporate users run under a daily limit), record it the same moment:
+`set-budget --daily-usd <N> [--engagement-usd <N>]`. Never invent one, and don't ask a
+dedicated question when no cap was hinted at - budgetless engagements skip all of this at zero
+cost. When a budget IS recorded: (a) the brief's estimate is compared against the DAILY cap,
+and when the estimate exceeds it the plan section proposes a **day plan with gates falling at
+day boundaries** (e.g. day 1 spec + build, day 2 QA + reviews, day 3 close) rather than
+pretending it fits one day; (b) `budget-status` runs at every gate and its DAILY/HEADROOM line
+is stated beside the team-sizing line (degrade ladder on approaching/exceeded: orchestration
+guide); (c) an approaching cap near a natural gate means **park cleanly, not push on**: advance
+the state file, keep the index current, write the outstanding list, and end the turn saying
+plainly "NOT closed - resuming tomorrow at <next gate>". The resume machinery makes tomorrow's
+pickup cheap; a hard org-side stop mid-review does not.
+
+**Get the go-ahead via the question tool** (header `Go-ahead`,
 `multiSelect: false`): **Proceed as briefed** · **Adjust something first** · **Stop here** - never
 a "shall I proceed?" buried in prose. **Record the answer**: `set-decision go-ahead "<answer>
 (user, <date>)"`, then `set-phase delivery` as delivery begins - a cold resume reads the phase

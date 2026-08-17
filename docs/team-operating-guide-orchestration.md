@@ -16,7 +16,20 @@
   the footprint is a receipt, not a decision. So: if you are about to engage anyone, say who and
   why in one line first, **even when the decision emerged mid-engagement**; and when the answer
   is nobody, say that too ("no fan-out, I'll handle this myself") - a stated zero is
-  right-sizing, silence is not.
+  right-sizing, silence is not. (The current external figure is 3-10x versus a single agent
+  on equivalent tasks - Anthropic, Jan 2026; the ~15x above is the older vs-chat number.
+  Either way: order of magnitude, so the rule stands unchanged.)
+  - **When the engagement has a recorded budget, the sizing line gets a money line beside
+    it (2026-08-17, assessment rec 1).** Run `engagement_state budget-status` at every gate
+    and before any fan-out, and state its DAILY/HEADROOM output in the same breath as the
+    agent count. `HEADROOM=approaching` or `exceeded` is never proceeded past silently -
+    offer the **degrade ladder** via the question tool and let the human pick: (1) drop to
+    the light profile for what remains; (2) retier the sonnet-eligible reviewer roles for
+    this engagement; (3) defer a non-blocking review stage to the next day; (4) **park
+    cleanly now** (the pacing rule in the engage skill: state advanced, index current,
+    outstanding list written, "NOT closed - resuming tomorrow" said plainly). The budget is
+    advisory pacing - the org-side spend limit stays the hard stop; the point is to reach a
+    day boundary at a gate, never mid-review.
   - **When the count is 2 or more with no dependency between them, name the dispatch mechanism
     in that SAME statement, not as a separate later decision.** Live evidence, not a guess: a
     2026-08-08 test where the right-sizing line said "Ravi and Layla run first and concurrently"
