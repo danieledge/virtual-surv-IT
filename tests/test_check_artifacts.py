@@ -2399,3 +2399,83 @@ def test_no_flags_still_works(tmp_path):
     art.mkdir()
     rc = ca_main(["check_artifacts", str(art)])
     assert rc in (0, 1)
+
+
+# --- 2026-08-17 live-session fixes: --slug sugar + ghost artifact-row removal -------------
+
+
+def test_main_accepts_slug_flag(tmp_path, monkeypatch, capsys):
+    """A live session reached for `--slug` twice (every other team script accepts it),
+    got a usage error both times, and burned a retry each - now it is sugar for the
+    positional pack dir."""
+    from scripts.check_artifacts import main as ca_main
+
+    art = tmp_path / "artifacts" / "pack"
+    art.mkdir(parents=True)
+    (art / "engagement-state.json").write_text(
+        json.dumps({"schema": 2, "status": "closed"}), encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    rc_flag = ca_main(["check_artifacts", "--slug", "pack"])
+    rc_positional = ca_main(["check_artifacts", str(tmp_path / "artifacts" / "pack")])
+    assert rc_flag == rc_positional
+
+
+def test_fix_removes_ghost_artifact_row_when_true_row_resolves(tmp_path):
+    """The exact live shape: a pre-heal row with a mis-rooted path plus the
+    added_before_file_existed flag, alongside the correct row for the same file -
+    --fix removes the ghost and the check then passes clean on that front."""
+    from scripts.check_artifacts import apply_fixes, check
+
+    art = tmp_path / "artifacts" / "pack"
+    art.mkdir(parents=True)
+    (art / "engagement-brief.md").write_text("# brief\n", encoding="utf-8")
+    (art / "engagement-brief.html").write_text("<p>b</p>", encoding="utf-8")
+    state = {
+        "schema": 2,
+        "status": "in_progress",
+        "engagement": {"slug": "pack", "title": "t"},
+        "artifacts": [
+            {"path": "engagement-brief.md", "title": "Brief", "status": "interim"},
+            {
+                "path": "artifacts/pack/engagement-brief.md",
+                "title": "Brief",
+                "status": "interim",
+                "added_before_file_existed": True,
+            },
+        ],
+    }
+    (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+    log = apply_fixes(art)
+    assert any("ghost artifact row" in line for line in log)
+    remaining = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
+    paths = [r["path"] for r in remaining["artifacts"]]
+    assert paths == ["engagement-brief.md"]
+    assert not any("artifacts/pack/engagement-brief.md" in f for f in check(art))
+
+
+def test_fix_keeps_flagged_row_when_no_true_sibling_exists(tmp_path):
+    """An honestly-missing artifact keeps its row and flag - removal is only safe when
+    the same basename resolves via a correct row (the finding's own remove-or-restore
+    choice must stay a human call otherwise)."""
+    from scripts.check_artifacts import apply_fixes
+
+    art = tmp_path / "artifacts" / "pack"
+    art.mkdir(parents=True)
+    state = {
+        "schema": 2,
+        "status": "in_progress",
+        "engagement": {"slug": "pack", "title": "t"},
+        "artifacts": [
+            {
+                "path": "artifacts/pack/nope.md",
+                "title": "N",
+                "status": "interim",
+                "added_before_file_existed": True,
+            },
+        ],
+    }
+    (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+    apply_fixes(art)
+    remaining = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
+    assert len(remaining["artifacts"]) == 1  # untouched

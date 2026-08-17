@@ -246,9 +246,20 @@ def read_active(root: Path) -> str | None:
 
 
 def write_active(root: Path, slug: str) -> None:
+    """Records WHICH SESSION set the marker too (2026-08-17 live report): a new
+    engagement's intake runs before its workspace init, so at that turn's end the
+    marker still names the PREVIOUS engagement - and the DoD stop gate, keying its
+    auto-fix instruction on the marker alone, sent the model off repairing the old
+    pack the moment the user opened new work. With the setting session recorded, the
+    gate can scope its fix instruction to a pack THIS session actually activated and
+    surface everything else without actioning it."""
     root.mkdir(parents=True, exist_ok=True)
+    record = {"slug": slug, "set": _dt.date.today().isoformat()}
+    sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if sid:
+        record["session"] = sid
     (root / ACTIVE_MARKER).write_text(
-        json.dumps({"slug": slug, "set": _dt.date.today().isoformat()}, indent=2) + "\n",
+        json.dumps(record, indent=2) + "\n",
         encoding="utf-8",
     )
 

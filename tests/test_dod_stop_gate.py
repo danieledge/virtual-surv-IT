@@ -274,3 +274,76 @@ def test_load_checker_does_not_grow_sys_path_on_repeat_calls(tmp_path):
         "a second call with the same project_root grew sys.path again - the dedup "
         "check did not hold"
     )
+
+
+# --- session-owned ACTIVE marker + other-pack summarisation (2026-08-17 live report) ------
+
+
+def _owned_setup(tmp_path, marker_session: str):
+    """Two gated workspaces, ACTIVE marker on 'previous', arming stamp for THIS session."""
+    art = tmp_path / "artifacts"
+    for slug in ("previous", "sibling"):
+        (art / slug).mkdir(parents=True)
+        (art / slug / "engagement-state.json").write_text(
+            json.dumps({"schema": 2, "status": "in_progress"}), encoding="utf-8"
+        )
+    (art / ".active-engagement.json").write_text(
+        json.dumps({"slug": "previous", "session": marker_session}), encoding="utf-8"
+    )
+    (art / ".team-session.json").write_text(
+        json.dumps({"session": "sess-mine"}), encoding="utf-8"
+    )
+    return art
+
+
+def _run_staged(monkeypatch, capsys, payload, project):
+    staged = _load_staged_gate()
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
+    rc = staged.main()
+    return rc, capsys.readouterr().out
+
+
+def test_another_sessions_active_pack_gets_no_fix_list(tmp_path, monkeypatch, capsys):
+    """The 7-minute live detour (2026-08-17): a fresh engagement's intake ended a turn
+    while the ACTIVE marker still named the previous engagement - the fix-list sent the
+    model off repairing it. A marker owned by ANOTHER session now yields surface-only
+    output: no AUTO-FIX instruction, an explicit do-not-act, and summaries instead of
+    finding bodies."""
+    _owned_setup(tmp_path, marker_session="sess-somebody-else")
+    rc, out = _run_staged(
+        monkeypatch, capsys, {"session_id": "sess-mine", "cwd": str(tmp_path)}, tmp_path
+    )
+    assert rc == 0
+    decision = json.loads(out)
+    reason = decision["reason"]
+    assert "do NOT fix" in reason
+    assert "AUTO-FIX" not in reason
+    assert "finding(s):" in reason  # summarised
+    assert "expected" not in reason  # no finding BODIES (schema detail text)
+
+
+def test_own_sessions_active_pack_keeps_the_fix_list(tmp_path, monkeypatch, capsys):
+    _owned_setup(tmp_path, marker_session="sess-mine")
+    rc, out = _run_staged(
+        monkeypatch, capsys, {"session_id": "sess-mine", "cwd": str(tmp_path)}, tmp_path
+    )
+    assert rc == 0
+    reason = json.loads(out)["reason"]
+    assert "AUTO-FIX" in reason  # the fix-list applies - this session owns the pack
+    assert "[previous]" in reason
+    # ...but the SIBLING pack is still summarised, never pasted in full
+    assert "[sibling]" in reason
+    assert "finding(s):" in reason
+
+
+def test_legacy_marker_without_session_keeps_old_behaviour(tmp_path, monkeypatch, capsys):
+    art = _owned_setup(tmp_path, marker_session="ignored")
+    (art / ".active-engagement.json").write_text(
+        json.dumps({"slug": "previous"}), encoding="utf-8"
+    )
+    rc, out = _run_staged(
+        monkeypatch, capsys, {"session_id": "sess-mine", "cwd": str(tmp_path)}, tmp_path
+    )
+    assert rc == 0
+    assert "AUTO-FIX" in json.loads(out)["reason"]

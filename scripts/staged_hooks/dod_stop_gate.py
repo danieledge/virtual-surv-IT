@@ -105,8 +105,27 @@ def _already_nudged(pack: Path, findings_hash: str) -> bool:
     return any(marker in str(entry) for entry in log)
 
 
+def _summarise_pack_findings(name: str, findings: list[str]) -> str:
+    """One line per OTHER pack: count + finding CODES only (2026-08-17 live report: the
+    other-engagements section pasted 13 findings' FULL text - schema details, line
+    numbers, the lot - into the console of a session that had just opened unrelated new
+    work; the user read a wall of another engagement's internals and the model then
+    spent 7 minutes fixing it. Surfacing drift needs the existence and the shape, never
+    the body)."""
+    codes: dict[str, int] = {}
+    for f in findings:
+        code = f.split(":", 1)[0].strip() or "FINDING"
+        codes[code] = codes.get(code, 0) + 1
+    detail = ", ".join(f"{c} x{n}" if n > 1 else c for c, n in sorted(codes.items()))
+    return f"[{name}] {len(findings)} finding(s): {detail}"
+
+
 def _reason(
-    active_findings: list[str], other_findings: list[str], slug: str | None, findings_hash: str
+    active_findings: list[str],
+    other_findings: list[str],
+    slug: str | None,
+    findings_hash: str,
+    session_owned: bool = True,
 ) -> str:
     log_note = (
         f'engagement_state --slug {slug} log-note "{_NUDGE_MARKER_PREFIX}{findings_hash}"'
@@ -148,6 +167,19 @@ def _reason(
             "the next time a turn ends while this same engagement is still active and gated, so "
             "it cannot silently drop out of sight - it just doesn't override an explicit request "
             "you were just given, no matter how quick the detour looks."
+        )
+    elif not session_owned:
+        # NOTHING here belongs to work this session started (2026-08-17 live report:
+        # a fresh engagement's intake ended a turn before its workspace existed, the
+        # ACTIVE marker still named the PREVIOUS engagement, and the model spent 7
+        # minutes repairing it against the deferral rule). No fix-list at all in this
+        # state - existence and shape only, and an explicit do-not-act.
+        head = (
+            "🎩 DoD backstop (Stop hook, warn-first): open engagement(s) in this project "
+            "carry outstanding DoD findings, summarised below. **None of them belongs to "
+            "work this session started - do NOT fix, open or narrate them now.** Continue "
+            "with the user's current request; mention them at most in one line, and only "
+            "switch if the user explicitly asks."
         )
     else:
         # The active engagement itself is clean - only OTHER open engagements have
@@ -292,41 +324,67 @@ def main() -> int:
         # applies to the active engagement; other gated packs are surfaced, not
         # actioned. No active marker, or only one gated pack: no scoping question to
         # answer - falls back to the pre-fix, undifferentiated behaviour exactly.
+        # Whose ACTIVE marker is it? (2026-08-17 live report: a new engagement's intake
+        # ended a turn before its workspace init, the marker still named the PREVIOUS
+        # engagement, and the fix-list sent the model off repairing it for 7 minutes
+        # against the deferral rule - prose failed to hold this twice, so it is
+        # mechanical now.) The marker records the SESSION that set it (write_active);
+        # the fix-list is issued only when that session is THIS one. A legacy marker
+        # with no session recorded, or a payload with no session id, keeps the old
+        # slug-based behaviour exactly.
         active_slug = None
-        es = ca._load_engagement_state_module()
-        if es is not None:
-            try:
-                active_slug = es.read_active(artifacts)
-            except Exception:  # nosec B110
-                active_slug = None
+        active_owned = True
+        try:
+            record = json.loads(
+                (artifacts / ".active-engagement.json").read_text(encoding="utf-8")
+            )
+            active_slug = record.get("slug") or None
+            marker_session = record.get("session")
+            payload_session = data.get("session_id")
+            if marker_session and payload_session:
+                active_owned = marker_session == payload_session
+        except Exception:  # nosec B110
+            active_slug = None
 
         active_findings: list[str] = []
         other_findings: list[str] = []
         for name, pack in gated:
             if not name and packs:
-                # Flat pack alongside workspaces: deep rglob checks would cross into the
-                # sibling workspaces - mirror check_artifacts and demand migration
-                # instead. Structural, not any one engagement's - always active-bucket.
-                active_findings.append(
+                flat_finding = (
                     "FLAT-PACK-UNMIGRATED: legacy flat pack coexists with workspaces - "
                     "run `python -m scripts.engagement_state migrate`"
                 )
+                # Structural, not any one engagement's - but a fix instruction only for
+                # a session that owns the active work; otherwise surface-only.
+                (active_findings if active_owned else other_findings).append(flat_finding)
                 continue
-            prefix = f"[{name}] " if name else ""
-            pack_findings = [f"{prefix}{f}" for f in ca.check(pack)]
-            if active_slug is None or len(gated) == 1 or name == active_slug:
-                active_findings.extend(pack_findings)
+            raw = ca.check(pack)
+            if not raw:
+                continue
+            if not active_owned:
+                other_findings.append(_summarise_pack_findings(name or "(flat)", raw))
+            elif active_slug is None or len(gated) == 1 or name == active_slug:
+                prefix = f"[{name}] " if name else ""
+                active_findings.extend(f"{prefix}{f}" for f in raw)
             else:
-                other_findings.extend(pack_findings)
+                # OTHER packs are summarised, never pasted in full (the same live
+                # report's other half: 13 findings' full bodies in the console).
+                other_findings.append(_summarise_pack_findings(name, raw))
+        project_findings: list[str] = []
         if packs:
-            # G8: project-level, not any one engagement's - always surfaced now, same as
-            # before this fix (the orphan scan is read-only here - the CLI checker owns
-            # the grandfather snapshot).
-            active_findings.extend(ca.check_registry(artifacts))
-            active_findings.extend(ca.check_root_orphans(artifacts))
+            # G8: project-level, not any one engagement's - always surfaced, same as
+            # before (the orphan scan is read-only here - the CLI checker owns the
+            # grandfather snapshot).
+            project_findings.extend(ca.check_registry(artifacts))
+            project_findings.extend(ca.check_root_orphans(artifacts))
         map_path = ca.find_codebase_map(cwd)
         if map_path is not None and map_path.is_file():
-            active_findings.extend(ca.check_map(map_path))
+            project_findings.extend(ca.check_map(map_path))
+        if project_findings:
+            if active_owned:
+                active_findings.extend(project_findings)
+            else:
+                other_findings.append(_summarise_pack_findings("project", project_findings))
     except Exception:
         return 0  # fail open - never brick a stop over a checker error
 
@@ -343,7 +401,9 @@ def main() -> int:
         return 0
 
     slug = marker_name or None
-    reason = _reason(active_findings, other_findings, slug, findings_hash)
+    reason = _reason(
+        active_findings, other_findings, slug, findings_hash, session_owned=active_owned
+    )
     print(json.dumps({"decision": "block", "reason": reason}))
     return 0
 

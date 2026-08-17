@@ -81,7 +81,7 @@ import re
 # Used for the git anchor query and for --fix's render_html call - both fixed-argv, no shell.
 import subprocess  # nosec B404
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Map hygiene thresholds (ADR-003: target ~200 lines; the gate hard-flags past 250).
 _MAP_MAX_LINES = 250
@@ -2048,6 +2048,55 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
         stray.unlink()
         fixed.append(f"FIXED SUMMARY-WRONG-EXT: removed rendered email copy {stray.name}")
 
+    # Duplicate ghost artifact rows (2026-08-17 live report): a row recorded before the
+    # add-artifact path-healing fix carries a mis-rooted path ("artifacts/<slug>/x.md"
+    # resolved against the pack dir), flagged added_before_file_existed, and its file
+    # can never exist at that resolved path - while a correct row for the SAME basename
+    # resolves fine. STALE-INDEX flagged it and --fix used to stall on it (exit 1), so
+    # the live session hand-edited state for minutes instead. Removal is mechanically
+    # safe exactly when BOTH hold: the flagged path resolves to nothing AND a sibling
+    # row with the same basename resolves to a real file - that is this finding's own
+    # "remove the row or restore the artifact" instruction, the remove branch.
+    es_dup = _load_engagement_state_module()
+    if es_dup is not None:
+        state_file = artifacts_dir / es_dup.STATE_FILENAME
+        if state_file.is_file():
+            try:
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                rows = [r for r in (state.get("artifacts") or []) if isinstance(r, dict)]
+                resolvable = {
+                    PurePosixPath(str(r.get("path", "")).replace("\\", "/")).name
+                    for r in rows
+                    if r.get("path") and (artifacts_dir / str(r["path"])).exists()
+                }
+                keep, dropped = [], []
+                for r in rows:
+                    path = str(r.get("path") or "")
+                    if (
+                        r.get("added_before_file_existed")
+                        and path
+                        and not (artifacts_dir / path).exists()
+                        and PurePosixPath(path.replace("\\", "/")).name in resolvable
+                    ):
+                        dropped.append(path)
+                    else:
+                        keep.append(r)
+                if dropped:
+                    state["artifacts"] = keep
+                    state_file.write_text(
+                        json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                    for path in dropped:
+                        fixed.append(
+                            f"FIXED STALE-INDEX: removed ghost artifact row {path} "
+                            "(added_before_file_existed, never resolvable; the same "
+                            "basename resolves via its correct row - index re-renders "
+                            "below)"
+                        )
+            except Exception as exc:
+                fixed.append(f"COULD-NOT-FIX ghost artifact rows: {exc}")
+
     # Re-render the living index from the machine-readable state when the render is stale
     # (ADR-006: the state is authoritative). Before the generic .md render pass, so the fresh
     # START-HERE gets a fresh .html too rather than keeping a stale sibling.
@@ -2246,6 +2295,18 @@ _KNOWN_FLAGS = frozenset({"--fix"})
 def main(argv: list[str]) -> int:
     _force_utf8_output()
     rest = argv[1:]
+    # --slug <workspace> (2026-08-17 live report: a session reached twice for the same
+    # `--slug` shape every OTHER team script accepts, got a usage error both times, and
+    # burned a retry each): sugar for targeting one workspace, equivalent to passing
+    # `<artifacts_dir>/<slug>` positionally.
+    slug = None
+    if "--slug" in rest:
+        i = rest.index("--slug")
+        if i + 1 >= len(rest) or rest[i + 1].startswith("-"):
+            print("--slug needs a workspace name", file=sys.stderr)
+            return 2
+        slug = rest[i + 1]
+        rest = rest[:i] + rest[i + 2 :]
     # 2026-08-07 (found by a framework-wide audit): `do_fix = "--fix" in argv[1:]` matched
     # only the exact string - a typo'd flag (--fx, --Fix, --fixx) or an unrecognized one
     # was silently ignored rather than erroring, so a human typing `check_artifacts --fx`
@@ -2256,14 +2317,16 @@ def main(argv: list[str]) -> int:
     unknown = [a for a in rest if a.startswith("-") and a not in _KNOWN_FLAGS]
     if unknown:
         print(
-            f"unrecognized flag(s): {' '.join(unknown)} - only --fix is accepted "
-            "(positional args: [artifacts_dir] [map_path])",
+            f"unrecognized flag(s): {' '.join(unknown)} - accepted: --fix, "
+            "--slug <workspace> (positional args: [artifacts_dir] [map_path])",
             file=sys.stderr,
         )
         return 2
     do_fix = "--fix" in rest
     positional = [a for a in rest if not a.startswith("-")]
     artifacts_dir = Path(positional[0]) if positional else Path("artifacts")
+    if slug:
+        artifacts_dir = artifacts_dir / slug
     map_path = Path(positional[1]) if len(positional) > 1 else find_codebase_map(Path.cwd())
 
     # 0.31 layout: with per-engagement workspaces, each pack is checked in its own scope
