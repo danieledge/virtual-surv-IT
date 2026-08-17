@@ -63,7 +63,9 @@ def install_paths(obj):
 
 def is_team_root(path):
     try:
-        return "compliance-surveillance-team" in (Path(path) / ".claude-plugin/plugin.json").read_text(encoding="utf-8-sig")
+        p = Path(path)
+        return ("compliance-surveillance-team" in (p / ".claude-plugin/plugin.json").read_text(encoding="utf-8-sig")
+                and (p / "scripts/engage_probe.py").is_file())
     except Exception:
         return False
 
@@ -92,6 +94,7 @@ def from_filesystem():
                 for marker in base.glob(pat):
                     if "compliance-surveillance-team" in marker.parts:
                         hits.append(marker)
+    hits = [h for h in hits if is_team_root(h.parent.parent)]
     if not hits:
         return ""
     def key(p):

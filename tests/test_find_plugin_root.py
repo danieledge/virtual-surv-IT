@@ -16,6 +16,19 @@ def _write_manifest(plugin_dir, name="compliance-surveillance-team@virtual-surv-
     (manifest_dir / "plugin.json").write_text(json.dumps({"name": name}), encoding="utf-8")
 
 
+def _write_probe_script(plugin_dir):
+    """Usability (2026-08-17) also requires scripts/engage_probe.py at the root - a
+    manifest or marker alone is a PARTIAL install that must fall through to the next
+    resolver, not end the search."""
+    (plugin_dir / "scripts").mkdir(parents=True, exist_ok=True)
+    (plugin_dir / "scripts" / "engage_probe.py").write_text("# stub\n", encoding="utf-8")
+
+
+def _make_usable(plugin_dir, name="compliance-surveillance-team@virtual-surv-it"):
+    _write_manifest(plugin_dir, name)
+    _write_probe_script(plugin_dir)
+
+
 def test_repo_as_project_when_cwd_has_operating_guide(tmp_path):
     cwd = tmp_path / "repo"
     (cwd / "docs").mkdir(parents=True)
@@ -30,7 +43,7 @@ def test_registry_resolves_real_world_nested_schema(tmp_path):
     resolver must not assume a flatter shape (schema-agnostic scan, see module docstring)."""
     home = tmp_path / "home"
     plugin_dir = tmp_path / "clone" / "virtual-surv-IT"
-    _write_manifest(plugin_dir)
+    _make_usable(plugin_dir)
     registry = home / ".claude" / "plugins" / "installed_plugins.json"
     registry.parent.mkdir(parents=True)
     registry.write_text(
@@ -60,7 +73,7 @@ def test_registry_finds_a_locally_cloned_directory_not_named_after_the_plugin(tm
     (matched by the manifest's own content) can find it, never the filesystem fallback."""
     home = tmp_path / "home"
     plugin_dir = tmp_path / "virtual-surv-IT"  # deliberately NOT containing the team name
-    _write_manifest(plugin_dir)
+    _make_usable(plugin_dir)
     registry = home / ".claude" / "plugins" / "installed_plugins.json"
     registry.parent.mkdir(parents=True)
     registry.write_text(
@@ -103,6 +116,7 @@ def test_filesystem_fallback_used_when_registry_has_no_match(tmp_path):
     cache = home / ".claude" / "plugins" / "cache" / "compliance-surveillance-team" / "1.0.0"
     (cache / "docs").mkdir(parents=True)
     (cache / "docs" / "team-operating-guide.md").write_text("x", encoding="utf-8")
+    _make_usable(cache)
     cwd = tmp_path / "project"
     cwd.mkdir()
     assert find_plugin_root(home, cwd) == str(cache)
@@ -115,6 +129,7 @@ def test_filesystem_fallback_picks_the_newest_looking_version(tmp_path):
         d = base / version / "docs"
         d.mkdir(parents=True)
         (d / "team-operating-guide.md").write_text("x", encoding="utf-8")
+        _make_usable(base / version)
     cwd = tmp_path / "project"
     cwd.mkdir()
     assert find_plugin_root(home, cwd) == str(base / "0.33.8")
@@ -123,7 +138,7 @@ def test_filesystem_fallback_picks_the_newest_looking_version(tmp_path):
 def test_registry_takes_priority_over_filesystem_fallback(tmp_path):
     home = tmp_path / "home"
     registry_dir = tmp_path / "registry-wins"
-    _write_manifest(registry_dir)
+    _make_usable(registry_dir)
     registry = home / ".claude" / "plugins" / "installed_plugins.json"
     registry.parent.mkdir(parents=True)
     registry.write_text(
@@ -135,6 +150,7 @@ def test_registry_takes_priority_over_filesystem_fallback(tmp_path):
     )
     cache.mkdir(parents=True)
     (cache / "team-operating-guide.md").write_text("x", encoding="utf-8")
+    _make_usable(cache.parent)
     cwd = tmp_path / "project"
     cwd.mkdir()
     assert find_plugin_root(home, cwd) == str(registry_dir)
@@ -157,6 +173,10 @@ def _team_root(tmp_path, name="clone"):
     (root / ".claude-plugin" / "plugin.json").write_text(
         '{"name": "compliance-surveillance-team"}', encoding="utf-8"
     )
+    # Usability requires the probe script too (2026-08-17): a manifest alone is a
+    # PARTIAL install and must fall through, which test_partial_install below pins.
+    (root / "scripts").mkdir()
+    (root / "scripts" / "engage_probe.py").write_text("# stub\n", encoding="utf-8")
     return root
 
 
@@ -205,3 +225,29 @@ def test_registry_alternate_filenames_are_consulted(tmp_path, monkeypatch):
         _json.dumps({"plugins": [{"installPath": str(root)}]}), encoding="utf-8"
     )
     assert find_plugin_root(home, cwd) == str(root)
+
+
+def test_partial_registry_install_falls_through_to_a_usable_copy(tmp_path, monkeypatch):
+    """The 2026-08-17 corp finding itself: the registry points at an install whose
+    scripts/ is gone (a moved working copy, a broken update) - the OLD behaviour
+    committed to it and the bootstrap died with no fallback. A partial candidate now
+    falls through, and the healthy filesystem copy is found."""
+    import json as _json
+
+    from scripts.find_plugin_root import find_plugin_root
+
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    home = tmp_path / "home"
+    broken = tmp_path / "moved-away"
+    _write_manifest(broken)  # manifest only - no scripts/engage_probe.py
+    (home / ".claude" / "plugins").mkdir(parents=True)
+    (home / ".claude" / "plugins" / "installed_plugins.json").write_text(
+        _json.dumps({"plugins": {"x": [{"installPath": str(broken)}]}}), encoding="utf-8"
+    )
+    healthy = home / ".claude" / "plugins" / "cache" / "compliance-surveillance-team" / "1.0.0"
+    (healthy / "docs").mkdir(parents=True)
+    (healthy / "docs" / "team-operating-guide.md").write_text("x", encoding="utf-8")
+    _make_usable(healthy)
+    cwd = tmp_path / "proj"
+    cwd.mkdir()
+    assert find_plugin_root(home, cwd) == str(healthy)

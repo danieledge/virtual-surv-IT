@@ -90,6 +90,8 @@ def test_registry_resolution_matches(tmp_path):
     (manifest_dir / "plugin.json").write_text(
         json.dumps({"name": "compliance-surveillance-team@virtual-surv-it"}), encoding="utf-8"
     )
+    (plugin_dir / "scripts").mkdir()
+    (plugin_dir / "scripts" / "engage_probe.py").write_text("# stub\n", encoding="utf-8")
     registry = home / ".claude" / "plugins" / "installed_plugins.json"
     registry.parent.mkdir(parents=True)
     registry.write_text(
@@ -107,6 +109,12 @@ def test_filesystem_fallback_matches(tmp_path):
     cache = home / ".claude" / "plugins" / "cache" / "compliance-surveillance-team" / "1.0.0"
     (cache / "docs").mkdir(parents=True)
     (cache / "docs" / "team-operating-guide.md").write_text("x", encoding="utf-8")
+    (cache / ".claude-plugin").mkdir()
+    (cache / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "compliance-surveillance-team@virtual-surv-it"}), encoding="utf-8"
+    )
+    (cache / "scripts").mkdir()
+    (cache / "scripts" / "engage_probe.py").write_text("# stub\n", encoding="utf-8")
     cwd = tmp_path / "project"
     cwd.mkdir()
     expected = find_plugin_root(home, cwd)

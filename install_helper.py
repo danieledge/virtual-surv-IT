@@ -4905,18 +4905,75 @@ _PLUGIN_CACHE_MARKER = "compliance-surveillance-team"
 def _plugin_cache_version_dirs(home: Path) -> list:
     """Every version directory for this plugin under ~/.claude/plugins/{cache,marketplaces} -
     same discovery rule as find_plugin_root.py's filesystem fallback (see module comment
-    above)."""
+    above; depth-bounded like it since 2026-08-17, same AV-scan rationale)."""
     bases = (home / ".claude" / "plugins" / "cache", home / ".claude" / "plugins" / "marketplaces")
+    patterns = (
+        "*/docs/team-operating-guide.md",
+        "*/*/docs/team-operating-guide.md",
+        "*/*/*/docs/team-operating-guide.md",
+        "*/*/*/*/docs/team-operating-guide.md",
+    )
     found: list = []
     for base in bases:
         if not base.is_dir():
             continue
-        for marker in base.rglob("docs/team-operating-guide.md"):
-            if _PLUGIN_CACHE_MARKER in marker.parts:
-                version_dir = marker.parent.parent
-                if version_dir not in found:
-                    found.append(version_dir)
+        for pattern in patterns:
+            for marker in base.glob(pattern):
+                if _PLUGIN_CACHE_MARKER in marker.parts:
+                    version_dir = marker.parent.parent
+                    if version_dir not in found:
+                        found.append(version_dir)
     return found
+
+
+# Registry filenames drift across Claude Code versions - same set find_plugin_root.py
+# consults (2026-08-17 corp debug session).
+_PLUGIN_REGISTRY_NAMES = ("installed_plugins.json", "config.json", "plugins.json")
+
+
+def _registry_install_paths(home: Path) -> list:
+    """Every installPath string any known registry file names, schema-agnostic (the same
+    walk _active_plugin_install_path always did, shared out so the cleaner can
+    cross-reference the registry against what the marker scan found - the 2026-08-17
+    corp debug session's finding 2: a partial install without the operating-guide marker
+    was invisible to the cleaner while the registry kept pointing at it, causing probe
+    failures with no cleanup path)."""
+    paths: list = []
+
+    def _walk(obj) -> None:
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if key == "installPath" and isinstance(value, str):
+                    if value not in paths:
+                        paths.append(value)
+                else:
+                    _walk(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                _walk(item)
+
+    for name in _PLUGIN_REGISTRY_NAMES:
+        try:
+            data = json.loads((home / ".claude" / "plugins" / name).read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        _walk(data)
+    return paths
+
+
+def _looks_like_this_plugin(path: Path) -> bool:
+    """Manifest names this plugin, or the path itself carries a recognisable token - the
+    second test exists because a PARTIAL install may have lost its manifest too, and a
+    ghost we cannot attribute must never be offered for deletion (it could belong to any
+    other plugin)."""
+    try:
+        text = (path / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8-sig")
+        if _PLUGIN_CACHE_MARKER in text:
+            return True
+    except OSError:
+        pass
+    lowered = str(path).lower()
+    return _PLUGIN_CACHE_MARKER in lowered or "virtual-surv" in lowered
 
 
 def _active_plugin_install_path(home: Path) -> Optional[Path]:
@@ -4926,26 +4983,7 @@ def _active_plugin_install_path(home: Path) -> Optional[Path]:
     silent on this plugin - callers must treat that as "don't know", never as "safe to
     remove everything" (see run_clean_plugin_cache's own newest-wins fallback for that case,
     which is deliberately more conservative than 'nothing is active')."""
-    registry = home / ".claude" / "plugins" / "installed_plugins.json"
-    try:
-        data = json.loads(registry.read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        return None
-    install_paths: list = []
-
-    def _walk(obj) -> None:
-        if isinstance(obj, dict):
-            for key, value in obj.items():
-                if key == "installPath" and isinstance(value, str):
-                    install_paths.append(value)
-                else:
-                    _walk(value)
-        elif isinstance(obj, list):
-            for item in obj:
-                _walk(item)
-
-    _walk(data)
-    for raw_path in install_paths:
+    for raw_path in _registry_install_paths(home):
         candidate = Path(raw_path)
         manifest = candidate / ".claude-plugin" / "plugin.json"
         try:
@@ -5009,7 +5047,41 @@ def run_clean_plugin_cache(
     ok, fail = mark_map["ok"], mark_map["fail"]
     home = Path.home()
     version_dirs = _plugin_cache_version_dirs(home)
-    if not version_dirs:
+    # Registry cross-reference (2026-08-17 corp debug session, finding 2): the marker
+    # scan alone cannot see a PARTIAL install (no operating-guide marker), yet the
+    # registry can keep pointing at one forever, breaking every probe with no cleanup
+    # path. Ghosts = registry paths attributable to this plugin, on disk, that the
+    # marker scan missed; stale entries = registry paths for this plugin with nothing
+    # on disk at all (report-only - the registry is Claude Code's file, repaired by a
+    # reinstall or /plugin, never edited here).
+    marker_resolved = {d.resolve() for d in version_dirs}
+    ghosts: list = []
+    stale_entries: list = []
+    for raw in _registry_install_paths(home):
+        rp = Path(raw)
+        if not _looks_like_this_plugin(rp):
+            continue
+        if rp.is_dir():
+            if rp.resolve() not in marker_resolved:
+                ghosts.append(rp)
+        else:
+            stale_entries.append(rp)
+    if not version_dirs and not ghosts:
+        if stale_entries:
+            print(
+                style.yellow(
+                    f"  ! nothing on disk to clean, but the registry still names "
+                    f"{len(stale_entries)} missing install path(s) for this plugin:"
+                )
+            )
+            for rp in stale_entries:
+                print(f"    {rp} (does not exist)")
+            print(
+                "    Fix: reinstall (python install_helper.py install), or /plugin in "
+                "Claude Code - the registry is Claude Code's own file and is never "
+                "edited here."
+            )
+            return 0
         print(
             f"{style.dim('-')} no cached installs found under "
             f"{home / '.claude' / 'plugins'} - nothing to clean"
@@ -5021,8 +5093,30 @@ def run_clean_plugin_cache(
         is_active = active is not None and d.resolve() == active.resolve()
         tag = style.green(" (ACTIVE - kept)") if is_active else ""
         print(f"    {d} - {_human_size(_dir_size(d))}{tag}")
+    for g in ghosts:
+        is_active = active is not None and g.resolve() == active.resolve()
+        tag = (
+            style.yellow(" (ACTIVE but PARTIAL - kept; repair with a reinstall)")
+            if is_active
+            else style.yellow(" (ghost: in the registry, no operating-guide marker - removable)")
+        )
+        print(f"    {g} - {_human_size(_dir_size(g))}{tag}")
+    if stale_entries:
+        print(
+            style.yellow(
+                f"  ! the registry also names {len(stale_entries)} install path(s) that no "
+                "longer exist on disk (report-only; fix via reinstall or /plugin):"
+            )
+        )
+        for rp in stale_entries:
+            print(f"    {rp} (does not exist)")
+    removable_ghosts = [
+        g for g in ghosts if not (active is not None and g.resolve() == active.resolve())
+    ]
     if active is not None:
-        stale = [d for d in version_dirs if d.resolve() != active.resolve()]
+        stale = [d for d in version_dirs if d.resolve() != active.resolve()] + removable_ghosts
+    elif not version_dirs:
+        stale = removable_ghosts
     else:
         print(
             style.yellow(
@@ -5032,7 +5126,7 @@ def run_clean_plugin_cache(
             )
         )
         newest = max(version_dirs, key=_cache_version_sort_key)
-        stale = [d for d in version_dirs if d != newest]
+        stale = [d for d in version_dirs if d != newest] + removable_ghosts
     if not stale:
         print(f"{style.dim('-')} nothing stale - only the active install is present")
         return 0

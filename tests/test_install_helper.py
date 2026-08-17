@@ -7366,3 +7366,103 @@ def test_enable_step_quick_defaults_does_not_affect_the_standalone_enable_subset
     inst.quick_defaults = True  # out-of-band - should not happen in practice, tested anyway
     inst.enable_step()
     assert calls == [{"assume_yes": False, "demo": False}]
+
+
+# --- cleaner registry cross-reference (2026-08-17 corp debug session, finding 2) ----------
+
+
+def test_clean_plugin_cache_surfaces_and_removes_ghost_registry_installs(
+    tmp_path, monkeypatch, capsys
+):
+    """A PARTIAL install (no operating-guide marker) is invisible to the marker scan but
+    the registry keeps pointing at it, breaking every probe with no cleanup path. The
+    cleaner now cross-references registry installPath values: on-disk-but-markerless
+    ghosts attributable to this plugin join the removable set."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    active = (
+        tmp_path / ".claude" / "plugins" / "cache" / "mkt" / "compliance-surveillance-team" / "1.0"
+    )
+    _make_fake_plugin_install(active)
+    ghost = tmp_path / "old-virtual-surv-IT-copy"
+    (ghost / ".claude-plugin").mkdir(parents=True)
+    (ghost / ".claude-plugin" / "plugin.json").write_text(
+        '{"name": "compliance-surveillance-team"}', encoding="utf-8"
+    )  # manifest yes, marker no = ghost
+    registry = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    registry.write_text(
+        json.dumps(
+            {"plugins": [{"installPath": str(active)}, {"installPath": str(ghost)}]}
+        ),
+        encoding="utf-8",
+    )
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "ghost" in out
+    assert not ghost.exists()  # removed
+    assert active.exists()  # active never touched
+
+
+def test_clean_plugin_cache_keeps_an_active_but_partial_install(tmp_path, monkeypatch, capsys):
+    """The registry's ACTIVE entry can itself be partial - it is still what Claude Code
+    is configured to use, so it is kept and flagged for repair, never deleted."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    ghost = tmp_path / "virtual-surv-IT"
+    (ghost / ".claude-plugin").mkdir(parents=True)
+    (ghost / ".claude-plugin" / "plugin.json").write_text(
+        '{"name": "compliance-surveillance-team"}', encoding="utf-8"
+    )
+    registry = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+    registry.parent.mkdir(parents=True)
+    registry.write_text(json.dumps({"plugins": [{"installPath": str(ghost)}]}), encoding="utf-8")
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "PARTIAL" in out and "repair" in out
+    assert ghost.exists()
+
+
+def test_clean_plugin_cache_reports_stale_registry_entries_without_touching_registry(
+    tmp_path, monkeypatch, capsys
+):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    gone = tmp_path / "moved-away-virtual-surv-IT"
+    registry = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+    registry.parent.mkdir(parents=True)
+    registry.write_text(json.dumps({"plugins": [{"installPath": str(gone)}]}), encoding="utf-8")
+    before = registry.read_text(encoding="utf-8")
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "does not exist" in out and "reinstall" in out
+    assert registry.read_text(encoding="utf-8") == before  # report-only, never edited
+
+
+def test_clean_plugin_cache_never_offers_unattributable_dirs(tmp_path, monkeypatch, capsys):
+    """A registry path with no manifest and no recognisable token could belong to ANY
+    plugin - it must never join the removable set."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    active = (
+        tmp_path / ".claude" / "plugins" / "cache" / "mkt" / "compliance-surveillance-team" / "1.0"
+    )
+    _make_fake_plugin_install(active)
+    other = tmp_path / "some-other-plugin"
+    other.mkdir()
+    registry = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    registry.write_text(
+        json.dumps({"plugins": [{"installPath": str(active)}, {"installPath": str(other)}]}),
+        encoding="utf-8",
+    )
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+    assert rc == 0
+    assert other.exists()  # untouched, unmentioned as removable

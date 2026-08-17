@@ -73,6 +73,17 @@ def _root_is_team_plugin(candidate: Path) -> bool:
     return _TEAM_NAME in text
 
 
+def _root_is_usable(candidate: Path) -> bool:
+    """Manifest names this plugin AND the probe script actually exists there. Corp debug
+    session finding (2026-08-17): a registry entry can point at a partial or stale
+    install - manifest present, scripts/ missing after a working-copy move or a broken
+    update - and committing to it made the bootstrap exit with NO fallback while a
+    healthy install sat unfound one resolver further down. Usability is checked before
+    any resolver's answer is committed, so a broken candidate falls through to the next
+    resolver instead of ending the search."""
+    return _root_is_team_plugin(candidate) and (candidate / "scripts" / "engage_probe.py").is_file()
+
+
 def _from_registry(home: Path) -> str:
     for name in _REGISTRY_NAMES:
         registry = home / ".claude" / "plugins" / name
@@ -82,7 +93,7 @@ def _from_registry(home: Path) -> str:
             continue
         for install_path in _walk_install_paths(data):
             candidate = Path(install_path)
-            if _root_is_team_plugin(candidate):
+            if _root_is_usable(candidate):
                 return str(candidate)
     return ""
 
@@ -123,9 +134,10 @@ def _from_filesystem_search(home: Path) -> str:
             for marker in base.glob(pattern):
                 if _TEAM_NAME in marker.parts:
                     candidates.append(marker)
-    if not candidates:
+    usable = [m for m in candidates if _root_is_usable(m.parent.parent)]
+    if not usable:
         return ""
-    newest = max(candidates, key=_sort_key)
+    newest = max(usable, key=_sort_key)
     return str(newest.parent.parent)
 
 
@@ -141,7 +153,7 @@ def find_plugin_root(home: Path, cwd: Path) -> str:
     if (cwd / "docs" / "team-operating-guide.md").is_file():
         return ""
     env_root = os.environ.get("CLAUDE_PLUGIN_ROOT") or ""
-    if env_root and _root_is_team_plugin(Path(env_root)):
+    if env_root and _root_is_usable(Path(env_root)):
         return env_root
     return _from_registry(home) or _from_filesystem_search(home)
 
