@@ -56,9 +56,14 @@ and states what's applicable vs not.
 
 **Quick runs in-session - no fan-out (2026-08-17 cost decision).** When the chosen depth is
 **Quick**, skip the whole pipeline below: no subagent, no workspace, no scorer round-trip.
-YOU run it, turingmind-style: strictly diff-scoped (`git diff`, changed code only -
-pre-existing issues out of scope), analysers first if available, then the router's selected
-lenses read inline and applied sequentially over that one diff, findings scored against
+YOU run it, turingmind-style: diff-scoped by default (`git diff`, changed code only -
+pre-existing issues out of scope). **Nothing to diff?** A NAMED target (a file, a small
+module) takes the diff's place - same in-session mechanics over that one bounded read - but
+if the named target won't sit comfortably in one context, that was never a Quick question:
+offer Deep instead of silently ballooning the read. No diff AND no named target = nothing to
+review: say so and ask what they want looked at - never invent scope to have something to do.
+Then: analysers first if available, then the router's selected
+lenses read inline and applied sequentially over that one scope, findings scored against
 `docs/code-review-method.md`'s rubric in-context and presented with the honest label
 "quick-tier: self-scored, no independent scorer at this depth". 🔴/🟠 to the console;
 artifact only if asked. The evidence machinery (packs, scorer independence, DoD) is what
