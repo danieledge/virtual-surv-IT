@@ -10,8 +10,11 @@
 text that precedes this AskUserQuestion call - never inside the locked option wording below -
 state one rough cost line for THIS target so depth is chosen priced, e.g.: "For this diff:
 Quick runs in-session (cents) · Deep is one reviewer pass (roughly $1-3 at list) · Audit adds
-the close machinery (roughly $3-8); plus the perf pass if chosen. Budget status: <DAILY/
-HEADROOM line when a budget is recorded>." Scale the figures to the target's size honestly;
+the close machinery (roughly $3-8); plus the perf pass if chosen (~$0.5-1). **Expect the
+engagement ALL-IN at roughly 2x the pass figure** - orchestration, scoring, the challenge and
+artifacts ride on top - and more when caches run cold (5-minute TTL boxes). Budget status:
+<DAILY/HEADROOM line when a budget is recorded>." Scale the figures to the target's size
+honestly; the pass price and the all-in are both stated so neither is mistaken for the other -
 order-of-magnitude is the point, not a quote.
 
 **Critical construction rules:**
