@@ -18,14 +18,16 @@ honestly; the pass price and the all-in are both stated so neither is mistaken f
 order-of-magnitude is the point, not a quote.
 
 **Critical construction rules:**
-- **Ask Q1, Q2 and Q3 in ONE `AskUserQuestion` call** (one screen, not three round-trips). They
-  remain **three distinct questions**, each `multiSelect: false`; batching the *call* is not
-  merging the *lists*.
+- **Ask Q1, Q2, Q3 and Q4 in ONE `AskUserQuestion` call** (one screen, not four round-trips).
+  They remain **four distinct questions**, each `multiSelect: false`; batching the *call* is not
+  merging the *lists*. (Q4 Origin joined the locked set 2026-08-17 - the user liked the question
+  but it arrived on a post-gate screen; it now rides the menu, and the fine-scope axes it used to
+  travel with are DERIVED, not asked - `deep-review` step 2.)
 - **This call is SEPARATE from the intake gate's batch** (`Work type` / `Execution` /
   `Data safety`, `engage` step 0a) - that batch already ran earlier in this engagement, before the
   work was even classified as a review. Never carry `Execution` or `Data safety` into this call:
   by step 1b they are already answered and recorded, not still pending.
-- **Headers:** Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle` (locked, like the option wording).
+- **Headers:** Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle` · Q4 `Origin` (locked, like the option wording).
 - **Q1 (depth) is single-select** - exactly one depth; Quick ⊂ Deep ⊂ Audit.
 - **Q2 (performance) is a SEPARATE question** (yes/no) - never merged into the depth list.
 - Every depth produces the **same clean findings artifact** - keep the option descriptions
@@ -70,10 +72,20 @@ deep review).** No `qa-engineer` (nothing is built, so there is nothing to test)
 right-sized report-only shape is the review pass(es) + the perf pass if chosen + Pip - state
 that count at the gate.
 
+**Q4 - "How did this code come to be?"  (single-select, header `Origin`):**
+
+| Label | Description |
+|---|---|
+| **AI-assisted / vibe-coded** | Largely AI-generated. The review adds a **🧑‍💻 Prompting guidance** section: how a better prompt would have prevented the top findings, with reusable examples - and watches the classic AI failure shapes (invented APIs, plausible-but-wrong logic, dead paths). |
+| **Mixed** | Human and AI work interleaved, or unsure. Same guidance section, calibrated. |
+| **Hand-written** | Human-authored. No prompting section; standard posture. |
+
 Only **one** depth runs (Audit ⊃ Deep ⊃ Quick - no triple-passing). The fix-cycle (Q3) is
 independent of depth, so e.g. *Quick + Fix→re-review loop* is valid. **If Q1 = None AND Q2 = No**
 there is nothing to run - don't dead-end or invent work: say so and return to the outcome question
 via the question tool ("no review selected - what would you like instead?"). For taking on legacy
 code end-to-end (assess → fix → re-review → handover) use the heavier **`/remediate`**, not this
-in-review loop. After the choice, the review skill asks the finer **scope** (dimensions · breadth ·
-change-vs-audit mode) - type *then* scope, never needing a slash command.
+in-review loop. After the choice, the review skill **derives** the finer scope (dimensions ·
+breadth · change-vs-audit mode) from the depth and the briefed target and states it in the brief
+for the go-ahead gate to adjust - it does NOT ask another screen of axes (2026-08-17 flow
+review; `deep-review` step 2 is the rule).

@@ -81,6 +81,11 @@ With the target known: show both disclaimers (text) at startup, then ask in a **
 - **Execution consent** (header `Execution`) - only when code is/looks involved; default **No**.
 - **Data attestation** (header `Data safety`) - only when data is plausibly involved; otherwise
   record "no data involved" silently. Exact menus + wording: `references/safety-gates.md`.
+- **Resume-or-new** (header `Engagements`) - only when 0b's menu has open engagements AND no
+  `--resume`/`--new` flag pre-answered it: 0b's question rides THIS batch as its fourth
+  question (top `shown` engagements + "Start new", recommendation per
+  `references/resume-menu.md`) instead of its own later round-trip (2026-08-17 flow review: the opening
+  used to be a series of screens that batch into one).
 
 Record the answers; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.**
 Repeat the execution- and data-responsibility notes in the final Delivery Report. **Persist them
@@ -110,7 +115,9 @@ started, steady-state only), use that JSON directly - do NOT also run the comman
 open. Otherwise run `<python> -m scripts.engagement_state list --menu`: it returns the ready-made
 option set as JSON, so never re-derive it in prose. If `open` is empty there is
 nothing to resume - go straight to classifying as new work. **Otherwise read
-`references/resume-menu.md` and follow it**: one question via the question tool (resume one of
+`references/resume-menu.md` and follow it**: one question via the question tool - **as the
+`Engagements` question inside the 0a batch when that batch is being asked (see 0a);
+standalone only when no 0a question fires** - (resume one of
 `shown`, or start new), **scope-fit decides which you recommend** (an open pack is never a reason
 to fold unrelated work into it, in this turn or mid-engagement), ONE engagement is ACTIVE per
 session with its slug on disk, and **a resumed workspace's state file is the record** - its

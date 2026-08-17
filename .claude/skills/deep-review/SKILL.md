@@ -10,44 +10,29 @@ Run a **deep (detailed) code review** of: **$ARGUMENTS**.
 `git diff`), ask where the code is - a path/glob, repo/branch, commit range, or to paste it -
 and wait. Don't review an assumed target.
 
-**2. Put scope on a menu - ask, don't assume.** Ask the axes below **in ONE `AskUserQuestion`
-call** (one screen, not separate round-trips); they stay distinct questions with the stated
-`multiSelect` and header. **Hard tool limits: max 4 questions per call, max 4 options per
-question** ("Other" is added automatically) - the constructions below are sized to fit; don't
-un-bundle them back into a 7-option list:
-- **Dimensions** (header `Dimensions`, **`multiSelect: false`** - four locked bundles; a bespoke
-  mix goes through "Other", e.g. *"bugs + docs only"*):
-  - **Full review** - all seven dimensions: bugs & logic · security · architecture ·
-    language-specific · docs/comments · style & form · compliance/audit.
-  - **Core** - 🐛 bugs & logic + 🔐 security + 🧰 language-specific. *For a plain utility script.*
-  - **Core + quality** - Core plus 📐 architecture + 📝 docs/comments + 🔵 style & form.
-  - **Core + compliance** - Core plus 📋 compliance/audit (§4/§5 trail).
-  Run only what was picked - don't force a dimension the user didn't choose. (A *dimension* is one
-  of these seven scope axes; a *lens* is one of the files in `docs/review/lenses/`. The mapping is
-  not 1:1 - the router owns it.)
-  - **Which to recommend is conditional, never a fixed default.** `compliance-reviewer` and
-    regulatory-citation retrieval cost real tokens for a check that only matters when there is a
-    §4/§5 trail to assess - don't spend them on general-purpose code by habit. **Recommend "Core +
-    quality"** unless the target plausibly touches detection logic, regulated data, or the
-    engagement is otherwise compliance-sensitive (ask if genuinely unclear from the target alone) -
-    **then recommend "Full review"** instead. Right-sizing applies to dimensions the same way it
-    applies to agent headcount.
-- **Breadth** (header `Breadth`, **`multiSelect: false`**, exactly one): the working diff ·
-  named files/glob · whole module · whole repo.
-- **Mode** (header `Mode`, **`multiSelect: false`**): change review (filter pre-existing) **or**
-  audit (keep pre-existing in scope).
-- **Origin** (header `Origin`, **`multiSelect: false`**): was this **AI-assisted /
-  "vibe-coded"**? (yes · mixed · no, hand-written). If **yes/mixed**, the report adds a
-  **🧑‍💻 Prompting guidance** section (see `docs/review/output-format.md`): how a better prompt
-  would have prevented the top findings, plus example prompts to reuse. (The reviewer also adds
-  it if the findings clearly show vibe-coding.)
+**2. Derive the fine scope - state it, don't re-ask it (2026-08-17 flow review).** The
+go-ahead gate must be FINAL: a live run recorded "proceed as briefed" and then asked four more
+scope questions, so the brief now carries the derived scope and the gate approves it. Derive:
+- **Dimensions** from depth + target: Deep → **Core + quality** (bugs & logic · security ·
+  language-specific · architecture · docs/comments · style & form) unless the target plausibly
+  touches detection logic, regulated data or the engagement is compliance-sensitive → **Full
+  review** (adds 📋 compliance/audit, §4/§5 trail). Audit depth always Full. A user-named
+  bespoke mix always wins. (`compliance-reviewer` and citation retrieval cost real tokens -
+  never spend them on general-purpose code by habit.)
+- **Breadth** from the briefed scope (the diff · named files · module · repo - whatever the
+  brief already says; never widen it here).
+- **Mode** from depth: Audit → keep pre-existing in scope; otherwise change-focused (or
+  whole-target when there is no diff, per the Quick rule's scope logic).
+- **Origin** is inherited from `engage`'s review menu (its Q4) - if it says AI-assisted/mixed,
+  the report adds the **🧑‍💻 Prompting guidance** section (`docs/review/output-format.md`);
+  the reviewer also adds it unprompted when the findings clearly show vibe-coding.
 
-> **Do NOT re-ask the fix-cycle (report / fix / loop) here** - `engage` already captured it
-> (its Q3) and it is the single source of truth; inherit that answer. If this skill was invoked
-> **directly** (not via `engage`), ask it once (header `Fix-cycle`) - but the call is already at
-> the 4-question cap, so in direct mode **swap Origin out of the first call** and ask it in the
-> follow-up screen (with jurisdiction, if 📋 compliance is in scope; otherwise on its own or
-> defaulted to "unknown - infer from the findings").
+Write one scope line into the brief ("Deep · Core + quality · whole repo · change-focused ·
+origin: mixed") - the go-ahead gate is where the user adjusts it. **Ask a scope question ONLY
+when genuinely ambiguous** (conflicting signals about compliance-sensitivity, an unclear
+target) - one question, not a screen of axes. Invoked **directly** (not via `engage`): the
+review menu never ran, so ask ONE batched call first - Fix-cycle + Origin (+ jurisdiction if
+📋 is in scope) - then derive the rest exactly as above.
 
 **If 📋 compliance/audit is among the dimensions**, ask **jurisdiction(s)** as a follow-up -
 **`multiSelect: true`** (may operate in several) - or use the configured scope (CLAUDE.md §2 /

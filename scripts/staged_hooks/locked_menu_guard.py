@@ -32,6 +32,7 @@ import sys
 _DEPTH_LABELS = {"Quick", "Deep", "Audit", "None"}
 _PERF_LABELS = {"Yes", "No"}
 _FIXCYCLE_LABELS = {"Report only", "Apply fixes", "Fix → re-review loop"}
+_ORIGIN_LABELS = {"AI-assisted / vibe-coded", "Mixed", "Hand-written"}
 _STAGE1_LABELS = {"Consolidated Delivery Report", "Separate artifacts", "Both"}
 _STAGE2_CANON = {
     "Spec docs": {"Engagement Brief", "BRD", "FSD", "RTM"},
@@ -81,23 +82,25 @@ def check_review_menu(questions: list) -> str | None:
     if not any(_header(q) == "Depth" for q in questions):
         return None
     headers = [_header(q) for q in questions]
-    if headers != ["Depth", "Performance", "Fix-cycle"]:
+    if headers != ["Depth", "Performance", "Fix-cycle", "Origin"]:
         return (
-            "review-menu drift: the locked construction is exactly three questions "
-            "headed Depth, Performance, Fix-cycle, in that order, in ONE call - got "
-            f"headers {headers!r} (review-menu.md - do not merge or reorder them)"
+            "review-menu drift: the locked construction is exactly four questions "
+            "headed Depth, Performance, Fix-cycle, Origin, in that order, in ONE call "
+            f"- got headers {headers!r} (review-menu.md - do not merge, drop or "
+            "reorder them; Origin joined the locked set 2026-08-17)"
         )
     by_header = dict(zip(headers, questions))
     for header, expected in (
         ("Depth", _DEPTH_LABELS),
         ("Performance", _PERF_LABELS),
         ("Fix-cycle", _FIXCYCLE_LABELS),
+        ("Origin", _ORIGIN_LABELS),
     ):
         q = by_header[header]
         if q.get("multiSelect"):
             return (
                 f"review-menu drift: '{header}' must be multiSelect: false (each of the "
-                "three is a single-select question - review-menu.md)"
+                "four is a single-select question - review-menu.md)"
             )
         if _labels(q) != expected:
             return (

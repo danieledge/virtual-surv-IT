@@ -24,6 +24,7 @@ apply_for() {
     dod_stop_gate.py|persona_anchor.py) echo "scripts/apply-project-anchor.sh" ;;
     todo_panel_nudge.py)                echo "scripts/apply-todo-panel-nudge.sh" ;;
     stop_hook_dispatcher.py)            echo "scripts/apply-stop-hook-dispatcher.sh" ;;
+    locked_menu_guard.py)               echo "scripts/apply-locked-menu-guard.sh" ;;
     bash_hook_dispatcher.py)            echo "scripts/apply-bash-hook-dispatcher.sh" ;;
     guard-consent-writes.py)            echo "scripts/apply-guard-git-config.sh" ;;
     guard-raw-data.py)                  echo "scripts/apply-guard-raw-coverage.sh" ;;

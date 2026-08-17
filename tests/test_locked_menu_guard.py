@@ -37,10 +37,13 @@ def _q(header, options, multi=False):
     }
 
 
+# Origin joined the locked set 2026-08-17 (user request: the was-it-vibe-coded question,
+# folded forward from the retired post-gate scope screen into the menu itself).
 VALID_REVIEW_MENU = [
     _q("Depth", ["Quick", "Deep", "Audit", "None"]),
     _q("Performance", ["Yes", "No"]),
     _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
+    _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
 ]
 
 VALID_STAGE1 = [_q("Artifacts", ["Consolidated Delivery Report", "Separate artifacts", "Both"])]
@@ -122,7 +125,8 @@ def test_wrong_multiselect_on_depth_flagged():
         _q("Depth", ["Quick", "Deep", "Audit", "None"], multi=True),
         _q("Performance", ["Yes", "No"]),
         _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
-    ]
+            _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
+]
     proc = _run(bad)
     assert proc.returncode == 2
     assert "multiSelect: false" in proc.stderr
@@ -195,7 +199,8 @@ def test_recommended_marker_on_review_menu_option_passes():
         _q("Depth", ["Quick (Recommended)", "Deep", "Audit", "None"]),
         _q("Performance", ["Yes", "No"]),
         _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
-    ]
+            _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
+]
     proc = _run(good)
     assert proc.returncode == 0
     assert proc.stderr == ""
@@ -206,7 +211,8 @@ def test_recommended_marker_on_multiple_options_passes():
         _q("Depth", ["Quick", "Deep", "Audit", "None"]),
         _q("Performance", ["Yes (Recommended)", "No"]),
         _q("Fix-cycle", ["Report only", "Apply fixes (Recommended)", "Fix → re-review loop"]),
-    ]
+            _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
+]
     proc = _run(good)
     assert proc.returncode == 0
 
@@ -282,3 +288,15 @@ def test_staged_and_live_match_when_installed():
     assert LIVE_HOOK.read_bytes() == HOOK.read_bytes(), (
         "staged locked-menu guard not yet applied - run: bash scripts/apply-locked-menu-guard.sh"
     )
+
+
+def test_legacy_three_question_menu_now_flags_the_missing_origin():
+    """The pre-2026-08-17 shape (no Origin) is drift now - the guard names what joined."""
+    legacy = [
+        _q("Depth", ["Quick", "Deep", "Audit", "None"]),
+        _q("Performance", ["Yes", "No"]),
+        _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
+    ]
+    proc = _run(legacy)
+    assert proc.returncode == 2
+    assert "Origin" in proc.stderr
