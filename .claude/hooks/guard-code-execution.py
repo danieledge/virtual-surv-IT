@@ -332,6 +332,33 @@ def _block(cmd: str, segment: str | None = None) -> None:
     sys.exit(2)
 
 
+def _team_invoked_this_session(payload) -> bool:
+    """Session scoping (2026-08-17, user decision): this gate protects the TEAM'S review
+    workflow - never execute the code under review without a human grant - so it arms
+    only in sessions that actually invoked the team. A session in an enabled project
+    that never ran /engage is plain Claude Code and runs its own tests freely (the live
+    complaint: /doctor and ordinary dev work blocked in dormant sessions). The
+    acting-session stamp (artifacts/.team-session.json) is written by engage_probe at
+    /engage step 0 and by every engagement_state mutation; arming requires a positive
+    match, with ONE deliberate inversion versus the advisory lifecycle hooks: a payload
+    carrying NO session id (an older Claude Code) cannot be told apart from an engaged
+    session, and a SAFETY gate fails toward ARMED. The stamp file itself is
+    write-protected in every session by guard-consent-writes (a disarm-by-clobbering
+    channel otherwise). The raw-data wall is NOT session-scoped - data protection holds
+    in every session by design."""
+    sid = payload.get("session_id")
+    if not sid:
+        return True  # cannot tell - fail toward armed
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    try:
+        stamp = json.loads(
+            open(os.path.join(root, "artifacts", ".team-session.json"), encoding="utf-8").read()
+        ).get("session")
+    except Exception:
+        return False  # no stamp = the team was never invoked here - dormant
+    return stamp == sid
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -339,6 +366,10 @@ def main() -> None:
         sys.exit(0)  # malformed payload - never brick the session
 
     if payload.get("tool_name", "") != "Bash":
+        sys.exit(0)
+
+    # Dormant session (team never invoked): plain Claude Code, no execution gate.
+    if not _team_invoked_this_session(payload):
         sys.exit(0)
 
     # Execution authorised (human-created consent marker, or human env-var override).
