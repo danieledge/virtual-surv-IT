@@ -68,9 +68,6 @@ They're your experts and reviewers, kept that way on purpose so they stay indepe
 | Member | Type | What they do (in plain terms) |
 |---|---|---|
 | **Amara** `business-analyst` | 🔧 Builder | Turns what a regulation requires into clear, testable written requirements, and works out how a rule change affects the detection already in place |
-| **Hassan** `tm-sme` | 🧠 Advisor | Money-laundering expert (transaction monitoring) |
-| **Camila** `trade-surveillance-sme` | 🧠 Advisor | Market-abuse expert (spoofing, insider dealing…) |
-| **Cleo** `comms-surveillance-sme` | 🧠 Advisor | Trader-chat / email monitoring expert |
 | **Mateo** `rules-developer` | 🔧 Builder | Writes the detection code + tests |
 | **Ana** `data-analyst` | 🔧 Builder | Exploratory analysis, false-positive analysis, data-quality, reconciliation, reporting/MI |
 | **Theo** `tuning-analyst` | 🔧 Builder | Sets and defends the alert thresholds - how sensitive each rule is - and shows the trade-off between catching more and raising too many false alarms |
@@ -83,6 +80,12 @@ They're your experts and reviewers, kept that way on purpose so they stay indepe
 | **Layla** `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |
 | **Yuki** `data-quality-reviewer` | 🧠 Advisor | Independently checks the data is complete & accurate, and that nothing in scope goes unmonitored |
 | **Pip** `review-scorer` | ⚙️ Helper | A lightweight, low-cost assistant that does the routine review prep - working out what kind of code it is, scoring findings, filtering noise - so the senior reviewers spend their effort on judgement |
+
+> **Where did the domain experts go?** The money-laundering, market-abuse and trader-chat
+> expertise used to be three more advisors (Hassan, Camila and Cleo). Since 2026-08-17 it
+> ships as three **knowledge packs** (`docs/sme/`) that any team member reads on demand -
+> same expertise, no extra teammate to brief, faster and cheaper to consult. Documents cite
+> the pack itself rather than a person.
 
 > Why this matters: a reviewer who could quietly fix the thing they're reviewing isn't
 > really an independent check. Advisor independence is enforced by the tools each one is
