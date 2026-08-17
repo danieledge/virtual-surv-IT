@@ -190,7 +190,7 @@ the first-class tracker/PR config (docs/INTEGRATIONS.md; off by default, absent 
 take no outward actions): when present, read
 `.claude/skills/engage/references/integrations.md` before your first outward action - issue
 creation is named in the plan the go-ahead gate approves, never fired unannounced. Then the
-tooling report, the codebase map header + §3, the newest CHANGELOG entry, and any
+tooling report, the codebase map header + §3, the newest CHANGELOG entry's heading (`WHATS_NEW=`), and any
 team-extensions block.
 
 **The probe does NOT print the operating guide** - issue that `Read` yourself (plugin mode:
@@ -279,15 +279,18 @@ well after the engagement had already run on it. If you don't know how to change
 *"(change with `python install_helper.py`, menu option 8, or `--model-project . --model opus`)"*.
 
 **What's new (banner, one short line only).** Branch on the printed `VERSION_CHANGED=`; never
-re-derive it. The probe also prints the newest CHANGELOG release block - the **plugin's** (or the
-repo's own in repo-as-project), **not** the working project's, which is unrelated.
-- `yes` **and** `PREV_TEAM_VERSION=` non-empty → *"🆕 Since last time (vX → vY): "* + up to three
-  headline changes in plain words from that block, ending *"(full detail: CHANGELOG.md)"*.
+re-derive it. The probe prints `WHATS_NEW=` - the newest CHANGELOG entry's heading (`WHATS_NEW=`)'s **heading line
+only** (the **plugin's**, or the repo's own in repo-as-project, **not** the working
+project's). The entry body is deliberately never printed - it is dev-facing detail, and it
+used to land in the transcript on every post-update open (live 2026-08-17). Do not go read
+CHANGELOG.md to expand it.
+- `yes` **and** `PREV_TEAM_VERSION=` non-empty → *"🆕 Since last time (vX → vY): "* + the
+  `WHATS_NEW=` title in plain words, ending *"(full detail: CHANGELOG.md)"*.
 - `yes` **and** `PREV_TEAM_VERSION=` empty (first engagement, no prior record) → *"🆕 In the
   current release (vY): ..."* - never guess what the user last saw.
 - `no` → show nothing. This must never become a wall of release notes and never delays the first
   question.
-- Changelog block empty (broken/partial install) while `yes` → banner and version as normal, omit
+- `WHATS_NEW=` absent (broken/partial install) while `yes` → banner and version as normal, omit
   the what's-new line; never surface probe mechanics to the user.
 
 Either populated form is **part of the opening banner itself, not optional**. The comparison is

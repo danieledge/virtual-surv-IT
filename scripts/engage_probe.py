@@ -405,24 +405,20 @@ def map_drift_summary(project_dir: Path, map_skeleton_on: bool) -> str:
 
 
 def first_changelog_entry(root: Path) -> str:
+    """The latest entry's HEADING only - '[x.y.z] - date - title'. It used to return up
+    to 30 body lines, and the full dev-facing root-cause story landed in the session
+    transcript on every version bump (live report 2026-08-17: "why is that root cause
+    text being read at /engage? seems wasteful"). The banner's what's-new is ONE line;
+    anyone wanting the story can open CHANGELOG.md."""
     path = root / "CHANGELOG.md"
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return ""
-    lines = text.splitlines()
-    out: list[str] = []
-    seen = 0
-    for ln in lines:
+    for ln in text.splitlines():
         if ln.startswith("## ["):
-            seen += 1
-            if seen > 1:
-                break
-        if seen:
-            out.append(ln)
-        if len(out) >= 30:
-            break
-    return "\n".join(out)
+            return ln[3:].strip()
+    return ""
 
 
 def git_branch(root: Path) -> str:
@@ -861,7 +857,7 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
             map_section3,
         ]
     if changelog_entry:
-        lines += ["", changelog_entry]
+        lines.append(f"WHATS_NEW={changelog_entry}")
     if extensions_block:
         lines += ["", extensions_block.rstrip()]
     return "\n".join(lines)

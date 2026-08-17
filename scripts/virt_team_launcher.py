@@ -59,27 +59,94 @@ def _scripts_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def _installer_config_path() -> Path:
+    """Mirrors install_helper's config_path() instead of exec'ing that whole file on
+    every go - a test pins the two derivations together."""
+    base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base) if base else Path.home() / ".config"
+    return root / "virt-surv-it" / "installer.json"
+
+
 def _configured_launch_command() -> str:
     """The command 'virt-surv go' launches Claude Code with, resolved at RUN time from
     the machine config rather than baked into the shell alias (alias v5, 2026-08-17
     live report: a launch command reset in the config kept launching the old baked
     value even after closing PowerShell, because the profile function still carried it;
     and a multi-word command like 'cc --debug' was baked as ONE quoted word, which can
-    never resolve). Mirrors install_helper's config_path()/load_config() instead of
-    exec'ing that whole file on every go - a test pins the two derivations together.
-    Any failure falls back to plain 'claude', same as an unset config."""
+    never resolve). Any failure falls back to plain 'claude', same as an unset config."""
     try:
-        base = os.environ.get("XDG_CONFIG_HOME")
-        root = Path(base) if base else Path.home() / ".config"
-        cfg = json.loads(
-            (root / "virt-surv-it" / "installer.json").read_text(encoding="utf-8-sig")
-        )
+        cfg = json.loads(_installer_config_path().read_text(encoding="utf-8-sig"))
         cmd = cfg.get("claude_launch_command") if isinstance(cfg, dict) else None
         if isinstance(cmd, str) and cmd.strip():
             return cmd.strip()
     except (OSError, ValueError):
         pass
     return "claude"
+
+
+# Pinned to install_helper._ALIAS_VERSION by a sync test - bump both together.
+_EXPECTED_ALIAS_VERSION = 5
+
+
+def _heal_stale_alias_once() -> None:
+    """Self-resolution for stale installed aliases (2026-08-17 user requirement: "it
+    should self-resolve" - the config said 'cc' but the loaded v4 function still fired
+    its baked 'cc --debug'; a plugin update must not wait on a manual re-register).
+    Runs from the __main__ entry of every real 'go', but does real work at most ONCE
+    per machine per alias version (the alias_heal_checked config mark): it asks
+    install_helper.heal_stale_aliases() to upgrade every rc/profile that already
+    carries a virt-surv entry older than the current template - never installing the
+    alias anywhere new. The one thing it cannot fix is the function already loaded in
+    the CALLING shell (no child process can mutate its parent), so it says exactly
+    that. Best-effort throughout: any failure must never cost the launch."""
+    try:
+        cfg_path = _installer_config_path()
+        try:
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
+            if not isinstance(cfg, dict):
+                cfg = {}
+        except (OSError, ValueError):
+            cfg = {}
+        if cfg.get("alias_heal_checked") == _EXPECTED_ALIAS_VERSION:
+            return
+        import contextlib
+        import importlib.util as _ilu
+
+        spec = _ilu.spec_from_file_location(
+            "install_helper_heal", _scripts_dir().parent / "install_helper.py"
+        )
+        ih = _ilu.module_from_spec(spec)
+        with contextlib.redirect_stdout(sys.stderr):
+            spec.loader.exec_module(ih)
+            healed = ih.heal_stale_aliases()
+        cfg["alias_heal_checked"] = ih._ALIAS_VERSION
+        try:
+            cfg_path.parent.mkdir(parents=True, exist_ok=True)
+            cfg_path.write_text(
+                json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            pass
+        if healed:
+            ink = _Ink()
+            print("", file=sys.stderr)
+            for path, removed in healed:
+                note = f" (removed {removed} old definition(s))" if removed else ""
+                print(
+                    f"    {ink.warn('!')} auto-updated an out-of-date 'virt-surv' alias "
+                    f"in {path}{note}",
+                    file=sys.stderr,
+                )
+            print(
+                "      This terminal still holds the OLD alias (a program cannot change "
+                "its parent shell): run '. $PROFILE' (PowerShell) or 'source ~/.bashrc' "
+                "(bash), or open a new terminal. If THIS launch errors on an unknown "
+                "command, that is the old alias firing one last time - the next terminal "
+                "is fixed.",
+                file=sys.stderr,
+            )
+    except Exception:
+        pass  # never cost the launch
 
 
 def _plugin_enabled(target: Path) -> bool:
@@ -768,6 +835,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Heal from the REAL entry point only - never on module import (tests load and call
+    # main() directly; the heal touching a developer's actual shell rc from inside a
+    # test run is exactly the kind of side effect that split is for).
+    _heal_stale_alias_once()
     try:
         sys.exit(main())
     except Exception:

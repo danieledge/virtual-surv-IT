@@ -69,13 +69,11 @@ deletes any existing marker, fail-safe).
   **regardless**, then the single target question follows in the same turn. Only the *disclaimers
   + batched screen* defer; the banner never does.
   **Exception - the request classifies itself but names no target** (e.g. `/engage code
-  review`): the gates ARE decidable (a review involves code), so the solo location screen is
-  not earned. Derive the target first - an uncommitted/branch diff, or a path the request
-  names - and state it in the classification line for correction at the menu. Only when
-  nothing is derivable does the target become a question, and it rides the 0a batch in the
-  Work-type slot (header `Target`): options **Uncommitted changes** / **Branch vs main** /
-  **I'll name a path** / **Whole codebase** (2026-08-17 user request: the location must
-  never cost its own turn).
+  review`): the gates are decidable, so no solo location screen. Derive the target (an
+  uncommitted/branch diff, or a path the request names) and state it for correction at the
+  menu; only an underivable target becomes a question, riding the 0a batch in the
+  Work-type slot (header `Target`): **Uncommitted changes** / **Branch vs main** /
+  **I'll name a path** / **Whole codebase** (2026-08-17: location never costs its own turn).
 - **The tool's hard limits are 4 questions per call and 4 options per question** ("Other" is added
   automatically). Never spec a menu that exceeds them; give **every** question a short `header`
   (≤12 chars - the ones to use are named per question below).
@@ -110,14 +108,12 @@ into the very first prompt, precisely because letting the model work it out cost
 occasionally picked the wrong option before self-correcting. When present, this is the answer -
 **do not ask the question at all.**
 
-- **`--new` → skip straight to classifying as new work, with ZERO engagement discovery.**
-  There is nothing to validate: "new" is valid whatever else is open. Do not run
-  `list --menu`, do not `ls` the artifacts directory, do not read `ENGAGEMENTS.md` or other
-  packs' state files, and do not flag or enumerate the open engagements in chat (live report
-  2026-08-17: after the human chose "new" in the go menu, the session still listed the 5 open
-  packs "in case any are actually related" - the go menu had JUST shown the human that exact
-  list; re-surfacing it re-litigates a made decision and costs a turn). You will see sibling
-  workspaces when creating yours in step 4 - that is not an invitation to comment on them.
+- **`--new` → skip straight to classifying as new work, with ZERO engagement discovery** -
+  nothing to validate ("new" is valid whatever is open): no `list --menu`, no artifacts
+  listing, no `ENGAGEMENTS.md`, no open-pack commentary in chat (the go menu just showed
+  the human that exact list and they chose new - re-surfacing it re-litigates their
+  decision; live 2026-08-17). Siblings seen while creating your workspace in step 4 are
+  not an invitation to comment.
 - **`--resume <slug>` → validate the slug first** (`RESUME_MENU`/`list --menu`, same as
   below) rather than trusting it blindly: the wrapper's view could be stale (another session
   closed or archived it in the seconds between the wrapper computing the menu and this

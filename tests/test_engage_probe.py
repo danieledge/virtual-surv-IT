@@ -143,7 +143,10 @@ def test_version_changed_yes_when_plugin_version_unreadable(tmp_path):
     assert version_changed("", "0.33.1") == "yes"
 
 
-def test_first_changelog_entry_stops_at_second_release_header(tmp_path):
+def test_first_changelog_entry_is_the_heading_line_only(tmp_path):
+    """2026-08-17 live report: the probe printed the latest entry's full body (a
+    dev-facing root-cause story, up to 30 lines) into every post-update open. The
+    what's-new banner needs ONE line - the heading - and nothing else."""
     root = tmp_path
     (root / "CHANGELOG.md").write_text(
         "# Changelog\n\n## [0.33.2] - 2026-07-30 - Latest\n\n- thing one\n- thing two\n\n"
@@ -151,10 +154,9 @@ def test_first_changelog_entry_stops_at_second_release_header(tmp_path):
         encoding="utf-8",
     )
     entry = first_changelog_entry(root)
-    assert "0.33.2" in entry
-    assert "thing one" in entry
-    assert "0.33.1" not in entry
-    assert "should not appear" not in entry
+    assert entry == "[0.33.2] - 2026-07-30 - Latest"
+    assert "thing one" not in entry
+    assert "\n" not in entry
 
 
 def test_first_changelog_entry_empty_when_file_missing(tmp_path):
@@ -186,6 +188,7 @@ def test_build_report_omits_changelog_when_version_unchanged(tmp_path):
     out = build_report("", tmp_path)
     assert "VERSION_CHANGED=no" in out
     assert "a distinctive marker line" not in out
+    assert "WHATS_NEW" not in out
 
 
 def test_build_report_includes_changelog_when_version_changed(tmp_path):
@@ -198,7 +201,8 @@ def test_build_report_includes_changelog_when_version_changed(tmp_path):
     )
     out = build_report("", tmp_path)
     assert "VERSION_CHANGED=yes" in out  # no map at all - first engagement
-    assert "a distinctive marker line" in out
+    assert "WHATS_NEW=[9.9.9] - 2026-07-30 - Test" in out
+    assert "a distinctive marker line" not in out  # heading only, never the body
 
 
 def test_run_extensions_show_caps_script_output(tmp_path, monkeypatch):

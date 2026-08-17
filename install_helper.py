@@ -4456,6 +4456,86 @@ _ALIAS_STAMP_ANY_RE = re.compile(rf"#\s*{re.escape(_ALIAS_MARKER)}-alias-v\d+\s*
 _ALIAS_ADDED_BY_RE = re.compile(r"^\s*# Added by install_helper\.py\b")
 
 
+def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path) -> str:
+    """The current alias definition for one rc/profile file - the single source both
+    run_setup_alias and heal_stale_aliases write, so the two can never drift.
+
+    v5: NOTHING config-dependent is baked into either line - the launcher answers
+    `--launch-command` from the machine config at every 'go', and the function
+    word-splits it (multi-word commands like 'cc --resume' work; a bare path with
+    spaces does not - configure a wrapper alias instead)."""
+    if rc_path.suffix == ".ps1":
+        return (
+            f"function {_ALIAS_MARKER} {{ "
+            f'if ($args.Count -gt 0 -and $args[0] -eq "go") {{ '
+            f"$__vtRest = @(); if ($args.Count -gt 1) {{ $__vtRest = $args[1..($args.Count-1)] }}; "
+            f'$__vtCmd = @((& "{interpreter}" "{launcher_path}" --launch-command) -split " +"); '
+            f'if (-not $__vtCmd) {{ $__vtCmd = @("claude") }}; '
+            f"$__vtCmdArgs = @($__vtCmd | Select-Object -Skip 1); "
+            f'$__vtDecision = & "{interpreter}" "{launcher_path}"; '
+            f'if ($__vtDecision) {{ & $__vtCmd[0] @__vtCmdArgs "$__vtDecision" @__vtRest }} '
+            f"else {{ & $__vtCmd[0] @__vtCmdArgs @__vtRest }} "
+            f"}} else {{ "
+            f'& "{interpreter}" "{script_path}" @args '
+            f"}} }} {_ALIAS_STAMP}"
+        )
+    return (
+        f"{_ALIAS_MARKER}() {{ "
+        f'if [ "$1" = "go" ]; then shift; local __vt_c __vt_d; '
+        f'__vt_c="$("{interpreter}" "{launcher_path}" --launch-command)"; '
+        f'[ -n "$__vt_c" ] || __vt_c=claude; '
+        f'__vt_d="$("{interpreter}" "{launcher_path}")"; '
+        f'$__vt_c ${{__vt_d:+"$__vt_d"}} "$@"; '
+        f'else "{interpreter}" "{script_path}" "$@"; fi; }} {_ALIAS_STAMP}'
+    )
+
+
+def heal_stale_aliases() -> list:
+    """Self-resolution for a stale installed alias (2026-08-17 user requirement: after a
+    plugin update "it should self-resolve" - a profile still carrying an old definition,
+    e.g. the v4 one with 'cc --debug' baked in, must not wait for a manual
+    re-register). Called by `virt-surv go`'s launcher once per machine per alias
+    version: every rc/profile that ALREADY HAS a virt-surv entry but not the current
+    line is upgraded in place - old stamped definitions removed
+    (_strip_stamped_definitions), current line appended. Files with NO entry are never
+    touched: installing the alias somewhere new stays a consented setup action, this
+    only keeps an existing consent current. Returns [(path, removed_count), ...] of
+    files actually rewritten; every failure is skipped silently (best-effort - the
+    launch must never break on this)."""
+    _, interpreter = _check_interpreters(
+        ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
+    )
+    if not interpreter:
+        return []
+    resolved = _resolve_repo_root(None)
+    script_path = (resolved / "install_helper.py") if resolved else Path(__file__).resolve()
+    launcher_path = (
+        (resolved / "scripts" / "virt_team_launcher.py")
+        if resolved
+        else Path(__file__).resolve().parent / "scripts" / "virt_team_launcher.py"
+    )
+    healed = []
+    for _label, rc_path in list(_posix_shell_rc_candidates()) + _powershell_profile_candidates():
+        try:
+            if not rc_path.is_file():
+                continue
+            existing = rc_path.read_text(encoding="utf-8", errors="replace")
+            if _ALIAS_MARKER not in existing:
+                continue  # never installed here - not ours to add
+            line = _alias_line_for(rc_path, interpreter, launcher_path, script_path)
+            if line in existing:
+                continue  # current already
+            stripped, removed = _strip_stamped_definitions(existing)
+            if rc_path.suffix != ".ps1" and _ALIAS_MARKER in stripped:
+                line = f"unalias {_ALIAS_MARKER} 2>/dev/null; {line}"
+            addition = f"\n# Added by install_helper.py --setup-alias (2026-08-04)\n{line}\n"
+            rc_path.write_text(stripped + addition, encoding="utf-8")
+            healed.append((rc_path, len(removed)))
+        except OSError:
+            continue
+    return healed
+
+
 def _strip_stamped_definitions(existing: str) -> tuple:
     """Remove every alias definition THIS tool wrote earlier - identified by the
     version stamp, which makes a line provably machine-written and safe to delete
@@ -4690,35 +4770,7 @@ def run_setup_alias(
         # Changing either line template below? Bump _ALIAS_VERSION (see its comment) -
         # the trailing stamp is the only thing that lets an already-installed profile
         # pick the change up on a re-run.
-        # v5: NOTHING config-dependent is baked into either line any more - the
-        # launcher answers `--launch-command` from the machine config at every 'go',
-        # and the function word-splits it (multi-word commands like 'cc --resume'
-        # work; a bare path with spaces does not - configure a wrapper alias instead).
-        if rc_path.suffix == ".ps1":
-            line = (
-                f"function {_ALIAS_MARKER} {{ "
-                f'if ($args.Count -gt 0 -and $args[0] -eq "go") {{ '
-                f"$__vtRest = @(); if ($args.Count -gt 1) {{ $__vtRest = $args[1..($args.Count-1)] }}; "
-                f'$__vtCmd = @((& "{interpreter}" "{launcher_path}" --launch-command) -split " +"); '
-                f'if (-not $__vtCmd) {{ $__vtCmd = @("claude") }}; '
-                f"$__vtCmdArgs = @($__vtCmd | Select-Object -Skip 1); "
-                f'$__vtDecision = & "{interpreter}" "{launcher_path}"; '
-                f'if ($__vtDecision) {{ & $__vtCmd[0] @__vtCmdArgs "$__vtDecision" @__vtRest }} '
-                f"else {{ & $__vtCmd[0] @__vtCmdArgs @__vtRest }} "
-                f"}} else {{ "
-                f'& "{interpreter}" "{script_path}" @args '
-                f"}} }} {_ALIAS_STAMP}"
-            )
-        else:
-            line = (
-                f"{_ALIAS_MARKER}() {{ "
-                f'if [ "$1" = "go" ]; then shift; local __vt_c __vt_d; '
-                f'__vt_c="$("{interpreter}" "{launcher_path}" --launch-command)"; '
-                f'[ -n "$__vt_c" ] || __vt_c=claude; '
-                f'__vt_d="$("{interpreter}" "{launcher_path}")"; '
-                f'$__vt_c ${{__vt_d:+"$__vt_d"}} "$@"; '
-                f'else "{interpreter}" "{script_path}" "$@"; fi; }} {_ALIAS_STAMP}'
-            )
+        line = _alias_line_for(rc_path, interpreter, launcher_path, script_path)
         existing = (
             rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
         )

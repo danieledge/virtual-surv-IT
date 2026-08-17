@@ -537,6 +537,79 @@ def test_launch_command_mode_defaults_to_claude(tmp_path, monkeypatch, capsys):
     assert out.err == ""
 
 
+def test_heal_runs_once_and_upgrades_a_stale_alias(tmp_path, monkeypatch, capsys):
+    """The 2026-08-17 "it should self-resolve" requirement: a go on a machine whose
+    profile still carries an old baked definition upgrades it automatically, marks the
+    check in the installer config, and explains the one-terminal-reload limit."""
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".bashrc").write_text(
+        "# Added by install_helper.py --setup-alias (2026-08-04)\n"
+        'virt-surv() { "cc --debug" stale; } # virt-surv-alias-v4\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    mod = _load()
+    mod._heal_stale_alias_once()
+    out = capsys.readouterr()
+    assert "auto-updated an out-of-date 'virt-surv' alias" in out.err
+    assert "open a new terminal" in out.err
+    assert out.out == ""  # stdout stays the decision channel even here
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert "cc --debug" not in content
+    assert "virt-surv-alias-v5" in content
+    cfg = json.loads(
+        (tmp_path / "xdg" / "virt-surv-it" / "installer.json").read_text(encoding="utf-8")
+    )
+    assert cfg["alias_heal_checked"] == mod._EXPECTED_ALIAS_VERSION
+    # second run: the mark short-circuits - no message, no rewrite
+    before = content
+    mod._heal_stale_alias_once()
+    out = capsys.readouterr()
+    assert "auto-updated" not in out.err
+    assert (home / ".bashrc").read_text(encoding="utf-8") == before
+
+
+def test_heal_never_installs_the_alias_anywhere_new(tmp_path, monkeypatch, capsys):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".bashrc").write_text("# plain rc, alias never installed\n", encoding="utf-8")
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    mod = _load()
+    mod._heal_stale_alias_once()
+    out = capsys.readouterr()
+    assert "auto-updated" not in out.err
+    assert (home / ".bashrc").read_text(encoding="utf-8") == "# plain rc, alias never installed\n"
+    # still marked checked - the scan itself doesn't repeat every go
+    cfg = json.loads(
+        (tmp_path / "xdg" / "virt-surv-it" / "installer.json").read_text(encoding="utf-8")
+    )
+    assert cfg["alias_heal_checked"] == mod._EXPECTED_ALIAS_VERSION
+
+
+def test_heal_version_constant_matches_install_helper():
+    """_EXPECTED_ALIAS_VERSION exists so the every-go check is a cheap JSON read with
+    no install_helper exec; this pin is the price - bump both together."""
+    spec = importlib.util.spec_from_file_location("ih_sync", REPO_ROOT / "install_helper.py")
+    ih = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ih)
+    mod = _load()
+    assert mod._EXPECTED_ALIAS_VERSION == ih._ALIAS_VERSION
+
+
+def test_heal_is_wired_to_the_real_entry_point_only():
+    """The heal must fire on every real 'go' (the __main__ block) but never on module
+    import - tests and in-process callers reach main() directly, and a test run must
+    not touch the developer's actual shell rc."""
+    source = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    main_block = source.split('if __name__ == "__main__":', 1)[1]
+    assert "_heal_stale_alias_once()" in main_block
+    body = source.split('if __name__ == "__main__":', 1)[0]
+    assert "def main" in body and "_heal_stale_alias_once()" not in body.split("def main", 1)[1]
+
+
 def test_launch_command_config_path_matches_install_helper(tmp_path, monkeypatch):
     """The launcher mirrors install_helper's config_path()/load_config() derivation
     instead of importing that whole file per 'go' - this pins the two together so a

@@ -25,7 +25,7 @@ two never drift apart (same role `test_hooks_in_sync.py` plays for staged-vs-liv
 `INTERPRETER=` (only when `--interpreter-name` was passed, which the bootstrap always does),
 `PLUGIN_ROOT=`, `PYTHON_VERSION=`, `PLUGIN_VERSION=`, `BRANCH=`, `PREV_TEAM_VERSION=`,
 `VERSION_CHANGED=yes|no`, `EXTRA_FORMATS=`, `REGULATORY_CITATIONS=on|off`, then (each only when
-non-empty) the tooling report, the codebase map header + §3, the newest CHANGELOG entry, and the
+non-empty) the tooling report, the codebase map header + §3, the newest CHANGELOG entry's heading (`WHATS_NEW=`), and the
 team-extensions block.
 
 **It does not print `docs/team-operating-guide.md`.** Inlining the guide was removed: it pushed

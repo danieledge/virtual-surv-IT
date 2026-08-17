@@ -5380,6 +5380,39 @@ def test_setup_alias_upgrade_demo_removes_nothing(tmp_path, monkeypatch, capsys)
     assert (home / ".bashrc").read_text(encoding="utf-8") == old  # untouched
 
 
+def test_heal_stale_aliases_upgrades_existing_entries_only(tmp_path, monkeypatch):
+    """heal_stale_aliases (2026-08-17 "it should self-resolve"): an rc with an OLD
+    stamped definition is upgraded in place; an rc with NO virt-surv entry is never
+    touched - installing the alias somewhere new stays a consented setup action."""
+    import install_helper as ih
+
+    old = (
+        "# Added by install_helper.py --setup-alias (2026-08-04)\n"
+        'virt-surv() { "cc --debug" stale; } # virt-surv-alias-v4\n'
+    )
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="echo mine\n" + old)
+    (home / ".zshrc").write_text("# no alias here\n", encoding="utf-8")
+    _stub_interpreters(monkeypatch, ih)
+    healed = ih.heal_stale_aliases()
+    assert [(p.name, n) for p, n in healed] == [(".bashrc", 1)]
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert "cc --debug" not in content
+    assert ih._ALIAS_STAMP in content
+    assert "echo mine" in content
+    assert (home / ".zshrc").read_text(encoding="utf-8") == "# no alias here\n"  # untouched
+
+
+def test_heal_stale_aliases_leaves_current_entries_alone(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
+    _stub_interpreters(monkeypatch, ih)
+    assert ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True) == 0
+    before = (home / ".bashrc").read_text(encoding="utf-8")
+    assert ih.heal_stale_aliases() == []
+    assert (home / ".bashrc").read_text(encoding="utf-8") == before
+
+
 def test_setup_alias_written_lines_carry_the_version_stamp(tmp_path, monkeypatch):
     """The stamp IS the upgrade mechanism: a freshly written line without it would be
     judged stale and re-appended on every future setup run. It must also be a comment
