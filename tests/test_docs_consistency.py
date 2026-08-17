@@ -133,6 +133,22 @@ def test_engage_does_not_claim_roster_in_claude_md():
     assert current, "engage/SKILL.md: roster pointer to docs/team-operating-guide.md not found"
 
 
+def test_engage_new_flag_forbids_engagement_discovery():
+    """Live report (2026-08-17): '/engage --new' from the go menu still spent a turn
+    listing the open packs 'in case any are related' - the human had JUST seen that
+    list in the launcher and chosen new. The skill must carry the zero-discovery rule
+    for --new, and validation must be scoped to --resume only."""
+    text = _read(".claude/skills/engage/SKILL.md")
+    assert "ZERO engagement discovery" in text, (
+        "engage/SKILL.md: the --new zero-discovery rule is gone - --new must skip "
+        "list --menu, artifacts listings, ENGAGEMENTS.md and any open-pack commentary"
+    )
+    assert re.search(r"`--resume <slug>`[^\n]*validate", text), (
+        "engage/SKILL.md: slug validation must be stated on the --resume branch "
+        "(it is the only flag with anything to validate)"
+    )
+
+
 # --- (f) spot-check doctrine: Morgan spot-checks, never re-scores --------------
 # 0.8.0 removed the double-scoring posture; the router doc drifted back once.
 

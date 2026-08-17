@@ -27,10 +27,15 @@ orchestrator's context, so anything not in the brief gets re-derived.
 1. **Diff-scoped reviews need no discovery at all.** Quick/Deep on changed code already
    takes its file list from `git diff`; state this as a hard rule in the reviewer
    agents' prompts too ("your file list is in the brief - do not enumerate the repo").
-2. **Map slice in the brief.** When `docs/codebase-map.md` exists, Morgan includes the
-   relevant slice (target module rows: paths, roles, known dependents) in each
-   reviewer's briefing. Reviewers treat it as the inventory and read files directly
-   from it. One map read, N briefs - instead of N independent explorations.
+2. **Map POINTER in the brief - point, never paste** (user question 2026-08-17: "does
+   Morgan pass the code map or just point to it? we don't want an expensive turn").
+   The economics decide this: Morgan emitting the map body into N briefs spends
+   orchestrator OUTPUT tokens (the expensive kind, ~5x input price) N times over. The
+   brief carries only (a) the map's path with "read `docs/codebase-map.md` first - it
+   is your inventory, do not enumerate the repo", and (b) the in-scope file list
+   itself, a few lines. An agent-side Read of the map costs cheap input tokens once
+   per agent that actually needs it - and a diff-scoped review needs no map read at
+   all, the brief's file list is already the whole scope.
 3. **Staleness guard, bounded.** The map is advisory and can drift. Cheap check before
    trusting it for scope: compare the map's recorded update date against
    `git log -1 --format=%ci` (or newest mtime under the target dirs). If drifted,

@@ -98,15 +98,23 @@ or `--new`** - `virt-surv go` (when the user launches Claude Code through it) co
 SAME resume-or-new decision outside any LLM entirely and pre-encodes the answer
 into the very first prompt, precisely because letting the model work it out cost real turns and
 occasionally picked the wrong option before self-correcting. When present, this is the answer -
-**do not ask the question at all** - but validate it against the real data first (`RESUME_MENU`/
-`list --menu`, same as below) rather than trusting a slug blindly: the wrapper's own view could
-be stale (another session closed or archived it in the seconds between the wrapper computing the
-menu and this session actually starting). `--resume <slug>` where `<slug>` is genuinely in
-`open` → resume it, skip straight to the "one ACTIVE engagement" and "state file is the record"
-rules below. `--new` → skip straight to classifying as new work. Either flag naming something
-that no longer validates (slug not in `open`, or `open` came back empty for `--resume`) → fall
-back to the normal flow below and ask, same as if no flag had been given - **never silently
-proceed on stale data, and never error out unhelpfully either.**
+**do not ask the question at all.**
+
+- **`--new` → skip straight to classifying as new work, with ZERO engagement discovery.**
+  There is nothing to validate: "new" is valid whatever else is open. Do not run
+  `list --menu`, do not `ls` the artifacts directory, do not read `ENGAGEMENTS.md` or other
+  packs' state files, and do not flag or enumerate the open engagements in chat (live report
+  2026-08-17: after the human chose "new" in the go menu, the session still listed the 5 open
+  packs "in case any are actually related" - the go menu had JUST shown the human that exact
+  list; re-surfacing it re-litigates a made decision and costs a turn). You will see sibling
+  workspaces when creating yours in step 4 - that is not an invitation to comment on them.
+- **`--resume <slug>` → validate the slug first** (`RESUME_MENU`/`list --menu`, same as
+  below) rather than trusting it blindly: the wrapper's view could be stale (another session
+  closed or archived it in the seconds between the wrapper computing the menu and this
+  session starting). Genuinely in `open` → resume it, skip straight to the "one ACTIVE
+  engagement" and "state file is the record" rules below. Not in `open` (or `open` empty) →
+  fall back to the normal flow below and ask, same as if no flag had been given - **never
+  silently proceed on stale data, and never error out unhelpfully either.**
 
 **No flag present (typed `/engage` directly, or via a plain terminal launch)** - the flow as it
 worked before the wrapper existed: if this turn's context already has a `RESUME_MENU` field
