@@ -86,15 +86,30 @@ def _sort_key(path: Path) -> list:
     return [(int(d), "") if d else (-1, s) for d, s in parts]
 
 
+# The install layouts put the marker at a FIXED shallow depth under each base -
+# cache/<marketplace>/<plugin>/<version>/docs/... or marketplaces/<name>[/...]/docs/... -
+# so glob exactly those depths and nothing deeper. The old unbounded rglob walked every
+# unrelated plugin's full tree (this plugin alone vendors 306 files) on every cold open,
+# a measured cost on AV-scanned corporate boxes and a README known-issue candidate
+# (turn-0 trim, applied 2026-08-17).
+_MARKER_DEPTH_PATTERNS = (
+    "*/docs/team-operating-guide.md",
+    "*/*/docs/team-operating-guide.md",
+    "*/*/*/docs/team-operating-guide.md",
+    "*/*/*/*/docs/team-operating-guide.md",
+)
+
+
 def _from_filesystem_search(home: Path) -> str:
     bases = (home / ".claude" / "plugins" / "cache", home / ".claude" / "plugins" / "marketplaces")
     candidates: list[Path] = []
     for base in bases:
         if not base.is_dir():
             continue
-        for marker in base.rglob("docs/team-operating-guide.md"):
-            if _TEAM_NAME in marker.parts:
-                candidates.append(marker)
+        for pattern in _MARKER_DEPTH_PATTERNS:
+            for marker in base.glob(pattern):
+                if _TEAM_NAME in marker.parts:
+                    candidates.append(marker)
     if not candidates:
         return ""
     newest = max(candidates, key=_sort_key)

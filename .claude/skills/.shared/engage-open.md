@@ -78,11 +78,14 @@ def from_registry():
 
 def from_filesystem():
     hits = []
+    pats = ("*/docs/team-operating-guide.md", "*/*/docs/team-operating-guide.md",
+            "*/*/*/docs/team-operating-guide.md", "*/*/*/*/docs/team-operating-guide.md")
     for base in (home / ".claude/plugins/cache", home / ".claude/plugins/marketplaces"):
         if base.is_dir():
-            for marker in base.rglob("docs/team-operating-guide.md"):
-                if "compliance-surveillance-team" in marker.parts:
-                    hits.append(marker)
+            for pat in pats:
+                for marker in base.glob(pat):
+                    if "compliance-surveillance-team" in marker.parts:
+                        hits.append(marker)
     if not hits:
         return ""
     def key(p):
