@@ -266,11 +266,13 @@ def test_deleting_the_consent_marker_still_allowed(tmp_path):
 
 
 def test_git_config_paths_are_in_the_protected_set():
-    assert STAGED._protected(".git/config")
-    assert STAGED._protected("/proj/.git/hooks/pre-commit")
-    assert STAGED._protected("cp /tmp/evil .git/config")
-    assert not STAGED._protected("src/config.py")
-    assert not STAGED._protected("mygit/config")
+    # engaged=False deliberately: git execution config sits in the ALWAYS tier
+    # (2026-08-17 session scoping) - protected even in a dormant session.
+    assert STAGED._protected(".git/config", engaged=False)
+    assert STAGED._protected("/proj/.git/hooks/pre-commit", engaged=False)
+    assert STAGED._protected("cp /tmp/evil .git/config", engaged=False)
+    assert not STAGED._protected("src/config.py", engaged=True)
+    assert not STAGED._protected("mygit/config", engaged=True)
 
 
 def test_maintenance_override_still_bypasses(tmp_path, monkeypatch):

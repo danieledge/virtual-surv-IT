@@ -12,10 +12,15 @@
 > act of any engagement is to **read `docs/team-operating-guide.md`**: the standing rules,
 > roster and routing table live there, not here.
 >
-> The one always-on exception is **safety**: all **three** guard hooks stay armed even in a
-> dormant session - the `data/raw/` read block (§5), the code-execution gate and the consent-write
-> gate (§7) - so a blocked command outside an engagement is expected, not a bug. Never put real
-> PII/MNPI or secrets into context (§5).
+> The one exception is **safety** - the three guard hooks, session-scoped with carve-outs since 2026-08-17:
+> the **`data/raw/` read block (§5) stays armed in every session** - data protection never
+> follows invocation - as do the write-protections on the consent marker, the hook files, git
+> execution config and the session stamp (a dormant session must not pre-forge or disarm what a
+> later engaged session inherits). The **code-execution gate (§7) and the settings
+> write-protection arm only in sessions that invoked the team** (`/engage` step 0 stamps the
+> session), so a dormant session in an enabled project is plain Claude Code - it runs its own
+> tests and manages its own config freely. A raw-data or marker/hook block outside an engagement
+> is still expected, not a bug. Never put real PII/MNPI or secrets into context (§5).
 
 > ℹ️ The regulatory scope (§2) and tech stack (§3) ship as **example defaults** in
 > `docs/scope-and-stack.md` so the team works out of the box - replace them with your real

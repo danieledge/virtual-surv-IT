@@ -61,6 +61,17 @@ import sys
 _MARKER = ".exec-consent"
 _SETTINGS_RE = re.compile(r"\.claude[/\\]settings(\.local)?\.json")
 
+# The acting-session stamp behind guard session-scoping (2026-08-17): the execution gate
+# arms only for the session whose id matches this file, so a model that could clobber or
+# delete it would disarm that gate mid-engagement. Write-protected in EVERY session
+# (dormant included), and unlike the consent marker, deleting it is NOT fail-safe - rm
+# here is a disarm, not a close - so it gets its own mutation check past _SAFE_VERB.
+# The sanctioned writers (engage_probe, engagement_state) write it from inside their own
+# process, which a lexical Bash guard never sees - only a command that NAMES the file
+# can be judged, and no legitimate command needs to.
+_STAMP_RE = re.compile(r"artifacts[/\\]\.team-session\.json")
+_STAMP_MUTATE_VERB = re.compile(r"^(rm|unlink|mv|truncate|shred)\b")
+
 # .pre-commit-config.yaml is execution config: `git commit` runs its hook entries
 # (`language: system` executes any command), so a model-writable config is a consent-free
 # execution path (ADR-002 rec 14c). Write-protected; read-only inspection rides _SAFE_VERB.
@@ -177,7 +188,7 @@ _FIND_MUTATE = re.compile(r"^find\b.*\s-(?:exec(?:dir)?|delete)\b")
 # read with a harmless stderr redirect (a real false positive found in live use, 2026-07-01).
 _REDIRECT_INTO_PROTECTED = re.compile(
     r">\s*\S*(\.exec-consent|\.claude[/\\]settings(\.local)?\.json|\.pre-commit-config\.ya?ml"
-    r"|\.git[/\\]config\b)"
+    r"|\.git[/\\]config\b|artifacts[/\\]\.team-session\.json)"
 )
 
 _WRITE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
@@ -241,14 +252,43 @@ def _truthy(val: str | None) -> bool:
     return bool(val) and val.strip().lower() not in ("", "0", "false", "no", "off")
 
 
-def _protected(text: str) -> bool:
+def _protected(text: str, engaged: bool) -> bool:
+    """Two tiers (2026-08-17, user decision). ALWAYS protected, every session: the
+    consent marker (grant integrity - a dormant session could otherwise pre-forge it
+    for a later engaged session to inherit), the session stamp (disarm channel),
+    pre-commit config and git execution config (consent-equivalent execution a later
+    engaged session would inherit the same way). ENGAGED sessions additionally protect
+    settings*.json - harness config stays human-only while the team drives the
+    session, but a dormant session managing its own permissions (or /doctor reading
+    config through an interpreter, the 2026-08-17 live report) is plain Claude Code
+    and is not interfered with."""
     norm = (text or "").replace("\\", "/")
-    return (
+    always = (
         _MARKER in norm
-        or bool(_SETTINGS_RE.search(norm))
+        or bool(_STAMP_RE.search(norm))
         or bool(_PRECOMMIT_RE.search(norm))
         or bool(_GIT_CONFIG_RE.search(norm))
     )
+    if always:
+        return True
+    return engaged and bool(_SETTINGS_RE.search(norm))
+
+
+def _team_invoked_this_session(payload) -> bool:
+    """Same contract and fail direction as guard-code-execution's copy (see its
+    docstring): positive stamp match arms; no stamp means the team was never invoked
+    here (dormant); a payload with no session id fails toward armed."""
+    sid = payload.get("session_id")
+    if not sid:
+        return True
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    try:
+        stamp = json.loads(
+            open(os.path.join(root, "artifacts", ".team-session.json"), encoding="utf-8").read()
+        ).get("session")
+    except Exception:
+        return False
+    return stamp == sid
 
 
 def _block(what: str) -> None:
@@ -278,10 +318,11 @@ def main() -> None:
 
     tool = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
+    engaged = _team_invoked_this_session(payload)
 
     if tool in _WRITE_TOOLS:
         target = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-        if _protected(target):
+        if _protected(target, engaged):
             _block(f"the protected file targeted by {tool} ({target})")
         if _HOOK_PATH_RE.search((target or "").replace("\\", "/")):
             _block(f"the safety hooks themselves ({target}) - editing a guard can neuter it")
@@ -315,7 +356,7 @@ def main() -> None:
                     f"the safety hooks themselves via Bash ({seg[:120]}) - editing a guard "
                     "can neuter it"
                 )
-            if not _protected(seg):
+            if not _protected(seg, engaged):
                 continue
             # A redirect can turn any verb into a write (`cat > marker`, `echo x >> settings`) -
             # but only when the redirect TARGET is protected (stderr-to-/dev/null is a read).
@@ -334,6 +375,13 @@ def main() -> None:
             if _SAFE_GIT.match(verb_seg):
                 continue  # read-only git inspection of a protected path (ADR-002 rec 11)
             if _SAFE_VERB.match(verb_seg):
+                # One carve-out from "delete is safe": deleting the SESSION STAMP is a
+                # disarm (the execution gate keys on it), not a fail-safe close.
+                if _STAMP_RE.search(seg) and _STAMP_MUTATE_VERB.match(verb_seg):
+                    _block(
+                        "the acting-session stamp (artifacts/.team-session.json) - "
+                        "removing it disarms the session-scoped gates"
+                    )
                 continue  # read or delete - safe direction
             # Default-deny: unknown verb touching a protected file (touch/cp/mv/sed -i/git
             # checkout/...) - opening the gate or mutating config must come from the human.

@@ -6,10 +6,18 @@ below are sourced from the README (safety hooks, handling real data, known issue
 this page adds no new claims and strengthens none. Where a telling elsewhere is shorter,
 this page is the reference.
 
-The three always-on guards are `.claude/hooks/guard-raw-data.py` (no agent read of
-`data/raw/`), `guard-code-execution.py` (no execution of the code under review without
-human consent) and `guard-consent-writes.py` (the model cannot grant itself consent or
-edit the harness config). They are wired in both `hooks/hooks.json` (plugin install) and
+The three guards are `.claude/hooks/guard-raw-data.py` (no agent read of
+`data/raw/` - **always on, in every session**: data protection never follows invocation),
+`guard-code-execution.py` (no execution of the code under review without human consent -
+**armed only in sessions that invoked the team** since 2026-08-17, keyed on the
+`artifacts/.team-session.json` stamp `/engage` step 0 writes; a dormant session runs its
+own tests as plain Claude Code) and `guard-consent-writes.py` (the model cannot grant
+itself consent or edit the harness config - the consent marker, hook files, git execution
+config and the session stamp stay write-protected **in every session**, since a dormant
+session must not pre-forge or disarm what a later engaged session inherits; only the
+`settings*.json` tier is scoped to team-invoked sessions). A hook payload carrying no
+session id cannot be told apart from an engaged session, and the scoped gates then fail
+toward ARMED - the safety direction. They are wired in both `hooks/hooks.json` (plugin install) and
 `.claude/settings.json` (repo as project), and a test keeps the two copies identical. A
 guard that crashes exits 2 and blocks (fail closed); two limits are deliberate and
 documented in ADR-002: a malformed payload or a host with no Python at all leaves the

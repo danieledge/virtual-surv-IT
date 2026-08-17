@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import datetime as _dt
 import json
 import os
 import re
@@ -777,7 +778,32 @@ def integrations_report_line(integrations: dict) -> str:
     return "INTEGRATIONS=" + ",".join(bits) if bits else ""
 
 
+def _stamp_team_session(project_dir: Path) -> None:
+    """Mark this session as having invoked the team (2026-08-17, guard session-scoping):
+    the execution gate and the engaged-tier consent protections arm on a positive match
+    between the hook payload's session id and this stamp, so it must exist from /engage
+    step 0 - before the first workspace mutation - or intake runs unprotected. Written
+    on every probe (idempotent), from the env var Claude Code exposes to commands; no
+    env var (an older Claude Code, or a human running the probe from a terminal) writes
+    nothing, which fails toward the guards' own armed-when-unsure direction. Same
+    contract as engagement_state.stamp_team_session, duplicated because this script must
+    run standalone by path in plugin mode."""
+    sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if not sid:
+        return
+    try:
+        art = project_dir / "artifacts"
+        art.mkdir(parents=True, exist_ok=True)
+        (art / ".team-session.json").write_text(
+            json.dumps({"session": sid, "stamped": _dt.date.today().isoformat()}) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # advisory - never fail the probe over it
+
+
 def build_report(plugin_root_arg: str, project_dir: Path) -> str:
+    _stamp_team_session(project_dir)
     root, pr_display, root_is_trusted = resolve_root(plugin_root_arg, project_dir)
     plugin_version = read_plugin_version(root)
     branch = git_branch(root)

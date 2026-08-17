@@ -189,7 +189,7 @@ What the team gives you today, each row tied to where the claim is enforced or d
 | A real engineering team, right-sized | Morgan (PM) + 13 specialist subagents, with domain typology advice as three in-line knowledge packs ([`docs/sme/`](docs/sme/README.md), zero spawn cost); a typical task fires only 2-5 agents, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
 | Independent review by construction | Advisors and reviewers hold no `Write`/`Edit` tools; QA and validation run as separate agents from the build. More than rules: pipelines/ETL, scripts, ML, reviews and docs all route to their own specialist. | Tool grants in [`.claude/agents/`](.claude/agents/), pinned by [`tests/test_docs_consistency.py`](tests/test_docs_consistency.py) · routing table in [`docs/team-operating-guide.md`](docs/team-operating-guide.md) |
 | Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | ADR-008 · ADR-006 · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
-| Three always-on safety guards, human-only consent | Raw data under `data/raw/` blocked from the model, execution gated on a human-created marker, and the model blocked from writing the marker, settings or the hooks themselves. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
+| Safety guards: always-on data wall, session-scoped gates | Raw data under `data/raw/` blocked from the model in EVERY session; the execution gate and settings write-protection arm only in sessions that invoked the team (2026-08-17 - a dormant session is plain Claude Code), while the consent marker, hook files and git execution config stay write-protected everywhere. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
 | Document conversion front door | Excel/CSV/PDF/DOCX read via the vendored converter - no pip needed - with a JSON evidence report every run; a PreToolUse hook redirects binary-document reads to it. | [`docs/house-rules.md`](docs/house-rules.md) · [`scripts/convert_file.py`](scripts/convert_file.py) · [`scripts/document_input_redirect.py`](scripts/document_input_redirect.py) |
 | A real review subsystem | Context-routed lenses, the standard analysers per language, schema-validated findings packs rendered to one canonical layout, and a build fingerprint tying the reviewed code to the shipped artifact. | [`docs/code-review-method.md`](docs/code-review-method.md) · [`docs/review/`](docs/review/) · the [review demo](docs/demos/review-demo.md) |
 | Independent QA + a mechanical DoD gate | A close only counts when `check_artifacts` passes - finding codes like `STALE-INDEX`, `FINAL-BEFORE-CLOSE`, `ROSTER-UNKNOWN` catch the failure modes that actually happened live. Iteration history stays visible append-only (journey strip, QA cycles). | [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) · [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
@@ -734,7 +734,10 @@ it spends tokens. (This is the regression net Anthropic's multi-agent guidance r
 ## 🪝 The safety hooks
 
 A *hook* is a small script Claude Code runs automatically **right before** it uses a tool, and it
-can **allow** or **block** that action. This plugin ships three safety guards, **always on**, plus four engagement-scoped lifecycle hooks (see the Claude Code features table; they no-op in dormant sessions and fail open). The guards run even when the
+can **allow** or **block** that action. This plugin ships three safety guards - the raw-data
+wall **always on**, the execution gate and the consent guard's settings tier **armed only in
+sessions that invoked the team** (2026-08-17; the marker/hook/git-exec-config protections in
+them stay always-on) - plus four engagement-scoped lifecycle hooks (see the Claude Code features table; they no-op in dormant sessions and fail open). The guards run even when the
 team is dormant). The newcomer-friendly version of the whole safety story is in
 [`docs/OVERVIEW.md` §5](docs/OVERVIEW.md); the per-channel confidence statement (exactly what
 each control does and does not guarantee) is [`docs/safety-model.md`](docs/safety-model.md);
@@ -891,7 +894,7 @@ CLAUDE.md                       # shared team handbook (example defaults - custo
    helper                         review-scorer (haiku - review prep, scoring, filter tallies)
 .claude/skills/                 # 26 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
                                 #   /new-scenario, /tune-thresholds, … (see "Using them")
-.claude/hooks/ + settings.json  # always-on data-safety + code-execution guards
+.claude/hooks/ + settings.json  # data-safety (always-on) + session-scoped execution guards
 rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
 scripts/                        # masking (ingest), synthesise, render_html, eval_score,
                                 #   calibrate_spoofing, check_citations, validate_* helpers,
@@ -938,7 +941,7 @@ engagements. Descriptions are taken from each script's own docstring.
 | `scripts/convert_sarif.py` | Converts SARIF analyser output to the team's findings-pack JSONL so company-tool findings keep 📊 measured status | model, consent-free |
 | `scripts/check-review-tools.sh` | Probes which analysers are installed (cached), so missing tools are skipped rather than re-invoked | model, consent-free |
 | `.claude/hooks/guard-raw-data.py` | Blocks Read/Grep/Glob/Bash tool calls that target `data/raw/` | run by Claude Code (always on) |
-| `.claude/hooks/guard-code-execution.py` | Blocks execution of the code under review unless a human has opened the consent gate | run by Claude Code (always on) |
+| `.claude/hooks/guard-code-execution.py` | Blocks execution of the code under review unless a human has opened the consent gate | run by Claude Code (team-invoked sessions) |
 | `.claude/hooks/guard-consent-writes.py` | Blocks model writes of the consent marker, `settings*.json` and the hook files themselves | run by Claude Code (always on) |
 | `.claude/hooks/run-guard.sh` | The guard launcher: probes `python3` → `python` → `py` and fails closed on a crash | run by Claude Code (always on) |
 | `scripts/persona_anchor.py` | Per-turn persona + discipline re-anchor while an engagement is live; a no-op when dormant (ADR-005; staged copy in `scripts/staged_hooks/`) | run by Claude Code (engagement-scoped) |
