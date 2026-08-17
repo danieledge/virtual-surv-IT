@@ -72,8 +72,9 @@ deletes any existing marker, fail-safe).
   review`): the gates are decidable, so no solo location screen. Derive the target (an
   uncommitted/branch diff, or a path the request names) and state it for correction at the
   menu; only an underivable target becomes a question, riding the 0a batch in the
-  Work-type slot (header `Target`): **Uncommitted changes** / **Branch vs main** /
-  **I'll name a path** / **Whole codebase** (2026-08-17: location never costs its own turn).
+  Work-type slot (header `Target`) - **locked construction in
+  `references/target-menu.md`, read it before asking** (2026-08-17: location never costs
+  its own turn, and the menu never varies).
 - **The tool's hard limits are 4 questions per call and 4 options per question** ("Other" is added
   automatically). Never spec a menu that exceeds them; give **every** question a short `header`
   (≤12 chars - the ones to use are named per question below).

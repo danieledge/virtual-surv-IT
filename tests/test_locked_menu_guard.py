@@ -305,3 +305,58 @@ def test_legacy_three_question_menu_now_flags_the_missing_origin():
     proc = _run(legacy)
     assert proc.returncode == 2
     assert "Origin" in proc.stderr
+
+
+# --- locked Target menu (2026-08-17 user decision: "it changes nearly every time") ---------
+
+_TARGET_FULL = [
+    "Uncommitted changes",
+    "Branch vs main",
+    "Whole working directory",
+    "A file or folder I'll name",
+]
+
+
+def test_target_menu_canonical_full_set_passes():
+    r = _run([_q("Target", _TARGET_FULL)])
+    assert r.returncode == 0, r.stderr
+
+
+def test_target_menu_non_git_subset_passes():
+    r = _run([_q("Target", ["Whole working directory", "A file or folder I'll name"])])
+    assert r.returncode == 0, r.stderr
+
+
+def test_target_menu_reworded_option_flagged():
+    opts = ["Uncommitted changes", "Branch vs main", "Whole codebase", "A file or folder I'll name"]
+    r = _run([_q("Target", opts)])
+    assert r.returncode == 2
+    assert "target-menu drift" in r.stderr
+
+
+def test_target_menu_dropped_option_flagged():
+    r = _run([_q("Target", _TARGET_FULL[:3])])
+    assert r.returncode == 2
+    assert "target-menu drift" in r.stderr
+
+
+def test_target_menu_multiselect_flagged():
+    r = _run([_q("Target", _TARGET_FULL, multi=True)])
+    assert r.returncode == 2
+    assert "multiSelect: false" in r.stderr
+
+
+def test_target_menu_recommended_suffix_is_not_drift():
+    opts = ["Uncommitted changes (Recommended)"] + _TARGET_FULL[1:]
+    r = _run([_q("Target", opts)])
+    assert r.returncode == 0, r.stderr
+
+
+def test_target_labels_match_the_reference_doc():
+    """The guard's canonical set and target-menu.md must name the same options - a
+    retier that updates one without the other would block every legitimate ask."""
+    doc = (REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "target-menu.md").read_text(
+        encoding="utf-8"
+    )
+    for label in _TARGET_FULL:
+        assert f"**{label}**" in doc, f"target-menu.md missing option {label!r}"

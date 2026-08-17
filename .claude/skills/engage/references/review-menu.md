@@ -15,7 +15,13 @@ engagement ALL-IN at roughly 2x the pass figure** - orchestration, scoring, the 
 artifacts ride on top - and more when caches run cold (5-minute TTL boxes). Budget status:
 <DAILY/HEADROOM line when a budget is recorded>." Scale the figures to the target's size
 honestly; the pass price and the all-in are both stated so neither is mistaken for the other -
-order-of-magnitude is the point, not a quote. **Name the derived target in the same message**
+order-of-magnitude is the point, not a quote. **Size mechanically, output a NUMBER, never a
+listing** (live 2026-08-17: a sizing `find` dumped 217 paths into the transcript, and the
+count included caches, artifacts/ and `.claude/` internals - junk that overstates the
+codebase and misprices the review). In order: the codebase map's inventory when
+`docs/codebase-map.md` exists · `git ls-files | wc -l` in a repo (respects .gitignore) ·
+last resort, a count-only `find`/`Get-ChildItem` excluding caches, `artifacts/` and
+`.claude/`. Diff targets size by `git diff --stat`'s summary line. **Name the derived target in the same message**
 ("Target: uncommitted diff, 12 files - say if you meant something else"): the target is
 derived, not asked (`deep-review` step 2), and this line is where a wrong derivation gets
 corrected - never a later screen or its own turn.

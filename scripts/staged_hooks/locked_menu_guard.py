@@ -33,6 +33,15 @@ _DEPTH_LABELS = {"Quick", "Deep", "Audit", "None"}
 _PERF_LABELS = {"Yes", "No"}
 _FIXCYCLE_LABELS = {"Report only", "Apply fixes", "Fix → re-review loop"}
 _ORIGIN_LABELS = {"AI-assisted / vibe-coded", "Mixed", "Hand-written"}
+_TARGET_LABELS = {
+    "Uncommitted changes",
+    "Branch vs main",
+    "Whole working directory",
+    "A file or folder I'll name",
+}
+# The ONE permitted variation (target-menu.md): a non-git working directory drops the
+# two diff-shaped options.
+_TARGET_NON_GIT_LABELS = {"Whole working directory", "A file or folder I'll name"}
 _STAGE1_LABELS = {"Consolidated Delivery Report", "Separate artifacts", "Both"}
 _STAGE2_CANON = {
     "Spec docs": {"Engagement Brief", "BRD", "FSD", "RTM"},
@@ -148,6 +157,31 @@ def check_artifact_menu(questions: list) -> str | None:
     return None
 
 
+def check_target_menu(questions: list) -> str | None:
+    """Locked review-target construction (2026-08-17 user decision: 'it changes nearly
+    every time in some way' - same drift class the locked review menu closed). Fires on
+    a 'Target' header: single-select, exactly the canonical labels - the full set, or
+    the two-option non-git subset, nothing else (target-menu.md)."""
+    for q in questions:
+        if _header(q) != "Target":
+            continue
+        if q.get("multiSelect"):
+            return (
+                "target-menu drift: 'Target' must be multiSelect: false - one target "
+                "per review (target-menu.md)"
+            )
+        labels = _labels(q)
+        if labels not in (_TARGET_LABELS, _TARGET_NON_GIT_LABELS):
+            return (
+                f"target-menu drift: 'Target' options are {sorted(labels)!r}, expected "
+                f"exactly {sorted(_TARGET_LABELS)!r} (or, in a non-git directory, "
+                f"{sorted(_TARGET_NON_GIT_LABELS)!r}) - do not reword, add or drop "
+                "options; exotic targets go through the automatic 'Other' "
+                "(target-menu.md)"
+            )
+    return None
+
+
 def main() -> int:
     try:
         data = json.loads(sys.stdin.read() or "{}")
@@ -160,7 +194,11 @@ def main() -> int:
         return 0
     questions = [q for q in questions if isinstance(q, dict)]
     try:
-        problem = check_review_menu(questions) or check_artifact_menu(questions)
+        problem = (
+            check_review_menu(questions)
+            or check_artifact_menu(questions)
+            or check_target_menu(questions)
+        )
     except Exception:
         return 0  # a guard that can't be sure must not block a legitimate question
     if problem:

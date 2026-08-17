@@ -21,9 +21,10 @@ scope questions, so the brief now carries the derived scope and the gate approve
   never spend them on general-purpose code by habit.)
 - **Target** the same way (2026-08-17 user request: no standalone "what should I review?"
   turn): an uncommitted/branch diff → the diff; a path/module named in the request → that.
-  Only when NEITHER exists is the target a real question - and it rides `engage`'s 0a intake
-  batch (the Work-type slot, see engage 0a), or direct-mode's one batched call below; never
-  its own screen.
+  Only when NEITHER exists is the target a real question - LOCKED construction in
+  `engage`'s `references/target-menu.md` (guard-enforced; "Whole working directory" is
+  the review-everything option) - riding `engage`'s 0a intake batch (the Work-type slot),
+  or direct-mode's one batched call below; never its own screen.
 - **Breadth** from the briefed scope (the diff · named files · module · repo - whatever the
   brief already says; never widen it here).
 - **Mode** from depth: Audit → keep pre-existing in scope; otherwise change-focused (or
