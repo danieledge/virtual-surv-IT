@@ -662,6 +662,22 @@ def test_banner_and_defaults_render_without_rich(tmp_path, monkeypatch, capsys):
     assert out.out == ""
 
 
+def test_banner_carries_the_morgan_persona(tmp_path, monkeypatch, capsys):
+    """2026-08-17 user request: Morgan is visible from the go screen - with the
+    mandatory AI-identity attribution, on both render paths."""
+    project = _plugin_enabled_project(tmp_path)
+    mod = _load()
+    mod._print_banner(project)
+    rich_err = capsys.readouterr().err
+    assert "Morgan (PM) here" in rich_err
+    assert "AI agent with Virtual Surveillance IT" in rich_err
+    monkeypatch.setattr(mod, "_rich_ui", lambda: None)
+    mod._print_banner(project)
+    plain_err = capsys.readouterr().err
+    assert "Morgan (PM) here" in plain_err
+    assert "AI agent with Virtual Surveillance IT" in plain_err
+
+
 def test_launch_command_config_path_matches_install_helper(tmp_path, monkeypatch):
     """The launcher mirrors install_helper's config_path()/load_config() derivation
     instead of importing that whole file per 'go' - this pins the two together so a

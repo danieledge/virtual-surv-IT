@@ -660,6 +660,19 @@ def _plugin_version() -> str:
         return ""
 
 
+def _morgan_line() -> str:
+    """Morgan's greeting for the go screen (2026-08-17 user request: the persona should
+    be visible from the very first touchpoint) - with the mandatory AI-identity
+    attribution, same wording family as install_helper's opening line. The 🎩 marker is
+    encoding-probed like every other glyph (cp1252 corp consoles)."""
+    try:
+        "🎩".encode(getattr(sys.stderr, "encoding", None) or "utf-8")
+        hat = "🎩 "
+    except (UnicodeEncodeError, LookupError):
+        hat = ""
+    return f"{hat}Morgan (PM) here - I'm an AI agent with Virtual Surveillance IT."
+
+
 def _print_banner(project_dir: Path) -> None:
     version = _plugin_version()
     r = _rich_ui()
@@ -682,6 +695,7 @@ def _print_banner(project_dir: Path) -> None:
                 expand=False,
             )
         )
+        r["console"].print("  " + _morgan_line(), style="cyan")
         return
     ink = _Ink()
     err = sys.stderr
@@ -692,6 +706,7 @@ def _print_banner(project_dir: Path) -> None:
     print(f"    project  {ink.bold(project_dir.name)}", file=err)
     if version:
         print(f"    plugin   v{version}", file=err)
+    print(f"    {ink.title(_morgan_line())}", file=err)
 
 
 def _apply_new_recommended_defaults(project_dir: Path) -> list:
