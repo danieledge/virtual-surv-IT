@@ -133,6 +133,43 @@ def test_engage_does_not_claim_roster_in_claude_md():
     assert current, "engage/SKILL.md: roster pointer to docs/team-operating-guide.md not found"
 
 
+def test_reviewer_agents_forbid_repo_enumeration():
+    """Map-first review scoping (2026-08-17): dispatched reviewers must work from the
+    brief's file list and the codebase map's PATH, never crawl the repo themselves - a
+    live run had three parallel reviewers each independently re-discover a mapped repo."""
+    for agent in ("code-reviewer", "performance-reviewer"):
+        text = _read(f".claude/agents/{agent}.md").lower()
+        assert "never enumerate the repo" in text, (
+            f"{agent}.md: the no-self-enumeration rule is gone"
+        )
+    router = _read("docs/review/agent-router.md")
+    assert "Point, never paste" in router, (
+        "agent-router.md: briefs must point at the codebase map, never inline its body"
+    )
+    skill = _read(".claude/skills/deep-review/SKILL.md")
+    assert "point, never paste" in skill.lower(), (
+        "deep-review/SKILL.md: the map-pointer briefing rule is gone"
+    )
+
+
+def test_review_target_is_derived_or_batched_never_a_solo_turn():
+    """Review-target batching (2026-08-17): the target is derived (diff / named path)
+    and, when genuinely unknown, asked inside the 0a intake batch - never its own
+    screen or turn."""
+    engage = _read(".claude/skills/engage/SKILL.md")
+    assert "Review target" in engage and "`Target`" in engage, (
+        "engage/SKILL.md: the Work-type slot swap to Review target is gone"
+    )
+    deep = _read(".claude/skills/deep-review/SKILL.md")
+    assert re.search(r"\*\*Target\*\*", deep), (
+        "deep-review/SKILL.md: step 2 must derive the target before asking"
+    )
+    menu = _read(".claude/skills/engage/references/review-menu.md")
+    assert "Name the derived target" in menu, (
+        "review-menu.md: the price-line message must state the derived target"
+    )
+
+
 def test_engage_new_flag_forbids_engagement_discovery():
     """Live report (2026-08-17): '/engage --new' from the go menu still spent a turn
     listing the open packs 'in case any are related' - the human had JUST seen that

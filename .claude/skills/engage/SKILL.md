@@ -68,6 +68,14 @@ deletes any existing marker, fail-safe).
   the intro line, the team version and the what's-new line lead your very first reply
   **regardless**, then the single target question follows in the same turn. Only the *disclaimers
   + batched screen* defer; the banner never does.
+  **Exception - the request classifies itself but names no target** (e.g. `/engage code
+  review`): the gates ARE decidable (a review involves code), so the solo location screen is
+  not earned. Derive the target first - an uncommitted/branch diff, or a path the request
+  names - and state it in the classification line for correction at the menu. Only when
+  nothing is derivable does the target become a question, and it rides the 0a batch in the
+  Work-type slot (header `Target`): options **Uncommitted changes** / **Branch vs main** /
+  **I'll name a path** / **Whole codebase** (2026-08-17 user request: the location must
+  never cost its own turn).
 - **The tool's hard limits are 4 questions per call and 4 options per question** ("Other" is added
   automatically). Never spec a menu that exceeds them; give **every** question a short `header`
   (≤12 chars - the ones to use are named per question below).
@@ -77,7 +85,9 @@ With the target known: show both disclaimers (text) at startup, then ask in a **
 - **Work-type** (header `Work type`) - *only if the classification is genuinely ambiguous after
   reading the request* (step 1). `/engage review this script` needs no "problem / review /
   build?" menu - classify it yourself, state the classification in one line, and let the user
-  correct it. Don't manufacture the question when the answer is in the request.
+  correct it. Don't manufacture the question when the answer is in the request. When the
+  request self-classifies but the target is underivable, this slot becomes **Review target**
+  (header `Target`) instead - the bare-`/engage` exception above.
 - **Execution consent** (header `Execution`) - only when code is/looks involved; default **No**.
 - **Data attestation** (header `Data safety`) - only when data is plausibly involved; otherwise
   record "no data involved" silently. Exact menus + wording: `references/safety-gates.md`.

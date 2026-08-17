@@ -74,7 +74,11 @@ Review checklist (static-only):
 - **Resource hygiene** - leaks, unclosed handles, caching opportunities.
 
 When invoked:
-1. Establish the **workload** (volumes, latency/throughput target, batch vs streaming).
+1. Establish the **workload** (volumes, latency/throughput target, batch vs streaming). Your
+   scope arrives in the dispatch brief (file list / hot-path candidates, plus the codebase
+   map's path when the project has one) - **work from it; never enumerate the repository
+   yourself**. Wider context comes from reading the named map, not from `ls`/Glob sweeps
+   (live 2026-08-17: parallel reviewers each re-discovered a repo whose map already existed).
 2. **Assess statically - do NOT execute the code** (static-only mode; profilers are off, CLAUDE.md
    §7). Read the hot paths and reason about complexity, data structures, I/O/query shape
    (`EXPLAIN` plan-only), concurrency and memory growth at the target volume; capture explicit

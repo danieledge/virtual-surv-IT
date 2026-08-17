@@ -1,7 +1,10 @@
 # Backlog: map-first review scoping + batched review-target question
 
-Status: PROPOSED - investigation only, nothing implemented (user instruction 2026-08-17:
-"don't change anything, propose approach"). Source: live corp-box run on engagement
+Status: Items 1 and 2 IMPLEMENTED 2026-08-17 (user: "implement both") - reviewer agents
+carry the no-self-enumeration rule, briefs point at the codebase map (never paste it),
+deep-review step 2 derives the target, and an underivable target rides the 0a intake
+batch's Work-type slot; pinned by tests in test_docs_consistency.py. Item 3 remains an
+opinion (recommended no change). Source: live corp-box run on engagement
 bx-dp-new (IMG_0738) - three dispatched reviewers each explored the repo with their own
 file discovery even though `docs/codebase-map.md` existed (map-skeleton=on), and the
 review target took an extra conversational turn to pin down.

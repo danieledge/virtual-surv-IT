@@ -171,6 +171,12 @@ When invoked:
    whether Pip ran. Either way, **pick depth yourself** - that's judgement, not mechanical
    detection - and none of this substitutes for reading the actual files under review: reusing
    the file list/language breakdown skips redundant bookkeeping, not the review itself.
+   **Never enumerate the repository yourself** (no `ls`/Glob sweeps, no breadth-first
+   browsing): the brief's file list IS your scope, and for wider context read the codebase
+   map at the path the brief names (`docs/codebase-map.md` when the project has one) instead
+   of walking directories - a live 2026-08-17 run had every dispatched reviewer
+   independently re-discover a repo whose map already existed. In a git repo with no list
+   and no map, `git ls-files <dir>` (bounded to the target) is the inventory of last resort.
 2. **Run the available analysers ONCE, up front - before any lens pass.** Only the tools the
    step-0 probe reported available for the languages in scope (table above). Hold their output
    as grounding input for every lens pass and cite it per finding (an analyser hit is 📊

@@ -15,7 +15,10 @@ engagement ALL-IN at roughly 2x the pass figure** - orchestration, scoring, the 
 artifacts ride on top - and more when caches run cold (5-minute TTL boxes). Budget status:
 <DAILY/HEADROOM line when a budget is recorded>." Scale the figures to the target's size
 honestly; the pass price and the all-in are both stated so neither is mistaken for the other -
-order-of-magnitude is the point, not a quote.
+order-of-magnitude is the point, not a quote. **Name the derived target in the same message**
+("Target: uncommitted diff, 12 files - say if you meant something else"): the target is
+derived, not asked (`deep-review` step 2), and this line is where a wrong derivation gets
+corrected - never a later screen or its own turn.
 
 **Critical construction rules:**
 - **Ask Q1, Q2, Q3 and Q4 in ONE `AskUserQuestion` call** (one screen, not four round-trips).

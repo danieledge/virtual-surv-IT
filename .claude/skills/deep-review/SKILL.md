@@ -19,6 +19,11 @@ scope questions, so the brief now carries the derived scope and the gate approve
   review** (adds 📋 compliance/audit, §4/§5 trail). Audit depth always Full. A user-named
   bespoke mix always wins. (`compliance-reviewer` and citation retrieval cost real tokens -
   never spend them on general-purpose code by habit.)
+- **Target** the same way (2026-08-17 user request: no standalone "what should I review?"
+  turn): an uncommitted/branch diff → the diff; a path/module named in the request → that.
+  Only when NEITHER exists is the target a real question - and it rides `engage`'s 0a intake
+  batch (the Work-type slot, see engage 0a), or direct-mode's one batched call below; never
+  its own screen.
 - **Breadth** from the briefed scope (the diff · named files · module · repo - whatever the
   brief already says; never widen it here).
 - **Mode** from depth: Audit → keep pre-existing in scope; otherwise change-focused (or
@@ -82,7 +87,14 @@ rather than silently absorbing the cost difference.
 related-file map built once up front - importers of the changed files, their imports, and
 their test files - and read only what the map names (turingmind's Phase-1C pattern; the live
 6-pass run's per-pass cold repo reads are exactly what this avoids). Never browse the
-codebase breadth-first from inside a review pass.
+codebase breadth-first from inside a review pass. **When `docs/codebase-map.md` exists, it
+is that map already** (2026-08-17 live report: three dispatched reviewers each re-crawled a
+repo whose map existed): the dispatch brief carries the in-scope FILE LIST plus the map's
+PATH with "read it for wider context - do not enumerate the repo" - **point, never paste**
+(the map body in N briefs is N times orchestrator output tokens; an agent-side Read is cheap
+input, and a diff-scoped pass needs no map read at all). Trust it only after a cheap
+staleness look (map's stated date vs `git log -1 --format=%ci`); if drifted, refresh just
+the target directories with `git ls-files <dir>` - never a whole-repo walk.
 
 > ⚠️ **Pip (`review-scorer`) is two of these steps, and both are delegations, not options -**
 > **including doing the step yourself "to save a turn."** Before dispatching anyone, state the

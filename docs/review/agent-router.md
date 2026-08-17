@@ -105,6 +105,13 @@ cold) where this topology prices 3. The legitimate reasons to split by component
 corporate-proxy timeouts have bitten (the split's original purpose - confirmed helpful on
 proxied corporate boxes); absent those, one pass per review agent.
 
+**Briefs carry scope, never invite discovery (2026-08-17).** Every dispatch brief names the
+in-scope FILE LIST, and - when the project has one - `docs/codebase-map.md`'s **path** with
+"read it for wider context; do not enumerate the repo" (a live run had three parallel
+reviewers each re-crawl a repo whose map already existed). **Point, never paste**: the map
+body copied into N briefs is N times orchestrator output tokens, where an agent-side Read of
+the same file is cheap input - and a diff-scoped pass needs no map read at all.
+
 **Sequential means the lens order inside one call, not the dispatch across calls.** When a large
 target is split into multiple component-scoped `code-reviewer` calls (operating guide
 §Orchestration discipline), those calls are independent and dispatch **concurrently, in one
