@@ -273,8 +273,12 @@ separate and stays human-consent-only.)
 
 **Fewer timeouts on slow networks/proxies (optional).** `python install_helper.py --env-tuning
 <project-dir>` upserts a curated set of Claude Code env vars into the project's
-`.claude/settings.json` - raised API/stream-idle timeouts, retry-watchdog, and capped
-single-tool output sizes. Opt-in, project-level only (Claude Code's settings-file `env` block
+`.claude/settings.json` - raised API/stream-idle timeouts, retry-watchdog, capped
+single-tool output sizes, and the **1-hour prompt-cache TTL** (`ENABLE_PROMPT_CACHING_1H=1` -
+on API-key/cloud billing the default 5-minute TTL re-pays the cold prefix after every
+stop-start gap; see [Token usage](#-token-usage--optimisation)). `virt-surv go` also
+propagates newly recommended keys to projects that already opted in, add-only, telling you
+when it does. Opt-in, project-level only (Claude Code's settings-file `env` block
 already wins over the shell on Linux and PowerShell alike), backs up the settings file first;
 any other env var already there, or set with a different value than recommended, is corrected
 in place, and everything unrelated is left untouched.
@@ -289,20 +293,29 @@ attached whole instead of a screenshot. Also reachable via Diagnostics → "Self
 interactive menu, and folded into `--check-env`'s own comprehensive report - both end with a
 compact pass/fail summary.
 
-**Run it from anywhere (optional).** `python install_helper.py setup-alias` offers to add a
-`virt-surv` alias/function to whichever shell config actually exists on your machine
-(`~/.bashrc`, `~/.zshrc`, or a PowerShell profile on Windows) - opt-in, previewed before
-writing, never duplicated on a re-run. Once set up, `cd` into any project (the same folder
-you'll run `claude` from) and run `virt-surv configure` (enable + permissions + preferences +
-Morgan's model + an analyser-availability cache refresh, one guided pass, asks before each
-choice) or `virt-surv engage` / `virt-surv onboard` (identical - the same pass with every
-recommended default applied automatically, zero prompts, warns if the folder doesn't look
-like a project root, then a ready-to-launch message naming that folder) - or `virt-surv
-archive` / `virt-surv list-engagements` (bridges to `scripts/engagement_state.py`, scoped to
-that folder) - no need to remember the clone's full path or hunt through the menu for first-time
-setup.
+**Run it from anywhere - and launch with `virt-surv go` (recommended).** `python
+install_helper.py setup-alias` offers to add a `virt-surv` alias/function to whichever shell
+config actually exists on your machine (`~/.bashrc`, `~/.zshrc`, or a PowerShell profile on
+Windows) - opt-in, previewed before writing, never duplicated on a re-run, and it upgrades
+itself in place on later runs (old definitions are removed, not stacked). Once set up,
+**`virt-surv go` from your project folder is the recommended way to start every session**: it
+shows the project's effective team settings in one table, pre-warms the analyser and probe
+caches so the first `/engage` opens with zero extra tool calls, lets you pick
+**resume-or-new** with arrow keys or hotkeys before Claude Code even starts (the choice
+arrives pre-seeded as the first prompt - no model round-trip spent deciding), and gives
+inline access to a settings editor (`c`) and engagement archiving (`a`). The other
+subcommands cover setup and upkeep: `virt-surv configure` (enable + permissions + preferences
++ Morgan's model + an analyser-availability cache refresh, one guided pass, asks before each
+choice), `virt-surv engage` / `virt-surv onboard` (identical - the same pass with every
+recommended default applied automatically, zero prompts), and `virt-surv archive` /
+`virt-surv list-engagements` (bridges to `scripts/engagement_state.py`, scoped to that
+folder) - no need to remember the clone's full path or hunt through the menu.
 
-**3. Restart Claude Code. From an enabled project, summon the team** (commands are namespaced):
+**3. Restart Claude Code and launch. The recommended way is `virt-surv go`** (set up the
+alias in the optional step above) - from your project folder it shows the team settings,
+warms the caches, and asks resume-or-new before the session starts, then launches Claude
+Code with your choice pre-seeded. Without the alias, start `claude` yourself from the
+enabled project and **summon the team** (commands are namespaced):
 ```
 /compliance-surveillance-team:engage
 ```
@@ -528,9 +541,10 @@ the specialists.
 
 Full detail: [The safety hooks](#-the-safety-hooks) · [Handling real data](#-handling-real-data).
 
-The PM **asks clarifying questions** (and waits for your answers, it won't guess scope,
-jurisdiction, data or success criteria), offers a **menu of documentary artifacts** to choose from
-(BRD, FSD, ADRs, RTM, review report, audit pack…), summarises everything in an Engagement Brief,
+The PM **asks clarifying questions** (batched into one screen, and it waits for your answers -
+it won't guess scope, jurisdiction, data or success criteria), packages everything into **one
+consolidated Delivery Report by default** (standalone documentary artifacts - BRD, FSD, ADRs,
+RTM, audit pack - on request), summarises everything in an Engagement Brief,
 **states how many agents it intends to use and why**, then oversees delivery and **hands back each
 deliverable in both `.md` and `.html`** in the engagement's own `artifacts/<slug>/` workspace
 (one folder per engagement, with a generated `START-HERE.md` index and a machine-readable state
@@ -899,8 +913,9 @@ rules/ · tests/                 # the bundled example (spoofing) + its true/fal
 scripts/                        # masking (ingest), synthesise, render_html, eval_score,
                                 #   calibrate_spoofing, check_citations, validate_* helpers,
                                 #   convert_file (the file-conversion front door)
-vendor/                         # convert_file's deps, bundled (pure Python, pinned - no pip
-                                #   needed; licences in THIRD-PARTY-LICENSES.md)
+vendor/                         # bundled pure-Python deps (no pip): convert_file's readers +
+                                #   rich/prompt_toolkit for the virt-surv go TUI; licences in
+                                #   THIRD-PARTY-LICENSES.md
 config/                         # masking schema + regulatory register + feed-schema example
 docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
                                 #   scenarios/ · demos/ · templates/ · adr/
@@ -939,6 +954,8 @@ engagements. Descriptions are taken from each script's own docstring.
 | `scripts/calibrate_spoofing.py` | Measured FP/FN evidence for the spoofing rule on a labelled synthetic corpus (precision/recall per segment) | model, consent-free |
 | `scripts/extensions.py` | Parses and surfaces the company-extensions contract from a working project's `docs/team-extensions.md` (ADR-009) | model, consent-free |
 | `scripts/convert_sarif.py` | Converts SARIF analyser output to the team's findings-pack JSONL so company-tool findings keep 📊 measured status | model, consent-free |
+| `scripts/virt_team_launcher.py` | `virt-surv go`'s decision engine, run before Claude Code starts: settings table, resume-or-new menu (arrow keys/mouse via vendored prompt_toolkit, plain fallback), inline settings editor and archiving, cache pre-warm; stdout carries only the pre-seeded prompt | human, pre-session |
+| `scripts/repo_skeleton.py` | Deterministic, token-budgeted codebase skeleton (inventory, tiered symbols, PageRank importance) - the mechanical layer under `/map-codebase` and the sanctioned whole-repo inventory during engagements | model, consent-free |
 | `scripts/check-review-tools.sh` | Probes which analysers are installed (cached), so missing tools are skipped rather than re-invoked | model, consent-free |
 | `.claude/hooks/guard-raw-data.py` | Blocks Read/Grep/Glob/Bash tool calls that target `data/raw/` | run by Claude Code (always on) |
 | `.claude/hooks/guard-code-execution.py` | Blocks execution of the code under review unless a human has opened the consent gate | run by Claude Code (team-invoked sessions) |
@@ -998,7 +1015,7 @@ hooks entirely).
   cross-project** conventions live in the committed, plugin-shipped
   [`docs/house-rules.md`](docs/house-rules.md). Advisory agents recommend; the PM commits.
   (Claude Code subagents have no per-agent memory; a committed file is the real, auditable mechanism.)
-- Models: **4 opus** (the final/unchecked judgement + novel-design roles) · **11 sonnet** ·
+- Models: **4 opus** (the final/unchecked judgement + novel-design roles) · **8 sonnet** ·
   **1 haiku**; the per-agent rationale and best-practice conformance live in
   [`docs/agent-design.md`](docs/agent-design.md). Change the `model:` field freely.
 
@@ -1011,7 +1028,7 @@ hooks entirely).
 Multi-agent setups cost tokens, so the team is built to be cost-conscious, the biggest lever being
 **right-sizing** (engaging only the agents a task needs, never all 13).
 
-In one line: one code review ~51k tokens (~$2, measured) · a lean engagement ~35-50k (estimate) · a full build-review-tuning delivery ~500k (~$4-8, measured); levers: right-sizing, model tiering (4 opus / 11 sonnet / 1 haiku), artifacts-as-blackboard, dormancy.
+In one line: one code review ~51k tokens (~$2, measured) · a lean engagement ~35-50k (estimate) · a full build-review-tuning delivery ~500k (~$4-8, measured); levers: right-sizing, model tiering (4 opus / 8 sonnet / 1 haiku), artifacts-as-blackboard, dormancy.
 
 <details>
 <summary>💰 <b>Measured per-run numbers + the optimisations in place</b></summary>

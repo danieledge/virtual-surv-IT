@@ -45,7 +45,7 @@ safety rails that stop confidential data ever reaching the AI.
   So an agent can actually *do* work (open files, write code, run it) rather than only
   chatting about it.
 
-- **Subagent** - one agent set up for **a single, focused role**. This project has 16 of
+- **Subagent** - one agent set up for **a single, focused role**. This project has 13 of
   them. Each has a short "job description" (a small text file in `.claude/agents/`) telling
   it what it's responsible for and what it's allowed to touch.
 
@@ -204,7 +204,7 @@ It's the template every other detection in this team would follow.
 | Path | What it is |
 |---|---|
 | `CLAUDE.md` | The team handbook - shared rules every AI member reads first |
-| `.claude/agents/` | The 16 job descriptions (one file per team member) |
+| `.claude/agents/` | The 13 job descriptions (one file per team member) |
 | `.claude/skills/` | Workflow shortcuts, e.g. `/new-scenario` runs the whole team chain |
 | `.claude/hooks/` | The automatic guard that blocks the AI from real data |
 | `rules/` | The actual detection code (the spoofing example) |
@@ -217,9 +217,12 @@ It's the template every other detection in this team would follow.
 
 ## 8. How you'd actually use it
 
-1. Open this project in **Claude Code** (Anthropic's coding tool). The 16 team members are
-   loaded but stay **dormant** - a normal session behaves like ordinary Claude Code until you
-   invoke the team.
+1. Open the project in **Claude Code** - the recommended way is **`virt-surv go`** from
+   your project folder (set up once via the install helper's alias step): it shows the
+   team settings, lets you pick resume-or-new before the session starts, and launches
+   Claude Code with that choice pre-seeded. Starting `claude` by hand works identically.
+   The 13 team members are loaded but stay **dormant** - a normal session behaves like
+   ordinary Claude Code until you invoke the team.
 2. **Start with the Project Manager - "Morgan".** Type `/engage` and describe whatever
    you've got - a rough idea, some code to check, or a full set of requirements. Morgan is
    warm and plain-speaking, with a can-do but realistic attitude - it'll find a way forward,
