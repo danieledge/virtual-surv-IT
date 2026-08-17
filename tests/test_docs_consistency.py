@@ -142,6 +142,49 @@ def test_reviewer_agents_forbid_repo_enumeration():
         assert "never enumerate the repo" in text, (
             f"{agent}.md: the no-self-enumeration rule is gone"
         )
+
+
+def test_build_side_agents_forbid_repo_enumeration_too():
+    """The build-workflow pass (2026-08-17): builders, QA, the BA and the analyst get
+    the same map-first scope rule reviews got - the enumeration guard denies a bare
+    find mid-build, so the sanctioned route must be in each prompt."""
+    for agent in (
+        "rules-developer",
+        "platform-engineer",
+        "ml-engineer",
+        "qa-engineer",
+        "data-analyst",
+    ):
+        text = _read(f".claude/agents/{agent}.md").lower()
+        assert "never enumerate the repo" in text, (
+            f"{agent}.md: the map-first scope rule is missing"
+        )
+    ba = _read(".claude/agents/business-analyst.md").lower()
+    assert "codebase-map.md" in ba and "never crawl" in ba
+
+
+def test_build_solution_carries_the_2026_08_17_review_fixes():
+    """Priced gate, light-shape derivation, consent-up-front, map-in-briefs - the four
+    build-workflow findings that map onto SKILL text."""
+    text = _read(".claude/skills/build-solution/SKILL.md")
+    assert "Price the plan at the go-ahead gate" in text
+    assert "EARS-lite" in text  # single-unit non-detection derives the light shape
+    assert "consent declined" in text  # evidence level agreed up front
+    assert "codebase map's\n   PATH" in text.replace("  ", " ") or "codebase map's" in text
+    assert "point, never paste" in text.lower()
+
+
+def test_bookends_close_refreshes_the_map():
+    """A build outdates the map; direct-invoked skills never pass through /engage's
+    close - the shared bookends must carry the bounded refresh + re-fingerprint."""
+    text = _read(".claude/skills/.shared/engagement-bookends.md")
+    assert "Map currency" in text
+    assert "repo_skeleton --fingerprint docs/codebase-map.md" in text
+
+
+def test_write_brd_batches_clarifying_questions():
+    text = _read(".claude/skills/write-brd/SKILL.md")
+    assert "ONE `AskUserQuestion` call" in text
     router = _read("docs/review/agent-router.md")
     assert "Point, never paste" in router, (
         "agent-router.md: briefs must point at the codebase map, never inline its body"

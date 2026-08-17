@@ -18,7 +18,7 @@ Operating rules:
   obligation it serves.
 
 When invoked:
-1. Confirm the spec and the acceptance criteria.
+1. Confirm the spec and the acceptance criteria. Your working scope arrives in the dispatch brief (file list, plus the codebase map's PATH when the project has one - read the map for wider context); **never enumerate the repository yourself** - `git ls-files` is the fallback inventory (map-first rule, 2026-08-17).
 2. Implement the rule logic following the stack in `docs/scope-and-stack.md` and the
    conventions in CLAUDE.md.
 3. Write tests covering known true-positive and false-positive cases, using synthetic or

@@ -57,7 +57,20 @@ work-in-progress rather than artifacts appearing with no state transition to exp
 ```
 
 (the `--fix` mode auto-renders missing `.html` siblings and renames a mis-typed summary email to
-`.txt`). **`check_artifacts` takes no `--slug`** - unlike the `engagement_state` commands around
+`.txt`).
+
+**Map currency (before `set-status closed`, 2026-08-17 build review):** a build is the one
+activity guaranteed to outdate the codebase map, and direct-invoked skills never pass through
+`/engage`'s close where the update used to live. When `docs/codebase-map.md` exists AND this
+engagement changed code: update the touched §2 rows (bounded - only areas this engagement
+touched, never a full re-map), append the §3 history row, and re-fingerprint:
+
+```
+<python> -m scripts.repo_skeleton --fingerprint docs/codebase-map.md --project-dir .
+```
+
+Skipping this hands the NEXT open a `MAP_DRIFT` flag against a map the team itself outdated -
+and hands the next review a stale inventory. No map, or a no-code engagement: skip silently. **`check_artifacts` takes no `--slug`** - unlike the `engagement_state` commands around
 it, it always scans the whole `artifacts/` root and discovers every engagement's own workspace
 itself, same as the DoD backstop Stop hook does. Write the
 **engagement-summary email**

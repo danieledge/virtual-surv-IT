@@ -17,20 +17,36 @@ bookend at the end.
 
 Run the **orchestrator-workers** pattern, agile and iterative:
 
-1. **Fill gaps flexibly.** If there's no BRD/FSD yet, run `/write-brd` then `/brd-to-fsd`
-   first; skip whatever the user already provided. **Chained skills are dormant** - read
-   `.claude/skills/<name>/SKILL.md` and follow it in this session, never the Skill tool
-   (`.claude/skills/.shared/run-mode.md`). Same for `/handover` at step 7.
+1. **Fill gaps flexibly - and right-size the spec chain first (2026-08-17 build review).**
+   A **single-unit, non-detection, non-regulated** build DERIVES the light shape by default:
+   an EARS-lite spec block inside the Engagement Brief replaces the BRD+FSD documents, and
+   the crew is builder + `code-reviewer` + QA (the `/engage-light` scale) - state the derived
+   shape at the gate for correction, don't ask. The full document chain (`/write-brd` then
+   `/brd-to-fsd`) runs for multi-unit, detection-logic or regulated work, or when the user
+   asks for the documents; skip whatever the user already provided. **Chained skills are
+   dormant** - read `.claude/skills/<name>/SKILL.md` and follow it in this session, never the
+   Skill tool (`.claude/skills/.shared/run-mode.md`). Same for `/handover` at step 7.
 2. **Decompose** the FSD into discrete, independently buildable units. **Route each unit to
    the right builder by type** (CLAUDE.md §6): detection logic → `rules-developer`; data
    pipeline / ETL / transformation or utility script / infra → `platform-engineer`; analytics
    / data-quality / reconciliation / reporting → `data-analyst`; ML → `ml-engineer` +
    independent `model-validator`. **Give each unit an explicit, non-overlapping brief**
    (objective · scope boundaries / what other units own · inputs/artifacts to read · expected
-   output) so units don't duplicate or leave gaps. Then chain each through `code-reviewer`; add
+   output **· the unit's in-scope FILE LIST and, when the project has one, the codebase map's
+   PATH with "read it for context - do not enumerate the repo"** - point, never paste the map
+   body; the same brief rule reviews use, and the enumeration guard denies a bare `find`
+   mid-build) so units don't duplicate or leave gaps. Then chain each through `code-reviewer`; add
    `compliance-reviewer` when the unit is detection logic, touches regulated data, or documents
    thresholds (§4) - **not a default for every unit** (CLAUDE.md §4; operating guide routing
    table: "not every code review"). Independent units can run in parallel.
+   **Price the plan at the go-ahead gate (2026-08-17):** beside the agent count and dispatch
+   mechanism (operating guide §Orchestration discipline), state one order-of-magnitude money
+   line derived from the unit list - roughly (builder pass + review pass) per unit at list
+   price, QA on top, and **assume at least one fix→re-review cycle per unit** in the figure;
+   add the budget-status line when a budget is recorded. **State execution-consent status and
+   its consequence in the same gate line** - "consent declined → QA evidence will be 🧠
+   inferred (written, not run), static-only DoD path" - so the plan's evidence level is agreed
+   up front, never discovered at step 3.
 3. **Test independently** - `qa-engineer` (not the builder) designs and runs tests
    appropriate to the deliverable: true-positive and false-positive cases for detection
    logic; input/output, schema and edge-case tests for pipelines/transforms; idempotency/
