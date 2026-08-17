@@ -197,6 +197,38 @@ def test_injected_block_carries_resume_menu(tmp_path, monkeypatch, capsys):
     assert menu == {"open": [], "shown": [], "more": 0, "archived": 0, "default": None}
 
 
+def test_new_flag_omits_resume_menu_and_states_the_flag(tmp_path, monkeypatch, capsys):
+    """Live drift 2026-08-17 (twice in one session): under `--new` the model still
+    surfaced the open engagements it had just been told to skip. The block now carries
+    ENGAGE_FLAG=--new and deliberately OMITS the resume menu - zero discovery means
+    nothing injected to enumerate."""
+    _repo_as_project(tmp_path)
+    _warm_cache(tmp_path)
+    rc, out = _run(
+        monkeypatch,
+        capsys,
+        {"user_input": "/compliance-surveillance-team:engage --new"},
+        tmp_path,
+    )
+    assert rc == 0
+    assert "ENGAGE_FLAG=--new" in out
+    assert "RESUME_MENU" not in out
+    assert "resume menu omitted on purpose" in out
+
+
+def test_resume_flag_keeps_the_menu_for_slug_validation(tmp_path, monkeypatch, capsys):
+    """--resume still needs the menu: the slug must validate against `open` (the
+    wrapper's view could be stale)."""
+    _repo_as_project(tmp_path)
+    _warm_cache(tmp_path)
+    rc, out = _run(
+        monkeypatch, capsys, {"user_input": "/engage --resume my-pack"}, tmp_path
+    )
+    assert rc == 0
+    assert "ENGAGE_FLAG=--resume my-pack" in out
+    assert "RESUME_MENU" in out
+
+
 def test_resume_menu_failure_does_not_drop_the_rest_of_the_block(tmp_path, monkeypatch, capsys):
     """RESUME_MENU and the probe report fail open INDEPENDENTLY - a broken
     engagement_state.resume_menu() must not cost the INTERPRETER=/PLUGIN_ROOT= part of the

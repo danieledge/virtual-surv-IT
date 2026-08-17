@@ -151,6 +151,10 @@ Windows, so an absolute Windows path is written with FORWARD slashes inside doub
 2026-08-16: a hand-composed `cd C:\Users\...` arrived as `C:Usersdev...`, failed, and the
 open was wrongly judged probe-broken). **Never hand-compose a substitute probe - the block
 above IS the probe**; on failure it now prints the inner error itself as `PROBE-STDERR:` lines.
+That ban includes "lighter" partial probes observed live (2026-08-17): grepping the skills
+tree for probe field names, or ad-hoc `engagement_state` calls to "check first" before the
+real probe - one probe (the prefetch block or the heredoc), nothing before it, nothing
+beside it.
 
 The interpreter order (warm cache first, then Windows-aware) and `PYTHONIOENCODING=utf-8` are
 still load-bearing, not decoration - the cache key is `CLAUDE_PROJECT_DIR`-scoped, not

@@ -110,10 +110,12 @@ occasionally picked the wrong option before self-correcting. When present, this 
 
 - **`--new` → skip straight to classifying as new work, with ZERO engagement discovery** -
   nothing to validate ("new" is valid whatever is open): no `list --menu`, no artifacts
-  listing, no `ENGAGEMENTS.md`, no open-pack commentary in chat (the go menu just showed
-  the human that exact list and they chose new - re-surfacing it re-litigates their
-  decision; live 2026-08-17). Siblings seen while creating your workspace in step 4 are
-  not an invitation to comment.
+  listing, no `ENGAGEMENTS.md`, no hand-rolled "check first" substitute probe, and no
+  open-pack commentary in chat - not even "one engagement is open but I'll skip it" (the
+  go menu just showed the human that exact list and they chose new - re-surfacing it
+  re-litigates their decision; live 2026-08-17, twice). The prefetch block confirms the
+  flag as `ENGAGE_FLAG=--new` and omits `RESUME_MENU` on purpose. Siblings seen while
+  creating your workspace in step 4 are not an invitation to comment.
 - **`--resume <slug>` → validate the slug first** (`RESUME_MENU`/`list --menu`, same as
   below) rather than trusting it blindly: the wrapper's view could be stale (another session
   closed or archived it in the seconds between the wrapper computing the menu and this
