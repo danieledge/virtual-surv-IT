@@ -146,3 +146,62 @@ def test_no_install_found_anywhere_returns_empty(tmp_path):
     cwd = tmp_path / "project"
     cwd.mkdir()
     assert find_plugin_root(home, cwd) == ""
+
+
+# --- 2026-08-17: local-path installs (corp live report - probe died with no root) ---------
+
+
+def _team_root(tmp_path, name="clone"):
+    root = tmp_path / name
+    (root / ".claude-plugin").mkdir(parents=True)
+    (root / ".claude-plugin" / "plugin.json").write_text(
+        '{"name": "compliance-surveillance-team"}', encoding="utf-8"
+    )
+    return root
+
+
+def test_env_seed_wins_for_local_path_installs(tmp_path, monkeypatch):
+    """A local clone sits under neither the plugin cache nor marketplaces, and the
+    registry filename drifts across Claude Code versions - CLAUDE_PLUGIN_ROOT (which
+    plugin-mode hooks receive directly) is the one signal covering every install shape.
+    Validated against the manifest, never trusted bare."""
+    from scripts.find_plugin_root import find_plugin_root
+
+    home = tmp_path / "home"
+    home.mkdir()
+    cwd = tmp_path / "some-client-project"
+    cwd.mkdir()
+    root = _team_root(tmp_path)
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(root))
+    assert find_plugin_root(home, cwd) == str(root)
+
+
+def test_env_seed_rejected_when_not_the_team_plugin(tmp_path, monkeypatch):
+    from scripts.find_plugin_root import find_plugin_root
+
+    home = tmp_path / "home"
+    home.mkdir()
+    cwd = tmp_path / "proj"
+    cwd.mkdir()
+    other = tmp_path / "other-plugin"
+    (other / ".claude-plugin").mkdir(parents=True)
+    (other / ".claude-plugin" / "plugin.json").write_text('{"name": "x"}', encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(other))
+    assert find_plugin_root(home, cwd) == ""  # falls through, nothing else to find
+
+
+def test_registry_alternate_filenames_are_consulted(tmp_path, monkeypatch):
+    import json as _json
+
+    from scripts.find_plugin_root import find_plugin_root
+
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    home = tmp_path / "home"
+    (home / ".claude" / "plugins").mkdir(parents=True)
+    cwd = tmp_path / "proj"
+    cwd.mkdir()
+    root = _team_root(tmp_path)
+    (home / ".claude" / "plugins" / "config.json").write_text(
+        _json.dumps({"plugins": [{"installPath": str(root)}]}), encoding="utf-8"
+    )
+    assert find_plugin_root(home, cwd) == str(root)

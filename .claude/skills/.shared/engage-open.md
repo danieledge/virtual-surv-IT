@@ -41,7 +41,7 @@ written, character for character - history and full rationale in
 ```
 CACHED=$(cat "${CLAUDE_PROJECT_DIR:-.}/.claude/.guard-interpreter" 2>/dev/null); \
 _try() { PYTHONIOENCODING=utf-8 "$1" - "$1" <<'PY'
-import sys, json, re, subprocess
+import sys, json, os, re, subprocess
 from pathlib import Path
 
 interp = sys.argv[1]
@@ -61,19 +61,25 @@ def install_paths(obj):
             out += install_paths(item)
     return out
 
-def from_registry():
+def is_team_root(path):
     try:
-        data = json.loads((home / ".claude/plugins/installed_plugins.json").read_text(encoding="utf-8-sig"))
+        return "compliance-surveillance-team" in (Path(path) / ".claude-plugin/plugin.json").read_text(encoding="utf-8-sig")
     except Exception:
-        return ""
-    for path in install_paths(data):
-        manifest = Path(path) / ".claude-plugin/plugin.json"
+        return False
+
+def from_env():
+    seed = os.environ.get("CLAUDE_PLUGIN_ROOT") or ""
+    return seed if seed and is_team_root(seed) else ""
+
+def from_registry():
+    for name in ("installed_plugins.json", "config.json", "plugins.json"):
         try:
-            text = manifest.read_text(encoding="utf-8-sig")
+            data = json.loads((home / ".claude/plugins" / name).read_text(encoding="utf-8-sig"))
         except Exception:
             continue
-        if "compliance-surveillance-team" in text:
-            return path
+        for path in install_paths(data):
+            if is_team_root(path):
+                return path
     return ""
 
 def from_filesystem():
@@ -92,9 +98,10 @@ def from_filesystem():
         return [(int(d), "") if d else (-1, s) for d, s in re.findall(r"(\d+)|(\D+)", str(p))]
     return str(max(hits, key=key).parent.parent)
 
-root = "" if (cwd / "docs/team-operating-guide.md").is_file() else (from_registry() or from_filesystem())
+root = "" if (cwd / "docs/team-operating-guide.md").is_file() else (from_env() or from_registry() or from_filesystem())
 script = Path(root, "scripts", "engage_probe.py") if root else Path("scripts/engage_probe.py")
 if not script.is_file():
+    sys.stderr.write("PROBE-STDERR: no engage_probe.py under resolved root=%r (cwd=%s)\n" % (root, cwd))
     sys.exit(1)
 proc = subprocess.run(
     [interp, str(script), "--plugin-root", root, "--interpreter-name", interp],

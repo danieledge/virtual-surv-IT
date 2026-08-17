@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 
@@ -54,23 +55,35 @@ def _walk_install_paths(obj) -> list[str]:
     return found
 
 
-def _from_registry(home: Path) -> str:
-    registry = home / ".claude" / "plugins" / "installed_plugins.json"
+# The registry filename has drifted across Claude Code versions (2026-08-17 corp live
+# report: a local-path install on v2.1.233 resolved to nothing, so the probe block died
+# with no root while a direct --plugin-root call worked) - try every known name; the
+# installPath walk below is schema-agnostic on purpose so a parse of ANY of them works.
+_REGISTRY_NAMES = ("installed_plugins.json", "config.json", "plugins.json")
+
+
+def _root_is_team_plugin(candidate: Path) -> bool:
+    manifest = candidate / ".claude-plugin" / "plugin.json"
     try:
-        data = json.loads(registry.read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        return ""
-    for install_path in _walk_install_paths(data):
-        candidate = Path(install_path)
-        manifest = candidate / ".claude-plugin" / "plugin.json"
+        text = manifest.read_text(encoding="utf-8-sig")
+    except OSError:
+        return False
+    # Substring match, not a parsed "name" field - matches the old grep -q's own
+    # crude-but-proven behaviour exactly, deliberately not tightened here.
+    return _TEAM_NAME in text
+
+
+def _from_registry(home: Path) -> str:
+    for name in _REGISTRY_NAMES:
+        registry = home / ".claude" / "plugins" / name
         try:
-            text = manifest.read_text(encoding="utf-8-sig")
-        except OSError:
+            data = json.loads(registry.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
             continue
-        # Substring match, not a parsed "name" field - matches the old grep -q's own
-        # crude-but-proven behaviour exactly, deliberately not tightened here.
-        if _TEAM_NAME in text:
-            return str(candidate)
+        for install_path in _walk_install_paths(data):
+            candidate = Path(install_path)
+            if _root_is_team_plugin(candidate):
+                return str(candidate)
     return ""
 
 
@@ -117,9 +130,19 @@ def _from_filesystem_search(home: Path) -> str:
 
 
 def find_plugin_root(home: Path, cwd: Path) -> str:
-    """Empty string means repo-as-project (the cwd IS the team repo)."""
+    """Empty string means repo-as-project (the cwd IS the team repo).
+
+    Resolution order (2026-08-17): repo-as-project first (unchanged), then the
+    CLAUDE_PLUGIN_ROOT env var - plugin-mode hooks receive it directly from Claude Code,
+    and it is the ONLY signal that covers every install shape including a local-path
+    clone, which sits under neither the plugin cache nor the marketplaces dir (the corp
+    live report's exact case) - validated against the manifest, never trusted bare; then
+    the registry; then the bounded cache/marketplaces glob."""
     if (cwd / "docs" / "team-operating-guide.md").is_file():
         return ""
+    env_root = os.environ.get("CLAUDE_PLUGIN_ROOT") or ""
+    if env_root and _root_is_team_plugin(Path(env_root)):
+        return env_root
     return _from_registry(home) or _from_filesystem_search(home)
 
 
