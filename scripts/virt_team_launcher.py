@@ -900,11 +900,16 @@ def _rich_ui():
 
 def _print_rule(label: str, note: str = "") -> None:
     """Section rule to stderr - rich Rule when available, the plain _rule string
-    otherwise. One helper so every menu header upgrades/degrades together."""
-    text = label + (f"  ({note})" if note else "")
+    otherwise. One helper so every menu header upgrades/degrades together. Bold title,
+    dim note, cyan-tinted line - the same accent the panel and pickers use."""
     r = _rich_ui()
     if r:
-        r["console"].print(r["Rule"](text, characters=r["rule_char"], style="dim", align="left"))
+        title = r["Text"](label, style="bold")
+        if note:
+            title.append(f"  ({note})", style="dim")
+        r["console"].print(
+            r["Rule"](title, characters=r["rule_char"], style="dim cyan", align="left")
+        )
         return
     print(_rule(_Ink(), label, note=note), file=sys.stderr)
 
@@ -966,10 +971,15 @@ def _pt_io() -> dict:
 
 
 def _pt_style(p):
+    """ANSI-16 only (corp terminals and pt's legacy Win32 backend map these cleanly;
+    truecolor does not survive every console). One accent - cyan - for structure and
+    selection; semantic colors reserved for STATE: green active, yellow attention,
+    dim inactive. The selection bar is cyan-on-black rather than reverse video, which
+    flips to something different in every terminal theme."""
     return p["Style"].from_dict(
         {
             "title": "bold ansicyan",
-            "sel": "reverse",
+            "sel": "bg:ansicyan ansiblack",
             "dim": "ansibrightblack",
             "note": "italic ansibrightblack",
             "on": "ansigreen",
@@ -1112,7 +1122,7 @@ def _print_banner(project_dir: Path) -> None:
                 title="[bold cyan]Virtual Surv-IT[/]",
                 title_align="left",
                 box=r["panel_box"],
-                border_style="dim cyan",
+                border_style="cyan",
                 padding=(0, 2),
                 expand=False,
             )
@@ -1244,6 +1254,8 @@ def _print_project_defaults(project_dir: Path) -> None:
             return "warn"
         if head in ("off", "not", "absent"):
             return "dim"
+        if value == "all auto":
+            return "dim"  # the neutral default - only overrides should pop
         return ""
     r = _rich_ui()
     print("", file=err)
