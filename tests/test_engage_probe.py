@@ -1192,3 +1192,88 @@ def test_allowlist_line_missing_without_settings(tmp_path):
     import scripts.engage_probe as ep
 
     assert "ALLOWLIST: missing" in ep._allowlist_line(tmp_path)
+
+
+# --- integrations (2026-08-17, docs/INTEGRATIONS.md) - off by default at every level ------
+
+
+def _write_prefs(tmp_path, payload: dict) -> None:
+    d = tmp_path / ".claude"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "team-preferences.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_integrations_default_entirely_off_and_line_absent(tmp_path):
+    from scripts.engage_probe import integrations_report_line, resolve_integrations
+
+    resolved = resolve_integrations(tmp_path)  # no prefs file at all
+    assert resolved["jira"]["enabled"] is False
+    assert resolved["pr_comments"]["enabled"] is False
+    assert integrations_report_line(resolved) == ""  # absent line = zero context cost
+
+
+def test_integrations_malformed_block_resolves_off_never_guesses(tmp_path):
+    from scripts.engage_probe import integrations_report_line, resolve_integrations
+
+    for bad in ("a string", 42, {"jira": "yes"}, {"jira": {"enabled": "true"}}):
+        _write_prefs(tmp_path, {"integrations": bad})
+        resolved = resolve_integrations(tmp_path)
+        assert resolved["jira"]["enabled"] is False, bad
+        assert integrations_report_line(resolved) == "", bad
+
+
+def test_jira_opt_in_resolves_with_defaults_and_reports(tmp_path):
+    from scripts.engage_probe import integrations_report_line, resolve_integrations
+
+    _write_prefs(
+        tmp_path,
+        {"integrations": {"jira": {"enabled": True, "project_key": "SURV"}}},
+    )
+    resolved = resolve_integrations(tmp_path)
+    jira = resolved["jira"]
+    assert jira["enabled"] is True
+    assert jira["mirror"] == "close-only"  # live is opt-in on top of opt-in
+    assert jira["tool_prefix"] == "mcp__atlassian"
+    line = integrations_report_line(resolved)
+    assert line.startswith("INTEGRATIONS=jira:on(close-only,key=SURV,")
+
+
+def test_jira_missing_project_key_is_surfaced_never_silent(tmp_path):
+    from scripts.engage_probe import integrations_report_line, resolve_integrations
+
+    _write_prefs(tmp_path, {"integrations": {"jira": {"enabled": True}}})
+    assert "key=UNSET" in integrations_report_line(resolve_integrations(tmp_path))
+
+
+def test_pr_comments_double_gate(tmp_path, monkeypatch):
+    """Experimental: config alone must NOT enable it - the launch-env flag is the second
+    gate, and configured-but-locked is surfaced, not silently off."""
+    from scripts.engage_probe import integrations_report_line, resolve_integrations
+
+    _write_prefs(tmp_path, {"integrations": {"pr_comments": {"enabled": True}}})
+    monkeypatch.delenv("CST_ENABLE_PR_COMMENTS", raising=False)
+    resolved = resolve_integrations(tmp_path)
+    assert resolved["pr_comments"]["enabled"] is False
+    assert resolved["pr_comments"]["locked"] is True
+    assert "pr-comments:locked" in integrations_report_line(resolved)
+
+    monkeypatch.setenv("CST_ENABLE_PR_COMMENTS", "1")
+    resolved = resolve_integrations(tmp_path)
+    assert resolved["pr_comments"]["enabled"] is True
+    assert "pr-comments:on(EXPERIMENTAL" in integrations_report_line(resolved)
+
+
+def test_build_report_carries_integrations_line_only_when_on(tmp_path, monkeypatch):
+    from scripts.engage_probe import build_report
+
+    monkeypatch.delenv("CST_ENABLE_PR_COMMENTS", raising=False)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "team-operating-guide.md").write_text("# ops\n", encoding="utf-8")
+    out = build_report("", tmp_path)
+    assert "INTEGRATIONS=" not in out
+    _write_prefs(
+        tmp_path,
+        {"integrations": {"jira": {"enabled": True, "project_key": "SURV"}}},
+    )
+    out = build_report("", tmp_path)
+    assert "INTEGRATIONS=jira:on(close-only,key=SURV," in out

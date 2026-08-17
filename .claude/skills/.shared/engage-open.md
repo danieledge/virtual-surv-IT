@@ -158,8 +158,13 @@ say so explicitly (that area's map entries are unverified, not `📊 observed`) 
 over the map's claims as settled fact; if the drift is central to what this engagement is about,
 consider offering `/map-codebase --refresh` before briefing rather than working from a known-stale
 map. (Root map only - `docs/codebase-map.d/` area files aren't covered by this open-time check,
-only by the full sweep at close.) Then the tooling report, the codebase map header + §3, the
-newest CHANGELOG entry, and any team-extensions block.
+only by the full sweep at close.) `INTEGRATIONS=` appears ONLY when the project has opted into
+the first-class tracker/PR config (docs/INTEGRATIONS.md; off by default, absent line = all off,
+take no outward actions): when present, read
+`.claude/skills/engage/references/integrations.md` before your first outward action - issue
+creation is named in the plan the go-ahead gate approves, never fired unannounced. Then the
+tooling report, the codebase map header + §3, the newest CHANGELOG entry, and any
+team-extensions block.
 
 **The probe does NOT print the operating guide** - issue that `Read` yourself (plugin mode:
 `$PLUGIN_ROOT/docs/team-operating-guide.md`) in the SAME turn as the probe when the working

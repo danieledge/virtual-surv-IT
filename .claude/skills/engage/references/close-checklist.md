@@ -139,3 +139,10 @@ previewed at the go-ahead gate). Outward-facing actions (raise a Jira, upload/pu
 pack) run only on approval and only against the ✅ closed pack - never interim artifacts,
 never secrets. Log each executed action with `engagement_state log-note`. An extension can
 never replace a close step - these are additions after the standard close completes.
+
+**First-class Jira integration (`INTEGRATIONS=jira:on(...)` in the open banner):** the same
+offer-after-summary-email step also carries the built-in Jira close actions - post the
+summary-email text as a comment on the recorded `jira-issue` decision's key, and transition
+it to the done-state (`.claude/skills/engage/references/integrations.md` has the rules; a
+PARTIAL or parked close posts the honest status and never transitions to done). Same
+approval, logging and closed-pack-only discipline as the extension actions above.

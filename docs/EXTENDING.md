@@ -132,6 +132,11 @@ Then declare the steps as close actions in `docs/team-extensions.md`:
   description = delivery-report summary, label `virt-team`.
 - Copy the engagement workspace to \\share\surveillance\packs\<slug>-<date>\.
 
+> **Jira and PR-comment presence have a first-class, mechanically-validated config of
+> their own** - off by default, project-scoped, documented in one place:
+> [`docs/INTEGRATIONS.md`](INTEGRATIONS.md). The free-form extension recipes below stay
+> the right tool for everything else (company analysers, bespoke close actions, KBs).
+
 ## Integrations
 
 - atlassian MCP: Jira project SURV, Confluence space SURV-DOC.

@@ -1183,6 +1183,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 | [`docs/FAQ.md`](docs/FAQ.md) | The questions a newcomer actually asks: evidence tags, hallucination, consent, the artifacts folder, Morgan |
 | [`docs/demos/README.md`](docs/demos/README.md) | Real captured demo transcripts (build, review, data-safety) - see the team work without running anything |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | Extending the team for your organisation: recipes + the extensions contract, analyser registry, tool allowlist |
+| [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) | First-class Jira and (experimental) PR-comment presence via your own MCP servers - **off by default**, project-scoped, one clear place to configure |
 | [`docs/team-operating-guide.md`](docs/team-operating-guide.md) | Standing rules, roster + routing table, question construction (read on-engage) |
 | [`docs/team-operating-guide-orchestration.md`](docs/team-operating-guide-orchestration.md) | Delegation/dispatch discipline - right-sizing, concurrent dispatch, review-splitting (read on first delegation, not at open) |
 | [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) | Frameworks, the canonical template catalogue, the traceability spine |

@@ -716,6 +716,67 @@ def resolve_preferences(project_dir: Path) -> dict:
     }
 
 
+def resolve_integrations(project_dir: Path) -> dict:
+    """The `integrations` block of `.claude/team-preferences.json`, validated to a known
+    shape. OFF BY DEFAULT at every level: no block, an unreadable block, or a wrong-typed
+    entry all resolve to disabled - an integration only ever activates on an explicit,
+    well-formed opt-in. Corp environments often have a Jira/GitHub MCP server wired up
+    for other work; the team must never start driving it just because it exists.
+    Project-scoped only, deliberately no machine-default tier: which tracker, which
+    project key and which MCP tool prefix are facts about the working project, never
+    about this machine. Canonical documentation (schema, examples, the approval model):
+    docs/INTEGRATIONS.md - the one place to configure this.
+
+    pr_comments is double-gated (2026-08-17 design decision): `"enabled": true` in the
+    project config AND `CST_ENABLE_PR_COMMENTS=1` in the launch environment. It is
+    experimental and needs real-environment validation alongside a working Jira setup
+    first; a configured-but-locked state is surfaced (not silently off) so the gate is
+    discoverable."""
+    prefs = read_team_preferences(project_dir)
+    raw = prefs.get("integrations")
+    out: dict = {"jira": {"enabled": False}, "pr_comments": {"enabled": False, "locked": False}}
+    if not isinstance(raw, dict):
+        return out
+    jira = raw.get("jira")
+    if isinstance(jira, dict) and jira.get("enabled") is True:
+        out["jira"] = {
+            "enabled": True,
+            "tool_prefix": str(jira.get("tool_prefix") or "mcp__atlassian"),
+            "project_key": str(jira.get("project_key") or ""),
+            "mirror": "live" if jira.get("mirror") == "live" else "close-only",
+        }
+    pr = raw.get("pr_comments")
+    if isinstance(pr, dict) and pr.get("enabled") is True:
+        if os.environ.get("CST_ENABLE_PR_COMMENTS") == "1":
+            out["pr_comments"] = {
+                "enabled": True,
+                "locked": False,
+                "tool_prefix": str(pr.get("tool_prefix") or "mcp__github"),
+            }
+        else:
+            out["pr_comments"] = {"enabled": False, "locked": True}
+    return out
+
+
+def integrations_report_line(integrations: dict) -> str:
+    """One compact INTEGRATIONS= line, or empty when everything is off - same
+    off-means-zero-output contract as MAP_DRIFT: a project with no integrations pays
+    nothing, and the skills read an ABSENT line as all-off."""
+    bits = []
+    jira = integrations.get("jira") or {}
+    if jira.get("enabled"):
+        bits.append(
+            f"jira:on({jira['mirror']},key={jira['project_key'] or 'UNSET'},"
+            f"tools={jira['tool_prefix']})"
+        )
+    pr = integrations.get("pr_comments") or {}
+    if pr.get("enabled"):
+        bits.append(f"pr-comments:on(EXPERIMENTAL,tools={pr['tool_prefix']})")
+    elif pr.get("locked"):
+        bits.append("pr-comments:locked(set CST_ENABLE_PR_COMMENTS=1 in the launch env)")
+    return "INTEGRATIONS=" + ",".join(bits) if bits else ""
+
+
 def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     root, pr_display, root_is_trusted = resolve_root(plugin_root_arg, project_dir)
     plugin_version = read_plugin_version(root)
@@ -752,6 +813,12 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         f"STANDARDS_CRITIQUE={'on' if standards_critique_on else 'off'}",
         f"MAP_SKELETON={'on' if map_skeleton_on else 'off'}",
     ]
+    integ_line = integrations_report_line(resolve_integrations(project_dir))
+    if integ_line:
+        # Absent when everything is off (docs/INTEGRATIONS.md) - when present, the
+        # engage flow reads .claude/skills/engage/references/integrations.md before
+        # its first outward action.
+        lines.append(integ_line)
     if drift:
         # Only appended when there's something to say - map_skeleton off, no map, no
         # Paths-glob entries, or nothing drifted all mean this line doesn't exist at all,
