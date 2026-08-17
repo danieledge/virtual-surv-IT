@@ -470,6 +470,10 @@ def test_menu_c_edits_then_reasks_and_returns_decision(tmp_path, monkeypatch, ca
     assert rc == 0
     assert out.out.strip() == "/compliance-surveillance-team:engage --new"
     assert "Project settings" in out.err
+    # After the editor, only the DELTA is reported - never the full defaults table
+    # again (live report 2026-08-17: the settings showed twice).
+    assert "-> no changes" in out.err
+    assert out.err.count("Project defaults") == 1
 
 
 def test_menu_a_archives_and_falls_through_to_plain_when_empty(tmp_path, monkeypatch, capsys):

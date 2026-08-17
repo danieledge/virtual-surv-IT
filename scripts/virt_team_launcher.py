@@ -348,6 +348,26 @@ def _editor_apply(project_dir: Path, action) -> str:
     return ""
 
 
+def _run_settings_editor(project_dir: Path) -> None:
+    """The [c] flow shared by both menu tiers: run the editor, then report ONLY the
+    rows that changed (live report 2026-08-17: the full defaults table was reprinted
+    under the table already on screen, so every edit showed the same settings twice -
+    the go-time table remains above as the 'before', these lines are the delta)."""
+    before = _editor_rows(project_dir) or []
+    _config_editor(project_dir)
+    after = _editor_rows(project_dir) or []
+    ink = _Ink()
+    changed = [
+        (label, value)
+        for (label, value, _on), (b_label, b_value, _bo) in zip(after, before)
+        if value != b_value
+    ]
+    for label, value in changed:
+        print(ink.dim(f"    -> {label}: {value}"), file=sys.stderr)
+    if not changed:
+        print(ink.dim("    -> no changes"), file=sys.stderr)
+
+
 def _pt_config_editor(p, project_dir: Path) -> None:
     """prompt_toolkit tier of the settings editor: arrows move, Enter/Space toggles the
     highlighted row IN PLACE (only the widget repaints, no full redraw), 'd' restores
@@ -657,8 +677,7 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
         return ""
     if pick[0] == "settings":
         try:
-            _config_editor(project_dir)
-            _print_project_defaults(project_dir)
+            _run_settings_editor(project_dir)
         except Exception:
             pass  # cosmetic tier
         return "__again__"
@@ -742,8 +761,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
         return ""
     if choice.lower() == "c":
         try:
-            _config_editor(project_dir)
-            _print_project_defaults(project_dir)
+            _run_settings_editor(project_dir)
         except Exception:
             pass  # cosmetic tier
         return "__again__"
