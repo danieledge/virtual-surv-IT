@@ -89,14 +89,38 @@ def test_repo_as_project_marker_also_detected(tmp_path, monkeypatch, capsys):
     assert "doesn't look like a configured project" not in out.err
 
 
-def test_plugin_project_no_engagements_prints_nothing(tmp_path, monkeypatch, capsys):
+def test_plugin_project_no_engagements_still_pauses_with_menu(tmp_path, monkeypatch, capsys):
+    """Zero open engagements used to skip the pause entirely; the menu now always shows
+    (2026-08-17 user preference) so [n]/[c] stay reachable. Non-interactive callers are
+    unchanged: no usable stdin -> the same plain launch as before, stdout empty."""
     _plugin_enabled_project(tmp_path)
     monkeypatch.chdir(tmp_path)
     mod = _load()
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)  # not under test here
-    rc = mod.main()
+    rc = mod.main()  # pytest's captured stdin is unreadable -> EOF path -> plain launch
     out = capsys.readouterr()
     assert rc == 0 and out.out == ""
+    assert "none open" in out.err
+    assert "[n]" in out.err and "start new" in out.err
+    assert "[a]" not in out.err  # nothing to archive - option hidden
+
+
+def test_empty_menu_n_starts_new_and_enter_launches_plain(tmp_path, monkeypatch, capsys):
+    project = _plugin_enabled_project(tmp_path)
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.strip() == "/compliance-surveillance-team:engage --new"
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out == ""  # Enter = just launch
+    assert "just launch" in out.err
 
 
 def test_decision_goes_to_stdout_menu_goes_to_stderr(tmp_path, monkeypatch, capsys):

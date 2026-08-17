@@ -441,8 +441,11 @@ def _resume_decision(project_dir: Path) -> str:
         except Exception:
             return ""
         shown = menu.get("shown") or []
-        if not shown:
-            return ""  # nothing open (any more) - nothing to decide, plain launch
+        # Zero open engagements used to skip the pause entirely (straight plain
+        # launch); the menu now shows regardless (2026-08-17 user preference: "I
+        # prefer it always pauses") - [c]/[a] stay reachable, and non-interactive
+        # callers are unaffected: no tty means input() raises EOFError, which is the
+        # same plain launch as before.
         decision = _menu_round(project_dir, engagement_state, menu, shown)
         if decision != "__again__":
             return decision
@@ -456,35 +459,40 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     err = sys.stderr
     ink = _Ink()
     print("", file=err)
-    _print_rule("Open engagements")
-    slug_w = max(len(_row_resume_token(r) or "?") for r in shown)
-    status_w = max(len(r.get("status") or "?") for r in shown)
-    for i, row in enumerate(shown, 1):
-        slug = _row_resume_token(row) or "?"
-        status = row.get("status") or "?"
-        opened = row.get("opened") or ""
-        title = row.get("title") or ""
-        status_col = (
-            ink.warn(status.ljust(status_w))
-            if status in ("in_progress", "blocked")
-            else ink.dim(status.ljust(status_w))
-        )
-        opened_col = ink.dim(f"opened {opened}") if opened else ""
-        print(
-            f"    {ink.bold(f'[{i}]')} resume {slug.ljust(slug_w)}  {status_col}  "
-            f"{opened_col}  {title}",
-            file=err,
-        )
-    more = menu.get("more") or 0
-    if more:
-        print(ink.dim(f"        (+{more} more not shown)"), file=err)
+    _print_rule("Open engagements" if shown else "Engagements")
+    if shown:
+        slug_w = max(len(_row_resume_token(r) or "?") for r in shown)
+        status_w = max(len(r.get("status") or "?") for r in shown)
+        for i, row in enumerate(shown, 1):
+            slug = _row_resume_token(row) or "?"
+            status = row.get("status") or "?"
+            opened = row.get("opened") or ""
+            title = row.get("title") or ""
+            status_col = (
+                ink.warn(status.ljust(status_w))
+                if status in ("in_progress", "blocked")
+                else ink.dim(status.ljust(status_w))
+            )
+            opened_col = ink.dim(f"opened {opened}") if opened else ""
+            print(
+                f"    {ink.bold(f'[{i}]')} resume {slug.ljust(slug_w)}  {status_col}  "
+                f"{opened_col}  {title}",
+                file=err,
+            )
+        more = menu.get("more") or 0
+        if more:
+            print(ink.dim(f"        (+{more} more not shown)"), file=err)
+    else:
+        archived = menu.get("archived") or 0
+        note = f"none open ({archived} archived)" if archived else "none open"
+        print(ink.dim(f"    {note}"), file=err)
     print(f"    {ink.bold('[n]')} start new", file=err)
-    print(
-        f"    {ink.bold('[c]')} change a project setting   {ink.bold('[a]')} archive "
-        "engagement(s)",
-        file=err,
-    )
-    print(f"    {ink.dim('[Enter] decide inside the session instead')}", file=err)
+    settings_opt = f"    {ink.bold('[c]')} change a project setting"
+    if shown:
+        settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
+    print(settings_opt, file=err)
+    enter_label = "just launch" if not shown else "decide inside the session instead"
+    print(f"    {ink.dim(f'[Enter] {enter_label}')}", file=err)
     print("", file=err)
     try:
         # Live bug (2026-08-15): input(prompt) writes `prompt` to STDOUT, not stderr -
