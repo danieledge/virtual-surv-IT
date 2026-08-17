@@ -439,7 +439,7 @@ def _pt_config_editor(p, project_dir: Path) -> None:
 
     rows0 = _rows()
     if not rows0:
-        return
+        return True
     app = p["Application"](
         layout=p["Layout"](
             p["Window"](
@@ -458,7 +458,8 @@ def _pt_config_editor(p, project_dir: Path) -> None:
     try:
         app.run()
     except Exception:
-        return
+        return False  # widget never ran - caller falls back to the numbered tier
+    return True
 
 
 def _config_editor(project_dir: Path) -> None:
@@ -471,8 +472,7 @@ def _config_editor(project_dir: Path) -> None:
     again). All interaction on stderr/stdin; stdout stays the decision channel. Every
     failure path just returns - cosmetic tier."""
     p = _ptk_ui()
-    if p:
-        _pt_config_editor(p, project_dir)
+    if p and _pt_config_editor(p, project_dir) is not False:
         return
     err = sys.stderr
     ink = _Ink()
@@ -559,10 +559,12 @@ def _archive_menu(project_dir: Path, es, menu: dict) -> None:
             entries,
             subtitle="in-place, nothing deleted; an OPEN pack shows as ARCHIVED-OPEN in checks",
         )
-        if pick is None:
+        if pick is not _PT_FAILED:
+            if pick is None:
+                return
+            _archive_perform(es, open_rows if pick == "all" else [shown[pick]])
             return
-        _archive_perform(es, open_rows if pick == "all" else [shown[pick]])
-        return
+        # fall through to the numbered tier
     print("", file=err)
     _print_rule("Archive engagements")
     for i, row in enumerate(shown, 1):
@@ -672,6 +674,8 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
         subtitle=subtitle,
     )
     ink = _Ink()
+    if pick is _PT_FAILED:
+        return "__pt_fallback__"
     if pick is None or pick[0] == "launch":
         print(ink.dim("    -> launching"), file=sys.stderr)
         return ""
@@ -707,7 +711,11 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     ink = _Ink()
     p = _ptk_ui()
     if p:
-        return _pt_menu_round(p, project_dir, engagement_state, menu, shown)
+        decision = _pt_menu_round(p, project_dir, engagement_state, menu, shown)
+        if decision != "__pt_fallback__":
+            return decision
+        # The pt widget could not run in this console (live Windows report
+        # 2026-08-17: a silent plain launch) - the numbered tier below takes over.
     print("", file=err)
     _print_rule("Open engagements" if shown else "Engagements")
     if shown:
@@ -916,6 +924,48 @@ def _print_rule(label: str, note: str = "") -> None:
 
 _PTK_CACHE = None
 
+# Sentinel for "the pt widget failed to run at all" - distinct from None, which means
+# the USER backed out (Esc). A failure falls back to the numbered input() tier; an Esc
+# must never re-prompt.
+_PT_FAILED = object()
+
+_WIN_CONOUT_BOUND = None
+
+
+def _win_bind_conout() -> bool:
+    """prompt_toolkit's Win32 layer renders via GetStdHandle(STD_OUTPUT_HANDLE) - the
+    PROCESS stdout handle - regardless of the stream passed in (win32.py's
+    Win32Output.__init__, confirmed in the vendored source). Under the v5 alias stdout
+    is a capture pipe, so pt raised NoConsoleScreenBufferError and the menu silently
+    vanished (live corp report + WINTEST repro, 2026-08-17). The winpty-style fix:
+    point the process STD_OUTPUT_HANDLE at the real console (CONOUT$). Python-level
+    stdout is unaffected - the C runtime's fd 1 already holds the pipe handle, so the
+    decision print still reaches the shell's capture; only fresh GetStdHandle callers
+    (pt) see the console. Returns False when there is no console to bind (then the
+    numbered tier takes over)."""
+    global _WIN_CONOUT_BOUND
+    if _WIN_CONOUT_BOUND is not None:
+        return _WIN_CONOUT_BOUND
+    try:
+        import ctypes
+
+        k32 = ctypes.windll.kernel32
+        k32.CreateFileW.restype = ctypes.c_void_p
+        k32.SetStdHandle.argtypes = [ctypes.c_ulong, ctypes.c_void_p]
+        # GENERIC_READ|GENERIC_WRITE, share read|write, OPEN_EXISTING
+        handle = ctypes.c_void_p(
+            k32.CreateFileW("CONOUT$", 0xC0000000, 0x3, None, 0x3, 0, None)
+        ).value
+        invalid = ctypes.c_void_p(-1).value
+        if not handle or handle == invalid:
+            _WIN_CONOUT_BOUND = False
+        else:
+            # 0xFFFFFFF5 == (DWORD) STD_OUTPUT_HANDLE (-11)
+            _WIN_CONOUT_BOUND = bool(k32.SetStdHandle(0xFFFFFFF5, handle))
+    except Exception:
+        _WIN_CONOUT_BOUND = False
+    return _WIN_CONOUT_BOUND
+
 
 def _ptk_ui():
     """Vendored prompt_toolkit (2026-08-17 user request: arrow keys, mouse, in-place
@@ -932,6 +982,14 @@ def _ptk_ui():
                 return None
         except Exception:
             return None
+        if sys.platform == "win32":
+            try:
+                # The alias captures stdout, and pt's Win32 layer only ever renders
+                # via the PROCESS stdout handle - rebind it to the console first.
+                if not sys.stdout.isatty() and not _win_bind_conout():
+                    return None
+            except Exception:
+                return None
     if _PTK_CACHE is None:
         try:
             vend = _scripts_dir().parent / "vendor"
@@ -1080,7 +1138,11 @@ def _pt_pick(p, title: str, entries: list, default_index: int = 0, subtitle: str
     try:
         app.run()
     except Exception:
-        return None
+        # NOT the same as Esc (None): the widget never ran - e.g. prompt_toolkit's
+        # Win32 console layer refusing a captured-stdout invocation (live Windows
+        # report 2026-08-17: the menu silently vanished and go launched plainly).
+        # Callers see the sentinel and fall back to the numbered input() tier.
+        return _PT_FAILED
     return result["v"]
 
 

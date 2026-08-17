@@ -714,6 +714,26 @@ def test_pt_editor_space_toggles_and_persists(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out == ""  # stdout purity holds in the pt tier too
 
 
+def test_pt_failure_falls_back_to_numbered_menu(tmp_path, monkeypatch, capsys):
+    """Live Windows report (2026-08-17): when prompt_toolkit's console layer refuses to
+    run (captured-stdout invocation), the failure was read as 'user pressed Esc' and go
+    launched plainly with no menu at all. A widget-start failure must fall back to the
+    numbered input() tier, never skip the pause."""
+    project = _plugin_enabled_project(tmp_path)
+    _ws(project, "dashboard-demo", title="Dashboard demo")
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setenv("VIRT_SURV_FORCE_PTK", "1")  # pt tier engages...
+    monkeypatch.setattr(mod, "_pt_pick", lambda *a, **k: mod._PT_FAILED)  # ...and dies
+    monkeypatch.setattr("builtins.input", lambda prompt="": "1")
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.strip() == "/compliance-surveillance-team:engage --resume dashboard-demo"
+    assert "[n]" in out.err  # the numbered menu actually rendered
+
+
 def test_rich_ui_loads_from_vendor_tree():
     """The go TUI uses vendored rich CORE only (2026-08-17): Console/Table/Panel/Rule
     need neither pygments nor markdown-it, so those are deliberately NOT vendored. This
