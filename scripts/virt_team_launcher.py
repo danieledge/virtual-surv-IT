@@ -47,6 +47,7 @@ working correctly is never load-bearing for actually starting a session.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -181,6 +182,50 @@ def _resume_decision(project_dir: Path) -> str:
     return ""
 
 
+def _apply_new_recommended_defaults(project_dir: Path) -> list:
+    """Plugin updates grow the recommended env set (e.g. the 1-hour prompt-cache TTL,
+    2026-08-17), but a project configured before the update never hears about the new
+    keys unless the human re-runs configure. `virt-surv go` is the natural propagation
+    point (2026-08-17 user request): for a project that PREVIOUSLY OPTED IN to env
+    tuning (any recommended key already present in its settings env block), missing
+    keys are added - ADD-ONLY: an existing value is never corrected here, the human may
+    have tuned it deliberately, and a project with no recommended keys at all declined
+    tuning (or predates it) and is left entirely alone; the first-time-setup offer is
+    that path's front door. Runs pre-session from the human's own shell - no model, no
+    guards in play. Returns the added key names; every failure returns [] (cosmetic
+    tier, never costs the launch)."""
+    try:
+        import importlib.util
+
+        helper = _scripts_dir().parent / "install_helper.py"
+        spec = importlib.util.spec_from_file_location("install_helper_env", helper)
+        ih = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ih)
+        recommended = dict(ih.RECOMMENDED_ENV)
+    except Exception:
+        return []
+    settings_path = project_dir / ".claude" / "settings.json"
+    try:
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    env = settings.get("env")
+    if not isinstance(env, dict) or not any(k in env for k in recommended):
+        return []  # never opted in - respect the decline
+    added = [k for k in recommended if k not in env]
+    if not added:
+        return []
+    for key in added:
+        env[key] = recommended[key]
+    try:
+        settings_path.write_text(
+            json.dumps(settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    except OSError:
+        return []
+    return added
+
+
 def _print_project_defaults(project_dir: Path) -> None:
     """One compact table of this project's effective team settings, to STDERR, every
     `virt-surv go` (2026-08-17 user request) - the human sees at a glance what the
@@ -288,6 +333,17 @@ def main() -> int:
     scripts_dir = _scripts_dir()
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
+    try:
+        added = _apply_new_recommended_defaults(project_dir)
+        if added:
+            print(
+                "Applied new recommended default(s) from the plugin update: "
+                + ", ".join(sorted(added))
+                + "  ('virt-surv configure' to review)",
+                file=sys.stderr,
+            )
+    except Exception:
+        pass  # cosmetic - never costs the launch
     try:
         _print_project_defaults(project_dir)
     except Exception:

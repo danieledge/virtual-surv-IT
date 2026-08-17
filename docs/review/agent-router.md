@@ -95,6 +95,16 @@ this pipeline deliberately does not spend. Running the lenses as separate **sonn
 remains an optional next step, not current behaviour. What *is* delegated today is the mechanical
 work: context detection, lens selection and scoring go to `review-scorer` (haiku).
 
+**Consolidation is the default; splitting is the exception (2026-08-17).** The sequential-
+lenses-in-one-call topology above is not just a description, it is the cost model: one
+reading of the code serves every lens, so adding a lens costs its checklist, not a fresh
+context. Dimensions must never silently become dispatches - a live 2026-08-16/17 run sent
+deep + security + perf over a small repo as 6 subagent passes (each re-reading the code
+cold) where this topology prices 3. The legitimate reasons to split by component are: the
+`large_context_review_split` preference is on, the target genuinely exceeds one context, or
+corporate-proxy timeouts have bitten (the split's original purpose - confirmed helpful on
+proxied corporate boxes); absent those, one pass per review agent.
+
 **Sequential means the lens order inside one call, not the dispatch across calls.** When a large
 target is split into multiple component-scoped `code-reviewer` calls (operating guide
 §Orchestration discipline), those calls are independent and dispatch **concurrently, in one

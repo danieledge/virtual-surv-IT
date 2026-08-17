@@ -6,6 +6,14 @@
 > (audit finding #7, 2026-07-30) mechanically blocks that exact class of drift before the
 > question reaches the user - don't rely on it instead of following this file.
 
+**Price the choice in the accompanying message (2026-08-17, assessment rec).** In the chat
+text that precedes this AskUserQuestion call - never inside the locked option wording below -
+state one rough cost line for THIS target so depth is chosen priced, e.g.: "For this diff:
+Quick runs in-session (cents) · Deep is one reviewer pass (roughly $1-3 at list) · Audit adds
+the close machinery (roughly $3-8); plus the perf pass if chosen. Budget status: <DAILY/
+HEADROOM line when a budget is recorded>." Scale the figures to the target's size honestly;
+order-of-magnitude is the point, not a quote.
+
 **Critical construction rules:**
 - **Ask Q1, Q2 and Q3 in ONE `AskUserQuestion` call** (one screen, not three round-trips). They
   remain **three distinct questions**, each `multiSelect: false`; batching the *call* is not

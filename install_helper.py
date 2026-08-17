@@ -3978,9 +3978,11 @@ def run_configure(
     print("")
     print(rule_header(3, TOTAL_STEPS, "API/env tuning", style))
     env_tuning_wanted = confirm(
-        "  Tune API timeout / stream-idle / output-size env vars (helps on slow "
-        "networks or behind a corporate proxy; trade-off: transient API/throttling "
-        "errors then retry quietly for up to hours instead of failing fast)?",
+        "  Tune API timeout / stream-idle / output-size env vars and the 1-hour "
+        "prompt-cache TTL (helps on slow networks or behind a corporate proxy, and "
+        "makes stop-start sessions markedly cheaper on API billing; trade-off: "
+        "transient API/throttling errors then retry quietly for up to hours instead "
+        "of failing fast)?",
         default=True,
         assume_yes=assume_yes,
         style=style,

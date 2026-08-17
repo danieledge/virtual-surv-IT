@@ -54,8 +54,31 @@ un-bundle them back into a 7-option list:
 `docs/scope-and-stack.md`), so `compliance-reviewer` assesses only the **applicable** regime(s)
 and states what's applicable vs not.
 
+**Quick runs in-session - no fan-out (2026-08-17 cost decision).** When the chosen depth is
+**Quick**, skip the whole pipeline below: no subagent, no workspace, no scorer round-trip.
+YOU run it, turingmind-style: strictly diff-scoped (`git diff`, changed code only -
+pre-existing issues out of scope), analysers first if available, then the router's selected
+lenses read inline and applied sequentially over that one diff, findings scored against
+`docs/code-review-method.md`'s rubric in-context and presented with the honest label
+"quick-tier: self-scored, no independent scorer at this depth". 🔴/🟠 to the console;
+artifact only if asked. The evidence machinery (packs, scorer independence, DoD) is what
+Deep and Audit buy - a Quick "am I OK to commit?" costs cents this way instead of a subagent
+chain. If Quick surfaces something structural, offer the Deep upgrade; never silently deepen.
+
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
 `docs/review/lenses/`; router `docs/review/agent-router.md`):
+
+**Consolidate by default - splitting is the exception (2026-08-17 cost review).** One
+`code-reviewer` dispatch per component runs ALL selected lenses sequentially inside it (the
+router's canonical topology: the code is read into context once and every lens reuses it).
+**Security is a lens, never its own pass, whenever a code review is already running** -
+a chained `/security-audit` folds its focus into the same pass's lens set instead of
+dispatching more agents (live 2026-08-16/17: deep + security + perf on a small repo went out
+as 6 subagent passes where the topology prices 3, roughly doubling the engagement's cost).
+Split into per-component passes ONLY when `LARGE_CONTEXT_REVIEW_SPLIT=on`, the target
+genuinely exceeds one context, or corporate-proxy timeouts have already bitten this session
+(the split's original purpose, and it demonstrably helps there) - name which reason applies
+in the sizing line, and state the resulting pass count before dispatching.
 
 > ⚠️ **Pip (`review-scorer`) is two of these steps, and both are delegations, not options -**
 > **including doing the step yourself "to save a turn."** Before dispatching anyone, state the

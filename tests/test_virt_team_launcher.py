@@ -360,3 +360,44 @@ def test_first_time_setup_offer_declined_falls_back_to_explained_plain_launch(
     assert rc == 0
     assert out.out == ""
     assert "doesn't look like a configured project" in out.err
+
+
+# --- new-recommended-defaults propagation at go (2026-08-17 user request) -----------------
+
+
+def test_go_applies_new_recommended_defaults_for_opted_in_projects(tmp_path, monkeypatch, capsys):
+    """A project that took env tuning before a plugin update gains the update's NEW keys
+    at the next go - add-only, told to the user on stderr."""
+    project = _plugin_enabled_project(tmp_path)
+    (project / ".claude" / "settings.json").write_text(
+        json.dumps({"env": {"API_TIMEOUT_MS": "999", "CLAUDE_CODE_RETRY_WATCHDOG": "1"}}),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "Applied new recommended default(s)" in out.err
+    assert "ENABLE_PROMPT_CACHING_1H" in out.err
+    saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert saved["env"]["ENABLE_PROMPT_CACHING_1H"] == "1"
+    assert saved["env"]["API_TIMEOUT_MS"] == "999"  # existing values NEVER corrected here
+    assert "Applied new" not in out.out  # stdout purity
+
+
+def test_go_leaves_projects_that_declined_tuning_alone(tmp_path, monkeypatch, capsys):
+    project = _plugin_enabled_project(tmp_path)
+    (project / ".claude" / "settings.json").write_text(
+        json.dumps({"env": {"MY_OWN_VAR": "x"}}), encoding="utf-8"
+    )
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "Applied new" not in out.err
+    saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert "ENABLE_PROMPT_CACHING_1H" not in saved.get("env", {})
