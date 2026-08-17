@@ -251,3 +251,66 @@ def test_partial_registry_install_falls_through_to_a_usable_copy(tmp_path, monke
     cwd = tmp_path / "proj"
     cwd.mkdir()
     assert find_plugin_root(home, cwd) == str(healthy)
+
+
+def test_installer_config_is_the_last_resort_when_everything_else_is_broken(
+    tmp_path, monkeypatch
+):
+    """The 2026-08-17 corp bug report's exact state: the registry names cache version
+    dirs that were never populated, the only cache copy on disk is ancient (predates
+    engage_probe.py, so unusable), and the healthy install is the source clone that
+    install_helper.py recorded in installer.json - which must now resolve."""
+    import json as _json
+
+    from scripts.find_plugin_root import find_plugin_root
+
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    home = tmp_path / "home"
+    plugins = home / ".claude" / "plugins"
+    plugins.mkdir(parents=True)
+    # registry -> two nonexistent cache dirs
+    (plugins / "installed_plugins.json").write_text(
+        _json.dumps(
+            {
+                "plugins": [
+                    {"installPath": str(plugins / "cache" / "m" / "compliance-surveillance-team" / "0.33.62")},
+                    {"installPath": str(plugins / "cache" / "m" / "compliance-surveillance-team" / "0.33.60")},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    # on-disk cache copy: marker but no probe script (a pre-engage_probe version)
+    ancient = plugins / "cache" / "m" / "compliance-surveillance-team" / "0.22.0"
+    (ancient / "docs").mkdir(parents=True)
+    (ancient / "docs" / "team-operating-guide.md").write_text("x", encoding="utf-8")
+    # installer.json knows the healthy clone
+    clone = _team_root(tmp_path, "the-clone")
+    xdg = tmp_path / "xdg"
+    (xdg / "virt-surv-it").mkdir(parents=True)
+    (xdg / "virt-surv-it" / "installer.json").write_text(
+        _json.dumps({"repo_path": str(clone)}), encoding="utf-8"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    cwd = tmp_path / "client-project"
+    cwd.mkdir()
+    assert find_plugin_root(home, cwd) == str(clone)
+
+
+def test_installer_config_repo_path_is_validated_not_trusted(tmp_path, monkeypatch):
+    import json as _json
+
+    from scripts.find_plugin_root import find_plugin_root
+
+    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg = tmp_path / "xdg"
+    (xdg / "virt-surv-it").mkdir(parents=True)
+    (xdg / "virt-surv-it" / "installer.json").write_text(
+        _json.dumps({"repo_path": str(tmp_path / "moved-away")}), encoding="utf-8"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    cwd = tmp_path / "proj"
+    cwd.mkdir()
+    assert find_plugin_root(home, cwd) == ""

@@ -141,6 +141,24 @@ def _from_filesystem_search(home: Path) -> str:
     return str(newest.parent.parent)
 
 
+def _from_installer_config(home: Path) -> str:
+    """Last-resort resolver (2026-08-17 corp bug report): the Claude CLI's own update
+    flow can leave the registry pointing at cache version dirs that were never
+    populated, while the only healthy install is the source clone. install_helper.py
+    records that clone's location in installer.json (repo_path) on every run - so when
+    every registry and cache candidate has fallen through, the recorded clone is the
+    one place left to look. Same usability validation as every other resolver."""
+    base = os.environ.get("XDG_CONFIG_HOME")
+    config = (Path(base) if base else home / ".config") / "virt-surv-it" / "installer.json"
+    try:
+        repo_path = json.loads(config.read_text(encoding="utf-8-sig")).get("repo_path") or ""
+    except (OSError, ValueError):
+        return ""
+    if repo_path and _root_is_usable(Path(repo_path)):
+        return str(repo_path)
+    return ""
+
+
 def find_plugin_root(home: Path, cwd: Path) -> str:
     """Empty string means repo-as-project (the cwd IS the team repo).
 
@@ -155,7 +173,7 @@ def find_plugin_root(home: Path, cwd: Path) -> str:
     env_root = os.environ.get("CLAUDE_PLUGIN_ROOT") or ""
     if env_root and _root_is_usable(Path(env_root)):
         return env_root
-    return _from_registry(home) or _from_filesystem_search(home)
+    return _from_registry(home) or _from_filesystem_search(home) or _from_installer_config(home)
 
 
 def main() -> int:

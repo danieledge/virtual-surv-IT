@@ -84,6 +84,15 @@ def from_registry():
                 return path
     return ""
 
+def from_config():
+    base = os.environ.get("XDG_CONFIG_HOME")
+    cfg = (Path(base) if base else home / ".config") / "virt-surv-it" / "installer.json"
+    try:
+        repo_path = json.loads(cfg.read_text(encoding="utf-8-sig")).get("repo_path") or ""
+    except Exception:
+        return ""
+    return repo_path if repo_path and is_team_root(repo_path) else ""
+
 def from_filesystem():
     hits = []
     pats = ("*/docs/team-operating-guide.md", "*/*/docs/team-operating-guide.md",
@@ -101,7 +110,7 @@ def from_filesystem():
         return [(int(d), "") if d else (-1, s) for d, s in re.findall(r"(\d+)|(\D+)", str(p))]
     return str(max(hits, key=key).parent.parent)
 
-root = "" if (cwd / "docs/team-operating-guide.md").is_file() else (from_env() or from_registry() or from_filesystem())
+root = "" if (cwd / "docs/team-operating-guide.md").is_file() else (from_env() or from_registry() or from_filesystem() or from_config())
 script = Path(root, "scripts", "engage_probe.py") if root else Path("scripts/engage_probe.py")
 if not script.is_file():
     sys.stderr.write("PROBE-STDERR: no engage_probe.py under resolved root=%r (cwd=%s)\n" % (root, cwd))
@@ -130,6 +139,11 @@ fi; \
 if [ -n "$OUT" ]; then echo "$OUT"; else \
 echo "PROBE_FAILED - retry this exact block once by hand with your working interpreter to see the real error"; fi
 ```
+
+**Run the block from wherever you already are - NEVER prepend `cd`.** The block uses
+`Path.cwd()` to detect repo-as-project vs plugin mode and to find the working project's own
+`artifacts/`; a `cd` into the plugin repo first (live corp report 2026-08-17) silently flips a
+plugin-mode session into repo-as-project and points the engagement state at the wrong project.
 
 **Windows path rule, for every Bash call this session:** the Bash tool is Git Bash even on
 Windows, so an absolute Windows path is written with FORWARD slashes inside double quotes
