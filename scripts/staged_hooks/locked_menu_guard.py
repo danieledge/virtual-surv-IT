@@ -118,13 +118,16 @@ def check_artifact_menu(questions: list) -> str | None:
     never a requirement that all three appear."""
     stage1 = next((q for q in questions if _header(q) == "Artifacts"), None)
     if stage1 is not None:
-        if stage1.get("multiSelect"):
-            return "artifact-menu drift: stage 1 ('Artifacts') must be multiSelect: false (artifact-menu.md)"
-        if _labels(stage1) != _STAGE1_LABELS:
-            return (
-                f"artifact-menu drift: stage 1 options are {sorted(_labels(stage1))!r}, "
-                f"expected exactly {sorted(_STAGE1_LABELS)!r} (artifact-menu.md)"
-            )
+        # RETIRED question (2026-08-17 user decision): every real engagement chose the
+        # Consolidated Delivery Report, so packaging is a stated default in the brief,
+        # never a question - re-asking it is drift, whatever its options say.
+        return (
+            "artifact-menu drift: the packaging question ('Artifacts') is RETIRED - "
+            "packaging defaults to the Consolidated Delivery Report, stated in the "
+            "brief and adjustable at the go-ahead gate; ask ONLY the stage-2 group "
+            "questions, and only when the user asked for standalone artifacts "
+            "(artifact-menu.md, 2026-08-17)"
+        )
     for q in questions:
         header = _header(q)
         canon = _STAGE2_CANON.get(header)

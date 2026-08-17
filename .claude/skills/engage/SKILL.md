@@ -201,13 +201,17 @@ single-select: **Apply the fixes** · **Show me the diff first** · **Don't chan
 *unless Q3 already authorised it* ("Apply fixes" / the fix→re-review loop) - don't double-ask what
 the user has already answered.
 
-**3. Offer the artifact menu - locked two-stage construction.** (Skip this step for the direct-answer
-path in step 1 unless the user has genuinely asked for a tracked deliverable.) Default = **one
-consolidated Delivery Report** (`docs/templates/delivery-report.md`) holding every section. For the exact
-two-stage menu (packaging single-select, then grouped ≤4-option multi-selects) read
-`references/artifact-menu.md` and use it verbatim - never improvise a giant template list. The
-**handover pack is a deliverable and belongs here** (not in the findings/fix question). Every
-artifact ships `.md` + `.html`.
+**3. Package by default - the packaging question is retired (2026-08-17 user decision).**
+(Skip this step entirely for the direct-answer path in step 1 unless the user has genuinely
+asked for a tracked deliverable.) Packaging is **one consolidated Delivery Report**
+(`docs/templates/delivery-report.md`) holding every section - every real engagement chose it,
+so it is **no longer asked**: state it in the brief ("Output: Consolidated Delivery Report
+(.md + .html)") and let the go-ahead gate's "Adjust something first", or the user asking for
+standalone documents at any point, change it. ONLY on such a request read
+`references/artifact-menu.md` and use its grouped stage-2 construction verbatim to pick which
+standalones - never improvise a giant template list, and never re-ask the packaging question
+itself (the locked-menu guard flags it as drift now). The **handover pack is a deliverable and
+belongs here** (not in the findings/fix question). Every artifact ships `.md` + `.html`.
 
 **4. Summarise - and open the living index.** Write an Engagement Brief
 (`docs/templates/engagement-brief.md`) capturing decisions taken, open questions, clarifications,

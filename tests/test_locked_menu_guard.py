@@ -166,9 +166,13 @@ def test_reworded_option_flagged():
 # ------------------------------------------------------------------ artifact-menu: valid
 
 
-def test_correct_stage1_passes():
+def test_any_stage1_packaging_question_is_retired_drift():
+    """2026-08-17 user decision: every real engagement chose the Consolidated Delivery
+    Report, so packaging is a stated default, never a question - even the previously
+    canonical construction now flags."""
     proc = _run(VALID_STAGE1)
-    assert proc.returncode == 0
+    assert proc.returncode == 2
+    assert "RETIRED" in proc.stderr
 
 
 def test_correct_stage2_passes():
@@ -217,15 +221,16 @@ def test_recommended_marker_on_multiple_options_passes():
     assert proc.returncode == 0
 
 
-def test_recommended_marker_on_artifact_menu_stage1_passes():
-    good = [
+def test_recommended_marker_does_not_resurrect_the_retired_stage1():
+    bad = [
         _q(
             "Artifacts",
             ["Consolidated Delivery Report (Recommended)", "Separate artifacts", "Both"],
         )
     ]
-    proc = _run(good)
-    assert proc.returncode == 0
+    proc = _run(bad)
+    assert proc.returncode == 2
+    assert "RETIRED" in proc.stderr
 
 
 def test_recommended_marker_on_artifact_menu_stage2_passes():
@@ -247,7 +252,7 @@ def test_recommended_marker_does_not_mask_a_genuinely_invented_option():
 # ------------------------------------------------------------------ artifact-menu: drift
 
 
-def test_stage1_wrong_multiselect_flagged():
+def test_stage1_wrong_multiselect_still_drift_via_retirement():
     bad = [
         _q("Artifacts", ["Consolidated Delivery Report", "Separate artifacts", "Both"], multi=True)
     ]
