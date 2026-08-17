@@ -257,7 +257,7 @@ def _config_editor(project_dir: Path) -> None:
         env_label = "env tuning (timeouts + 1h cache TTL)"
         env_on = "ENABLE_PROMPT_CACHING_1H" in env
         print("", file=err)
-        print(_rule(ink, "Project settings", note="pick a number to toggle"), file=err)
+        _print_rule("Project settings", note="pick a number to toggle")
         width = max(
             max(len(label) for label, _ in _TOGGLE_PREFS), len(env_label)
         )
@@ -369,7 +369,7 @@ def _archive_menu(project_dir: Path, es, menu: dict) -> None:
         print(ink.dim("    nothing to archive"), file=err)
         return
     print("", file=err)
-    print(_rule(ink, "Archive engagements"), file=err)
+    _print_rule("Archive engagements")
     for i, row in enumerate(shown, 1):
         slug = _row_resume_token(row) or "?"
         status = row.get("status") or "?"
@@ -456,7 +456,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     err = sys.stderr
     ink = _Ink()
     print("", file=err)
-    print(_rule(ink, "Open engagements"), file=err)
+    _print_rule("Open engagements")
     slug_w = max(len(_row_resume_token(r) or "?") for r in shown)
     status_w = max(len(r.get("status") or "?") for r in shown)
     for i, row in enumerate(shown, 1):
@@ -586,6 +586,64 @@ def _rule(ink: _Ink, label: str = "", note: str = "", width: int = 64) -> str:
     return ink.dim(line[:width]) if not note else ink.dim(body + "-" * max(pad, 3)) + " " + ink.dim(note)
 
 
+_RICH_CACHE = None
+
+
+def _rich_ui():
+    """Vendored rich (repo vendor/, the same tree convert_file's deps live in - 2026-08-17
+    user request for a materially nicer go TUI) when importable; None otherwise. Every
+    caller keeps its plain-_Ink rendering as the fallback, so a missing or broken vendor
+    tree costs looks only, never the launch. Only rich CORE is vendored (Console, Table,
+    Panel, Rule need neither pygments nor markdown-it - verified empirically before
+    vendoring). The Console is built fresh per call so it binds the CURRENT sys.stderr
+    (tests swap it); box/rule glyphs degrade to ASCII unless stderr is utf-capable - corp
+    Windows consoles decode stderr as cp1252 and box glyphs arrive as mojibake (the
+    _print_project_defaults lesson, kept)."""
+    global _RICH_CACHE
+    if _RICH_CACHE is None:
+        try:
+            vend = _scripts_dir().parent / "vendor"
+            if str(vend) not in sys.path:
+                sys.path.insert(0, str(vend))
+            from rich import box
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.rule import Rule
+            from rich.table import Table
+            from rich.text import Text
+
+            _RICH_CACHE = {
+                "box": box,
+                "Console": Console,
+                "Panel": Panel,
+                "Rule": Rule,
+                "Table": Table,
+                "Text": Text,
+            }
+        except Exception:
+            _RICH_CACHE = {}
+    if not _RICH_CACHE:
+        return None
+    r = dict(_RICH_CACHE)
+    utf = "utf" in ((getattr(sys.stderr, "encoding", "") or "").lower())
+    r["console"] = r["Console"](file=sys.stderr, highlight=False, emoji=False, soft_wrap=True)
+    r["safe_box"] = r["box"].SIMPLE if utf else r["box"].ASCII
+    r["panel_box"] = r["box"].ROUNDED if utf else r["box"].ASCII
+    r["rule_char"] = "─" if utf else "-"
+    return r
+
+
+def _print_rule(label: str, note: str = "") -> None:
+    """Section rule to stderr - rich Rule when available, the plain _rule string
+    otherwise. One helper so every menu header upgrades/degrades together."""
+    text = label + (f"  ({note})" if note else "")
+    r = _rich_ui()
+    if r:
+        r["console"].print(r["Rule"](text, characters=r["rule_char"], style="dim", align="left"))
+        return
+    print(_rule(_Ink(), label, note=note), file=sys.stderr)
+
+
 def _plugin_version() -> str:
     try:
         manifest = _scripts_dir().parent / ".claude-plugin" / "plugin.json"
@@ -595,9 +653,30 @@ def _plugin_version() -> str:
 
 
 def _print_banner(project_dir: Path) -> None:
+    version = _plugin_version()
+    r = _rich_ui()
+    if r:
+        body = r["Text"]()
+        body.append("project  ", style="dim")
+        body.append(project_dir.name, style="bold")
+        if version:
+            body.append("\nplugin   ", style="dim")
+            body.append(f"v{version}")
+        r["console"].print()
+        r["console"].print(
+            r["Panel"](
+                body,
+                title="[bold cyan]Virtual Surv-IT[/]",
+                title_align="left",
+                box=r["panel_box"],
+                border_style="dim cyan",
+                padding=(0, 2),
+                expand=False,
+            )
+        )
+        return
     ink = _Ink()
     err = sys.stderr
-    version = _plugin_version()
     print("", file=err)
     print(
         ink.dim("=== ") + ink.title("Virtual Surv-IT") + ink.dim(" " + "=" * 45), file=err
@@ -711,21 +790,34 @@ def _print_project_defaults(project_dir: Path) -> None:
     except Exception:
         tuned = "not applied"
     rows.append(("env tuning (1h cache TTL)", tuned))
-    ink = _Ink()
-    width = max(len(name) for name, _ in rows)
-    print("", file=err)
-    print(_rule(ink, "Project defaults", note="'virt-surv configure' to change"), file=err)
-    for name, value in rows:
-        dots = ink.dim("." * (width - len(name) + 2))
+
+    def _value_style(value: str) -> str:
         head = value.split(" ")[0]
         if head in ("on", "applied", "present"):
-            shown = ink.good(value)
-        elif head == "locked":
-            shown = ink.warn(value)
-        elif head in ("off", "not", "absent"):
-            shown = ink.dim(value)
-        else:
-            shown = value
+            return "good"
+        if head == "locked":
+            return "warn"
+        if head in ("off", "not", "absent"):
+            return "dim"
+        return ""
+    r = _rich_ui()
+    print("", file=err)
+    _print_rule("Project defaults", note="'virt-surv configure' to change")
+    if r:
+        table = r["Table"](box=None, show_header=False, padding=(0, 1), pad_edge=False)
+        table.add_column(style="default", no_wrap=True)
+        table.add_column()
+        style_map = {"good": "green", "warn": "yellow", "dim": "dim", "": "default"}
+        for name, value in rows:
+            table.add_row("  " + name, r["Text"](value, style=style_map[_value_style(value)]))
+        r["console"].print(table)
+        return
+    ink = _Ink()
+    width = max(len(name) for name, _ in rows)
+    for name, value in rows:
+        dots = ink.dim("." * (width - len(name) + 2))
+        style = _value_style(value)
+        shown = {"good": ink.good, "warn": ink.warn, "dim": ink.dim}.get(style, lambda t: t)(value)
         print(f"    {name} {dots} {shown}", file=err)
 
 
@@ -743,7 +835,7 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
         return False
     ink = _Ink()
     print("", file=err)
-    print(_rule(ink, "First-time setup"), file=err)
+    _print_rule("First-time setup")
     print(f"    (virt-team: {project_dir} has no team configuration yet.)", file=err)
     print(ink.bold("    Run first-time project setup now? [Y/n] "), end="", file=err)
     try:

@@ -610,6 +610,34 @@ def test_heal_is_wired_to_the_real_entry_point_only():
     assert "def main" in body and "_heal_stale_alias_once()" not in body.split("def main", 1)[1]
 
 
+def test_rich_ui_loads_from_vendor_tree():
+    """The go TUI uses vendored rich CORE only (2026-08-17): Console/Table/Panel/Rule
+    need neither pygments nor markdown-it, so those are deliberately NOT vendored. This
+    pins both halves: rich imports from vendor/, and the heavy deps stayed out."""
+    mod = _load()
+    assert mod._rich_ui() is not None, "vendor/rich missing or rich core grew a hard dep"
+    assert (REPO_ROOT / "vendor" / "rich").is_dir()
+    assert not (REPO_ROOT / "vendor" / "pygments").exists()
+    assert not (REPO_ROOT / "vendor" / "markdown_it").exists()
+
+
+def test_banner_and_defaults_render_without_rich(tmp_path, monkeypatch, capsys):
+    """A broken/absent vendor tree costs looks only: the plain-_Ink fallback renders the
+    same information."""
+    project = _plugin_enabled_project(tmp_path)
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_rich_ui", lambda: None)
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "Virtual Surv-IT" in out.err
+    assert "Project defaults" in out.err
+    assert "env tuning (1h cache TTL)" in out.err
+    assert out.out == ""
+
+
 def test_launch_command_config_path_matches_install_helper(tmp_path, monkeypatch):
     """The launcher mirrors install_helper's config_path()/load_config() derivation
     instead of importing that whole file per 'go' - this pins the two together so a
