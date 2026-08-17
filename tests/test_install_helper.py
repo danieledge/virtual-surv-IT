@@ -1224,7 +1224,7 @@ def test_menu_setup_only_skips_sync_and_uses_clone_asis(monkeypatch, tmp_path, c
 
     clone = _fake_clone(tmp_path)
     # Advanced submenu (6) -> Environment setup only (1), then prompt defaults
-    _menu_session(monkeypatch, tmp_path, ["6", "1", "", ""])
+    _menu_session(monkeypatch, tmp_path, ["4", "1", "", ""])
     (tmp_path / "xdg" / "virt-surv-it").mkdir(parents=True)
     (tmp_path / "xdg" / "virt-surv-it" / "installer.json").write_text(
         json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
@@ -1339,7 +1339,7 @@ def test_menu_setup_only_without_clone_fails_cleanly(monkeypatch, tmp_path, caps
     # rc reflects "did the session end cleanly", not "did the last action succeed" - the
     # human already saw the on-screen error; a scripting/CI caller uses the separate
     # --enable-project/--configure flag paths instead, which still propagate their own rc.
-    _menu_session(monkeypatch, tmp_path, ["6", "1"])  # Advanced -> Environment setup only
+    _menu_session(monkeypatch, tmp_path, ["4", "1"])  # Advanced -> Environment setup only
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0))
     rc = ih.main([])
     out = capsys.readouterr().out
@@ -1389,7 +1389,7 @@ def test_menu_quit_after_readonly_diagnostic_still_says_nothing_changed(
         json.dumps({"repo_path": str(clone), "branch": "main"}), encoding="utf-8"
     )
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0, stdout=""))
-    _menu_session(monkeypatch, tmp_path, ["5", "1"])  # Diagnostics -> Check for updates, then "q"
+    _menu_session(monkeypatch, tmp_path, ["3", "1"])  # Diagnostics -> Check for updates, then "q"
     rc = ih.main([])
     out = capsys.readouterr().out
     assert rc == 0
@@ -2777,7 +2777,7 @@ def test_menu_check_for_updates_is_read_only(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
     clone = _fake_clone(tmp_path)
-    _menu_session(monkeypatch, tmp_path, ["5", "1"])  # Diagnostics -> Check for updates
+    _menu_session(monkeypatch, tmp_path, ["3", "1"])  # Diagnostics -> Check for updates
     cfg_dir = tmp_path / "xdg" / "virt-surv-it"
     cfg_dir.mkdir(parents=True)
     (cfg_dir / "installer.json").write_text(
@@ -2812,7 +2812,7 @@ def test_menu_check_for_updates_fetch_failure_fails_soft(monkeypatch, tmp_path, 
     import install_helper as ih
 
     clone = _fake_clone(tmp_path)
-    _menu_session(monkeypatch, tmp_path, ["5", "1"])  # Diagnostics -> Check for updates
+    _menu_session(monkeypatch, tmp_path, ["3", "1"])  # Diagnostics -> Check for updates
     cfg_dir = tmp_path / "xdg" / "virt-surv-it"
     cfg_dir.mkdir(parents=True)
     (cfg_dir / "installer.json").write_text(
@@ -2836,7 +2836,7 @@ def test_menu_check_for_updates_fetch_failure_fails_soft(monkeypatch, tmp_path, 
 def test_menu_check_for_updates_without_clone_fails_soft(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
-    _menu_session(monkeypatch, tmp_path, ["5", "1"])  # Diagnostics -> Check for updates
+    _menu_session(monkeypatch, tmp_path, ["3", "1"])  # Diagnostics -> Check for updates
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(0, stdout=""))
     rc = ih.main([])
     out = capsys.readouterr().out
@@ -3899,12 +3899,13 @@ def test_machine_defaults_step_invalid_model_input_leaves_unchanged(tmp_path, mo
     assert "expected opus/sonnet/sonnet-4-6/default" in capsys.readouterr().out
 
 
-def test_menu_option_6_maps_to_advanced_submenu():
+def test_menu_option_4_maps_to_advanced_submenu():
     from install_helper import _ADVANCED_ACTIONS, MENU_ACTIONS
 
-    assert MENU_ACTIONS["6"] == "advanced"
+    assert MENU_ACTIONS["4"] == "advanced"
     assert _ADVANCED_ACTIONS["3"] == "formats"
     assert _ADVANCED_ACTIONS["5"] == "demo"
+    assert _ADVANCED_ACTIONS["10"] == "aliasmanage"
 
 
 def test_write_team_preferences_regulatory_citations_flag(tmp_path):
@@ -5769,16 +5770,16 @@ def test_main_dispatches_folder_subcommand_before_argparse(monkeypatch):
 # --- reorganised menu / submenus --------------------------------------------------------------
 
 
-def test_top_level_menu_actions_are_the_expected_six():
+def test_top_level_menu_actions_are_the_expected_four():
+    """2026-08-17 restructure: manage-engagements retired (folder subcommands carry it),
+    alias moved under Advanced as the two-option manager."""
     from install_helper import MENU_ACTIONS
 
     assert MENU_ACTIONS == {
         "1": "full",
         "2": "configure",
-        "3": "manage",
-        "4": "alias",
-        "5": "diagnostics",
-        "6": "advanced",
+        "3": "diagnostics",
+        "4": "advanced",
         "q": "quit",
     }
 
@@ -5811,6 +5812,7 @@ def test_advanced_submenu_full_mapping():
         "7": "dashboard",
         "8": "fixbashrc",
         "9": "cleanplugincache",
+        "10": "aliasmanage",
         "b": "back",
     }
 
@@ -5850,7 +5852,7 @@ def test_choose_action_diagnostics_then_back_redraws_top_menu(monkeypatch):
     verified by picking Diagnostics, backing out, then picking a real top-level action."""
     import install_helper as ih
 
-    answers = iter(["5", "b", "1"])  # Diagnostics -> back -> Install/update (full)
+    answers = iter(["3", "b", "1"])  # Diagnostics -> back -> Install/update (full)
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     assert ih.choose_action(ih.Style(False)) == "full"
 
@@ -5858,7 +5860,7 @@ def test_choose_action_diagnostics_then_back_redraws_top_menu(monkeypatch):
 def test_choose_action_resolves_through_diagnostics_submenu(monkeypatch):
     import install_helper as ih
 
-    answers = iter(["5", "2"])  # Diagnostics -> Check analyser output cleanliness
+    answers = iter(["3", "2"])  # Diagnostics -> Check analyser output cleanliness
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     assert ih.choose_action(ih.Style(False)) == "toolcheck"
 
@@ -5866,19 +5868,50 @@ def test_choose_action_resolves_through_diagnostics_submenu(monkeypatch):
 def test_choose_action_resolves_through_advanced_submenu(monkeypatch):
     import install_helper as ih
 
-    answers = iter(["6", "4"])  # Advanced -> Morgan's model only
+    answers = iter(["4", "4"])  # Advanced -> Morgan's model only
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     assert ih.choose_action(ih.Style(False)) == "model"
 
 
-def test_choose_action_configure_and_alias_returned_directly(monkeypatch):
+def test_choose_action_configure_direct_and_aliasmanage_via_advanced(monkeypatch):
     import install_helper as ih
 
     monkeypatch.setattr("builtins.input", lambda prompt="": "2")
     assert ih.choose_action(ih.Style(False)) == "configure"
 
-    monkeypatch.setattr("builtins.input", lambda prompt="": "4")
-    assert ih.choose_action(ih.Style(False)) == "alias"
+    answers = iter(["4", "10"])  # Advanced -> Manage the alias
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    assert ih.choose_action(ih.Style(False)) == "aliasmanage"
+
+
+def test_run_alias_manage_register_path_delegates_to_setup_alias(monkeypatch, capsys):
+    import install_helper as ih
+
+    calls = []
+    monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: calls.append(a) or 0)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")  # blank = register (default)
+    assert ih.run_alias_manage(ih.Style(False), ih.marks()) == 0
+    assert len(calls) == 1
+
+
+def test_run_alias_manage_change_command_saves_and_offers_refresh(tmp_path, monkeypatch, capsys):
+    import json as _json
+
+    import install_helper as ih
+
+    xdg = tmp_path / "xdg"
+    (xdg / "virt-surv-it").mkdir(parents=True)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    refreshed = []
+    monkeypatch.setattr(ih, "run_setup_alias", lambda *a, **k: refreshed.append(k) or 0)
+    answers = iter(["2"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers, ""))
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "cc")
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    assert ih.run_alias_manage(ih.Style(False), ih.marks()) == 0
+    saved = _json.loads((xdg / "virt-surv-it" / "installer.json").read_text())
+    assert saved["claude_launch_command"] == "cc"
+    assert refreshed == [{"assume_yes": True}]
 
 
 # --- demo mode must cover every new command (live report, 2026-08-04) -----------------------
@@ -6277,9 +6310,14 @@ def test_menu_loops_back_and_runs_a_second_action_before_quit(monkeypatch, tmp_p
         "run_configure",
         lambda target, style, mm, assume_yes=False, demo=False: calls.append("configure") or 0,
     )
-    # 4 = Set up the alias, then loop back, 2 = Configure, answer the directory prompt,
-    # loop back again, then exhausted answers feed "q" to end the session.
-    _menu_session(monkeypatch, tmp_path, ["4", "2", str(tmp_path)])
+    monkeypatch.setattr(
+        ih,
+        "run_alias_manage",
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: calls.append("alias") or 0,
+    )
+    # 4,10 = Advanced -> Manage the alias, loop back, 2 = Configure, answer the
+    # directory prompt, loop back again, then exhausted answers feed "q".
+    _menu_session(monkeypatch, tmp_path, ["4", "10", "2", str(tmp_path)])
     rc = ih.main([])
     assert rc == 0
     assert calls == ["alias", "configure"]  # BOTH ran, in order, in one session
@@ -6291,9 +6329,11 @@ def test_menu_shows_again_after_an_action_completes(monkeypatch, tmp_path, capsy
     import install_helper as ih
 
     monkeypatch.setattr(
-        ih, "run_setup_alias", lambda style, mm, assume_yes=False, demo=False, repo_hint=None: 0
+        ih,
+        "run_alias_manage",
+        lambda style, mm, assume_yes=False, demo=False, repo_hint=None: 0,
     )
-    _menu_session(monkeypatch, tmp_path, ["4"])  # alias, then exhausted -> "q"
+    _menu_session(monkeypatch, tmp_path, ["4", "10"])  # Advanced -> alias, exhausted -> "q"
     ih.main([])
     out = capsys.readouterr().out
     assert out.count("What can I do for you?") == 2  # once before "4", once before "q"
@@ -6309,7 +6349,7 @@ def test_invalid_menu_choice_reprompts_without_redrawing_menu(monkeypatch, tmp_p
     ih.main([])
     out = capsys.readouterr().out
     assert out.count("What can I do for you?") == 1  # drawn once, not once per bad keystroke
-    assert out.count("1-6 or q, please.") == 2  # one error per invalid attempt
+    assert out.count("1-4 or q, please.") == 2  # one error per invalid attempt
 
 
 # --- --demo must cover the WHOLE menu session, every action, not just one path ---------------
@@ -6347,8 +6387,8 @@ def test_demo_flag_protects_every_action_in_one_session(monkeypatch, tmp_path, c
         lambda target, style, mm, assume_yes=False, demo=False: configure_calls.append(demo) or 0,
     )
     # "2" = Configure (free-function path), directory prompt, loop back,
-    # "6","3" = Advanced -> Project preferences (Installer subset "formats"), loop back, "q".
-    _menu_session(monkeypatch, tmp_path, ["2", str(tmp_path), "6", "3", "q"])
+    # "4","3" = Advanced -> Project preferences (Installer subset "formats"), loop back, "q".
+    _menu_session(monkeypatch, tmp_path, ["2", str(tmp_path), "4", "3", "q"])
     rc = ih.main(["--demo"])
     assert rc == 0
     assert configure_calls == [True]  # demo threaded to the free-function path
@@ -6384,9 +6424,9 @@ def test_demo_menu_selection_is_one_shot_not_sticky(monkeypatch, tmp_path):
             called_demo_values.append(demo) or 0
         ),
     )
-    # 6,5 = Advanced -> Demo (one-shot full-flow preview via the FakeInstaller), loop
+    # 4,5 = Advanced -> Demo (one-shot full-flow preview via the FakeInstaller), loop
     # back, 2 = Configure, directory prompt, loop back, then exhausted -> "q".
-    _menu_session(monkeypatch, tmp_path, ["6", "5", "2", str(tmp_path)])
+    _menu_session(monkeypatch, tmp_path, ["4", "5", "2", str(tmp_path)])
     ih.main([])
     # run_configure must have been called with demo=False - the earlier "Demo" menu pick
     # must not have left args.demo stuck true.

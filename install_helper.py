@@ -1161,13 +1161,15 @@ def confirm(prompt: str, default: bool, assume_yes: bool, style: Optional[Style]
 # ------------------------------------------------------------------ interactive menu
 
 
+# 2026-08-17 restructure (user requests): "Manage engagements" retired from the menu
+# (its jobs live on as the folder subcommands - virt-surv list-engagements / archive -
+# and run_manage_engagements stays for them); the alias item moved under Advanced as a
+# two-option manager (register/update, or change the 'go' launch command).
 MENU_ACTIONS = {
     "1": "full",
     "2": "configure",
-    "3": "manage",
-    "4": "alias",
-    "5": "diagnostics",
-    "6": "advanced",
+    "3": "diagnostics",
+    "4": "advanced",
     "q": "quit",
 }
 
@@ -1193,6 +1195,7 @@ _ADVANCED_ACTIONS = {
     "7": "dashboard",
     "8": "fixbashrc",
     "9": "cleanplugincache",
+    "10": "aliasmanage",
     "b": "back",
 }
 
@@ -1241,10 +1244,8 @@ def choose_action(style: Style) -> str:
         options = (
             ("1", "Install or update the team (this machine - full run, recommended)"),
             ("2", "Configure a project (per project - enable/permissions/preferences/model)"),
-            ("3", "Manage engagements (per project - list / archive closed)"),
-            ("4", "Set up the 'virt-surv' alias (this machine - run from any folder)"),
-            ("5", "Diagnostics..."),
-            ("6", "Advanced / one-off settings..."),
+            ("3", "Diagnostics..."),
+            ("4", "Advanced / one-off settings..."),
             ("q", "Quit"),
         )
         for key, text in options:
@@ -1262,7 +1263,7 @@ def choose_action(style: Style) -> str:
                 return "full"
             if answer in MENU_ACTIONS:
                 break
-            print("  1-6 or q, please.")
+            print("  1-4 or q, please.")
         action = MENU_ACTIONS[answer]
         if action == "diagnostics":
             resolved = _choose_submenu(
@@ -1304,6 +1305,10 @@ def choose_action(style: Style) -> str:
                     ("7", "Rebuild the local team dashboard"),
                     ("8", "Fix a slow ~/.bashrc (checks first, applies only if needed)"),
                     ("9", "Clean stale plugin cache (removes old installs, keeps the active one)"),
+                    (
+                        "10",
+                        "Manage the 'virt-surv' alias (register/update it, or change the 'go' launch command)",
+                    ),
                     ("b", "Back"),
                 ),
                 _ADVANCED_ACTIONS,
@@ -4761,6 +4766,66 @@ def run_setup_alias(
 _CLAUDE_LAUNCH_CMD_KEY = "claude_launch_command"
 
 
+def run_alias_manage(
+    style: Style,
+    mark_map: dict,
+    assume_yes: bool = False,
+    demo: bool = False,
+    repo_hint: Optional[str] = None,
+) -> int:
+    """Advanced-menu alias manager (2026-08-17 user request): the two things a human
+    ever needs here in one place - register/update the 'virt-surv' alias, or change the
+    command 'virt-surv go' launches Claude Code with (previously buried in Machine
+    defaults - the "no obvious setting" live report). A changed command offers the
+    alias refresh immediately: the command is BAKED into the shell function, so saving
+    the config alone was exactly the "doesn't stick" live bug."""
+    s = style
+    print("")
+    print(s.bold("Manage the 'virt-surv' alias"))
+    print(f"  {s.cyan('1)')} Register or update the alias (recommended after plugin updates)")
+    print(f"  {s.cyan('2)')} Change the command 'virt-surv go' uses to launch Claude Code")
+    try:
+        choice = input(f"{s.cyan('  Which one?')} {s.bold('[1]')}: ").strip()
+    except EOFError:
+        return 0
+    if choice in ("", "1"):
+        return run_setup_alias(style, mark_map, assume_yes, demo, repo_hint)
+    if choice != "2":
+        print("  1 or 2, please - nothing changed.")
+        return 0
+    cfg = load_config(config_path())
+    current = cfg.get(_CLAUDE_LAUNCH_CMD_KEY) or ""
+    picked = ask(
+        f"  Launch command (currently: {current or 'unset, launches `claude`'}) - blank to keep",
+        "",
+        False,
+        style=style,
+    ).strip()
+    if not picked or picked == current:
+        print(f"{s.dim('-')} unchanged")
+        return 0
+    if demo:
+        print(s.dim(f"    would set launch command = {picked}"))
+        return 0
+    cfg[_CLAUDE_LAUNCH_CMD_KEY] = picked
+    save_config(config_path(), cfg)
+    print(f"  saved: 'virt-surv go' will launch via {picked!r}")
+    if confirm(
+        "  Refresh the alias now so 'go' picks it up?",
+        default=True,
+        assume_yes=assume_yes,
+        style=s,
+    ):
+        return run_setup_alias(style, mark_map, assume_yes=True)
+    print(
+        s.dim(
+            "  (re-run this item later - the installed alias keeps the old command until "
+            "the refresh)"
+        )
+    )
+    return 0
+
+
 def detect_or_configure_claude_launch_command(
     style: Style, mark_map: dict, assume_yes: bool = False
 ) -> str:
@@ -7325,18 +7390,14 @@ def _main(argv=None) -> int:
                 else:
                     print("No problem - nothing changed. See you next time.")
                 return 0
-            if action in ("configure", "manage"):
-                # Free-function flows with no need for Installer's clone-management
-                # state - handled directly here rather than added as Installer subsets.
+            if action == "configure":
+                # Free-function flow with no need for Installer's clone-management
+                # state - handled directly here rather than added as an Installer subset.
                 raw = ask("  Which project directory?", ".", False, style=style)
-                target = Path(raw)
-                if action == "configure":
-                    run_configure(target, style, marks(), args.yes, args.demo)
-                else:
-                    run_manage_engagements(target, style, marks(), args.yes, args.demo)
+                run_configure(Path(raw), style, marks(), args.yes, args.demo)
                 did_anything = did_anything or not args.demo
-            elif action == "alias":
-                run_setup_alias(style, marks(), args.yes, args.demo, args.repo)
+            elif action == "aliasmanage":
+                run_alias_manage(style, marks(), args.yes, args.demo, args.repo)
                 did_anything = did_anything or not args.demo
             elif action == "demo":
                 # A one-shot preview of the full flow, not a persistent toggle - restored
