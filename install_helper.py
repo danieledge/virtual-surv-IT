@@ -141,6 +141,12 @@ def merge_allow(settings: dict, entries=RECOMMENDED_ALLOW):
 # unthrottled run. To fail fast instead, the human removes API_TIMEOUT_MS and
 # CLAUDE_CODE_RETRY_WATCHDOG from the project settings' env block.
 RECOMMENDED_ENV = {
+    # 1-hour prompt-cache TTL for API-key/cloud sessions (subscription seats already get
+    # 1h): the default 5-minute TTL makes every stop-start gap re-pay the cold prefix at
+    # full input price - on this plugin's front-loaded opens that is the difference
+    # between a cheap and an expensive day (2026-08-17 cost-model refresh; README
+    # §Token usage). Harmless where unsupported: unknown env vars are ignored.
+    "ENABLE_PROMPT_CACHING_1H": "1",
     "API_TIMEOUT_MS": "1800000",
     "API_FORCE_IDLE_TIMEOUT": "0",
     "CLAUDE_STREAM_IDLE_TIMEOUT_MS": "600000",

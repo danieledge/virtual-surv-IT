@@ -109,6 +109,26 @@ evidenced and re-checkable → **sonnet**. Purely mechanical → **haiku**.
 `ml-engineer` (both have a backstop - analysers + PM, and `model-validator` respectively); drop them
 to sonnet if cost must be pushed harder, accepting a small risk on deep security/model-design quality.
 
+**Pricing reality check (2026-08-17, assessment rec 3).** The tiering above was originally priced
+against the Opus 4.1-era ~5x premium ($15/$75 vs $3/$15 per million tokens). Opus 5 lists at
+$5/$25 - a **1.67x** ratio - so the retier-down lever saves far less than the intuition it was
+written under (roughly $1-2 per full review cycle), and the opus tier on the four final-word roles
+is now cheap insurance. Prefer keeping the tiers and spending the cost effort on right-sizing and
+caching (README §Token usage) instead; the retier lever remains documented for genuinely
+cost-pinched estates.
+
+**Verification-pass audit note (Opus 5, same date).** Anthropic's Opus 5 guidance is that the
+model self-verifies well enough that redundant verification scaffolding is pure cost. In THIS
+domain, independent review is often itself the deliverable - segregation of duties and the
+review's own audit trail are evidence a regulator reads - so **every pass whose independence is
+the point stays** (qa vs builder, model-validator vs ml-engineer, the reviewer trio at close).
+The audit target is passes that exist only as quality insurance with no evidentiary role: a
+second same-lens look, a re-check the DoD gate already performs mechanically, or PM re-review of
+an already-independently-reviewed artifact. One live datapoint supports pruning with care rather
+than by reflex: a 2026-08-01 engagement that did MORE checking scored WORSE than cheaper solo
+runs on the same case. When trimming, remove the pass in the skill that chains it, never by
+weakening an agent's own definition.
+
 ## 3. Deliberate deviations from the generic guidance
 
 - **No "use proactively" in descriptions - on purpose.** The generic advice is to add "use

@@ -1023,10 +1023,22 @@ so ±15%); the rest are estimates with no run behind them yet:
 | A **full build → 3 reviews → tuning → performance** delivery (9 agent runs, **measured**) | **~500k** | **~$4-8** | the heavy end, a complete reviewed+calibrated deliverable (see the [build demo](docs/demos/build-artifacts/delivery-report.md) §6) |
 | A full fan-out (right-sizing off), *estimate* | ~500k+ | ~$5-10 | rarely, reserved for broad work |
 
-> 💵 **Cost basis (rough, ±2×).** At list prices: **opus ~$15/$75, sonnet ~$3/$15, haiku ~$1/$5**
-> per million input/output tokens. The reported token counts are *totals* (no input/output split), so
-> these assume a ~50/50 mix; actual cost varies with the split, prices change, and prompt-caching can
-> cut it substantially. Treat as order-of-magnitude, not a quote.
+> 💵 **Cost basis (rough, ±2×; prices refreshed 2026-08-17).** At current list prices: **Opus 5
+> $5/$25, Sonnet 5 $3/$15 (intro $2/$10 through 2026-08-31), Haiku 4.5 $1/$5** per million
+> input/output tokens - the Opus:Sonnet ratio is now only **1.67×**, not the ~5× of the Opus 4.1
+> era these notes were first written under, so the opus tier on the final-word reviewer roles is
+> cheap insurance rather than a big lever. The reported token counts are *totals* (no
+> input/output split), so these assume a ~50/50 mix; actual cost varies with the split, prices
+> change, and prompt-caching can cut it substantially. Treat as order-of-magnitude, not a quote.
+>
+> ⏱️ **Caching decides the day's bill.** Cache reads are ~0.1× input price, but matching is
+> byte-exact on the prefix and the TTL is **5 minutes on API keys and Bedrock/Vertex** versus
+> **1 hour on subscription seats** - so a stop-start working pattern on the API/cloud path pays
+> cache-cold re-reads repeatedly, and the same engagement can cost 2-3× more cold than warm.
+> API-key users can set `ENABLE_PROMPT_CACHING_1H=1` (included in `install_helper.py
+> --env-tuning`'s curated set). Bank-grade deployments note: Bedrock/Vertex with zero-data-
+> retention keeps prompt caching but loses the Batch API's 50% discount, and Anthropic-side
+> analytics don't cover cloud usage - per-user cost visibility there needs OTEL or a gateway.
 >
 > 🧾 **Perspective:** the build demo's [delivery report](docs/demos/build-artifacts/delivery-report.md) §6
 > puts it plainly: that full 9-run delivery (~$4-8 API) is the routine ~80% of a real engagement
@@ -1036,7 +1048,7 @@ so ±15%); the rest are estimates with no run behind them yet:
 **Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
 - **Right-sizing**: the headline lever: a narrow change fires 2-3 agents, not 16; the PM states the
   agent count at the gate, so over-spawning is visible.
-- **Model tiering**: opus (~5× sonnet) reserved for final-judgement/novel-design roles only, haiku
+- **Model tiering**: opus (1.67× sonnet at current prices) reserved for final-judgement/novel-design roles only, haiku
   for the mechanical review bookkeeping (exact split and rationale: [Notes on the
   config](#-notes-on-the-config)).
 - **Artifacts-as-blackboard**: agents return condensed results; big output goes to files, not back
