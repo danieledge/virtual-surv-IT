@@ -1154,6 +1154,24 @@ def _plugin_version() -> str:
         return ""
 
 
+def _prewarm_guard_interpreter(project_dir: Path) -> None:
+    """The engage-probe PREFETCH hook only runs when .claude/.guard-interpreter is
+    warm - a cold cache means the FIRST /engage of a fresh project pays the big inline
+    fallback heredoc in the transcript (live report 2026-08-17: "why is the bash
+    command containing this python script"). run-guard.sh owns this cache and writes
+    it after the first guard execution; go seeds it earlier with the interpreter
+    already running this launcher, so even a first engage gets the zero-tool-call
+    prefetch. Never overwrites an existing value (run-guard's probe result wins);
+    forward slashes so the heredoc's `command -v` accepts it in Git Bash on Windows."""
+    try:
+        cache = project_dir / ".claude" / ".guard-interpreter"
+        if cache.is_file() or not cache.parent.is_dir():
+            return
+        cache.write_text(Path(sys.executable).as_posix() + "\n", encoding="utf-8")
+    except Exception:
+        pass  # cosmetic tier - the fallback heredoc still works without it
+
+
 def _morgan_line() -> str:
     """Morgan's greeting for the go screen (2026-08-17 user request: the persona should
     be visible from the very first touchpoint) - with the mandatory AI-identity
@@ -1431,6 +1449,10 @@ def main() -> int:
         _print_project_defaults(project_dir)
     except Exception:
         pass  # cosmetic - the table must never cost the launch
+    try:
+        _prewarm_guard_interpreter(project_dir)
+    except Exception:
+        pass
     try:
         _refresh_tool_cache(project_dir)
     except Exception:

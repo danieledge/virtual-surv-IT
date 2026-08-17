@@ -638,6 +638,25 @@ def test_heal_is_wired_to_the_real_entry_point_only():
     assert "def main" in body and "_heal_stale_alias_once()" not in body.split("def main", 1)[1]
 
 
+def test_go_prewarms_the_guard_interpreter_cache(tmp_path, monkeypatch, capsys):
+    """A cold .guard-interpreter cache makes the first /engage fall back to the big
+    inline probe heredoc (live report 2026-08-17); go seeds it so even a first engage
+    gets the zero-tool-call prefetch. An existing value is never overwritten."""
+    import sys as _sys
+
+    project = _plugin_enabled_project(tmp_path)
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    assert mod.main() == 0
+    cache = project / ".claude" / ".guard-interpreter"
+    assert cache.read_text(encoding="utf-8").strip() == Path(_sys.executable).as_posix()
+    cache.write_text("my-own-python\n", encoding="utf-8")
+    assert mod.main() == 0
+    assert cache.read_text(encoding="utf-8") == "my-own-python\n"  # run-guard's value wins
+    capsys.readouterr()
+
+
 # --- prompt_toolkit tier (2026-08-17 user request: arrows/mouse/in-place toggles) ----------
 
 
