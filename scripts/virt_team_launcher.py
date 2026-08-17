@@ -48,6 +48,7 @@ working correctly is never load-bearing for actually starting a session.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -140,17 +141,33 @@ def _resume_decision(project_dir: Path) -> str:
     if not shown:
         return ""  # nothing open - nothing to decide, plain launch
     err = sys.stderr
-    print("Existing engagement(s) found:", file=err)
+    ink = _Ink()
+    print("", file=err)
+    print(_rule(ink, "Open engagements"), file=err)
+    slug_w = max(len(_row_resume_token(r) or "?") for r in shown)
+    status_w = max(len(r.get("status") or "?") for r in shown)
     for i, row in enumerate(shown, 1):
         slug = _row_resume_token(row) or "?"
         status = row.get("status") or "?"
+        opened = row.get("opened") or ""
         title = row.get("title") or ""
-        print(f"  {i}) resume {slug} ({status}) - {title}", file=err)
+        status_col = (
+            ink.warn(status.ljust(status_w))
+            if status in ("in_progress", "blocked")
+            else ink.dim(status.ljust(status_w))
+        )
+        opened_col = ink.dim(f"opened {opened}") if opened else ""
+        print(
+            f"    {ink.bold(f'[{i}]')} resume {slug.ljust(slug_w)}  {status_col}  "
+            f"{opened_col}  {title}",
+            file=err,
+        )
     more = menu.get("more") or 0
     if more:
-        print(f"     (+{more} more not shown)", file=err)
-    print("  n) start new", file=err)
-    print("  [Enter] decide inside the session instead", file=err)
+        print(ink.dim(f"        (+{more} more not shown)"), file=err)
+    print(f"    {ink.bold('[n]')} start new", file=err)
+    print(f"    {ink.dim('[Enter] decide inside the session instead')}", file=err)
+    print("", file=err)
     try:
         # Live bug (2026-08-15): input(prompt) writes `prompt` to STDOUT, not stderr -
         # CPython does this unconditionally, regardless of which stream the caller
@@ -160,7 +177,7 @@ def _resume_decision(project_dir: Path) -> str:
         # instead of a clean "--new" - garbled into a single mangled argument by the
         # time it reached the launch command. Print the prompt text ourselves, to
         # stderr, then call input() with NO argument so it never touches stdout.
-        print("Choice: ", end="", file=err)
+        print(_Ink().bold("    Choice: "), end="", file=err)
         choice = input().strip()
     except (EOFError, KeyboardInterrupt):
         return ""  # no tty / interrupted - fall through to deciding in-session
@@ -180,6 +197,83 @@ def _resume_decision(project_dir: Path) -> str:
             return f"{engage_cmd} --resume {slug}"
     print(f"'{choice}' out of range - deciding inside the session instead.", file=err)
     return ""
+
+
+# ---------------------------------------------------------------- presentation
+# The go screen is the team's front door (2026-08-17 user request: "prettify it
+# materially"). Constraints learned live: STRUCTURE stays pure ASCII (corp consoles
+# decode stderr as cp1252 - box glyphs arrive as mojibake, the probe's own lesson), and
+# ANSI color only when the terminal provably supports it - a real tty, NO_COLOR unset,
+# and on Windows a terminal that speaks VT (Windows Terminal / mintty / a TERM-setting
+# ssh session). Everything degrades to the same plain text the tests read. stdout is
+# untouched by any of this - it stays exactly the decision string.
+
+def _color_enabled() -> bool:
+    if os.environ.get("NO_COLOR"):
+        return False
+    if not sys.stderr.isatty():
+        return False
+    if os.name != "nt":
+        return True
+    return bool(
+        os.environ.get("WT_SESSION")
+        or os.environ.get("TERM")
+        or os.environ.get("TERM_PROGRAM")
+        or os.environ.get("ANSICON")
+    )
+
+
+class _Ink:
+    def __init__(self) -> None:
+        self.on = _color_enabled()
+
+    def _c(self, code: str, text: str) -> str:
+        return f"\033[{code}m{text}\033[0m" if self.on else text
+
+    def title(self, t: str) -> str:
+        return self._c("1;36", t)
+
+    def dim(self, t: str) -> str:
+        return self._c("2", t)
+
+    def good(self, t: str) -> str:
+        return self._c("32", t)
+
+    def warn(self, t: str) -> str:
+        return self._c("33", t)
+
+    def bold(self, t: str) -> str:
+        return self._c("1", t)
+
+
+def _rule(ink: _Ink, label: str = "", note: str = "", width: int = 64) -> str:
+    if not label:
+        return ink.dim("=" * width)
+    body = f"--- {label} "
+    pad = width - len(body) - (len(note) + 1 if note else 0)
+    line = body + "-" * max(pad, 3) + (f" {note}" if note else "")
+    return ink.dim(line[:width]) if not note else ink.dim(body + "-" * max(pad, 3)) + " " + ink.dim(note)
+
+
+def _plugin_version() -> str:
+    try:
+        manifest = _scripts_dir().parent / ".claude-plugin" / "plugin.json"
+        return json.loads(manifest.read_text(encoding="utf-8-sig")).get("version") or ""
+    except Exception:
+        return ""
+
+
+def _print_banner(project_dir: Path) -> None:
+    ink = _Ink()
+    err = sys.stderr
+    version = _plugin_version()
+    print("", file=err)
+    print(
+        ink.dim("=== ") + ink.title("Virtual Surv-IT") + ink.dim(" " + "=" * 45), file=err
+    )
+    print(f"    project  {ink.bold(project_dir.name)}", file=err)
+    if version:
+        print(f"    plugin   v{version}", file=err)
 
 
 def _apply_new_recommended_defaults(project_dir: Path) -> list:
@@ -266,10 +360,42 @@ def _print_project_defaults(project_dir: Path) -> None:
     pr = integrations.get("pr_comments") or {}
     if pr.get("enabled") or pr.get("locked"):
         rows.append(("pr comments", "on (EXPERIMENTAL)" if pr.get("enabled") else "locked"))
+    # Session-safety state at a glance (2026-08-17 UX pass): the consent marker decides
+    # whether the exec gate opens, and env tuning decides the day's cache economics -
+    # both cheap file checks, both worth knowing before the session starts.
+    rows.append(
+        (
+            "exec consent marker",
+            "present" if (project_dir / ".claude" / ".exec-consent").is_file() else "absent",
+        )
+    )
+    try:
+        env = (
+            json.loads(
+                (project_dir / ".claude" / "settings.json").read_text(encoding="utf-8")
+            ).get("env")
+            or {}
+        )
+        tuned = "applied" if "ENABLE_PROMPT_CACHING_1H" in env else "not applied"
+    except Exception:
+        tuned = "not applied"
+    rows.append(("env tuning (1h cache TTL)", tuned))
+    ink = _Ink()
     width = max(len(name) for name, _ in rows)
-    print("Project defaults ('virt-surv configure' to change):", file=err)
+    print("", file=err)
+    print(_rule(ink, "Project defaults", note="'virt-surv configure' to change"), file=err)
     for name, value in rows:
-        print(f"  {name.ljust(width)}  {value}", file=err)
+        dots = ink.dim("." * (width - len(name) + 2))
+        head = value.split(" ")[0]
+        if head in ("on", "applied", "present"):
+            shown = ink.good(value)
+        elif head == "locked":
+            shown = ink.warn(value)
+        elif head in ("off", "not", "absent"):
+            shown = ink.dim(value)
+        else:
+            shown = value
+        print(f"    {name} {dots} {shown}", file=err)
 
 
 def _offer_first_time_setup(project_dir: Path) -> bool:
@@ -284,8 +410,11 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
     helper = _scripts_dir().parent / "install_helper.py"
     if not helper.is_file():
         return False
-    print(f"(virt-team: {project_dir} has no team configuration yet.)", file=err)
-    print("Run first-time project setup now? [Y/n] ", end="", file=err)
+    ink = _Ink()
+    print("", file=err)
+    print(_rule(ink, "First-time setup"), file=err)
+    print(f"    (virt-team: {project_dir} has no team configuration yet.)", file=err)
+    print(ink.bold("    Run first-time project setup now? [Y/n] "), end="", file=err)
     try:
         answer = input().strip().lower()
     except (EOFError, KeyboardInterrupt):
@@ -334,12 +463,19 @@ def main() -> int:
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
     try:
+        _print_banner(project_dir)
+    except Exception:
+        pass  # cosmetic
+    try:
         added = _apply_new_recommended_defaults(project_dir)
         if added:
+            ink = _Ink()
             print(
-                "Applied new recommended default(s) from the plugin update: "
+                "    "
+                + ink.good("+")
+                + " Applied new recommended default(s) from the plugin update: "
                 + ", ".join(sorted(added))
-                + "  ('virt-surv configure' to review)",
+                + ink.dim("  ('virt-surv configure' to review)"),
                 file=sys.stderr,
             )
     except Exception:
