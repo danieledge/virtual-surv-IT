@@ -125,6 +125,150 @@ def _row_resume_token(row: dict) -> str:
     return row.get("slug") or workspace_dir or ""
 
 
+_TOGGLE_PREFS = (
+    ("docx export", "extra_formats"),
+    ("regulatory citations", "regulatory_citations"),
+    ("large-context review split", "large_context_review_split"),
+    ("parallel dispatch (Workflow)", "parallel_dispatch_via_workflow"),
+    ("standards critique", "standards_critique"),
+    ("codebase-map skeleton", "map_skeleton"),
+)
+
+
+def _config_editor(project_dir: Path) -> None:
+    """Inline project-settings editor on the go screen (2026-08-17 user request): pick a
+    setting by number to toggle it, [d] restores machine defaults, [b] done. Writes the
+    project's team-preferences.json directly, preserving every unrelated key; restoring
+    defaults means REMOVING the project-level keys - resolve_preferences' key-presence
+    precedence then lets the machine tier speak again. All interaction on stderr/stdin;
+    stdout stays the decision channel. Every failure path just returns - cosmetic tier."""
+    err = sys.stderr
+    ink = _Ink()
+    prefs_path = project_dir / ".claude" / "team-preferences.json"
+    try:
+        import engage_probe
+    except Exception:
+        return
+    while True:
+        try:
+            prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
+        except Exception:
+            prefs = {}
+        try:
+            effective = engage_probe.resolve_preferences(project_dir)
+        except Exception:
+            return
+        print("", file=err)
+        print(_rule(ink, "Project settings", note="pick a number to toggle"), file=err)
+        width = max(len(label) for label, _ in _TOGGLE_PREFS)
+        for i, (label, key) in enumerate(_TOGGLE_PREFS, 1):
+            if key == "extra_formats":
+                on = "docx" in (effective.get("extra_formats") or [])
+            else:
+                on = bool(effective.get(key))
+            dots = ink.dim("." * (width - len(label) + 2))
+            val = ink.good("on") if on else ink.dim("off")
+            src = "" if key in prefs or (key == "extra_formats" and key in prefs) else ink.dim(
+                "  (machine default)"
+            )
+            print(f"    {ink.bold(f'[{i}]')} {label} {dots} {val}{src}", file=err)
+        print(f"    {ink.bold('[d]')} restore machine defaults (drop project choices)", file=err)
+        print(f"    {ink.bold('[b]')} done", file=err)
+        print(ink.bold("    Setting: "), end="", file=err)
+        try:
+            choice = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return
+        if choice in ("", "b"):
+            return
+        if choice == "d":
+            for _, key in _TOGGLE_PREFS:
+                prefs.pop(key, None)
+        else:
+            try:
+                idx = int(choice)
+                label, key = _TOGGLE_PREFS[idx - 1]
+            except (ValueError, IndexError):
+                print(ink.dim("    1-6, d or b, please."), file=err)
+                continue
+            if key == "extra_formats":
+                current = "docx" in (effective.get("extra_formats") or [])
+                formats = [f for f in (prefs.get("extra_formats") or []) if f != "docx"]
+                prefs["extra_formats"] = formats if current else formats + ["docx"]
+            else:
+                prefs[key] = not bool(effective.get(key))
+        try:
+            prefs_path.parent.mkdir(parents=True, exist_ok=True)
+            prefs_path.write_text(
+                json.dumps(prefs, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            print(ink.dim("    could not write team-preferences.json - unchanged"), file=err)
+            return
+
+
+def _archive_menu(project_dir: Path, es, menu: dict) -> None:
+    """Archive engagements from the go screen (2026-08-17 user request): a number
+    archives that engagement, 'all' archives every listed one, [b] back. Archiving an
+    OPEN pack is allowed but informed: it uses --force and the DoD checker will show it
+    as ARCHIVED-OPEN - stated before confirming, never silently."""
+    err = sys.stderr
+    ink = _Ink()
+    shown = menu.get("shown") or []
+    if not shown:
+        print(ink.dim("    nothing to archive"), file=err)
+        return
+    print("", file=err)
+    print(_rule(ink, "Archive engagements"), file=err)
+    for i, row in enumerate(shown, 1):
+        slug = _row_resume_token(row) or "?"
+        status = row.get("status") or "?"
+        print(f"    {ink.bold(f'[{i}]')} {slug}  {ink.dim(status)}", file=err)
+    print(f"    {ink.bold('[all]')} archive every engagement listed", file=err)
+    print(f"    {ink.bold('[b]')} back", file=err)
+    print(
+        ink.dim(
+            "    (archive-in-place: nothing is deleted; an OPEN pack archives with --force "
+            "and shows as ARCHIVED-OPEN in checks)"
+        ),
+        file=err,
+    )
+    print(ink.bold("    Archive: "), end="", file=err)
+    try:
+        choice = input().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return
+    if choice in ("", "b"):
+        return
+    targets = []
+    if choice == "all":
+        targets = shown
+    else:
+        try:
+            targets = [shown[int(choice) - 1]]
+        except (ValueError, IndexError):
+            print(ink.dim("    a number, 'all' or b, please."), file=err)
+            return
+    import contextlib
+
+    for row in targets:
+        slug = _row_resume_token(row) or ""
+        if not slug:
+            continue
+        try:
+            # es.main prints its confirmations to ITS stdout - which in-process is OUR
+            # stdout, the decision channel. Everything it says belongs on stderr here
+            # (the test that added this caught the leak before it shipped).
+            with contextlib.redirect_stdout(sys.stderr):
+                rc = es.main(["archive", slug, "--force"])
+        except SystemExit as exc:  # es.main may exit; treat code as rc
+            rc = int(exc.code or 0)
+        except Exception:
+            rc = 1
+        marker = ink.good("archived") if rc == 0 else ink.warn(f"failed (rc {rc})")
+        print(f"    {slug}: {marker}", file=err)
+
+
 def _resume_decision(project_dir: Path) -> str:
     """Returns the full pre-seeded prompt string (possibly empty) - the engage command
     in the spelling THIS project answers to (see _engage_command), plus the
@@ -133,13 +277,26 @@ def _resume_decision(project_dir: Path) -> str:
     command-substitution capture."""
     try:
         import engagement_state
-
-        menu = engagement_state.resume_menu(project_dir / "artifacts")
     except Exception:
         return ""
-    shown = menu.get("shown") or []
-    if not shown:
-        return ""  # nothing open - nothing to decide, plain launch
+    while True:
+        try:
+            menu = engagement_state.resume_menu(project_dir / "artifacts")
+        except Exception:
+            return ""
+        shown = menu.get("shown") or []
+        if not shown:
+            return ""  # nothing open (any more) - nothing to decide, plain launch
+        decision = _menu_round(project_dir, engagement_state, menu, shown)
+        if decision != "__again__":
+            return decision
+
+
+def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) -> str:
+    """One render-and-ask round of the engagement menu. Returns the decision string, ""
+    for decide-in-session, or the sentinel "__again__" after a side action ([c] settings,
+    [a] archive) so the caller recomputes the menu - archiving changes it - and asks
+    again."""
     err = sys.stderr
     ink = _Ink()
     print("", file=err)
@@ -166,6 +323,11 @@ def _resume_decision(project_dir: Path) -> str:
     if more:
         print(ink.dim(f"        (+{more} more not shown)"), file=err)
     print(f"    {ink.bold('[n]')} start new", file=err)
+    print(
+        f"    {ink.bold('[c]')} change a project setting   {ink.bold('[a]')} archive "
+        "engagement(s)",
+        file=err,
+    )
     print(f"    {ink.dim('[Enter] decide inside the session instead')}", file=err)
     print("", file=err)
     try:
@@ -183,6 +345,19 @@ def _resume_decision(project_dir: Path) -> str:
         return ""  # no tty / interrupted - fall through to deciding in-session
     if not choice:
         return ""
+    if choice.lower() == "c":
+        try:
+            _config_editor(project_dir)
+            _print_project_defaults(project_dir)
+        except Exception:
+            pass  # cosmetic tier
+        return "__again__"
+    if choice.lower() == "a":
+        try:
+            _archive_menu(project_dir, engagement_state, menu)
+        except Exception:
+            pass
+        return "__again__"
     engage_cmd = _engage_command(project_dir)
     if choice.lower() == "n":
         return f"{engage_cmd} --new"

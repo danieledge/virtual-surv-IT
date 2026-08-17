@@ -401,3 +401,71 @@ def test_go_leaves_projects_that_declined_tuning_alone(tmp_path, monkeypatch, ca
     assert "Applied new" not in out.err
     saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert "ENABLE_PROMPT_CACHING_1H" not in saved.get("env", {})
+
+
+# --- inline config editor + archive on the go screen (2026-08-17 user requests) -----------
+
+
+def test_config_editor_toggles_and_restores_machine_defaults(tmp_path, monkeypatch, capsys):
+    project = _plugin_enabled_project(tmp_path)
+    mod = _load()
+    # toggle citations (item 2) off, then restore defaults, then done
+    answers = iter(["2", "d", "b"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    mod._config_editor(project)
+    prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
+    # 'd' removed the project-level choices again - machine defaults resume
+    assert "regulatory_citations" not in prefs
+    out = capsys.readouterr()
+    assert "Project settings" in out.err
+    assert out.out == ""  # stdout purity
+
+
+def test_config_editor_single_toggle_persists(tmp_path, monkeypatch, capsys):
+    project = _plugin_enabled_project(tmp_path)
+    mod = _load()
+    answers = iter(["2", "b"])  # toggle citations (default on -> off), done
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    mod._config_editor(project)
+    prefs = json.loads((project / ".claude" / "team-preferences.json").read_text())
+    assert prefs["regulatory_citations"] is False
+    # unrelated keys survive the rewrite
+    assert prefs == {"regulatory_citations": False} or "guard_daemon" not in prefs
+
+
+def test_menu_c_edits_then_reasks_and_returns_decision(tmp_path, monkeypatch, capsys):
+    project = _plugin_enabled_project(tmp_path)
+    _ws(project, "thing")
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    answers = iter(["c", "b", "n"])  # settings -> done -> start new
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.strip() == "/compliance-surveillance-team:engage --new"
+    assert "Project settings" in out.err
+
+
+def test_menu_a_archives_and_falls_through_to_plain_when_empty(tmp_path, monkeypatch, capsys):
+    """Archive the only engagement via [a] all - the recomputed menu is empty, so the
+    launcher falls through to a plain launch (empty decision)."""
+    import scripts.engagement_state as es
+
+    project = _plugin_enabled_project(tmp_path)
+    art = project / "artifacts"
+    assert es.main(["--dir", str(art / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
+    capsys.readouterr()  # drain the SETUP's own init output - the assertion below is
+    # about the LAUNCHER's stdout purity, not the fixture's
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    answers = iter(["a", "all"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out == ""  # nothing left to resume - plain launch
+    assert "archived" in out.err
+    assert (art / "old" / ".archive").is_file()
