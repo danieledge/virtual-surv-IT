@@ -634,6 +634,82 @@ def test_heal_is_wired_to_the_real_entry_point_only():
     assert "def main" in body and "_heal_stale_alias_once()" not in body.split("def main", 1)[1]
 
 
+# --- prompt_toolkit tier (2026-08-17 user request: arrows/mouse/in-place toggles) ----------
+
+
+def _pt_session(monkeypatch, keys: str):
+    """Headless prompt_toolkit driving: forces the pt tier past the tty gate, neuters
+    the stderr output binding, and returns a context manager feeding `keys`."""
+    import contextlib
+    import sys as _sys
+
+    monkeypatch.setenv("VIRT_SURV_FORCE_PTK", "1")
+    vend = str(REPO_ROOT / "vendor")
+    if vend not in _sys.path:
+        _sys.path.insert(0, vend)
+    from prompt_toolkit.application import create_app_session
+    from prompt_toolkit.input.defaults import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+
+    @contextlib.contextmanager
+    def _ctx():
+        with create_pipe_input() as pipe:
+            pipe.send_text(keys)
+            with create_app_session(input=pipe, output=DummyOutput()):
+                yield
+
+    return _ctx()
+
+
+def test_ptk_tier_is_gated_on_a_real_tty():
+    """Under pytest stdin is not a tty, so without the force flag the pt tier must stay
+    out of the way - that is what keeps every numbered-input test above meaningful."""
+    mod = _load()
+    assert mod._ptk_ui() is None
+
+
+def test_pt_menu_enter_resumes_first_engagement(tmp_path, monkeypatch, capsys):
+    project = _plugin_enabled_project(tmp_path)
+    _ws(project, "dashboard-demo", title="Dashboard demo")
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setattr(mod, "_pt_io", lambda: {})
+    with _pt_session(monkeypatch, "\r"):  # Enter on the first (resume) row
+        rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.strip() == "/compliance-surveillance-team:engage --resume dashboard-demo"
+
+
+def test_pt_menu_hotkey_n_starts_new(tmp_path, monkeypatch, capsys):
+    project = _plugin_enabled_project(tmp_path)
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setattr(mod, "_pt_io", lambda: {})
+    with _pt_session(monkeypatch, "n"):
+        rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.strip() == "/compliance-surveillance-team:engage --new"
+
+
+def test_pt_editor_space_toggles_and_persists(tmp_path, monkeypatch, capsys):
+    """The in-place toggle: space flips the highlighted row (docx export, row 1) and
+    the write is the same _editor_apply the numbered tier uses."""
+    project = _plugin_enabled_project(tmp_path)
+    mod = _load()
+    monkeypatch.setattr(mod, "_pt_io", lambda: {})
+    with _pt_session(monkeypatch, " b"):  # toggle row 1, then done
+        mod._config_editor(project)
+    prefs = json.loads(
+        (project / ".claude" / "team-preferences.json").read_text(encoding="utf-8")
+    )
+    assert "docx" in prefs.get("extra_formats", [])
+    assert capsys.readouterr().out == ""  # stdout purity holds in the pt tier too
+
+
 def test_rich_ui_loads_from_vendor_tree():
     """The go TUI uses vendored rich CORE only (2026-08-17): Console/Table/Panel/Rule
     need neither pygments nor markdown-it, so those are deliberately NOT vendored. This

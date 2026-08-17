@@ -225,57 +225,248 @@ _TOGGLE_PREFS = (
 )
 
 
-def _config_editor(project_dir: Path) -> None:
-    """Inline project-settings editor on the go screen (2026-08-17 user request): pick a
-    setting by number to toggle it, [d] restores machine defaults, [b] done. Writes the
-    project's team-preferences.json directly, preserving every unrelated key; restoring
-    defaults means REMOVING the project-level keys - resolve_preferences' key-presence
-    precedence then lets the machine tier speak again. All interaction on stderr/stdin;
-    stdout stays the decision channel. Every failure path just returns - cosmetic tier."""
-    err = sys.stderr
-    ink = _Ink()
-    prefs_path = project_dir / ".claude" / "team-preferences.json"
+_ENV_ROW_LABEL = "env tuning (timeouts + 1h cache TTL)"
+
+
+def _editor_rows(project_dir: Path):
+    """One consistent snapshot for a settings-editor render: [(label, value, on)] for
+    the six toggle prefs plus the env-bundle row, or None when preferences can't be
+    resolved. Shared by BOTH editor tiers so they can never drift."""
     try:
         import engage_probe
+
+        effective = engage_probe.resolve_preferences(project_dir)
     except Exception:
-        return
-    while True:
+        return None
+    try:
+        prefs = json.loads(
+            (project_dir / ".claude" / "team-preferences.json").read_text(encoding="utf-8")
+        )
+    except Exception:
+        prefs = {}
+    rows = []
+    for label, key in _TOGGLE_PREFS:
+        if key == "extra_formats":
+            on = "docx" in (effective.get("extra_formats") or [])
+        else:
+            on = bool(effective.get(key))
+        src = "" if key in prefs else "  (machine default)"
+        rows.append((label, ("on" if on else "off") + src, on))
+    try:
+        env = (
+            json.loads(
+                (project_dir / ".claude" / "settings.json").read_text(encoding="utf-8")
+            ).get("env")
+            or {}
+        )
+    except Exception:
+        env = {}
+    env_on = "ENABLE_PROMPT_CACHING_1H" in env
+    rows.append((_ENV_ROW_LABEL, "applied" if env_on else "not applied", env_on))
+    return rows
+
+
+def _editor_apply(project_dir: Path, action) -> str:
+    """Perform one editor action - 1..6 toggles that pref, 7 toggles the env bundle,
+    'd' restores machine defaults (drops the project-level pref keys; env has no
+    machine tier, its own row toggles it). Returns a short note for the user ('' when
+    there is nothing to say). Shared by both editor tiers."""
+    prefs_path = project_dir / ".claude" / "team-preferences.json"
+    try:
+        prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
+    except Exception:
+        prefs = {}
+    env_i = len(_TOGGLE_PREFS) + 1
+    if action != "d":
         try:
-            prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
-        except Exception:
-            prefs = {}
+            action = int(action)  # the input() tier hands over strings
+        except (TypeError, ValueError):
+            return f"1-{env_i}, d or b, please."
+    if action == "d":
+        for _, key in _TOGGLE_PREFS:
+            prefs.pop(key, None)
+    elif action == env_i:
+        # The env bundle: ON adds the missing recommended keys, add-only, same
+        # contract as the go-time propagation; OFF removes only keys still AT their
+        # recommended value, so a custom-tuned timeout survives and is reported.
         try:
-            effective = engage_probe.resolve_preferences(project_dir)
+            import importlib.util as _ilu
+
+            spec = _ilu.spec_from_file_location(
+                "install_helper_env2", _scripts_dir().parent / "install_helper.py"
+            )
+            ih = _ilu.module_from_spec(spec)
+            spec.loader.exec_module(ih)
+            recommended = dict(ih.RECOMMENDED_ENV)
         except Exception:
-            return
+            return "could not load the recommended env set - unchanged"
         settings_path = project_dir / ".claude" / "settings.json"
         try:
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
         except Exception:
             settings = {}
-        env = settings.get("env") if isinstance(settings.get("env"), dict) else {}
-        env_label = "env tuning (timeouts + 1h cache TTL)"
-        env_on = "ENABLE_PROMPT_CACHING_1H" in env
+        env = dict(settings.get("env") or {}) if isinstance(settings.get("env"), dict) else {}
+        note = ""
+        if "ENABLE_PROMPT_CACHING_1H" in env:
+            kept = [k for k in recommended if k in env and env[k] != recommended[k]]
+            for k in recommended:
+                if k in env and env[k] == recommended[k]:
+                    del env[k]
+            if kept:
+                note = "kept custom-tuned value(s): " + ", ".join(sorted(kept))
+        else:
+            for k, v in recommended.items():
+                env.setdefault(k, v)
+        settings["env"] = env
+        try:
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings_path.write_text(
+                json.dumps(settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            return "could not write settings.json - unchanged"
+        return note
+    else:
+        try:
+            label, key = _TOGGLE_PREFS[int(action) - 1]
+        except (ValueError, IndexError, TypeError):
+            return f"1-{env_i}, d or b, please."
+        rows = _editor_rows(project_dir) or []
+        current = bool(rows[int(action) - 1][2]) if rows else False
+        if key == "extra_formats":
+            formats = [f for f in (prefs.get("extra_formats") or []) if f != "docx"]
+            prefs["extra_formats"] = formats if current else formats + ["docx"]
+        else:
+            prefs[key] = not current
+    try:
+        prefs_path.parent.mkdir(parents=True, exist_ok=True)
+        prefs_path.write_text(
+            json.dumps(prefs, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    except OSError:
+        return "could not write team-preferences.json - unchanged"
+    return ""
+
+
+def _pt_config_editor(p, project_dir: Path) -> None:
+    """prompt_toolkit tier of the settings editor: arrows move, Enter/Space toggles the
+    highlighted row IN PLACE (only the widget repaints, no full redraw), 'd' restores
+    machine defaults, Esc/'b' done. Mouse: click a row to toggle it."""
+    idx = [0]
+    note = [""]
+    kb = p["KeyBindings"]()
+
+    def _rows():
+        return _editor_rows(project_dir) or []
+
+    def _toggle(i):
+        note[0] = _editor_apply(project_dir, i + 1)
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % max(len(_rows()), 1)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % max(len(_rows()), 1)
+
+    @kb.add("enter")
+    @kb.add(" ")
+    def _flip(event):
+        _toggle(idx[0])
+
+    @kb.add("d")
+    def _defaults(event):
+        note[0] = _editor_apply(project_dir, "d") or "machine defaults restored"
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("b")
+    @kb.add("q")
+    def _done(event):
+        event.app.exit()
+
+    def _fragments():
+        MouseEventType = p["MouseEventType"]
+        rows = _rows()
+        out = [("class:title", " Project settings\n")]
+        width = max((len(label) for label, _v, _o in rows), default=0)
+        for i, (label, value, on) in enumerate(rows):
+
+            def _click(mouse_event, _i=i):
+                if mouse_event.event_type == MouseEventType.MOUSE_UP:
+                    idx[0] = _i
+                    _toggle(_i)
+                    return None
+                return NotImplemented
+
+            sel = i == idx[0]
+            marker = "> " if sel else "  "
+            row_style = "class:sel" if sel else ""
+            val_style = "class:sel" if sel else ("" if on else "class:dim")
+            out.append((row_style, f"  {marker}{label.ljust(width + 2)}", _click))
+            out.append((val_style, value, _click))
+            out.append(("", "\n"))
+        out.append(
+            ("class:dim", "  Enter/Space/click toggles - d machine defaults - Esc done")
+        )
+        if note[0]:
+            out.append(("class:note", f"\n  {note[0]}"))
+        return out
+
+    rows0 = _rows()
+    if not rows0:
+        return
+    app = p["Application"](
+        layout=p["Layout"](
+            p["Window"](
+                p["FormattedTextControl"](_fragments, focusable=True, show_cursor=False),
+                height=len(rows0) + 3,
+                always_hide_cursor=True,
+            )
+        ),
+        key_bindings=kb,
+        style=_pt_style(p),
+        mouse_support=True,
+        erase_when_done=True,
+        full_screen=False,
+        **_pt_io(),
+    )
+    try:
+        app.run()
+    except Exception:
+        return
+
+
+def _config_editor(project_dir: Path) -> None:
+    """Inline project-settings editor on the go screen (2026-08-17 user request).
+    prompt_toolkit tier when the terminal supports it (arrows/mouse, in-place toggles);
+    numbered input() tier otherwise - both drive the same _editor_rows/_editor_apply,
+    so they can never disagree about what a toggle does. Writes team-preferences.json
+    preserving every unrelated key; restoring defaults means REMOVING the project-level
+    keys (resolve_preferences' key-presence precedence lets the machine tier speak
+    again). All interaction on stderr/stdin; stdout stays the decision channel. Every
+    failure path just returns - cosmetic tier."""
+    p = _ptk_ui()
+    if p:
+        _pt_config_editor(p, project_dir)
+        return
+    err = sys.stderr
+    ink = _Ink()
+    while True:
+        rows = _editor_rows(project_dir)
+        if rows is None:
+            return
         print("", file=err)
         _print_rule("Project settings", note="pick a number to toggle")
-        width = max(
-            max(len(label) for label, _ in _TOGGLE_PREFS), len(env_label)
-        )
-        for i, (label, key) in enumerate(_TOGGLE_PREFS, 1):
-            if key == "extra_formats":
-                on = "docx" in (effective.get("extra_formats") or [])
-            else:
-                on = bool(effective.get(key))
+        width = max(len(label) for label, _v, _o in rows)
+        for i, (label, value, on) in enumerate(rows, 1):
             dots = ink.dim("." * (width - len(label) + 2))
-            val = ink.good("on") if on else ink.dim("off")
-            src = "" if key in prefs or (key == "extra_formats" and key in prefs) else ink.dim(
-                "  (machine default)"
+            head, _, tail = value.partition("  ")
+            shown = (ink.good(head) if on else ink.dim(head)) + (
+                ink.dim("  " + tail) if tail else ""
             )
-            print(f"    {ink.bold(f'[{i}]')} {label} {dots} {val}{src}", file=err)
-        env_i = len(_TOGGLE_PREFS) + 1
-        env_dots = ink.dim("." * (width - len(env_label) + 2))
-        env_val = ink.good("applied") if env_on else ink.dim("not applied")
-        print(f"    {ink.bold(f'[{env_i}]')} {env_label} {env_dots} {env_val}", file=err)
+            print(f"    {ink.bold(f'[{i}]')} {label} {dots} {shown}", file=err)
         print(f"    {ink.bold('[d]')} restore machine defaults (drop project choices)", file=err)
         print(f"    {ink.bold('[b]')} done", file=err)
         print(ink.bold("    Setting: "), end="", file=err)
@@ -285,88 +476,65 @@ def _config_editor(project_dir: Path) -> None:
             return
         if choice in ("", "b"):
             return
-        if choice == "d":
-            # Scoped to the team preferences: env tuning has no machine tier to
-            # restore to - its own row toggles it explicitly.
-            for _, key in _TOGGLE_PREFS:
-                prefs.pop(key, None)
-        elif choice == str(env_i):
-            # The env bundle (2026-08-17 follow-up: the TTL row was on the defaults
-            # table but missing here). ON adds the missing recommended keys, add-only,
-            # same contract as the go-time propagation; OFF removes only keys still AT
-            # their recommended value, so a custom-tuned timeout survives and is
-            # reported rather than silently dropped.
-            try:
-                import importlib.util as _ilu
+        note = _editor_apply(project_dir, "d" if choice == "d" else choice)
+        if note:
+            print(ink.dim(f"    {note}"), file=err)
 
-                spec = _ilu.spec_from_file_location(
-                    "install_helper_env2", _scripts_dir().parent / "install_helper.py"
-                )
-                ih = _ilu.module_from_spec(spec)
-                spec.loader.exec_module(ih)
-                recommended = dict(ih.RECOMMENDED_ENV)
-            except Exception:
-                print(ink.dim("    could not load the recommended env set - unchanged"), file=err)
-                continue
-            env = dict(env)
-            if env_on:
-                kept = [k for k in recommended if k in env and env[k] != recommended[k]]
-                for k in recommended:
-                    if k in env and env[k] == recommended[k]:
-                        del env[k]
-                if kept:
-                    print(
-                        ink.dim(
-                            "    kept custom-tuned value(s): " + ", ".join(sorted(kept))
-                        ),
-                        file=err,
-                    )
-            else:
-                for k, v in recommended.items():
-                    env.setdefault(k, v)
-            settings["env"] = env
-            try:
-                settings_path.parent.mkdir(parents=True, exist_ok=True)
-                settings_path.write_text(
-                    json.dumps(settings, indent=2, ensure_ascii=False) + "\n",
-                    encoding="utf-8",
-                )
-            except OSError:
-                print(ink.dim("    could not write settings.json - unchanged"), file=err)
+
+def _archive_perform(es, targets: list) -> None:
+    """Archive each target pack (--force: an OPEN pack archives but shows as
+    ARCHIVED-OPEN in checks), reporting per slug to stderr. Shared by both tiers."""
+    import contextlib
+
+    ink = _Ink()
+    for row in targets:
+        slug = _row_resume_token(row) or ""
+        if not slug:
             continue
-        else:
-            try:
-                idx = int(choice)
-                label, key = _TOGGLE_PREFS[idx - 1]
-            except (ValueError, IndexError):
-                print(ink.dim(f"    1-{env_i}, d or b, please."), file=err)
-                continue
-            if key == "extra_formats":
-                current = "docx" in (effective.get("extra_formats") or [])
-                formats = [f for f in (prefs.get("extra_formats") or []) if f != "docx"]
-                prefs["extra_formats"] = formats if current else formats + ["docx"]
-            else:
-                prefs[key] = not bool(effective.get(key))
         try:
-            prefs_path.parent.mkdir(parents=True, exist_ok=True)
-            prefs_path.write_text(
-                json.dumps(prefs, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-            )
-        except OSError:
-            print(ink.dim("    could not write team-preferences.json - unchanged"), file=err)
-            return
+            # es.main prints its confirmations to ITS stdout - which in-process is OUR
+            # stdout, the decision channel. Everything it says belongs on stderr here
+            # (the test that added this caught the leak before it shipped).
+            with contextlib.redirect_stdout(sys.stderr):
+                rc = es.main(["archive", slug, "--force"])
+        except SystemExit as exc:  # es.main may exit; treat code as rc
+            rc = int(exc.code or 0)
+        except Exception:
+            rc = 1
+        marker = ink.good("archived") if rc == 0 else ink.warn(f"failed (rc {rc})")
+        print(f"    {slug}: {marker}", file=sys.stderr)
 
 
 def _archive_menu(project_dir: Path, es, menu: dict) -> None:
-    """Archive engagements from the go screen (2026-08-17 user request): a number
-    archives that engagement, 'all' archives every listed one, [b] back. Archiving an
-    OPEN pack is allowed but informed: it uses --force and the DoD checker will show it
-    as ARCHIVED-OPEN - stated before confirming, never silently."""
+    """Archive engagements from the go screen (2026-08-17 user request): pick one,
+    'all' archives every OPEN one (not just the 3 shown rows - live report), back to
+    leave. Archiving an OPEN pack is allowed but informed: it uses --force and the DoD
+    checker will show it as ARCHIVED-OPEN - stated before confirming, never silently.
+    prompt_toolkit tier when the terminal supports it; numbered input() otherwise."""
     err = sys.stderr
     ink = _Ink()
     shown = menu.get("shown") or []
     if not shown:
         print(ink.dim("    nothing to archive"), file=err)
+        return
+    open_rows = menu.get("open") or shown
+    p = _ptk_ui()
+    if p:
+        entries = [
+            (i, f"{_row_resume_token(row) or '?'}  ({row.get('status') or '?'})")
+            for i, row in enumerate(shown)
+        ]
+        entries.append(("all", f"archive ALL open engagements ({len(open_rows)})"))
+        entries.append((None, "back"))
+        pick = _pt_pick(
+            p,
+            "Archive engagements  (in-place, nothing deleted; OPEN packs show as "
+            "ARCHIVED-OPEN)",
+            [(ret, label, None) for ret, label in entries],
+        )
+        if pick is None:
+            return
+        _archive_perform(es, open_rows if pick == "all" else [shown[pick]])
         return
     print("", file=err)
     _print_rule("Archive engagements")
@@ -374,7 +542,6 @@ def _archive_menu(project_dir: Path, es, menu: dict) -> None:
         slug = _row_resume_token(row) or "?"
         status = row.get("status") or "?"
         print(f"    {ink.bold(f'[{i}]')} {slug}  {ink.dim(status)}", file=err)
-    open_rows = menu.get("open") or shown
     print(
         f"    {ink.bold('[all]')} archive ALL open engagements ({len(open_rows)})", file=err
     )
@@ -393,7 +560,6 @@ def _archive_menu(project_dir: Path, es, menu: dict) -> None:
         return
     if choice in ("", "b"):
         return
-    targets = []
     if choice == "all":
         # ALL OPEN, not all SHOWN (live report 2026-08-17: the list caps at 3 rows with
         # "+N more not shown" - 'all' archived the visible three and the rest came
@@ -405,24 +571,7 @@ def _archive_menu(project_dir: Path, es, menu: dict) -> None:
         except (ValueError, IndexError):
             print(ink.dim("    a number, 'all' or b, please."), file=err)
             return
-    import contextlib
-
-    for row in targets:
-        slug = _row_resume_token(row) or ""
-        if not slug:
-            continue
-        try:
-            # es.main prints its confirmations to ITS stdout - which in-process is OUR
-            # stdout, the decision channel. Everything it says belongs on stderr here
-            # (the test that added this caught the leak before it shipped).
-            with contextlib.redirect_stdout(sys.stderr):
-                rc = es.main(["archive", slug, "--force"])
-        except SystemExit as exc:  # es.main may exit; treat code as rc
-            rc = int(exc.code or 0)
-        except Exception:
-            rc = 1
-        marker = ink.good("archived") if rc == 0 else ink.warn(f"failed (rc {rc})")
-        print(f"    {slug}: {marker}", file=err)
+    _archive_perform(es, targets)
 
 
 def _resume_decision(project_dir: Path) -> str:
@@ -451,6 +600,56 @@ def _resume_decision(project_dir: Path) -> str:
             return decision
 
 
+def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: list) -> str:
+    """prompt_toolkit tier of the go menu: arrow/mouse picker over the same entries as
+    the numbered flow, same return contract (decision, "" for in-session/plain, or
+    "__again__" after a side action)."""
+    entries = []
+    for i, row in enumerate(shown):
+        slug = _row_resume_token(row) or "?"
+        status = row.get("status") or "?"
+        opened = row.get("opened") or ""
+        title = row.get("title") or ""
+        detail = "  ".join(x for x in (status, f"opened {opened}" if opened else "", title) if x)
+        entries.append((("resume", i), f"resume {slug}  ({detail})", None))
+    if not shown:
+        archived = menu.get("archived") or 0
+        note = f"none open ({archived} archived)" if archived else "none open"
+        entries.append((("noop",), note, None))
+    entries.append((("new",), "start new", "n"))
+    entries.append((("settings",), "change a project setting", "c"))
+    if shown:
+        entries.append((("archive",), "archive engagement(s)", "a"))
+    launch_label = "decide inside the session instead" if shown else "just launch"
+    entries.append((("launch",), launch_label, None))
+    pick = _pt_pick(p, "Open engagements" if shown else "Engagements", entries)
+    ink = _Ink()
+    if pick is None or pick[0] in ("launch", "noop"):
+        return ""
+    if pick[0] == "settings":
+        try:
+            _config_editor(project_dir)
+            _print_project_defaults(project_dir)
+        except Exception:
+            pass  # cosmetic tier
+        return "__again__"
+    if pick[0] == "archive":
+        try:
+            _archive_menu(project_dir, engagement_state, menu)
+        except Exception:
+            pass
+        return "__again__"
+    engage_cmd = _engage_command(project_dir)
+    if pick[0] == "new":
+        print(ink.dim("    -> starting new"), file=sys.stderr)
+        return f"{engage_cmd} --new"
+    slug = _row_resume_token(shown[pick[1]])
+    if slug:
+        print(ink.dim(f"    -> resuming {slug}"), file=sys.stderr)
+        return f"{engage_cmd} --resume {slug}"
+    return ""
+
+
 def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) -> str:
     """One render-and-ask round of the engagement menu. Returns the decision string, ""
     for decide-in-session, or the sentinel "__again__" after a side action ([c] settings,
@@ -458,6 +657,9 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     again."""
     err = sys.stderr
     ink = _Ink()
+    p = _ptk_ui()
+    if p:
+        return _pt_menu_round(p, project_dir, engagement_state, menu, shown)
     print("", file=err)
     _print_rule("Open engagements" if shown else "Engagements")
     if shown:
@@ -650,6 +852,156 @@ def _print_rule(label: str, note: str = "") -> None:
         r["console"].print(r["Rule"](text, characters=r["rule_char"], style="dim", align="left"))
         return
     print(_rule(_Ink(), label, note=note), file=sys.stderr)
+
+
+_PTK_CACHE = None
+
+
+def _ptk_ui():
+    """Vendored prompt_toolkit (2026-08-17 user request: arrow keys, mouse, in-place
+    updates - "a nicer, less tech experience") when USABLE: importable AND both stdin
+    and stderr are real ttys. Anything else - tests, pipes, dumb terminals, a broken
+    vendor tree - returns None and every menu falls back to the numbered input() flow,
+    which stays fully maintained (it is also what non-tty automation always gets).
+    VIRT_SURV_FORCE_PTK=1 skips the tty gate so the pt tier can be driven headlessly
+    (tests use prompt_toolkit's own pipe-input/dummy-output session)."""
+    global _PTK_CACHE
+    if not os.environ.get("VIRT_SURV_FORCE_PTK"):
+        try:
+            if not (sys.stdin.isatty() and sys.stderr.isatty()):
+                return None
+        except Exception:
+            return None
+    if _PTK_CACHE is None:
+        try:
+            vend = _scripts_dir().parent / "vendor"
+            if str(vend) not in sys.path:
+                sys.path.insert(0, str(vend))
+            from prompt_toolkit.application import Application
+            from prompt_toolkit.key_binding import KeyBindings
+            from prompt_toolkit.layout import Layout, Window
+            from prompt_toolkit.layout.controls import FormattedTextControl
+            from prompt_toolkit.mouse_events import MouseEventType
+            from prompt_toolkit.styles import Style
+
+            _PTK_CACHE = {
+                "Application": Application,
+                "KeyBindings": KeyBindings,
+                "Layout": Layout,
+                "Window": Window,
+                "FormattedTextControl": FormattedTextControl,
+                "MouseEventType": MouseEventType,
+                "Style": Style,
+            }
+        except Exception:
+            _PTK_CACHE = {}
+    return _PTK_CACHE or None
+
+
+def _pt_io() -> dict:
+    """Application() kwargs binding prompt_toolkit's rendering to STDERR - stdout stays
+    the decision channel even while a full-screen-less pt app is running. Tests
+    monkeypatch this to {} so the app inherits their pipe-input/dummy-output session."""
+    try:
+        from prompt_toolkit.output.defaults import create_output
+
+        return {"output": create_output(stdout=sys.stderr)}
+    except Exception:
+        return {}
+
+
+def _pt_style(p):
+    return p["Style"].from_dict(
+        {
+            "title": "bold cyan",
+            "sel": "reverse",
+            "dim": "ansibrightblack",
+            "note": "italic ansibrightblack",
+        }
+    )
+
+
+def _pt_pick(p, title: str, entries: list, default_index: int = 0):
+    """One arrow/mouse picker round: entries = [(ret, label, hotkey-or-None)]. Returns
+    the chosen entry's ret, or None on Esc/Ctrl-C/q (caller's 'back/default'). Up/Down
+    and mouse move the highlight, Enter (or a click, or the hotkey) picks; the widget
+    erases itself when done so the console stays clean."""
+    idx = [max(0, min(default_index, len(entries) - 1))]
+    result = {"v": None}
+    kb = p["KeyBindings"]()
+
+    def _exit(event, value):
+        result["v"] = value
+        event.app.exit()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % len(entries)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % len(entries)
+
+    @kb.add("enter")
+    def _enter(event):
+        _exit(event, entries[idx[0]][0])
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("q")
+    def _esc(event):
+        _exit(event, None)
+
+    for i, (ret, _label, hot) in enumerate(entries):
+        if hot:
+
+            @kb.add(hot)
+            def _hot(event, _ret=ret):
+                _exit(event, _ret)
+
+    def _fragments():
+        MouseEventType = p["MouseEventType"]
+        out = [("class:title", f" {title}\n")]
+        for i, (ret, label, hot) in enumerate(entries):
+
+            def _click(mouse_event, _i=i, _ret=ret):
+                if mouse_event.event_type == MouseEventType.MOUSE_UP:
+                    idx[0] = _i
+                    result["v"] = _ret
+                    from prompt_toolkit.application.current import get_app
+
+                    get_app().exit()
+                    return None
+                return NotImplemented
+
+            sel = i == idx[0]
+            marker = "> " if sel else "  "
+            style = "class:sel" if sel else ""
+            out.append((style, f"  {marker}{label}", _click))
+            out.append(("", "\n"))
+        out.append(("class:dim", "  arrows move - Enter picks - Esc backs out"))
+        return out
+
+    app = p["Application"](
+        layout=p["Layout"](
+            p["Window"](
+                p["FormattedTextControl"](_fragments, focusable=True, show_cursor=False),
+                height=len(entries) + 2,
+                always_hide_cursor=True,
+            )
+        ),
+        key_bindings=kb,
+        style=_pt_style(p),
+        mouse_support=True,
+        erase_when_done=True,
+        full_screen=False,
+        **_pt_io(),
+    )
+    try:
+        app.run()
+    except Exception:
+        return None
+    return result["v"]
 
 
 def _plugin_version() -> str:
