@@ -403,12 +403,15 @@ def _pt_config_editor(p, project_dir: Path) -> None:
             sel = i == idx[0]
             marker = "> " if sel else "  "
             row_style = "class:sel" if sel else ""
-            val_style = "class:sel" if sel else ("" if on else "class:dim")
+            head, _, src = value.partition("  ")
+            val_style = "class:sel" if sel else ("class:on" if on else "class:dim")
             out.append((row_style, f"  {marker}{label.ljust(width + 2)}", _click))
-            out.append((val_style, value, _click))
+            out.append((val_style, head, _click))
+            if src:
+                out.append(("class:sel" if sel else "class:dim", f"  {src}", _click))
             out.append(("", "\n"))
         out.append(
-            ("class:dim", "  Enter/Space/click toggles - d machine defaults - Esc done")
+            ("class:dim", "  Enter/Space/click toggles · d machine defaults · Esc done")
         )
         if note[0]:
             out.append(("class:note", f"\n  {note[0]}"))
@@ -520,17 +523,21 @@ def _archive_menu(project_dir: Path, es, menu: dict) -> None:
     open_rows = menu.get("open") or shown
     p = _ptk_ui()
     if p:
-        entries = [
-            (i, f"{_row_resume_token(row) or '?'}  ({row.get('status') or '?'})")
-            for i, row in enumerate(shown)
-        ]
-        entries.append(("all", f"archive ALL open engagements ({len(open_rows)})"))
-        entries.append((None, "back"))
+        slug_w = max((len(_row_resume_token(r) or "?") for r in shown), default=0)
+        entries = []
+        for i, row in enumerate(shown):
+            slug = _row_resume_token(row) or "?"
+            status = row.get("status") or "?"
+            entries.append(
+                (i, [("class:slug", slug.ljust(slug_w)), ("class:dim", f"  {status}")], None)
+            )
+        entries.append(("all", f"archive ALL open engagements ({len(open_rows)})", None))
+        entries.append((None, "back", "b"))
         pick = _pt_pick(
             p,
-            "Archive engagements  (in-place, nothing deleted; OPEN packs show as "
-            "ARCHIVED-OPEN)",
-            [(ret, label, None) for ret, label in entries],
+            "Archive engagements",
+            entries,
+            subtitle="in-place, nothing deleted; an OPEN pack shows as ARCHIVED-OPEN in checks",
         )
         if pick is None:
             return
@@ -605,26 +612,48 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
     the numbered flow, same return contract (decision, "" for in-session/plain, or
     "__again__" after a side action)."""
     entries = []
+    slug_w = max((len(_row_resume_token(r) or "?") for r in shown), default=0)
     for i, row in enumerate(shown):
         slug = _row_resume_token(row) or "?"
         status = row.get("status") or "?"
         opened = row.get("opened") or ""
         title = row.get("title") or ""
-        detail = "  ".join(x for x in (status, f"opened {opened}" if opened else "", title) if x)
-        entries.append((("resume", i), f"resume {slug}  ({detail})", None))
+        frags = [
+            ("", "resume "),
+            ("class:slug", slug.ljust(slug_w)),
+            ("class:warn" if status in ("in_progress", "blocked") else "class:dim", f"  {status}"),
+        ]
+        if opened:
+            frags.append(("class:dim", f"  opened {opened}"))
+        if title:
+            frags.append(("", f"  {title}"))
+        entries.append((("resume", i), frags, None))
+    subtitle = ""
     if not shown:
         archived = menu.get("archived") or 0
-        note = f"none open ({archived} archived)" if archived else "none open"
-        entries.append((("noop",), note, None))
+        subtitle = f"none open ({archived} archived)" if archived else "none open"
     entries.append((("new",), "start new", "n"))
     entries.append((("settings",), "change a project setting", "c"))
     if shown:
         entries.append((("archive",), "archive engagement(s)", "a"))
     launch_label = "decide inside the session instead" if shown else "just launch"
     entries.append((("launch",), launch_label, None))
-    pick = _pt_pick(p, "Open engagements" if shown else "Engagements", entries)
+    default_index = 0
+    default_slug = menu.get("default") or ""
+    for i, row in enumerate(shown):
+        if (_row_resume_token(row) or "") == default_slug:
+            default_index = i
+            break
+    pick = _pt_pick(
+        p,
+        "Open engagements" if shown else "Engagements",
+        entries,
+        default_index=default_index,
+        subtitle=subtitle,
+    )
     ink = _Ink()
-    if pick is None or pick[0] in ("launch", "noop"):
+    if pick is None or pick[0] == "launch":
+        print(ink.dim("    -> launching"), file=sys.stderr)
         return ""
     if pick[0] == "settings":
         try:
@@ -836,7 +865,15 @@ def _rich_ui():
         return None
     r = dict(_RICH_CACHE)
     utf = "utf" in ((getattr(sys.stderr, "encoding", "") or "").lower())
-    r["console"] = r["Console"](file=sys.stderr, highlight=False, emoji=False, soft_wrap=True)
+    import shutil as _shutil
+
+    # Cap the content column (2026-08-17 polish pass): full-terminal-width rules on a
+    # wide screen visually detach from the panel and table beside them - one bounded
+    # column reads as a single composed block.
+    cols = _shutil.get_terminal_size((80, 24)).columns
+    r["console"] = r["Console"](
+        file=sys.stderr, highlight=False, emoji=False, soft_wrap=True, width=min(cols, 76)
+    )
     r["safe_box"] = r["box"].SIMPLE if utf else r["box"].ASCII
     r["panel_box"] = r["box"].ROUNDED if utf else r["box"].ASCII
     r["rule_char"] = "─" if utf else "-"
@@ -913,19 +950,24 @@ def _pt_io() -> dict:
 def _pt_style(p):
     return p["Style"].from_dict(
         {
-            "title": "bold cyan",
+            "title": "bold ansicyan",
             "sel": "reverse",
             "dim": "ansibrightblack",
             "note": "italic ansibrightblack",
+            "on": "ansigreen",
+            "warn": "ansiyellow",
+            "slug": "bold",
+            "hot": "ansicyan",
         }
     )
 
 
-def _pt_pick(p, title: str, entries: list, default_index: int = 0):
-    """One arrow/mouse picker round: entries = [(ret, label, hotkey-or-None)]. Returns
-    the chosen entry's ret, or None on Esc/Ctrl-C/q (caller's 'back/default'). Up/Down
-    and mouse move the highlight, Enter (or a click, or the hotkey) picks; the widget
-    erases itself when done so the console stays clean."""
+def _pt_pick(p, title: str, entries: list, default_index: int = 0, subtitle: str = ""):
+    """One arrow/mouse picker round: entries = [(ret, label, hotkey-or-None)] where
+    label is a plain string OR a list of (style, text) fragments for styled rows.
+    Returns the chosen entry's ret, or None on Esc/Ctrl-C/q (caller's 'back/default').
+    Up/Down and mouse move the highlight, Enter (or a click, or the hotkey) picks; the
+    widget erases itself when done so the console stays clean."""
     idx = [max(0, min(default_index, len(entries) - 1))]
     result = {"v": None}
     kb = p["KeyBindings"]()
@@ -962,6 +1004,8 @@ def _pt_pick(p, title: str, entries: list, default_index: int = 0):
     def _fragments():
         MouseEventType = p["MouseEventType"]
         out = [("class:title", f" {title}\n")]
+        if subtitle:
+            out.append(("class:dim", f"   {subtitle}\n"))
         for i, (ret, label, hot) in enumerate(entries):
 
             def _click(mouse_event, _i=i, _ret=ret):
@@ -976,17 +1020,25 @@ def _pt_pick(p, title: str, entries: list, default_index: int = 0):
 
             sel = i == idx[0]
             marker = "> " if sel else "  "
-            style = "class:sel" if sel else ""
-            out.append((style, f"  {marker}{label}", _click))
+            out.append(("class:sel" if sel else "", f"  {marker}", _click))
+            if isinstance(label, str):
+                out.append(("class:sel" if sel else "", label, _click))
+            else:
+                for frag_style, frag_text in label:
+                    out.append(("class:sel" if sel else frag_style, frag_text, _click))
+            if hot and not sel:
+                out.append(("class:dim", "  ", _click))
+                out.append(("class:hot", f"[{hot}]", _click))
             out.append(("", "\n"))
-        out.append(("class:dim", "  arrows move - Enter picks - Esc backs out"))
+        out.append(("class:dim", "  arrows/mouse move · Enter picks · Esc backs out"))
         return out
 
+    height = len(entries) + (3 if subtitle else 2)
     app = p["Application"](
         layout=p["Layout"](
             p["Window"](
                 p["FormattedTextControl"](_fragments, focusable=True, show_cursor=False),
-                height=len(entries) + 2,
+                height=height,
                 always_hide_cursor=True,
             )
         ),
