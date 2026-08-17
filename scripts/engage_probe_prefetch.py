@@ -119,7 +119,18 @@ def _resume_menu_json(project_dir: Path) -> str | None:
         return None
 
 
-def _build_block(interp: str, project_dir: Path) -> str | None:
+def _engage_flag(prompt: str) -> str:
+    """The wrapper-provided resume-or-new answer, verbatim from the prompt: '--new',
+    '--resume <slug>', or '' when neither is present."""
+    m = re.search(r"(?:^|\s)--resume\s+(\S+)", prompt)
+    if m:
+        return f"--resume {m.group(1)}"
+    if re.search(r"(?:^|\s)--new(?:\s|$)", prompt):
+        return "--new"
+    return ""
+
+
+def _build_block(interp: str, project_dir: Path, prompt: str = "") -> str | None:
     """Returns the full injected block, or None on any failure (fail-open)."""
     try:
         scripts_dir = _scripts_dir()
@@ -138,11 +149,26 @@ def _build_block(interp: str, project_dir: Path) -> str | None:
         "<engage-probe-result>",
         "Pre-computed by the engage_probe_prefetch hook, same probe engage-open.md's step 0",
         "documents - use these values directly, do NOT run the Bash bootstrap heredoc for",
-        "this open. Still read docs/team-operating-guide.md yourself using PLUGIN_ROOT below;",
+        "this open, and never compose a substitute probe of your own (no grepping the",
+        "skill tree for fields, no ad-hoc engagement_state calls - live drift 2026-08-17).",
+        "Still read docs/team-operating-guide.md yourself using PLUGIN_ROOT below;",
         "the probe never prints it.",
         f"INTERPRETER={interp}",
         report,
     ]
+    flag = _engage_flag(prompt)
+    if flag:
+        lines.append(f"ENGAGE_FLAG={flag}")
+    if flag == "--new":
+        # ZERO engagement discovery under --new (SKILL.md 0b): the resume menu is
+        # deliberately NOT injected - there is nothing to validate and nothing to
+        # enumerate; the human already answered in the go menu.
+        lines.append(
+            "(--new: resume menu omitted on purpose - skip 0b entirely, no list --menu,"
+        )
+        lines.append("no open-pack commentary; go straight to classifying the work)")
+        lines.append("</engage-probe-result>")
+        return "\n".join(lines)
     try:
         menu_json = _resume_menu_json(project_dir)
     except Exception:
@@ -177,7 +203,7 @@ def main() -> int:
         return 0  # cold cache: first-ever run in this project, let the live probe handle it
 
     try:
-        block = _build_block(interp, project_dir)
+        block = _build_block(interp, project_dir, prompt)
         if block:
             print(block)
     except Exception:
