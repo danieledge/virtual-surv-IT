@@ -100,6 +100,11 @@ _CHECKS = (
         False,
     ),
     ("module_form_redirect", _SCRIPTS_DIR / "module_form_redirect.py", {"Bash"}, False),
+    # Map-first enforcement (2026-08-17): denies bare full-tree enumeration in
+    # ENGAGED sessions only, naming the sanctioned inventory sources. Advisory
+    # infra polarity (fail_open on a missing/broken file) - it is a cost rule,
+    # not a safety wall; the module itself returns 2 to deny when armed.
+    ("enumeration_redirect", _SCRIPTS_DIR / "enumeration_redirect.py", {"Bash"}, False),
 )
 
 
