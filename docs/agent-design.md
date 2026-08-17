@@ -92,7 +92,7 @@ evidenced and re-checkable → **sonnet**. Purely mechanical → **haiku**.
 |---|---|---|
 | `model-validator` | **opus** | The *last word* on model soundness; adversarial; nobody re-checks it. |
 | `compliance-reviewer` | **opus** | Final audit/DoD gate before handover; a missed audit-trail/secret/PII is high-consequence and unchecked downstream. |
-| `code-reviewer` | **opus** | Subtle cross-language **security** judgement analysers miss; high blast radius. |
+| `code-reviewer` | **opus** | Subtle cross-language **security** judgement analysers miss; high blast radius. **Depth-tiered at dispatch since 2026-08-17**: Audit-depth passes ride this opus frontmatter (the pack is the final audit word); Deep-depth passes dispatch with a `sonnet` override by default (independently scored + PM-challenged), opus opt-in priced at the review menu; Quick runs in-session and never spawns it at all. |
 | `ml-engineer` | **opus** | Novel ML/NLP **design**; subtle failure modes (leakage, overfitting) are cheaper to avoid than to catch and re-do. |
 | `business-analyst` | sonnet | Structured elicitation/spec work; re-checked against the SME packs, by reviewers and the PM. |
 | `rules-developer` | sonnet | Detection code + tests, built **from a spec validated against the `docs/sme/` packs** and independently reviewed (code + compliance) before merge - two checks up front that `ml-engineer`'s *novel* design lacks (its validation is post-build). **A specific engagement may escalate to opus for genuinely novel/complex scenario logic** where a subtle miss is as costly as a model error; the tier is per-engagement, the default sonnet. |

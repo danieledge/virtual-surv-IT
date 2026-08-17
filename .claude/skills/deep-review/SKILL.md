@@ -80,6 +80,20 @@ genuinely exceeds one context, or corporate-proxy timeouts have already bitten t
 (the split's original purpose, and it demonstrably helps there) - name which reason applies
 in the sizing line, and state the resulting pass count before dispatching.
 
+**Tier by evidence need (2026-08-17 decision):** **Deep defaults to `model: sonnet`** on the
+dispatch (its findings are independently scored and PM-challenged, and the pack is not the
+final audit word), with an **opus opt-in stated in the priced menu line** for
+high-stakes-but-not-audit work; **Audit always dispatches opus** - there the pack IS the
+evidence and the final specialist word (agent-design §2's rationale). If the dispatch path in
+use cannot override the agent's frontmatter model, say so and proceed on the frontmatter tier
+rather than silently absorbing the cost difference.
+
+**Deep reads a MAP, not the repo:** widen scope beyond the diff only via a targeted
+related-file map built once up front - importers of the changed files, their imports, and
+their test files - and read only what the map names (turingmind's Phase-1C pattern; the live
+6-pass run's per-pass cold repo reads are exactly what this avoids). Never browse the
+codebase breadth-first from inside a review pass.
+
 > ⚠️ **Pip (`review-scorer`) is two of these steps, and both are delegations, not options -**
 > **including doing the step yourself "to save a turn."** Before dispatching anyone, state the
 > pipeline roll-call in one line - *"Pip context → Ravi (×N, concurrent) → Pip score/filter →
