@@ -2093,7 +2093,14 @@ def test_run_setup_alias_posix_line_has_go_branch(tmp_path, monkeypatch):
     assert "virt-surv() {" in content
     assert '"$1" = "go"' in content
     assert "virt_team_launcher.py" in content
-    assert '"claude"' in content  # the stubbed launch command, baked in
+    # v5: the launch command is NOT baked - the function asks the launcher at every
+    # 'go' and word-splits the answer via an unquoted $__vt_c expansion (live report
+    # 2026-08-17: a config reset kept launching the old baked value, and a multi-word
+    # command was baked as one unresolvable quoted word).
+    assert "--launch-command" in content
+    assert "$__vt_c ${__vt_d:+" in content  # unquoted on purpose - word-splitting IS the fix
+    assert '"claude"' not in content  # nothing config-dependent baked any more
+    assert "__vt_c=claude" in content  # only the hard fallback remains
     # The launcher's stdout is the FULL pre-seeded prompt, passed through verbatim as
     # one argument. History: 2026-08-15 the prefix was missing entirely; the fix baked
     # "/engage" into this line - but that bare spelling only exists repo-as-project, so
@@ -2123,6 +2130,10 @@ def test_run_setup_alias_powershell_line_has_go_branch(tmp_path, monkeypatch):
     assert "function virt-surv {" in content
     assert '$args[0] -eq "go"' in content
     assert "virt_team_launcher.py" in content
+    # v5: launch command resolved at run time and word-split (see the POSIX twin test).
+    assert "--launch-command" in content
+    assert "& $__vtCmd[0] @__vtCmdArgs" in content
+    assert '& "claude"' not in content
     # Verbatim pass-through, same contract as POSIX - the run-mode-dependent command
     # spelling lives in the launcher, never baked here (2026-08-16 live report).
     assert '"$__vtDecision"' in content
@@ -3838,10 +3849,10 @@ def test_machine_defaults_step_blank_launch_command_leaves_unchanged(tmp_path, m
 def test_machine_defaults_step_offers_alias_refresh_when_launch_command_changes(
     tmp_path, monkeypatch
 ):
-    """Live report (2026-08-16): "it doesn't seem to stick" - saving
-    claude_launch_command alone changes nothing for an already-installed alias (the
-    command is baked into the shell function at setup-alias time). The step must offer
-    the setup-alias refresh, and accepting it must actually run it."""
+    """Live report (2026-08-16): "it doesn't seem to stick" - a pre-v5 installed alias
+    has the command baked in, so a config change alone did nothing for it. The step
+    still offers the setup-alias refresh (which carries such an install to v5, where
+    the command is resolved at run time), and accepting it must actually run it."""
     import install_helper as ih
 
     _isolate_home(monkeypatch, tmp_path)
@@ -5232,12 +5243,12 @@ def test_setup_alias_idempotent_skip(tmp_path, monkeypatch, capsys):
     assert content.count("virt-surv() {") == 1
 
 
-def test_setup_alias_upgrades_when_the_launch_command_changed(tmp_path, monkeypatch, capsys):
-    """Live report (2026-08-16): changing 'virt-surv go's launch command in Machine
-    defaults "doesn't seem to stick" - the command is baked into the shell function,
-    and the old staleness check saw a current-shaped entry and skipped forever, so the
-    rc kept launching the old command. An entry whose baked values differ from what
-    this run would write must upgrade."""
+def test_setup_alias_line_is_launch_command_independent(tmp_path, monkeypatch, capsys):
+    """v5 inverts the 2026-08-16 fix one step further: the launch command is no longer
+    IN the line at all (the launcher answers --launch-command at run time), so a config
+    change alone must leave a current alias exactly as it is - no upgrade churn, and
+    the change is live on the next 'go' with no profile reload (2026-08-17 live
+    report: even a config RESET kept launching the old baked value)."""
     import install_helper as ih
 
     home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="")
@@ -5247,10 +5258,10 @@ def test_setup_alias_upgrades_when_the_launch_command_changed(tmp_path, monkeypa
     rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
     out = capsys.readouterr().out
     assert rc == 0
-    assert "out of date" in out
+    assert "already exists, skipped" in out
     content = (home / ".bashrc").read_text(encoding="utf-8")
-    assert '"cc" ${__vt_d:+"$__vt_d"}' in content  # new definition, new command
-    assert content.count("virt-surv() {") == 2  # appended below, old line untouched
+    assert content.count("virt-surv() {") == 1  # identical line - never re-appended
+    assert '"cc"' not in content  # and no command value anywhere in it
 
 
 def test_setup_alias_upgrades_a_pre_go_alias_instead_of_skipping(tmp_path, monkeypatch, capsys):

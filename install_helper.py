@@ -2776,15 +2776,14 @@ class Installer:
         save_config(self.cfg_path, self.cfg)
         self.step_ok("Machine defaults", f"{summary} ({self.cfg_path})")
         if launch_cmd_wanted != launch_cmd_current:
-            # The launch command is BAKED into the virt-surv shell function when
-            # setup-alias writes it - saving the config alone changes nothing for an
-            # already-installed alias (live report 2026-08-16: "it doesn't seem to
-            # stick"). Offer the refresh right here; run_setup_alias's exact-line
-            # staleness check appends an updated definition carrying the new command.
+            # A v5 alias reads this config at every 'go', so the change is already
+            # live for it. The refresh offer stays for machines whose installed alias
+            # predates v5 (those still have a command BAKED in - the 2026-08-16
+            # "doesn't seem to stick" report); on v5 it's a no-op skip.
             if confirm(
-                "  Refresh the 'virt-surv' shell alias now so 'go' launches with the "
-                "new command? (Otherwise re-run setup-alias later - the installed "
-                "alias keeps the old command baked in until then.)",
+                "  Refresh the 'virt-surv' shell alias too? (needed once if it was "
+                "installed before v5 - a current alias picks the change up on the "
+                "next 'go' automatically)",
                 default=True,
                 assume_yes=False,
                 style=self.style,
@@ -4441,7 +4440,15 @@ _ALIAS_MARKER = "virt-surv"
 # a plugin install needs /compliance-surveillance-team:engage - live report 2026-08-16:
 # the baked bare form was an unknown command on every real plugin install), so the
 # shell function now passes the launcher's stdout through verbatim as one argument.
-_ALIAS_VERSION = 4
+# v5 the LAUNCH COMMAND is no longer baked either: the function asks the launcher
+# (`--launch-command`) at every 'go' and word-splits the answer (live report
+# 2026-08-17: a launch command reset in the config kept launching the old baked value
+# even after closing PowerShell, because the profile function still carried it - and a
+# multi-word command like 'cc --debug' was baked as ONE quoted word, unresolvable).
+# Config changes now take effect on the next 'go' with no alias refresh and no profile
+# reload. Trade-off, stated: a launch command that is a single path WITH SPACES no
+# longer works word-split - wrap it in your own alias/function and configure that name.
+_ALIAS_VERSION = 5
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
 
@@ -4640,6 +4647,10 @@ def run_setup_alias(
             "profile) - nothing to add the alias to"
         )
         return 1
+    # Still asked/persisted HERE on first setup (the config must exist for the launcher
+    # to answer --launch-command later), but since v5 the value never enters the line
+    # templates below - the shell function resolves it at every 'go'. The binding is
+    # kept for the surrounding messages that name the configured command.
     launch_cmd = detect_or_configure_claude_launch_command(style, mark_map, assume_yes)
     wrote_any = False
     had_error = False
@@ -4647,14 +4658,21 @@ def run_setup_alias(
         # Changing either line template below? Bump _ALIAS_VERSION (see its comment) -
         # the trailing stamp is the only thing that lets an already-installed profile
         # pick the change up on a re-run.
+        # v5: NOTHING config-dependent is baked into either line any more - the
+        # launcher answers `--launch-command` from the machine config at every 'go',
+        # and the function word-splits it (multi-word commands like 'cc --resume'
+        # work; a bare path with spaces does not - configure a wrapper alias instead).
         if rc_path.suffix == ".ps1":
             line = (
                 f"function {_ALIAS_MARKER} {{ "
                 f'if ($args.Count -gt 0 -and $args[0] -eq "go") {{ '
                 f"$__vtRest = @(); if ($args.Count -gt 1) {{ $__vtRest = $args[1..($args.Count-1)] }}; "
+                f'$__vtCmd = @((& "{interpreter}" "{launcher_path}" --launch-command) -split " +"); '
+                f'if (-not $__vtCmd) {{ $__vtCmd = @("claude") }}; '
+                f"$__vtCmdArgs = @($__vtCmd | Select-Object -Skip 1); "
                 f'$__vtDecision = & "{interpreter}" "{launcher_path}"; '
-                f'if ($__vtDecision) {{ & "{launch_cmd}" "$__vtDecision" @__vtRest }} '
-                f'else {{ & "{launch_cmd}" @__vtRest }} '
+                f'if ($__vtDecision) {{ & $__vtCmd[0] @__vtCmdArgs "$__vtDecision" @__vtRest }} '
+                f"else {{ & $__vtCmd[0] @__vtCmdArgs @__vtRest }} "
                 f"}} else {{ "
                 f'& "{interpreter}" "{script_path}" @args '
                 f"}} }} {_ALIAS_STAMP}"
@@ -4662,9 +4680,11 @@ def run_setup_alias(
         else:
             line = (
                 f"{_ALIAS_MARKER}() {{ "
-                f'if [ "$1" = "go" ]; then shift; local __vt_d; '
+                f'if [ "$1" = "go" ]; then shift; local __vt_c __vt_d; '
+                f'__vt_c="$("{interpreter}" "{launcher_path}" --launch-command)"; '
+                f'[ -n "$__vt_c" ] || __vt_c=claude; '
                 f'__vt_d="$("{interpreter}" "{launcher_path}")"; '
-                f'"{launch_cmd}" ${{__vt_d:+"$__vt_d"}} "$@"; '
+                f'$__vt_c ${{__vt_d:+"$__vt_d"}} "$@"; '
                 f'else "{interpreter}" "{script_path}" "$@"; fi; }} {_ALIAS_STAMP}'
             )
         existing = (
@@ -4673,10 +4693,10 @@ def run_setup_alias(
         # Staleness is EXACT-LINE: skip only when the rc already contains the exact
         # line this run would write. Any difference upgrades - a changed template
         # (which is what the version stamp marks), but equally a changed baked-in
-        # value: the launch command ("Machine defaults" edits claude_launch_command,
-        # but an already-written alias had the old one baked in - live report
-        # 2026-08-16: "it doesn't seem to stick"), a different interpreter, or a
-        # moved clone path.
+        # value: a different interpreter or a moved clone path. (The launch command
+        # left this list at v5 - it is resolved at run time now, precisely because
+        # baking it produced the 2026-08-16 "doesn't seem to stick" report and then
+        # the 2026-08-17 one where even a config RESET kept launching the old value.)
         stale = _ALIAS_MARKER in existing and line not in existing
         if _ALIAS_MARKER in existing and not stale:
             print(
@@ -4776,9 +4796,11 @@ def run_alias_manage(
     """Advanced-menu alias manager (2026-08-17 user request): the two things a human
     ever needs here in one place - register/update the 'virt-surv' alias, or change the
     command 'virt-surv go' launches Claude Code with (previously buried in Machine
-    defaults - the "no obvious setting" live report). A changed command offers the
-    alias refresh immediately: the command is BAKED into the shell function, so saving
-    the config alone was exactly the "doesn't stick" live bug."""
+    defaults - the "no obvious setting" live report). Since alias v5 the command is
+    resolved from this config at every 'go' (pre-v5 aliases had it BAKED into the
+    shell function - the "doesn't stick" live bug, and its 2026-08-17 sequel where
+    even a config reset kept launching the old value); the refresh offer below exists
+    to carry pre-v5 installs over."""
     s = style
     print("")
     print(s.bold("Manage the 'virt-surv' alias"))
@@ -4810,19 +4832,17 @@ def run_alias_manage(
     cfg[_CLAUDE_LAUNCH_CMD_KEY] = picked
     save_config(config_path(), cfg)
     print(f"  saved: 'virt-surv go' will launch via {picked!r}")
+    # A v5 alias reads this config at every 'go', so the change is already live - but
+    # an OLDER installed alias still has a command baked in and needs one refresh to
+    # reach v5. Offer it once; on v5 the refresh is a no-op skip, so this stays cheap.
     if confirm(
-        "  Refresh the alias now so 'go' picks it up?",
+        "  Refresh the alias too? (needed once if it was installed before v5 - a "
+        "current alias picks the change up on the next 'go' automatically)",
         default=True,
         assume_yes=assume_yes,
         style=s,
     ):
         return run_setup_alias(style, mark_map, assume_yes=True)
-    print(
-        s.dim(
-            "  (re-run this item later - the installed alias keeps the old command until "
-            "the refresh)"
-        )
-    )
     return 0
 
 
@@ -7090,15 +7110,19 @@ def _run_go(target: Path, style: Style, mark_map: dict, hat: str, demo: bool = F
     # every real plugin install then got "unknown command /engage" (live report
     # 2026-08-16). The run-mode-dependent spelling lives in the launcher's
     # _engage_command, computed per project at run time - never composed here.
-    argv = [launch_cmd] + ([decision] if decision else [])
+    # Word-split like the v5 shell alias does: 'cc --resume' is a command plus a flag,
+    # not one unresolvable word (the pre-split form failed shutil.which on any
+    # multi-word command and would have execvp'd a literal 'cc --resume').
+    cmd_parts = launch_cmd.split() or ["claude"]
+    argv = cmd_parts + ([decision] if decision else [])
     if demo:
         print(style.dim(f"    would launch: {' '.join(argv)} (demo - nothing launched)"))
         return 0
-    resolved_cmd = shutil.which(launch_cmd)
+    resolved_cmd = shutil.which(cmd_parts[0])
     if not resolved_cmd:
         print(
             style.yellow(
-                f"  '{launch_cmd}' isn't a real executable I can launch directly here "
+                f"  '{cmd_parts[0]}' isn't a real executable I can launch directly here "
                 "(likely your own shell alias/function, not yet visible to this Python "
                 "process) - type this yourself:"
             )

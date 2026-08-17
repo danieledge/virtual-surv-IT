@@ -59,6 +59,29 @@ def _scripts_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def _configured_launch_command() -> str:
+    """The command 'virt-surv go' launches Claude Code with, resolved at RUN time from
+    the machine config rather than baked into the shell alias (alias v5, 2026-08-17
+    live report: a launch command reset in the config kept launching the old baked
+    value even after closing PowerShell, because the profile function still carried it;
+    and a multi-word command like 'cc --debug' was baked as ONE quoted word, which can
+    never resolve). Mirrors install_helper's config_path()/load_config() instead of
+    exec'ing that whole file on every go - a test pins the two derivations together.
+    Any failure falls back to plain 'claude', same as an unset config."""
+    try:
+        base = os.environ.get("XDG_CONFIG_HOME")
+        root = Path(base) if base else Path.home() / ".config"
+        cfg = json.loads(
+            (root / "virt-surv-it" / "installer.json").read_text(encoding="utf-8-sig")
+        )
+        cmd = cfg.get("claude_launch_command") if isinstance(cfg, dict) else None
+        if isinstance(cmd, str) and cmd.strip():
+            return cmd.strip()
+    except (OSError, ValueError):
+        pass
+    return "claude"
+
+
 def _plugin_enabled(target: Path) -> bool:
     """Cheap marker check so an unrelated `claude` launch (any other project on this
     machine) does no work and prints nothing - never worth refreshing a cache or
@@ -158,9 +181,19 @@ def _config_editor(project_dir: Path) -> None:
             effective = engage_probe.resolve_preferences(project_dir)
         except Exception:
             return
+        settings_path = project_dir / ".claude" / "settings.json"
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        except Exception:
+            settings = {}
+        env = settings.get("env") if isinstance(settings.get("env"), dict) else {}
+        env_label = "env tuning (timeouts + 1h cache TTL)"
+        env_on = "ENABLE_PROMPT_CACHING_1H" in env
         print("", file=err)
         print(_rule(ink, "Project settings", note="pick a number to toggle"), file=err)
-        width = max(len(label) for label, _ in _TOGGLE_PREFS)
+        width = max(
+            max(len(label) for label, _ in _TOGGLE_PREFS), len(env_label)
+        )
         for i, (label, key) in enumerate(_TOGGLE_PREFS, 1):
             if key == "extra_formats":
                 on = "docx" in (effective.get("extra_formats") or [])
@@ -172,6 +205,10 @@ def _config_editor(project_dir: Path) -> None:
                 "  (machine default)"
             )
             print(f"    {ink.bold(f'[{i}]')} {label} {dots} {val}{src}", file=err)
+        env_i = len(_TOGGLE_PREFS) + 1
+        env_dots = ink.dim("." * (width - len(env_label) + 2))
+        env_val = ink.good("applied") if env_on else ink.dim("not applied")
+        print(f"    {ink.bold(f'[{env_i}]')} {env_label} {env_dots} {env_val}", file=err)
         print(f"    {ink.bold('[d]')} restore machine defaults (drop project choices)", file=err)
         print(f"    {ink.bold('[b]')} done", file=err)
         print(ink.bold("    Setting: "), end="", file=err)
@@ -182,14 +219,60 @@ def _config_editor(project_dir: Path) -> None:
         if choice in ("", "b"):
             return
         if choice == "d":
+            # Scoped to the team preferences: env tuning has no machine tier to
+            # restore to - its own row toggles it explicitly.
             for _, key in _TOGGLE_PREFS:
                 prefs.pop(key, None)
+        elif choice == str(env_i):
+            # The env bundle (2026-08-17 follow-up: the TTL row was on the defaults
+            # table but missing here). ON adds the missing recommended keys, add-only,
+            # same contract as the go-time propagation; OFF removes only keys still AT
+            # their recommended value, so a custom-tuned timeout survives and is
+            # reported rather than silently dropped.
+            try:
+                import importlib.util as _ilu
+
+                spec = _ilu.spec_from_file_location(
+                    "install_helper_env2", _scripts_dir().parent / "install_helper.py"
+                )
+                ih = _ilu.module_from_spec(spec)
+                spec.loader.exec_module(ih)
+                recommended = dict(ih.RECOMMENDED_ENV)
+            except Exception:
+                print(ink.dim("    could not load the recommended env set - unchanged"), file=err)
+                continue
+            env = dict(env)
+            if env_on:
+                kept = [k for k in recommended if k in env and env[k] != recommended[k]]
+                for k in recommended:
+                    if k in env and env[k] == recommended[k]:
+                        del env[k]
+                if kept:
+                    print(
+                        ink.dim(
+                            "    kept custom-tuned value(s): " + ", ".join(sorted(kept))
+                        ),
+                        file=err,
+                    )
+            else:
+                for k, v in recommended.items():
+                    env.setdefault(k, v)
+            settings["env"] = env
+            try:
+                settings_path.parent.mkdir(parents=True, exist_ok=True)
+                settings_path.write_text(
+                    json.dumps(settings, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
+            except OSError:
+                print(ink.dim("    could not write settings.json - unchanged"), file=err)
+            continue
         else:
             try:
                 idx = int(choice)
                 label, key = _TOGGLE_PREFS[idx - 1]
             except (ValueError, IndexError):
-                print(ink.dim("    1-6, d or b, please."), file=err)
+                print(ink.dim(f"    1-{env_i}, d or b, please."), file=err)
                 continue
             if key == "extra_formats":
                 current = "docx" in (effective.get("extra_formats") or [])
@@ -224,7 +307,10 @@ def _archive_menu(project_dir: Path, es, menu: dict) -> None:
         slug = _row_resume_token(row) or "?"
         status = row.get("status") or "?"
         print(f"    {ink.bold(f'[{i}]')} {slug}  {ink.dim(status)}", file=err)
-    print(f"    {ink.bold('[all]')} archive every engagement listed", file=err)
+    open_rows = menu.get("open") or shown
+    print(
+        f"    {ink.bold('[all]')} archive ALL open engagements ({len(open_rows)})", file=err
+    )
     print(f"    {ink.bold('[b]')} back", file=err)
     print(
         ink.dim(
@@ -242,7 +328,10 @@ def _archive_menu(project_dir: Path, es, menu: dict) -> None:
         return
     targets = []
     if choice == "all":
-        targets = shown
+        # ALL OPEN, not all SHOWN (live report 2026-08-17: the list caps at 3 rows with
+        # "+N more not shown" - 'all' archived the visible three and the rest came
+        # straight back as open).
+        targets = open_rows
     else:
         try:
             targets = [shown[int(choice) - 1]]
@@ -610,6 +699,11 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
 
 
 def main() -> int:
+    if "--launch-command" in sys.argv[1:]:
+        # Alias v5 support channel: print ONLY the configured launch command on stdout
+        # (the shell function word-splits it), nothing else on either stream.
+        print(_configured_launch_command())
+        return 0
     project_dir = Path.cwd()
     if not _plugin_enabled(project_dir):
         try:

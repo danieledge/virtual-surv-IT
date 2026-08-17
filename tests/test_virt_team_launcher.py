@@ -469,3 +469,126 @@ def test_menu_a_archives_and_falls_through_to_plain_when_empty(tmp_path, monkeyp
     assert out.out == ""  # nothing left to resume - plain launch
     assert "archived" in out.err
     assert (art / "old" / ".archive").is_file()
+
+
+def test_archive_all_covers_every_open_pack_not_just_the_shown_cap(
+    tmp_path, monkeypatch, capsys
+):
+    """Live report (2026-08-17: "after archiving it's still showing items as open") -
+    the resume menu shows at most 3 rows ("+N more not shown"), and [a] 'all' archived
+    only those, so the overflow packs came straight back as open. 'all' means ALL open."""
+    import scripts.engagement_state as es
+
+    project = _plugin_enabled_project(tmp_path)
+    art = project / "artifacts"
+    slugs = [f"pack-{i}" for i in range(5)]
+    for slug in slugs:
+        assert (
+            es.main(["--dir", str(art / slug), "init", "--title", slug, "--slug", slug]) == 0
+        )
+    capsys.readouterr()  # drain fixture output
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    answers = iter(["a", "all"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out == ""  # everything archived - plain launch, stdout stays pure
+    for slug in slugs:
+        assert (art / slug / ".archive").is_file(), f"{slug} left open"
+
+
+# --- --launch-command mode (alias v5, 2026-08-17) ------------------------------------------
+
+
+def test_launch_command_mode_prints_configured_command(tmp_path, monkeypatch, capsys):
+    """The v5 shell alias asks the launcher for the launch command at every 'go' - so a
+    config change (or reset) is live immediately, with no alias refresh and no profile
+    reload (live report: a reset config kept launching the old baked 'cc --debug')."""
+    import sys as _sys
+
+    cfg_dir = tmp_path / "cfg" / "virt-surv-it"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "installer.json").write_text(
+        json.dumps({"claude_launch_command": "cc --resume"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    mod = _load()
+    monkeypatch.setattr(_sys, "argv", ["virt_team_launcher.py", "--launch-command"])
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out == "cc --resume\n"  # stdout is ONLY the command
+    assert out.err == ""
+
+
+def test_launch_command_mode_defaults_to_claude(tmp_path, monkeypatch, capsys):
+    import sys as _sys
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
+    mod = _load()
+    monkeypatch.setattr(_sys, "argv", ["virt_team_launcher.py", "--launch-command"])
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out == "claude\n"
+    assert out.err == ""
+
+
+def test_launch_command_config_path_matches_install_helper(tmp_path, monkeypatch):
+    """The launcher mirrors install_helper's config_path()/load_config() derivation
+    instead of importing that whole file per 'go' - this pins the two together so a
+    future config relocation can't silently split them."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    spec = importlib.util.spec_from_file_location("ih_cfg", REPO_ROOT / "install_helper.py")
+    ih = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ih)
+    cfg_path = ih.config_path()
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(json.dumps({"claude_launch_command": "cc"}), encoding="utf-8")
+    mod = _load()
+    assert mod._configured_launch_command() == "cc"
+
+
+# --- env-tuning row in the [c] settings editor (2026-08-17 user report) --------------------
+
+
+def test_config_editor_env_toggle_on_applies_recommended_set(tmp_path, monkeypatch, capsys):
+    """"ttl setting is missing on the choice c menu" - item [7] applies the recommended
+    env bundle add-only, same contract as the go-time propagation."""
+    project = _plugin_enabled_project(tmp_path)
+    mod = _load()
+    answers = iter(["7", "b"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    mod._config_editor(project)
+    saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert saved["env"]["ENABLE_PROMPT_CACHING_1H"] == "1"
+    assert saved["env"]["API_TIMEOUT_MS"] == "1800000"
+    out = capsys.readouterr()
+    assert "env tuning" in out.err
+    assert out.out == ""  # stdout purity
+
+
+def test_config_editor_env_toggle_off_keeps_custom_tuned_values(tmp_path, monkeypatch, capsys):
+    """OFF removes only keys still AT their recommended value - a custom-tuned timeout
+    survives and the user is told, never a silent drop."""
+    project = _plugin_enabled_project(tmp_path)
+    (project / ".claude" / "settings.json").write_text(
+        json.dumps(
+            {"env": {"ENABLE_PROMPT_CACHING_1H": "1", "API_TIMEOUT_MS": "999"}, "other": True}
+        ),
+        encoding="utf-8",
+    )
+    mod = _load()
+    answers = iter(["7", "b"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    mod._config_editor(project)
+    saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert "ENABLE_PROMPT_CACHING_1H" not in saved["env"]  # was at recommended - removed
+    assert saved["env"]["API_TIMEOUT_MS"] == "999"  # custom-tuned - kept
+    assert saved["other"] is True  # unrelated settings survive the rewrite
+    out = capsys.readouterr()
+    assert "kept custom-tuned" in out.err
+    assert out.out == ""
