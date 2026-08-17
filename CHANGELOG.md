@@ -3,6 +3,55 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.34.0] - 2026-08-17 - virt-surv go becomes the front door; review and build flows tightened end to end
+
+Two days of live corporate-laptop testing drove this release: every item below traces to a
+real session report, and each shipped with a pinning test.
+
+### Added
+- **`virt-surv go` as the recommended launch**, with a real TUI: a rich-rendered banner
+  (Morgan's greeting included), a color-coded project-defaults table, and prompt_toolkit
+  menus - arrow keys, mouse, hotkey badges, in-place setting toggles - with a numbered
+  fallback wherever a terminal can't run them (both libraries vendored, pure Python, no
+  pip; Textual was evaluated and rejected over its compiled tree-sitter dependency). The
+  menu always pauses, even with nothing open; `[c]` edits project settings inline (env
+  tuning / 1h cache TTL included) and `[a]` archives engagements - 'all' means all open,
+  not just the rows shown.
+- **Locked review-target menu** (`references/target-menu.md`, guard-enforced): Uncommitted
+  changes / Branch vs main / Whole working directory / A file or folder I'll name - with a
+  two-option non-git variation and everything exotic via "Other". The target is DERIVED
+  (diff or named path) whenever possible; underivable targets ride the intake batch.
+- **Map-first enforcement**: a Bash rule denies bare full-tree enumeration (find -type f,
+  ls -R, Get-ChildItem -Recurse) in engaged sessions, naming the sanctioned inventory
+  sources (codebase map, git ls-files, repo_skeleton). The price line's sizing is now
+  mechanical - a number, never a listing.
+- **Build-workflow pass** (the review flow's treatment applied to builds): unit briefs
+  carry the file list + map path, all build-side agents get the no-enumeration rule, the
+  go-ahead gate prices the plan and states consent consequences up front, single-unit
+  non-detection builds derive the light shape, and the shared bookends refresh the map at
+  close when code changed.
+
+### Fixed
+- **Alias v5 + self-heal**: the Claude launch command is no longer baked into the shell
+  function (a config reset kept launching a stale 'cc --debug'; multi-word commands were
+  unresolvable) - the function asks the launcher at every go and word-splits the answer.
+  Upgrades REMOVE old stamped definitions instead of stacking them, and `go` heals a
+  stale profile automatically, once per alias version.
+- **Windows menu under the alias's stdout capture**: prompt_toolkit's Win32 layer renders
+  via the process stdout handle, so the widget silently died - the launcher now rebinds
+  STD_OUTPUT_HANDLE to CONOUT$ (verified live on the Windows VM), and any widget-start
+  failure falls back to the numbered menu instead of skipping the pause.
+- **`/engage --new` engagement archaeology**: the open no longer re-surveys open packs
+  the go menu just showed - zero discovery under --new, the prefetch injects
+  ENGAGE_FLAG=--new and omits the resume menu, and hand-rolled substitute probes are
+  named and banned.
+- **Probe cost**: the what's-new is one heading line (WHATS_NEW=), not the changelog
+  body; `go` pre-warms the guard-interpreter cache so even a first /engage gets the
+  zero-tool-call prefetch instead of the inline bootstrap heredoc.
+- **Docs factual sweep**: OVERVIEW's roster said 16 agents (13), token-usage tiering said
+  11 sonnet (8), Using-them still described the retired documentary-artifact menu; quick
+  start now leads with `virt-surv go` everywhere (PDF regenerated).
+
 ## [0.33.62] - 2026-08-13 - Full-suite regression run catches a self-inflicted fingerprint bug from 0.33.61
 
 A full `pytest` run (not just the touched-file suites 0.33.61 was verified against) surfaced
