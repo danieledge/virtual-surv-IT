@@ -4451,6 +4451,38 @@ _ALIAS_MARKER = "virt-surv"
 _ALIAS_VERSION = 5
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
+# Any version's stamp - the removal marker for _strip_stamped_definitions.
+_ALIAS_STAMP_ANY_RE = re.compile(rf"#\s*{re.escape(_ALIAS_MARKER)}-alias-v\d+\s*$")
+_ALIAS_ADDED_BY_RE = re.compile(r"^\s*# Added by install_helper\.py\b")
+
+
+def _strip_stamped_definitions(existing: str) -> tuple:
+    """Remove every alias definition THIS tool wrote earlier - identified by the
+    version stamp, which makes a line provably machine-written and safe to delete
+    (live report 2026-08-17: upgrades only ever appended, so a corp profile carried 5
+    dead definitions, one still baking the abandoned 'cc --debug'; dead lines are not
+    just clutter - a parse failure in the newest line falls back to stale baked code).
+    Each removed definition also takes its own '# Added by install_helper.py' comment
+    (and the spacer blank above it) with it. UNSTAMPED content mentioning the marker
+    is never touched, even when it looks like ours - a pre-stamp-era line and a
+    user-customised one are indistinguishable, and blind surgery on someone's shell rc
+    is the risk this file avoids everywhere else. Returns (stripped_text, removed)."""
+    out = []
+    removed = []
+    for raw in existing.splitlines():
+        if _ALIAS_STAMP_ANY_RE.search(raw):
+            removed.append(raw)
+            if out and _ALIAS_ADDED_BY_RE.match(out[-1]):
+                out.pop()
+                if out and not out[-1].strip():
+                    out.pop()
+            continue
+        out.append(raw)
+    text = "\n".join(out)
+    if text and not text.endswith("\n"):
+        text += "\n"
+    return text, removed
+
 
 def _posix_shell_rc_candidates() -> list:
     """(label, path) for POSIX shell rc files that already EXIST - doesn't guess which
@@ -4703,30 +4735,43 @@ def run_setup_alias(
                 f"{style.dim('-')} {label} ({rc_path}): a '{_ALIAS_MARKER}' entry already exists, skipped"
             )
             continue
+        stripped, removed_lines = existing, []
         if stale:
             # Upgrade path: any existing entry without the CURRENT version stamp is an
             # older template (see _ALIAS_VERSION's comment for the two live reports
             # where shape-specific staleness checks left fixed code unreachable on
             # machines that had already run setup-alias).
             #
-            # Never edits the old line's text (a user may have customised it, and
-            # blind text-surgery on someone else's shell rc is exactly the kind of
-            # risk this file avoids everywhere else) - appends the new definition
-            # below it instead. POSIX needs `unalias` first: shell ALIAS expansion
+            # Two tiers (2026-08-17 live report: append-only upgrades left 5 dead
+            # definitions in a corp profile, one still baking 'cc --debug'):
+            # STAMPED old definitions are provably ours - removed, previewed below.
+            # UNSTAMPED marker content may be user-written or customised - left as-is,
+            # the new definition simply appended after it. POSIX additionally needs
+            # `unalias` first when unstamped content remains: shell ALIAS expansion
             # happens before function lookup, so an old `alias virt-surv=...` earlier
             # in the same file would keep shadowing a same-named function defined
             # later, even though function redefinition alone is enough in PowerShell
             # (last definition wins there, no alias/function precedence quirk).
-            if rc_path.suffix != ".ps1":
+            stripped, removed_lines = _strip_stamped_definitions(existing)
+            if rc_path.suffix != ".ps1" and _ALIAS_MARKER in stripped:
                 line = f"unalias {_ALIAS_MARKER} 2>/dev/null; {line}"
             print(
                 style.yellow(
                     f"  ! {label} ({rc_path}): the existing '{_ALIAS_MARKER}' entry is out "
-                    "of date (the alias template, launch command, interpreter or clone "
-                    "path has changed) - appending an updated one below it (the old line "
-                    "is left as-is, never edited)."
+                    "of date (the alias template, interpreter or clone path has "
+                    "changed) - replacing it with the current definition."
                 )
             )
+            for old in removed_lines:
+                print(style.dim(f"    would remove: {old.strip()}"))
+            if _ALIAS_MARKER in stripped:
+                print(
+                    style.dim(
+                        "    (an unstamped '" + _ALIAS_MARKER + "' line stays untouched - "
+                        "not written by this tool, or customised; the new definition "
+                        "below it wins)"
+                    )
+                )
         print(f"  Would add to {label} ({rc_path}):")
         print(style.dim(f"    {line}"))
         if demo:
@@ -4741,11 +4786,18 @@ def run_setup_alias(
             continue
         try:
             rc_path.parent.mkdir(parents=True, exist_ok=True)
-            with rc_path.open("a", encoding="utf-8") as fh:
-                if existing and not existing.endswith("\n"):
-                    fh.write("\n")
-                fh.write(f"\n# Added by install_helper.py --setup-alias (2026-08-04)\n{line}\n")
-            print(f"{ok} added to {rc_path}")
+            addition = f"\n# Added by install_helper.py --setup-alias (2026-08-04)\n{line}\n"
+            if removed_lines:
+                # Removal means a full rewrite of the rc: stripped content + the new
+                # definition. Plain append everywhere else, same as always.
+                rc_path.write_text(stripped + addition, encoding="utf-8")
+                print(f"{ok} removed {len(removed_lines)} outdated definition(s), added to {rc_path}")
+            else:
+                with rc_path.open("a", encoding="utf-8") as fh:
+                    if existing and not existing.endswith("\n"):
+                        fh.write("\n")
+                    fh.write(addition)
+                print(f"{ok} added to {rc_path}")
             wrote_any = True
         except OSError as exc:
             print(f"{fail} could not write {rc_path}: {exc}")

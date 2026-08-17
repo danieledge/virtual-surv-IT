@@ -5315,6 +5315,71 @@ def test_setup_alias_upgrades_a_go_era_alias_missing_the_engage_prefix(
     assert ih._ALIAS_STAMP in content  # and the stamp that marks it current
 
 
+def test_setup_alias_upgrade_removes_old_stamped_definitions(tmp_path, monkeypatch, capsys):
+    """Live report (2026-08-17): append-only upgrades left 5 dead virt-surv definitions
+    in a corp PowerShell profile, one still baking the abandoned 'cc --debug' launch
+    command - dead weight that runs again if the newest line ever fails to load. Old
+    STAMPED definitions are provably machine-written, so an upgrade now removes them
+    (with their '# Added by' comment), previewed line by line."""
+    import install_helper as ih
+
+    old = (
+        "# Added by install_helper.py --setup-alias (2026-08-04)\n"
+        'virt-surv() { if [ "$1" = "go" ]; then "cc --debug" stale; fi; } '
+        "# virt-surv-alias-v4\n"
+    )
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc="echo unrelated\n\n" + old)
+    _stub_interpreters(monkeypatch, ih)
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "would remove" in out
+    assert "removed 1 outdated definition(s)" in out
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert "cc --debug" not in content  # the stale baked line is GONE, not shadowed
+    assert "virt-surv-alias-v4" not in content
+    assert content.count("virt-surv() {") == 1  # exactly the new definition
+    assert content.count("# Added by install_helper.py") == 1  # old comment went with it
+    assert "echo unrelated" in content  # everything else untouched
+    # and no unalias prefix: no unstamped marker content remained to shadow the function
+    assert "unalias" not in content
+
+
+def test_setup_alias_upgrade_keeps_unstamped_marker_lines(tmp_path, monkeypatch, capsys):
+    """The other tier: an UNSTAMPED line mentioning virt-surv may be user-written or
+    customised - indistinguishable from a pre-stamp-era install - so it is never
+    removed; the new definition is appended after it with the unalias guard."""
+    import install_helper as ih
+
+    custom = "alias virt-surv='my customised thing'\n"
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc=custom)
+    _stub_interpreters(monkeypatch, ih)
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "stays untouched" in out
+    content = (home / ".bashrc").read_text(encoding="utf-8")
+    assert "alias virt-surv='my customised thing'" in content
+    assert "unalias virt-surv 2>/dev/null" in content  # old alias must not shadow the function
+    assert ih._ALIAS_STAMP in content
+
+
+def test_setup_alias_upgrade_demo_removes_nothing(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    old = (
+        "# Added by install_helper.py --setup-alias (2026-08-04)\n"
+        "virt-surv() { stale; } # virt-surv-alias-v4\n"
+    )
+    home = _isolate_home_for_alias(monkeypatch, tmp_path, bashrc=old)
+    _stub_interpreters(monkeypatch, ih)
+    rc = ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "would remove" in out
+    assert (home / ".bashrc").read_text(encoding="utf-8") == old  # untouched
+
+
 def test_setup_alias_written_lines_carry_the_version_stamp(tmp_path, monkeypatch):
     """The stamp IS the upgrade mechanism: a freshly written line without it would be
     judged stale and re-appended on every future setup run. It must also be a comment
