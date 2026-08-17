@@ -181,8 +181,94 @@ def _resume_decision(project_dir: Path) -> str:
     return ""
 
 
+def _print_project_defaults(project_dir: Path) -> None:
+    """One compact table of this project's effective team settings, to STDERR, every
+    `virt-surv go` (2026-08-17 user request) - the human sees at a glance what the
+    session is about to run with, before Claude Code even starts. ASCII-aligned, no
+    box-drawing glyphs: corp Windows consoles decode stderr as cp1252 and box chars
+    arrive as mojibake (the same lesson the probe's _ascii_safe already carries).
+    Cosmetic: any failure here must never cost the launch or the decision."""
+    err = sys.stderr
+    try:
+        import engage_probe
+
+        prefs = engage_probe.resolve_preferences(project_dir)
+        integrations = engage_probe.resolve_integrations(project_dir)
+        raw = engage_probe.read_team_preferences(project_dir)
+    except Exception:
+        return
+    rows = [
+        ("docx export", "on" if "docx" in (prefs.get("extra_formats") or []) else "off"),
+        ("regulatory citations", "on" if prefs.get("regulatory_citations") else "off"),
+        ("large-context review split", "on" if prefs.get("large_context_review_split") else "off"),
+        (
+            "parallel dispatch (Workflow)",
+            "on" if prefs.get("parallel_dispatch_via_workflow") else "off",
+        ),
+        ("standards critique", "on" if prefs.get("standards_critique") else "off"),
+        ("codebase-map skeleton", "on" if prefs.get("map_skeleton") else "off"),
+    ]
+    tools = raw.get("review_tools") or {}
+    overrides = ", ".join(f"{k}:{v}" for k, v in sorted(tools.items()) if v != "auto")
+    rows.append(("review tools", overrides or "all auto"))
+    jira = integrations.get("jira") or {}
+    if jira.get("enabled"):
+        rows.append(
+            ("jira integration", f"on ({jira['mirror']}, {jira['project_key'] or 'UNSET'})")
+        )
+    else:
+        rows.append(("jira integration", "off"))
+    pr = integrations.get("pr_comments") or {}
+    if pr.get("enabled") or pr.get("locked"):
+        rows.append(("pr comments", "on (EXPERIMENTAL)" if pr.get("enabled") else "locked"))
+    width = max(len(name) for name, _ in rows)
+    print("Project defaults ('virt-surv configure' to change):", file=err)
+    for name, value in rows:
+        print(f"  {name.ljust(width)}  {value}", file=err)
+
+
+def _offer_first_time_setup(project_dir: Path) -> bool:
+    """No team configuration here yet: offer the real first-time setup instead of a
+    plain launch with a hint (2026-08-17 user request). The configure flow's own
+    stdout is redirected onto OUR stderr - the caller captures this process's stdout
+    via $(...) as the decision string, and a setup transcript leaking into it would
+    become the session's opening prompt. Returns True only when the project actually
+    ends up configured; every decline/failure path falls back to the explained plain
+    launch. Non-interactive callers (no tty, EOF) decline automatically."""
+    err = sys.stderr
+    helper = _scripts_dir().parent / "install_helper.py"
+    if not helper.is_file():
+        return False
+    print(f"(virt-team: {project_dir} has no team configuration yet.)", file=err)
+    print("Run first-time project setup now? [Y/n] ", end="", file=err)
+    try:
+        answer = input().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    if answer in ("n", "no"):
+        return False
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(helper), "configure", str(project_dir)],
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0 and _plugin_enabled(project_dir)
+
+
 def main() -> int:
     project_dir = Path.cwd()
+    if not _plugin_enabled(project_dir):
+        try:
+            configured = _offer_first_time_setup(project_dir)
+        except Exception:
+            configured = False  # cosmetic path - never let it kill the launch
+        if configured:
+            print("Setup complete - continuing the launch.", file=sys.stderr)
     if not _plugin_enabled(project_dir):
         # Live report (2026-08-15): a session that ran this from the wrong directory (or
         # hit a shell cwd-reset - a documented issue on some corp Windows hosts, see
@@ -202,6 +288,10 @@ def main() -> int:
     scripts_dir = _scripts_dir()
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
+    try:
+        _print_project_defaults(project_dir)
+    except Exception:
+        pass  # cosmetic - the table must never cost the launch
     try:
         _refresh_tool_cache(project_dir)
     except Exception:

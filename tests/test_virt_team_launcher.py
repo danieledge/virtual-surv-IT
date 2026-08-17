@@ -287,3 +287,76 @@ def _run(mod) -> str:
     with contextlib.redirect_stdout(buf):
         mod.main()
     return buf.getvalue()
+
+
+# --- project-defaults table + first-time setup offer (2026-08-17 user request) ------------
+
+
+def test_configured_project_prints_defaults_table_on_stderr_only(tmp_path, monkeypatch, capsys):
+    project = _plugin_enabled_project(tmp_path)
+    _ws(project, "existing-thing")
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "Project defaults" in out.err
+    assert "regulatory citations" in out.err
+    assert "jira integration" in out.err
+    # stdout stays EXACTLY the decision - the table must never leak into the capture
+    assert "Project defaults" not in out.out
+    assert out.out.strip() == "/compliance-surveillance-team:engage --new"
+
+
+def test_first_time_setup_offer_accepted_runs_configure_with_stdout_redirected(
+    tmp_path, monkeypatch, capsys
+):
+    """Accepting the offer runs install_helper configure against the project, with the
+    setup's stdout pointed at OUR stderr - the caller's $(...) capture must only ever
+    see the decision."""
+    monkeypatch.chdir(tmp_path)  # no markers = unconfigured
+    mod = _load()
+    calls = []
+
+    def fake_run(argv, stdout=None, stderr=None):
+        calls.append((argv, stdout, stderr))
+        # configure "succeeds" and writes the marker
+        (tmp_path / ".claude").mkdir(exist_ok=True)
+        (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+
+        class P:
+            returncode = 0
+
+        return P()
+
+    import subprocess as sp
+
+    monkeypatch.setattr(sp, "run", fake_run)
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")  # blank = the Y default
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert len(calls) == 1
+    argv, stdout, stderr = calls[0]
+    assert argv[1].endswith("install_helper.py")
+    assert argv[2] == "configure" and argv[3] == str(tmp_path)
+    assert stdout is not None  # redirected, never inherited stdout
+    assert "Setup complete" in out.err
+    assert "Project defaults" in out.err  # configured now - table shows on the same run
+    assert "install_helper" not in out.out  # stdout purity
+
+
+def test_first_time_setup_offer_declined_falls_back_to_explained_plain_launch(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    mod = _load()
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out == ""
+    assert "doesn't look like a configured project" in out.err
