@@ -55,6 +55,21 @@ order-of-magnitude is the point, not a quote.
 | **Apply fixes** | Fix the findings, then stop. |
 | **Fix → re-review loop** | Fix, re-review, repeat until clean (no Criticals) or you call it. This is the loop "Audit" implies - now available to **Quick/Deep too**. |
 
+**Security is already in every depth - never invent a "dedicated security pass" question
+(2026-08-17 live report).** The security lens loads for all code at every depth (router
+matrix); a session improvised an extra "also run a dedicated /security-audit alongside?
+(Recommended)" question and planned a separate sequential pass, exactly the shape the
+consolidation rule bans. If the user's request emphasises security, say the lens is included
+at no extra pass, and offer the full `/security-audit` machinery (ASVS depth, threat model,
+evaluator-optimizer loop) only as a priced alternative for a security-FOCUSED engagement -
+never as a default-recommended add-on pass beside a deep review.
+
+**Report-only staffs reviewers only (same live report: 5 agents planned for a report-only
+deep review).** No `qa-engineer` (nothing is built, so there is nothing to test) and no
+`compliance-reviewer` sign-off unless the depth is Audit or detection logic is in scope. The
+right-sized report-only shape is the review pass(es) + the perf pass if chosen + Pip - state
+that count at the gate.
+
 Only **one** depth runs (Audit ⊃ Deep ⊃ Quick - no triple-passing). The fix-cycle (Q3) is
 independent of depth, so e.g. *Quick + Fix→re-review loop* is valid. **If Q1 = None AND Q2 = No**
 there is nothing to run - don't dead-end or invent work: say so and return to the outcome question
