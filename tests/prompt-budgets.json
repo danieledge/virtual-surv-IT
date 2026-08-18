@@ -30,7 +30,7 @@
     "ALWAYS_LOADED": 3300,
     "OPEN_TIME": 18800,
     "ROUTE_TIME": 48200,
-    "AGENT_TIME": 23700,
+    "AGENT_TIME": 23200,
     "DEFERRED": null
   },
   "files": {
@@ -42,7 +42,7 @@
     ".claude/agents/code-reviewer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 5171
+      "baseline_tokens": 4718
     },
     ".claude/agents/compliance-reviewer.md": {
       "tier": "AGENT_TIME",
