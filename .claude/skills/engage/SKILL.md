@@ -158,6 +158,11 @@ in your banner line and target its workspace in every state command (`--slug <sl
   governs *detection logic*, not every chat reply). If the answer is itself a substantive
   finding worth an audit trail, that is exactly the "genuinely asks for one" case - open the
   workspace;
+- an *alert-absence / detection-gap ask* - "why did this not alert?", "no alerts from X",
+  "alert volumes dropped" → read `.claude/skills/why-no-alert/SKILL.md` and follow it:
+  the METHOD (form classification, the fixed lineage walk, the hypothesis table) comes
+  from the skill, never improvised - even when the case-level form right-sizes to a
+  chat answer, it is a chat answer produced BY that method;
 - a *problem / idea* → discovery → requirements → build (full SDLC);
 - a *review* → the audit-review loop (`/audit-review`). **When the work is a code review, offer a
   dedicated security audit up front** via the question tool (header `Security`, `multiSelect:

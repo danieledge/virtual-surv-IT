@@ -213,6 +213,15 @@ def test_review_target_is_derived_or_batched_never_a_solo_turn():
     )
 
 
+def test_engage_classify_names_the_alert_absence_entry_point():
+    """Discoverability (2026-08-18): the routing table alone made /why-no-alert a
+    judgement-dependent cross-reference; the classify step must name the query family
+    so an absence ask never lands in the plain chat-answer bucket without the method."""
+    text = _read(".claude/skills/engage/SKILL.md")
+    assert "why did this not alert" in text
+    assert "why-no-alert/SKILL.md" in text
+
+
 def test_engage_new_flag_forbids_engagement_discovery():
     """Live report (2026-08-17): '/engage --new' from the go menu still spent a turn
     listing the open packs 'in case any are related' - the human had JUST seen that
