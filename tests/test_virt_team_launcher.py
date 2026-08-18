@@ -470,10 +470,32 @@ def test_menu_c_edits_then_reasks_and_returns_decision(tmp_path, monkeypatch, ca
     assert rc == 0
     assert out.out.strip() == "/compliance-surveillance-team:engage --new"
     assert "Project settings" in out.err
-    # After the editor, only the DELTA is reported - never the full defaults table
-    # again (live report 2026-08-17: the settings showed twice).
+    # Backing out unchanged stays quiet - no table reprint (the 2026-08-17
+    # duplicate-table complaint); a CHANGED exit refreshes it (see the next test).
     assert "-> no changes" in out.err
     assert out.err.count("Project defaults") == 1
+
+
+def test_menu_c_with_a_change_refreshes_the_table(tmp_path, monkeypatch, capsys):
+    """2026-08-18 user report: delta lines under the stale launch-time table made a
+    successful change look ignored - a changed exit reprints the table in its current
+    state, so the new value (and any newly unlocked menu item) is visibly real."""
+    project = _plugin_enabled_project(tmp_path)
+    _ws(project, "thing")
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    answers = iter(["c", "8", "b", "n"])  # enable jira, done, start new
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.err.count("Project defaults") == 2  # launch-time + refreshed
+    assert "-> jira integration (beta): on" in out.err
+    # the refreshed table carries the new state, and the re-rendered menu unlocks [j]
+    assert "on (key UNSET)" in out.err or "jira integration" in out.err
+    assert "[j]" in out.err
+    assert out.out.strip() == "/compliance-surveillance-team:engage --new"
 
 
 def test_menu_a_archives_and_falls_through_to_plain_when_empty(tmp_path, monkeypatch, capsys):

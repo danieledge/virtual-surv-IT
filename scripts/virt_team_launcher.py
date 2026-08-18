@@ -405,6 +405,15 @@ def _run_settings_editor(project_dir: Path) -> None:
         print(ink.dim(f"    -> {label}: {value}"), file=sys.stderr)
     if not changed:
         print(ink.dim("    -> no changes"), file=sys.stderr)
+    else:
+        # Reprint the table in its CURRENT state (2026-08-18 user report: leaving the
+        # launch-time table on screen made a successful change look ignored - the
+        # no-change path stays quiet, which is what the original duplicate-table
+        # complaint was about).
+        try:
+            _print_project_defaults(project_dir)
+        except Exception:
+            pass
 
 
 def _pt_config_editor(p, project_dir: Path) -> None:
