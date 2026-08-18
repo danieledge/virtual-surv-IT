@@ -33,3 +33,16 @@ A consult that turns into implementation hands a precise spec to `rules-develope
 **Tag every insight 📊 observed (a source states it) / 🧠 inferred (expert reasoning)**
 (CLAUDE.md §6). Durable lessons per CLAUDE.md §6: project-specific → the working
 project's own `CLAUDE.md`; general → `docs/house-rules.md`.
+
+## Under-alerting diagnosis (consult on "why no alert?" - `/why-no-alert` walks the chain)
+
+Trade-surveillance-specific absence causes: **instrument/venue scope gaps** (the scenario
+runs, just not on that instrument class, venue or order type - and liquid-name alert flow
+masks illiquid-name silence: FCA MW79's Firm B pattern); **reference-data dependencies**
+(a scenario conditioned on a news/price feed that is stale or was never activated - MW79
+Firm A, zero insider alerts for 3+ years); **order-lifecycle completeness** (amends/
+cancels or sponsored-DMA flow never ingested - MW79 Firm C); **baseline starvation**
+(behaviour-relative logic with too little history for that trader/instrument, so the rule
+skips silently - the worked spoofing example documents exactly this mode); **cross-day or
+cross-venue logic** that requires co-timed events the data model splits. Segment-granular
+volume checks, never aggregate: presence elsewhere masks absence somewhere.

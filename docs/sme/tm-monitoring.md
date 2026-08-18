@@ -35,3 +35,15 @@ implementation hands a clear specification to `rules-developer`. **Tag every ins
 📊 observed (a source states it) / 🧠 inferred (expert reasoning)** (CLAUDE.md §6).
 Durable lessons per CLAUDE.md §6: project-specific → the working project's own
 `CLAUDE.md`; general → `docs/house-rules.md`.
+
+## Under-alerting diagnosis (consult on "why no alert?" - `/why-no-alert` walks the chain)
+
+TM-specific absence causes, in the order they actually occur: **eligibility/exclusion
+lists** (the customer, account type or product was scoped out at ingestion - the most
+common invisible cause); **segmentation misassignment** (right customer, wrong segment,
+so the wrong threshold set applied); **aggregation windows** (activity split across a
+period boundary never summed over the line); **suppression as an FP-reduction lever that
+over-reached** (a rule quieted for noise now swallowing true positives); **threshold
+drift vs behaviour drift** (thresholds tuned on last year's volumes). Distinguish "the
+scenario never saw it" (data/eligibility) from "saw it and scored under the line"
+(threshold - route to BTL) before proposing any fix.

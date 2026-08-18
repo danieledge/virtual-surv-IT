@@ -25,6 +25,7 @@ Route by **deliverable type**, not habit:
 | Detection rule / scenario logic | `rules-developer` |
 | Data pipeline / ETL / transformation or utility script / infra / IaC | `platform-engineer` |
 | Exploratory analytics, FP analysis, data-quality, reconciliation, reporting/MI | `data-analyst` |
+| Alert-absence / detection-gap triage ("why no alert?", "volumes dropped") - `/why-no-alert` | `data-analyst` leads case-level; `data-quality-reviewer` feed/ingestion links; `tuning-analyst` threshold link; systemic form → `/assess-coverage` |
 | Threshold calibration / alert tuning (ATL-BTL, segmentation) | `tuning-analyst` |
 | TM model validation | `tuning-analyst` (data work) + `model-validator` (independent verdict) - see `/validate-tm-model` |
 | ML / AI component (then independent `model-validator`) | `ml-engineer` |
@@ -37,7 +38,7 @@ Route by **deliverable type**, not habit:
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | **no spawn** - the consulting agent (PM or specialist) reads the matching `docs/sme/` pack in-line: `tm-monitoring.md` (AML) · `trade-surveillance.md` (market abuse) · `comms-surveillance.md` (e-comms/voice); cite the pack, never a persona |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
-## Command index (canonical - all 26 skills)
+## Command index (canonical - all 27 skills)
 
 - `/engage` - front door: intake + orchestration for any request (problem, review or build)
 - `/engage-light` - explicit low-ceremony profile: same safety gates + code chain, one-page
@@ -54,6 +55,9 @@ Route by **deliverable type**, not habit:
 - `/new-scenario` - new detection scenario end to end: spec → SME review → build → compliance review
 - `/build-solution` - end-to-end build from a requirements pack (orchestrator-workers)
 - `/analyse-data` - exploratory analysis → evidenced insight report
+- `/why-no-alert` - detection-gap triage: why a case-level miss, silent scenario or volume
+  drop happened - fixed lineage walk (feed → ingestion → logic → threshold → suppression →
+  scope), evidence per stage
 - `/tune-thresholds` - threshold calibration: ATL-BTL, segmentation, volume↔coverage trade-off
 - `/validate-tm-model` - periodic TM model validation pack (coverage, thresholds, data integrity)
 - `/assess-coverage` - are all in-scope risks monitored? typology→scenario→feed map + feed health

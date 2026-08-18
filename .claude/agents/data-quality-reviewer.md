@@ -34,6 +34,11 @@ Review checklist:
 - **Reconciliation** - source → surveillance counts and key totals tie out (e.g. trades booked
   vs trades surveilled); breaks quantified and explained.
 - **De-duplication & integrity** - duplicates inflating/splitting behaviour; broken keys.
+- **Ingestion eligibility & exclusion lists** - was the activity scoped OUT between arrival
+  and rule evaluation (eligibility filters, segmentation gates, exclusion/allow lists)? A
+  top real-world cause of "why no alert" and invisible from feed checks alone.
+- **Alert-lifecycle dedup/suppression** (distinct from data dedup) - alerts that generated
+  and then died before a case: dedup logic, suppression rules, case-management filtering.
 - **Surveillance coverage (the big one)** - is **every** in-scope instrument, venue, account,
   desk, trader and comms channel mapped to a feed *and* to a detection scenario? Flag anything
   in scope but unmonitored, and anything monitored but out of the documented scope.
