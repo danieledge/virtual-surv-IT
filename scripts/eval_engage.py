@@ -443,6 +443,49 @@ class SessionCapture:
     usage_series: list[dict] = field(default_factory=list)
 
 
+def usage_attribution(usage_series: list[dict]) -> dict:
+    """Track D of the token plan (2026-08-18): fold the per-message usage series into one
+    attribution block, so a run's cost is inspectable per share instead of one opaque total.
+    Main-loop vs subagent split comes from each assistant entry's `from_subagent` flag;
+    per-model totals from the final result entry's `model_usage` when the SDK sent one.
+    Purely arithmetic over what run_engage_session already captured - no new collection."""
+    main_out = sub_out = main_msgs = sub_msgs = 0
+    per_model: dict[str, dict] = {}
+    final_result: dict = {}
+    for entry in usage_series:
+        if entry.get("type") == "assistant":
+            out = int((entry.get("usage") or {}).get("output_tokens") or 0)
+            if entry.get("from_subagent"):
+                sub_out += out
+                sub_msgs += 1
+            else:
+                main_out += out
+                main_msgs += 1
+            model = entry.get("model") or "unknown"
+            slot = per_model.setdefault(model, {"messages": 0, "output_tokens": 0})
+            slot["messages"] += 1
+            slot["output_tokens"] += out
+        elif entry.get("type") == "result":
+            final_result = entry  # last result wins, same rule as cap.cost_usd
+    totals = final_result.get("usage") or {}
+    return {
+        "total_cost_usd": final_result.get("total_cost_usd"),
+        "num_turns": final_result.get("num_turns"),
+        "totals": {
+            "input_tokens": totals.get("input_tokens"),
+            "output_tokens": totals.get("output_tokens"),
+            "cache_read_input_tokens": totals.get("cache_read_input_tokens"),
+            "cache_creation_input_tokens": totals.get("cache_creation_input_tokens"),
+        },
+        "output_split": {
+            "main_loop": {"messages": main_msgs, "output_tokens": main_out},
+            "subagents": {"messages": sub_msgs, "output_tokens": sub_out},
+        },
+        "per_model_stream": per_model,
+        "per_model_result": final_result.get("model_usage") or {},
+    }
+
+
 def _transcript_lines(
     message: Any,
     text_block_cls: type,
@@ -1064,6 +1107,17 @@ async def run_case(
     (out_dir / "events.jsonl").write_text(
         "\n".join(json.dumps(e) for e in cap.events), encoding="utf-8"
     )
+    # Track D (token plan Phase 0, 2026-08-18): case runs now persist the same per-message
+    # usage series --target-path mode always kept, plus the computed attribution - so cost
+    # is attributable per workflow (main-loop vs subagent share, per-model split) instead of
+    # one opaque total. Data was already collected in cap.usage_series; it was simply never
+    # written for case runs.
+    (out_dir / "usage-series.jsonl").write_text(
+        "\n".join(json.dumps(u) for u in cap.usage_series), encoding="utf-8"
+    )
+    (out_dir / "attribution.json").write_text(
+        json.dumps(usage_attribution(cap.usage_series), indent=2), encoding="utf-8"
+    )
     (out_dir / "gates.json").write_text(
         json.dumps(
             {"consent_granted": sim_log.consent_granted, "exchanges": sim_log.exchanges}, indent=2
@@ -1181,6 +1235,9 @@ async def run_target(
     )
     (out_dir / "usage-series.jsonl").write_text(
         "\n".join(json.dumps(u) for u in cap.usage_series), encoding="utf-8"
+    )
+    (out_dir / "attribution.json").write_text(
+        json.dumps(usage_attribution(cap.usage_series), indent=2), encoding="utf-8"
     )
     (out_dir / "gates.json").write_text(
         json.dumps(

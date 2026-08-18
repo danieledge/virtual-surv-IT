@@ -639,3 +639,43 @@ def test_transcript_prose_is_never_crowded_out_by_artifacts(tmp_path):
         )
     out = ee.raw_evidence_findings(tmp_path, "\n".join(f"pm prose {i}" for i in range(300)), {})
     assert any("pm prose" in f["title"] for f in out), "PM prose was crowded out entirely"
+
+
+def test_usage_attribution_splits_main_and_subagent_output():
+    """Track D (token plan, 2026-08-18): the attribution block folds the usage series into
+    main-loop vs subagent output shares and per-model totals; the last result entry wins,
+    same rule the session capture applies to cost."""
+    from scripts.eval_engage import usage_attribution
+
+    series = [
+        {"type": "assistant", "from_subagent": False, "model": "sonnet-x",
+         "usage": {"output_tokens": 100}},
+        {"type": "assistant", "from_subagent": True, "model": "haiku-y",
+         "usage": {"output_tokens": 40}},
+        {"type": "assistant", "from_subagent": True, "model": "sonnet-x",
+         "usage": {"output_tokens": 60}},
+        {"type": "result", "total_cost_usd": 1.0, "num_turns": 3,
+         "usage": {"input_tokens": 5, "output_tokens": 200,
+                   "cache_read_input_tokens": 7, "cache_creation_input_tokens": 9},
+         "model_usage": {"sonnet-x": {"outputTokens": 160}}},
+        {"type": "result", "total_cost_usd": 2.5, "num_turns": 4,
+         "usage": {"input_tokens": 6, "output_tokens": 210,
+                   "cache_read_input_tokens": 8, "cache_creation_input_tokens": 10},
+         "model_usage": {"sonnet-x": {"outputTokens": 170}}},
+    ]
+    att = usage_attribution(series)
+    assert att["total_cost_usd"] == 2.5 and att["num_turns"] == 4  # last result wins
+    assert att["output_split"]["main_loop"] == {"messages": 1, "output_tokens": 100}
+    assert att["output_split"]["subagents"] == {"messages": 2, "output_tokens": 100}
+    assert att["per_model_stream"]["sonnet-x"] == {"messages": 2, "output_tokens": 160}
+    assert att["per_model_stream"]["haiku-y"] == {"messages": 1, "output_tokens": 40}
+    assert att["totals"]["output_tokens"] == 210
+    assert att["per_model_result"]["sonnet-x"]["outputTokens"] == 170
+
+
+def test_usage_attribution_empty_series_is_safe():
+    from scripts.eval_engage import usage_attribution
+
+    att = usage_attribution([])
+    assert att["total_cost_usd"] is None
+    assert att["output_split"]["main_loop"]["output_tokens"] == 0
