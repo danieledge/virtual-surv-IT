@@ -657,6 +657,50 @@ def test_go_prewarms_the_guard_interpreter_cache(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
 
 
+def test_config_editor_row8_toggles_the_jira_integration(tmp_path, monkeypatch, capsys):
+    """2026-08-18 user report: the [c] editor was missing table rows like the Jira
+    integration. Row 8 toggles integrations.jira.enabled in place, preserving the rest
+    of the block (project_key survives an off/on cycle)."""
+    project = _plugin_enabled_project(tmp_path)
+    prefs_path = project / ".claude" / "team-preferences.json"
+    prefs_path.write_text(
+        json.dumps({"integrations": {"jira": {"enabled": True, "project_key": "SURV"}}}),
+        encoding="utf-8",
+    )
+    mod = _load()
+    answers = iter(["8", "b"])  # toggle off, done
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    mod._config_editor(project)
+    prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
+    assert prefs["integrations"]["jira"]["enabled"] is False
+    assert prefs["integrations"]["jira"]["project_key"] == "SURV"  # preserved for re-enable
+    answers = iter(["8", "b"])  # back on
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    mod._config_editor(project)
+    prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
+    assert prefs["integrations"]["jira"]["enabled"] is True
+    assert prefs["integrations"]["jira"]["project_key"] == "SURV"
+    assert capsys.readouterr().out == ""  # stdout purity
+
+
+def test_config_editor_jira_enable_without_key_says_where_to_set_it(
+    tmp_path, monkeypatch, capsys
+):
+    project = _plugin_enabled_project(tmp_path)
+    mod = _load()
+    answers = iter(["8", "b"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    mod._config_editor(project)
+    prefs = json.loads(
+        (project / ".claude" / "team-preferences.json").read_text(encoding="utf-8")
+    )
+    assert prefs["integrations"]["jira"]["enabled"] is True
+    err = capsys.readouterr().err
+    assert "no project key" in err and "INTEGRATIONS.md" in err
+    rows = mod._editor_rows(project)
+    assert rows[-1][1] == "on (key UNSET)"
+
+
 # --- plugin cache-lag check at go (2026-08-18 user request) --------------------------------
 
 

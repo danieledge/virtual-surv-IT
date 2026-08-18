@@ -264,6 +264,13 @@ def _editor_rows(project_dir: Path):
         env = {}
     env_on = "ENABLE_PROMPT_CACHING_1H" in env
     rows.append((_ENV_ROW_LABEL, "applied" if env_on else "not applied", env_on))
+    jira = (prefs.get("integrations") or {}).get("jira") if isinstance(prefs.get("integrations"), dict) else {}
+    jira = jira if isinstance(jira, dict) else {}
+    if jira.get("enabled") is True:
+        key = str(jira.get("project_key") or "") or "key UNSET"
+        rows.append(("jira integration (beta)", f"on ({key})", True))
+    else:
+        rows.append(("jira integration (beta)", "off", False))
     return rows
 
 
@@ -278,11 +285,42 @@ def _editor_apply(project_dir: Path, action) -> str:
     except Exception:
         prefs = {}
     env_i = len(_TOGGLE_PREFS) + 1
+    jira_i = len(_TOGGLE_PREFS) + 2
     if action != "d":
         try:
             action = int(action)  # the input() tier hands over strings
         except (TypeError, ValueError):
-            return f"1-{env_i}, d or b, please."
+            return f"1-{jira_i}, d or b, please."
+    if action == jira_i:
+        # Jira integration toggle (2026-08-18 user report: the [c] editor was missing
+        # table rows like this one). Enable/disable in place, PRESERVING the rest of
+        # the jira block (project_key, tool_prefix, mirror) so re-enabling keeps the
+        # configuration; a key-less enable shows "key UNSET" in the table and the note
+        # points at the canonical doc.
+        integrations = prefs.get("integrations")
+        if not isinstance(integrations, dict):
+            integrations = {}
+        jira = integrations.get("jira")
+        if not isinstance(jira, dict):
+            jira = {}
+        now_on = jira.get("enabled") is not True
+        jira["enabled"] = now_on
+        integrations["jira"] = jira
+        prefs["integrations"] = integrations
+        note = ""
+        if now_on and not str(jira.get("project_key") or ""):
+            note = (
+                "enabled with no project key - set integrations.jira.project_key in "
+                ".claude/team-preferences.json (docs/INTEGRATIONS.md)"
+            )
+        try:
+            prefs_path.parent.mkdir(parents=True, exist_ok=True)
+            prefs_path.write_text(
+                json.dumps(prefs, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            return "could not write team-preferences.json - unchanged"
+        return note
     if action == "d":
         for _, key in _TOGGLE_PREFS:
             prefs.pop(key, None)
