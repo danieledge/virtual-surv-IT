@@ -5309,6 +5309,100 @@ def _human_size(num_bytes: int) -> str:
     return f"{size:.1f}GB"
 
 
+def _purge_stale_registry_entries(home: Path, bad_paths: list) -> list:
+    """Remove registry entries whose installPath is one of `bad_paths` - THIS plugin's
+    entries pointing at nothing on disk (2026-08-18 user decision: the cleaner used to
+    report these and refuse to touch Claude Code's own file; now it repairs them, with
+    the same care the settings writers get: .bak of the original, atomic replace,
+    surgical removal of ONLY the matched nodes). A dict node carrying a bad installPath
+    is dropped from its parent list, or its parent dict key is removed when the node is
+    a direct value; a bare string installPath in a list is dropped likewise. Returns
+    [(file, removed_count)] for the files actually modified."""
+    bad = {str(p) for p in bad_paths}
+    results = []
+    for name in _PLUGIN_REGISTRY_NAMES:
+        path = home / ".claude" / "plugins" / name
+        try:
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        removed = 0
+
+        def _is_bad_node(node) -> bool:
+            return isinstance(node, dict) and str(node.get("installPath") or "") in bad
+
+        def _prune(obj):
+            nonlocal removed
+            if isinstance(obj, dict):
+                for key in list(obj.keys()):
+                    val = obj[key]
+                    if _is_bad_node(val):
+                        del obj[key]
+                        removed += 1
+                    elif isinstance(val, str) and key == "installPath" and val in bad:
+                        # a dict whose own installPath is bad but which the parent must
+                        # decide about - handled by the parent pass; leave here
+                        continue
+                    else:
+                        _prune(val)
+            elif isinstance(obj, list):
+                keep = []
+                for item in obj:
+                    if _is_bad_node(item) or (isinstance(item, str) and item in bad):
+                        removed += 1
+                        continue
+                    _prune(item)
+                    keep.append(item)
+                obj[:] = keep
+
+        _prune(data)
+        # top-level dict entries whose VALUE is a bad node (e.g. {"team@mkt": {...}})
+        if removed:
+            _write_json_backup(path, data)
+            results.append((path, removed))
+    return results
+
+
+def _offer_registry_repair(
+    home: Path, stale_entries: list, style: Style, mark_map: dict, assume_yes: bool, demo: bool
+) -> None:
+    """List the dead entries and, on confirm, remove them from the registry files
+    (2026-08-18 user decision - the report-only stance left an out-of-date registry the
+    user could see but the tool refused to fix). Each modified file keeps a .bak; the
+    write is atomic; only entries matching the ALREADY-identified this-plugin dead paths
+    are touched."""
+    ok = mark_map["ok"]
+    for rp in stale_entries:
+        print(f"    {rp} (does not exist)")
+    if demo:
+        print(style.dim("    (demo mode - the registry would be repaired, .bak kept)"))
+        return
+    if not confirm(
+        "  Repair the registry now (remove those dead entries; a .bak of each file is kept)?",
+        default=assume_yes,
+        assume_yes=assume_yes,
+        style=style,
+    ):
+        print(
+            style.dim(
+                "  - left as-is. Manual fix: reinstall (option 1) or /plugin in Claude Code."
+            )
+        )
+        return
+    results = _purge_stale_registry_entries(home, stale_entries)
+    if not results:
+        print(style.yellow("  nothing matched in the registry files - no changes made"))
+        return
+    for path, removed in results:
+        print(f"{ok} {path.name}: removed {removed} dead entr{'y' if removed == 1 else 'ies'} (backup: {path.name}.bak)")
+    print(
+        style.dim(
+            "  Restart Claude Code. If the plugin should still be installed here, run a "
+            "full install (option 1) to re-register it cleanly."
+        )
+    )
+
+
 def run_clean_plugin_cache(
     style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
 ) -> int:
@@ -5357,13 +5451,7 @@ def run_clean_plugin_cache(
                     f"{len(stale_entries)} missing install path(s) for this plugin:"
                 )
             )
-            for rp in stale_entries:
-                print(f"    {rp} (does not exist)")
-            print(
-                "    Fix: reinstall (python install_helper.py install), or /plugin in "
-                "Claude Code - the registry is Claude Code's own file and is never "
-                "edited here."
-            )
+            _offer_registry_repair(home, stale_entries, style, mark_map, assume_yes, demo)
             return 0
         print(
             f"{style.dim('-')} no cached installs found under "
@@ -5388,11 +5476,10 @@ def run_clean_plugin_cache(
         print(
             style.yellow(
                 f"  ! the registry also names {len(stale_entries)} install path(s) that no "
-                "longer exist on disk (report-only; fix via reinstall or /plugin):"
+                "longer exist on disk:"
             )
         )
-        for rp in stale_entries:
-            print(f"    {rp} (does not exist)")
+        _offer_registry_repair(home, stale_entries, style, mark_map, assume_yes, demo)
     removable_ghosts = [
         g for g in ghosts if not (active is not None and g.resolve() == active.resolve())
     ]

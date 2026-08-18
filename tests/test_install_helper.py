@@ -7578,9 +7578,11 @@ def test_clean_plugin_cache_keeps_an_active_but_partial_install(tmp_path, monkey
     assert ghost.exists()
 
 
-def test_clean_plugin_cache_reports_stale_registry_entries_without_touching_registry(
+def test_clean_plugin_cache_declined_repair_leaves_registry_untouched(
     tmp_path, monkeypatch, capsys
 ):
+    """2026-08-18: dead registry entries are now REPAIRABLE (see the repair tests), but a
+    declined confirm must still leave Claude Code's file exactly as it was."""
     import install_helper as ih
 
     monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
@@ -7589,11 +7591,12 @@ def test_clean_plugin_cache_reports_stale_registry_entries_without_touching_regi
     registry.parent.mkdir(parents=True)
     registry.write_text(json.dumps({"plugins": [{"installPath": str(gone)}]}), encoding="utf-8")
     before = registry.read_text(encoding="utf-8")
-    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: False)  # human declines the repair
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=False)
     out = capsys.readouterr().out
     assert rc == 0
-    assert "does not exist" in out and "reinstall" in out
-    assert registry.read_text(encoding="utf-8") == before  # report-only, never edited
+    assert "does not exist" in out
+    assert registry.read_text(encoding="utf-8") == before  # declined = untouched
 
 
 def test_clean_plugin_cache_never_offers_unattributable_dirs(tmp_path, monkeypatch, capsys):
@@ -7662,3 +7665,56 @@ def test_installed_cache_note_flags_a_version_lag(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     assert ih._installed_cache_note() == ""
+
+
+def test_cleaner_repairs_dead_registry_entries(tmp_path, monkeypatch, capsys):
+    """2026-08-18 user decision: the cleaner used to report registry entries pointing at
+    nothing on disk and refuse to touch Claude Code's file. It now repairs them on
+    confirm - surgical (only this plugin's dead paths), .bak kept, atomic write."""
+    import install_helper as ih
+
+    home = tmp_path / "home"
+    reg_dir = home / ".claude" / "plugins"
+    reg_dir.mkdir(parents=True)
+    dead = str(reg_dir / "cache" / "virtual-surv-IT" / "0.22.0")
+    alive_dir = reg_dir / "cache" / "other-plugin" / "1.0.0"
+    (alive_dir / ".claude-plugin").mkdir(parents=True)
+    (alive_dir / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "other-plugin", "version": "1.0.0"}), encoding="utf-8"
+    )
+    reg = reg_dir / "installed_plugins.json"
+    reg.write_text(
+        json.dumps(
+            {"plugins": [{"installPath": dead}, {"installPath": str(alive_dir)}]}
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "removed 1 dead entry" in out
+    data = json.loads(reg.read_text(encoding="utf-8"))
+    paths = [p.get("installPath") for p in data["plugins"]]
+    assert dead not in paths
+    assert str(alive_dir) in paths  # the other plugin's entry is untouched
+    assert (reg_dir / "installed_plugins.json.bak").is_file()  # original backed up
+
+
+def test_cleaner_demo_leaves_the_registry_alone(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    home = tmp_path / "home"
+    reg_dir = home / ".claude" / "plugins"
+    reg_dir.mkdir(parents=True)
+    dead = str(reg_dir / "cache" / "virtual-surv-IT" / "0.22.0")
+    reg = reg_dir / "installed_plugins.json"
+    original = json.dumps({"plugins": [{"installPath": dead}]})
+    reg.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "would be repaired" in out
+    assert reg.read_text(encoding="utf-8") == original
+    assert not (reg_dir / "installed_plugins.json.bak").exists()
