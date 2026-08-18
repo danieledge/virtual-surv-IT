@@ -123,7 +123,8 @@ signed as Morgan), and human sign-off.
   `synthesise`, `validate_masking`, `validate_manifest`, `validate_rtm`, `validate_references`,
   `check_citations`, `eval_score`,
   `calibrate_spoofing`, `check_artifacts`, `engagement_state`, `extensions`,
-  `convert_sarif`, `engage_probe`. (Adding a new `scripts/` tool means adding its basename to the
+  `convert_sarif`, `engage_probe`, `repo_skeleton`, `explain_rule` (the "why did this NOT
+  alert?" per-condition trace - `/why-no-alert` step (c)). (Adding a new `scripts/` tool means adding its basename to the
   staged guard and having the human apply it - otherwise plugin-mode users get a consent prompt
   for the team's own tooling. A live instance of exactly that was found on 2026-08-01: the probe
   behind `/engage` step 0 was missing from the list.) So read ANY document input - a spreadsheet, a **PDF**, a DOCX, a CSV -

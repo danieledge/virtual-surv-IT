@@ -104,6 +104,14 @@ volume/coverage trade-off without touching detection logic.
 | No genuine baseline (limitation) | all spoof-shaped, none genuine market-wide | no alert (cannot size "outsized") |
 | Same-ms lifecycle | FILL listed before its NEW at the same ms | fill applied, not dropped |
 
+**"Why did this NOT alert?"** - every non-fire outcome above can be traced mechanically:
+`python -m scripts.explain_rule --file <orders.jsonl>` (or `--generator benign --seed N`)
+emits the per-condition truth table, the first failing condition in the rule's own
+evaluation order, and a distance-to-threshold counterfactual per failing numeric condition
+("would alert at large_qty_multiple <= 3.2"). `calibrate_spoofing --near-miss` narrates
+any FN the same way. Both are allow-listed team tooling (consent-free, §7) and the
+mechanical backbone of `/why-no-alert` stages (c) and (d).
+
 ## 6. Running this scenario
 
 Prerequisite: `pip install -r requirements-dev.txt` (standard library + pytest; no extra deps for

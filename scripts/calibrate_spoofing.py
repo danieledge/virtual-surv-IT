@@ -93,6 +93,33 @@ def main() -> int:
     # no control does. A non-perfect result here is a regression worth investigating.
     ok = total.fn == 0 and total.fp == 0
     print("RESULT:", "PASS (recall=1.0, FP=0 on the synthetic set)" if ok else "REGRESSION")
+    if total.fn and "--near-miss" in sys.argv:
+        # Case-level absence narration for every FN (absence plan Phase 2): the same
+        # explain machinery /why-no-alert uses, so a regression here arrives with its
+        # first failing condition and distance-to-threshold already attached.
+        from scripts.explain_rule import explain_events
+
+        print("\nNear-miss detail (--near-miss): first failing condition per FN session")
+        for name, gen, should_alert, n in _SEGMENTS:
+            if not should_alert:
+                continue
+            for seed in range(1, n + 1):
+                events = gen(seed=seed)
+                if detect_spoofing(events):
+                    continue
+                result = explain_events(events)
+                for g in result["groups"]:
+                    for o in g["orders"]:
+                        if o["first_failing_condition"]:
+                            cond = next(
+                                c for c in o["conditions"] if c["id"] == o["first_failing_condition"]
+                            )
+                            print(
+                                f"  {name} seed={seed} order={o['order_id']}: "
+                                f"{cond['id']} {cond['condition']} - observed {cond['observed']}, "
+                                f"required {cond['required']}"
+                                + (f" | {cond['counterfactual']}" if cond["counterfactual"] else "")
+                            )
     return 0 if ok else 1
 
 
