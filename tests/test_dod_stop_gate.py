@@ -319,7 +319,9 @@ def test_another_sessions_active_pack_gets_no_fix_list(tmp_path, monkeypatch, ca
     reason = decision["reason"]
     assert "do NOT fix" in reason
     assert "AUTO-FIX" not in reason
-    assert "finding(s):" in reason  # summarised
+    # 2026-08-18 tightening: COUNT only - no per-pack lines, no finding codes
+    assert "open engagement(s)/area(s)" in reason
+    assert "finding(s):" not in reason  # no per-pack summaries either
     assert "expected" not in reason  # no finding BODIES (schema detail text)
 
 
@@ -332,9 +334,9 @@ def test_own_sessions_active_pack_keeps_the_fix_list(tmp_path, monkeypatch, caps
     reason = json.loads(out)["reason"]
     assert "AUTO-FIX" in reason  # the fix-list applies - this session owns the pack
     assert "[previous]" in reason
-    # ...but the SIBLING pack is still summarised, never pasted in full
-    assert "[sibling]" in reason
-    assert "finding(s):" in reason
+    # ...and the SIBLING pack is a COUNT only (2026-08-18): never listed, never coded
+    assert "[sibling]" not in reason
+    assert "not this session's scope" in reason
 
 
 def test_legacy_marker_without_session_keeps_old_behaviour(tmp_path, monkeypatch, capsys):

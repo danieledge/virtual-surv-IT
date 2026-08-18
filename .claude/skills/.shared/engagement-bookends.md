@@ -39,7 +39,12 @@ default (live 2026-08-18: a /why-no-alert close demanded an "engagement report" 
 diagnosis that already covered everything, then offered an exec summary when challenged).
 The summary email stays - it is the short requester-facing bookend, not a duplicate of
 the deliverable. The full consolidated Delivery Report is for engagements whose substance
-spans MULTIPLE artifacts.
+spans MULTIPLE artifacts. **Naming is deterministic (2026-08-18):** the single
+deliverable keeps its work-product name (`DIAGNOSIS-*`, `REVIEW-*`, `ASSESSMENT-*`)
+and is designated the delivery at close - `delivery-report.md` is RESERVED for the
+multi-artifact consolidation, and `check_artifacts` treats that name as close-only,
+so a mid-engagement file named like one trips the gate. Two runs of the same
+workflow must not choose different shapes.
 
 **Author closing artifacts final-form, then gate ONCE, then close.** Write the summary email and
 delivery report complete on the first pass - final `Status:` lines (never a draft/interim word),
