@@ -92,6 +92,7 @@ _RUNTIME_PARTS = (
     "INSTRUCTIONS.md",
     "team-preferences.json",
     "team-extensions.md",
+    "engage-probe.json",  # the go-written probe cache (2026-08-18) - runtime, per project
     _MARKER,
     "dashboard.html",
     "scst-dashboard.html",
