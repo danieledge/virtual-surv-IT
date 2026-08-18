@@ -52,13 +52,24 @@ for the §4/§5 trail.
 ## Progressive loading
 
 ```
-1. Detect languages   → file extensions in the target / git diff
+1. Detect languages   → review-scorer's own procedure: file extensions in the target / git
+                        diff. code-reviewer/compliance-reviewer reuse review-scorer's already-
+                        detected file list/language breakdown when their dispatch brief already
+                        has it (the standard pipeline's step 1, see deep-review/SKILL.md) rather
+                        than re-deriving it themselves via their own git diff (2026-08-12)
 2. Pick depth/mode    → quick (change) vs deep/audit (keep pre-existing, +architecture)
 3. Load minimum lenses→ core (bugs+security) + per-language + architecture (deep)
-4. Run lenses      → SEQUENTIAL focused passes inside code-reviewer, one lens at a time
-                        (full attention per lens), then merge + dedupe
-5. Score & filter     → docs/code-review-method.md  (mechanical; cheap tier)
-6. Morgan challenges  → spot-checks, not re-scores (every Critical, anything regulated,
+4. Run analysers      → ONCE, up front, inside code-reviewer - only the tools the step-0
+                        probe reported available (code-reviewer.md's table is the single
+                        source of truth); their output grounds every lens pass, so a tool
+                        hit is cited 📊 measured rather than rediscovered 🧠 inferred
+5. Run lenses         → SEQUENTIAL focused passes inside code-reviewer, one lens at a time
+                        (full attention per lens), each grounded in step 4's analyser
+                        output, then merge + dedupe
+6. Score & filter     → DELEGATE to review-scorer (haiku), rubric in
+                        docs/code-review-method.md - a reviewer self-scoring its own
+                        pack is a pipeline defect, not a fallback
+7. Morgan challenges  → spot-checks, not re-scores (every Critical, anything regulated,
                         anything with a thin evidence basis, plus a sample of the rest),
                         downgrades/drops what fails, then presents the scoreboard
                         (console) + the clean artifact
@@ -68,12 +79,12 @@ for the §4/§5 trail.
 
 - **Haiku** - `review-scorer` does the rote steps: language/context detection, lens selection,
   confidence arithmetic, and the Found/Reported/Filtered bookkeeping.
-- **Sonnet** - the lens passes themselves (per-language / per-dimension), as run by
-  `code-reviewer`.
-- **Opus** - `code-reviewer`'s judgement on findings + **Morgan's** challenge pass and the
-  §4/§5 regulated calls.
+- **Opus** - `code-reviewer`, end to end: the lens passes run inside it (topology below), so
+  they ride its tier along with its judgement on findings and the §4/§5 regulated calls.
+- **Morgan's challenge pass** - the orchestrator's own tier: sonnet by default, opus when
+  configured for the engagement (operating guide §Orchestration discipline).
 
-So the cheap, high-volume steps run cheap and only the genuine judgement pays opus.
+So the rote, high-volume steps run cheap and the genuine judgement pays the top tier.
 
 **Execution topology as shipped (the canonical statement).** The lens passes run **inside
 `code-reviewer`, sequentially**: one lens at a time, so each gets full attention. They are **not**
@@ -83,6 +94,30 @@ catches more" property does **not** hold here - real independence would need sep
 this pipeline deliberately does not spend. Running the lenses as separate **sonnet** sub-agents
 remains an optional next step, not current behaviour. What *is* delegated today is the mechanical
 work: context detection, lens selection and scoring go to `review-scorer` (haiku).
+
+**Consolidation is the default; splitting is the exception (2026-08-17).** The sequential-
+lenses-in-one-call topology above is not just a description, it is the cost model: one
+reading of the code serves every lens, so adding a lens costs its checklist, not a fresh
+context. Dimensions must never silently become dispatches - a live 2026-08-16/17 run sent
+deep + security + perf over a small repo as 6 subagent passes (each re-reading the code
+cold) where this topology prices 3. The legitimate reasons to split by component are: the
+`large_context_review_split` preference is on, the target genuinely exceeds one context, or
+corporate-proxy timeouts have bitten (the split's original purpose - confirmed helpful on
+proxied corporate boxes); absent those, one pass per review agent.
+
+**Briefs carry scope, never invite discovery (2026-08-17).** Every dispatch brief names the
+in-scope FILE LIST, and - when the project has one - `docs/codebase-map.md`'s **path** with
+"read it for wider context; do not enumerate the repo" (a live run had three parallel
+reviewers each re-crawl a repo whose map already existed). **Point, never paste**: the map
+body copied into N briefs is N times orchestrator output tokens, where an agent-side Read of
+the same file is cheap input - and a diff-scoped pass needs no map read at all.
+
+**Sequential means the lens order inside one call, not the dispatch across calls.** When a large
+target is split into multiple component-scoped `code-reviewer` calls (operating guide
+§Orchestration discipline), those calls are independent and dispatch **concurrently, in one
+message** - the per-call lens order stays sequential within each. Serialising independent calls
+across turns buys nothing (same tokens either way) and multiplies wall-clock time (live failure
+2026-08-07: a 4-pass split dispatched one call per turn).
 
 ## Adding a lens
 Create `docs/review/lenses/language-<name>.md` (same shape as the others: frontmatter with

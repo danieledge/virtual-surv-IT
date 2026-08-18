@@ -1,0 +1,754 @@
+#!/usr/bin/env python3
+"""Deterministic, mechanical first-contact orientation for an unfamiliar codebase (ADR-007).
+
+Problem this exists to fix: without a bounded tool, first-contact exploration on a large or
+unfamiliar codebase tends toward ad hoc, unscoped `find`/`ls`/`grep` sweeps - noisy (picks up
+`__pycache__`, `node_modules`, build output), unbounded (can dump thousands of files into an
+agent's own context), and non-reproducible. `repo_skeleton` replaces that with one deterministic
+pass: inventory the tree (respecting `.gitignore` where possible), extract symbols per file
+(tiered: whatever's actually available on the host, stdlib `ast` as the always-present floor),
+and emit a token-budgeted, human-and-agent-readable skeleton. Zero LLM calls, zero third-party
+hard dependencies, zero network.
+
+Design constraints (see docs/adr/ADR-007-codebase-map-evolution.md for the full record):
+  - Tree-sitter/ctags are SOFT runtime probes only, never vendored (compiled wheels/binaries
+    cannot be vendored under this repo's vendor/README.md convention) - if neither is present
+    on the host, the tool still works via the stdlib-ast/filename-floor tiers.
+  - Deterministic: two runs on the same input produce byte-identical output. No LLM in this
+    script at all.
+  - Token-budgeted, not file-count-budgeted: the output stops growing once it would exceed the
+    budget, with an explicit footer note naming what got left out - never a silent truncation.
+
+Usage:
+  python -m scripts.repo_skeleton [PATH] [--budget N] [--out FILE]
+
+PATH defaults to the current directory. Output goes to stdout unless --out is given.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import json
+import os
+import re
+import shutil
+import subprocess  # nosec B404 - fixed-argv git/ctags calls only, never shell=True
+import sys
+from pathlib import Path
+
+# Directory names skipped entirely during the os.walk fallback (git ls-files already excludes
+# gitignored paths for free, so this list only matters when there's no git repo to ask).
+_EXCLUDE_DIRS = frozenset(
+    {
+        "__pycache__",
+        ".git",
+        ".hg",
+        ".svn",
+        "node_modules",
+        "dist",
+        "build",
+        "venv",
+        ".venv",
+        ".tox",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "vendor",  # this repo's own vendored-dependency convention (vendor/README.md)
+        ".idea",
+        ".vscode",
+    }
+)
+# Suffix-shaped exclusions (egg-info dirs carry a version in the name, so an exact-name
+# set can't match them).
+_EXCLUDE_SUFFIXES = (".egg-info",)
+
+_PY_EXT = ".py"
+# Extensions the filename/heading floor treats as markdown-shaped (heading scan applies).
+_MARKDOWN_EXTS = frozenset({".md", ".markdown", ".rst"})
+
+# Rough chars-per-token proxy - the same approximation scripts/subagent_return_budget.py
+# already uses (a true count needs the model's own tokenizer, unavailable to a standalone
+# script). Not a target to be exact about: the budget check exists to keep output bounded,
+# not to hit an exact token count.
+_CHARS_PER_TOKEN = 4
+_DEFAULT_BUDGET_TOKENS = 6000
+
+
+def _force_utf8_output() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
+def _estimate_tokens(text: str) -> int:
+    return len(text) // _CHARS_PER_TOKEN
+
+
+# --------------------------------------------------------------------------- inventory
+
+
+def _git_ls_files(root: Path) -> list[str] | None:
+    """Tracked + untracked-but-not-ignored files, via git (None if no repo / git unavailable).
+    `-c` (cached/tracked) + `-o --exclude-standard` (other files, respecting .gitignore) covers
+    a working tree with uncommitted new files without re-implementing gitignore matching."""
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+            ["git", "-C", str(root), "ls-files", "-c", "-o", "--exclude-standard", "-z"],
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    raw = result.stdout.decode("utf-8", errors="replace")
+    return [p for p in raw.split("\0") if p]
+
+
+def _os_walk_files(root: Path) -> list[str]:
+    """Fallback inventory when there's no git repo to ask - skips _EXCLUDE_DIRS/_EXCLUDE_SUFFIXES
+    entirely (not just from the listing - os.walk is told not to descend into them at all, so a
+    huge node_modules never gets stat'd file-by-file)."""
+    out: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if d not in _EXCLUDE_DIRS and not any(d.endswith(s) for s in _EXCLUDE_SUFFIXES)
+        ]
+        rel_dir = Path(dirpath).relative_to(root)
+        for name in filenames:
+            rel = name if rel_dir == Path(".") else str(rel_dir / name)
+            out.append(rel.replace(os.sep, "/"))
+    return out
+
+
+def inventory(root: Path) -> list[str]:
+    """Sorted, forward-slash-normalised relative file paths under `root`. Deterministic
+    regardless of filesystem iteration order (always sorted before returning)."""
+    files = _git_ls_files(root)
+    if files is None:
+        files = _os_walk_files(root)
+    return sorted(set(files))
+
+
+# --------------------------------------------------------------------------- symbol extraction
+
+_TIER_TREE_SITTER = "tree-sitter"
+_TIER_CTAGS = "ctags"
+_TIER_AST = "ast"
+_TIER_FLOOR = "floor"
+
+
+def _symbols_tree_sitter(_path: Path) -> list[str] | None:
+    """Soft probe only - tree-sitter is never vendored (compiled wheel), so this tier is
+    live only when the host environment happens to already have it installed. Not
+    implemented beyond the presence probe in this first version: a positive probe with no
+    extraction still means "unavailable for now", so callers fall through to the next tier.
+    Kept as a real tier (not deleted) so a future version can add real extraction here
+    without touching the tiering logic anywhere else."""
+    try:
+        import tree_sitter  # noqa: F401
+    except ImportError:
+        return None
+    return None  # probed present, but extraction isn't implemented yet - fall through
+
+
+def _symbols_ctags(path: Path) -> list[str] | None:
+    """Soft probe via `ctags` on PATH (never vendored - a compiled binary, not a Python
+    package). None if ctags isn't installed OR the call fails/times out for any reason -
+    this tier degrading never blocks the always-available floor below it."""
+    if shutil.which("ctags") is None:
+        return None
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, path arg only
+            ["ctags", "-x", "--output-format=json", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    names: list[str] = []
+    for line in result.stdout.splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        name = row.get("name")
+        if name:
+            names.append(name)
+    return names or None
+
+
+def _symbols_ast_python(path: Path) -> list[str] | None:
+    """Stdlib ast - the always-available floor for Python specifically. Top-level (and
+    one-level-nested, e.g. class methods) def/class names, never executes the file."""
+    try:
+        source = path.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(source, filename=str(path))
+    except (OSError, SyntaxError, ValueError):
+        return None
+    names: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.append(node.name)
+    return names or None
+
+
+def _symbols_floor(path: Path) -> list[str]:
+    """The universal floor for anything not covered by a richer tier: markdown-shaped files
+    contribute their heading lines; everything else contributes nothing beyond its own
+    filename (the caller already has the path, so an empty symbol list here is a legitimate,
+    honest "no further detail available", not a failure)."""
+    if path.suffix.lower() not in _MARKDOWN_EXTS:
+        return []
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    return [
+        line.strip("# ").strip() for line in text.splitlines() if line.lstrip().startswith("#")
+    ][:20]  # a runaway heading-shaped file (rare) still can't blow the per-file budget
+
+
+def extract_symbols(path: Path) -> tuple[list[str], str]:
+    """Tiered dispatcher: tree-sitter -> ctags -> stdlib ast (Python only) -> filename/heading
+    floor. Returns (symbols, tier_name) - the tier is surfaced in output so a reader knows how
+    much to trust the listing (an ast-derived def list is exact; a floor-tier heading scan is
+    approximate)."""
+    symbols = _symbols_tree_sitter(path)
+    if symbols is not None:
+        return symbols, _TIER_TREE_SITTER
+    symbols = _symbols_ctags(path)
+    if symbols is not None:
+        return symbols, _TIER_CTAGS
+    if path.suffix == _PY_EXT:
+        symbols = _symbols_ast_python(path)
+        if symbols is not None:
+            return symbols, _TIER_AST
+    return _symbols_floor(path), _TIER_FLOOR
+
+
+# --------------------------------------------------------------------------- reference graph + rank
+
+
+def build_reference_graph(root: Path, files: list[str]) -> dict[str, set[str]]:
+    """Best-effort file-level def/ref graph. Python-only for this version - the ast tier is the
+    only one that gives real import statements without a heavier parser dependency; non-Python
+    files simply contribute no edges (uniform base rank, not an error). A future version can add
+    an import-graph builder per language without changing pagerank()/the ranking contract.
+    `files` are root-relative (as returned by inventory()) - resolved against `root` to read
+    each file, never against the current working directory."""
+    py_files = {f for f in files if f.endswith(_PY_EXT)}
+    module_index: dict[str, str] = {}
+    for f in py_files:
+        p = Path(f)
+        if p.name == "__init__.py":
+            dotted = ".".join(p.parent.parts)
+        else:
+            dotted = ".".join((*p.parent.parts, p.stem)) if p.parent.parts else p.stem
+        if dotted:
+            module_index[dotted] = f
+
+    graph: dict[str, set[str]] = {f: set() for f in files}
+    for f in sorted(py_files):
+        for mod in _python_import_modules(root / f):
+            target = module_index.get(mod)
+            if target is None and "." in mod:
+                # "from foo.bar import baz" where baz is a symbol, not a module - foo.bar
+                # itself is still the right file-level edge.
+                target = module_index.get(mod.rsplit(".", 1)[0])
+            if target and target != f:
+                graph[f].add(target)
+    return graph
+
+
+def _python_import_modules(path: Path) -> set[str]:
+    """Top-level (non-relative) import module names from one Python file - AST-only, never
+    executes the file. Relative imports (`from . import x`) are skipped: resolving them needs
+    the importing file's own package position, which is a real feature but not needed for a
+    first version whose absolute-import coverage already gives PageRank a real graph to rank
+    with on typical Python projects."""
+    try:
+        source = path.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(source, filename=str(path))
+    except (OSError, SyntaxError, ValueError):
+        return set()
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                modules.add(alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            modules.add(node.module)
+    return modules
+
+
+_DAMPING = 0.85
+_PAGERANK_ITERATIONS = 50
+_PAGERANK_TOL = 1e-6
+
+
+def pagerank(graph: dict[str, set[str]]) -> dict[str, float]:
+    """Minimal pure-stdlib power-iteration PageRank over a file-level def/ref graph - no
+    numpy/networkx (ADR-007's compiled-wheel constraint: neither can be vendored under this
+    repo's vendor/README.md convention). Uniform personalization - no engagement-aware
+    weighting (recently-edited-file boosts etc. are Phase 3 territory, ADR-007). Deterministic:
+    nodes are always iterated in sorted order, so floating-point summation order never varies
+    run to run on the same input graph."""
+    nodes = sorted({*graph} | {t for outs in graph.values() for t in outs})
+    if not nodes:
+        return {}
+    n = len(nodes)
+    base = 1.0 / n
+    scores = {node: base for node in nodes}
+    out_deg = {node: len(graph.get(node, ())) for node in nodes}
+    dangling = [node for node in nodes if out_deg[node] == 0]
+    for _ in range(_PAGERANK_ITERATIONS):
+        new_scores = {node: (1 - _DAMPING) * base for node in nodes}
+        leaked = _DAMPING * sum(scores[d] for d in dangling) * base
+        for node in nodes:
+            new_scores[node] += leaked
+        for src in nodes:
+            targets = graph.get(src) or set()
+            if not targets:
+                continue
+            share = _DAMPING * scores[src] / out_deg[src]
+            for dst in sorted(targets):
+                new_scores[dst] += share
+        delta = sum(abs(new_scores[k] - scores[k]) for k in nodes)
+        scores = new_scores
+        if delta < _PAGERANK_TOL:
+            break
+    return scores
+
+
+# --------------------------------------------------------------------------- Mermaid
+
+
+def _mermaid_node_id(rel_path: str) -> str:
+    return re.sub(r"[^0-9a-zA-Z_]", "_", rel_path)
+
+
+def render_mermaid(graph: dict[str, set[str]]) -> str:
+    """Deterministic `graph TD` Mermaid subset - the smallest useful one (labelled nodes,
+    `-->` edges, nothing else: no subgraphs, no classDef, no click handlers). Nodes sorted by
+    path, edges collected into a set then sorted before emission - dict/set iteration order is
+    not a determinism guarantee on its own, sorting before emission is the whole story. Only
+    files that actually have an edge (source or target) are drawn - an isolated file with no
+    import relationship to anything else adds no signal to a dependency diagram."""
+    edges: set[tuple[str, str]] = set()
+    for src, targets in graph.items():
+        for dst in targets:
+            edges.add((src, dst))
+    if not edges:
+        return "graph TD\n"
+    connected = sorted({n for pair in edges for n in pair})
+    lines = ["graph TD"]
+    for node in connected:
+        lines.append(f'    {_mermaid_node_id(node)}["{node}"]')
+    for src, dst in sorted(edges):
+        lines.append(f"    {_mermaid_node_id(src)} --> {_mermaid_node_id(dst)}")
+    return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------------------------------- churn
+
+
+def git_churn(root: Path, files: list[str]) -> dict[str, int] | None:
+    """Commit-count churn per file, ONE batched `git log` call - not one per file, same "one
+    subprocess, not N" discipline as scripts/check_artifacts.py's _batch_resolve_shas. None if
+    git is unavailable (caller falls back to mtime-based churn, tagged inferred, at that
+    point) - never raises."""
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+            ["git", "-C", str(root), "log", "--name-only", "--pretty=format:", "--no-renames"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    inventory_set = set(files)
+    counts: dict[str, int] = {}
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line in inventory_set:
+            counts[line] = counts.get(line, 0) + 1
+    return counts
+
+
+def mtime_churn(root: Path, files: list[str]) -> dict[str, float]:
+    """Fallback churn signal when there's no git repo to ask: raw mtime. Tagged 🧠 inferred
+    wherever displayed (never 📊 measured like the git-log figure) - it conflates recency with
+    actual change frequency, which git-log commit counts do not."""
+    out: dict[str, float] = {}
+    for f in files:
+        try:
+            out[f] = (root / f).stat().st_mtime
+        except OSError:
+            pass
+    return out
+
+
+def compute_ranks(root: Path, files: list[str]) -> dict[str, float]:
+    """PageRank over the best-effort reference graph - the single entry point main() calls to
+    wire real ranks into build_skeleton() (which otherwise defaults every file to rank 0, i.e.
+    path-only ordering)."""
+    return pagerank(build_reference_graph(root, files))
+
+
+# --------------------------------------------------------------------------- budgeted output
+
+
+def _churn_suffix(rel_path: str, churn: dict | None, churn_measured: bool) -> str:
+    if not churn or rel_path not in churn:
+        return ""
+    value = churn[rel_path]
+    if churn_measured:
+        return f", churn: {value} commits (\U0001f4ca measured)"
+    from datetime import datetime, timezone
+
+    dt = datetime.fromtimestamp(value, tz=timezone.utc).strftime("%Y-%m-%d")
+    return f", last modified {dt} (\U0001f9e0 inferred - no git history to measure churn)"
+
+
+def _file_block(
+    rel_path: str,
+    symbols: list[str],
+    tier: str,
+    *,
+    compact: bool,
+    churn: dict | None = None,
+    churn_measured: bool = False,
+) -> str:
+    suffix = _churn_suffix(rel_path, churn, churn_measured)
+    if compact:
+        head = ", ".join(symbols[:5])
+        more = f" (+{len(symbols) - 5} more)" if len(symbols) > 5 else ""
+        return f"- {rel_path}: {head}{more}{suffix}" if symbols else f"- {rel_path}{suffix}"
+    lines = [f"## {rel_path}  [{tier}]{suffix}"]
+    if symbols:
+        lines.extend(f"  - {s}" for s in symbols)
+    else:
+        lines.append("  (no symbols extracted)")
+    return "\n".join(lines)
+
+
+def build_skeleton(
+    root: Path,
+    budget_tokens: int = _DEFAULT_BUDGET_TOKENS,
+    *,
+    ranks: dict | None = None,
+    churn: dict | None = None,
+    churn_measured: bool = False,
+    mermaid_graph: dict | None = None,
+    files: list[str] | None = None,
+) -> str:
+    """Walk `inventory(root)` (or the pre-computed `files` list, if the caller already has one -
+    main() passes it to avoid a second `git ls-files` subprocess call for the same tree) ranked
+    by `(-rank, path)` (rank defaults to 0 for every file if `ranks` is omitted - path-only
+    ordering), extracting symbols per file and emitting full detail until the running token
+    estimate would exceed `budget_tokens`, then switching remaining files to a compact
+    one-liner tier, then omitting the rest with an explicit count - never a silent truncation.
+    `churn` (rel_path -> commit count or mtime, see compute_ranks()'s caller in main()) is
+    display-only, never a ranking input. `mermaid_graph`, if given, appends a rendered
+    dependency diagram after the file listing."""
+    files = inventory(root) if files is None else files
+    ranks = ranks or {}
+    ordered = sorted(files, key=lambda p: (-ranks.get(p, 0.0), p))
+
+    header = [
+        f"# Repository skeleton - {root}",
+        f"# {len(files)} files inventoried, budget ~{budget_tokens} tokens",
+        "",
+    ]
+    body: list[str] = []
+    used_tokens = _estimate_tokens("\n".join(header))
+    compact_from: int | None = None
+    omitted = 0
+
+    for i, rel_path in enumerate(ordered):
+        symbols, tier = extract_symbols(root / rel_path)
+        compact = compact_from is not None
+        block = _file_block(
+            rel_path, symbols, tier, compact=compact, churn=churn, churn_measured=churn_measured
+        )
+        block_tokens = _estimate_tokens(block) + 1
+        if used_tokens + block_tokens > budget_tokens:
+            if compact_from is None:
+                # First file that doesn't fit at full detail - switch this and every
+                # remaining file to the compact tier instead of dropping it outright.
+                compact_from = i
+                block = _file_block(
+                    rel_path,
+                    symbols,
+                    tier,
+                    compact=True,
+                    churn=churn,
+                    churn_measured=churn_measured,
+                )
+                block_tokens = _estimate_tokens(block) + 1
+                if used_tokens + block_tokens > budget_tokens:
+                    omitted += 1
+                    continue
+            else:
+                omitted += 1
+                continue
+        body.append(block)
+        used_tokens += block_tokens
+
+    if omitted:
+        body.append(
+            f"\n...and {omitted} more lower-ranked file(s) omitted "
+            "(--budget to raise, or run against a narrower path)."
+        )
+
+    out = "\n".join(header) + "\n".join(body) + "\n"
+    if mermaid_graph is not None:
+        rendered = render_mermaid(mermaid_graph)
+        if rendered.strip() != "graph TD":
+            out += "\n## Dependency graph\n\n```mermaid\n" + rendered + "```\n"
+    return out
+
+
+# --------------------------------------------------------------------------- drift-stamp writer
+
+_FINGERPRINTS_FILENAME = "codebase-map.fingerprints.json"
+
+
+def _split_paths_cell(cell: str) -> list[str]:
+    return [g.strip() for g in cell.split(",") if g.strip()]
+
+
+def _parse_map_paths_column(map_path: Path) -> dict[str, list[str]]:
+    """Area -> globs, from the §2 table's optional `Paths` column - same column-driven
+    detection scripts.check_artifacts.check_map() already uses for As-of/Anchor (a table
+    without a Paths column contributes nothing, additively - no error, no entries)."""
+    if not map_path.is_file():
+        return {}
+    lines = map_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    columns: dict[str, int] | None = None
+    result: dict[str, list[str]] = {}
+    for line in lines:
+        if not line.lstrip().startswith("|"):
+            columns = None
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if not cells or set("".join(cells)) <= {"-", ":", " "}:
+            continue
+        lowered = [c.lower() for c in cells]
+        if any("basis" in c for c in lowered):
+            columns = {name: i for i, name in enumerate(lowered)}
+            continue
+        if columns is None:
+            continue
+        area_idx = columns.get("area")
+        paths_idx = next((i for n, i in columns.items() if "paths" in n), None)
+        if area_idx is None or paths_idx is None:
+            continue
+        if area_idx >= len(cells) or paths_idx >= len(cells):
+            continue
+        area = cells[area_idx].strip()
+        globs = _split_paths_cell(cells[paths_idx])
+        if area and globs:
+            result[area] = globs
+    return result
+
+
+def _current_head_sha(repo_root: Path) -> str:
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "no-vcs"
+    sha = result.stdout.strip()
+    return sha if result.returncode == 0 and sha else "no-vcs"
+
+
+def _load_map_fingerprint_module():
+    """Import scripts.map_fingerprint in BOTH run modes - same dual-mode pattern as
+    scripts.check_artifacts._load_map_fingerprint_module (proper package import when run as
+    `-m scripts.repo_skeleton`; a file-relative importlib fallback when run by direct path,
+    the plugin-mode invocation form with no package context to resolve `scripts.` against).
+    Bug found 2026-08-06 building Chunk E: the plain `from scripts.map_fingerprint import ...`
+    this replaced worked only in the first mode, so `--fingerprint` crashed with
+    ModuleNotFoundError under the exact invocation form /map-codebase (Chunk E) needs."""
+    try:
+        from scripts import map_fingerprint
+
+        return map_fingerprint
+    except ImportError:
+        pass
+    import importlib.util
+
+    path = Path(__file__).with_name("map_fingerprint.py")
+    spec = importlib.util.spec_from_file_location("map_fingerprint", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def write_fingerprints(
+    map_path: Path, project_dir: Path | None = None, out_path: Path | None = None
+) -> dict:
+    """Read a codebase map's (root OR an area file - identical §2 table shape, so this
+    function has no notion of "root" vs "area", just "a map-shaped file") `Paths` column,
+    fingerprint each entry's globs (scripts.map_fingerprint.compute_fingerprint), and write
+    the sidecar to the SAME directory as map_path (design: docs/adr/ADR-007-codebase-map-
+    evolution.md) - never a project-root-relative path, so the root map's sidecar
+    (docs/codebase-map.fingerprints.json) and each docs/codebase-map.d/ area file's shared
+    sidecar (docs/codebase-map.d/codebase-map.fingerprints.json) each live next to what they
+    describe. Bug found 2026-08-06 (Chunk E): scripts.check_artifacts._check_map_drift used
+    to look for the sidecar at project_dir/<name> while this wrote it at
+    map_path.parent/<name> - identical only when the map lives at the project ROOT, silently
+    wrong for the documented default location (docs/codebase-map.md) - fixed on both sides
+    together, see that function's own docstring.
+
+    `project_dir` is a SEPARATE concern from the sidecar's location: it is what the Paths
+    column's globs are relative to (`scripts/*.py` means the project's own scripts/, not
+    docs/scripts/) and what `_check_map_drift` also uses for the exact same globs - the two
+    must agree, or every entry drifts permanently the moment the map isn't at the project
+    root. Second bug found alongside the first: this used to hash relative to map_path.parent
+    (silently wrong for the same reason). Defaults to map_path.parent only as a last resort
+    (correct for a map placed directly at the project root); the CLI passes it explicitly.
+
+    MERGES into an existing sidecar rather than overwriting it (2026-08-06, needed once
+    multiple area files share one directory and therefore one sidecar): re-fingerprinting
+    file A must not erase file B's already-recorded entries."""
+    from datetime import datetime, timezone
+
+    mf = _load_map_fingerprint_module()
+    compute_fingerprint, resolve_globs = mf.compute_fingerprint, mf.resolve_globs
+
+    project_dir = project_dir or map_path.parent
+    sidecar_dir = map_path.parent
+    out_path = out_path or (sidecar_dir / _FINGERPRINTS_FILENAME)
+    existing_entries: dict = {}
+    if out_path.is_file():
+        try:
+            existing = json.loads(out_path.read_text(encoding="utf-8"))
+            existing_entries = existing.get("entries") or {} if isinstance(existing, dict) else {}
+        except (OSError, ValueError):
+            existing_entries = {}  # unreadable/corrupt sidecar - rebuild from this file only
+    entries = dict(existing_entries)
+    for area, globs in _parse_map_paths_column(map_path).items():
+        fp = compute_fingerprint(globs, project_dir)
+        files_hashed = len(resolve_globs(globs, project_dir))
+        entries[area] = {"paths": globs, "fingerprint": fp, "files_hashed": files_hashed}
+    payload = {
+        "generated_by": "repo_skeleton",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "root_anchor": _current_head_sha(project_dir),
+        "entries": entries,
+    }
+    out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return payload
+
+
+# --------------------------------------------------------------------------- CLI
+
+
+def main(argv: list[str]) -> int:
+    _force_utf8_output()
+    ap = argparse.ArgumentParser(
+        description="Deterministic, token-budgeted first-contact skeleton of a codebase."
+    )
+    ap.add_argument("path", nargs="?", default=".", help="root to inventory (default: .)")
+    ap.add_argument(
+        "--budget", type=int, default=_DEFAULT_BUDGET_TOKENS, help="approx. token budget"
+    )
+    ap.add_argument("--out", type=Path, default=None, help="write to a file instead of stdout")
+    ap.add_argument(
+        "--no-rank",
+        action="store_true",
+        help="skip PageRank (path-only ordering) - useful on a huge non-Python tree where the "
+        "reference graph would be empty anyway",
+    )
+    ap.add_argument(
+        "--no-churn", action="store_true", help="skip git-log/mtime churn annotation per file"
+    )
+    ap.add_argument(
+        "--mermaid",
+        action="store_true",
+        help="append a Mermaid dependency graph section (only edges PageRank could resolve)",
+    )
+    ap.add_argument(
+        "--fingerprint",
+        type=Path,
+        default=None,
+        metavar="MAP_PATH",
+        help="drift-stamp mode: read MAP_PATH's codebase-map §2 'Paths' column, fingerprint "
+        "each entry's globs (relative to --project-dir, default: current directory), write/"
+        "merge codebase-map.fingerprints.json alongside MAP_PATH. Ignores --budget/--out/"
+        "--mermaid/etc - this is a separate mode, not a skeleton render",
+    )
+    ap.add_argument(
+        "--project-dir",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="with --fingerprint only: what the Paths column's globs are relative to - "
+        "default: current directory (run this from the project root, the normal case)",
+    )
+    args = ap.parse_args(argv[1:])
+
+    if args.fingerprint:
+        map_path = args.fingerprint.expanduser().resolve()
+        if not map_path.is_file():
+            print(f"not a file: {map_path}", file=sys.stderr)
+            return 1
+        project_dir = (args.project_dir or Path.cwd()).expanduser().resolve()
+        payload = write_fingerprints(map_path, project_dir=project_dir)
+        out_path = map_path.parent / _FINGERPRINTS_FILENAME
+        print(f"Wrote {len(payload['entries'])} fingerprint(s) -> {out_path}")
+        return 0
+
+    root = Path(args.path).expanduser().resolve()
+    if not root.is_dir():
+        print(f"not a directory: {root}", file=sys.stderr)
+        return 1
+
+    files = inventory(root)
+    graph = None if (args.no_rank and not args.mermaid) else build_reference_graph(root, files)
+    ranks = {} if args.no_rank else pagerank(graph)
+
+    churn = None
+    churn_measured = False
+    if not args.no_churn:
+        churn = git_churn(root, files)
+        churn_measured = churn is not None
+        if churn is None:
+            churn = mtime_churn(root, files)
+
+    text = build_skeleton(
+        root,
+        args.budget,
+        ranks=ranks,
+        churn=churn,
+        churn_measured=churn_measured,
+        mermaid_graph=graph if args.mermaid else None,
+        files=files,
+    )
+    if args.out:
+        args.out.write_text(text, encoding="utf-8")
+        print(f"Wrote skeleton -> {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

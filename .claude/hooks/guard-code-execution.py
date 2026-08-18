@@ -114,6 +114,23 @@ _EXEC_PATTERNS = [
 ]
 _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 
+# Subset of _EXEC_PATTERNS covering "ad hoc inline diagnostic" shapes specifically
+# (`python -c "..."`, `python -`, `node -e`, `ruby -e`, `perl -e`, `php -r`) - checked
+# separately so _block() can add a MORE TARGETED note for exactly this class. Live report,
+# recurring (2026-08-04, 2026-08-07): a session hits a hiccup (a step-0 /engage probe
+# failure, or anything else), reaches for "let me just check X directly" as an ad hoc
+# inline command, and gets blocked - correctly, but the GENERIC block message gave no hint
+# that (a) this specific shape is always blocked regardless of consent, so granting consent
+# won't help, and (b) if this followed a probe failure, the fix is retrying the exact probe
+# block, not improvising a replacement. `.claude/skills/engage/references/probe-contract.md`
+# already said this, but it's a just-in-time reference the model may never open before
+# reaching for the ad hoc command in the first place - this note fires AT THE BLOCK ITSELF,
+# which the model has already seen by definition.
+_INLINE_CODE_RE = re.compile(
+    rf"\b{_PY}\s+(?:\S+\s+)*-c\b|\b{_PY}\s+-\s*$|\bnode\s+-e\b|\bruby\s+-e\b|\bperl\s+-e\b|\bphp\s+-r\b",
+    re.IGNORECASE,
+)
+
 # The team's OWN trusted tooling - allowed even though it runs python. ANCHORED at the start of
 # a segment (ADR-002: the old `.search()` matched anywhere, so `echo "scripts."; pytest` waved
 # the whole line through). Two forms:
@@ -130,9 +147,9 @@ _EXEC_RE = re.compile("|".join(_EXEC_PATTERNS), re.IGNORECASE)
 #     was missing, so /engage step 0 tripped the gate on its own front door.
 _TEAM_SCRIPT_NAMES = (
     r"(?:render_html|render_findings|render_docx|convert_file|ingest|gen_synthetic|synthesise"
-    r"|validate_masking|validate_manifest|validate_rtm|check_citations|eval_score"
+    r"|validate_masking|validate_manifest|validate_rtm|validate_references|check_citations|eval_score"
     r"|calibrate_spoofing|check_artifacts|engagement_state|extensions|convert_sarif"
-    r"|engage_probe)\.py"
+    r"|engage_probe|repo_skeleton)\.py"
 )
 
 # 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in
@@ -162,8 +179,16 @@ def _company_allowed(segment: str) -> bool:
 #     immediately after `.py`, so the quoted argument IS the script path - same basename
 #     trust as the unquoted form (lexical residual per ADR-002; a quoted path containing a
 #     segment separator splits in _segments and fails safe to the exec check).
+#
+# 2026-08-04: a leading `VAR=value ` env-var prefix (e.g. `PYTHONIOENCODING=utf-8 python
+# ".../engage_probe.py"`, needed on Windows cp1252 terminals) broke the anchor - the segment
+# no longer STARTS with the python token, so this pattern failed to match while the unanchored
+# _EXEC_RE still caught "python ... .py" further into the string, blocking the team's own
+# allow-listed script. `_EXEC_PATTERNS` already carries this exact `(?:\w+=\S+\s+)*` prefix for
+# pytest/unittest/pre-commit/powershell for the same reason - applied here too, zero or more
+# repetitions so chained env vars (`A=1 B=2 python ...`) also pass.
 _TEAM_ALLOW = re.compile(
-    rf"^(?:{_PY}\s+-m\s+scripts\."
+    rf"^(?:\w+=\S+\s+)*(?:{_PY}\s+-m\s+scripts\."
     rf"|{_PY}\s+scripts{_SEP}"
     rf"|{_PY}\s+\"[^\"]*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}\""
     rf"|{_PY}\s+'[^']*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}'"
@@ -182,20 +207,121 @@ _TEAM_ALLOW = re.compile(
 # Shell separators we split on so an allow-listed segment can't wave through a blocked one chained
 # after it. Splitting on `$(`/backtick is deliberately crude - it errs toward inspecting MORE,
 # which for a guard means failing safe. (Lexical only; see ADR-002 for the irreducible residual.)
-_SEGMENT_SPLIT = re.compile(r";|&&|\|\||\||\n|`|\$\(")
+#
+# 2026-08-07 (found live by a framework-wide audit, verified by hand before this fix):
+# `` ` `` and `$(` are split out from _SEGMENT_DELIMS proper because they need DIFFERENT
+# quote-gating than the other four - see _segments()'s in_single-only check below. Kept in
+# one combined tuple here anyway (rather than folded entirely into the loop) so a reader
+# scanning top-of-file constants still sees every boundary token in one place.
+_SEGMENT_DELIMS = (";", "&&", "||", "|", "\n", "`", "$(")
+
+# Of _SEGMENT_DELIMS, only these four are ordinary text inside a double-quoted string in
+# real bash (`echo "a; b"` prints "a; b" literally) - so only these stay gated on
+# `not in_double` too. `` ` `` and `$(` are handled separately in the loop below.
+_ORDINARY_DELIMS = (";", "&&", "||", "|", "\n")
 
 
 def _segments(cmd: str) -> list[str]:
-    return [s.strip() for s in _SEGMENT_SPLIT.split(cmd) if s.strip()]
+    """Split a compound command into per-statement segments, quote-aware.
+
+    A purely lexical split (the old approach: regex over the raw string) chops INSIDE a
+    quoted argument - a log-note or commit message using ';' or '&&' as ordinary
+    punctuation ("...close as-is; no real source data exists...") got sliced into a bogus
+    mid-sentence fragment, which then spuriously matched an unrelated block pattern (live,
+    2026-08-03: a chained `engagement_state log-note "..."` call). Delimiters are only
+    boundaries OUTSIDE '...' / "..." - inside a quote they are just text. Still lexical,
+    not a full shell parser (ADR-002's irreducible residual): unclosed quotes just fold
+    the remainder into one segment, which is the safe direction (inspecting MORE as one
+    unit, never less).
+
+    2026-08-07 fix: that "inside a quote they are just text" rule is TRUE for `;`/`&&`/
+    `||`/`|`/newline but FALSE for command substitution - `echo "$(pytest)"` and the
+    equivalent backtick form both actually RUN pytest in real bash; only single quotes
+    suppress substitution. The 2026-08-03 quote-awareness rewrite above gated backtick/`$(` on the
+    same `not in_single and not in_double` condition as the other four, so a command
+    wrapped in double quotes silently escaped every anchored `_EXEC_PATTERNS`/`_TEAM_ALLOW`
+    check (`^pytest`, `^make`, etc. - segment-start anchors that never saw the real command
+    because it never became its own segment). `guard-consent-writes.py`'s own `_segments`-
+    equivalent already had this right (its own comment: "command substitution executes even
+    inside double quotes - always a boundary") - this brings the other two guards in line
+    with it instead of leaving the fix live in only one of the three.
+    """
+    segments: list[str] = []
+    current: list[str] = []
+    in_single = in_double = False
+    i, n = 0, len(cmd)
+    while i < n:
+        ch = cmd[i]
+        if ch == "\\" and not in_single and i + 1 < n:
+            if cmd[i + 1] == "\n":
+                # Line continuation: real bash ERASES both chars (one continued logical
+                # line), never keeps them as literal text - unlike every other escape.
+                i += 2
+                continue
+            current.append(cmd[i : i + 2])
+            i += 2
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            current.append(ch)
+            i += 1
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            current.append(ch)
+            i += 1
+            continue
+        if not in_single:
+            # Command substitution executes even inside double quotes - always a boundary
+            # regardless of in_double, unlike the four ordinary delimiters below.
+            if cmd.startswith("`", i):
+                segments.append("".join(current))
+                current = []
+                i += 1
+                continue
+            if cmd.startswith("$(", i):
+                segments.append("".join(current))
+                current = []
+                i += 2
+                continue
+            if not in_double:
+                hit = next((d for d in _ORDINARY_DELIMS if cmd.startswith(d, i)), None)
+                if hit is not None:
+                    segments.append("".join(current))
+                    current = []
+                    i += len(hit)
+                    continue
+        current.append(ch)
+        i += 1
+    segments.append("".join(current))
+    return [s.strip() for s in segments if s.strip()]
 
 
 def _block(cmd: str, segment: str | None = None) -> None:
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     marker = os.path.join(root, ".claude", ".exec-consent")
+    inline_note = ""
+    if segment and _INLINE_CODE_RE.search(segment):
+        inline_note = (
+            "This looks like an ad hoc inline diagnostic (`-c`/stdin code execution) - it is "
+            "ALWAYS blocked here, unconditionally, no matter how harmless it looks. This is NOT "
+            "a consent question: granting consent will not change this, since inline execution "
+            "is blocked regardless of authorisation state. Two live-report shapes this has "
+            "recurred as: (1) retrying after a step-0 /engage probe failure by improvising a "
+            "replacement instead of re-running the exact probe block character for character "
+            "(see PROBE_FAILED in .claude/skills/engage/references/probe-contract.md); (2) "
+            "checking a JSON/text file (e.g. verifying a findings pack parses and counting its "
+            'entries) by running `python -c "...json.load..."` instead of just reading the '
+            "file - it is already text you can Read and count directly, no execution needed "
+            "(docs/team-operating-guide.md's findings-count-verification guidance). If you "
+            "genuinely need the interpreter's own path or version, use `python --version` or "
+            "`python -V` instead - never `-c`.\n"
+        )
     sys.stderr.write(
         "Blocked (code-execution gate, CLAUDE.md §7): this command EXECUTES code, and review is "
         "static by default. Running the code under review (its tests, the script itself, or a "
         "profiler/benchmark) needs authorisation.\n"
+        f"{inline_note}"
         "To allow execution - ONLY for trusted code in a safe/dev or sandbox environment on "
         "synthetic data - the USER grants consent (the model cannot): run "
         f"`touch {marker}` in any terminal (or `! touch {marker}` as the first characters of "
@@ -206,6 +332,33 @@ def _block(cmd: str, segment: str | None = None) -> None:
     sys.exit(2)
 
 
+def _team_invoked_this_session(payload) -> bool:
+    """Session scoping (2026-08-17, user decision): this gate protects the TEAM'S review
+    workflow - never execute the code under review without a human grant - so it arms
+    only in sessions that actually invoked the team. A session in an enabled project
+    that never ran /engage is plain Claude Code and runs its own tests freely (the live
+    complaint: /doctor and ordinary dev work blocked in dormant sessions). The
+    acting-session stamp (artifacts/.team-session.json) is written by engage_probe at
+    /engage step 0 and by every engagement_state mutation; arming requires a positive
+    match, with ONE deliberate inversion versus the advisory lifecycle hooks: a payload
+    carrying NO session id (an older Claude Code) cannot be told apart from an engaged
+    session, and a SAFETY gate fails toward ARMED. The stamp file itself is
+    write-protected in every session by guard-consent-writes (a disarm-by-clobbering
+    channel otherwise). The raw-data wall is NOT session-scoped - data protection holds
+    in every session by design."""
+    sid = payload.get("session_id")
+    if not sid:
+        return True  # cannot tell - fail toward armed
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    try:
+        stamp = json.loads(
+            open(os.path.join(root, "artifacts", ".team-session.json"), encoding="utf-8").read()
+        ).get("session")
+    except Exception:
+        return False  # no stamp = the team was never invoked here - dormant
+    return stamp == sid
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -213,6 +366,10 @@ def main() -> None:
         sys.exit(0)  # malformed payload - never brick the session
 
     if payload.get("tool_name", "") != "Bash":
+        sys.exit(0)
+
+    # Dormant session (team never invoked): plain Claude Code, no execution gate.
+    if not _team_invoked_this_session(payload):
         sys.exit(0)
 
     # Execution authorised (human-created consent marker, or human env-var override).

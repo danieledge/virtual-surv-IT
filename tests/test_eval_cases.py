@@ -236,19 +236,30 @@ def test_planted_line_anchors_within_input(case_dir):
 
 
 def test_scenario_contains_no_answer_key(case_dir):
-    """scenario.md files carry no ground truth or eval banner.
+    """The case's AGENT-VISIBLE INPUT carries no ground truth or eval banner.
 
-    scenario.md is agent-visible (for many cases it IS the input the blind subagent gets),
-    so seeded-issue sections, pointers at expected.yaml, and "this is a behaviour eval"
-    announcements invalidate the case. That content lives in notes.md.
+    The input is what the blind subagent gets, so seeded-issue sections, pointers at
+    expected.yaml, and "this is a behaviour eval" announcements invalidate the case. That
+    content lives in notes.md.
+
+    This used to look for a file literally named `scenario.md` and SKIP when there wasn't one.
+    11 of the 43 cases declare a differently-named input (`input_alert_export.py`,
+    `deploy_surveillance_feed.sh`, `draft_spec.md`, ...), so every code-review case and two of
+    the four injection cases were silently exempt from an integrity check the harness depends
+    on - and a skip reads as "not applicable" rather than "not checked" (audit 2026-08-02; no
+    leak was present at the time, so this closes the hole rather than fixing a breach).
+    The manifest's own `input:` is the source of truth for what the agent sees.
     """
-    scenario = case_dir / "scenario.md"
-    if not scenario.is_file():
-        pytest.skip("case has no scenario.md")
-    text = _norm(scenario.read_text(encoding="utf-8"))
+    expected = _load_expected(case_dir)
+    declared = expected.get("input") or "scenario.md"
+    agent_visible = case_dir / declared
+    assert agent_visible.is_file(), (
+        f"{case_dir.name}: manifest declares input {declared!r} but that file does not exist"
+    )
+    text = _norm(agent_visible.read_text(encoding="utf-8", errors="replace"))
     leaked = [m for m in ANSWER_KEY_MARKERS if m in text]
     assert not leaked, (
-        f"{case_dir.name}: scenario.md contains answer-key markers {leaked} - move the "
+        f"{case_dir.name}: {declared} contains answer-key markers {leaked} - move the "
         "grading content to notes.md (see evals/README.md)"
     )
 

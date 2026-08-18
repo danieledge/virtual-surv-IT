@@ -1,6 +1,6 @@
 # Trade Surveillance Scenario Design - <SCENARIO NAME>
 
-> Produced by `business-analyst` with `trade-surveillance-sme`, before development. Translates a
+> Produced by `business-analyst` consulting the `docs/sme/trade-surveillance.md` pack, before development. Translates a
 > market-abuse behaviour into an implementable, testable design for `rules-developer` (logic) and
 > `tuning-analyst` (parameters). Examples use **synthetic/masked data only** (§5). Authored in
 > `.md`, rendered to `.html`. This is the design, not the production rule.
@@ -110,7 +110,7 @@ Map the scenario to the control(s) it satisfies in the surveillance control fram
 List explicitly; flag SME input needed.
 
 ## 9. Hand-off
-SME review: `trade-surveillance-sme`. Implementer: `rules-developer`. Tuning: `tuning-analyst`.
+SME pack consulted: `docs/sme/trade-surveillance.md`. Implementer: `rules-developer`. Tuning: `tuning-analyst`.
 Coverage feeds into the Surveillance Coverage Assessment.
 
 ## Sign-off

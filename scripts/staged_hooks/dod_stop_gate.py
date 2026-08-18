@@ -32,6 +32,19 @@ Deliberately low-noise and non-blocking:
     can never loop the model forever (warn-first, not hard-block);
   * **fails open** on any internal error - a verification backstop must never brick a stop.
 
+2026-08-03 cross-turn suppression (token-usage audit): the loop-safety above only ever
+covered ONE stop cycle. An engagement left open with an unaddressed, unchanging finding (a
+mid-delivery unrendered .html sibling, a stale map anchor, a user who chose not to fix
+something) re-fired this SAME nudge at every single stop, in every later session in that
+project, until the pack closed or archived - a per-turn tax that compounds with turn count
+and was never noticed because each individual nudge looked correct in isolation. Fixed the
+same way `todo_panel_nudge.py` already solves the analogous one-time-nudge problem: the
+findings are hashed, and the hash is compared against a `dod-nudged:<hash>` marker in the
+gating pack's own `log` (recorded by the model via `log-note`, since every hook in this repo
+stays read-only). Unchanged findings nudge once, then go silent; a NEW or DIFFERENT finding
+set changes the hash and nudges again - the backstop still catches drift, it just stops
+repeating itself.
+
 Stdin: the Stop-hook JSON payload. Stdout: a single JSON `{"decision":"block","reason":...}` for
 the one nudge (which feeds the findings back to the PM to act on), else nothing. Exit code is
 always 0.
@@ -40,14 +53,27 @@ Wired in `.claude/settings.json` + `hooks/hooks.json` -> `hooks.Stop` (it ships 
 config edits are human-only under ADR-002 rec 5). Patches to this file are staged at
 `scripts/staged_hooks/dod_stop_gate.py` and installed by the human via
 `bash scripts/apply-project-anchor.sh`.
+
+2026-08-14 live report (corp Windows dogfooding session, screenshots): a session was nudged
+about an unrelated OPEN engagement while its own most recent message had just asked for a new,
+different review - exactly the case the "proceed with THAT first" branch below exists for. It
+narrated "quick note - fixing the two ... state issues ... before we proceed" and then actually
+fixed them, before starting the new work: diverting into the fix, just a fast one. The wording
+at the time said "rather than diverting into fixing it now," which apparently reads as
+compatible with "but this one's quick" - tightened below to name that exact rationalization and
+rule it out explicitly, and to give a concrete one-line deferral so there's a specific correct
+action to take instead of an abstract instruction to not do something.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
 from pathlib import Path
+
+_NUDGE_MARKER_PREFIX = "dod-nudged:"
 
 
 def _load_input() -> dict:
@@ -57,22 +83,122 @@ def _load_input() -> dict:
         return {}
 
 
-def _reason(findings: list[str]) -> str:
-    bullet = "\n- ".join(findings)
-    return (
-        "🎩 DoD backstop (Stop hook, warn-first): an engagement in this project is still "
-        "OPEN and the mechanical DoD check flags:\n- "
-        f"{bullet}\n\n"
-        "The gate is a FIX-LIST (docs/DEFINITION-OF-DONE.md): AUTO-FIX the deterministic ones "
-        "(render a missing .html sibling, create/refresh the START-HERE index, regenerate a "
-        "stale registry) and re-close; ESCALATE only what needs a human. A final-/"
-        "delivery-report/summary-email flagged before close means a close is UNDERWAY or was "
-        "interrupted - resume and FINISH it (`set-status closing`, complete the close "
-        "artifacts, `check_artifacts --fix`, `set-status closed`); NEVER delete completed "
-        "close deliverables to satisfy the gate. If the engagement is genuinely still "
-        'blocked, end the turn saying so plainly ("NOT closed - outstanding: ...") rather '
-        "than stopping silently. (One-time nudge - it will not fire again this stop cycle.)"
+def _findings_hash(findings: list[str]) -> str:
+    """Stable, order-independent fingerprint of the current finding set - so re-sorting or
+    re-ordering the checker's own output never spuriously looks like "something changed"."""
+    joined = "\n".join(sorted(findings))
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
+
+
+def _already_nudged(pack: Path, findings_hash: str) -> bool:
+    """True if this EXACT finding set was already nudged for this pack - read-only, mirrors
+    todo_panel_nudge.py's marker check. An unreadable or marker-less state file is "not yet
+    nudged", never a suppression (fail toward warning, not toward silence)."""
+    try:
+        state = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    log = state.get("log")
+    if not isinstance(log, list):
+        return False
+    marker = f"{_NUDGE_MARKER_PREFIX}{findings_hash}"
+    return any(marker in str(entry) for entry in log)
+
+
+def _summarise_pack_findings(name: str, findings: list[str]) -> str:
+    """One line per OTHER pack: count + finding CODES only (2026-08-17 live report: the
+    other-engagements section pasted 13 findings' FULL text - schema details, line
+    numbers, the lot - into the console of a session that had just opened unrelated new
+    work; the user read a wall of another engagement's internals and the model then
+    spent 7 minutes fixing it. Surfacing drift needs the existence and the shape, never
+    the body)."""
+    codes: dict[str, int] = {}
+    for f in findings:
+        code = f.split(":", 1)[0].strip() or "FINDING"
+        codes[code] = codes.get(code, 0) + 1
+    detail = ", ".join(f"{c} x{n}" if n > 1 else c for c, n in sorted(codes.items()))
+    return f"[{name}] {len(findings)} finding(s): {detail}"
+
+
+def _reason(
+    active_findings: list[str],
+    other_findings: list[str],
+    slug: str | None,
+    findings_hash: str,
+    session_owned: bool = True,
+) -> str:
+    log_note = (
+        f'engagement_state --slug {slug} log-note "{_NUDGE_MARKER_PREFIX}{findings_hash}"'
+        if slug
+        else f'engagement_state log-note "{_NUDGE_MARKER_PREFIX}{findings_hash}"'
     )
+    other_block = ""
+    if other_findings:
+        other_bullet = "\n- ".join(other_findings)
+        other_block = (
+            "\n\nOther open engagements in this project also have outstanding DoD findings "
+            "(surfaced so silent drift is never missed entirely, but NOT auto-fixed here - "
+            "stay scoped to your active engagement unless the user asks you to switch):\n- "
+            f"{other_bullet}"
+        )
+    if active_findings:
+        bullet = "\n- ".join(active_findings)
+        head = (
+            "🎩 DoD backstop (Stop hook, warn-first): your ACTIVE engagement is still "
+            "OPEN and the mechanical DoD check flags:\n- "
+            f"{bullet}\n\n"
+            "The gate is a FIX-LIST (docs/DEFINITION-OF-DONE.md): AUTO-FIX the deterministic ones "
+            "(render a missing .html sibling, create/refresh the START-HERE index, regenerate a "
+            "stale registry) and re-close; ESCALATE only what needs a human. A final-/"
+            "delivery-report/summary-email flagged before close means a close is UNDERWAY or was "
+            "interrupted - resume and FINISH it (`set-status closing`, complete the close "
+            "artifacts, `check_artifacts --fix`, `set-status closed`); NEVER delete completed "
+            "close deliverables to satisfy the gate. If the engagement is genuinely still "
+            'blocked, end the turn saying so plainly ("NOT closed - outstanding: ...") rather '
+            "than stopping silently. **If the user's own most recent message clearly asked for "
+            "something else - new/different work, not this engagement** - proceed with THAT "
+            'first. Note this nudge in one line (e.g. "noted: N DoD finding(s) on <slug>, '
+            'deferred") and move on - **not even a fast, looks-harmless fix first.** '
+            '"I\'ll just quickly fix this before starting" is still diverting; it is not the '
+            "same as proceeding with THAT first, however small the detour looks, and do **NOT** "
+            f"record `{log_note}` (that marker means the findings were actually acted on - "
+            "recording it while deferring would wrongly suppress a real gap, not postpone it). "
+            "Nothing is lost by deferring this way: this finding set re-arms and nudges again "
+            "the next time a turn ends while this same engagement is still active and gated, so "
+            "it cannot silently drop out of sight - it just doesn't override an explicit request "
+            "you were just given, no matter how quick the detour looks."
+        )
+    elif not session_owned:
+        # NOTHING here belongs to work this session started (2026-08-17 live report:
+        # a fresh engagement's intake ended a turn before its workspace existed, the
+        # ACTIVE marker still named the PREVIOUS engagement, and the model spent 7
+        # minutes repairing it against the deferral rule). No fix-list at all in this
+        # state - existence and shape only, and an explicit do-not-act.
+        head = (
+            "🎩 DoD backstop (Stop hook, warn-first): open engagement(s) in this project "
+            "carry outstanding DoD findings, summarised below. **None of them belongs to "
+            "work this session started - do NOT fix, open or narrate them now.** Continue "
+            "with the user's current request; mention them at most in one line, and only "
+            "switch if the user explicitly asks."
+        )
+    else:
+        # The active engagement itself is clean - only OTHER open engagements have
+        # findings. Still worth one nudge (so a silently-never-closed sibling is never
+        # missed project-wide) but there is nothing here for THIS session to act on.
+        head = (
+            "🎩 DoD backstop (Stop hook, warn-first): your active engagement has no "
+            "outstanding DoD findings of its own."
+        )
+    return (
+        f"{head}"
+        f"{other_block}"
+        "\n\n(One-time nudge - it will not fire again this stop cycle, "
+        f"and once you record `{log_note}` it will not repeat for this SAME finding set in "
+        "any later turn or session either - only a new or changed finding re-arms it.)"
+    )
+
+
+_CHECK_ARTIFACTS_MODULE_CACHE = None
 
 
 def _load_checker(project_root: Path):
@@ -82,15 +208,31 @@ def _load_checker(project_root: Path):
     __file__-relative load: a plugin install runs this hook by absolute path from the
     plugin dir against a foreign project, where no `scripts` package resolves - that was
     the silent no-op. The second candidate covers the staged copy's own location
-    (scripts/staged_hooks/ -> scripts/). None = unavailable (fail open)."""
+    (scripts/staged_hooks/ -> scripts/). None = unavailable (fail open).
+
+    2026-08-03 perf audit: memoized. Since stop_hook_dispatcher.py now runs this hook and
+    todo_panel_nudge.py (which carries the identical loader) in ONE process, each still
+    loading check_artifacts.py as its OWN separate module object - this cache at least
+    stops THIS hook's own repeated calls from re-parsing+re-executing it."""
+    global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
-        sys.path.insert(0, str(project_root))
+        # M3 (2026-08-14 daemon-safety audit): deduped, not an unconditional insert -
+        # same fix as persona_anchor.py's own _load_checker (see its comment for the
+        # full rationale). This hook is re-exec'd fresh per Stop event INSIDE the
+        # daemon when daemon-served (stop_hook_dispatcher.py loads it via importlib on
+        # every call); an unconditional insert would grow the daemon's process-global
+        # sys.path by one more entry per Stop event without bound over the daemon's
+        # life, and risk a stale project's entry shadowing a later one.
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
         from scripts import check_artifacts
 
         return check_artifacts
     # Probe only; fall through to the file-relative loader.
     except Exception:  # nosec B110
         pass
+    if _CHECK_ARTIFACTS_MODULE_CACHE is not None:
+        return _CHECK_ARTIFACTS_MODULE_CACHE
     import importlib.util
 
     here = Path(__file__).resolve()
@@ -103,6 +245,7 @@ def _load_checker(project_root: Path):
                 spec = importlib.util.spec_from_file_location("check_artifacts", candidate)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
+                _CHECK_ARTIFACTS_MODULE_CACHE = module
                 return module
         # A candidate that won't load must not stop the next one being tried.
         except Exception:  # nosec B112
@@ -128,6 +271,28 @@ def main() -> int:
     if not artifacts.is_dir():
         return 0
 
+    # Session scoping (2026-08-16 live report): a pure-dormant "hello" session in a
+    # project holding another session's leftover OPEN pack got the full fix-list and
+    # was pulled into working that engagement - this gate keyed on disk state alone,
+    # so one abandoned pack made dormancy impossible project-wide. Arm only for the
+    # session that actually drove the team: engagement_state stamps the acting
+    # session's id (from CLAUDE_CODE_SESSION_ID) into artifacts/.team-session.json on
+    # every mutating command, and this payload carries this session's own id. Missing
+    # stamp, missing payload id, or mismatch = a session that never engaged - stay
+    # SILENT (user decision: fully dormant; open engagements still surface at the
+    # /engage resume menu, virt-surv go, and the statusline). Fail-direction note:
+    # this deliberately fails toward silence, the opposite of _already_nudged's
+    # fail-toward-warning - dormancy is the promise being kept here.
+    session_id = data.get("session_id")
+    try:
+        stamped = json.loads(
+            (artifacts / ".team-session.json").read_text(encoding="utf-8")
+        ).get("session")
+    except Exception:
+        stamped = None
+    if not session_id or stamped != session_id:
+        return 0
+
     ca = _load_checker(cwd)
     if ca is None:
         return 0  # fail open - never brick a stop over a missing checker
@@ -147,33 +312,99 @@ def main() -> int:
         if not gated:
             return 0
 
-        findings = []
+        # Which of the gated workspaces is the SESSION's active one (ADR-008's
+        # .active-engagement.json, read via the same loader check_artifacts.py itself
+        # uses)? 2026-08-11 fix, live report: a multi-engagement project opened for a
+        # code review in ONE workspace got a single undifferentiated nudge covering
+        # every open pack project-wide, and the reason text said "AUTO-FIX... and
+        # re-close" with no scoping - the session got pulled into fixing unrelated,
+        # unattended engagements it was never asked to touch. The SCAN stays broad on
+        # purpose (that is the whole point of this backstop - catch a close that
+        # silently never ran, anywhere in the project) but the FIX instruction now only
+        # applies to the active engagement; other gated packs are surfaced, not
+        # actioned. No active marker, or only one gated pack: no scoping question to
+        # answer - falls back to the pre-fix, undifferentiated behaviour exactly.
+        # Whose ACTIVE marker is it? (2026-08-17 live report: a new engagement's intake
+        # ended a turn before its workspace init, the marker still named the PREVIOUS
+        # engagement, and the fix-list sent the model off repairing it for 7 minutes
+        # against the deferral rule - prose failed to hold this twice, so it is
+        # mechanical now.) The marker records the SESSION that set it (write_active);
+        # the fix-list is issued only when that session is THIS one. A legacy marker
+        # with no session recorded, or a payload with no session id, keeps the old
+        # slug-based behaviour exactly.
+        active_slug = None
+        active_owned = True
+        try:
+            record = json.loads(
+                (artifacts / ".active-engagement.json").read_text(encoding="utf-8")
+            )
+            active_slug = record.get("slug") or None
+            marker_session = record.get("session")
+            payload_session = data.get("session_id")
+            if marker_session and payload_session:
+                active_owned = marker_session == payload_session
+        except Exception:  # nosec B110
+            active_slug = None
+
+        active_findings: list[str] = []
+        other_findings: list[str] = []
         for name, pack in gated:
             if not name and packs:
-                # Flat pack alongside workspaces: deep rglob checks would cross into the
-                # sibling workspaces - mirror check_artifacts and demand migration instead.
-                findings.append(
+                flat_finding = (
                     "FLAT-PACK-UNMIGRATED: legacy flat pack coexists with workspaces - "
                     "run `python -m scripts.engagement_state migrate`"
                 )
+                # Structural, not any one engagement's - but a fix instruction only for
+                # a session that owns the active work; otherwise surface-only.
+                (active_findings if active_owned else other_findings).append(flat_finding)
                 continue
-            prefix = f"[{name}] " if name else ""
-            findings.extend(f"{prefix}{f}" for f in ca.check(pack))
+            raw = ca.check(pack)
+            if not raw:
+                continue
+            if not active_owned:
+                other_findings.append(_summarise_pack_findings(name or "(flat)", raw))
+            elif active_slug is None or len(gated) == 1 or name == active_slug:
+                prefix = f"[{name}] " if name else ""
+                active_findings.extend(f"{prefix}{f}" for f in raw)
+            else:
+                # OTHER packs are summarised, never pasted in full (the same live
+                # report's other half: 13 findings' full bodies in the console).
+                other_findings.append(_summarise_pack_findings(name, raw))
+        project_findings: list[str] = []
         if packs:
-            # G8: surface registry drift at turn end too; the orphan scan is read-only
-            # here (the CLI checker owns the grandfather snapshot).
-            findings.extend(ca.check_registry(artifacts))
-            findings.extend(ca.check_root_orphans(artifacts))
+            # G8: project-level, not any one engagement's - always surfaced, same as
+            # before (the orphan scan is read-only here - the CLI checker owns the
+            # grandfather snapshot).
+            project_findings.extend(ca.check_registry(artifacts))
+            project_findings.extend(ca.check_root_orphans(artifacts))
         map_path = ca.find_codebase_map(cwd)
         if map_path is not None and map_path.is_file():
-            findings.extend(ca.check_map(map_path))
+            project_findings.extend(ca.check_map(map_path))
+        if project_findings:
+            if active_owned:
+                active_findings.extend(project_findings)
+            else:
+                other_findings.append(_summarise_pack_findings("project", project_findings))
     except Exception:
         return 0  # fail open - never brick a stop over a checker error
 
-    if not findings:
+    if not active_findings and not other_findings:
         return 0
 
-    print(json.dumps({"decision": "block", "reason": _reason(findings)}))
+    findings_hash = _findings_hash(active_findings + other_findings)
+    # Marker home: prefer the flat pack when it's among the gated set (it's what most
+    # single-engagement projects have), else the first gated workspace. Which specific pack
+    # holds the marker is not semantically load-bearing - it is just a durable place to
+    # record "this exact finding set was already nudged", shared across every gated pack.
+    marker_name, marker_pack = next((g for g in gated if not g[0]), gated[0])
+    if _already_nudged(marker_pack, findings_hash):
+        return 0
+
+    slug = marker_name or None
+    reason = _reason(
+        active_findings, other_findings, slug, findings_hash, session_owned=active_owned
+    )
+    print(json.dumps({"decision": "block", "reason": reason}))
     return 0
 
 

@@ -58,12 +58,57 @@ def test_syntax_error_fed_back_during_engagement(tmp_path, monkeypatch, capsys):
     assert "post-edit lint" in err and "syntax" in err
 
 
+def test_py_compile_check_never_spawns_a_subprocess(tmp_path, monkeypatch, capsys):
+    """2026-08-03 perf audit: py_compile runs in-process now (py_compile.compile()), not
+    via `python -m py_compile` as a subprocess - every Write/Edit of a .py file during a
+    live engagement used to pay a full process-spawn cost for a syntax check alone. Forcing
+    subprocess.run to raise proves the syntax-error path truly never shells out - if it
+    still did, this test would fail with the forced exception instead of asserting cleanly."""
+    _live(tmp_path)
+    bad = tmp_path / "rule.py"
+    bad.write_text("def detect(:\n    pass\n", encoding="utf-8")
+
+    mod = _load()
+
+    def _boom(*a, **k):
+        raise AssertionError("subprocess.run must not be called for the py_compile check")
+
+    monkeypatch.setattr(mod.subprocess, "run", _boom)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(json.dumps(_edit(bad))))
+    monkeypatch.setattr(mod.shutil, "which", lambda _name: None)  # also skip ruff's subprocess
+    rc = mod.main()
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "syntax" in err
+
+
 def test_clean_file_stays_silent(tmp_path, monkeypatch, capsys):
     _live(tmp_path)
     ok = tmp_path / "rule.py"
     ok.write_text("def detect(rows):\n    return [r for r in rows if r]\n", encoding="utf-8")
     rc, err = _run(monkeypatch, capsys, _edit(ok), tmp_path)
     assert rc == 0 and err == ""
+
+
+def test_py_compile_check_leaves_no_pycache_next_to_the_edited_file(tmp_path, monkeypatch, capsys):
+    """nit (2026-08-14 perf audit): py_compile.compile() defaults to writing a
+    __pycache__/*.pyc bytecode file right next to the source it checks - pure litter in
+    the user's working tree for what is only ever a syntax check here, on every single
+    Write/Edit during a live engagement. cfile=os.devnull must keep that from
+    happening, on both the clean and the syntax-error path."""
+    _live(tmp_path)
+    ok = tmp_path / "rule.py"
+    ok.write_text("def detect(rows):\n    return [r for r in rows if r]\n", encoding="utf-8")
+    rc, _err = _run(monkeypatch, capsys, _edit(ok), tmp_path)
+    assert rc == 0
+    assert not (tmp_path / "__pycache__").exists()
+
+    bad = tmp_path / "broken_rule.py"
+    bad.write_text("def detect(:\n    pass\n", encoding="utf-8")
+    rc, _err = _run(monkeypatch, capsys, _edit(bad), tmp_path)
+    assert rc == 2
+    assert not (tmp_path / "__pycache__").exists()
 
 
 def test_non_python_files_ignored(tmp_path, monkeypatch, capsys):

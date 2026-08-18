@@ -33,7 +33,7 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      (`EMAIL-AGENT-UNMARKED`) - it is the pack's most-forwarded artifact;
   7. once the engagement is ✅ closed, no content artifact still carries a mutable interim/
      in-progress status banner - the status lives only in START-HERE (`STALE-STATUS`);
-  8. any structured findings pack under `artifacts/data/findings-*.json` validates against
+  8. any structured findings pack under `artifacts/data/findings-*.jsonl` validates against
      `docs/review/findings-schema.json` (`FINDINGS-INVALID`) - the pack is the source of truth a
      report is rendered from. (`artifacts/data/` is machine-readable source; the top-level
      `artifacts/` stays user-navigable .md/.txt/.html and is what the .html-sibling + index checks
@@ -55,6 +55,12 @@ the one-command check the PM runs at the gate instead (docs/DEFINITION-OF-DONE.m
      snapshot allowlist `.dod-root-allowlist.json`, taken on the rule's first run (D2
      ruling 2026-07-29: pre-existing flat files are exempt, the layout applies to new
      work only).
+ 12. a scored-kind findings pack (review / security-audit / performance) that carries
+     findings records its review-scorer pass in the envelope `scoring` field
+     (`PACK-UNSCORED`) - the scorer delegation was silently skipped in two live runs on
+     2026-08-08 after repeated prose fixes, and only a recorded attestation on disk is
+     mechanically checkable; compliance/model-validation packs are exempt (their findings
+     are never score-filtered).
 
 Exit 0 = gate satisfied; exit 1 = findings printed (one line each, machine-readable prefix).
 No third-party dependencies. Output is forced to UTF-8 so the emoji basis tags don't crash a
@@ -75,7 +81,7 @@ import re
 # Used for the git anchor query and for --fix's render_html call - both fixed-argv, no shell.
 import subprocess  # nosec B404
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Map hygiene thresholds (ADR-003: target ~200 lines; the gate hard-flags past 250).
 _MAP_MAX_LINES = 250
@@ -107,6 +113,47 @@ _NOVCS_CELL_RE = re.compile(r"(?i)^[\s`']*no[\s-]?vcs[\s`']*$")
 # field and a stated rationale - CLAUDE.md §4, no unexplained thresholds).
 _MAP_STALENESS_BUDGET = 50
 _STALENESS_BUDGET_RE = re.compile(r"(?i)staleness-budget[^0-9]*(\d+)")
+
+# ADR-007 Phase 1 Chunk C: MAP-DRIFT/MAP-DEAD-POINTER. Backtick-wrapped `path/file.py:123` (or
+# a `:12-34` range) citations inside an entry's own text - the shape every existing map entry
+# already uses (see docs/templates/codebase-map.md's own examples), not a new convention.
+_MAP_CITATION_RE = re.compile(r"`([\w./-]+\.\w+):(\d+)(?:-\d+)?`")
+_FINGERPRINTS_FILENAME = "codebase-map.fingerprints.json"
+
+
+def _split_paths_cell(cell: str) -> list[str]:
+    return [g.strip() for g in cell.split(",") if g.strip()]
+
+
+def _read_map_skeleton_toggle(project_dir: Path) -> bool:
+    """map_skeleton toggle for MAP-DRIFT/MAP-DEAD-POINTER - off by default. Same 3-tier
+    precedence as the docx/citations preferences (project's own team-preferences.json key,
+    present-or-not, wins even if false; else this machine's installer.json default; else
+    built-in False). Deliberately re-derived, not imported, matching
+    engage_probe.read_machine_defaults()'s own stated standalone-runnability rationale - this
+    file must keep working invoked by path in plugin mode, not just as -m scripts.check_artifacts."""
+    try:
+        prefs = json.loads(
+            (project_dir / ".claude" / "team-preferences.json").read_text(encoding="utf-8-sig")
+        )
+        if isinstance(prefs, dict) and "map_skeleton" in prefs:
+            return bool(prefs["map_skeleton"])
+    except (OSError, ValueError):
+        pass
+    try:
+        import os
+
+        base = os.environ.get("XDG_CONFIG_HOME")
+        root = Path(base) if base else Path.home() / ".config"
+        installer_cfg = json.loads(
+            (root / "virt-surv-it" / "installer.json").read_text(encoding="utf-8-sig")
+        )
+        if isinstance(installer_cfg, dict):
+            return bool(installer_cfg.get("default_map_skeleton", False))
+    except (OSError, ValueError):
+        pass
+    return False
+
 
 # Code-without-QA gate: a live engagement (2026-07-21) delivered phase-2 implementation
 # code from inside an analysis workflow and no QA pass ever ran - the DoD items are
@@ -158,9 +205,6 @@ _ROSTER = {
     "mei": "ml-engineer",
     "kenji": "platform-engineer",
     "linh": "qa-engineer",
-    "hassan": "tm-sme",
-    "camila": "trade-surveillance-sme",
-    "cleo": "comms-surveillance-sme",
     "viktor": "model-validator",
     "ravi": "code-reviewer",
     "thabo": "performance-reviewer",
@@ -168,7 +212,20 @@ _ROSTER = {
     "yuki": "data-quality-reviewer",
     "pip": "review-scorer",
 }
-_ROLE_TO_NAME = {slug: name for name, slug in _ROSTER.items()}
+# Retired 2026-08-17 (the SME agents became docs/sme/ knowledge packs, assessment
+# rec 5) but kept RECOGNISED wherever recognition matters: historical artifacts and
+# still-open packs written before the change legitimately carry these attributions
+# and must not start flagging ROSTER-UNKNOWN. Deliberately NOT in _ROSTER: the
+# roster-gate consistency test pins _ROSTER to the operating guide's live roster,
+# and auto-rename suggestions must never propose a retired persona. New artifacts
+# cite the pack, never a persona (docs/sme/README.md).
+_RETIRED = {
+    "hassan": "tm-sme",
+    "camila": "trade-surveillance-sme",
+    "cleo": "comms-surveillance-sme",
+}
+_KNOWN_PERSONAS = {**_ROSTER, **_RETIRED}
+_ROLE_TO_NAME = {slug: name for name, slug in _KNOWN_PERSONAS.items()}
 # A `Name (role)` attribution is only treated as a team-persona claim when the parenthetical is
 # a FULL, hyphenated team role slug. Short forms (`qa`, `ba`, `orchestrator`, `pm`) are
 # DELIBERATELY excluded: they collide with real content - "Airflow (orchestrator)",
@@ -176,7 +233,7 @@ _ROLE_TO_NAME = {slug: name for name, slug in _ROSTER.items()}
 # false-alarm and drive a wrong auto-rename (2026-07-23 review). The one live failure used full
 # slugs ("Chidi (code-reviewer)"), so full-slug matching still catches the real thing. `project-
 # manager` is kept (unambiguous); a bare `sme` is ambiguous (three SMEs) and is not matched.
-_ROLE_ALIASES = {slug: slug for slug in _ROSTER.values() if slug != "pm"}
+_ROLE_ALIASES = {slug: slug for slug in _KNOWN_PERSONAS.values() if slug != "pm"}
 _ROLE_ALIASES["project-manager"] = "pm"
 # Persona attribution pattern: "Name (role)". Name is a single capitalised word.
 _PERSONA_RE = re.compile(r"\b([A-Z][a-z]{2,})\s*\(([A-Za-z][A-Za-z /_-]{1,40})\)")
@@ -191,7 +248,7 @@ _PERSONA_RE = re.compile(r"\b([A-Z][a-z]{2,})\s*\(([A-Za-z][A-Za-z /_-]{1,40})\)
 #     capitalised non-roster name on one line ("sign-off from Layla + Daniel"). Two roster
 #     names joined ("Theo + Ana") is fine; the other token must be name-shaped
 #     ([A-Z][a-z]{2,}), so "Layla + RTM" never trips it.
-_ROSTER_NAMES_RE = "|".join(sorted(n.capitalize() for n in _ROSTER))
+_ROSTER_NAMES_RE = "|".join(sorted(n.capitalize() for n in _KNOWN_PERSONAS))
 _AGENT_JOIN_RE = re.compile(
     rf"\b({_ROSTER_NAMES_RE})\b\s*[+&]\s*([A-Z][a-z]{{2,}})\b"
     rf"|\b([A-Z][a-z]{{2,}})\s*[+&]\s*\b({_ROSTER_NAMES_RE})\b"
@@ -209,7 +266,7 @@ def check_agent_identity(text: str, where: Path) -> list[str]:
     """
     findings: list[str] = []
     has_persona = any(
-        m.group(1).lower() in _ROSTER
+        m.group(1).lower() in _KNOWN_PERSONAS
         and _ROLE_ALIASES.get(re.sub(r"[\s_]+", "-", m.group(2).strip().lower())) is not None
         for m in _PERSONA_RE.finditer(text)
     )
@@ -223,7 +280,7 @@ def check_agent_identity(text: str, where: Path) -> list[str]:
     for m in _AGENT_JOIN_RE.finditer(text):
         agent = m.group(1) or m.group(4)
         other = m.group(2) or m.group(3)
-        if other.lower() in _ROSTER or m.group(0) in seen:
+        if other.lower() in _KNOWN_PERSONAS or m.group(0) in seen:
             continue  # two agents on one line is not an agent+human combination
         seen.add(m.group(0))
         findings.append(
@@ -266,7 +323,7 @@ def check_summary_email(text: str, where: Path) -> list[str]:
             "signed off as 🤖 Morgan, never the human requester (the human's sign-off lives "
             "in the delivery report; DoD / operating guide rule 3)"
         )
-    for name in sorted(_ROSTER):
+    for name in sorted(_KNOWN_PERSONAS):
         cap = name.capitalize()
         name_re = re.compile(rf"\b{cap}\b")
         if not name_re.search(text):
@@ -298,10 +355,19 @@ def check_roster(text: str, where: Path) -> list[str]:
         if name == expected or (name, role) in seen:
             continue
         seen.add((name, role))
-        if name in _ROSTER:
+        if role in _RETIRED.values():
+            # A retired SME role attributed to anyone NEW: the role has no persona any
+            # more - the fix is citing the knowledge pack, never re-attributing.
+            findings.append(
+                f"SME-PACK-ATTRIBUTION: {where} attributes '{m.group(1)} ({role_raw})' but "
+                f"the {role} role is retired (2026-08-17) - new work cites the matching "
+                "docs/sme/ knowledge pack instead of a persona (docs/sme/README.md)"
+            )
+            continue
+        if name in _KNOWN_PERSONAS:
             findings.append(
                 f"ROSTER-ROLE-MISMATCH: {where} attributes '{m.group(1)} ({role_raw})' but "
-                f"{m.group(1)} is the {_ROSTER[name]}; {role} is {expected.capitalize()} "
+                f"{m.group(1)} is the {_KNOWN_PERSONAS[name]}; {role} is {expected.capitalize()} "
                 "(auto-fix: correct to the canonical persona for the role)"
             )
         else:
@@ -345,12 +411,18 @@ _STALE_STATUS_RE = re.compile(
 # Document-control Status fields must be closed out once START-HERE is ✅ CLOSED: a doc still
 # declaring `Status `Draft`` / `In review` under a closed index is the status machinery
 # contradicting the index (independent review 2026-07-25: 5 of 7 "final" docs read Draft).
+# `pending` alone is the same defect under a different word: no template's placeholder uses it
+# (they all say `Draft | In review | Approved`), so a report reading bare `Status `Pending``
+# is scaffolding text an author wrote and never went back to update (live report, 2026-08-03:
+# a closed delivery-report.md and its .html both still read Pending) - not caught before
+# because this pattern only checked for draft/in review/in progress, never pending itself.
 # Judgement item, never auto-fixed - only the PM knows closed vs "pending human sign-off"
 # (the latter, stated in the Status value itself, passes this check).
 _STALE_DOCSTATUS_RE = re.compile(
     r"(?im)^>.*\bStatus\b[ `'·:]*(?:draft\b(?![^`\n]*pending human sign-off)"
     r"|in review\b(?![^`\n]*pending human sign-off)"
-    r"|in progress\b(?![^`\n]*pending human sign-off))"
+    r"|in progress\b(?![^`\n]*pending human sign-off)"
+    r"|pending\b(?!\s+human sign-off))"
 )
 
 
@@ -520,6 +592,19 @@ def find_codebase_map(project_dir: Path) -> Path | None:
     return None
 
 
+def find_codebase_map_area_files(project_dir: Path) -> list[Path]:
+    """ADR-007 Phase 1 Chunk E: `docs/codebase-map.d/*.md` area files - the root map's
+    Index (docs/templates/codebase-map.md) points to these for detail the ~200-line root
+    budget can't hold. Each one is a map in its own right (same doc-control header, same
+    §2 entries shape) and gets the identical per-file hygiene check_map() already runs on
+    the root map - sorted for deterministic output, absent directory is the common case
+    (a project that never ran /map-codebase), not an error."""
+    area_dir = project_dir / "docs" / "codebase-map.d"
+    if not area_dir.is_dir():
+        return []
+    return sorted(p for p in area_dir.glob("*.md") if p.is_file())
+
+
 def _anchor_resolves(sha: str, repo_dir: Path) -> bool | None:
     """True/False if git could answer; None when git/repo is unavailable (skip check)."""
     try:
@@ -560,18 +645,219 @@ def _commits_behind(sha: str, repo_dir: Path) -> int | None:
         return None
 
 
+def _batch_resolve_shas(shas: list[str], repo_dir: Path) -> dict[str, bool | None]:
+    """Resolve MANY commit SHAs in ONE git subprocess instead of one-per-sha (2026-08-03
+    perf audit): check_map()'s entry-anchor loop used to call _anchor_resolves once PER
+    MAP ENTRY, so a well-filled map (capped at 250 lines, plausibly 20-50 unique entry
+    SHAs) meant that many separate `git cat-file -e` process spawns on every gated Stop
+    event. `git cat-file --batch-check` accepts a newline-separated list of revision
+    specifiers on stdin and answers all of them in ONE process, in the SAME order. Same
+    per-sha semantics as _anchor_resolves: True = resolves as a commit, False = git
+    answered but it doesn't resolve (a real staleness finding), None = git/repo
+    unavailable entirely (skip that sha's check, never a false STALE finding)."""
+    if not shas:
+        return {}
+    stdin_text = "".join(f"{sha}^{{commit}}\n" for sha in shas)
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, regex-validated hex shas
+            ["git", "-C", str(repo_dir), "cat-file", "--batch-check=%(objectname) %(objecttype)"],
+            input=stdin_text,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return dict.fromkeys(shas)
+    if "not a git repository" in result.stderr.lower():
+        return dict.fromkeys(shas)
+    lines = result.stdout.splitlines()
+    # git answers one line per input line, in order - zip by position, never by string
+    # match (a RESOLVED line echoes the resolved objectname, not the "<sha>^{commit}"
+    # text we sent; only a MISSING line echoes the literal input back).
+    out: dict[str, bool | None] = dict(zip(shas, (ln.strip().endswith(" commit") for ln in lines)))
+    for sha in shas:
+        out.setdefault(sha, None)  # a git error mid-stream left this sha unanswered - skip it
+    return out
+
+
+# H1 (2026-08-14 perf audit): dod_stop_gate.py's Stop-hook gate calls check_map() on every
+# Stop event while a codebase map exists, each call spawning up to 3 `git` subprocesses
+# (_anchor_resolves, _commits_behind, _batch_resolve_shas) even when nothing has changed
+# since the previous turn - a per-turn tax that compounds with turn count. The three
+# memoized wrappers below key on the CURRENT git HEAD sha (plus the specific sha(s) being
+# asked about), so a Stop event with no new commits since the last one reuses the prior
+# answer instead of re-spawning git. This only helps when check_artifacts runs inside the
+# ADR-014 guard daemon (a persistent process across calls, via its stop_hook_dispatcher
+# target) - a plain per-call fresh-process invocation starts with an empty cache and costs
+# exactly what it always did, never more.
+#
+# Correctness: HEAD itself is deliberately NEVER cached (computed fresh, one cheap spawn,
+# on every check_map() call) - a cached HEAD would silently miss real commits landing
+# between Stop events, permanently freezing MAP-STALE/MAP-STALE-ANCHOR findings at
+# whatever they were the first time. Only the (repo, HEAD, sha) -> answer mapping is
+# memoized, so any commit landing (HEAD moves) invalidates every cached answer for that
+# repo at once, never later - and a HEAD lookup failure (no repo, git unavailable)
+# disables caching for that call entirely rather than caching under a None key.
+_MAP_GIT_CACHE: dict[tuple, object] = {}
+
+
+def _current_head_sha(repo_dir: Path) -> str | None:
+    """One cheap `git rev-parse HEAD`. Always computed fresh by the caller - see
+    _MAP_GIT_CACHE's module comment for why this specific value must never be cached."""
+    try:
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, shell=False
+            ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.decode(errors="replace").strip()
+    return sha or None
+
+
+def _cached_anchor_resolves(sha: str, repo_dir: Path, head: str | None) -> bool | None:
+    key = (str(repo_dir), head, "anchor", sha) if head else None
+    if key is not None and key in _MAP_GIT_CACHE:
+        return _MAP_GIT_CACHE[key]
+    result = _anchor_resolves(sha, repo_dir)
+    if key is not None:
+        _MAP_GIT_CACHE[key] = result
+    return result
+
+
+def _cached_commits_behind(sha: str, repo_dir: Path, head: str | None) -> int | None:
+    key = (str(repo_dir), head, "behind", sha) if head else None
+    if key is not None and key in _MAP_GIT_CACHE:
+        return _MAP_GIT_CACHE[key]
+    result = _commits_behind(sha, repo_dir)
+    if key is not None:
+        _MAP_GIT_CACHE[key] = result
+    return result
+
+
+def _cached_batch_resolve_shas(
+    shas: list[str], repo_dir: Path, head: str | None
+) -> dict[str, bool | None]:
+    key = (str(repo_dir), head, "batch", frozenset(shas)) if head else None
+    if key is not None and key in _MAP_GIT_CACHE:
+        return _MAP_GIT_CACHE[key]
+    result = _batch_resolve_shas(shas, repo_dir)
+    if key is not None:
+        _MAP_GIT_CACHE[key] = result
+    return result
+
+
 def _split_cells(line: str) -> list[str]:
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
 
-def check_map(map_path: Path) -> list[str]:
+def _check_map_drift(
+    map_path: Path, project_dir: Path, drift_rows: list[tuple[int, str, list[str]]]
+) -> list[str]:
+    """MAP-DRIFT: a §2 entry's `Paths` glob no longer matches its recorded fingerprint (or
+    was never fingerprinted at all) - toggle-gated, called only when map_skeleton is on
+    (check_map). Escalate-only, matching the existing precedent that apply_fixes() never
+    auto-resolves map hygiene findings - re-verifying an entry's PROSE against the code it
+    now describes is a judgement call, not something to mechanically "fix".
+
+    Sidecar lives NEXT TO map_path (map_path.parent), never project_dir - matching exactly
+    where scripts.repo_skeleton.write_fingerprints() writes it. Bug found 2026-08-06
+    (building Chunk E): this used to read project_dir/<name>, which only happened to equal
+    map_path.parent when the map lives at the project ROOT - silently wrong for the
+    documented default location (docs/codebase-map.md), where the two paths differ. Fixed on
+    both sides together; project_dir stays a parameter (used elsewhere in this function,
+    below, for globs resolved relative to the project root) but no longer decides where the
+    sidecar itself is looked up.
+
+    M6 (2026-08 Fable audit): MISSING and CORRUPT sidecars used to collapse to the same
+    `entries = {}` fallback - a genuinely absent sidecar (nothing fingerprinted yet, one
+    MAP-DRIFT "never fingerprinted" per row is the right answer) and a PRESENT-but-corrupt
+    one (a real integrity problem - drift cannot be judged at all, and every row reporting
+    "never fingerprinted" is actively misleading about why) read identically to a human
+    fixing it. Missing (OSError - no file) still degrades to the per-row fallback; corrupt
+    (present, but invalid JSON or the wrong shape) now raises its own distinct finding
+    instead of masquerading as "nothing to see here"."""
+    if not drift_rows:
+        return []
+    mf = _load_map_fingerprint_module()
+    if mf is None:
+        return []  # fail open, same posture as every other optional-module load in this file
+    sidecar_path = map_path.parent / _FINGERPRINTS_FILENAME
+    entries: dict = {}
+    findings: list[str] = []
+    try:
+        raw = sidecar_path.read_text(encoding="utf-8")
+    except OSError:
+        pass  # genuinely no sidecar yet - the per-row "never fingerprinted" fallback is correct
+    else:
+        try:
+            sidecar = json.loads(raw)
+            if isinstance(sidecar, dict):
+                entries = sidecar.get("entries") or {}
+            else:
+                raise ValueError("fingerprints sidecar is not a JSON object")
+        except ValueError as exc:
+            findings.append(
+                f"MAP-FINGERPRINTS-INVALID: {sidecar_path} exists but is not readable as "
+                f"fingerprint data ({exc}) - drift cannot be checked against it; regenerate "
+                f"via `<python> -m scripts.repo_skeleton --fingerprint {map_path}`"
+            )
+    for lineno, area, globs in drift_rows:
+        recorded = entries.get(area)
+        if recorded is None:
+            findings.append(
+                f"MAP-DRIFT: {map_path}:{lineno} area {area!r} has a Paths glob but was never "
+                f"fingerprinted - run `<python> -m scripts.repo_skeleton --fingerprint "
+                f"{map_path}` (or `/map-codebase --refresh`)"
+            )
+            continue
+        current = mf.compute_fingerprint(globs, project_dir)
+        if current != recorded.get("fingerprint"):
+            findings.append(
+                f"MAP-DRIFT: {map_path}:{lineno} area {area!r} changed since mapped - "
+                f"re-verify the entry and refresh its fingerprint (`<python> -m "
+                f"scripts.repo_skeleton --fingerprint {map_path}`)"
+            )
+    return findings
+
+
+def _check_map_dead_pointers(
+    map_path: Path, project_dir: Path, citation_checks: list[tuple[int, str]]
+) -> list[str]:
+    """MAP-DEAD-POINTER: a `file:line` citation in an entry's own text that no longer resolves
+    on disk - independent of the fingerprint sidecar, a pure filesystem check. Toggle-gated,
+    called only when map_skeleton is on (check_map)."""
+    findings: list[str] = []
+    for lineno, entry_text in citation_checks:
+        for m in _MAP_CITATION_RE.finditer(entry_text):
+            cited_path = m.group(1)
+            if not (project_dir / cited_path).is_file():
+                findings.append(
+                    f"MAP-DEAD-POINTER: {map_path}:{lineno} cites `{m.group(0)[1:-1]}` - "
+                    f"{cited_path} no longer exists"
+                )
+    return findings
+
+
+def check_map(map_path: Path, project_dir: Path | None = None) -> list[str]:
     """Mechanical hygiene findings for a codebase map; empty means the gate is satisfied.
 
     2026-07-29 register M1/M2/M3/M7: the anchor placeholder no longer passes as no-vcs,
     per-entry As-of/Anchor cells are validated (entry SHAs must resolve), the header anchor
     is bounded against HEAD, entry detection is column-driven (rename-tolerant), and the
-    line cap excludes the Deprecated section ADR-003 mandates keeping."""
+    line cap excludes the Deprecated section ADR-003 mandates keeping.
+
+    ADR-007 Phase 1 Chunk C: MAP-DRIFT (a §2 entry's optional `Paths` glob no longer matches
+    its recorded fingerprint) and MAP-DEAD-POINTER (a `file:line` citation in an entry's own
+    text that no longer resolves on disk) - both gated behind the map_skeleton toggle
+    (_read_map_skeleton_toggle), off by default: a project that hasn't opted in sees zero new
+    findings, identical to pre-Chunk-C behaviour."""
     findings: list[str] = []
+    project_dir = project_dir or map_path.parent
+    map_skeleton_on = _read_map_skeleton_toggle(project_dir)
     text = map_path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
 
@@ -601,8 +887,11 @@ def check_map(map_path: Path) -> list[str]:
         )
     anchor_line = next((ln for ln in lines[:30] if "Anchor" in ln), "")
     anchor_sha = _SHA_RE.search(anchor_line)
+    # H1: one HEAD lookup, shared by every git-derived fact check_map() computes below -
+    # see _MAP_GIT_CACHE's module comment.
+    head = _current_head_sha(map_path.parent)
     if anchor_sha:
-        resolves = _anchor_resolves(anchor_sha.group(0), map_path.parent)
+        resolves = _cached_anchor_resolves(anchor_sha.group(0), map_path.parent, head)
         if resolves is False:
             findings.append(
                 f"MAP-STALE-ANCHOR: header anchor {anchor_sha.group(0)} does not resolve "
@@ -612,7 +901,7 @@ def check_map(map_path: Path) -> list[str]:
             # M3: a resolvable anchor can still be ancient - bound it against HEAD.
             budget_m = _STALENESS_BUDGET_RE.search(header)
             budget = int(budget_m.group(1)) if budget_m else _MAP_STALENESS_BUDGET
-            behind = _commits_behind(anchor_sha.group(0), map_path.parent)
+            behind = _cached_commits_behind(anchor_sha.group(0), map_path.parent, head)
             if behind is not None and behind > budget:
                 findings.append(
                     f"MAP-STALE: header anchor is {behind} commits behind HEAD (budget "
@@ -640,6 +929,10 @@ def check_map(map_path: Path) -> list[str]:
     # a real Anchor (SHA or the strict no-vcs token). Entry SHAs must resolve (M2: they
     # read as verified provenance on resume, so they may not be decorative).
     entry_shas: dict[str, int] = {}
+    # ADR-007 Phase 1 Chunk C - gathered during the same scan, only when the toggle is on
+    # (an empty list either way costs nothing extra below when map_skeleton_on is False).
+    drift_rows: list[tuple[int, str, list[str]]] = []  # lineno, area, globs
+    citation_checks: list[tuple[int, str]] = []  # lineno, entry cell text
     columns: dict[str, int] | None = None
     found_entry_table = False
     for lineno, line in enumerate(lines, start=1):
@@ -680,6 +973,37 @@ def check_map(map_path: Path) -> list[str]:
                     f"neither a commit SHA nor `no-vcs` ({cell[:30]!r}) - entry provenance "
                     "may not be decorative (ADR-003)"
                 )
+        if map_skeleton_on:
+            # Substring lookups throughout (not columns.get("area")/("entry") exact-match) -
+            # matching the same rename-tolerant column-driven design already used for
+            # asof_idx/anchor_idx/paths_idx above. Bug found 2026-08-06 (Chunk E): "entry"
+            # was an exact-match .get() while every sibling column used a substring search,
+            # so it never matched the documented template's own header ("Entry (a durable
+            # code fact - NOT a finding or an activity note)") - MAP-DEAD-POINTER silently
+            # never fired for any project that followed the template as written.
+            #
+            # The sidecar KEY per row is the Area column on the root map (many areas, one
+            # table) but an ID column on an area file (one area, many entries, no Area
+            # column to key on - docs/templates/codebase-map-area.md) - try Area first,
+            # fall back to ID, so ONE function handles both table shapes with no bespoke
+            # area-file branch.
+            key_idx = next((i for n, i in columns.items() if "area" in n), None)
+            if key_idx is None:
+                key_idx = next((i for n, i in columns.items() if "id" in n), None)
+            paths_idx = next((i for n, i in columns.items() if "paths" in n), None)
+            if (
+                key_idx is not None
+                and paths_idx is not None
+                and key_idx < len(cells)
+                and paths_idx < len(cells)
+            ):
+                area = cells[key_idx].strip()
+                globs = _split_paths_cell(cells[paths_idx])
+                if area and globs:
+                    drift_rows.append((lineno, area, globs))
+            entry_idx = next((i for n, i in columns.items() if "entry" in n), None)
+            if entry_idx is not None and entry_idx < len(cells):
+                citation_checks.append((lineno, cells[entry_idx]))
     if not found_entry_table:
         # Fallback for legacy maps whose entries table predates the Basis column: the old
         # section-name scan, so their rows still get the basis check.
@@ -701,12 +1025,17 @@ def check_map(map_path: Path) -> list[str]:
                     f"MAP-NO-BASIS: {map_path}:{lineno} map entry has no 📊 observed / 🧠 "
                     "inferred tag - every entry must state its evidence basis"
                 )
+    resolved = _cached_batch_resolve_shas(list(entry_shas), map_path.parent, head)
     for sha, lineno in sorted(entry_shas.items(), key=lambda kv: kv[1]):
-        if _anchor_resolves(sha, map_path.parent) is False:
+        if resolved.get(sha) is False:
             findings.append(
                 f"MAP-STALE-ENTRY-ANCHOR: {map_path}:{lineno} entry anchor {sha} does not "
                 "resolve in this repository - re-verify the entry and refresh its anchor"
             )
+
+    if map_skeleton_on:
+        findings.extend(_check_map_drift(map_path, project_dir, drift_rows))
+        findings.extend(_check_map_dead_pointers(map_path, project_dir, citation_checks))
 
     for pattern, label in _SECRET_PATTERNS:
         if pattern.search(text):
@@ -718,36 +1047,262 @@ def check_map(map_path: Path) -> list[str]:
     return findings
 
 
+_VALIDATE_FINDINGS_MODULE_CACHE = None
+_FINDINGS_PACK_IO_MODULE_CACHE = None
+
+
+def _load_findings_pack_io_module():
+    """Import scripts.findings_pack_io in BOTH run modes - same dual-mode pattern and
+    memoization as _load_validate_findings_module below."""
+    global _FINDINGS_PACK_IO_MODULE_CACHE
+    try:
+        from scripts import findings_pack_io  # normal `-m` / package mode
+
+        return findings_pack_io
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _FINDINGS_PACK_IO_MODULE_CACHE is not None:
+        return _FINDINGS_PACK_IO_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("findings_pack_io.py")
+        spec = importlib.util.spec_from_file_location("findings_pack_io", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _FINDINGS_PACK_IO_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
+def _load_validate_findings_module():
+    """Import scripts.validate_findings in BOTH run modes - same dual-mode pattern and
+    memoization as _load_engagement_state_module / _load_validate_rtm_module above.
+
+    2026-08-03 perf audit: check_findings_packs() used to shell out to this script (one
+    subprocess PER PACK - a review with several passes/re-reviews means several packs, so
+    several process spawns on every gated Stop event) specifically to stay path-independent
+    in plugin mode. The __file__-relative fallback branch here gives the exact same
+    path-independence without a subprocess: it resolves the file next to this one, exactly
+    as the subprocess invocation did, just executed in-process."""
+    global _VALIDATE_FINDINGS_MODULE_CACHE
+    try:
+        from scripts import validate_findings  # normal `-m` / package mode
+
+        return validate_findings
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _VALIDATE_FINDINGS_MODULE_CACHE is not None:
+        return _VALIDATE_FINDINGS_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("validate_findings.py")
+        spec = importlib.util.spec_from_file_location("validate_findings", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _VALIDATE_FINDINGS_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
+_RENDER_FINDINGS_MODULE_CACHE = None
+_RENDER_HTML_MODULE_CACHE = None
+
+
+def _load_render_findings_module():
+    """Import scripts.render_findings in BOTH run modes - same dual-mode pattern and
+    memoization as _load_validate_findings_module above.
+
+    2026-08-05 perf fix: apply_fixes() used to shell out to this script once PER PACK,
+    immediately followed by one subprocess spawn PER UN-RENDERED .md (see
+    _load_render_html_module below) - on a host where every python.exe spawn is inflated by
+    endpoint-security scanning (corp Windows), a handover pack with several deliverables
+    chained enough untimed spawns to present as the whole close step hanging. Both loops in
+    apply_fixes() now call the render function in-process instead."""
+    global _RENDER_FINDINGS_MODULE_CACHE
+    try:
+        from scripts import render_findings
+
+        return render_findings
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _RENDER_FINDINGS_MODULE_CACHE is not None:
+        return _RENDER_FINDINGS_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("render_findings.py")
+        spec = importlib.util.spec_from_file_location("render_findings", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _RENDER_FINDINGS_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
+def _load_render_html_module():
+    """Import scripts.render_html in BOTH run modes - same dual-mode pattern as
+    _load_render_findings_module above (2026-08-05 perf fix)."""
+    global _RENDER_HTML_MODULE_CACHE
+    try:
+        from scripts import render_html
+
+        return render_html
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _RENDER_HTML_MODULE_CACHE is not None:
+        return _RENDER_HTML_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("render_html.py")
+        spec = importlib.util.spec_from_file_location("render_html", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _RENDER_HTML_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
+_MAP_FINGERPRINT_MODULE_CACHE = None
+
+
+def _load_map_fingerprint_module():
+    """Import scripts.map_fingerprint in BOTH run modes - same dual-mode pattern as
+    _load_render_findings_module above (ADR-007 Phase 1 Chunk C: MAP-DRIFT needs
+    compute_fingerprint to agree byte-for-byte with what repo_skeleton --fingerprint wrote)."""
+    global _MAP_FINGERPRINT_MODULE_CACHE
+    try:
+        from scripts import map_fingerprint
+
+        return map_fingerprint
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _MAP_FINGERPRINT_MODULE_CACHE is not None:
+        return _MAP_FINGERPRINT_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("map_fingerprint.py")
+        spec = importlib.util.spec_from_file_location("map_fingerprint", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _MAP_FINGERPRINT_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
 def check_findings_packs(artifacts_dir: Path) -> list[str]:
-    """Validate any structured findings pack under artifacts/data/ against the schema. Shells out to
-    validate_findings (by path, NOT an import) so this stays path-independent - an installed plugin
-    invokes scripts by absolute path. A pack that fails is FINDINGS-INVALID: the model fixes the
-    DATA, not the rendered report. Inert until packs exist (fails open if the validator won't run).
-    Recursive over the data/ lane (2026-07-29 register P5: nested packs went unvalidated)."""
+    """Validate any structured findings pack under artifacts/data/ against the schema,
+    in-process (2026-08-03 perf audit - was one subprocess spawn per pack). A pack that
+    fails is FINDINGS-INVALID: the model fixes the DATA, not the rendered report. Inert
+    until packs exist (fails open if the validator module won't load). Recursive over the
+    data/ lane (2026-07-29 register P5: nested packs went unvalidated)."""
     findings: list[str] = []
     data_dir = artifacts_dir / "data"
     if not data_dir.is_dir():
         return findings
-    validator = Path(__file__).with_name("validate_findings.py")
-    for pack in sorted(data_dir.rglob("findings-*.json")):
+    vf = _load_validate_findings_module()
+    if vf is None:
+        return findings  # validator unavailable - fail open, same posture as before
+    for pack in sorted(data_dir.rglob("findings-*.jsonl")):
         try:
-            result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
-                [sys.executable, str(validator), str(pack)],
-                capture_output=True,
-                text=True,
-            )
+            errs = vf.load_and_validate(pack)
+        except (OSError, ValueError) as exc:
+            findings.append(f"FINDINGS-INVALID: {pack.name} - cannot read/parse {pack}: {exc}")
+            continue
+        except Exception:  # nosec B112 - deliberate fail-open, see comment below
+            continue  # an unexpected validator crash must not brick the gate (fail open)
+        if errs:
+            findings.append(f"FINDINGS-INVALID: {pack.name} - " + "; ".join(errs))
+    return findings
+
+
+# Kinds whose findings are genuinely scored and filtered by review-scorer
+# (docs/code-review-method.md): compliance/model-validation are never score-filtered, and
+# the scorer's dedup pass over those is optional - so they are exempt from PACK-UNSCORED.
+_SCORED_PACK_KINDS = {"review", "security-audit", "performance"}
+_SCORER_ATTEST_RE = re.compile(r"(?i)review[-_ ]?scorer")
+
+
+def check_findings_scoring(artifacts_dir: Path) -> list[str]:
+    """PACK-UNSCORED: a scored-kind findings pack must record its review-scorer pass.
+
+    Born of two live runs on 2026-08-08 (a Flask review and a full-lifecycle golden case)
+    where the review-scorer delegation was silently skipped in BOTH, after two prior prose
+    strengthenings of the same rule - the pipeline step exists only in instructions the
+    orchestrator does not reliably follow, and nothing on disk evidenced whether it ran.
+    This makes the evidence mechanical: a pack of a scored kind (review / security-audit /
+    performance - docs/code-review-method.md: those findings are genuinely filtered, and
+    the scorer still runs even after self-scoring) that carries findings must record the
+    scorer pass in its envelope `scoring` field. By construction never a wrong accusation:
+    a pack that WAS scored but not recorded has a real provenance gap, and the fix is to
+    record the pass - same posture as STALE-FINDINGS-RENDER. Judgement item, never
+    auto-fixed (recording a scorer pass that never ran would be fabrication)."""
+    findings: list[str] = []
+    data_dir = artifacts_dir / "data"
+    if not data_dir.is_dir():
+        return findings
+    fp_io = _load_findings_pack_io_module()
+    if fp_io is None:
+        return findings  # loader unavailable - fail open, same posture as before
+    unscored: list[tuple[Path, int]] = []
+    for pack_path in sorted(data_dir.rglob("findings-*.jsonl")):
+        try:
+            pack = fp_io.read_pack(pack_path)
         except (OSError, ValueError):
-            continue  # a validator that won't launch shouldn't brick the gate (fail open)
-        if result.returncode != 0:
-            detail = (
-                "; ".join(
-                    ln.split("FINDINGS-INVALID:", 1)[1].strip()
-                    for ln in result.stdout.splitlines()
-                    if ln.startswith("FINDINGS-INVALID:")
-                )
-                or "schema validation failed"
-            )
-            findings.append(f"FINDINGS-INVALID: {pack.name} - {detail}")
+            continue  # FINDINGS-INVALID already covers unreadable/malformed packs
+        except Exception:  # nosec B112 - deliberate fail-open, see comment below
+            continue  # fail open - an unexpected reader crash must not brick the gate
+        if not isinstance(pack, dict):
+            continue
+        if pack.get("kind", "review") not in _SCORED_PACK_KINDS:
+            continue
+        n = len(pack.get("findings") or [])
+        if n == 0:
+            continue  # a clean pack has nothing to score/filter
+        scoring = pack.get("scoring")
+        if isinstance(scoring, str) and _SCORER_ATTEST_RE.search(scoring):
+            continue
+        unscored.append((pack_path, n))
+    if not unscored:
+        return findings
+    if len(unscored) == 1:
+        pack_path, n = unscored[0]
+        findings.append(
+            f"PACK-UNSCORED: {pack_path.name} carries {n} finding(s) but its envelope "
+            "records no review-scorer pass - code/performance findings are scored and "
+            "filtered by review-scorer, even after self-scoring "
+            "(docs/code-review-method.md). Dispatch review-scorer over the pack, apply "
+            "its numbers, then record the pass in the envelope's `scoring` field (e.g. "
+            '"scored by review-scorer: Found N · Reported R · Filtered F"); if the '
+            "scorer already ran, record that pass there (judgement item, never "
+            "auto-fixed)"
+        )
+        return findings
+    # 2026-08-12 live report: with the old one-string-per-pack shape, several unscored
+    # packs in the same engagement (a live corp session hit 3 in one, plus more across
+    # sibling engagements in the same project) each repeated the full explanatory
+    # paragraph verbatim - a wall of near-identical text for what is really one
+    # instruction ("dispatch review-scorer") applied to a short list of packs. State the
+    # shared explanation once; list the affected packs concisely rather than repeating it.
+    packs_desc = "; ".join(f"{p.name} ({n} finding(s))" for p, n in unscored)
+    findings.append(
+        f"PACK-UNSCORED: {len(unscored)} packs carry findings but their envelopes "
+        "record no review-scorer pass - code/performance findings are scored and "
+        "filtered by review-scorer, even after self-scoring "
+        "(docs/code-review-method.md). Dispatch review-scorer over each pack, apply "
+        "its numbers, then record the pass in the envelope's `scoring` field (e.g. "
+        '"scored by review-scorer: Found N · Reported R · Filtered F"); if the '
+        "scorer already ran, record that pass there (judgement item, never "
+        f"auto-fixed). Affected: {packs_desc}"
+    )
     return findings
 
 
@@ -763,7 +1318,7 @@ def check_findings_render_freshness(artifacts_dir: Path) -> list[str]:
     still is, a prose re-read-every-document instruction. This closes the two pieces that
     ARE mechanically checkable without inventing a new textual convention: does the
     rendered REVIEW-<slug>.md's finding-ID set and disposition tally still match the
-    CURRENT data/findings-<slug>.json pack, or did the pack change after the last render
+    CURRENT data/findings-<slug>.jsonl pack, or did the pack change after the last render
     (a fix cycle, a re-review) without a re-render catching up. (Late-cycle prose changes
     and struck-citation sweeping stay judgement calls - no existing marker distinguishes a
     struck citation from a live one in free text, so a mechanical check there would be
@@ -772,9 +1327,12 @@ def check_findings_render_freshness(artifacts_dir: Path) -> list[str]:
     data_dir = artifacts_dir / "data"
     if not data_dir.is_dir():
         return findings
-    for pack_path in sorted(data_dir.rglob("findings-*.json")):
+    fp_io = _load_findings_pack_io_module()
+    if fp_io is None:
+        return findings  # loader unavailable - fail open, same posture as before
+    for pack_path in sorted(data_dir.rglob("findings-*.jsonl")):
         try:
-            pack = json.loads(pack_path.read_text(encoding="utf-8"))
+            pack = fp_io.read_pack(pack_path)
         except (OSError, ValueError):
             continue  # FINDINGS-INVALID already covers unreadable/malformed packs
         if not isinstance(pack, dict):
@@ -825,10 +1383,21 @@ def check_findings_render_freshness(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+_ENGAGEMENT_STATE_MODULE_CACHE = None
+
+
 def _load_engagement_state_module():
     """Import scripts.engagement_state in BOTH run modes (package import when available,
     __file__-relative load under direct-path plugin invocation). None = module unavailable;
-    the state checks then skip rather than brick the gate."""
+    the state checks then skip rather than brick the gate.
+
+    2026-08-03 perf audit: this is called 6+ times across one check_artifacts run (check_state,
+    check_registry, check_root_orphans, ...), and in plugin mode (no `scripts` package on
+    path, so the fast branch always fails) the fallback used to re-parse and re-exec this
+    file from scratch on every single call. Memoized in a module-level variable - not
+    sys.modules, so this cache can never collide with an unrelated `engagement_state` some
+    other import path might load."""
+    global _ENGAGEMENT_STATE_MODULE_CACHE
     try:
         from scripts import engagement_state  # normal `-m` / package mode
 
@@ -836,6 +1405,8 @@ def _load_engagement_state_module():
     # Probe only; fall through to the file-relative loader.
     except Exception:  # nosec B110
         pass
+    if _ENGAGEMENT_STATE_MODULE_CACHE is not None:
+        return _ENGAGEMENT_STATE_MODULE_CACHE
     try:
         import importlib.util
 
@@ -843,17 +1414,24 @@ def _load_engagement_state_module():
         spec = importlib.util.spec_from_file_location("engagement_state", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _ENGAGEMENT_STATE_MODULE_CACHE = module
         return module
     except Exception:
         return None
 
 
-def check_state(artifacts_dir: Path) -> list[str]:
+def check_state(artifacts_dir: Path, _all_md: list[Path] | None = None) -> list[str]:
     """Machine-readable engagement state (ADR-006): `engagement-state.json` is the
     authoritative lifecycle record and START-HERE.md is rendered from it. Advisory during
     migration: a legacy engagement with no state file raises nothing - but an index that
     CLAIMS state generation with the state file gone, an invalid state file, or a render
-    that no longer matches the state (by embedded state-hash) are real integrity findings."""
+    that no longer matches the state (by embedded state-hash) are real integrity findings.
+
+    `_all_md` (2026-08-03 perf audit): an optional pre-walked `sorted(artifacts_dir.rglob(
+    "*.md"))` that check() shares across its several .md-scanning sub-checks, so a gated
+    Stop event pays for ONE recursive walk instead of one per sub-check. None (the default,
+    and always the case for a direct/standalone call) means "walk it yourself" - behaviour
+    is identical either way, this only changes whether the walk is shared or fresh."""
     findings: list[str] = []
     es = _load_engagement_state_module()
     if es is None:
@@ -910,7 +1488,7 @@ def check_state(artifacts_dir: Path) -> list[str]:
                     "(--fix re-renders and backs the hand-edited file up)"
                 )
 
-    findings.extend(_check_ratified_claims(artifacts_dir, state))
+    findings.extend(_check_ratified_claims(artifacts_dir, state, _all_md=_all_md))
     return findings
 
 
@@ -926,10 +1504,15 @@ _RATIFIED_NEGATE_RE = re.compile(
 _RATIFY_STOPWORDS = {"ratification", "ratified", "decision", "close", "human"}
 
 
-def _check_ratified_claims(artifacts_dir: Path, state: dict) -> list[str]:
+def _check_ratified_claims(
+    artifacts_dir: Path, state: dict, _all_md: list[Path] | None = None
+) -> list[str]:
     """RATIFIED-CLAIM-PENDING (2026-07-26 live-run review, consolidated finding 2): the FSD
     asserted "ops-lead ratified" while the decision log said pending. When the state records
-    a ratification as pending, no artifact may assert it as given. Escalate, never auto-fix."""
+    a ratification as pending, no artifact may assert it as given. Escalate, never auto-fix.
+
+    `_all_md`: see check_state()'s docstring - an optional pre-walked file list, shared by
+    check() across its sub-checks; None walks fresh (identical result, just not shared)."""
     pending = [
         r
         for r in state.get("ratifications") or []
@@ -939,7 +1522,8 @@ def _check_ratified_claims(artifacts_dir: Path, state: dict) -> list[str]:
         return []
     findings: list[str] = []
     data_dir = artifacts_dir / "data"
-    for md in sorted(artifacts_dir.rglob("*.md")):
+    md_source = _all_md if _all_md is not None else sorted(artifacts_dir.rglob("*.md"))
+    for md in md_source:
         if md.name.upper() == "START-HERE.MD" or data_dir in md.parents:
             continue  # the index renders the pending list itself
         text = md.read_text(encoding="utf-8", errors="replace")
@@ -1017,10 +1601,15 @@ _RTM_GATE_CODES = {
 _RTM_DETAIL_CAP = 3
 
 
+_VALIDATE_RTM_MODULE_CACHE = None
+
+
 def _load_validate_rtm_module():
     """Import scripts.validate_rtm in BOTH run modes (package import, else a __file__-relative
     load under direct-path plugin invocation). None = unavailable; the RTM check then skips
-    rather than bricking the gate - the same posture _load_engagement_state_module takes."""
+    rather than bricking the gate - the same posture _load_engagement_state_module takes.
+    Memoized the same way, for the same reason (2026-08-03 perf audit)."""
+    global _VALIDATE_RTM_MODULE_CACHE
     try:
         from scripts import validate_rtm
 
@@ -1028,6 +1617,8 @@ def _load_validate_rtm_module():
     # Probe only; fall through to the file-relative loader.
     except Exception:  # nosec B110
         pass
+    if _VALIDATE_RTM_MODULE_CACHE is not None:
+        return _VALIDATE_RTM_MODULE_CACHE
     try:
         import importlib.util
 
@@ -1035,12 +1626,15 @@ def _load_validate_rtm_module():
         spec = importlib.util.spec_from_file_location("validate_rtm", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _VALIDATE_RTM_MODULE_CACHE = module
         return module
     except Exception:
         return None
 
 
-def check_rtm(artifacts_dir: Path, project_root: Path | None = None) -> list[str]:
+def check_rtm(
+    artifacts_dir: Path, project_root: Path | None = None, _all_md: list[Path] | None = None
+) -> list[str]:
     """Gate the traceability spine of any RTM in the pack (CLAUDE.md §8).
 
     A missing RTM is NOT a finding - most engagements never author one, and absence is the
@@ -1048,12 +1642,16 @@ def check_rtm(artifacts_dir: Path, project_root: Path | None = None) -> list[str
     that no longer exists (RTM-UNRESOLVED) or a requirement with neither an obligation nor a
     gap disposition (RTM-INCOMPLETE) is a real defect. Findings are aggregated per file and
     per code, and carry the command that reproduces the detail.
+
+    `_all_md`: see check_state()'s docstring - an optional pre-walked file list, shared by
+    check() across its sub-checks; None walks fresh (identical result, just not shared).
     """
     validate_rtm = _load_validate_rtm_module()
     if validate_rtm is None:
         return []
     findings: list[str] = []
-    for rtm in sorted(artifacts_dir.rglob("*.md")):
+    md_source = _all_md if _all_md is not None else sorted(artifacts_dir.rglob("*.md"))
+    for rtm in md_source:
         if not rtm.stem.lower().startswith("rtm") or _under_archive(rtm, artifacts_dir):
             continue
         try:
@@ -1085,18 +1683,25 @@ def check(artifacts_dir: Path) -> list[str]:
         # check is meaningful only once artifacts exist.)
         return findings
 
+    # ONE recursive walk for every .md-scanning sub-check below to share (2026-08-03 perf
+    # audit: check_state -> _check_ratified_claims and check_rtm each independently
+    # rglob("*.md")'d the same tree check() itself also scans a few lines down - a gated
+    # Stop event paid for that walk 3+ times over). Each sub-check still applies its OWN
+    # filter to this shared, UNfiltered list exactly as it did to its own fresh rglob() -
+    # only the walk is shared, no filtering logic changed.
+    all_md = sorted(artifacts_dir.rglob("*.md"))
+
     findings.extend(check_findings_packs(artifacts_dir))
     findings.extend(check_findings_render_freshness(artifacts_dir))
-    findings.extend(check_state(artifacts_dir))
+    findings.extend(check_findings_scoring(artifacts_dir))
+    findings.extend(check_state(artifacts_dir, _all_md=all_md))
     findings.extend(check_review_fingerprints(artifacts_dir))
-    findings.extend(check_rtm(artifacts_dir))
+    findings.extend(check_rtm(artifacts_dir, _all_md=all_md))
     # artifacts/data/ holds machine-readable source (findings packs); the top-level artifacts/ is the
     # user-navigable set. Exclude the data/ subtree from the .md/.html-sibling and index scans.
     data_dir = artifacts_dir / "data"
     md_files = [
-        m
-        for m in sorted(artifacts_dir.rglob("*.md"))
-        if data_dir not in m.parents and not _under_archive(m, artifacts_dir)
+        m for m in all_md if data_dir not in m.parents and not _under_archive(m, artifacts_dir)
     ]
     for md in md_files:
         # The summary email must be a .txt; a .md copy is the wrong type, not a missing render -
@@ -1229,13 +1834,25 @@ def check(artifacts_dir: Path) -> list[str]:
         )
     if start_here is not None:
         index_text = start_here.read_text(encoding="utf-8", errors="replace")
-        status = _index_status(index_text)
-        if status is None:
+        if _index_status(index_text) is None:
             findings.append(
                 f"INDEX-NO-STATUS: {start_here} has no readable engagement Status line "
                 "(⏳ in progress / ⛔ blocked - awaiting input / ✅ closed) - state must be "
                 "visible so an interim pack is never mistaken for a delivery"
             )
+        # C8 (2026-08 audit): this used to be _index_status(index_text) directly - reading
+        # ONLY the rendered index, never the state file. Register G5 made pack_status()
+        # the one shared status rule (state file authoritative, index fallback) precisely
+        # to kill exactly this class of divergent parser; check() alone kept the old
+        # index-only read, so a not-yet-rendered index could either spuriously trip
+        # FINAL-BEFORE-CLOSE/SUMMARY-BEFORE-CLOSE against a pack the state file already
+        # calls closed, or - the dangerous direction - a stale/hand-edited index reading
+        # "closed" while the state file says otherwise would silently WAIVE the close-only
+        # gate for a pack that was never actually closed. INDEX-NO-STATUS above still
+        # checks the index text specifically (a human reader needs a visible status line
+        # regardless of what the state file says); everything gating on the overall
+        # engagement status now agrees with apply_fixes() and the hooks.
+        status = pack_status(artifacts_dir)
         # Every artifact file must be listed in the index (by name), and every local link
         # in the index must resolve - the two directions of index staleness.
         listable = (
@@ -1278,7 +1895,16 @@ def check(artifacts_dir: Path) -> list[str]:
     # branch, disarming every close-only guard exactly when the team forgot the index
     # (the 2026-07-22 failure class). A 🔒 closing pack is the sanctioned close window:
     # close artifacts are legitimate there, and nothing demands them yet (register R5).
-    summaries = sorted(artifacts_dir.rglob("engagement-summary-*.txt"))
+    # C6 (2026-08 audit): this rglob was the one recursive summary-email scan in check()
+    # that did NOT exclude .archive'd subtrees (compare the same pattern applied a few
+    # lines up for stray START-HERE.html/summary files and code artifacts) - a summary
+    # email left behind under an archived nested pack was flagged as SUMMARY-BEFORE-CLOSE
+    # against the OUTER, still-open pack that never wrote it.
+    summaries = sorted(
+        s
+        for s in artifacts_dir.rglob("engagement-summary-*.txt")
+        if not _under_archive(s, artifacts_dir)
+    )
     not_closed = status in ("open", "blocked") or status is None
     if not_closed:
         state = status or ("no index" if start_here is None else "not readable")
@@ -1334,12 +1960,20 @@ def check(artifacts_dir: Path) -> list[str]:
 def apply_fixes(artifacts_dir: Path) -> list[str]:
     """Mechanically resolve the auto-fixable DoD defects (docs/DEFINITION-OF-DONE.md 'AUTO-FIX'
     class) so the close does not depend on the model remembering each step:
-      * render each findings pack (artifacts/data/findings-*.json) to its canonical
+      * render each findings pack (artifacts/data/findings-*.jsonl) to its canonical
         REVIEW-<slug>.md - AT CLOSE ONLY (🔒 closing / ✅ closed; D4 ruling 2026-07-29,
         register P3: the tool used to manufacture mid-engagement the very artifact the
         prose declares close-only);
       * normalise a mis-typed engagement-summary email (.md / .html) to the required .txt;
+      * re-render START-HERE.md from the authoritative state when its embedded content
+        hash is stale (STATE-STALE-RENDER), or back up and re-render it when its content
+        no longer matches its own embedded hash (INDEX-HAND-EDITED - ADR-006: the index
+        is a generated view, so a hand-edit is preserved to a `.bak` sibling, never lost,
+        then overwritten by the regenerated render);
       * render every remaining .md that lacks its .html sibling.
+    M4 (2026-08 Fable audit): this docstring used to list only 3 of these 4 fix classes -
+    the STATE-STALE-RENDER/INDEX-HAND-EDITED re-render (below, before the generic .md
+    render pass) is real behaviour that predates this note, just previously undocumented.
     Returns a log of what changed; idempotent (a second run is a no-op)."""
     fixed: list[str] = []
     if not artifacts_dir.is_dir():
@@ -1350,21 +1984,24 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
     # an invalid pack (that surfaces as FINDINGS-INVALID from the check, not a silent bad report).
     data_dir = artifacts_dir / "data"
     if data_dir.is_dir() and pack_status(artifacts_dir) in ("closing", "closed"):
-        renderer = Path(__file__).with_name("render_findings.py")
-        for pack in sorted(data_dir.glob("findings-*.json")):
-            result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path
-                [sys.executable, str(renderer), str(pack)],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0:
-                fixed.append(
-                    f"FIXED: rendered {result.stdout.split('-> ')[-1].strip()} from {pack.name}"
-                )
-            # non-zero = invalid pack; the FINDINGS-INVALID check reports it, don't double-flag here
+        rf = _load_render_findings_module()
+        if rf is not None:  # fail open if the renderer module won't load, same posture as
+            for pack in sorted(data_dir.glob("findings-*.jsonl")):  # check_findings_packs()
+                try:
+                    out = rf.render_pack_file(pack)
+                except Exception:  # nosec B112 - deliberate fail-open, see comment below
+                    continue  # invalid pack; FINDINGS-INVALID reports it, don't double-flag
+                fixed.append(f"FIXED: rendered {out} from {pack.name}")
 
     # Normalise the email FIRST so the render pass never renders a mis-typed .md email.
+    # C7 (2026-08 audit): every rglob below is now filtered through _under_archive, the
+    # same guard check() itself uses for the equivalent scans - an archived pack is
+    # frozen (out of scope everywhere else), so --fix must not rename, delete or
+    # re-render anything inside one. The .html rglob two blocks down used to UNLINK
+    # archived historical copies outright; that was real, not just cosmetic.
     for bad in sorted(artifacts_dir.rglob("engagement-summary-*.md")):
+        if _under_archive(bad, artifacts_dir):
+            continue
         target = bad.with_suffix(".txt")
         if target.exists():
             continue  # a correct .txt already exists - leave the duplicate for a human
@@ -1395,6 +2032,8 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
                 fixed.append(f"COULD-NOT-SYNC state after email rename: {exc}")
         else:
             for idx in artifacts_dir.rglob("START-HERE.md"):
+                if _under_archive(idx, artifacts_dir):
+                    continue
                 itext = idx.read_text(encoding="utf-8", errors="replace")
                 if bad.name in itext:
                     idx.write_text(itext.replace(bad.name, target.name), encoding="utf-8")
@@ -1404,8 +2043,59 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
                         f"{target.name}"
                     )
     for stray in sorted(artifacts_dir.rglob("engagement-summary-*.html")):
+        if _under_archive(stray, artifacts_dir):
+            continue  # C7: archived is frozen - never delete a historical copy in there
         stray.unlink()
         fixed.append(f"FIXED SUMMARY-WRONG-EXT: removed rendered email copy {stray.name}")
+
+    # Duplicate ghost artifact rows (2026-08-17 live report): a row recorded before the
+    # add-artifact path-healing fix carries a mis-rooted path ("artifacts/<slug>/x.md"
+    # resolved against the pack dir), flagged added_before_file_existed, and its file
+    # can never exist at that resolved path - while a correct row for the SAME basename
+    # resolves fine. STALE-INDEX flagged it and --fix used to stall on it (exit 1), so
+    # the live session hand-edited state for minutes instead. Removal is mechanically
+    # safe exactly when BOTH hold: the flagged path resolves to nothing AND a sibling
+    # row with the same basename resolves to a real file - that is this finding's own
+    # "remove the row or restore the artifact" instruction, the remove branch.
+    es_dup = _load_engagement_state_module()
+    if es_dup is not None:
+        state_file = artifacts_dir / es_dup.STATE_FILENAME
+        if state_file.is_file():
+            try:
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                rows = [r for r in (state.get("artifacts") or []) if isinstance(r, dict)]
+                resolvable = {
+                    PurePosixPath(str(r.get("path", "")).replace("\\", "/")).name
+                    for r in rows
+                    if r.get("path") and (artifacts_dir / str(r["path"])).exists()
+                }
+                keep, dropped = [], []
+                for r in rows:
+                    path = str(r.get("path") or "")
+                    if (
+                        r.get("added_before_file_existed")
+                        and path
+                        and not (artifacts_dir / path).exists()
+                        and PurePosixPath(path.replace("\\", "/")).name in resolvable
+                    ):
+                        dropped.append(path)
+                    else:
+                        keep.append(r)
+                if dropped:
+                    state["artifacts"] = keep
+                    state_file.write_text(
+                        json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                    for path in dropped:
+                        fixed.append(
+                            f"FIXED STALE-INDEX: removed ghost artifact row {path} "
+                            "(added_before_file_existed, never resolvable; the same "
+                            "basename resolves via its correct row - index re-renders "
+                            "below)"
+                        )
+            except Exception as exc:
+                fixed.append(f"COULD-NOT-FIX ghost artifact rows: {exc}")
 
     # Re-render the living index from the machine-readable state when the render is stale
     # (ADR-006: the state is authoritative). Before the generic .md render pass, so the fresh
@@ -1447,23 +2137,23 @@ def apply_fixes(artifacts_dir: Path) -> list[str]:
             except Exception as exc:  # STATE-INVALID surfaces from the check; log, don't crash
                 fixed.append(f"COULD-NOT-RENDER START-HERE from state: {exc}")
 
-    # Render every .md lacking its .html sibling. render_html is resolved by __file__-relative
-    # path so this works both as `-m scripts.check_artifacts` and by direct-path plugin invocation.
-    render_html = Path(__file__).with_name("render_html.py")
+    # Render every .md lacking its .html sibling, in-process (2026-08-05 perf fix - see
+    # _load_render_html_module above).
+    rh = _load_render_html_module()
     for md in sorted(artifacts_dir.rglob("*.md")):
+        if _under_archive(md, artifacts_dir):
+            continue  # C7: don't write a new render into a frozen archived subtree
         if md.with_suffix(".html").is_file():
             continue
-        result = subprocess.run(  # nosec B603 - fixed interpreter, our own bundled script, a path arg
-            [sys.executable, str(render_html), str(md)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            fixed.append(
-                f"FIXED MISSING-HTML: rendered {md.name} -> {md.with_suffix('.html').name}"
-            )
-        else:
-            fixed.append(f"COULD-NOT-RENDER {md.name}: {(result.stderr or '').strip()[:120]}")
+        if rh is None:
+            fixed.append(f"COULD-NOT-RENDER {md.name}: render_html module unavailable")
+            continue
+        try:
+            out = rh.render_file(md)
+        except Exception as exc:
+            fixed.append(f"COULD-NOT-RENDER {md.name}: {exc}")
+            continue
+        fixed.append(f"FIXED MISSING-HTML: rendered {md.name} -> {out.name}")
     return fixed
 
 
@@ -1599,11 +2289,44 @@ def check_registry(artifacts_dir: Path) -> list[str]:
     return []
 
 
+_KNOWN_FLAGS = frozenset({"--fix"})
+
+
 def main(argv: list[str]) -> int:
     _force_utf8_output()
-    do_fix = "--fix" in argv[1:]
-    positional = [a for a in argv[1:] if not a.startswith("-")]
+    rest = argv[1:]
+    # --slug <workspace> (2026-08-17 live report: a session reached twice for the same
+    # `--slug` shape every OTHER team script accepts, got a usage error both times, and
+    # burned a retry each): sugar for targeting one workspace, equivalent to passing
+    # `<artifacts_dir>/<slug>` positionally.
+    slug = None
+    if "--slug" in rest:
+        i = rest.index("--slug")
+        if i + 1 >= len(rest) or rest[i + 1].startswith("-"):
+            print("--slug needs a workspace name", file=sys.stderr)
+            return 2
+        slug = rest[i + 1]
+        rest = rest[:i] + rest[i + 2 :]
+    # 2026-08-07 (found by a framework-wide audit): `do_fix = "--fix" in argv[1:]` matched
+    # only the exact string - a typo'd flag (--fx, --Fix, --fixx) or an unrecognized one
+    # was silently ignored rather than erroring, so a human typing `check_artifacts --fx`
+    # got a silent check-only run instead of the fix pass they asked for, with nothing
+    # telling them why nothing got fixed. Every flag-shaped argument is now validated
+    # against the one real flag this script accepts; an unrecognized one is a usage error
+    # (exit 2, distinct from 1 = "gate not satisfied"), not a silent no-op.
+    unknown = [a for a in rest if a.startswith("-") and a not in _KNOWN_FLAGS]
+    if unknown:
+        print(
+            f"unrecognized flag(s): {' '.join(unknown)} - accepted: --fix, "
+            "--slug <workspace> (positional args: [artifacts_dir] [map_path])",
+            file=sys.stderr,
+        )
+        return 2
+    do_fix = "--fix" in rest
+    positional = [a for a in rest if not a.startswith("-")]
     artifacts_dir = Path(positional[0]) if positional else Path("artifacts")
+    if slug:
+        artifacts_dir = artifacts_dir / slug
     map_path = Path(positional[1]) if len(positional) > 1 else find_codebase_map(Path.cwd())
 
     # 0.31 layout: with per-engagement workspaces, each pack is checked in its own scope
@@ -1664,13 +2387,19 @@ def main(argv: list[str]) -> int:
     map_note = "no codebase map found - skipped (created at first close, ADR-003)"
     if map_path is not None:
         if map_path.is_file():
-            findings.extend(check_map(map_path))
+            findings.extend(check_map(map_path, project_dir=Path.cwd()))
             map_note = f"map checked: {map_path}"
         else:
             findings.append(f"MAP-NOT-FOUND: {map_path} was given explicitly but does not exist")
             map_note = f"map missing: {map_path}"
 
+    area_files = find_codebase_map_area_files(Path.cwd())
+    for area_file in area_files:
+        findings.extend(check_map(area_file, project_dir=Path.cwd()))
+
     notes = [map_note]
+    if area_files:
+        notes.append(f"{len(area_files)} area file(s) checked")
     if skipped_fresh:
         notes.append(f"{skipped_fresh} closed pack(s) skipped via fingerprint")
     archived_count = sum(

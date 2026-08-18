@@ -21,11 +21,32 @@ last-resort fallback when the checker itself cannot be loaded.
 Size is the design constraint: the anchor is ~8 lines of pointers, not a reload of the rules -
 right-altitude, minimal high-signal tokens (Anthropic context-engineering).
 
+2026-08-03 steady-state shrink (token-usage audit): the full anchor above fires on EVERY
+prompt for the entire life of an engagement - on a long delivery that's dozens of turns paying
+the full ~9-line anchor each time, when the decay risk it exists to counter is really about a
+handful of rules (voice marker, question-tool discipline, roster names), not the close
+procedure or artifact-placement detail restated every turn. So: the FULL anchor fires once per
+pack (tracked the same read-only way `todo_panel_nudge.py` tracks its own one-time nudge - a
+`persona-anchor-seeded` marker in the pack's own `log`, written by the model via `log-note`,
+since hooks in this repo stay read-only); every later prompt gets a short 3-line anchor with
+just the rules that actually decay. A brand-new engagement, or one whose marker cannot be read,
+gets the full anchor - erring toward more context, never toward silently under-anchoring.
+
 Stdin: UserPromptSubmit JSON payload. Stdout (exit 0) is added to the model's context. Fails open
 on any error - a presentation aid must never break a prompt. UTF-8-forced (Windows-safe).
 
 Wire via hooks -> "UserPromptSubmit" in .claude/settings.json + hooks/hooks.json
 (scripts/apply-persona-anchor.sh - human-run; hook/config edits are human-only, ADR-002 rec 5).
+
+2026-08-14 (ADR-014 daemon, multi-target extension): daemon-servable (fires on every
+user message, the highest-frequency point besides Bash calls, so the biggest single
+win in the daemon's target set) - was excluded from the FIRST daemon pass pending two
+fixes an audit found: the sys.path insert above is now deduped (see its own comment),
+and scripts/check_artifacts.py - the one real staleness risk, since _load_checker's
+fallback path caches it at module level - is in guard_daemon.py's own watch list, so a
+live edit to it correctly restarts the daemon (a fresh process re-imports everything,
+including this module's own _CHECK_ARTIFACTS_MODULE_CACHE reset to None) rather than
+silently serving a stale cached module.
 """
 
 from __future__ import annotations
@@ -46,8 +67,20 @@ _ANCHOR = """<persona-anchor>
 - Close = set-status closing -> check_artifacts --fix -> summary email -> set-status closed
   (the close gate refuses on findings; findings are a FIX-LIST). If blocked, say plainly
   "NOT closed - outstanding: ...".
+Record `{log_note}` now so later turns get the short form of this reminder instead of this
+full one - the rules above stay true either way.
 </persona-anchor>"""
 
+# Steady-state: just the rules that actually decay turn-to-turn (voice, question-tool,
+# roster) - the close procedure and artifact-placement detail are reference material a
+# model consults when it reaches that gate, not something that erodes mid-turn.
+_ANCHOR_SHORT = """<persona-anchor>
+🎩 Morgan, PM (persona anchor, short form - full text already seeded this engagement): open
+every reply with 🎩, ask every clarification via AskUserQuestion (never buried in prose), name
+specialists by roster name. If blocked, say plainly "NOT closed - outstanding: ...".
+</persona-anchor>"""
+
+_SEEDED_MARKER = "persona-anchor-seeded"
 _LIVE_STATUSES = ("open", "blocked", "closing")
 
 
@@ -59,18 +92,38 @@ def _force_utf8_output() -> None:
             pass
 
 
+_CHECK_ARTIFACTS_MODULE_CACHE = None
+
+
 def _load_checker(project_root: Path):
     """scripts.check_artifacts in BOTH run modes (same loader as the staged stop gate:
     package import first, then __file__-relative for plugin installs). None = unavailable;
-    the legacy sniff below then keeps the anchor working."""
+    the legacy sniff below then keeps the anchor working.
+
+    2026-08-03 perf audit: memoized - this hook is one process per prompt, so the win here
+    is small on its own, but the same pattern applies uniformly across every hook that
+    carries this loader (consistency, and it costs nothing if this hook is ever combined
+    with another in one process, the way the Stop hooks were)."""
+    global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
-        sys.path.insert(0, str(project_root))
+        # 2026-08-14 (daemon-safety audit): deduped, not an unconditional insert - this
+        # hook used to run once per prompt in its own fresh process, where an unbounded
+        # sys.path (dying with the process every time) was harmless. Serving it from a
+        # long-lived daemon changes that: without the dedup check, every call would grow
+        # sys.path by one more entry for the same project_root, and if this daemon ever
+        # served more than one project's requests over its lifetime, stale entries from
+        # an earlier project would sit ahead of a later one, silently shadowing it. Same
+        # dedup pattern guard_daemon.py's own _load_targets() already uses.
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
         from scripts import check_artifacts
 
         return check_artifacts
     # Probe only; fall through to the file-relative loader.
     except Exception:  # nosec B110
         pass
+    if _CHECK_ARTIFACTS_MODULE_CACHE is not None:
+        return _CHECK_ARTIFACTS_MODULE_CACHE
     import importlib.util
 
     here = Path(__file__).resolve()
@@ -83,6 +136,7 @@ def _load_checker(project_root: Path):
                 spec = importlib.util.spec_from_file_location("check_artifacts", candidate)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
+                _CHECK_ARTIFACTS_MODULE_CACHE = module
                 return module
         # A candidate that won't load must not stop the next one being tried.
         except Exception:  # nosec B112
@@ -109,11 +163,11 @@ def _fallback_status(pack: Path) -> str | None:
     return "open" if ("⏳" in text or "⛔" in text) else None
 
 
-def _open_engagements(artifacts: Path, ca) -> list[tuple[str, str]]:
-    """(name, status) for every LIVE pack - workspaces `artifacts/<slug>/` plus the legacy
-    flat pack. Shared detection + parser when the checker loads (G5/G7); fail-open per
-    pack: unreadable input never misfires the anchor."""
-    out: list[tuple[str, str]] = []
+def _open_engagements(artifacts: Path, ca) -> list[tuple[str, str, Path]]:
+    """(name, status, pack path) for every LIVE pack - workspaces `artifacts/<slug>/` plus
+    the legacy flat pack. Shared detection + parser when the checker loads (G5/G7);
+    fail-open per pack: unreadable input never misfires the anchor."""
+    out: list[tuple[str, str, Path]] = []
     packs: list[tuple[str, Path]] = []
     try:
         if ca is not None:
@@ -135,8 +189,30 @@ def _open_engagements(artifacts: Path, ca) -> list[tuple[str, str]]:
         except Exception:
             status = _fallback_status(pack)
         if status in _LIVE_STATUSES:
-            out.append((name, status))
+            out.append((name, status, pack))
     return out
+
+
+def _already_seeded(pack: Path) -> bool:
+    """True if the full anchor was already shown at least once for this pack - read-only,
+    mirrors todo_panel_nudge.py's marker check. Unreadable state or no marker means "not yet
+    seeded" (errs toward the full anchor, never toward silently under-anchoring)."""
+    try:
+        state = json.loads((pack / "engagement-state.json").read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    log = state.get("log")
+    if not isinstance(log, list):
+        return False
+    return any(_SEEDED_MARKER in str(entry) for entry in log)
+
+
+def _log_note_command(slug: str | None) -> str:
+    return (
+        f'engagement_state --slug {slug} log-note "{_SEEDED_MARKER}"'
+        if slug
+        else f'engagement_state log-note "{_SEEDED_MARKER}"'
+    )
 
 
 def main() -> int:
@@ -152,26 +228,54 @@ def main() -> int:
     artifacts = cwd / "artifacts"
     if not artifacts.is_dir():
         return 0
+    # Session scoping (2026-08-16 live report, same fix as the staged DoD stop gate):
+    # an open pack left behind by ANOTHER session used to re-summon Morgan into every
+    # later session in the project, however dormant. Arm only when this payload's
+    # session_id matches the acting-session stamp engagement_state writes to
+    # artifacts/.team-session.json on every mutating command. Missing either id, or a
+    # mismatch = a session that never drove the team - stay silent.
+    session_id = data.get("session_id")
+    try:
+        stamped = json.loads(
+            (artifacts / ".team-session.json").read_text(encoding="utf-8")
+        ).get("session")
+    except Exception:
+        stamped = None
+    if not session_id or stamped != session_id:
+        return 0
     ca = _load_checker(cwd)
     opens = _open_engagements(artifacts, ca)
     if not opens:
         return 0
-    print(_ANCHOR)
+
+    # Marker home for the full-vs-short decision: prefer the flat pack when it's among the
+    # live set, else the ACTIVE workspace if named, else the first. Not semantically tied to
+    # one specific pack - just a durable place to record "the full anchor was already shown".
+    active_slug = None
+    try:
+        active_slug = json.loads(
+            (artifacts / ".active-engagement.json").read_text(encoding="utf-8")
+        ).get("slug")
+    except Exception:
+        active_slug = None
+    marker_name, _marker_status, marker_pack = next(
+        (o for o in opens if o[0] == "(flat)"),
+        next((o for o in opens if o[0] == active_slug), opens[0]),
+    )
+    slug = None if marker_name == "(flat)" else marker_name
+    if _already_seeded(marker_pack):
+        print(_ANCHOR_SHORT)
+    else:
+        print(_ANCHOR.format(log_note=_log_note_command(slug)))
+
     if len(opens) > 1 or (len(opens) == 1 and opens[0][0] != "(flat)"):
         marks = {"open": "⏳", "in_progress": "⏳", "blocked": "⛔", "closing": "🔒"}
-        listing = ", ".join(f"{n} {marks.get(s, s)}" for n, s in opens)
+        listing = ", ".join(f"{n} {marks.get(s, s)}" for n, s, _ in opens)
         # R1: the ACTIVE slug is recorded on disk (.active-engagement.json) - surface it
         # so a resumed session targets the right workspace instead of guessing.
-        active = None
-        try:
-            active = json.loads(
-                (artifacts / ".active-engagement.json").read_text(encoding="utf-8")
-            ).get("slug")
-        except Exception:
-            active = None
-        if active and any(n == active for n, _ in opens):
+        if active_slug and any(n == active_slug for n, _, _ in opens):
             tail = (
-                f" - ACTIVE: {active} (from .active-engagement.json); target its "
+                f" - ACTIVE: {active_slug} (from .active-engagement.json); target its "
                 "workspace (--slug), or set-active to switch"
             )
         else:

@@ -1,0 +1,57 @@
+case: process-review-scorer-delegation
+workflow: /engage
+rubric: process-discipline
+input: scenario.md
+description: >
+  Behaviour case - the model-tiering rule in docs/code-review-method.md: "the review skills
+  delegate [context/language detection and scoring/filtering] to the review-scorer (haiku)
+  agent, for code-reviewer AND performance-reviewer findings alike." Live-reported
+  (2026-08-07): on one run of this exact scenario shape (deep + performance review via
+  /engage), review-scorer (Pip) was delegated to for the context scan, hit an unrelated
+  API/gateway error, and Morgan self-corrected to "I'll handle the context scan myself" - a
+  reasonable one-off recovery. On a LATER, otherwise-identical run (same command, same
+  scenario), review-scorer was never invoked at all - no context-scan delegation, no scoring
+  delegation, no lens-loading narration. Since the delegation rule is unconditional and
+  always-loaded (not a JIT reference doc), this pins whether that's a rare blip or a real,
+  trackable failure rate.
+
+planted:
+  - id: CONTEXT-1
+    # Step 1 of the tiered pipeline (deep-review/SKILL.md): "Context (delegate to
+    # review-scorer, haiku) - detect languages, list changed files/lines, check for
+    # CLAUDE.md, and select the minimal lens set". Short phrases close to that step's own
+    # wording (the normalizer is instructed to stay close to the transcript's own wording,
+    # not paraphrase loosely) rather than one generic word like "lens" alone.
+    keywords: [review-scorer, detect languages, select the lens, select lens set,
+               context scan]
+    min_severity: warning
+    must_find: true
+  - id: SCORE-1
+    # Step 4: "Score & filter (delegate to review-scorer, haiku) - apply the scoring
+    # rubric and produce the Found/Reported/Filtered counts". Deliberately does NOT
+    # include "review-scorer" itself (CONTEXT-1 already covers that name) - this spec
+    # requires its OWN scoring-stage evidence, so a transcript that only ever mentions
+    # review-scorer once, during the context scan, does not also satisfy this one.
+    keywords: [score & filter, score and filter, scoring rubric, confidence scor,
+               "found/reported/filtered", "found, reported, filtered"]
+    min_severity: warning
+    must_find: true
+  - id: PERF-2
+    # Sanity check that the performance-review half of the ask actually happened - a run
+    # that silently drops performance review entirely shouldn't pass on a technicality.
+    keywords: [performance-reviewer, performance review, thabo]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # The exact failure signature from the live report: doing the scorer's rote work directly
+  # instead of delegating it - the affirmative self-correction phrasing a correct run
+  # (which delegates from the start) is unlikely to ever need to say.
+  - id: FP-1
+    keywords: ["i'll handle the context scan myself", "i'll do the scoring myself",
+               "i'll score these myself", "handle this myself - it's rote",
+               "skip review-scorer", "without review-scorer", "instead of review-scorer"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

@@ -86,6 +86,15 @@ def _review_menu_payload() -> str:
                 {"label": "Fix → re-review loop"},
             ],
         },
+        {
+            "header": "Origin",
+            "multiSelect": False,
+            "options": [
+                {"label": "AI-assisted / vibe-coded"},
+                {"label": "Mixed"},
+                {"label": "Hand-written"},
+            ],
+        },
     ]
     return json.dumps({"tool_name": "AskUserQuestion", "tool_input": {"questions": questions}})
 

@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """Validate a review findings pack against docs/review/findings-schema.json.
 
-The pack (JSON) is the structured source of truth for a review/audit report; render_findings.py
-turns it into the canonical REVIEW-<slug>.md. Validating here - required fields, enums, types - is
-the enforcement that makes format drift impossible: a missing or renamed field is a hard error the
-team must fix, not a silent three-C report. A tiny dependency-free JSON-Schema subset validator
-(type / required / enum / minimum / maximum / properties / items), matching the repo's
-no-third-party-deps posture (same as check_artifacts).
+The pack (JSONL on disk - one envelope line + one line per finding, see findings_pack_io.py) is
+the structured source of truth for a review/audit report; render_findings.py turns it into the
+canonical REVIEW-<slug>.md. Validation here operates on the reconstructed in-memory dict
+(`findings_pack_io.read_pack`), so the schema itself and this validator's logic are unaffected by
+the on-disk format - required fields, enums, types - is the enforcement that makes format drift
+impossible: a missing or renamed field is a hard error the team must fix, not a silent three-C
+report. A tiny dependency-free JSON-Schema subset validator (type / required / enum / minimum /
+maximum / properties / items), matching the repo's no-third-party-deps posture (same as
+check_artifacts).
 
 Packs live in a subfolder (artifacts/data/) so the top-level artifacts/ stays user-navigable
 (.md/.txt/.html); this script takes an explicit pack path.
 
 Exit 0 = valid; exit 1 = violations printed (one per line, `FINDINGS-INVALID:` prefix). Output is
 forced to UTF-8 so it can't crash a Windows console.
-Usage: python -m scripts.validate_findings <pack.json> [schema.json]
+Usage: python -m scripts.validate_findings <pack.jsonl> [schema.json]
 """
 
 from __future__ import annotations
@@ -21,6 +24,11 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+
+try:
+    from scripts.findings_pack_io import read_pack
+except ImportError:  # pragma: no cover - direct-path invocation
+    from findings_pack_io import read_pack  # type: ignore[no-redef]
 
 _SCHEMA_PATH = Path(__file__).resolve().parent.parent / "docs" / "review" / "findings-schema.json"
 
@@ -81,20 +89,22 @@ def validate(instance: object, schema: dict, path: str = "$") -> list[str]:
 
 def load_and_validate(pack_path: Path, schema_path: Path = _SCHEMA_PATH) -> list[str]:
     schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))
-    pack = json.loads(Path(pack_path).read_text(encoding="utf-8"))
+    pack = read_pack(Path(pack_path))
     return validate(pack, schema)
 
 
 def main(argv: list[str]) -> int:
     _force_utf8_output()
     if len(argv) < 2:
-        print("usage: python -m scripts.validate_findings <pack.json> [schema.json]")
+        print("usage: python -m scripts.validate_findings <pack.jsonl> [schema.json]")
         return 2
     pack_path = Path(argv[1])
     schema_path = Path(argv[2]) if len(argv) > 2 else _SCHEMA_PATH
     try:
         errs = load_and_validate(pack_path, schema_path)
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
+        # ValueError covers both json.JSONDecodeError (a subclass) and read_pack's own
+        # empty-pack/bad-envelope errors.
         print(f"FINDINGS-INVALID: cannot read/parse {pack_path}: {exc}")
         return 1
     if errs:

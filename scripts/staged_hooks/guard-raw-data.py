@@ -63,6 +63,7 @@ import os
 import re
 import shlex
 import sys
+import time
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -99,11 +100,58 @@ _OUT_OF_SCOPE_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
 # pattern nor a file operand. Conservative list - an unknown flag is treated as valueless,
 # which at worst leaves an extra token in the file list (fail-closed direction).
 _FLAGS_WITH_VALUE = {
-    "-e", "-f", "-m", "-A", "-B", "-C", "-D", "-d", "--regexp", "--file", "--max-count",
-    "--include", "--exclude", "--exclude-dir", "--after-context", "--before-context",
-    "--context", "--devices", "--directories", "--color", "--colour", "-g", "--glob",
-    "--type", "-t", "--type-not", "-T", "--max-depth",
+    "-e",
+    "-f",
+    "-m",
+    "-A",
+    "-B",
+    "-C",
+    "-D",
+    "-d",
+    "--regexp",
+    "--file",
+    "--max-count",
+    "--include",
+    "--exclude",
+    "--exclude-dir",
+    "--after-context",
+    "--before-context",
+    "--context",
+    "--devices",
+    "--directories",
+    "--color",
+    "--colour",
+    "-g",
+    "--glob",
+    "--type",
+    "-t",
+    "--type-not",
+    "-T",
+    "--max-depth",
 }
+
+# Compound-command segment splitter, mirroring guard-code-execution.py's _segments(): a
+# multi-statement Bash command (`grep ...; echo "..."`, `a && b`, `a | b`) was previously
+# shlex-split and judged as ONE invocation, so words from a LATER, unrelated statement
+# became "file operands" of an EARLIER search verb - a live false positive during the
+# 2026-08-03 token-usage audit itself (the audit's own multi-statement command got
+# blocked). Each segment is now judged independently.
+#
+# 2026-08-07: kept as one combined tuple for readability even though `` ` ``/`$(` now get
+# different quote-gating than the other four below - see _ORDINARY_DELIMS and _segments().
+_SEGMENT_DELIMS = (";", "&&", "||", "|", "\n", "`", "$(")
+
+# Of _SEGMENT_DELIMS, only these four are ordinary text inside a double-quoted string in
+# real bash (`echo "a; b"` prints "a; b" literally) - `` ` ``/`$(` are handled separately
+# in _segments() because command substitution EXECUTES even inside double quotes.
+_ORDINARY_DELIMS = (";", "&&", "||", "|", "\n")
+
+# `git commit`/`git tag -m <text>` (or --message=<text>): the message is prose the user
+# wrote, not a file read, so it must not trip the marker scan just for MENTIONING the
+# guard's own marker string (e.g. describing this very fix in a commit message) - the
+# fourth instance of the prose/argument false-positive class this project keeps hitting.
+# `-F <file>` (a message FILE) is deliberately NOT exempted here - that IS a real read.
+_GIT_MESSAGE_VERBS = ("commit", "tag")
 
 # ---------------------------------------------------------------------------
 # Canonical raw-data directory - the directory we protect.
@@ -119,6 +167,9 @@ _FLAGS_WITH_VALUE = {
 # ---------------------------------------------------------------------------
 _project_root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
 _RAW_DIR = (Path(_project_root) / "data" / "raw").resolve()
+_RAW_PRESENT_CACHE = Path(_project_root) / ".claude" / ".raw-data-present"
+_RAW_PRESENT_CACHE_TTL_SECONDS = 30  # short enough to catch a mid-session data/raw
+# addition quickly; long enough to collapse a burst of Grep/Glob calls into one real walk.
 
 
 def _raw_data_present() -> bool:
@@ -129,14 +180,36 @@ def _raw_data_present() -> bool:
     - a fresh clone, a synthetic-only project - blocking every repo-root search would be a
     pure false positive and would make the guard hated rather than respected. The precise
     path checks below are unconditional and do not consult this.
+
+    Cached (2026-08-10, corp report): a path-less Grep/Glob call always roots at the
+    project dir, which is trivially an ancestor of data/raw, so this ran a full os.walk()
+    on nearly every real search - measurable overhead on a corporate Windows box with
+    endpoint security scanning each filesystem op. A short-TTL file cache (same pattern as
+    .claude/.guard-interpreter) collapses a burst of calls into one real walk. The cache is
+    never load-bearing: any read/write failure falls straight through to a real check, and
+    the fail-closed exception handler below is unchanged.
     """
     try:
         if not _RAW_DIR.is_dir():
             return False
+        try:
+            cached = _RAW_PRESENT_CACHE.read_text(encoding="utf-8").strip()
+            age = time.time() - _RAW_PRESENT_CACHE.stat().st_mtime
+            if age < _RAW_PRESENT_CACHE_TTL_SECONDS:
+                return cached == "true"
+        except (OSError, ValueError):
+            pass  # no valid cache - fall through to a real check
+        result = False
         for _root, _dirs, files in os.walk(_RAW_DIR):
             if files:
-                return True
-        return False
+                result = True
+                break
+        try:
+            _RAW_PRESENT_CACHE.parent.mkdir(parents=True, exist_ok=True)
+            _RAW_PRESENT_CACHE.write_text("true" if result else "false", encoding="utf-8")
+        except OSError:
+            pass  # cache write is an optimization only, never load-bearing
+        return result
     except Exception:
         # Cannot tell - assume present so the stricter branch applies (fail closed).
         return True
@@ -237,6 +310,110 @@ def _search_file_operands(command: str) -> list[str] | None:
     return operands
 
 
+def _segments(command: str) -> list[str]:
+    """Split a compound Bash command into independently-judged statements (mirrors
+    guard-code-execution.py's _segments()). Without this, `grep ...; echo "..."` was judged
+    as ONE search invocation, so words from the SECOND statement became "file operands" of
+    the FIRST'S search verb.
+
+    Quote-aware (2026-08-03, second fix): a purely lexical split chopped INSIDE a quoted
+    argument too - a log-note/commit message using ';' or '&&' as ordinary punctuation
+    ("...close as-is; no real source data exists...") became its own bogus mid-sentence
+    segment, live in an eval run. Delimiters are only boundaries OUTSIDE '...' / "..." -
+    still lexical, not a full shell parser (ADR-002's irreducible residual): an unclosed
+    quote just folds the remainder into one segment, the safe direction.
+
+    2026-08-07 fix: that "boundaries only outside quotes" rule is TRUE for `;`/`&&`/`||`/
+    `|`/newline but FALSE for command substitution - `echo "$(cat data/raw/x.csv)"` really
+    executes the inner `cat` in bash even though it's inside double quotes; only single
+    quotes suppress it. The 2026-08-03 rewrite gated backtick/`$(` on the same quote check
+    as the other four, so a substitution wrapped in double quotes never became its own
+    segment - mirrors the identical fix in guard-code-execution.py's _segments(), found by
+    the same framework-wide audit and applied to both guards together so the fix doesn't
+    live in only one of them."""
+    segments: list[str] = []
+    current: list[str] = []
+    in_single = in_double = False
+    i, n = 0, len(command)
+    while i < n:
+        ch = command[i]
+        if ch == "\\" and not in_single and i + 1 < n:
+            if command[i + 1] == "\n":
+                # Line continuation: real bash ERASES both chars (one continued logical
+                # line), never keeps them as literal text - unlike every other escape.
+                i += 2
+                continue
+            current.append(command[i : i + 2])
+            i += 2
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            current.append(ch)
+            i += 1
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            current.append(ch)
+            i += 1
+            continue
+        if not in_single:
+            # Command substitution executes even inside double quotes - always a boundary
+            # regardless of in_double, unlike the four ordinary delimiters below.
+            if command.startswith("`", i):
+                segments.append("".join(current))
+                current = []
+                i += 1
+                continue
+            if command.startswith("$(", i):
+                segments.append("".join(current))
+                current = []
+                i += 2
+                continue
+            if not in_double:
+                hit = next((d for d in _ORDINARY_DELIMS if command.startswith(d, i)), None)
+                if hit is not None:
+                    segments.append("".join(current))
+                    current = []
+                    i += len(hit)
+                    continue
+        current.append(ch)
+        i += 1
+    segments.append("".join(current))
+    return [s.strip() for s in segments if s.strip()]
+
+
+def _git_message_operands(segment: str) -> list[str] | None:
+    """For a `git commit`/`git tag` segment, return every token EXCEPT the -m/--message
+    VALUE (prose, not a file read) - the flag itself and every other token (including a
+    `-F <file>` message-file argument, which IS a real read) are kept and still checked.
+    Returns None when the segment is not recognisably a git commit/tag invocation, in which
+    case the caller applies the ordinary whole-segment marker check."""
+    try:
+        tokens = shlex.split(segment)
+    except Exception:
+        return None
+    if (
+        len(tokens) < 2
+        or os.path.basename(tokens[0]) != "git"
+        or tokens[1] not in _GIT_MESSAGE_VERBS
+    ):
+        return None
+    out: list[str] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        base = tok.split("=", 1)[0]
+        if base in ("-m", "--message"):
+            if "=" not in tok and i + 1 < len(tokens):
+                i += 2  # drop the flag AND its value
+                continue
+            i += 1  # inline --message=... form: drop just this one token
+            continue
+        out.append(tok)
+        i += 1
+    return out
+
+
 def _extract_path_candidates(tool: str, tool_input: dict) -> list[str]:
     """
     Return the list of string path tokens to check for a given tool.
@@ -335,14 +512,28 @@ def main() -> None:
     tool = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
 
-    # --- Search-tool pattern exemption (fix 3): judge the FILE operands, not the pattern.
+    # --- Bash: judge each statement of a compound command independently (segment fix),
+    # then apply the search-verb pattern exemption (fix 3) or the git-message exemption
+    # per segment - never the whole compound command as if it were one invocation.
     if tool == "Bash":
-        operands = _search_file_operands(tool_input.get("command") or "")
-        if operands is not None:
-            for operand in operands:
-                if _is_under_raw(operand) or _RAW_MARKER_RE.search(operand):
-                    _block(f"raw-data path in search operand - tool={tool}")
-            sys.exit(0)
+        for segment in _segments(tool_input.get("command") or ""):
+            operands = _search_file_operands(segment)
+            if operands is not None:
+                for operand in operands:
+                    if _is_under_raw(operand) or _RAW_MARKER_RE.search(operand):
+                        _block(f"raw-data path in search operand - tool={tool}")
+                continue
+            msg_operands = _git_message_operands(segment)
+            if msg_operands is not None:
+                residual = " ".join(msg_operands)
+                if any(marker in residual for marker in RAW_MARKERS) or _RAW_MARKER_RE.search(
+                    residual
+                ):
+                    _block(f"raw-data path in git commit/tag argument - tool={tool}")
+                continue
+            if any(marker in segment for marker in RAW_MARKERS) or _RAW_MARKER_RE.search(segment):
+                _block(f"raw-data marker in input - tool={tool}")
+        sys.exit(0)
 
     # --- Ancestor-rooted / path-less search (fix 2): only when raw data actually exists.
     if tool in ("Grep", "Glob"):

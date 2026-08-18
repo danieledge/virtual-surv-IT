@@ -10,63 +10,179 @@ Run a **deep (detailed) code review** of: **$ARGUMENTS**.
 `git diff`), ask where the code is - a path/glob, repo/branch, commit range, or to paste it -
 and wait. Don't review an assumed target.
 
-**2. Put scope on a menu - ask, don't assume.** Ask the axes below **in ONE `AskUserQuestion`
-call** (one screen, not separate round-trips); they stay distinct questions with the stated
-`multiSelect` and header. **Hard tool limits: max 4 questions per call, max 4 options per
-question** ("Other" is added automatically) - the constructions below are sized to fit; don't
-un-bundle them back into a 7-option list:
-- **Dimensions** (header `Dimensions`, **`multiSelect: false`** - four locked bundles; a bespoke
-  mix goes through "Other", e.g. *"bugs + docs only"*):
-  - **Full review (recommended)** - all seven dimensions: bugs & logic · security · architecture ·
-    language-specific · docs/comments · style & form · compliance/audit.
-  - **Core** - 🐛 bugs & logic + 🔐 security + 🧰 language-specific. *For a plain utility script.*
-  - **Core + quality** - Core plus 📐 architecture + 📝 docs/comments + 🔵 style & form.
-  - **Core + compliance** - Core plus 📋 compliance/audit (§4/§5 trail).
-  Run only what was picked - don't force a dimension the user didn't choose. (A *dimension* is one
-  of these seven scope axes; a *lens* is one of the files in `docs/review/lenses/`. The mapping is
-  not 1:1 - the router owns it.)
-- **Breadth** (header `Breadth`, **`multiSelect: false`**, exactly one): the working diff ·
-  named files/glob · whole module · whole repo.
-- **Mode** (header `Mode`, **`multiSelect: false`**): change review (filter pre-existing) **or**
-  audit (keep pre-existing in scope).
-- **Origin** (header `Origin`, **`multiSelect: false`**): was this **AI-assisted /
-  "vibe-coded"**? (yes · mixed · no, hand-written). If **yes/mixed**, the report adds a
-  **🧑‍💻 Prompting guidance** section (see `docs/review/output-format.md`): how a better prompt
-  would have prevented the top findings, plus example prompts to reuse. (The reviewer also adds
-  it if the findings clearly show vibe-coding.)
+**2. Derive the fine scope - state it, don't re-ask it (2026-08-17 flow review).** The
+go-ahead gate must be FINAL: a live run recorded "proceed as briefed" and then asked four more
+scope questions, so the brief now carries the derived scope and the gate approves it. Derive:
+- **Dimensions** from depth + target: Deep → **Core + quality** (bugs & logic · security ·
+  language-specific · architecture · docs/comments · style & form) unless the target plausibly
+  touches detection logic, regulated data or the engagement is compliance-sensitive → **Full
+  review** (adds 📋 compliance/audit, §4/§5 trail). Audit depth always Full. A user-named
+  bespoke mix always wins. (`compliance-reviewer` and citation retrieval cost real tokens -
+  never spend them on general-purpose code by habit.)
+- **Target** the same way (2026-08-17 user request: no standalone "what should I review?"
+  turn): an uncommitted/branch diff → the diff; a path/module named in the request → that.
+  Only when NEITHER exists is the target a real question - LOCKED construction in
+  `engage`'s `references/target-menu.md` (guard-enforced; "Whole working directory" is
+  the review-everything option) - riding `engage`'s 0a intake batch (the Work-type slot),
+  or direct-mode's one batched call below; never its own screen.
+- **Breadth** from the briefed scope (the diff · named files · module · repo - whatever the
+  brief already says; never widen it here).
+- **Mode** from depth: Audit → keep pre-existing in scope; otherwise change-focused (or
+  whole-target when there is no diff, per the Quick rule's scope logic).
+- **Origin** is inherited from `engage`'s review menu (its Q4) - if it says AI-assisted/mixed,
+  the report adds the **🧑‍💻 Prompting guidance** section (`docs/review/output-format.md`);
+  the reviewer also adds it unprompted when the findings clearly show vibe-coding.
 
-> **Do NOT re-ask the fix-cycle (report / fix / loop) here** - `engage` already captured it
-> (its Q3) and it is the single source of truth; inherit that answer. If this skill was invoked
-> **directly** (not via `engage`), ask it once (header `Fix-cycle`) - but the call is already at
-> the 4-question cap, so in direct mode **swap Origin out of the first call** and ask it in the
-> follow-up screen (with jurisdiction, if 📋 compliance is in scope; otherwise on its own or
-> defaulted to "unknown - infer from the findings").
+Write one scope line into the brief ("Deep · Core + quality · whole repo · change-focused ·
+origin: mixed") - the go-ahead gate is where the user adjusts it. **Ask a scope question ONLY
+when genuinely ambiguous** (conflicting signals about compliance-sensitivity, an unclear
+target) - one question, not a screen of axes. Invoked **directly** (not via `engage`): the
+review menu never ran, so ask ONE batched call first - Fix-cycle + Origin (+ jurisdiction if
+📋 is in scope) - then derive the rest exactly as above.
 
 **If 📋 compliance/audit is among the dimensions**, ask **jurisdiction(s)** as a follow-up -
 **`multiSelect: true`** (may operate in several) - or use the configured scope (CLAUDE.md §2 /
 `docs/scope-and-stack.md`), so `compliance-reviewer` assesses only the **applicable** regime(s)
 and states what's applicable vs not.
 
+**Quick runs in-session - no fan-out (2026-08-17 cost decision).** When the chosen depth is
+**Quick**, skip the whole pipeline below: no subagent, no workspace, no scorer round-trip.
+YOU run it, turingmind-style: diff-scoped by default (`git diff`, changed code only -
+pre-existing issues out of scope). **Nothing to diff?** A NAMED target (a file, a small
+module) takes the diff's place - same in-session mechanics over that one bounded read - but
+if the named target won't sit comfortably in one context, that was never a Quick question:
+offer Deep instead of silently ballooning the read. No diff AND no named target = nothing to
+review: say so and ask what they want looked at - never invent scope to have something to do.
+Then: analysers first if available, then the router's selected
+lenses read inline and applied sequentially over that one scope, findings scored against
+`docs/code-review-method.md`'s rubric in-context and presented with the honest label
+"quick-tier: self-scored, no independent scorer at this depth". 🔴/🟠 to the console;
+artifact only if asked. The evidence machinery (packs, scorer independence, DoD) is what
+Deep and Audit buy - a Quick "am I OK to commit?" costs cents this way instead of a subagent
+chain. If Quick surfaces something structural, offer the Deep upgrade; never silently deepen.
+
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
 `docs/review/lenses/`; router `docs/review/agent-router.md`):
 
-1. **Context** *(delegate to `review-scorer`, haiku)* - detect languages, list changed
-   files/lines, check for CLAUDE.md, and select the minimal lens set per the router. This is
-   rote work - run it on the cheap tier, not opus.
-2. **Load lenses** progressively via the router - only those `review-scorer` selected.
+**Consolidate by default - splitting is the exception (2026-08-17 cost review).** One
+`code-reviewer` dispatch per component runs ALL selected lenses sequentially inside it (the
+router's canonical topology: the code is read into context once and every lens reuses it).
+**Security is a lens, never its own pass, whenever a code review is already running** -
+a chained `/security-audit` folds its focus into the same pass's lens set instead of
+dispatching more agents (live 2026-08-16/17: deep + security + perf on a small repo went out
+as 6 subagent passes where the topology prices 3, roughly doubling the engagement's cost).
+Split into per-component passes ONLY when `LARGE_CONTEXT_REVIEW_SPLIT=on`, the target
+genuinely exceeds one context, or corporate-proxy timeouts have already bitten this session
+(the split's original purpose, and it demonstrably helps there) - name which reason applies
+in the sizing line, and state the resulting pass count before dispatching.
+
+**Tier by evidence need (2026-08-17 decision):** **Deep defaults to `model: sonnet`** on the
+dispatch (its findings are independently scored and PM-challenged, and the pack is not the
+final audit word), with an **opus opt-in stated in the priced menu line** for
+high-stakes-but-not-audit work; **Audit always dispatches opus** - there the pack IS the
+evidence and the final specialist word (agent-design §2's rationale). If the dispatch path in
+use cannot override the agent's frontmatter model, say so and proceed on the frontmatter tier
+rather than silently absorbing the cost difference.
+
+**Deep reads a MAP, not the repo:** widen scope beyond the diff only via a targeted
+related-file map built once up front - importers of the changed files, their imports, and
+their test files - and read only what the map names (turingmind's Phase-1C pattern; the live
+6-pass run's per-pass cold repo reads are exactly what this avoids). Never browse the
+codebase breadth-first from inside a review pass. **When `docs/codebase-map.md` exists, it
+is that map already** (2026-08-17 live report: three dispatched reviewers each re-crawled a
+repo whose map existed): the dispatch brief carries the in-scope FILE LIST plus the map's
+PATH with "read it for wider context - do not enumerate the repo" - **point, never paste**
+(the map body in N briefs is N times orchestrator output tokens; an agent-side Read is cheap
+input, and a diff-scoped pass needs no map read at all). Trust it only after a cheap
+staleness look (map's stated date vs `git log -1 --format=%ci`); if drifted, refresh just
+the target directories with `git ls-files <dir>` - never a whole-repo walk.
+
+> ⚠️ **Pip (`review-scorer`) is two of these steps, and both are delegations, not options -**
+> **including doing the step yourself "to save a turn."** Before dispatching anyone, state the
+> pipeline roll-call in one line - *"Pip context → Ravi (×N, concurrent) → Pip score/filter →
+> my challenge"* - the same out-loud discipline as the agent count (operating guide
+> §Orchestration discipline). A fan-out plan that names the reviewers but not `review-scorer`
+> is wrong; Found/Reported/Filtered counts self-scored by the reviewer are a defect to redo via
+> Pip, not accept. Skipping the haiku helper saves nothing - it moves rote work onto the most
+> expensive tier, whether that's the reviewer self-scoring (below) or the orchestrator doing
+> Pip's context step inline. Two live failures, two different shapes of the same mistake:
+> **2026-08-07** - a full audit-depth review ran with zero `review-scorer` calls, the stated
+> plan never named Pip, and the reviewers self-scored, noting it in their own packs. **2026-08-10**
+> - step 4 (scoring) was correctly queued for Pip, but step 1 (context) wasn't: the
+> orchestrator read the analyser outputs, detected languages and picked lenses itself, then
+> self-disclosed it in the task list as "effectively done inline by Morgan." Faster in the
+> moment, but sonnet doing haiku's rote work still costs more, and a plan can fail this rule
+> one step at a time, not just wholesale.
+
+1. **Context** - a real `Task` tool call, `subagent_type: review-scorer` (haiku), not the
+   orchestrator doing the equivalent work itself - detect languages, list changed files/lines,
+   check for CLAUDE.md, and select the minimal lens set per the router. This is rote work - run
+   it on the cheap tier, not opus, and not inline on whatever tier the orchestrator is already
+   running.
+2. **Load lenses** progressively via the router - only those `review-scorer` selected. **Forward
+   Pip's context, not just the lens list** - include the file list and language breakdown Pip
+   already detected verbatim in `code-reviewer`'s dispatch prompt, **labeled `Context from
+   review-scorer:` right before it** (so it reads as a fixed, recognizable marker rather than
+   something the reviewer has to infer from unlabeled brief text), instead of re-running
+   `git diff`/re-deriving language grouping for context that already exists (2026-08-12:
+   `code-reviewer.md`'s own step 1 is written to look for that exact label, and to fall back to
+   deriving it itself only when the label isn't there - e.g. a lightweight path with no
+   `review-scorer` call). **Not `performance-reviewer`** - it never derived a file list via
+   `git diff` in the first place (its own step 1 establishes workload characteristics, not file/
+   language detection), so there's nothing there for it to reuse.
 3. **Analyse** - drive `code-reviewer` to run the loaded lenses in the topology the router defines
    (`docs/review/agent-router.md`, canonical for pipeline shape: today that is sequential focused
-   passes inside `code-reviewer`, one lens at a time, with the trade-off stated there), plus the
-   standard analysers (ruff/mypy/bandit,
-   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep). Deep adds
-   the **architecture** lens, **impact analysis**, and test/doc coverage.
+   passes inside `code-reviewer`, one lens at a time, with the trade-off stated there),
+   **analysers first**: the available analysers run once, up front, before any lens pass, and
+   their output grounds every pass - never an after-check on a review already written
+   (`code-reviewer.md`'s tool table is the single source of truth for which tools and their
+   caveats; **Semgrep** stays deliberately excluded, see there for why). Deep adds
+   the **architecture** lens, **impact analysis**, and test/doc coverage. If the target is
+   split into multiple independent component passes (operating guide §Orchestration
+   discipline, `large_context_review_split`), dispatch the set per the dispatch rule's
+   **default path**: when `PARALLEL_DISPATCH_VIA_WORKFLOW=on` (the probe line; on by default)
+   and the `Workflow` tool is available this session, use the fixed script in
+   `.claude/skills/.shared/workflow-dispatch.md` verbatim - one `{label, prompt, agentType}`
+   spec per pass, `agentType: "code-reviewer"`, a `performance-reviewer` pass on the same
+   target joins the same `args` array; the passes run concurrently in the background and the
+   results arrive as a later task notification (say so plainly - the two-turn flow is in that
+   shared file). **Each pass's prompt must instruct it to write its own findings pack directly**
+   to its own component-qualified path (operating guide §Orchestration discipline -
+   `findings-<slug>-<component>.jsonl`, never the shared canonical name) and return only a short
+   confirmation, not its findings as text - see `.claude/skills/.shared/workflow-dispatch.md`
+   for the exact convention.
+   **Fallback** (preference off, tool absent, or the Workflow call failed):
+   dispatch them as **concurrent Task calls in one
+   message** - never one per turn; the `performance-reviewer` pass joins the
+   same message. **Live-tested failure mode (2026-08-07/08, three attempts): stating this rule
+   was not enough
+   on its own - the calls still went out one per turn every time**, which is why the Workflow
+   path is the default. On the fallback, follow the operating guide's literal
+   procedure: list every independent call first, then emit all of them as Task tool-uses in
+   this ONE response before reading any of their results. N independent passes = N Task
+   tool-uses in this turn, not N turns.
 4. **Score & filter** *(delegate to `review-scorer`, haiku)* - apply the scoring rubric and
-   produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). Tag each finding's
+   produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). This is the one
+   genuinely sequential step in the fan-out (it depends on the packs existing), and it runs
+   **even if a pass returned self-scored counts** - the reviewer applying the rubric to its own
+   findings is not a substitute. Once the scorer's numbers are applied, **you (Morgan) record
+   the pass in each pack's envelope `scoring` field** ("scored by review-scorer: Found N ·
+   Reported R · Filtered F") **right here, as part of this step - before the challenge pass,
+   not as part of it.** Pip has no Write/Edit of its own (advisory, judgement stays with the
+   reviewers and you), and the reviewer that wrote the pack has already returned by now, so
+   this bookkeeping edit is yours to make regardless of whether your later challenge pass
+   changes anything - `check_artifacts` mechanically flags a scored-kind pack without that
+   record (`PACK-UNSCORED`), and a self-scoring note there does not clear it. Tag each finding's
    **evidence basis** (📊 measured / 🧠 inferred). **Never** filter regulated findings (secrets,
    PII/raw data §5, undocumented thresholds / broken traceability §4) - those stay with
    `code-reviewer`/`compliance-reviewer`, not the scorer.
-5. For anything touching detection logic, hand to **compliance-reviewer** for the §4/§5 trail.
-6. **Morgan's challenge pass** *(opus)* - a **spot-check, not a re-score**: the scorer already
+5. For anything touching detection logic, hand to **compliance-reviewer** for the §4/§5 trail -
+   **forward Pip's file list here too, same `Context from review-scorer:` label as step 2**
+   (2026-08-12: this dispatch is sequential, after step 1's Pip call has already returned, so
+   the same context-forwarding step 2's dispatch of `code-reviewer` already does applies here
+   too - `compliance-reviewer.md`'s own step 2 is written to look for that label).
+6. **Morgan's challenge pass** *(the orchestrator's own tier - sonnet by default, opus if
+   configured for this engagement)* - a **spot-check, not a re-score**: the scorer already
    applied the rubric (step 4), and re-scoring everything on opus pays twice for the same
    judgement. Challenge the findings that *matter*: every 🔴 Critical, anything §4/§5-regulated,
    any finding whose evidence basis looks thin (🧠 presented as 📊), and a sample of the rest.
@@ -81,11 +197,20 @@ and states what's applicable vs not.
      reconciliation, unbounded loss) from an *intended limit* (documented, expected).
 
 **4. Present - findings pack → rendered report → scoreboard** (`docs/review/output-format.md`):
-   1. Assemble the **final (post-challenge) findings** into a **structured pack**
-      `artifacts/data/findings-<slug>.json` (schema `docs/review/findings-schema.json`, exemplar
-      `docs/review/gold-findings.json`) - `code-reviewer` already returns the findings in this JSON
-      shape; you write the pack (each finding's five fields + the narrative string fields
-      `executive_summary`, `developer_guidance`, `limitations`, `tooling_coverage`).
+   1. `code-reviewer` already **wrote** the structured pack itself, directly, to
+      `artifacts/<slug>/data/findings-<slug>.jsonl` (schema `docs/review/findings-schema.json`,
+      exemplar `docs/review/gold-findings.jsonl` - it holds a Write grant scoped to exactly this
+      path, mechanically enforced) - read it back for your challenge pass (step 6) rather than
+      re-authoring it. **In a component-split review** (step 3.3) each pass instead wrote its own
+      pack directly to its own component-qualified path - read those small packs back (`Read`
+      each one, no reconstruction from prose needed) and **you** merge them into the canonical
+      `findings-<slug>.jsonl` yourself (operating guide §Orchestration discipline, the
+      >8-finding Write-then-Edit rule) - challenge from that merged file the same way. The
+      `scoring` envelope edit (step 4) already happened before you get here, regardless of
+      what the challenge pass does - what's carved out below is FINDING CONTENT specifically.
+      **Only if your challenge pass downgrades or drops something** do you edit
+      that same file to reflect the final (post-challenge) findings; otherwise leave it exactly as
+      written.
    2. Run **`<python> -m scripts.check_artifacts --fix`** (allow-listed - no consent needed): it
       **validates** the pack (a missing field is `FINDINGS-INVALID` → fix the pack and re-run) and
       **renders** the canonical `artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first). The renderer owns the layout,

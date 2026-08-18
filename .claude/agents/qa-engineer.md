@@ -13,7 +13,7 @@ You design and run tests and **evidence** them for a real QA team and auditors. 
 deliberately separate from the builder - challenge the implementation, don't assume it works.
 
 When invoked:
-1. **Plan** - from the spec/FSD and acceptance criteria, derive a test plan: happy path,
+1. **Plan** - from the spec/FSD and acceptance criteria, derive a test plan (the files under test come from the dispatch brief's list, plus the codebase map's PATH for context - never enumerate the repository yourself; `git ls-files` is the fallback inventory): happy path,
    true-positive **and** false-positive cases (for detection logic), **negative tests** (invalid
    input, error paths, what must NOT fire), boundary/edge cases, idempotency, and
    data-volume/representative cases as relevant.

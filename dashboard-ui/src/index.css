@@ -1,0 +1,378 @@
+/* Team dashboard - design tokens + shared component styles.
+   Redesigned 2026-08-08 (live feedback: "too technical", "doesn't fit the vibe", "much more
+   approachable") - moved off the generic flat-gray/corporate-blue admin-panel look toward a
+   warmer, teal-anchored palette and softer, rounder shapes that read as "a team's workspace"
+   rather than "an ops console". One stylesheet, mirroring the single-_CSS-string approach the
+   Python-rendered fallback page already uses, for a coherent visual language across both.
+
+   Extended 2026-08-09 (round 1 of the dashboard reskin - see docs/adr and the plan file) with a
+   Tailwind token-system layer, porting the SHAPE (not the palette) of
+   github.com/hoangsonww/Claude-Code-Agent-Monitor's client/tailwind.config.js (MIT, (c) Son
+   Nguyen - see README credit): an elevation ramp (--surface-0..5), semantic border/accent
+   tokens, and an `@layer components` pattern. Unlike that source (one permanently-dark theme,
+   literal hex), every new token here is wired through the *existing* `@media
+   (prefers-color-scheme: dark)` mechanism and stays in the same warm teal-on-cream family this
+   file was redesigned toward on 2026-08-08 - never indigo/purple, never a cold flat gray. Fonts
+   (Inter / JetBrains Mono) are self-hosted via @fontsource, imported once in main.tsx - no
+   webfont CDN, so this still works fully offline under file:// and inside the Artifact preview's
+   CSP with no CDN access.
+
+   Extended 2026-08-09 (round 2 of the dashboard reskin) - Portfolio/Sessions/the outer page
+   chrome (KpiStrip, ProjectCard, Heatmap, RosterBars, ObligationTable, CostByModelTable,
+   SessionsView, TabBar, EngagementRow/Timeline, App's wrapper) migrated off their hand-rolled
+   classNames onto Tailwind utilities + the ui/ primitives; the now-dead rules those classNames
+   used are deleted below. TeamSwimlaneTimeline/TimelineStackedList kept their hand-rolled
+   SVG/bezier arc logic and animation keyframes untouched (tl-node-g/tl-arc/tl-arc-pill/
+   tl-node-link below) - only their surrounding chrome moved onto Tailwind.
+
+   Extended 2026-08-09 (round 3) - src/components/commandcentre/ moved onto the same shared
+   tokens too. commandcentre.css and its permanently-dark `.cc-root`/`--cc-*` isolation are
+   gone, replaced by ccStyles.css (same cc-* class grammar, now pointed at the surface/border/
+   accent tokens from this file) - the Command Centre follows the page's own light/dark theme
+   like everything else now, which is the whole point of this reskin. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* ---- elevation ramp (round 1) ----
+     Light mode stays close to white already, so elevation reads mostly through a gentle
+     lightness climb plus a whisper of the same green-tinted warm neutral this palette is built
+     from (never a cold pure gray) - surface-0 is the page's cream floor, surface-5 is the
+     brightest/most-elevated (tooltip/popover) surface. */
+  --surface-0: #f3f4ef;
+  --surface-1: #f5f6f1;
+  --surface-2: #f7f8f3;
+  --surface-3: #fafbf6;
+  --surface-4: #fcfdf9;
+  --surface-5: #ffffff;
+
+  /* --bg/--surface/--surface-alt are kept as aliases into the new ramp so every component that
+     still reads the OLD variable names (i.e. everything - round 2/3 migrates them one by one)
+     keeps working unchanged. Remove these aliases once no component references them anymore. */
+  --bg: var(--surface-0);
+  --surface: var(--surface-5);
+  --surface-alt: var(--surface-1);
+
+  --border: #dde3d7;
+  --border-strong: #1f7a64;
+  --fg: #23261f;
+  --muted: #6c7268;
+
+  /* Accent = the same teal that already anchors this palette (--border-strong), not a new hue.
+     -hover/-muted are derived with color-mix so they track --accent automatically. */
+  --accent: var(--border-strong);
+  --accent-hover: color-mix(in srgb, var(--accent) 85%, white 15%);
+  --accent-muted: color-mix(in srgb, var(--accent) 15%, transparent);
+
+  --ok: #3c9a5c;
+  --bad: #d6544b;
+  --warn: #c8862f;
+
+  --chip-bg: #eaf1ec;
+  --chip-fg: #29352d;
+  --bar-track: #e4ece6;
+  --bar-fill: #1f7a64;
+
+  --heat-0: #eaf1ec;
+  --heat-1: #bfe0d2;
+  --heat-2: #6fbba0;
+  --heat-3: #1f7a64;
+
+  /* Actor palette (swimlane lanes + roster avatars) - cycles mod 6. Blue/teal/moss/slate/
+     rose/forest, deliberately kept clear of the amber/orange --warn hue so a "rework" ring
+     never visually collides with someone's own identity color. */
+  --actor-1: #4c5ecf;
+  --actor-2: #1b7c83;
+  --actor-3: #6b7a1f;
+  --actor-4: #4c6079;
+  --actor-5: #9c4259;
+  --actor-6: #206b4f;
+  --actor-text: #ffffff;
+
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+/* Dark tokens - defined once as a mixin-like block would be nice, but plain CSS can't OR a
+   media query with an attribute selector onto one rule, so this exists twice (2026-08-09,
+   manual theme toggle): once guarded by the OS media query (:not([data-theme="light"]) lets an
+   explicit "light" choice below win even when the OS is dark), once by an explicit
+   [data-theme="dark"] (lets an explicit "dark" choice win even when the OS is light). Keep
+   both blocks in sync - there is no single source of truth to edit instead, by construction. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    /* Dark mode's old --bg/--surface/--surface-alt already ascend in lightness in that exact
+       order, so the new ramp reproduces them exactly at surface-0/2/3 (zero visual drift) and
+       fills in the missing steps around them. surface-5 is the brightest, most-elevated
+       (popover/tooltip) surface. */
+    --surface-0: #14170f;
+    --surface-1: #191d15;
+    --surface-2: #1d211a;
+    --surface-3: #232920;
+    --surface-4: #2a3125;
+    --surface-5: #333b2c;
+
+    --bg: var(--surface-0);
+    --surface: var(--surface-2);
+    --surface-alt: var(--surface-3);
+
+    --border: #37402f;
+    --border-strong: #4fd1ac;
+    --fg: #ebeee5;
+    --muted: #99a190;
+
+    --accent: var(--border-strong);
+    --accent-hover: color-mix(in srgb, var(--accent) 85%, white 15%);
+    --accent-muted: color-mix(in srgb, var(--accent) 15%, transparent);
+
+    --ok: #52c081;
+    --bad: #e5776e;
+    --warn: #d99a2b;
+
+    --chip-bg: #232920;
+    --chip-fg: #ebeee5;
+    --bar-track: #232920;
+    --bar-fill: #4fd1ac;
+
+    --heat-0: #232920;
+    --heat-1: #1e4238;
+    --heat-2: #266951;
+    --heat-3: #4fd1ac;
+
+    --actor-1: #7a89e0;
+    --actor-2: #39c5cf;
+    --actor-3: #b9c96b;
+    --actor-4: #92a8c4;
+    --actor-5: #d98ba8;
+    --actor-6: #57c99a;
+    --actor-text: #14170f;
+  }
+}
+
+:root[data-theme='dark'] {
+  --surface-0: #14170f;
+  --surface-1: #191d15;
+  --surface-2: #1d211a;
+  --surface-3: #232920;
+  --surface-4: #2a3125;
+  --surface-5: #333b2c;
+
+  --bg: var(--surface-0);
+  --surface: var(--surface-2);
+  --surface-alt: var(--surface-3);
+
+  --border: #37402f;
+  --border-strong: #4fd1ac;
+  --fg: #ebeee5;
+  --muted: #99a190;
+
+  --accent: var(--border-strong);
+  --accent-hover: color-mix(in srgb, var(--accent) 85%, white 15%);
+  --accent-muted: color-mix(in srgb, var(--accent) 15%, transparent);
+
+  --ok: #52c081;
+  --bad: #e5776e;
+  --warn: #d99a2b;
+
+  --chip-bg: #232920;
+  --chip-fg: #ebeee5;
+  --bar-track: #232920;
+  --bar-fill: #4fd1ac;
+
+  --heat-0: #232920;
+  --heat-1: #1e4238;
+  --heat-2: #266951;
+  --heat-3: #4fd1ac;
+
+  --actor-1: #7a89e0;
+  --actor-2: #39c5cf;
+  --actor-3: #b9c96b;
+  --actor-4: #92a8c4;
+  --actor-5: #d98ba8;
+  --actor-6: #57c99a;
+  --actor-text: #14170f;
+}
+
+/* Shared component grammar (round 1) - ported from the source repo's `@layer components`
+   pattern, renamed to our own tokens. `.ui-card`/`.ui-card-hover` (not `.card`/`.card-hover`,
+   the source's names) deliberately avoided colliding with the legacy `.card` rule that used
+   to live further down this file: that rule was plain/unlayered CSS, which always wins over
+   `@layer` content regardless of source order or specificity, so reusing the name would have
+   made this primitive silently invisible. Round 2 deleted the legacy `.card` once every
+   consumer had moved onto `ui/Card.tsx` - the two names never needed to converge in practice,
+   left as `ui-card` for clarity. --radius-lg/-md/-sm (16/12/8px) happen to equal Tailwind's
+   rounded-2xl/-xl/-lg exactly, so those built-in classes are used directly instead of
+   arbitrary values. */
+@layer components {
+  .ui-card {
+    @apply bg-surface-2 border border-border rounded-2xl;
+  }
+  .ui-card-hover {
+    @apply ui-card transition-all duration-200 hover:border-border-strong hover:bg-surface-3;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white text-sm font-medium rounded-lg transition-colors duration-150;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 text-sm text-muted hover:text-fg hover:bg-surface-3 rounded-lg transition-colors duration-150;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border whitespace-nowrap shrink-0;
+  }
+  /* Tone variants use color-mix directly rather than Tailwind's `/opacity` color modifier:
+     that modifier needs colors defined as space-separated channels (e.g. `--ok: 60 154 92`) to
+     work, and ours are plain hex strings for compatibility with every existing non-Tailwind
+     rule in this file - `bg-ok/10` would silently compile to an invalid color value. */
+  .badge-ok {
+    @apply badge;
+    color: var(--ok);
+    border-color: var(--ok);
+    background: color-mix(in srgb, var(--ok) 14%, transparent);
+  }
+  .badge-bad {
+    @apply badge;
+    color: var(--bad);
+    border-color: var(--bad);
+    background: color-mix(in srgb, var(--bad) 14%, transparent);
+  }
+  .badge-warn {
+    @apply badge;
+    color: var(--warn);
+    border-color: var(--warn);
+    background: color-mix(in srgb, var(--warn) 14%, transparent);
+  }
+  .badge-neutral {
+    @apply badge text-muted border-border bg-surface-2;
+  }
+}
+
+/* Accessibility details ported from the source repo, adapted to our tokens. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+::selection {
+  background: var(--accent-muted);
+  color: var(--fg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+h1 {
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+}
+h2 {
+  font-size: 0.82rem;
+  margin: 1.8rem 0 0.7rem;
+  color: var(--border-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 750;
+}
+
+h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+  color: var(--fg);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+
+a {
+  color: var(--border-strong);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+.tl-node-link {
+  cursor: pointer;
+}
+.tl-node-link:hover circle:last-of-type {
+  filter: brightness(1.15);
+}
+.tl-node-link:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--muted);
+}
+.sub {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 0 0 0.7rem;
+}
+.eng-row-highlight {
+  animation: eng-row-flash 2.2s ease-out 1;
+}
+@keyframes eng-row-flash {
+  0%,
+  15% {
+    box-shadow: 0 0 0 3px var(--border-strong);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eng-row-highlight {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--border-strong);
+  }
+}
+/* .timeline-desktop/.timeline-mobile + .tl-node-g/.tl-arc/.tl-arc-pill (the old standalone
+   EngagementTimeline.tsx swimlane's breakpoint swap + SVG animation classes) removed 2026-08-09
+   - that component (and TeamSwimlaneTimeline.tsx/TimelineStackedList.tsx, which owned these
+   classes) was deleted once the Command Centre's own AgentTimeline (.cc-timeline-desktop/
+   .cc-timeline-mobile, ccStyles.css) took over rendering an engagement's roster timeline from
+   inside EngagementRow directly - two swimlanes for the same engagement was the "repeated
+   information" this replaced. */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

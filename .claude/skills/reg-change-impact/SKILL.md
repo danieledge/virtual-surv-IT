@@ -12,6 +12,11 @@ touched). **Establish the change and the jurisdiction(s) first - ask via the que
 question per axis; make any mutually-exclusive axis (e.g. a single jurisdiction) single-select**
 (CLAUDE.md §2).
 
+**The standard open applies before any agent is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement
+Brief and `engagement_state init` (unless `/engage` already wrote them) before step 1, the closing
+bookend at the end.
+
 1. **Understand the change** - what obligation changed, effective date, the new/amended
    requirement (get the `*-sme` to read it; don't interpret regulation unaided). **Ground every
    pinpoint citation against the regulatory register** (`config/regulatory-register.yaml`); a new

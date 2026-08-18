@@ -11,14 +11,38 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
 
 import scripts.todo_panel_nudge as nudge
 
 
-def _run(monkeypatch, capsys, payload: dict):
+def _run_bare(monkeypatch, capsys, payload: dict):
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
     rc = nudge.main()
     return rc, capsys.readouterr().out
+
+
+# Session scoping (2026-08-16): the STAGED hook arms only when the payload's session_id
+# matches the acting-session stamp in artifacts/.team-session.json. The live copy under
+# test here ignores both until the staged fix is applied, so adding them now is inert -
+# and it keeps this whole suite green the moment the human runs the apply script.
+_SID = "sess-live-suite"
+
+
+def _stamped_run(run_fn, monkeypatch, capsys, payload: dict):
+    payload.setdefault("session_id", _SID)
+    cwd = payload.get("cwd")
+    if cwd:
+        art = Path(cwd) / "artifacts"
+        if art.is_dir():
+            (art / ".team-session.json").write_text(
+                json.dumps({"session": _SID}), encoding="utf-8"
+            )
+    return run_fn(monkeypatch, capsys, payload)
+
+
+def _run(monkeypatch, capsys, payload: dict):
+    return _stamped_run(_run_bare, monkeypatch, capsys, payload)
 
 
 def _state(phase="delivery", status="in_progress", log=None):
@@ -160,4 +184,45 @@ def test_staged_and_live_match_when_installed():
     assert live.is_file(), f"live hook missing at {live} - it is not installed"
     assert live.read_bytes() == staged.read_bytes(), (
         "staged todo-panel nudge not yet applied - run: bash scripts/apply-todo-panel-nudge.sh"
+    )
+
+
+def _load_staged_nudge():
+    """Loads scripts/staged_hooks/todo_panel_nudge.py directly (importlib, by path)
+    rather than importing scripts.todo_panel_nudge - the M3 fix below is staged, not
+    yet human-applied to the live copy (test_staged_and_live_match_when_installed
+    above correctly flags that as pending), so testing the live import would test
+    unfixed code. Same pattern as test_dod_stop_gate.py's own _load_staged_gate()."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "staged_hooks" / "todo_panel_nudge.py"
+    spec = importlib.util.spec_from_file_location("staged_todo_panel_nudge", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_load_checker_does_not_grow_sys_path_on_repeat_calls(tmp_path):
+    """M3 (2026-08-14 daemon-safety audit): same bug class already fixed in
+    persona_anchor.py's own _load_checker, missed here (and in dod_stop_gate.py,
+    covered by its own identical test) - this hook is re-exec'd fresh per Stop event
+    INSIDE the daemon when daemon-served, so an unconditional sys.path.insert would
+    grow the daemon's process-global sys.path without bound over its life. Calling
+    _load_checker twice with the SAME project_root must not add a second entry."""
+    import sys
+
+    staged = _load_staged_nudge()
+    project_root = tmp_path
+    before = list(sys.path)
+    staged._load_checker(project_root)
+    after_first = list(sys.path)
+    staged._load_checker(project_root)
+    after_second = list(sys.path)
+
+    added_by_first = [p for p in after_first if p not in before]
+    assert len(added_by_first) <= 1  # at most the one, deliberate insert
+    assert after_second == after_first, (
+        "a second call with the same project_root grew sys.path again - the dedup "
+        "check did not hold"
     )

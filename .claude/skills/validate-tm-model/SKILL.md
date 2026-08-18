@@ -20,6 +20,11 @@ FFIEC BSA/AML). It is **independent** of whoever tuned/built the model.
 `/tune-thresholds`, `/prepare-data`), read `.claude/skills/<name>/SKILL.md` and follow it in this
 session, never the Skill tool (`.claude/skills/.shared/run-mode.md`).
 
+**The standard open applies before any agent is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement
+Brief and `engagement_state init` (unless `/engage` already wrote them) before step 1, the closing
+bookend at the end.
+
 **1. Gather inputs - ask via the question tool, one question per axis; don't assume.** Ask as
 discrete, structured questions: which **scenario set / TM system**; where the **alert + outcome
 data** is (synthetic, masked, or data **attested safe** - at intake, or **confirm now if you
@@ -29,7 +34,7 @@ invoked this skill directly** rather than via `/engage`, §5 - if raw/unprepared
 exclusive (e.g. a single jurisdiction or a fixed period), make that question **single-select**.
 
 **2. Assess (drive `tuning-analyst` for the data work + `model-validator` for the independent
-verdict; `tm-sme` for typology coverage):**
+verdict; the `docs/sme/tm-monitoring.md` pack for typology coverage):**
 - **Rule/scenario coverage** - are the firm's risks & typologies all covered? Any gaps?
 - **Threshold adequacy** - are thresholds still appropriate (ATL/BTL evidence), or drifted?
 - **Data integrity** - completeness/accuracy of the feeds the model depends on (hand to

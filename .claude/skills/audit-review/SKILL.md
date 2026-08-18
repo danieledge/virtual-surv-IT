@@ -22,31 +22,54 @@ from the artifact menu / at close, not mixed into this action question.
 
 Run an **evaluator-optimizer loop**:
 
-1. **code-reviewer** in **deep** mode (i.e. run `/deep-review` first, telling it to inherit
+1. **code-reviewer** in **deep** mode (i.e. run `/deep-review`, telling it to inherit
    **Mode = audit** and the **compliance** dimension and not to re-ask those) - comprehensive review
-   across the languages present, driving the standard analysers (ruff/mypy/bandit,
-   Checkstyle/PMD/SpotBugs, scalafmt/scapegoat, PSScriptAnalyzer, ShellCheck, Semgrep),
+   across the languages present, driving the standard analysers first - run once, up front,
+   before the lens passes, their output grounding each pass (`code-reviewer.md`'s tool table is
+   the single source of truth for which tools; **Semgrep** stays deliberately excluded, see
+   there for why),
    citing OWASP ASVS / CWE / SEI CERT, with confidence scoring and filter transparency
    (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope. The embedded
    `/deep-review` asks whether the code was **AI-assisted / vibe-coded**; if so, carry its
    **🧑‍💻 Prompting guidance** through into the audit report (see `docs/review/output-format.md`).
-2. **compliance-reviewer** - use the **jurisdiction(s)** already established in step 1's
-   `/deep-review` (or CLAUDE.md §2 / `docs/scope-and-stack.md`); **only ask if still unknown** -
-   don't re-ask what step 1 captured. It assesses against the **applicable** regime(s) and states
+2. **compliance-reviewer** - use the **jurisdiction(s)** already established at step 1's
+   `/deep-review` **intake** (asked and answered before any reviewer is dispatched; or CLAUDE.md
+   §2 / `docs/scope-and-stack.md`); **only ask if still unknown** - don't re-ask what intake
+   captured, and don't wait for `code-reviewer`'s output: jurisdiction is an intake answer, not a
+   review result. It assesses against the **applicable** regime(s) and states
    what's applicable vs not. Then: auditability, the alert→logic→obligation trace, threshold
    rationale, secrets/PII, test coverage, and change control.
+
+   **Steps 1 and 2 are one concurrent dispatch, not step-after-step.** The two reviews are
+   independent - separate packs (`findings-<slug>.jsonl`, `findings-compliance-<slug>.jsonl`),
+   merged only in the consolidation step below - so once intake is answered, dispatch
+   `compliance-reviewer` together with step 1's `code-reviewer` pass(es) per the operating
+   guide's dispatch rule. **No `review-scorer` context to forward here** (unlike
+   `deep-review/SKILL.md`'s step 5, a sequential hand-off): step 1's embedded `/deep-review` runs
+   its own Pip context call internally, concurrently with this dispatch, so nothing is available
+   yet to forward when `compliance-reviewer` goes out - it derives its own file list via
+   `git diff` this way, which is correct here, not a gap. **Default path**: when `PARALLEL_DISPATCH_VIA_WORKFLOW=on` (the probe
+   line; on by default) and the `Workflow` tool is available this session, its
+   `{label, prompt, agentType: "compliance-reviewer"}` spec joins the same `args` array as the
+   `agentType: "code-reviewer"` spec(s), through the fixed script in
+   `.claude/skills/.shared/workflow-dispatch.md` verbatim - the passes run concurrently in the
+   background and the results arrive as a later task notification (say so plainly; two-turn flow
+   in that shared file). **Fallback** (preference off, tool absent, or the Workflow call failed):
+   all of them as Task tool-uses in **one message** - never one per turn - per the operating
+   guide's literal procedure ("Dispatch independent calls concurrently").
 3. If any **Critical/Warning** findings (and fixes are in scope), route fixes to the right
    builder, then **re-review** - and **fix everything you safely can in this pass, don't defer
-   fixable work to a later sprint**. **Record every pass as it happens** in the Delivery
+   fixable work to a later sprint**. **The re-review pass needs fresh context, not the first
+   pass's** (2026-08-12): the fixes just applied changed the files, so any file list/language
+   breakdown forwarded into the first pass is now stale - re-run `review-scorer`'s context step
+   (or let `code-reviewer` derive it itself) rather than re-forwarding what step 1/2 used. **Record every pass as it happens** in the Delivery
    Report's iteration log (§1a: journey strip + append-only hand-off row per review pass, fix
    routing and re-review - operating guide, Outcome discipline 5); earlier pass verdicts are
    never rewritten. Loop until everything fixable is fixed; the only items left
    are those needing a **human decision** (mark 🔴 Open / needs human review, not "deferred").
-4. **Morgan's challenge pass (opus) - a spot-check, not a re-score** (the scorer already applied
-   the rubric; re-scoring everything on opus pays twice for the same judgement). Challenge every
-   🔴 Critical, anything §4/§5-regulated, any finding whose **evidence basis** looks thin (🧠
-   presented as 📊 - never let an inference reach the user as fact), and a sample of the rest;
-   downgrade or drop what fails. Be a sceptic, not a relay - and not a second scorer.
+4. **Morgan's challenge pass** - same step, same scope and rationale as `deep-review/SKILL.md`
+   step 6 (spot-check not re-score; every 🔴 Critical, §4/§5-regulated, thin-evidence and a
+   sample of the rest; documented/intentional bounds aren't defects) - not repeated here.
 5. Present in the shared `docs/review/output-format.md`: a clean traffic-light **scoreboard to
    the console**, with the full findings in the **clean artifact**. Give an explicit verdict
    (✅ audit-ready / ⚠️ conditional / ❌ not yet), standards cited, audit/regulatory checks, the
@@ -67,12 +90,15 @@ Run an **evaluator-optimizer loop**:
    ✅. Right-sized: it reads the pack, it does not re-run the review.
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`).
-Step 1's `/deep-review` already wrote `artifacts/data/findings-<slug>.json`; **consolidate the
-compliance-reviewer findings from step 2 into the same pack** (append to `findings[]`; use the pack's
-narrative fields for the audit skeleton), then run **`<python> -m scripts.check_artifacts --fix`** -
-it validates the pack (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's
-`artifacts/<slug>/REVIEW-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status
-closing` first). Don't hand-author or hand-edit the rendered report.
+Step 1's `/deep-review` already had `code-reviewer` write its own pack directly to
+`artifacts/<slug>/data/findings-<slug>.jsonl`, and step 2's `compliance-reviewer` writes its own
+alongside it (`findings-compliance-<slug>.jsonl`, both agents hold a Write grant scoped to exactly
+their own path, mechanically enforced) - **read both back and consolidate**: merge
+`compliance-reviewer`'s `findings[]` into the code-review pack (append; use its narrative fields
+for the audit skeleton), then run **`<python> -m scripts.check_artifacts --fix`** - it validates the
+pack (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `artifacts/<slug>/REVIEW-<slug>.md`
++ `.html` (render is CLOSE-only, ADR-010: `set-status closing` first). Don't hand-author or
+hand-edit the rendered report.
 (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 
 **Close with a clear disposition - never leave it ambiguous.** State the verdict **and the

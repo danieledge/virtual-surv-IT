@@ -16,6 +16,11 @@ are dormant** - when this workflow routes to another (`/build-solution`, `/hando
 `/audit-review`), read `.claude/skills/<name>/SKILL.md` and follow it in this session, never the
 Skill tool (`.claude/skills/.shared/run-mode.md`).
 
+**The standard open applies before any agent is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement
+Brief and `engagement_state init` (unless `/engage` already wrote them) before step 1, the closing
+bookend at the end.
+
 You are the orchestrator (CLAUDE.md §6). Do **not** write detection logic yourself - route
 each step to the right agent and chain them in this session:
 
@@ -34,8 +39,10 @@ each step to the right agent and chain them in this session:
    When off, skip citations entirely - but state it plainly in the spec
    ("Regulatory citations: off (project preference)") rather than silently omitting
    them; never let a reader assume the obligation was checked and cleared.
-2. **Domain SME** - pick by domain: `trade-surveillance-sme`, `tm-sme`, or
-   `comms-surveillance-sme`. Have them review the proposed detection logic and thresholds.
+2. **Domain SME pack** - the reviewing agent (business-analyst, or the PM for a light pass)
+   reads the matching `docs/sme/` knowledge pack in-line (`trade-surveillance.md`,
+   `tm-monitoring.md`, or `comms-surveillance.md`) and reviews the proposed detection logic
+   and thresholds against its protocol - no spawn; cite the pack, never a persona.
    (Advisory/read-only - they recommend, they do not edit.)
 3. **rules-developer** - implement under `rules/` with synthetic tests under `tests/`
    (synthetic data only - §5), thresholds documented with rationale + tuning date (§4).

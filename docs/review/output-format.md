@@ -81,8 +81,8 @@ the terminal only ever sees the scoreboard.)
 ## Artifact sections
 
 > **Findings are structured data, rendered - not hand-authored (0.23.0+).** The source of truth is a
-> **findings pack** (`artifacts/data/findings-<slug>.json`, schema `docs/review/findings-schema.json`,
-> exemplar `gold-findings.json`); the canonical `REVIEW-<slug>.md` is produced from it by
+> **findings pack** (`artifacts/data/findings-<slug>.jsonl`, schema `docs/review/findings-schema.json`,
+> exemplar `gold-findings.jsonl`); the canonical `REVIEW-<slug>.md` is produced from it by
 > `render_findings` - the layout below is what that renderer emits, and the field descriptions here
 > are the pack's fields. **`code-reviewer` returns findings in the pack's JSON shape**; the PM writes
 > the pack (post-challenge) to `artifacts/data/` and runs **`<python> -m scripts.check_artifacts --fix`**

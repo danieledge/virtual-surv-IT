@@ -24,7 +24,7 @@ manipulation), 6AMLD / BSA (AML), FCA SYSC record-keeping. Cite the specific obl
 ## 3. Elicitation method & sources
 | Technique | Source / participant | Date | Output |
 |-----------|----------------------|------|--------|
-| Interview | tm-sme / trade-sme | <YYYY-MM-DD> | typology notes |
+| Pack consult | docs/sme/ pack (AML / trade) | <YYYY-MM-DD> | typology notes |
 | Document analysis | regulation / policy | … | obligation map |
 | Workshop | analysts | … | as-is process |
 
@@ -95,7 +95,7 @@ visibly open; they never dissolve.
 
 | Round | Date | Question (raised by) | Answered by | Answer (summary) | Spec change (section · version) | Status |
 |-------|------|----------------------|-------------|------------------|---------------------------------|--------|
-| 1 | <YYYY-MM-DD> | <e.g. segment thresholds per asset class?> (`business-analyst`) | `tm-sme` | <one line> | §6 · v0.2 | ✅ answered |
+| 1 | <YYYY-MM-DD> | <e.g. segment thresholds per asset class?> (`business-analyst`) | `docs/sme/tm-monitoring.md` | <one line> | §6 · v0.2 | ✅ answered |
 | 2 | <YYYY-MM-DD> | <...> (`business-analyst`) | user (via Morgan) | - | - | 🔴 open |
 
 > Traceability: REQ-B/F-### flow into the FSD and the RTM (`docs/templates/rtm.md`):

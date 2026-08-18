@@ -19,6 +19,11 @@ conversion the team does itself goes through `<python> -m scripts.convert_file` 
 defaults, schema gates, JSON evidence report - attach it); never hand-parse.
 (`<python>`: the `INTERPRETER=` word the step-0 probe printed, verbatim, never re-probed; direct invocation and plugin-mode paths: `.claude/skills/.shared/run-mode.md`)
 
+**The standard open applies before analysis begins, even when this skill is invoked directly.**
+Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement Brief and
+`engagement_state init` (unless `/engage` already wrote them) before step 1, the closing bookend
+at the end.
+
 1. **Frame** the question and the assumptions/caveats up front.
 2. **Analyse** - efficient, well-commented SQL/Python on synthetic/masked data: distributions,
    segments, cohorts, trends, false-positive sources, correlations. Never expose raw PII/MNPI in

@@ -48,7 +48,7 @@ List explicitly. Flag anything needing SME input. **Each open question must be f
 dispositioned by its owner before sign-off** (§9) - don't leave them dangling (DoD gate).
 
 ## 8. Hand-off
-SME for review: `<trade-surveillance-sme | tm-sme | comms-surveillance-sme>`
+SME pack consulted: `<docs/sme/trade-surveillance.md | tm-monitoring.md | comms-surveillance.md>`
 Implementer: `rules-developer` (or `ml-engineer` if model-based → `model-validator`).
 
 ## 9. Open-questions disposition (decision log)
@@ -57,7 +57,7 @@ mapping / sign off while a blocker is open.
 
 | # | Question | Owner | Disposition |
 |---|---|---|---|
-| Q1 | <…> | <sme> | answered / needs deployment input / open-decision-required - <one line> |
+| Q1 | <…> | <sme pack> | answered / needs deployment input / open-decision-required - <one line> |
 
 **Bottom line:** is the obligation mapping safe to finalise? If not, the minimum still required.
 

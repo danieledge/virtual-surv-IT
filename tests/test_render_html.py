@@ -22,6 +22,25 @@ def test_title_pulled_from_first_h1():
     assert _title_from("no heading here", "fallback") == "fallback"
 
 
+def test_render_file_writes_html_alongside_by_default(tmp_path):
+    src = tmp_path / "REPORT.md"
+    src.write_text(SAMPLE, encoding="utf-8")
+    out = rh.render_file(src)
+    assert out == src.with_suffix(".html")
+    assert out.is_file()
+    assert "Review Report" in out.read_text(encoding="utf-8")
+
+
+def test_render_file_honours_explicit_out_path(tmp_path):
+    src = tmp_path / "REPORT.md"
+    src.write_text(SAMPLE, encoding="utf-8")
+    out_path = tmp_path / "elsewhere" / "custom.html"
+    out_path.parent.mkdir()
+    out = rh.render_file(src, out_path)
+    assert out == out_path
+    assert out.is_file()
+
+
 def test_render_is_standalone_html():
     html = render(SAMPLE, "Review Report")
     assert html.lstrip().startswith("<!doctype html>")

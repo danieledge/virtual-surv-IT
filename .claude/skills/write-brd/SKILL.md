@@ -6,9 +6,16 @@ disable-model-invocation: true
 
 Under the PM (CLAUDE.md §6), turn this idea into a BRD: **$ARGUMENTS**
 
-1. Clarify first - **ask via the question tool, one question per axis** (scope, jurisdiction,
-   success metrics); make any mutually-exclusive axis **single-select**; don't guess material
-   decisions. If scope/stakeholders are unclear, start with `/elicit-requirements`.
+**The standard open applies before drafting begins, even when this skill is invoked directly.**
+Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement Brief and
+`engagement_state init` (unless `/engage` already wrote them) before step 1, the closing bookend
+at the end.
+
+1. Clarify first - **ONE `AskUserQuestion` call, one question per axis inside it** (scope,
+   jurisdiction, success metrics - up to 4 axes per call, each **single-select** where
+   mutually exclusive); never a screen per axis (2026-08-17 flow review - the same
+   batching the intake gate uses). Don't guess material decisions. If scope/stakeholders
+   are unclear, start with `/elicit-requirements`.
 2. Route to **business-analyst** to draft using `docs/templates/brd.md` (plugin mode: `$PLUGIN_ROOT/docs/templates/brd.md` - resolve it; missing from the working repo is never a blocker).
 3. Write each requirement in **EARS** form ("When `<trigger>`, the system shall
    `<response>`") with a stable ID (BRD-001, …) and the regulatory/business driver cited

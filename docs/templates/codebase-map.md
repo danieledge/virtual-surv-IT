@@ -31,6 +31,13 @@
   **Deprecated** with a date and reason; never silently delete or silently keep.
 - Mechanical hygiene: `python -m scripts.check_artifacts` validates size, header fields,
   basis tags, secret patterns and anchor resolution.
+- **Optional `Paths` column (ADR-007 Phase 1, off by default - `map_skeleton` preference):**
+  a comma-separated glob (or globs) of the files an entry describes, e.g. `path/*.py` or
+  `src/config.py, src/settings.py`. When the `map_skeleton` toggle is on, `MAP-DRIFT` compares
+  a fresh fingerprint of those files (`python -m scripts.repo_skeleton --fingerprint
+  <this map>`) against the one recorded when the entry was written, flagging entries whose
+  code has moved on since. Leave the column out (or a row's cell blank) for an entry with no
+  natural file-glob shape - drift-checking is opt-in per entry, not mandatory.
 
 ## 1. What this project is
 
@@ -60,9 +67,25 @@ One short paragraph: purpose, tech stack, entry points, how it is built/run/test
 > reading the code** (how it is built, its load-bearing decisions, its sharp edges); the
 > findings live in the review artifact and their one-line trace in §3.
 
-| # | Area | Entry (a durable code fact - NOT a finding or an activity note) | Basis | As-of | Anchor |
-|---|------|-------|-------|-------|--------|
-| 1 | <e.g. detection rules> | <how the code is built - fact, decision or quirk in one or two sentences, with `path/file.py:line` pointers; no finding IDs/severities/dispositions> | 📊 <where seen> / 🧠 <assumption> | <YYYY-MM-DD> | `<sha>` |
+| # | Area | Entry (a durable code fact - NOT a finding or an activity note) | Basis | As-of | Anchor | Paths (optional) |
+|---|------|-------|-------|-------|--------|-------|
+| 1 | <e.g. detection rules> | <how the code is built - fact, decision or quirk in one or two sentences, with `path/file.py:line` pointers; no finding IDs/severities/dispositions> | 📊 <where seen> / 🧠 <assumption> | <YYYY-MM-DD> | `<sha>` | <e.g. `path/*.py`> |
+
+## Index (ADR-007 Phase 1 Chunk E - only if `docs/codebase-map.d/` has files)
+
+> Deliberately UNNUMBERED (not "## 3.") - `scripts/engage_probe.py`'s regex locates the
+> Engagement history section by its exact "## 3." / "## 4." heading anchors; a numbered
+> section here would shift those anchors and silently break the what's-new-since-you-last-
+> engaged banner. Keep this section unnumbered wherever it sits in the file.
+
+Detail that doesn't fit §2's budget lives in its own area file, generated/refreshed by
+`/map-codebase`. **Omit this section entirely** for a project with no area files - an empty
+Index is noise, not a placeholder to fill in. Each row states its own load-trigger, so a
+specialist reads only what the task in front of them actually needs:
+
+| Area file | Read this when... |
+|-----------|--------------------|
+| `docs/codebase-map.d/<area>.md` | <e.g. touching detection scoring logic, or before a deep review of that area> |
 
 ## 3. Engagement history
 

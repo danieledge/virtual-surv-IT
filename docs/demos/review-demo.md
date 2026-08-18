@@ -44,7 +44,7 @@ Deliberately NOT flagged
 - LARGE_ORDER_MULTIPLE = 5.0 (line 10): correctly documented threshold with rationale + tuning
   date per CLAUDE.md §4 - this is the planted FP-trap; flagging it would be a false positive.
 
-Tooling coverage: ruff/bandit/mypy/semgrep MISSING; gitleaks ran (no leaks reported - note the
+Tooling coverage: ruff/bandit/mypy MISSING; gitleaks ran (no leaks reported - note the
 hardcoded password evaded its ruleset). All findings therefore 🧠 inferred from reading.
 ```
 

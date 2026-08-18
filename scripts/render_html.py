@@ -154,6 +154,12 @@ blockquote { border-left: 4px solid #d0d7de; margin: 1em 0; padding: .2em 1em; c
 a { color: #0969da; }
 .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ececec;
   color: #595959; font-size: .8rem; }
+/* In-progress status pulse - CSS-only (no JS: bleach strips script elements from body content
+   by design, see _sanitise()'s docstring). #status-in-progress is set by engagement_state.py's
+   render_markdown() only while status == in_progress; never applied to blocked/closing/closed. */
+#status-in-progress { display: inline-block; animation: status-pulse 1.8s ease-in-out infinite; }
+@keyframes status-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { #status-in-progress { animation: none; } }
 @media (prefers-color-scheme: dark) {
   body { background: #0d1117; color: #e6edf3; }
   h1, h2 { border-color: #30363d; }
@@ -283,6 +289,26 @@ def render(md_text: str, title: str, source: str = "", generated: str = "") -> s
     return re.sub(r"%%(TITLE|CSS|META|BODY|FOOTER)%%", lambda m: fields[m.group(1)], _TEMPLATE)
 
 
+def render_file(src: Path, out: Path | None = None) -> Path:
+    """Render one Markdown file to HTML, in-process. Shared by main() (CLI) and
+    check_artifacts.apply_fixes() (2026-08-05 perf fix - apply_fixes used to shell out to this
+    script once per un-rendered .md; on a host where every python.exe spawn is inflated by
+    endpoint-security scanning (corp Windows), a handover pack with several deliverables
+    chained enough untimed spawns to present as the whole close step hanging).
+
+    Pin UTF-8 explicitly: Path.read_text/write_text otherwise use the OS locale default (e.g.
+    cp1252 on Windows), which mangles emoji / non-ASCII into replacement boxes. UTF-8 keeps
+    rendering identical on every platform, not just UTF-8-locale Linux/macOS."""
+    md_text = src.read_text(encoding="utf-8")
+    out = out or src.with_suffix(".html")
+    generated = _dt.date.today().isoformat()
+    out.write_text(
+        render(md_text, _title_from(md_text, src.stem), source=src.name, generated=generated),
+        encoding="utf-8",
+    )
+    return out
+
+
 def main() -> None:
     # Force UTF-8 output so a cp1252 (Windows) console can't crash on non-ASCII (0.19.0).
     for _stream in (sys.stdout, sys.stderr):
@@ -295,18 +321,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, help="output .html path (default: alongside the .md)")
     args = ap.parse_args()
 
-    # Pin UTF-8 explicitly: Path.read_text/write_text otherwise use the OS locale default
-    # (e.g. cp1252 on Windows), which mangles emoji / non-ASCII into replacement boxes. UTF-8
-    # keeps rendering identical on every platform, not just UTF-8-locale Linux/macOS.
-    md_text = args.src.read_text(encoding="utf-8")
-    out = args.out or args.src.with_suffix(".html")
-    generated = _dt.date.today().isoformat()
-    out.write_text(
-        render(
-            md_text, _title_from(md_text, args.src.stem), source=args.src.name, generated=generated
-        ),
-        encoding="utf-8",
-    )
+    out = render_file(args.src, args.out)
     print(f"Rendered {args.src} -> {out}")
 
 

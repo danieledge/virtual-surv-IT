@@ -54,9 +54,16 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
 
 2. **Deep security review** (`code-reviewer` in **audit** mode - pre-existing issues stay in scope).
    Load the **security + per-language + architecture** lenses via `docs/review/agent-router.md`, and
-   drive the **security analysers** where available: `bandit`, `semgrep`, `gitleaks` / secret-scan,
-   `find-sec-bugs` (JVM), `ShellCheck`, `PSScriptAnalyzer` security rules, plus a **dependency /
-   supply-chain** scan (`pip-audit`, `npm audit`, `osv-scanner`) for known-vulnerable dependencies.
+   drive the **security analysers** first - run before the lens passes, their output grounding
+   each pass - where available: `bandit`, `gitleaks` / secret-scan, `ShellCheck`,
+   `PSScriptAnalyzer` security rules (consent-gated: the execution guard treats `pwsh` as code
+   execution - see `code-reviewer.md`, which also dropped `find-sec-bugs` outright: it needs a
+   compiled build), plus a **dependency /
+   supply-chain** scan (`npm audit`, `osv-scanner`) for known-vulnerable dependencies. (`semgrep`
+   and `pip-audit` deliberately excluded - both made unconditional network calls with no reliable
+   offline mode found, causing repeated live corp-proxy hangs; see `code-reviewer.md` for the
+   measurements. Python dependency-CVE coverage has no dedicated tool for now until a
+   network-safe replacement is found - flag as 🧠 inferred-only.)
    Cite **OWASP ASVS / CWE / SEI CERT** per finding, with confidence scoring, evidence basis
    (📊 measured / 🧠 inferred - never let an inference read as fact), and filter transparency
    (`docs/code-review-method.md`). Cover, at depth: injection (CWE-78/89/22), deserialisation /
@@ -66,15 +73,30 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
 
 3. **compliance-reviewer** - the **§5 data-safety trail** (no secrets, no PII/MNPI/raw data in
    code, logs or fixtures) and, where detection logic is touched, the §4 alert→logic→obligation
-   trace. Use the jurisdiction(s) established in step 2 (or CLAUDE.md §2 / `docs/scope-and-stack.md`);
-   only ask if still unknown. Regulated findings are **never filtered**.
+   trace. Use the jurisdiction(s) established at intake (or CLAUDE.md §2 / `docs/scope-and-stack.md`);
+   only ask if still unknown - it is an intake answer, not something step 2 produces. Regulated
+   findings are **never filtered**.
+
+   **Steps 2 and 3 are one concurrent dispatch, not step-after-step.** The two passes are
+   independent - separate packs (`findings-<slug>.jsonl`, `findings-compliance-<slug>.jsonl`),
+   merged only in the consolidation step below - so dispatch them per the operating guide's
+   dispatch rule. **Default path**: when `PARALLEL_DISPATCH_VIA_WORKFLOW=on` (the probe line; on
+   by default) and the `Workflow` tool is available this session, one `{label, prompt, agentType}`
+   spec per pass (`agentType: "code-reviewer"`, `agentType: "compliance-reviewer"`) in the same
+   `args` array, through the fixed script in `.claude/skills/.shared/workflow-dispatch.md`
+   verbatim - the passes run concurrently in the background and the results arrive as a later
+   task notification (say so plainly; two-turn flow in that shared file). **Fallback**
+   (preference off, tool absent, or the Workflow call failed): both as Task tool-uses in **one
+   message** - never one per turn - per the operating guide's literal procedure ("Dispatch
+   independent calls concurrently").
 
 4. If any **Critical/Warning** findings (and fixes are in scope), route fixes to the right builder
    (or `/remediate`), then **re-review** - **fix everything you safely can this pass; don't defer
    fixable work.** Loop until only human-decision items remain, marked **🔴 Open (needs human
    review)**, not "deferred".
 
-5. **Morgan's challenge pass (opus) - a spot-check, not a re-score** (the scorer already applied the
+5. **Morgan's challenge pass (the orchestrator's own tier - sonnet by default, opus if
+   configured for this engagement) - a spot-check, not a re-score** (the scorer already applied the
    rubric; re-scoring everything on opus pays twice). Challenge every 🔴 Critical, every §5/§4
    regulated finding, anything whose evidence basis looks thin (🧠 presented as 📊), and a sample of
    the rest; downgrade or drop what fails. Be a sceptic, not a relay - and not a second scorer.
@@ -90,9 +112,12 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
    artifact before presenting, don't rely on the gate).
 
 **The report is rendered from a findings pack, not hand-authored** (`docs/review/output-format.md`,
-schema `docs/review/findings-schema.json`). Write the findings to
-`artifacts/data/findings-<slug>.json` with **`"kind": "security-audit"`** (each finding the five
-named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition), then run
+schema `docs/review/findings-schema.json`). Tell `code-reviewer` (step 2) to write its own pack
+directly to `artifacts/<slug>/data/findings-<slug>.jsonl` with **`"kind": "security-audit"`** (each
+finding the five named fields - `standard` = the CWE/OWASP ASVS ref - + severity/basis/disposition -
+it holds a Write grant scoped to exactly this path, mechanically enforced); `compliance-reviewer`
+(step 3) writes its own alongside it (`findings-compliance-<slug>.jsonl`). **Read both back and
+consolidate** - merge `compliance-reviewer`'s `findings[]` into the security pack - then run
 **`<python> -m scripts.check_artifacts --fix`** (allow-listed): it validates the pack
 (`FINDINGS-INVALID` → fix and re-run) and renders the workspace's `artifacts/<slug>/SECURITY-AUDIT-<slug>.md` + `.html` (render is CLOSE-only, ADR-010: `set-status closing` first)
 (the `kind` drives the `SECURITY-AUDIT-` prefix). Don't hand-author or hand-edit the report.

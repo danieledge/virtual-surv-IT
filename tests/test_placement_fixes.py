@@ -18,7 +18,6 @@ silently. The render now embeds a content hash: hand-edits surface as INDEX-HAND
 from __future__ import annotations
 
 import copy
-import json
 
 from scripts.check_artifacts import apply_fixes, check, main as ca_main
 
@@ -56,10 +55,11 @@ def _index(art, status, listed=()):
     _touch(art / "START-HERE.html")
 
 
-def _pack(art, obj, name="findings-t.json", sub=""):
+def _pack(art, obj, name="findings-t.jsonl", sub=""):
+    from scripts.findings_pack_io import write_pack
+
     d = art / "data" / sub if sub else art / "data"
-    d.mkdir(parents=True, exist_ok=True)
-    (d / name).write_text(json.dumps(obj), encoding="utf-8")
+    write_pack(d / name, obj)
 
 
 # --- P3: REVIEW render is close-only ------------------------------------------------------
@@ -106,7 +106,7 @@ def test_nested_findings_pack_validated(tmp_path):
     _index(art, "⏳ IN PROGRESS")
     bad = copy.deepcopy(_VALID_PACK)
     del bad["findings"][0]["likely_cause"]
-    _pack(art, bad, name="findings-nested.json", sub="cycle-2")
+    _pack(art, bad, name="findings-nested.jsonl", sub="cycle-2")
     assert any("FINDINGS-INVALID" in f for f in check(art))
 
 
@@ -117,11 +117,11 @@ def test_root_data_lane_validated_in_workspace_mode(tmp_path, capsys):
     es_main(["--dir", str(art / "audit"), "init", "--title", "a", "--slug", "audit"])
     bad = copy.deepcopy(_VALID_PACK)
     del bad["findings"][0]["impact"]
-    _pack(art, bad, name="findings-root.json")
+    _pack(art, bad, name="findings-root.jsonl")
     capsys.readouterr()
     rc = ca_main(["check_artifacts", str(art)])
     out = capsys.readouterr().out
-    assert rc == 1 and "FINDINGS-INVALID" in out and "findings-root.json" in out
+    assert rc == 1 and "FINDINGS-INVALID" in out and "findings-root.jsonl" in out
 
 
 # --- P7: hand-edited index detected and backed up -----------------------------------------

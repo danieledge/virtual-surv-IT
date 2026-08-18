@@ -3,6 +3,1466 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.34.0] - 2026-08-17 - virt-surv go becomes the front door; review and build flows tightened end to end
+
+Two days of live corporate-laptop testing drove this release: every item below traces to a
+real session report, and each shipped with a pinning test.
+
+### Added
+- **`virt-surv go` as the recommended launch**, with a real TUI: a rich-rendered banner
+  (Morgan's greeting included), a color-coded project-defaults table, and prompt_toolkit
+  menus - arrow keys, mouse, hotkey badges, in-place setting toggles - with a numbered
+  fallback wherever a terminal can't run them (both libraries vendored, pure Python, no
+  pip; Textual was evaluated and rejected over its compiled tree-sitter dependency). The
+  menu always pauses, even with nothing open; `[c]` edits project settings inline (env
+  tuning / 1h cache TTL included) and `[a]` archives engagements - 'all' means all open,
+  not just the rows shown.
+- **Locked review-target menu** (`references/target-menu.md`, guard-enforced): Uncommitted
+  changes / Branch vs main / Whole working directory / A file or folder I'll name - with a
+  two-option non-git variation and everything exotic via "Other". The target is DERIVED
+  (diff or named path) whenever possible; underivable targets ride the intake batch.
+- **Map-first enforcement**: a Bash rule denies bare full-tree enumeration (find -type f,
+  ls -R, Get-ChildItem -Recurse) in engaged sessions, naming the sanctioned inventory
+  sources (codebase map, git ls-files, repo_skeleton). The price line's sizing is now
+  mechanical - a number, never a listing.
+- **Build-workflow pass** (the review flow's treatment applied to builds): unit briefs
+  carry the file list + map path, all build-side agents get the no-enumeration rule, the
+  go-ahead gate prices the plan and states consent consequences up front, single-unit
+  non-detection builds derive the light shape, and the shared bookends refresh the map at
+  close when code changed.
+
+### Fixed
+- **Alias v5 + self-heal**: the Claude launch command is no longer baked into the shell
+  function (a config reset kept launching a stale 'cc --debug'; multi-word commands were
+  unresolvable) - the function asks the launcher at every go and word-splits the answer.
+  Upgrades REMOVE old stamped definitions instead of stacking them, and `go` heals a
+  stale profile automatically, once per alias version.
+- **Windows menu under the alias's stdout capture**: prompt_toolkit's Win32 layer renders
+  via the process stdout handle, so the widget silently died - the launcher now rebinds
+  STD_OUTPUT_HANDLE to CONOUT$ (verified live on the Windows VM), and any widget-start
+  failure falls back to the numbered menu instead of skipping the pause.
+- **`/engage --new` engagement archaeology**: the open no longer re-surveys open packs
+  the go menu just showed - zero discovery under --new, the prefetch injects
+  ENGAGE_FLAG=--new and omits the resume menu, and hand-rolled substitute probes are
+  named and banned.
+- **Probe cost**: the what's-new is one heading line (WHATS_NEW=), not the changelog
+  body; `go` pre-warms the guard-interpreter cache so even a first /engage gets the
+  zero-tool-call prefetch instead of the inline bootstrap heredoc.
+- **Docs factual sweep**: OVERVIEW's roster said 16 agents (13), token-usage tiering said
+  11 sonnet (8), Using-them still described the retired documentary-artifact menu; quick
+  start now leads with `virt-surv go` everywhere (PDF regenerated).
+
+## [0.33.62] - 2026-08-13 - Full-suite regression run catches a self-inflicted fingerprint bug from 0.33.61
+
+A full `pytest` run (not just the touched-file suites 0.33.61 was verified against) surfaced
+two real failures in `tests/test_archive.py` that a per-file run had missed.
+
+**Root cause:** C5's per-pack mutation lock (0.33.61) writes `.engagement-state.lock` for the
+duration of a command - including `set-status closed`, which computes and stores the
+close-time fingerprint from *inside* that lock. The lock file existed on disk at the exact
+moment the fingerprint's stat-walk ran, got hashed into the stored value, then was deleted
+(lock released) before anything else could recompute it - so an unlocked recomputation could
+never match what was stored. Fixed by adding the lock file to `_FINGERPRINT_EXCLUDE`, the
+same treatment already given to the state file, index renders and the archive marker - all
+operational bookkeeping, never a deliverable.
+
+**Second, unrelated finding surfaced by the same run:** M3's fix (0.33.61, hash the state
+file's content so post-close tampering moves the fingerprint) hashed the *whole* state dict,
+which broke a real, deliberate pre-existing contract: a `log-note` after close only appends to
+the log and must not force a full re-scan, any more than a routine index re-render does.
+Narrowed the hash to the fields that actually determine close validity (status, close date,
+verdict, outstanding, team, artifacts) - catches every tampering case M3 was written for while
+leaving that contract intact.
+
+Both fixes verified with the existing pre-fix tests (which now pass) plus a full clean
+`pytest` run across the whole suite, not just the files touched.
+
+## [0.33.61] - 2026-08-13 - Fable-model audit of the engagement-lifecycle core and install_helper.py; all findings fixed
+
+Three parallel Fable-model reviews scoped to the core plugin (guard/hook/daemon layer,
+engagement lifecycle, `install_helper.py`), followed by a full fix pass over every finding.
+
+**Close gate (the highest-stakes transition in the system):** could strand a pack falsely
+CLOSED on disk two ways - a rollback write that could itself fail if the pre-close
+snapshot was already invalid, and a checker crash that used to fail OPEN (keep the close)
+rather than fail closed. Both now refuse/roll back instead.
+
+**Concurrency:** `engagement_state.py` had no locking around its read-modify-write cycle -
+parallel Workflow-tool dispatch mutating the same pack concurrently silently lost updates
+(reproduced live: 7 of 12 concurrent writes lost). Added a portable cross-process lock
+with stale-lock reclamation.
+
+**Archived packs:** `check()` and `apply_fixes --fix` were missing the `.archive` exclusion
+some of their sibling scans already had - archived history could trip false
+SUMMARY-BEFORE-CLOSE findings, and `--fix` would rename, DELETE, and re-render files
+inside a pack that's supposed to be frozen.
+
+**Status source of truth:** `check()` read engagement status from the rendered index text
+only, never the authoritative state file - a stale or hand-edited index reading "closed"
+could silently waive the close-only gate for a pack that was never actually closed. Now
+state-authoritative, consistent with `apply_fixes()` and the hooks (register G5's rule,
+closed for real this time).
+
+**Also fixed:** a missing `\n`/`\r` in the analyser-command shell-metacharacter blocklist
+(same effect as `;`, wasn't blocked); `migrate` losing the root's ACTIVE marker/lock file
+into the pack it moves; the close-fingerprint being blind to state-file tampering after
+close; `version_changed` failing open (suppressing the what's-new banner) on an unreadable
+manifest; a corrupt map-fingerprints sidecar being indistinguishable from a missing one;
+`add-tool` silently deleting pre-existing invalid registry entries on upsert.
+
+**`install_helper.py`:** two `--demo` gaps that performed real writes despite the
+"nothing written" promise (six scripting-path flags had no demo parameter at all);
+unparseable-settings write holes in two fallback paths; five non-atomic settings writes
+(now temp-file + `os.replace`, matching `engagement_state.py`'s own pattern);
+three `UnicodeDecodeError` crash sites where `except OSError` didn't catch it (a
+`ValueError` subclass); twelve `text=True` subprocess calls missing explicit UTF-8
+handling (the cp1252-on-Windows crash class fixed elsewhere before, missed here); a
+substring-match false positive in the statusline merge check (`"statusline.sh" in
+command` matching any unrelated `*statusline.sh`).
+
+Every fix carries a regression test confirmed to genuinely fail against the pre-fix code
+before being confirmed to pass restored (`git stash` round-trip on each). Full suite green,
+lint clean throughout. Two low-priority guard-hook items (a `sed -n` false-positive block,
+a stylistic `return`/`sys.exit` mix) were left untouched deliberately - both would require
+editing `guard-*.py` matching logic, which stays human-only.
+
+## [0.33.60] - 2026-08-12 - Two live corp-Windows field-report fixes; code-review token-duplication and onboarding-flow consolidation
+
+**Field reports (live corp-Windows session):** the `/engage` probe's cached-interpreter
+path word-split on a Windows path with a space and failed - fixed (quoted); the cache is
+also now written with normalized forward slashes (strongest available fix for a related
+symptom, not yet confirmed live). `engage_probe.py`'s subprocess calls decoded output
+with the wrong encoding on Windows (same bug `run_cmd` fixed elsewhere on 2026-07-30) -
+now fixed here too.
+
+**`virt-surv configure`:** "recommended defaults" now genuinely covers the whole flow
+(permissions, env tuning, the LLM-gateway workaround, docx, Morgan's model - pinned to
+sonnet) instead of stopping partway; prints a full summary table on every run.
+
+**ADR-014 guard daemon** - staged, off by default, opt-in via `"guard_daemon": true`
+(now on by default when configuring a project). Promoted from the validated design spike
+(0.33.57-59: 8/8 live checks passed). Retired the superseded interpreter-cache apply
+script to a redirect; `apply-outstanding.sh` now discovers apply scripts dynamically
+instead of a hand-maintained list that had already gone stale.
+
+**Code-review path:** closed a confirmed duplication where `code-reviewer`/
+`compliance-reviewer` re-derived context `review-scorer` had already computed; added a
+size guard on analyser output. An independent audit then caught and fixed three real
+regressions in that change before ship (see git log for detail).
+
+**Onboarding UX:** consolidated four overlapping, drifted preference-question surfaces
+into one; fixed a broken promise where "go with defaults" advertised project enablement
+the install plan never actually delivered; added progress headers and immediate
+accept/decline feedback to `virt-surv configure`, which previously had neither.
+
+## [0.33.59] - 2026-08-12 - ADR-014 v0.3: guard-daemon spike validated live on the actual reporting Windows box, 8/8 checks passed
+
+Via the new Diagnostics-menu entry (0.33.58), on the real corp box this whole investigation
+has been about: daemon started correctly, served a harmless payload (allowed) and a
+raw-data payload (blocked, with the real `guard-raw-data.py` message verbatim - proof it
+runs actual current guard logic in-process), 10 genuinely concurrent mixed requests each
+got their own correct exit code with zero cross-talk (the concurrency-safety lock fix,
+confirmed live, not just designed), staleness detection correctly flagged a touched file
+and the daemon actually exited. **Measured speedup: 12.6ms daemon-backed median vs. 307ms
+cold-start median.**
+
+ADR-014 open questions 1 (IPC/concurrency) and 2 (staleness) move from "prototyped" to
+"confirmed" with this evidence. Still open: idle-timeout actually firing (not covered by
+the automated smoke test by design - needs a manual 60s+ run), whether the Windows detached
+spawn stays genuinely invisible (no console popup), and open questions 3 (attack surface)
+and 5 (testing strategy), untouched by this prototype. `docs/internal/adr-014-spike/` is
+still not wired into any live hook path - `.claude/hooks/run-guard.sh` remains unchanged.
+
+## [0.33.58] - 2026-08-12 - New: ADR-014 spike smoke test exposed via Diagnostics menu / `--check-adr014-spike`
+
+User request, explicitly overriding this session's own initial caution about exposing
+unverified spike code through the production installer surface: the ADR-014 guard-daemon
+prototype's live smoke test (`docs/internal/adr-014-spike/smoke_test.py`) is now reachable
+as Diagnostics menu option 6 and `--check-adr014-spike`, same convention as every other
+check in `install_helper.py` - a thin `run_adr014_smoke_test()` wrapper around `run_cmd`
+(demo-mode-safe: `--demo` genuinely skips it, never starts a real daemon process), relaying
+the spike's own captured output in full. SKIPs cleanly (does not error) on a checkout that
+predates the spike. Does not modify or duplicate the spike's own logic, and
+`.claude/hooks/run-guard.sh` remains untouched regardless of whether this is ever run.
+
+## [0.33.57] - 2026-08-12 - New: ADR-014 guard-daemon design spike (prototype, not production, not wired into any live hook path)
+
+`run_hook_latency_diagnostic` finally reached the real guard-launcher path on the reporting
+corp box (0.33.56's `sh`-resolution fix): bare interpreter cold start measured 82-106ms, but
+the real `run-guard.sh` -> `bash_hook_dispatcher.py` path measured 1372-3808ms (median
+1404ms) - roughly 15x higher, pointing at the guard-dispatch path's own imports/logic (or
+file-read-triggered scanning of them) as the dominant cost, not raw interpreter start-up.
+8-way concurrent fan-out's worst single call: 21017ms, the same order of magnitude as the
+originally reported 25-90s - reproducing the symptom on demand.
+
+That's the evidence ADR-014 said was needed before committing to a persistent daemon. Per
+its own build plan step 2, a working prototype now exists at `docs/internal/adr-014-spike/`
+(`guard_daemon.py`, `guard_daemon_client.py`, a live smoke test, pytest coverage) -
+**unverified by execution, not wired into `.claude/hooks/run-guard.sh` or any live hook
+path.** One real finding from building it: `bash_hook_dispatcher.main()` reads
+`sys.stdin`/writes `sys.stderr` directly (process-global, not a parameter) - a naive threaded
+daemon would risk one concurrent request's payload leaking into another's guard evaluation;
+dispatch is now serialized behind a lock. `docs/adr/ADR-014-persistent-guard-daemon.md`
+updated to v0.2 with the measured evidence and this finding.
+
+## [0.33.56] - 2026-08-11 - Fix: hook-latency diagnostic couldn't find `sh` on Windows/PowerShell, skipping the two measurements that matter most
+
+Live corp report, same day: the diagnostic shipped in 0.33.55 ran on the actual reporting
+Windows box, and its two most decision-relevant sections - real guard-launcher cost and the
+concurrent fan-out simulation - both SKIPPED with "sh, run-guard.sh or
+bash_hook_dispatcher.py not found". Traced to the diagnostic resolving `sh` via
+`shutil.which("sh")` alone, which is genuinely absent from PATH in a plain PowerShell
+session even with Git Bash installed (PowerShell does not add Git Bash's `bin/` to PATH by
+default) - confirmed directly from the run's own `PS C:\...>` prompt. Claude Code itself
+doesn't have this problem because it doesn't depend on the invoking shell's PATH for this.
+
+New `_resolve_sh()`: checks `CLAUDE_CODE_GIT_BASH_PATH` first (the mechanism public
+bug-tracker discussion around Windows/Git-Bash hook execution points at Claude Code itself
+using - several plausible shapes handled, since this isn't independently verified against
+Claude Code's own source), then `shutil.which("sh")` as before, then common Windows Git-Bash
+install locations as a last resort. Returns None (caller SKIPs, same as before) only if
+nothing resolves at all.
+
+Also from that same live run: bare Python cold start measured 136-173ms (median 142ms),
+flat across repetition - correctly flagged the daemon-relevant WARN signal, but the number
+itself is far below the originally reported 2-9s, meaning the real cost lives in the guard
+dispatch path or concurrency itself, not bare interpreter startup - exactly what this fix
+lets the diagnostic actually measure next run. PowerShell cold start (diagnostic signal
+only) measured 537-1416ms, over 4x Python's median - confirms switching the guard launcher
+to PowerShell would not have helped.
+
+## [0.33.55] - 2026-08-11 - New: hook-latency diagnostic (feeds the ADR-014 daemon decision); dashboard rebuild moved out of the default install path
+
+`install_helper.py` gains a fifth Diagnostics option (`--check-hook-latency`, menu option
+5): measures real PreToolUse hook latency on this machine - repeated bare interpreter cold
+starts, the real guard-launcher end to end, a genuinely concurrent fan-out simulation, and
+(Windows-only, diagnostic signal only) a PowerShell cold-start comparison - with a
+conservative, evidence-based repetition-trend read (does cost drop after the first call,
+consistent with a one-time AV/EDR trust cache, or stay flat, consistent with per-process
+scanning) feeding the persistent-daemon decision in ADR-014 with actual numbers instead of
+guesswork. Always writes its full numbers to a timestamped file, pass or fail - the data is
+the point, not just catching errors.
+
+Separately, `dashboard_step` (rebuild the local team dashboard) is pulled back out of the
+default full-install/update sequence - added there 2026-08-09, but a rebuild is a one-off
+action to reach for, not something every install/update should pay for unconditionally.
+Now standalone only: Advanced submenu option 7, or `subset="dashboard"` - `/dashboard`
+covers the same ground on demand, same as before.
+
+## [0.33.54] - 2026-08-11 - Fix: guard-launcher latency/correctness under Workflow fan-out; DoD Stop hook now scopes auto-fix to the active engagement
+
+Live corp bug report (Windows debug-log monitoring): 87 slow PreToolUse events, 2-9s normal,
+25-90s under Workflow-tool fan-out. Four causes found; three fixed here in `run-guard.sh`: a
+trailing `/` in `CLAUDE_PLUGIN_ROOT` produced a doubled path that let the stale-lock stamp
+write fail silently, permanently disabling stale-lock reclaim for the rest of the session -
+now stripped up front, and a stamp-write failure is now visible (stderr) and fails open
+(releases the lock) rather than risking one nobody can ever reclaim. `LOCK_WAIT_BUDGET_MS`
+was a flat 1500ms regardless of real interpreter cold-start time on the host - now scales
+with a one-time-measured, cached cold-start cost (floor unchanged at 1500ms, so a fast host
+behaves exactly as before an earlier version of this fix over-corrected by tying the floor to
+`LOCK_MAX_AGE_SECONDS`, which broke `test_a_genuinely_held_lock_fails_open_within_the_wait_budget`
+- caught before landing, floor reverted to the original). The fourth cause - a fresh Python
+process per hook call, the actual root of the cold-start cost - is not fixed here; a
+persistent guard daemon is proposed as the real fix in ADR-014, design only, not built.
+
+Same report separately found the DoD Stop-hook backstop (`dod_stop_gate.py`) scanning every
+open engagement project-wide but instructing auto-fix on all of them undifferentiated - a
+session opened for a code review in one workspace got pulled into fixing unrelated,
+unattended engagements nobody asked it to touch. The scan stays project-wide on purpose
+(that's the whole point of the backstop - catch a close that silently never ran, anywhere in
+the project); the auto-fix instruction is now scoped to the session's active engagement only
+(`.active-engagement.json`), with other open engagements' findings surfaced but explicitly
+marked not-actioned.
+
+## [0.33.53] - 2026-08-08 - Fix: deliverables written to the plugin root instead of the working directory
+
+The `--target-path` diagnostic-mode artifact leak, seen twice today (real files landing in this
+repo's own `artifacts/` instead of the live test's disposable sandbox), traced to its actual
+cause: nothing in the team's own docs ever distinguished **reading** team docs/skills
+(`$PLUGIN_ROOT` in installed-plugin mode - already documented) from **writing** the user's own
+deliverables (always the working directory - never previously stated). With no Bash tool
+available to confirm the actual working directory, and having just successfully read team docs
+from an absolute `$PLUGIN_ROOT` path, real deliverable writes reused that same absolute path
+instead.
+
+### Fixed
+- `.claude/skills/.shared/run-mode.md`: new section stating plainly that `artifacts/...` writes
+  are always relative to the working directory, never `$PLUGIN_ROOT`, regardless of run mode -
+  the mechanical rule is to use a relative path for every deliverable write, never an absolute
+  one recycled from a team-doc `Read` call.
+
+### Verified live, twice
+- A "lean, report only" request: this time Morgan skipped the artifact-write path entirely
+  (findings delivered in chat) - no leak, but not a real test of the fix either, since nothing
+  was written.
+- A "full audit with a delivery report package" request: this time real writes happened - both
+  `code-reviewer` and `compliance-reviewer` findings packs (JSONL) - and landed correctly inside
+  the sandbox, not the real repo. This is the genuine test, and it held.
+
+This is specific to the Bash-disabled `--target-path` live-diagnostic testing mode used
+throughout today's work, not standard production usage (a real user's Claude Code session always
+has Bash), but the underlying confusion (plugin-doc location vs. working directory) could in
+principle occur anywhere the plugin is installed separately from the working project and Bash is
+unavailable for any reason - worth having fixed regardless of how rarely it triggers in practice.
+
+## [0.33.52] - 2026-08-08 - Extend Workflow dispatch to code-reviewer + compliance-reviewer; fix the reliability gap
+
+Two more live tests today. First: `security-audit/SKILL.md` and `audit-review/SKILL.md` had
+`code-reviewer` and `compliance-reviewer` as sequential numbered steps, with text implying a
+dependency ("jurisdiction established in step 2") that traced back to an intake question asked
+before either reviewer runs - not a real handoff. Reworded both to dispatch concurrently via the
+same `parallel_dispatch_via_workflow` mechanism (default on, same opt-out preference, no new
+toggle) - `docs/review/agent-router.md` and `docs/code-review-method.md` checked, no equivalent
+false-dependency text found there.
+
+Live-tested and it failed: `Workflow` was never called at all, every dispatch went out
+sequentially one Task call per turn - despite Morgan's own right-sizing line saying "dispatched
+concurrently." Comparing against the ONE run that did work (today's earlier 8-agent Flask
+review) found a real difference: that run's right-sizing statement named "the Workflow tool"
+explicitly as part of stating the plan; this one just said "concurrently" without naming a
+mechanism. Fixed the actual behavioural gap, not the wording of the dispatch rule again:
+`docs/team-operating-guide.md`'s right-sizing bullet (the one Morgan reliably follows every
+time, evidenced across every transcript today) now requires naming the dispatch mechanism
+inside the SAME statement as the agent count for any 2+ independent agents, not as a separate
+later decision.
+
+Re-tested live immediately after: right-sizing line said "dispatched... via the Workflow tool"
+as part of naming the two specialists, and `events.jsonl` confirms exactly one real `Workflow`
+call, both reviewers completed concurrently in ~6 minutes, genuine findings delivered (including
+independently catching that a planted regex bug caused under-alerting, not just a security gap).
+Small sample (this is the second real success after the fix, following one real failure before
+it), not a guarantee - but a clean, evidence-matched result tied to a specific, testable
+hypothesis rather than another blind wording pass.
+
+Also reconfirmed the known `--target-path` diagnostic-mode artifact leak (no Bash tool available
+means Morgan cannot confirm its own working directory, and can write real files into this repo's
+`artifacts/` instead of the disposable sandbox) - happened again on this run, cleaned up. This is
+specific to the Bash-disabled live-diagnostic testing mode, not standard usage, and remains
+unfixed - flagged, not addressed, in this release.
+
+## [0.33.51] - 2026-08-08 - Fix: workflow-dispatch script threw on every real invocation
+
+Live-tested 0.33.50 for the first time (a real `Workflow` call, not the mocked/static
+verification it shipped with) and it failed immediately: the script's own guard rejected
+`args`, because `args` arrived inside the script as a JSON-encoded **string**, not the array
+passed in the tool call - reproduced twice, contradicting the Workflow tool's own documented
+contract ("pass arrays as actual JSON values, not stringified"). Fixed in
+`.claude/skills/.shared/workflow-dispatch.md`'s script: normalises `args` with
+`typeof args === "string" ? JSON.parse(args) : args` before use, rather than trusting the
+documented shape. Re-tested live after the fix: two agents dispatched and returned correctly
+(`alpha`/`bravo`), 0 errors, 3.6s. This is the first genuine live confirmation the mechanism
+works end to end.
+
+## [0.33.50] - 2026-08-08 - Workflow-tool parallel dispatch: deterministic concurrency for independent review passes
+
+After 0.33.47/0.33.48/0.33.49's three prompt-only concurrent-dispatch fixes all failed live
+(three phrasings, identical failure - a documented model tendency, not wording), the dispatch
+mechanism itself changes: independent review-pass fan-outs now default to Claude Code's
+`Workflow` tool, whose `parallel()` is a deterministic script construct with no per-turn
+judgement call. Trade-off accepted by design: Workflow is always asynchronous - dispatch
+returns immediately, results arrive as a later background task notification.
+
+### Added
+- **`parallel_dispatch_via_workflow` team preference** - default **on** when the key is absent
+  (only an explicit `false` disables), no machine-wide tier (same precedent as
+  `large_context_review_split`): installer confirm + write-through (`install_helper.py`),
+  probe line `PARALLEL_DISPATCH_VIA_WORKFLOW=on|off` (`scripts/engage_probe.py`), documented
+  in `preferences/SKILL.md` (now five known keys; the 4-question menu keeps the four most
+  likely rows, drift checking moves to the say-it-in-words path).
+- **`.claude/skills/.shared/workflow-dispatch.md`** - the canonical doctrine plus a **fixed,
+  verbatim workflow script** (Morgan never improvises workflow JS): `args` takes an array of
+  `{label, prompt, agentType?}` specs as a real JSON value, `parallel()` runs them (wrapped as
+  functions, per the tool contract), `agent()` without `schema` returns each pass's final text
+  - the same return shape as today's Task calls, so the split-review merge flow is unchanged.
+  Also covers: the availability check (Workflow must appear in the session's own tool
+  listing; not named = not callable = fallback, no probing), failure handling (any refused
+  call = fallback for the engagement, never a retry loop), null slots (re-run just that pass
+  via Task), and the two-turn narration (state plainly it runs in the background with results
+  to follow; never narrate un-arrived results; consolidate and continue on notification).
+
+### Changed
+- **`docs/team-operating-guide.md`** dispatch rule now branches: Workflow path by default
+  (preference on + tool available), the previous one-message multi-Task procedure retained
+  verbatim as the explicit fallback; the live-failure history extended from two to three
+  attempts. The split-review bullet routes its component-scoped calls through the same rule.
+- **`deep-review/SKILL.md`** step 3.3 and **`performance-review/SKILL.md`**'s fan-out step
+  reference the conditional path (Workflow default, Task-batch fallback).
+- **`docs/agent-design.md`** script/Workflow conformance row: ➖ → 🟡 (mechanism adopted for
+  determinism, not scale).
+
+## [0.33.49] - 2026-08-08 - Mechanical PACK-UNSCORED gate; resume logic verified live
+
+Two more live diagnostics, plus a mechanical follow-up when one of them found the prior
+fix hadn't actually worked.
+
+### Verified live
+- **Resume/interruption logic**: ran the `process-full-lifecycle` golden case for real, killed
+  it mid-engagement (after QA/code-review/compliance-review had all completed but before the fix
+  pass or close, with a deliberately stale `outstanding[]` bookkeeping list still saying "not yet
+  run" for all three), then launched a fresh, uncoached session against the same kept sandbox
+  ("the previous session got cut off, resume where it left off" - no hints). It correctly
+  detected the interrupted engagement, did not re-run any completed review, explicitly caught and
+  fixed the stale `outstanding[]` list, surfaced the one genuine remaining judgement call, ran the
+  fix -> re-verify loop and closed cleanly (9/9 process-discipline checks, 0 false-positive traps,
+  all 3 Criticals resolved, 59/59 tests green).
+- **A live performance-focused review of Flask's real core package** (separate from 0.33.46's
+  full audit-depth run) completed cleanly - but re-confirmed, on fresh evidence, that the
+  0.33.47/0.33.48 documentation fixes for `review-scorer` delegation and concurrent dispatch had
+  **not** actually changed live behaviour: `review-scorer` was delegated to in neither this run
+  nor the resume run above (zero matching `Agent` calls in either `events.jsonl`), and in the
+  Flask run Morgan explicitly narrated *"Dispatching both now, concurrently"* then issued the two
+  calls as two separate assistant turns anyway (confirmed via `events.jsonl`, not the transcript's
+  own prose) - a claimed fix that wasn't real, worse than a silent skip.
+
+### Added
+- **`PACK-UNSCORED`** (`scripts/check_artifacts.py`): a scored-kind findings pack (review /
+  security-audit / performance) that carries findings must record its `review-scorer` pass in a
+  new envelope `scoring` field; a self-scoring note alone does not clear it (the scorer still runs
+  even after self-scoring, per `docs/code-review-method.md`). Surfaces with **zero new hook
+  wiring** - `check()` already runs inside the existing, live `dod_stop_gate.py` Stop hook, so the
+  new check gets that infrastructure (one-time nudge per finding set, fails open) for free.
+  Verified against today's real packs before landing: correctly flags the two live runs' actual
+  unscored packs and leaves the compliance pack and a malformed pack alone.
+- `docs/review/findings-schema.json`: documents the new optional `scoring` field.
+  `.claude/agents/code-reviewer.md`, `performance-reviewer.md`, `deep-review/SKILL.md`,
+  `performance-review/SKILL.md`: record the provenance convention at the point each already
+  describes the scoring step.
+
+### Investigated, not built
+- **Concurrent dispatch has no reliable mechanical check today.** Detecting "should these Task
+  calls have been batched" would need either an undocumented session-transcript format (no
+  stability guarantee, and this repo already treats undocumented Task-tool payload shapes as
+  fragile - see `subagent_return_budget.py`) or new harness infrastructure identifying which
+  assistant turn a tool call belongs to - neither exists today. A start/end marker pair on the
+  `Task` tool can observe sequence but not intent (sequential dispatch is often correct - a
+  re-review after fixes, the scorer's own pass), so it would false-flag legitimate cases against
+  this codebase's own never-wrongly-flag bar for hooks. Nothing shipped for this rather than
+  ship something fragile.
+
+## [0.33.48] - 2026-08-07 - Review-pipeline documentation audit: JSONL sweep, tooling order, contradictions
+
+A second, broader pass over the review pipeline's own documentation - not reacting to a new
+incident this time, a deliberate "would this survive a skeptical external read" audit of the
+core orchestration docs and the four scored-reviewer agents.
+
+### Fixed
+- **Finished the JSON→JSONL prose sweep** deferred from 0.33.46: every remaining
+  `findings-<slug>.json` reference across `CLAUDE.md`, `README.md`, the `.claude/skills/*/SKILL.md`
+  files, `docs/DEFINITION-OF-DONE.md`, `docs/EXTENDING.md`, `docs/adr/ADR-010-one-placement-rule.md`,
+  `docs/agent-design.md`, `docs/review/output-format.md`, `docs/review/agent-router.md` and
+  `docs/internal/cross-platform-portability-roadmap.md` now correctly says `.jsonl`.
+  `findings-schema.json` (the schema file, not a pack) is untouched everywhere, as are dated
+  historical snapshots (`CHANGELOG.md`, `docs/internal/whole-plugin-review-2026-08-05.md`).
+- **Static analysers now explicitly run once, up front, before any lens pass** - `code-reviewer.md`,
+  `docs/review/agent-router.md` and the `deep-review`/`audit-review`/`security-audit` skills all
+  previously left this ordering unstated (tools ran, but nothing said *when* relative to the LLM
+  review); now explicit, so a tool hit is grounding input a lens pass cites (📊 measured) rather
+  than something a pass might rediscover as 🧠 inferred, or worse, skip checking against entirely.
+- **A structural bug in `performance-reviewer.md`**: it told the agent to "hand your candidates to
+  `review-scorer` (Pip)" - but `performance-reviewer` has no `Agent`/`Task` tool and cannot call
+  another agent (subagents don't hand off directly, as its own opening line says). Fixed: it
+  writes every candidate to the pack; the *caller* delegates `review-scorer` over the pack once it
+  exists.
+- **Model-tiering contradiction**: `docs/review/agent-router.md` and `docs/code-review-method.md`
+  both claimed the lens passes run on sonnet and Morgan's challenge pass pays opus - `code-reviewer`
+  is `model: opus` and the lens passes run *inside* it (one agent invocation, not separate calls),
+  so they necessarily ride its tier; Morgan's challenge runs at the orchestrator's own tier (sonnet
+  default, opus if configured). Both docs corrected to match `docs/team-operating-guide.md` and
+  `deep-review/SKILL.md`, which already had it right.
+- **Stale analyser rosters**: `deep-review`/`audit-review`/`security-audit` skills still listed
+  SpotBugs, `find-sec-bugs`, `scapegoat` and unconditional PSScriptAnalyzer as driven tools;
+  `code-reviewer.md` already documents all four as not driven (no network-free path) or
+  consent-gated. Skills now defer to `code-reviewer.md`'s tool table as the single source of truth
+  instead of restating a list that drifts.
+- **Component-split write collision**: `docs/team-operating-guide.md` says split-review passes
+  "return findings as text, never write directly", but `code-reviewer.md`'s standing Write
+  instruction said write the pack yourself - and every component pass shares the same one allowed
+  path, so a briefed agent following its own file would collide with its siblings. `code-reviewer.md`
+  and `deep-review/SKILL.md` now state the exception explicitly: component-split passes return text,
+  the orchestrator writes the merged pack.
+- **Evidence-basis mislabelling** in `performance-review/SKILL.md`: called explicit coded costs
+  (a literal `sleep`, a fixed timeout) "measured" - `docs/code-review-method.md` and
+  `performance-reviewer.md` both correctly call these 📄 *coded*, never 📊 *measured* (nothing ran).
+  Skill file brought in line.
+
+### Verified, no change needed
+Cross-checked every file/script/subcommand the operating guide and router reference against the
+actual repo (all exist); all four scored-reviewer agents' schema field references match
+`findings-schema.json`; `compliance-reviewer.md` and `model-validator.md` were already internally
+consistent.
+
+### Flagged, not fixed (needs an owner decision, not a docs fix)
+- `security-audit/SKILL.md` still directs `npm audit` / `osv-scanner` - both reach the network by
+  default, the same bar that already removed `semgrep`/`pip-audit`. `osv-scanner` has an offline-db
+  mode that could be mandated instead of dropping the step outright.
+- `scripts/check-review-tools.sh` still probes for `spotbugs` even though it's never driven -
+  harmless (presence-report only) but potentially misleading; trimming it is a script change, not
+  a docs one.
+
+## [0.33.47] - 2026-08-07 - Concurrent dispatch for independent review passes; review-scorer delegation hardened
+
+Traced from a live diagnostic: a real, disposable-copy `/engage` run against Flask's own core
+package (pallets/flask open source, ~9,500 LOC, sonnet tier - matching actual production usage,
+not the eval harness's opus default) surfaced two orchestration-quality gaps in an otherwise
+clean 25-minute, $12.66, zero-crash run.
+
+### Changed
+- **`docs/team-operating-guide.md`**: new orchestration-discipline rule - once independent
+  subagent calls are decided (no dependency on each other's output), dispatch them as multiple
+  Task calls in ONE assistant message so the runtime runs them concurrently, not one call per
+  turn. No token-cost trade-off, wall-clock only. Live failure: a 4-pass component-split review
+  (3 `code-reviewer` + 1 `performance-reviewer`, mutually independent) went out as four lone
+  calls across four separate turns, and the serialised waiting dominated the run.
+- **`.claude/skills/deep-review/SKILL.md`**, **`performance-review/SKILL.md`**,
+  **`docs/review/agent-router.md`**: wired the same concurrent-dispatch rule into the review
+  pipeline's own fan-out steps; clarified that "sequential" in the router's pipeline-shape
+  description means lens order inside one `code-reviewer` call, not dispatch across independent
+  calls.
+- **`review-scorer` (Pip) delegation hardened.** Same live run: zero `review-scorer` calls
+  anywhere across the whole engagement, despite `deep-review/SKILL.md` already documenting the
+  delegation twice (context/lens selection, score & filter) - the stated fan-out plan simply
+  never named Pip, and reviewers self-scored instead. `deep-review/SKILL.md` now requires
+  Morgan to state the full pipeline roll-call ("Pip context → reviewers (concurrent) → Pip
+  score/filter → challenge") out loud before dispatching anyone; self-scored counts are now
+  explicitly a defect to redo via Pip, not accept - reinforced in `performance-review/SKILL.md`,
+  `docs/review/agent-router.md` and `docs/code-review-method.md`.
+
+### Not changed
+- `large_context_review_split`'s default split behaviour - the same run showed opus (used by
+  `code-reviewer`'s 3-way split) as 57% of total cost, but the split count itself wasn't shown
+  to be miscalibrated, so it was left alone pending real evidence either way.
+
+## [0.33.46] - 2026-08-07 - Findings-pack format: JSON → JSONL (append-safe writes)
+
+### Changed
+- **Findings-pack on-disk format moved from a single JSON object to JSONL** (envelope line +
+  one finding per line) - `findings-<slug>.jsonl`, was `.json`. Root cause: a JSON array must
+  stay syntactically whole (matched brackets/commas) at every step, so appending more findings
+  after an initial Write meant patching the existing file, not safely adding to it; that's what
+  tripped a corporate proxy's request timeout on a live consolidation Write (2026-08-05) and is
+  the likely cause of a separately live-reported ~3-hour deep review on a small codebase
+  (2026-08-07). JSONL makes every append a genuine append - new lines only, nothing existing
+  ever touched, no bracket/comma bookkeeping.
+- New shared module `scripts/findings_pack_io.py` (`read_pack`/`write_pack`/`envelope_line`/
+  `finding_line`) is the one place that knows the on-disk shape; `render_findings.py`,
+  `validate_findings.py`, `check_artifacts.py`, `convert_sarif.py` and the findings-pack write
+  guard all import it. `render()`/`validate()` and `docs/review/findings-schema.json` are
+  unchanged - both already operated on the reconstructed in-memory dict, so this is an I/O-layer
+  migration, not a pipeline/logic change.
+- `.claude/agents/{code-reviewer,compliance-reviewer,model-validator,performance-reviewer}.md`:
+  the Write/Edit protocol simplified - write the envelope line then as many finding lines as fit,
+  then append further findings by Edit (matching the last existing line) in batches of ~4-6. The
+  old "Write in one call, or Edit-append only if blocked" distinction is gone: appending is now
+  uniformly safe either way. The 2026-08-05 timeout citation is kept as historical rationale.
+- **`guard-findings-pack-write.py`** (staged - human-applied via
+  `scripts/apply-guard-findings-pack-write.sh`): path pattern now matches `.jsonl`; the size cap
+  (`large_context_review_split`, opt-in) now applies to **both Write and Edit** - JSONL removed
+  the reason Edit was exempt (it was the deliberate escape hatch past a Write that could no
+  longer safely be split further; every line is independently countable now, so there's no
+  reason to leave a second, uncapped path open). **Requires a human run of
+  `bash scripts/apply-guard-findings-pack-write.sh` before the live hook picks this up** - not
+  yet applied as of this release.
+- `docs/review/gold-findings.json` → `gold-findings.jsonl` (same content, new format). Note:
+  `docs/review/gold-findings.md` is a separate, hand-authored worked-exemplar document (not a
+  render of the gold pack) and is unaffected.
+
+### Deliberately not doing
+- No backward-compat shim for old `.json` packs - findings packs are per-engagement, ephemeral
+  artifacts, and this plugin is an explicit POC; a dual-format reader would be complexity for a
+  narrow window (an engagement mid-review exactly at upgrade time). Clean cutover.
+- No sweep of the ~20 prose/doc files (README, ADRs, team-operating-guide, skill files) that
+  also mention the old `.json` pack format - tracked as a fast-follow, not blocking this release.
+
+## [0.33.45] - 2026-08-07 - Findings-pack timeout fallback; gitleaks scoped to target
+
+### Added
+- `.claude/agents/{code-reviewer,compliance-reviewer,model-validator,performance-reviewer}.md`:
+  the "Write it in one call, always" findings-pack instruction now has an explicit fallback
+  for a genuine API/operation timeout on the Write itself (distinct from the guard's
+  finding-count size-cap block) - retry once, then fall back to a small first-batch Write
+  plus Edit appends on the same path. Addresses the documented 2026-08-05 live failure
+  (`guard-findings-pack-write.py`'s own docstring: an oversized consolidation Write timed
+  out twice in a row behind a corporate proxy). No opt-in needed, no default changed.
+- `code-reviewer.md`: new instruction to scope `gitleaks` to the review target
+  (`gitleaks detect --no-git --source <path>` / `gitleaks dir <path>`) rather than its
+  default full-git-history walk, whose cost scales with history size, not review size.
+- `install_helper.py`: the `RECOMMENDED_ENV` block now documents its own trade-off in a
+  comment (30-min request timeout + ~300-retry watchdog means a persistent transient/
+  throttling error can retry silently for hours instead of failing fast - traced to a
+  live ~3-hour deep-review stall), and all three `--env-tuning` confirm prompts state this
+  trade-off to the user up front. No env values or defaults changed.
+
+Traced from a live-reported ~3-hour deep code review of a small codebase; root-caused via a
+careful, evidence-cited investigation (verified independently - `2026-08-05` citation,
+`gitleaks` CLI flags, and full test suite all confirmed accurate before landing).
+
+## [0.33.44] - 2026-08-07 - New golden case: review-scorer delegation compliance
+
+### Added
+- `evals/cases/process-review-scorer-delegation/` (45th golden case): pins
+  `docs/code-review-method.md`'s unconditional delegation rule - review-scorer (Pip) must
+  be delegated to for both context/language detection AND scoring/filtering on every
+  code-reviewer/performance-reviewer review. Live-reported (2026-08-07): the same command
+  against the same scenario delegated correctly once, then skipped the delegation entirely
+  on a later run - since the rule is always-loaded (not a JIT reference doc), this makes
+  the failure rate measurable via repeated `/run-evals` runs rather than anecdotal. First
+  live run: PASS (recall 1.0, judge 0.92, cost $14.80 on the harness's opus-tier
+  orchestrator default) - confirmed genuine via transcript inspection (an actual
+  `TaskCreate review-scorer` call, not just narration). One passing run does not establish
+  a failure rate; also note the harness's default `--team-model opus` does not match this
+  project's actual sonnet-4-6 orchestrator, so this run doesn't yet test the tier where the
+  original failure was observed.
+
+## [0.33.43] - 2026-08-07 - Opt-in workaround for an LLM-gateway beta-fields rejection
+
+### Added
+- `install_helper.py`: new `--env-tuning-betas <project-dir>` flag (plus a matching
+  opt-in question in `--configure`, off by default) upserts
+  `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` into a project's `.claude/settings.json` env
+  block. Workaround for a live-reported failure: a haiku-tier subagent call (review-scorer
+  is the only agent in this roster pinned to `model: haiku`) failed with `API Error: 400
+  tools.0.custom.eager_input_streaming: Extra inputs are not permitted` - the exact
+  signature of an LLM gateway rejecting Anthropic's beta tool-schema fields. Kept separate
+  from `--env-tuning`'s on-by-default bundle since it has a real tradeoff of its own (MCP
+  tool search disabled) that only makes sense if you're actually hitting this gateway
+  incompatibility. Same upsert/backup mechanics as `--env-tuning` (shared
+  `_run_env_upsert` helper, extracted from `run_env_tuning` in this change).
+
+## [0.33.42] - 2026-08-07 - Codebase-map drift surfaced at open, not just close (ADR-007 0.5)
+
+### Added
+- `scripts/engage_probe.py`: new `MAP_DRIFT=<n> of <m> area(s): <list>` line in the
+  open-time probe report, gated behind `map_skeleton` (only appears when the toggle is on
+  AND something has actually drifted - off means zero added output, same contract as
+  every other map_skeleton-gated behaviour). Root map only (`docs/codebase-map.d/` area
+  files aren't covered by this open-time check, only by the full close-time sweep).
+  Minimal, standalone duplicate of `check_artifacts.check_map()`'s `MAP-DRIFT` logic
+  rather than an import - `engage_probe.py` must stay runnable before any plugin-mode
+  import of a sibling `scripts/` module is guaranteed reliable.
+- `.claude/skills/.shared/engage-open.md`: instructs Morgan to actually use the new field
+  - when briefing an agent whose work touches a drifted area, say so explicitly (that
+    area's map claims are unverified) instead of handing over the map as settled fact;
+    consider `/map-codebase --refresh` first if the drift is central to the engagement.
+    Closes the gap ADR-007's own build plan had left as an unbuilt "optional" item - user
+    request: "wouldn't it make sense to run [drift detection] first and feed that info
+    into the agents... otherwise it's not adding value."
+
+## [0.33.41] - 2026-08-07 - `virt-surv onboard`, project-root sanity check, map-update narration
+
+### Added
+- `virt-surv onboard` alias subcommand: identical to `virt-surv engage` (same code path) -
+  added as a second name for the same zero-prompt project-setup behaviour, since both read
+  naturally depending on how you think about it ("onboard this project" vs "engage").
+- Both `engage` and `onboard` now print the resolved target folder up front and warn
+  (non-blocking - these commands stay zero-prompt by design) if it looks like the wrong
+  place to run from - your HOME directory or a filesystem root. The success message now
+  names the resolved folder explicitly ("run `claude` from <path> and say hello").
+
+### Changed
+- `.claude/skills/engage/references/close-checklist.md`: the codebase-map update at close
+  (ADR-003) was silent to the user - added an explicit one-line narration instruction
+  ("Updating the codebase map with what this engagement taught us...") before/while doing
+  it, so it's never a surprise entry in the diff.
+
+## [0.33.40] - 2026-08-07 - Upfront quick/manual install choice; targeted note on inline-exec blocks
+
+### Changed
+- Reworked the 0.33.39 "auto-enable on a real tty" behaviour for the full install/update
+  path into a single upfront choice (user request): a new `quick_setup_choice` step asks
+  once - "go with the recommended defaults (fast) or walk through each one individually?"
+  - and `optional_pip`/`statusline_step`/`alias_step` read the answer instead of each
+  hardcoding "auto-on for subset full". Choosing "manually configure" restores the exact
+  original per-step questions, including their original tty-gated defaults. `--yes` still
+  always implies the fast path (unattended, unchanged). Fixes a live regression from
+  0.33.39 along the way: the new question's own non-tty fallback defaulted to True, which
+  cascaded into the alias step actually invoking a real interpreter subprocess probe
+  during a plain `--demo` run - now conservatively False off a real terminal, matching
+  every other step's own non-tty handling.
+
+### Added
+- `machine_defaults_offer`: new last step of the full install/update path (user request:
+  "we are missing an option to be able to modify settings on install too" - project-level
+  setup moved to `virt-surv configure`/`engage` in 0.33.39, this restores a way to review/
+  change THIS MACHINE's defaults during install without hunting through the Advanced
+  menu). Always asks explicitly (never folded into quick_defaults - changing what every
+  future project inherits is a deliberate action) unless `--yes`.
+- `scripts/staged_hooks/guard-code-execution.py` (**staged - human apply required**:
+  `bash scripts/apply-guard-exec-allow.sh`): the code-execution block message now adds a
+  targeted note when the blocked command is an ad hoc inline diagnostic (`python -c`,
+  `node -e`, etc.) - this is unconditionally blocked regardless of consent, not a
+  permission question, and the note names the two live-recurring shapes (improvising a
+  replacement after a step-0 /engage probe failure instead of retrying the exact block;
+  checking a findings-pack JSON by running `python -c "...json.load..."` instead of just
+  reading the file) plus the safe alternative for interpreter info (`python --version`/
+  `-V`, never `-c`). The generic message alone gave no hint of either, requiring the model
+  to already know to consult a just-in-time reference doc it may never open before
+  reaching for the ad hoc command in the first place.
+- `docs/team-operating-guide.md`'s findings-count-verification guidance now says
+  explicitly how to check a written pack's finding count: read the file and count
+  entries in the text, never by executing `python -c` to parse it.
+
+## [0.33.39] - 2026-08-07 - Faster default setup: new defaults, `virt-surv engage`, fewer prompts
+
+### Changed
+- New CONFIGURE-recommended defaults (user request: "set the defaults to be citations off,
+  split on, docx off, map on"): `_project_preference_defaults()`'s built-in fallback flips
+  `regulatory_citations` on->off and `map_skeleton` off->on; `run_configure`'s
+  `large_context_review_split` fallback flips off->on (it has no machine-wide tier by
+  design, see `write_team_preferences`'s docstring); `docx` stays off, tuned env vars
+  already defaulted on. `machine_defaults_step`'s own display defaults updated to match, so
+  it never shows a stale "currently" value for the same underlying default. Deliberately
+  scoped to what CONFIGURE writes - `scripts/engage_probe.py` keeps its own unchanged
+  built-in fallback for a project that has never run configure/preferences at all, since
+  changing that is a much larger-blast-radius runtime default the user didn't ask for.
+- Option 1 (the default full install/update run): status line and the `virt-surv` shell
+  alias are now wired automatically on a real interactive terminal - no "do you want this"
+  question, matching the user's "should be to enable... done on default path" request.
+  `--yes` (unattended/CI) is unchanged for both. "Enable for a project" is no longer part
+  of this default run at all - project-level setup moved entirely to `virt-surv configure`/
+  `virt-surv engage`, run from the project's own root (the same folder you'll run `claude`
+  from). The closing "Over to you" summary was rewritten to point there instead.
+
+### Added
+- New `virt-surv engage` alias subcommand: runs the same pass as `virt-surv configure` but
+  with `assume_yes` always True regardless of flags - every recommended default applied,
+  zero prompts - then prints a Morgan-voiced "Claude Code is ready to launch here - run
+  `claude` and say hello" close on success. `--demo` still previews without writing or
+  printing the close message.
+
+### Fixed
+- `claude plugin install`/`claude plugin enable` reporting "already installed"/"already
+  enabled" as a failure - it's the desired end state, now informational only. The install
+  path previously used `step_fail`'s fatal-by-default behaviour here, which aborted the
+  entire install run for a condition that isn't actually a problem.
+
+## [0.33.38] - 2026-08-07 - --configure always refreshes the analyser-availability cache
+
+### Added
+- `install_helper.py`: `--configure` (`virt-surv configure`) now unconditionally runs
+  `bash scripts/check-review-tools.sh --refresh` as its last step, after preferences are
+  written - explicit user request ("always run ... when configuring"), no confirm() gate.
+  New `run_tool_cache_refresh()` bridges to the script with `cwd` set to the TARGET project
+  (same pattern as `run_list_engagements`/`run_archive_engagements` bridging to
+  `engagement_state.py`), so the refreshed `.claude/.tool-availability` cache lands in the
+  right place. Soft-fail throughout (bash absent, script missing, non-zero exit): reported,
+  never blocks configure - matching the script's own "report, not a gate" contract.
+
+## [0.33.37] - 2026-08-07 - ADR-007 Chunk F: golden eval case + stale roadmap entry fixed
+
+### Added
+- `evals/cases/process-first-contact-map/` (44th golden case, `process-discipline-probe`
+  rubric, modelled on `process-codebase-map-architecture`): pins the `map_skeleton` toggle
+  contract as a scored behaviour case, not just a unit-tested mechanism - a real drift
+  condition produces zero automatic output when the toggle is off, and a real-but-human-
+  adjudicated `MAP-DRIFT`/`MAP-DEAD-POINTER` finding when it's on, never a silent auto-fix.
+  This was ADR-007's last unbuilt Chunk F item, previously tracked as explicitly deferred.
+
+### Fixed
+- README's "What's shipped and what's next" section still described the ADR-007 generative
+  layer (`repo_skeleton`, `/map-codebase`, drift stamps) as "RE-SCOPED... parked" - stale since
+  0.33.28, when it actually shipped. Corrected to SHIPPED, with a pointer to the new eval case.
+- `docs/adr/ADR-007-codebase-map-evolution.md` bumped to v0.4: Build plan section closed out
+  (Golden eval case was the only open item), version-history row added.
+
+## [0.33.36] - 2026-08-07 - install_helper.py can tune API-timeout/output-size env vars
+
+### Added
+- `install_helper.py`: new `--env-tuning PROJECT_DIR` standalone flag, plus an offer during
+  the guided `enable`/`--configure` flows, that upserts a curated set of Claude Code env vars
+  into the project's `.claude/settings.json` (`API_TIMEOUT_MS`, `API_FORCE_IDLE_TIMEOUT`,
+  `CLAUDE_STREAM_IDLE_TIMEOUT_MS`, `CLAUDE_ENABLE_BYTE_WATCHDOG`, `CLAUDE_CODE_RETRY_WATCHDOG`,
+  `CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING`, `ENABLE_TOOL_SEARCH`,
+  `MAX_MCP_OUTPUT_TOKENS`, `BASH_MAX_OUTPUT_LENGTH`, `TASK_MAX_OUTPUT_LENGTH`) - raises
+  request/stream timeouts and caps single-tool output sizes, aimed at the timeout/large-output
+  pattern seen on slow networks or behind a corporate proxy. Project-level only: Claude Code's
+  settings-file `env` block already wins over the shell on both Linux and PowerShell, so no
+  platform-specific shell-profile edit is needed. New `merge_env()` is an UPSERT (unlike the
+  existing add-only `merge_allow()` for `--permissions`): any other env var already in the
+  file is left untouched, a tracked key present with a different value is corrected, a missing
+  key is added - matching the explicit "don't overwrite other vars, update stale ones, add
+  missing ones" requirement. Same backup-before-write and refuse-on-unparseable-JSON safety
+  bar as `--permissions`.
+
+### Fixed
+- `probe-contract.md`'s `PROBE_FAILED` recovery said "retry the exact same compound block" but
+  had nothing telling the model NOT to improvise something else instead. Live report: a session
+  reached for its own ad hoc check - `python -c "import sys; print(sys.executable)"` - instead
+  of retrying the documented block, and got blocked (correctly - inline `-c` execution is always
+  blocked, CLAUDE.md §7, no exception for a hand-typed diagnostic). Added an explicit negative
+  instruction: don't improvise, `-c`/stdin code execution is unconditionally blocked regardless
+  of intent, and `python --version`/`-V` are the safe alternative if interpreter info is
+  genuinely needed beyond what `INTERPRETER=`/`PYTHON_VERSION=` already printed.
+
+## [0.33.34] - 2026-08-07 - Four ADRs corrected against what actually shipped
+
+### Fixed
+- `docs/adr/README.md`: the ADR-007 index row still said "Re-scoped" - stale since this
+  session's Phase 1+2 build; updated to match ADR-007's own document control.
+- `docs/adr/ADR-002-safety-hook-threat-model.md`: rec 1 claimed the raw-data guard "does
+  not segment-split and does not need to" - true when written (verified 2026-08-01), false
+  since the guard gained its own `_segments()` on 2026-08-03 (an unrelated false-positive
+  fix). Corrected with the actual current reasoning.
+- `docs/adr/ADR-006-machine-readable-engagement-state.md`: §5 stated the consent-exclusion
+  schema rule as absolute ("the one hard rule," no exception), but `execution_consent_outcome`
+  (register R3, added 2026-07-29) is a real, narrow, already-shipped exception - predates
+  and was missed by the 0.3 documentation-drift audit. Rewritten to describe the actual rule
+  (no GRANT can live here; a non-granting outcome record is the one sanctioned exception).
+- `docs/adr/ADR-005-persona-reanchoring-hook.md`: the design section still describes
+  injecting the full inline 16-name roster mapping every anchored turn - the shipped
+  `_ANCHOR` never did that; it points at the roster instead, cheaper than proposed, and the
+  2026-08-03 steady-state shrink (a 3-line anchor after the first turn) went further still.
+  Annotated to match what actually shipped.
+
+No behaviour changes in this entry - every fix here is documentation-only, correcting each
+ADR's description of already-shipped, already-correct code.
+
+## [0.33.33] - 2026-08-07 - README test-count claims fixed, and pinned so they can't overstate again
+
+### Fixed
+- README had three DIFFERENT, all-wrong test-count claims: a "1300+ passing" badge, "700+
+  unit tests", and "700+ passing unit tests (785 collected as of 0.33.1)" - the real
+  collected count is 1,842. All three corrected to a conservative "1400+" (a rounded floor,
+  not a hyper-precise number that goes stale on the next test-adding commit) plus the
+  accurate current snapshot figure.
+- New test (`test_readme_test_count_claim_is_never_an_overstatement`,
+  `tests/test_docs_consistency.py`) pins this so it can't silently drift wrong again: unlike
+  the skill/agent-count tests (which derive an EXACT match from disk, viable since those
+  only change when a whole skill/agent is added), a test count changes on nearly every
+  commit that touches `tests/`, so an exact-match test would be pure maintenance burden.
+  Instead it checks a weaker, permanently-true property - every "N+ test(s)" claim in
+  README must never exceed the real `def test_` count on disk (itself a floor on the true
+  pytest-collected count, since parametrized tests always collect as more than one ID).
+
+## [0.33.32] - 2026-08-07 - check_artifacts flag validation, stale semgrep refs, missing close-sequence step
+
+### Fixed
+- `scripts/check_artifacts.py`: `"--fix" in argv[1:]` matched only the exact string, so a
+  typo'd flag (`--fx`, `--Fix`) was silently ignored - a check-only run happened instead of
+  the fix pass asked for, with no error explaining why nothing got fixed. Any unrecognized
+  `-`-prefixed argument is now a usage error (exit 2), not a silent no-op.
+- `deep-review/SKILL.md` and `audit-review/SKILL.md` listed Semgrep among the "standard
+  analysers" code-reviewer drives - stale since 2026-08-04, when `code-reviewer.md` removed
+  it (unconditional network calls, no offline mode, repeated corp-proxy hangs). Fixed both,
+  plus the same stale mention in the README roster blurb, `docs/templates/review-report.md`'s
+  tooling-coverage table, and `docs/review/gold-findings.md`'s exemplar citation (swapped
+  for `bandit`, a tool that's actually used for that exact finding class).
+- `.claude/skills/.shared/engagement-bookends.md`'s documented close sequence was missing
+  `set-status closing` entirely - the step that opens the 🔒 closing window and is what
+  makes writing the summary email/delivery report *before* `set-status closed` legitimate
+  work-in-progress rather than artifacts appearing with no matching state transition
+  (`docs/team-operating-guide.md`'s own "Close ordering" already documented it; this shared
+  file just never had it). `handover/SKILL.md` had the same gap more severely - it produces
+  its own closing artifacts inline and had ZERO `set-status` calls anywhere, so a handover
+  produced via this skill never actually flipped `engagement-state.json` out of whatever
+  status it already had. Both fixed.
+
+## [0.33.31] - 2026-08-07 - Dispatcher write-protection, fail-closed-on-missing-guard, slug path traversal
+
+### Fixed (staged - `bash scripts/apply-guard-git-config.sh` and `bash scripts/apply-bash-hook-dispatcher.sh`)
+- `scripts/bash_hook_dispatcher.py` - which all four guards route through (P4) - was not
+  covered by `guard-consent-writes.py`'s protection at all (only `.claude/hooks/*` and
+  `hooks/hooks.json` were guarded). One Edit to its `_CHECKS` registry could neuter every
+  guard through the *protected* Write/Edit channel, not just the already-known Bash-lexical
+  residual. Verified live before fixing; now blocked identically to a guard under
+  `.claude/hooks/`. Deliberately scoped to the live copy only - `scripts/staged_hooks/
+  bash_hook_dispatcher.py` stays freely model-editable, same as every other staged guard.
+- The dispatcher's own missing-guard-file handling failed OPEN unconditionally, asymmetric
+  with a guard file that exists but fails to *load*, which already failed closed. There is
+  no legitimate reason for a shipped safety-guard file to be missing from a working
+  install; both cases now follow the identical `fail_closed` policy per check.
+
+### Fixed (live, no apply step needed - not a staged guard file)
+- `scripts/engagement_state.py`: every command that builds a workspace path from `--slug`
+  did `root / slug` with no validation. Two real escapes, verified by hand: an absolute-
+  path slug discards the artifacts-root prefix entirely (`Path.__truediv__`'s documented
+  behaviour), and a `..`-bearing slug resolves outside the root on `.resolve()`. Both
+  closed with one shared containment-check helper (verify the *resolved* result is still
+  inside the root, not a character blocklist) applied at all 6 call sites: `init`,
+  `set-active`, `archive`, `unarchive`, `migrate`, and `resolve_pack_dir` (shared by most
+  other commands).
+
+## [0.33.30] - 2026-08-07 - Command substitution inside double quotes escaped two of the three guards
+
+### Fixed (staged - `bash scripts/apply-guard-exec-allow.sh` and `bash scripts/apply-guard-raw-coverage.sh`)
+- Found by a framework-wide audit, verified by hand: `guard-code-execution.py` and
+  `guard-raw-data.py`'s `_segments()` treated `` ` ``/`$(` as a segment boundary only
+  outside double quotes - wrong, since bash actually executes command substitution even
+  inside them. `echo "$(pytest)"` and the backtick equivalent ran unblocked, because the
+  real command never became its own segment for the exec guard's anchored patterns
+  (`^pytest`, `^make`, etc.) to see. `guard-consent-writes.py` already had this right; the
+  other two guards lost it in independent 2026-08-03 rewrites. Fixed identically in both -
+  `` ` ``/`$(` are now a boundary whenever outside single quotes, regardless of double-quote
+  state; the four ordinary delimiters (`;`/`&&`/`||`/`|`) keep their original quote gating,
+  unchanged, since those genuinely are just literal text inside `"..."` in real bash.
+  Impact stated precisely, not oversold: the exec guard's gap was real and proven live; the
+  raw-data guard's equivalent gap was latent, not active (its checks are substring/regex
+  scans, not anchored, so the pre-fix guard already blocked every case tested - confirmed by
+  running the same inputs against live and staged side by side) - fixed there anyway for
+  cross-guard consistency. Full writeup: `docs/adr/ADR-002-safety-hook-threat-model.md`'s
+  Residual risk section.
+
+## [0.33.29] - 2026-08-06 - Statusline map indicator is its own off-by-default preference
+
+### Added
+- `scripts/statusline.sh`'s new `map:on/off` field (mirrors the `map_skeleton` preference,
+  ADR-007 Phase 1 Chunk D) is gated behind its own preference, `statusline_show_map`
+  (project `.claude/team-preferences.json`, machine `installer.json`
+  `default_statusline_show_map`, same 3-tier precedence as `map_skeleton` - project key
+  wins, else machine default, else off). Deliberately separate from `map_skeleton` itself:
+  a project can have drift-checking on without a longer statusline, or vice versa. Off by
+  default, so no existing project's statusline changes shape unless it opts in.
+- `install_helper.py`: the machine-defaults step and `--configure`'s guided flow both offer
+  this alongside `map_skeleton`, off by default, same wording pattern.
+
+## [0.33.28] - 2026-08-06 - ADR-007 Phase 1+2 complete: /map-codebase, area files, three fingerprint bugs fixed
+
+### Added (gated behind `map_skeleton`, off by default - no behaviour change unless opted in)
+- `/map-codebase` skill: a deterministic `repo_skeleton` first-contact pass, then a small
+  (1-3, stated out loud) synthesis-agent team producing curated codebase-map entries -
+  invariants, gotchas, risk areas, never prose summaries or symbol inventories (the skeleton
+  already has those). `--refresh` mode re-verifies only drifted areas via the existing
+  fingerprint sidecar, so a clean map costs nothing to re-check.
+- `docs/codebase-map.d/<area>.md` area files (`docs/templates/codebase-map-area.md`) for
+  detail that doesn't fit the root map's ~200-line budget, discovered and hygiene-checked by
+  `check_artifacts` exactly like the root map. Root map template gained an unnumbered `##
+  Index` section listing them with a load-trigger line each.
+
+### Fixed
+- Three bugs found live while wiring `/map-codebase` to the drift-stamp mechanism shipped
+  in Chunk C (0.33.x): (1) the fingerprint sidecar's write location and read location
+  disagreed whenever the map wasn't at the project root (the documented default,
+  `docs/codebase-map.md`) - `MAP-DRIFT` would report every entry as permanently
+  unfingerprinted; (2) glob resolution for the Paths column had the same project-root-vs-
+  map-parent confusion, silently hashing the wrong files; (3) `MAP-DEAD-POINTER`'s "entry"
+  column lookup was an exact match while every sibling column used a rename-tolerant
+  substring search, so it never matched the documented template's own long header text and
+  never fired for any project using the template as written. All three fixed together, with
+  regression tests against the actual documented template text (not an abbreviated test
+  fixture) so the gap can't reopen unnoticed the same way.
+- `scripts/repo_skeleton.py --fingerprint` crashed with `ModuleNotFoundError` under
+  plugin-mode invocation (direct file path, no package context) - added the same dual-mode
+  import loader `check_artifacts.py` already uses.
+
+## [0.33.27] - 2026-08-06 - Morgan's model is pinned to an exact ID, never Claude Code's generic alias
+
+### Fixed
+- Found live: Claude Code's `"sonnet"` alias resolves to a DIFFERENT actual model depending
+  on API provider (Sonnet 5 on the direct Anthropic API, Sonnet 4.6 on Claude Platform on
+  AWS, Sonnet 4.5 on Bedrock/other platforms) - a project pinned to the bare alias could
+  silently run an older model than intended, with no error and no signal beyond the
+  statusline's `display_name`. `install_helper.py`'s model-setting flow (`--model`, the
+  interactive menu, `/preferences`) now writes an exact, provider-independent model ID for
+  every choice (`opus` → `claude-opus-5`, `sonnet` → `claude-sonnet-5`) instead of the bare
+  alias, and adds `sonnet-4-6` (→ `claude-sonnet-4-6`) as its own explicit third choice for
+  anyone who deliberately wants that generation pinned rather than reaching it by luck of
+  provider.
+
+## [0.33.26] - 2026-08-06 - The four scoped reviewer agents can now Edit their own findings pack
+
+### Added (staged - `bash scripts/apply-guard-findings-pack-write.sh`)
+- A live diagnostic run against a real, large codebase (`--target-path` mode, see below) showed
+  a gap in 0.33.25's fix: the four scoped reviewer agents (`code-reviewer`, `compliance-reviewer`,
+  `model-validator`, `performance-reviewer`) hit the size-limit guard mid-review, but had no
+  `Edit` grant to chunk past it the way the orchestrator can - `performance-reviewer` silently
+  dropped three findings from its own pack rather than splitting the write. All four now hold
+  `Edit`, scoped by `guard-findings-pack-write.py` to the exact same findings-pack path already
+  enforced for `Write` - not a broader capability, the same narrow one extended to a second
+  tool. The size-limit cap stays `Write`-only by design (Edit is the intended way past it).
+
+### Changed
+- `scripts/eval_engage.py` gained a `--target-path` diagnostic mode: run a live `/engage`
+  session against a disposable copy of any external directory (loaded via the Agent SDK's
+  plugin-dir mechanism, `Bash` disallowed so it's static-only) instead of only the built-in
+  `evals/cases/*` scenarios, with live-flushed transcript/events/usage output for monitoring a
+  run in progress. This is how the gap above was found.
+
+## [0.33.25] - 2026-08-05 - Mechanical backstop for the large-consolidation-write timeout
+
+### Added (staged - `bash scripts/apply-guard-findings-pack-write.sh`)
+- 0.33.24 fixed the large-consolidation-write timeout with prose guidance (Morgan chunks a
+  big merge herself instead of one giant Write) - a live follow-up report showed the same
+  timeout recurring, prose guidance under pressure isn't reliable enough on its own.
+  `guard-findings-pack-write.py` now has a second, opt-in half: when a project has set
+  `large_context_review_split: true` (off by default - no behaviour change for any project
+  that hasn't hit this), it mechanically blocks any Write to a findings-pack path - the four
+  scoped reviewer agents' calls **and the orchestrator's own** - that would write more than 8
+  findings in one call, with an explicit "write a small batch, then Edit to append the rest"
+  message. This can't intercept a timeout that kills the model's own generation before a tool
+  call ever forms (no hook fires on that), but it does catch an oversized Write the instant
+  generation succeeds, turning a heuristic Morgan might skip under pressure into a rule she's
+  told about mechanically, every time.
+
+## [0.33.24] - 2026-08-05 - The large-review consolidation write can itself time out - now chunked
+
+### Fixed
+- The component-split review design's final step - one delegated `code-reviewer` call
+  consolidating all components' findings into a single Write - assumed that write was always
+  cheap. A live corp report found a 13-finding merge hitting `API Error: The operation timed
+  out` on that same single-Write attempt twice in a row, making zero progress on retry: the
+  merged pack's OUTPUT size alone can trip the same proxy timeout the original design only
+  accounted for on the diff-reading INPUT side. Fixed in `docs/team-operating-guide.md`'s
+  orchestration-discipline bullet: above roughly 8 findings to merge, Morgan now does the
+  consolidation write herself (not via a delegated `code-reviewer` call - she carries no
+  Write/Edit restriction on the findings-pack path, unlike the four scoped reviewer agents) and
+  builds the pack incrementally - one small `Write` for the first batch plus all required
+  top-level fields, then `Edit` calls appending the rest in bounded batches - rather than
+  emitting the whole merged set in one generation. Below the threshold, the original
+  single-write design is unchanged. Design record updated:
+  `docs/internal/large-context-review-splitting-plan.md`.
+
+## [0.33.23] - 2026-08-05 - Tooling inventory now stated at open; stale semgrep/pip-audit allow-list entries
+
+### Fixed
+- `/engage`'s opening banner never stated which of the seven configurable analysers are
+  present vs missing, even though the cached tooling report already computes this and already
+  states the consequence ("missing tools degrade dependent findings from 📊 measured to 🧠
+  inferred") - that link was visible only in the raw probe output Morgan reads, never surfaced
+  to the user. `.claude/skills/.shared/engage-open.md` now instructs a one-line banner summary
+  every engagement, still from the cache (no re-probe), so the tooling picture is known before
+  a review runs, not discovered after.
+- `.claude/settings.json`'s `permissions.allow` still listed `Bash(semgrep:*)` and
+  `Bash(pip-audit:*)`, contradicting the "deliberately excluded, never invoked" policy both
+  tools have carried since their 2026-08-04 removal (unconditional network calls, hung on
+  corporate proxies). `install_helper.py`'s `RECOMMENDED_ALLOW` - what actually gets written to
+  new/existing projects - was already clean; this repo's own checked-in settings predated that
+  removal. New `scripts/apply-remove-stale-tool-allowlist.sh` (human-run, settings.json edits
+  are human-only) removes both.
+
+## [0.33.22] - 2026-08-05 - Large-context review split was invisible: banner and statusline both missed it
+
+### Fixed
+- `large_context_review_split` (the per-project toggle that splits large reviews by component
+  to dodge corporate-proxy timeouts) was read correctly by the step-0 probe and printed in its
+  raw output, but nothing in `/engage`'s banner-composition instructions ever told Morgan to
+  actually state it - so a user who turned it on got no confirmation in the opening banner that
+  it took effect. `.claude/skills/.shared/engage-open.md` now instructs a one-line banner
+  mention when it's on (silent when off, since it's a reliability workaround most projects never
+  touch, not an output preference worth restating every engagement).
+- `scripts/statusline.sh` showed docx/citations/model preferences on every render but never
+  `large_context_review_split` - now shown unconditionally (`split:on|off`) alongside the other
+  three, so the setting is visible at a glance without asking Morgan.
+
+## [0.33.21] - 2026-08-05 - Close-time rendering is in-process: no more chained subprocess spawns
+
+### Fixed
+- `check_artifacts --fix` (run by `/handover` and every engagement close) used to shell out to
+  `render_findings.py` once per findings pack, then to `render_html.py` once per `.md` artifact
+  still missing its `.html` sibling - each a separate untimed `python.exe` child-process spawn.
+  On a host where every new process gets scanned by endpoint security (a corporate Windows box),
+  a handover pack with a findings-heavy review plus several other deliverables chained enough of
+  these spawns back-to-back to present as the whole close step hanging or timing out, with no
+  indication of which step was actually slow. `render_findings.py` and `render_html.py` each
+  gained an importable `render_pack_file()`/`render_file()` function; `check_artifacts.py` now
+  calls them in-process via the same dual-mode-import-plus-memoization pattern already used for
+  findings-pack schema validation (the 2026-08-03 perf audit that converted
+  `check_findings_packs()` away from a subprocess-per-pack). `render_findings.py --html` also no
+  longer shells out to `render_html.py` - same in-process call. Net effect: a close that used to
+  spawn N+1 child interpreters now spawns zero for rendering, regardless of findings-pack size.
+
+## [0.33.20] - 2026-08-05 - Whole-plugin review: pack-filename collision and a raw-data guard wiring gap
+
+A report-only independent review of the whole plugin (everything outside `install_helper.py`,
+which had its own pass in 0.33.19) turned up 18 findings; full report:
+`docs/internal/whole-plugin-review-2026-08-05.md`. Two acted on so far.
+
+### Fixed
+- `code-reviewer` and `performance-reviewer` both wrote their findings pack to the same path
+  (`artifacts/<slug>/data/findings-<slug>.json`) - running both in one engagement let the second
+  silently clobber the first. `performance-reviewer` now writes
+  `findings-performance-<slug>.json`, matching the `compliance-`/`model-validation-` prefix
+  convention `compliance-reviewer`/`model-validator` already used to avoid exactly this.
+- The 2026-08-01 raw-data-guard coverage fix taught `guard-raw-data.py` to handle `WebFetch`
+  (a `file://` URL addresses the local filesystem) and `NotebookRead`, but nothing wired those
+  tool names through: the PreToolUse matcher in `hooks/hooks.json` / `.claude/settings.json`
+  never listed them, and the dispatcher's own tool-set table (`scripts/bash_hook_dispatcher.py`)
+  independently restricted `guard_raw_data` to `{Read, Grep, Glob, Bash}` - so the fix was live
+  code on a dead wiring path. Both files now list `WebFetch`/`NotebookRead`.
+
+## [0.33.19] - 2026-08-05 - Install helper: independent UX review, thirteen fixes
+
+An independent review pass of `install_helper.py` (asked to assess and implement, not just
+report) turned up several real bugs alongside UX polish. All fixed and covered by new tests.
+
+### Fixed
+- `--model opus|sonnet|default` on its own (no `--model-project`/`--model-default`) silently
+  fell through to a full install instead of doing nothing useful; `--model-project DIR` without
+  `--model` silently reset an existing project's model to sonnet. Both now fail fast with a
+  clear message instead of a silent, surprising write (or non-write).
+- `probe_analyser_output` and the self-test's bandit "planted issue" check classified a crashed
+  analyser (non-zero exit, short traceback) as "OK: clean" - now checks the exit code first, so
+  a crash is reported as a crash, not a false pass.
+- `_parse_review_tool_overrides` silently dropped unrecognised input (e.g. a typo'd tool name) -
+  now returns what it rejected and the prompt warns per rejected chunk. Its summary line also
+  prints in the same `tool=state` syntax the user types, not a raw Python dict repr.
+- Several backup-filename and log-message dates were hardcoded literal strings left over from
+  whenever that line was last written (`settings.json.bak-2026-07-30`, a stash message, the
+  persisted `last_run` field) - all now use the actual current date.
+- `run_setup_alias`'s "Add it?" confirm defaulted to yes even when the repo root couldn't be
+  confidently resolved (the "may be temporary" case) - default now follows the resolution
+  result instead of always assuming yes.
+- `Installer.model_step` (labelled "per project only") asked "make this the default for new
+  projects too?" regardless - contradicting its own label. It no longer asks; the Advanced
+  menu's "Machine defaults" is the one place for that.
+- `print_summary` referenced a stale "option 4" for configuring a project (now correctly
+  "option 2"), and the "Done, summon the team" sign-off could print even when a step had
+  failed or nothing was actually run - both fixed.
+- Quitting the interactive menu without taking any write action said "nothing changed" even
+  after `--model`/permissions/etc had actually been applied, and vice versa for read-only
+  diagnostic runs - now tracks whether anything was actually written.
+- `_bootstrap_only_hint` pointed at a `--full` flag that doesn't exist.
+- Unknown `-`-prefixed flags to a `virt-surv <subcommand>` (e.g. a typo) were silently treated
+  as the target directory path instead of being rejected.
+
+### Added
+- `--version` flag.
+- `install_helper.py` and `virt-surv <subcommand>` now open with a short line in Morgan's
+  voice, matching the interactive menu's existing banner.
+- The "Which project directory?" prompts (configure/manage/preferences/model) now show what
+  the default (`.`) actually resolves to, so accepting it isn't a guess.
+- `format_preferences_step` now says explicitly that the large-context review-split preference
+  is set via "Configure a project", not here - it was previously easy to look for it in the
+  wrong place.
+
+## [0.33.18] - 2026-08-05 - Machine defaults (view/edit), a one-click recommended-settings path, real precedence
+
+### Added
+- Advanced menu -> "This machine's defaults": view and edit docx/citations/review-tools/
+  Morgan's default model directly, with no project needed - previously the ONLY way to
+  see or change these was as a side effect of configuring one specific project.
+- `virt-surv configure` / `--configure` opens with a one-click "use the recommended
+  settings?" question - accepting it applies enable + permission allow-list + this
+  machine's defaults with no further prompts, reusing the existing `--yes` machinery
+  rather than adding new logic. Declining walks through each choice as before.
+
+### Fixed
+- "Sensible defaults" now actually respect machine-level overrides: a tool disabled at
+  `--check-tools`/Machine-defaults level (e.g. ruff off) stayed disabled for a BRAND NEW
+  project's suggested defaults, instead of silently reverting to the built-in default -
+  `run_configure` and `format_preferences_step` previously only ever consulted the
+  project's own (possibly nonexistent) preferences file, never this machine's config. A
+  project that has ALREADY made its own explicit choice still always wins.
+- `engage_probe.py` (the real, live `/engage`-time reader of docx/citations) had the
+  exact same gap - a project that was enabled without ever running Configure/Project
+  preferences fell back to the hardcoded built-in default, never this machine's
+  configured one. Fixed with the identical project-overrides-machine-overrides-builtin
+  precedence, so what a human sees while configuring can never drift from what Morgan
+  actually applies at engagement time.
+- The full install flow asked "Still set Morgan's model for a project?" on EVERY run
+  after declining project enablement, even for an already-configured project - not
+  something the average user should be asked on every routine update. Removed; the
+  Advanced menu's "Morgan's model" and "Machine defaults" items are always directly
+  reachable instead.
+- A live pollution incident this session (an earlier test's confirm-prompt fake matched
+  the wrong question by substring, and the test didn't isolate HOME/XDG_CONFIG_HOME)
+  wrote to the real `~/.config/virt-surv-it/installer.json` on the dev machine. Root
+  cause fixed (precise prompt matching) and every test in this area now isolates HOME
+  explicitly as defense in depth.
+
+## [0.33.17] - 2026-08-04 - Project-preferences flow: which target am I setting, made explicit
+
+### Changed
+- "Project preferences" (Advanced menu / `format_preferences_step`) answered several
+  questions that read as project-scoped, then bolted on an abstract "save as your default
+  for new/unconfigured projects?" question at the end with no restated values - genuinely
+  unclear which target (the one project, or this whole machine) was being changed at each
+  step. Now: an explicit "For `<project>`:" header before the project-scoped questions, a
+  visually separated "Separately - this machine's default:" section before the optional
+  final question, and that question restates the concrete values just chosen ("You just
+  set docx=off, citations=on... for `<project>`. Also make THESE SAME choices this
+  machine's default...?") instead of an abstract "your default" phrase.
+- The step's intro now names the seven supported analysers (ruff, mypy, bandit, black,
+  sqlfluff, shfmt, gitleaks) explicitly, so "where do I turn ruff off" has an obvious
+  answer instead of the generic "review-tool overrides" wording.
+- Menu label simplified to "Project preferences (docx, citations, review tools)" - the
+  dual-scope nuance now lives in the step's own (much clearer) flow instead of a
+  hard-to-parse single menu line.
+
+## [0.33.16] - 2026-08-04 - Menu UX polish: no redraw-on-typo, plugin-vs-project scope labelled
+
+### Changed
+- The top-level interactive menu no longer redraws its full six-line option list on every
+  invalid keystroke - a mistyped entry now gets a short error and a re-ask, matching how
+  the Diagnostics/Advanced submenus already behaved.
+- Every top-level and Advanced-submenu item that writes a setting now states its scope
+  explicitly - "this machine" (installer-wide: the alias, status line, environment setup)
+  vs "per project" (Configure, Manage engagements, Morgan's model) vs "per project; can
+  also set this machine's default" (Project preferences) - previously unlabelled, which
+  made it unclear which settings applied where.
+- Diagnostics/Advanced submenu option text tightened - the Comprehensive/Project-
+  preferences entries had grown into unwrapped, 100+ character lines.
+
+## [0.33.15] - 2026-08-04 - Alias verification, a self-update relaunch fix, clearer diagnostic naming
+
+### Added
+- The alias/function line is now VERIFIED immediately after being written, not just
+  written: the exact line is evaluated in isolation (POSIX via `bash -c`, PowerShell via
+  `powershell.exe`/`pwsh.exe -Command`) and `virt-surv` must actually resolve, catching a
+  quoting/syntax mistake immediately rather than only when a user opens a new terminal
+  and it silently doesn't work. Failed verification now surfaces as a real failure
+  (non-zero exit), not a silent false "added".
+- The post-write guidance is now specific per shell: PowerShell needs `. $PROFILE`
+  (PowerShell does not auto-reload its profile mid-session) rather than a generic
+  "re-source your shell config" line that read as POSIX-only.
+
+### Fixed
+- The self-update relaunch (mid-install, when the sync step pulls a newer
+  `install_helper.py`) passed `args.mode` to the restarted child, which is often still
+  `None` (the user picked "1) Install or update" from the menu rather than a positional
+  CLI arg) - so the relaunched child landed back on the interactive menu instead of
+  continuing straight through, with nothing explaining that new menu options need a full
+  install to actually appear. Now passes the RESOLVED mode explicitly, so the relaunch
+  jumps straight into the full flow the user was already mid-way through.
+
+### Changed
+- `--check-tools`/`--check-env`/`--selftest` help text and the Diagnostics submenu labels
+  now state the relationship explicitly (Quick vs Comprehensive-includes-Quick-plus-more
+  vs the synthetic-engagement-only piece), instead of three similarly-worded options with
+  no stated relationship between them.
+
+## [0.33.14] - 2026-08-04 - PowerShell profile detection fixed for folder redirection; diagnostics folded together
+
+### Fixed
+- `_powershell_profile_candidates()` hardcoded `Path.home()/"Documents"` for the alias's
+  PowerShell profile path. On a corporate machine with folder redirection, "Documents"
+  resolves to a NETWORK path, so the local guess wrote somewhere PowerShell never actually
+  reads `$PROFILE` from - the alias silently didn't work. Now queries each PowerShell host's
+  own `$PROFILE` for real (`powershell.exe`/`pwsh.exe -NoProfile -Command "Write-Output
+  $PROFILE"`), falling back to the static guess only when that host isn't on PATH or the
+  query itself fails.
+
+### Changed
+- `--check-env` now also runs the same synthetic "review this code" engagement `--selftest`
+  does (planted-issue detection + the full engagement-state lifecycle), so the comprehensive
+  check is comprehensive rather than a parallel, separate diagnostic.
+- Both `--check-env` and `--selftest` now end with a compact pass/fail summary (grouped
+  Passed/Warnings/Skipped/Failed), instead of requiring a scrollback hunt through a
+  20+-row run to see what actually failed.
+
+## [0.33.13] - 2026-08-04 - `--selftest`: a mechanical smoke test of a real engagement
+
+### Added
+- `install_helper.py --selftest` (also reachable via Diagnostics → "Self-test" in the
+  interactive menu): a throwaway synthetic "review this code" engagement exercising the real
+  substrate an engagement depends on - guard hooks, an analyser proven to *detect* a planted
+  issue (not just stay quiet on clean input), and the full engagement-state lifecycle (init →
+  findings → render → the close-gate correctly refusing an incomplete close → archive). No
+  LLM/Claude Code invocation, no network, no new dependencies - stdlib and the team's own
+  bundled scripts only (a real orchestrated engagement eval already exists via
+  `scripts/eval_engage.py`, which needs the Agent SDK, a venv, real tokens and network - wrong
+  tool for a lightweight diagnostic).
+- On any failure, writes one debug bundle file (`virt-surv-selftest-<timestamp>.txt`, current
+  directory) with full stdout/stderr/traceback per step plus Python/platform/interpreter/repo
+  info - meant to be pasted or attached whole in place of a screenshot.
+
+## [0.33.12] - 2026-08-04 - Alias offered in the full install; a relocated-session diagnostics bug fixed
+
+### Added
+- The full install flow now offers the `virt-surv` alias as its own optional step (mirroring
+  the existing status-line step), not only reachable as a separate menu item. Interactive
+  default is Yes on a real terminal (matching status line); an unattended run (`--yes`, or
+  non-interactive with no live tty) never touches the user's shell rc files.
+
+### Fixed
+- `--check-env` and `--setup-alias`, run from the interactive menu or the full install's own
+  alias step, could misreport "not installed yet" even mid-install: both used
+  `Path(__file__).resolve().parent` to find the clone, but
+  `_relocate_if_running_inside_target_repo` re-execs from a temp copy (so git can safely
+  overwrite the running script) for the rest of that session - `__file__` stays wrong even
+  though the real clone is available via `args.repo`, which the relocation logic already
+  passes through correctly. Both now prefer that hint before falling back to `__file__`.
+
+## [0.33.11] - 2026-08-04 - Live-reported Windows fixes: a broken alias, a false-positive shfmt check, clearer diagnostics
+
+A batch of fixes from live testing on a real corporate Windows box during the same session
+that shipped [0.33.10]'s tool-config work.
+
+### Fixed
+- `--setup-alias` could write a **broken alias**: it used `Path(__file__).resolve()` for the
+  script path, but when run from the curl-bootstrap temp extraction (before the full clone
+  exists), that resolves to a temp directory that gets cleaned up - breaking the alias, and
+  clobbering a previously-correct one on re-run. Now prefers the configured clone
+  (`installer.json`'s `repo_path`) whenever `__file__`'s own parent isn't a real repo, and
+  warns clearly if no real clone can be found at all.
+- `shfmt` could come back `NOISY` on a trivial, genuinely clean fixture file:
+  `Path.write_text()`'s default newline translation turns `\n` into `\r\n` on Windows, and
+  `shfmt -d`'s diff is byte-sensitive enough to report that as "the whole file would change".
+  All three `--check-tools` fixture files now write with an explicit `newline="\n"`.
+- `--check-env`'s plugin-root-bootstrap and guard-hook checks showed confusing raw errors
+  (`No module named 'scripts.find_plugin_root'`, a temp-dir path for the missing dispatcher)
+  when run from the same bootstrap-only state - now a clear "not installed yet, run the full
+  install first" message.
+
+### Added
+- `--check-env` now also checks: every `.py` file under `scripts/` and `.claude/hooks/` (plus
+  `install_helper.py` itself) compiles cleanly under the resolved interpreter, and `git`/the
+  `claude` CLI are present - previously only checked in the full install's own preflight, not
+  in the standalone diagnostic.
+- The full install flow now offers the `virt-surv` alias as its own optional step (mirroring
+  the existing status-line step), not only reachable as a separate menu item. Opt-in by
+  default (unlike status line) since it edits the user's own shell rc file(s); never offered
+  on an unattended `--yes` run.
+
+## [0.33.10] - 2026-08-04 - Seven code-review analysers made individually configurable, with a live safety check
+
+Live audit of the full code-review tool list against the bar `semgrep`/`pip-audit` failed
+(single-file, dependency-free, network-free). Seven tools cleared it and are now the officially
+supported, individually configurable set: `ruff`, `mypy`, `bandit`, `black`, `sqlfluff`,
+`shfmt`, `gitleaks`.
+
+### Added
+- On/off/auto config for the seven supported analysers: project-level
+  (`.claude/team-preferences.json`'s `review_tools`), machine-level default
+  (`~/.config/virt-surv-it/installer.json`'s `default_review_tools`, applies to every project
+  unless a project overrides it), and a global kill switch (`CST_NO_EXTERNAL_TOOLS=1`) that
+  disables all seven regardless of either config. `off` is enforced before the tool is ever
+  probed - a disabled tool never shows as available even if it's sitting on PATH.
+- A live safety check before any tool can be forced `on`: `install_helper.py`'s "Project
+  preferences" step runs the same throwaway-file probe `--check-tools` uses against just that
+  tool, and downgrades it back to `auto` with a clear warning if the probe comes back noisy,
+  errored, or times out - the exact failure shape that made semgrep/pip-audit unsafe, now
+  caught at configuration time instead of discovered mid-review.
+- `--check-tools`/`--check-env` extended from four to all seven supported analysers (was
+  ruff/mypy/bandit/gitleaks only).
+- `sqlfluff` added to `requirements-review.txt` (previously undocumented as pip-installable).
+
+### Changed
+- `error-prone`, `spotbugs`+`find-sec-bugs` (Java) and `scalac -Xlint`, `wartremover` (Scala) are
+  no longer driven at all - each needs a full compiled build via `mvn`/`gradle`/`sbt`, which both
+  reaches the network for dependencies and is blocked outright by the code-execution guard.
+  Java/Scala deep static analysis is 🧠 inferred-only until a network-free alternative exists.
+- `checkstyle`/`pmd`'s install guidance corrected: standalone CLI binary (brew/apt) only - never
+  via Maven/Gradle or raw `java -jar` (both blocked as code execution).
+- `code-reviewer.md`'s tool table and rationale rewritten to reflect current reality (was still
+  listing `semgrep` as an active analyser, and Java's Maven-based install path as safe).
+- The seven-tool config binds Morgan too, not just the `code-reviewer` agent, whenever she runs
+  an analyser herself for a direct-answer quick look instead of delegating.
+
+## [0.33.9] - 2026-08-04 - `install_helper.py` UX overhaul: fewer menu options, an alias, folder-scoped commands
+
+The installer's interactive menu had grown to 10 flat numbered options and felt clunky, with
+thin diagnostics on error. This is a from-scratch UX pass on the same stdlib-only, Python-3.9+,
+run-from-a-bare-clone constraints - no new dependencies.
+
+### Added
+- `install_helper.py setup-alias` installs a `virt-surv` shell alias (bash/zsh `alias`, or a
+  PowerShell `function` - both PS 5.1 and PS 7+ profile paths, since they differ) so the
+  installer is reachable from any folder, not just the clone.
+- `virt-surv configure [DIR]`, `virt-surv archive [DIR]` and `virt-surv list-engagements [DIR]`
+  run scoped to a project folder (defaulting to the current directory) without needing `cd` into
+  the plugin clone first.
+- `--check-tools`/`--check-env` comprehensive diagnostics (interpreters, encoding round-trip,
+  plugin-root bootstrap, guard hooks, analyser output cleanliness) for debugging install issues
+  on corporate/Windows environments, added earlier this cycle and now reachable from the
+  Diagnostics submenu.
+
+### Changed
+- Reorganised the top-level interactive menu from 10 flat options down to 6 (plus a persistent
+  Diagnostics and an Advanced/one-off-settings submenu) - one-off settings and diagnostics moved
+  one level down instead of competing with the everyday choices.
+- The menu now loops back to the top level after every action instead of exiting the process -
+  running Configure then Diagnostics then Manage no longer means relaunching the installer three
+  times.
+- `--demo` now covers the entire interactive session, not just a fixed one-shot preview: it
+  threads through every menu action (Configure, Manage, alias setup, every Advanced/Diagnostics
+  choice) for as long as the session runs, so the whole menu system can be explored risk-free.
+  Picking "Demo" from the Advanced submenu is itself a one-shot full-flow preview and does not
+  leave later, real actions in the same session running in demo mode.
+- `install_helper.py configure DIR` consolidates enable + permissions + project preferences +
+  Morgan's model into one guided flow, reachable both as a CLI flag and from the menu.
+
+## [0.33.8] - 2026-08-04 - Token-usage and CPU-latency audit, plus eval-found routing fixes
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+Two audits (token usage, CPU/latency), then a live eval run surfaced two real bugs the audits
+didn't cover.
+
+### Changed
+- Scoped Write access for the four findings-pack reviewers (`code-reviewer`,
+  `compliance-reviewer`, `model-validator`, `performance-reviewer`) to their own JSON output,
+  mechanically enforced - cuts output-token cost on deep reviews.
+- Morgan's own orchestration tier now defaults to Sonnet; Opus stays available on request.
+- Consolidated the PreToolUse and Stop hooks into two dispatcher processes, memoized
+  repeatedly-reloaded modules, batched per-SHA git lookups, and cached the statusline's
+  interpreter probe.
+
+### Fixed
+- A simple, answerable-now question no longer gets formalised into a full engagement pack by
+  default - `/engage` classification gained a direct-answer path (eval-measured: cut one case's
+  cost 86%).
+- Fixed quote-blind compound-command segment splitting in the code-execution and raw-data
+  guards - a chained command's own punctuation (e.g. a semicolon in a log message) could get
+  sliced into a bogus fragment and falsely block.
+- `compliance-reviewer` is no longer effectively mandatory for every build.
+  `DEFINITION-OF-DONE.md` and `/build-solution` now match the routing table's own rule
+  (detection logic / regulated data / §4 thresholds only, not every code review).
+
+### Removed
+- Temporarily removed `semgrep` and `pip-audit` from code-review tooling, pending further
+  research into token usage and compatibility issues reported with the framework.
+
+## [0.33.7] - 2026-08-03 - Windows-detection, a missed status word, and a docs pass from a live session
+
+> Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.
+
+Three defects found by watching a real corporate-Windows session hit friction, plus a docs pass
+on the README and the quick-start reference.
+
+### Fixed
+- **The step-0 probe now reports `OS=Windows|POSIX`.** `safety-gates.md` already said to show the
+  PowerShell exec-consent command alongside the `!` form on Windows, but nothing put "this is
+  Windows" in front of the model as a fact at the moment it needed it - it had to infer that from
+  soft context, and on a live Windows host it gave the `!` form alone, which doesn't work in a
+  Windows terminal. `engage_probe.py` now emits `OS=` the same way `INTERPRETER=` already exists:
+  don't make the model infer something it can just be told. `safety-gates.md` and `SKILL.md`
+  updated to read the field instead of an unprompted "on Windows" clause.
+- **`check_artifacts.py`'s `_STALE_DOCSTATUS_RE` never checked for "pending".** A closed
+  `delivery-report.md` and its `.html` both still read `Status \`Pending\`` and the mechanical
+  gate stayed silent, because the regex only ever matched draft/in review/in progress. No
+  template's Status placeholder uses "pending" (they all say `Draft | In review | Approved`), so
+  it was always author-written scaffolding text, never a template artifact. Added the missing
+  alternative, symmetric with the existing "pending human sign-off" exception.
+- **`review-menu.md` now disambiguates from the intake gate's batch.** The locked review-type
+  call (`Depth`/`Performance`/`Fix-cycle`) and the separate intake-gate batch (`Work type`/
+  `Execution`/`Data safety`) used near-identical "batch these in one screen" phrasing with no
+  statement that they're different calls at different points in the flow, so a live session
+  carried `Execution` into the review-menu call. `locked_menu_guard.py` caught it and the model
+  recovered in the same turn, but the friction was real; the ambiguity is now closed at the
+  source.
+- **The engagement-flow poster's README caption was stale, not the poster.** It read "point-in-time
+  render at v0.28.0 - predates workspaces and the closing window" for a file that had actually
+  been updated the day before and was titled v0.33.6, already covering workspaces. Fixed the
+  caption and converted the poster to a PDF (renders directly on GitHub, same reasoning as the
+  quick-start reference) instead of a third-party proxy hardcoded to `main`.
+
+### Added
+- **`docs/quick-start.pdf`**, generated from `docs/quick-start.html`: GitHub never renders `.html`
+  files inline for security, so the file always showed as source. A PDF renders natively in
+  GitHub's own file viewer. All README references updated to lead with it.
+- **A "What Morgan cannot do" section** in README's Using-them, stating the boundaries as plainly
+  as the capabilities: execution consent, the raw-data directory, hook/settings edits, close
+  authority, advisory-agent write access, and QA gating are all things Morgan cannot do, each
+  citing the gate that actually enforces it.
+- **A banner on `main` pointing to `dev`**: during this fast-moving PoC phase, promoting `dev` to
+  `main` is eval-gated and costs real API tokens, so `main` can lag `dev` by weeks of real work.
+  Pushed directly to `main` (docs-only, no eval gate needed per `CONTRIBUTING.md`'s "small, safe
+  fixes" carve-out).
+- **The installer now defaults to the `dev` channel**, not `main`, with the same rationale as the
+  banner above - instance default, config fallback, interactive prompt wording and `--branch`
+  help text all updated; `main` stays a fully valid, explicit choice.
+
+### Changed
+- **README's top release-summary box restructured** from one dense paragraph into scannable
+  headline features plus a short "also in this cycle" line. Two bullets that read as admitting
+  the project had previously overclaimed ("most-marketed guarantee, backed by zero validating
+  code"; raw eval percentages) reworded to describe the mechanism added, not a correction of a
+  prior falsehood.
+- **Three README redundancies trimmed**: the "why a specialist team" bullets fully re-explained
+  what the Core Principles table already covers (condensed to a paragraph + link); the dormancy
+  mechanism was explained in full in two places (one now cross-references the other); the
+  model-tier split (opus/sonnet/haiku counts) was stated with rationale twice, a real drift risk
+  the project's own conventions already warn about (one now cites the other).
+
 ## [0.33.6] - 2026-08-01 - Framework audit remediation: guard escapes closed, traceability gated, eval numbers made readable
 
 > Overview (whole 0.33.x cycle on one page): `docs/releases/0.33.md`.

@@ -11,6 +11,7 @@ import copy
 import json
 from pathlib import Path
 
+from scripts.findings_pack_io import read_pack, write_pack
 from scripts.render_findings import render
 from scripts.validate_findings import load_and_validate, validate
 
@@ -18,8 +19,8 @@ _ROOT = Path(__file__).resolve().parents[1]
 _SCHEMA = json.loads(
     (_ROOT / "docs" / "review" / "findings-schema.json").read_text(encoding="utf-8")
 )
-_GOLD_PATH = _ROOT / "docs" / "review" / "gold-findings.json"
-_GOLD = json.loads(_GOLD_PATH.read_text(encoding="utf-8"))
+_GOLD_PATH = _ROOT / "docs" / "review" / "gold-findings.jsonl"
+_GOLD = read_pack(_GOLD_PATH)
 
 
 def test_gold_pack_is_valid():
@@ -87,9 +88,8 @@ def test_kind_security_audit_names_and_titles(tmp_path):
     pack["kind"] = "security-audit"
     pack["slug"] = "sec-x"
     pack.pop("title", None)  # so the kind's default title applies
-    (tmp_path / "data").mkdir()
-    p = tmp_path / "data" / "findings-sec-x.json"
-    p.write_text(json.dumps(pack), encoding="utf-8")
+    p = tmp_path / "data" / "findings-sec-x.jsonl"
+    write_pack(p, pack)
     rf_main(["render_findings", str(p)])
     out = tmp_path / "SECURITY-AUDIT-sec-x.md"  # kind drives the prefix, up into artifacts/
     assert out.is_file()
@@ -106,8 +106,46 @@ def test_kind_performance_shows_gain_and_prefix(tmp_path):
     f = pack["findings"][0]
     f["current_cost"], f["projected_cost"], f["gain"] = "4.2s @ 100k", "0.1s", "~40x"
     assert "**Performance:** 4.2s @ 100k → 0.1s  (gain: ~40x)" in render(pack)
-    (tmp_path / "data").mkdir()
-    p = tmp_path / "data" / "findings-perf-x.json"
-    p.write_text(json.dumps(pack), encoding="utf-8")
+    p = tmp_path / "data" / "findings-perf-x.jsonl"
+    write_pack(p, pack)
     rf_main(["render_findings", str(p)])
     assert (tmp_path / "PERF-perf-x.md").is_file()
+
+
+# ------------------------------------------ render_pack_file (2026-08-05, in-process rendering)
+
+
+def test_render_pack_file_writes_the_default_out_path(tmp_path):
+    from scripts.render_findings import render_pack_file
+
+    p = tmp_path / "data" / "findings-t.jsonl"
+    write_pack(p, _GOLD)
+    out = render_pack_file(p)
+    assert out == tmp_path / f"REVIEW-{_GOLD['slug']}.md"
+    assert out.is_file()
+
+
+def test_render_pack_file_invalid_pack_raises_value_error(tmp_path):
+    from scripts.render_findings import render_pack_file
+
+    bad = copy.deepcopy(_GOLD)
+    del bad["findings"][0]["likely_cause"]
+    p = tmp_path / "data" / "findings-bad.jsonl"
+    write_pack(p, bad)
+    try:
+        render_pack_file(p)
+        raise AssertionError("expected ValueError for an invalid pack")
+    except ValueError as exc:
+        assert "schema violation" in str(exc)
+
+
+def test_render_pack_file_want_html_renders_in_process_no_subprocess(tmp_path):
+    import scripts.render_findings as rf
+
+    # 2026-08-05: render_findings no longer imports subprocess at all - --html is an
+    # in-process call to render_html.render_file(), not a child-process spawn.
+    assert not hasattr(rf, "subprocess")
+    p = tmp_path / "data" / "findings-t.jsonl"
+    write_pack(p, _GOLD)
+    out = rf.render_pack_file(p, want_html=True)
+    assert out.with_suffix(".html").is_file()

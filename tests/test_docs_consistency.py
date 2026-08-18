@@ -89,6 +89,13 @@ def test_readme_version_badge_matches_plugin_json():
 
 
 def test_adr002_header_version_matches_revision_table():
+    if not (_ROOT / "docs" / "adr").is_dir():
+        import pytest
+
+        pytest.skip(
+            "docs/adr/ is deliberately untracked (internal docs, .gitignore 2026-08-13) "
+            "and absent in this clone - the check runs wherever the files exist"
+        )
     text = _read("docs/adr/ADR-002-safety-hook-threat-model.md")
     header = re.search(r"Version `([\d.]+)`", text)
     assert header, "ADR-002: no header version"
@@ -124,6 +131,102 @@ def test_engage_does_not_claim_roster_in_claude_md():
     assert not stale, f"engage/SKILL.md still says the roster is in CLAUDE.md: {stale.group(0)!r}"
     current = re.search(r"roster is in[\s`*\n]{0,10}[^\n]*team-operating-guide\.md", text)
     assert current, "engage/SKILL.md: roster pointer to docs/team-operating-guide.md not found"
+
+
+def test_reviewer_agents_forbid_repo_enumeration():
+    """Map-first review scoping (2026-08-17): dispatched reviewers must work from the
+    brief's file list and the codebase map's PATH, never crawl the repo themselves - a
+    live run had three parallel reviewers each independently re-discover a mapped repo."""
+    for agent in ("code-reviewer", "performance-reviewer"):
+        text = _read(f".claude/agents/{agent}.md").lower()
+        assert "never enumerate the repo" in text, (
+            f"{agent}.md: the no-self-enumeration rule is gone"
+        )
+
+
+def test_build_side_agents_forbid_repo_enumeration_too():
+    """The build-workflow pass (2026-08-17): builders, QA, the BA and the analyst get
+    the same map-first scope rule reviews got - the enumeration guard denies a bare
+    find mid-build, so the sanctioned route must be in each prompt."""
+    for agent in (
+        "rules-developer",
+        "platform-engineer",
+        "ml-engineer",
+        "qa-engineer",
+        "data-analyst",
+    ):
+        text = _read(f".claude/agents/{agent}.md").lower()
+        assert "never enumerate the repo" in text, (
+            f"{agent}.md: the map-first scope rule is missing"
+        )
+    ba = _read(".claude/agents/business-analyst.md").lower()
+    assert "codebase-map.md" in ba and "never crawl" in ba
+
+
+def test_build_solution_carries_the_2026_08_17_review_fixes():
+    """Priced gate, light-shape derivation, consent-up-front, map-in-briefs - the four
+    build-workflow findings that map onto SKILL text."""
+    text = _read(".claude/skills/build-solution/SKILL.md")
+    assert "Price the plan at the go-ahead gate" in text
+    assert "EARS-lite" in text  # single-unit non-detection derives the light shape
+    assert "consent declined" in text  # evidence level agreed up front
+    assert "codebase map's\n   PATH" in text.replace("  ", " ") or "codebase map's" in text
+    assert "point, never paste" in text.lower()
+
+
+def test_bookends_close_refreshes_the_map():
+    """A build outdates the map; direct-invoked skills never pass through /engage's
+    close - the shared bookends must carry the bounded refresh + re-fingerprint."""
+    text = _read(".claude/skills/.shared/engagement-bookends.md")
+    assert "Map currency" in text
+    assert "repo_skeleton --fingerprint docs/codebase-map.md" in text
+
+
+def test_write_brd_batches_clarifying_questions():
+    text = _read(".claude/skills/write-brd/SKILL.md")
+    assert "ONE `AskUserQuestion` call" in text
+    router = _read("docs/review/agent-router.md")
+    assert "Point, never paste" in router, (
+        "agent-router.md: briefs must point at the codebase map, never inline its body"
+    )
+    skill = _read(".claude/skills/deep-review/SKILL.md")
+    assert "point, never paste" in skill.lower(), (
+        "deep-review/SKILL.md: the map-pointer briefing rule is gone"
+    )
+
+
+def test_review_target_is_derived_or_batched_never_a_solo_turn():
+    """Review-target batching (2026-08-17): the target is derived (diff / named path)
+    and, when genuinely unknown, asked inside the 0a intake batch - never its own
+    screen or turn."""
+    engage = _read(".claude/skills/engage/SKILL.md")
+    assert "Review target" in engage and "`Target`" in engage, (
+        "engage/SKILL.md: the Work-type slot swap to Review target is gone"
+    )
+    deep = _read(".claude/skills/deep-review/SKILL.md")
+    assert re.search(r"\*\*Target\*\*", deep), (
+        "deep-review/SKILL.md: step 2 must derive the target before asking"
+    )
+    menu = _read(".claude/skills/engage/references/review-menu.md")
+    assert "Name the derived target" in menu, (
+        "review-menu.md: the price-line message must state the derived target"
+    )
+
+
+def test_engage_new_flag_forbids_engagement_discovery():
+    """Live report (2026-08-17): '/engage --new' from the go menu still spent a turn
+    listing the open packs 'in case any are related' - the human had JUST seen that
+    list in the launcher and chosen new. The skill must carry the zero-discovery rule
+    for --new, and validation must be scoped to --resume only."""
+    text = _read(".claude/skills/engage/SKILL.md")
+    assert "ZERO engagement discovery" in text, (
+        "engage/SKILL.md: the --new zero-discovery rule is gone - --new must skip "
+        "list --menu, artifacts listings, ENGAGEMENTS.md and any open-pack commentary"
+    )
+    assert re.search(r"`--resume <slug>`[^\n]*validate", text), (
+        "engage/SKILL.md: slug validation must be stated on the --resume branch "
+        "(it is the only flag with anything to validate)"
+    )
 
 
 # --- (f) spot-check doctrine: Morgan spot-checks, never re-scores --------------
@@ -210,6 +313,46 @@ def test_agent_count_references_match_filesystem():
             )
 
 
+def _test_function_def_count() -> int:
+    """A cheap, pure-file-read LOWER BOUND on the real pytest-collected test count - a
+    parametrized `def test_x` collects as MANY test IDs, never fewer, so this is always
+    <= the true collected count. Deliberately not an exact match (this file's own stated
+    design is pure file reads, no execution - actually invoking pytest --collect-only from
+    inside a test would be circular and slow); a floor-check on the def-count is the
+    strongest claim obtainable without running the suite."""
+    total = 0
+    for path in (_ROOT / "tests").glob("test_*.py"):
+        total += len(re.findall(r"^def test_", path.read_text(encoding="utf-8"), re.M))
+    return total
+
+
+def test_readme_test_count_claim_is_never_an_overstatement():
+    """Found live 2026-08-07 (framework-wide audit): README claimed '700+ unit tests' /
+    '785 collected as of 0.33.1' / a '1300+ passing' badge - three DIFFERENT numbers, none
+    matching the real count by then (1842 collected). A hand-maintained exact count always
+    eventually drifts (the skill/agent-count tests above solve this by deriving an EXACT
+    match from disk; a test count can't use that pattern, since it changes on nearly every
+    commit that touches tests/). This instead pins a WEAKER, permanently-true property: the
+    rounded "N+" claims in README must never overstate reality - the real def-count (itself
+    a floor on the true collected count) must be >= every "N+ ... test" figure quoted."""
+    floor = _test_function_def_count()
+    readme = _read("README.md")
+    # Two phrasings appear: "N+ ... test(s)" (prose) and "Tests N+" (the badge alt text/URL).
+    claims = re.findall(r"(\d[\d,]*)\+\s*(?:passing\s+)?(?:unit\s+)?tests?\b", readme, re.I)
+    claims += re.findall(r"[Tt]ests?[\s-](\d[\d,]*)\+", readme)
+    assert len(claims) >= 3, (
+        f"README: expected at least 3 'N+ test(s)' claims (badge + two prose mentions), "
+        f"found {len(claims)}: {claims} - did the wording change enough to need a new pattern?"
+    )
+    for claim in claims:
+        n = int(claim.replace(",", ""))
+        assert n <= floor, (
+            f"README claims '{claim}+ tests' but only {floor} `def test_` definitions exist "
+            f"on disk (a floor on the true collected count) - the claim overstates reality, "
+            f"lower it"
+        )
+
+
 def test_roster_gate_matches_operating_guide():
     """The roster hardcoded in check_artifacts (for ROSTER-UNKNOWN/ROSTER-ROLE-MISMATCH) must
     match the canonical roster line in the operating guide, so the name->role map can't drift."""
@@ -243,3 +386,48 @@ def test_eval_case_count_references_match_filesystem():
             assert int(found) == n, (
                 f"{rel}: says {found} golden cases but {n} eval-case dirs exist on disk"
             )
+
+
+# --- (j) compliance-reviewer conditionality: never unconditional in the operative docs -----
+# The 2026-08-04 eval trace found DEFINITION-OF-DONE.md's "Compliance-reviewed" checklist item
+# and build-solution/SKILL.md's review step both named compliance-reviewer with no conditional
+# qualifier - unlike performance-reviewer right next to it in both places, which correctly said
+# "where it processes data at volume". CLAUDE.md §4 and the operating guide's routing table both
+# scope compliance-reviewer to detection logic / regulated data / §4 thresholds ("not every code
+# review"); an unqualified restatement elsewhere is exactly how that drifted. Anchored on the
+# specific checklist bullet / review step, not every mention of the agent name - several OTHER
+# mentions in these same files (audit-depth synthesis read, handover-usability check, eval
+# attestation) are legitimately their own, differently-scoped conditions, not this one.
+
+_COMPLIANCE_CONDITION_MARKERS = (
+    "detection logic",
+    "regulated data",
+    "not every code review",
+    "not a default",
+)
+
+
+def _assert_conditional(rel: str, section: str, label: str) -> None:
+    assert any(marker in section for marker in _COMPLIANCE_CONDITION_MARKERS), (
+        f"{rel}: {label} names compliance-reviewer with no nearby conditional qualifier "
+        "(detection logic / regulated data / not every code review) - reads as unconditional, "
+        "the exact 2026-08-04 bug"
+    )
+
+
+def test_dod_compliance_reviewed_bullet_is_conditional():
+    text = _read("docs/DEFINITION-OF-DONE.md")
+    m = re.search(r"- \[ \] \*\*Compliance-reviewed\*\*.*?(?=\n- \[ \]|\Z)", text, re.S)
+    assert m, "DEFINITION-OF-DONE.md: 'Compliance-reviewed' checklist bullet not found"
+    _assert_conditional(
+        "docs/DEFINITION-OF-DONE.md", m.group(0), "the 'Compliance-reviewed' bullet"
+    )
+
+
+def test_build_solution_review_step_is_conditional():
+    text = _read(".claude/skills/build-solution/SKILL.md")
+    m = re.search(r"4\. \*\*Review\*\*.*?(?=\n5\.|\Z)", text, re.S)
+    assert m, "build-solution/SKILL.md: step 4 ('Review') not found"
+    _assert_conditional(
+        ".claude/skills/build-solution/SKILL.md", m.group(0), "step 4's review-chain sentence"
+    )

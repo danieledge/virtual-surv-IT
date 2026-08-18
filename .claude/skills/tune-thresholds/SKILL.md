@@ -12,6 +12,11 @@ Tune detection thresholds for: **$ARGUMENTS**
 > periodic umbrella review that invokes both plus data-quality and adds an independent
 > model-validator verdict, use `/validate-tm-model`.
 
+**The standard open applies before any agent is dispatched, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement
+Brief and `engagement_state init` (unless `/engage` already wrote them) before step 1, the closing
+bookend at the end.
+
 **1. Gather inputs first - ask via the question tool, one question per axis; don't assume.**
 Ask as discrete, structured questions:
 - **Scenario/rule** to tune (single-select if a known set; else free text).
@@ -23,8 +28,8 @@ Ask as discrete, structured questions:
   `data/raw/` is hard-blocked). Separate question.
 - **Segmentation** that applies (product/instrument/customer/channel). Separate question.
 
-**2. Get the typology context from the SME** - `tm-sme` (or `trade-surveillance-sme` /
-`comms-surveillance-sme`): the red flags, the obligation the scenario serves, what "true
+**2. Get the typology context from the SME pack** - read `docs/sme/tm-monitoring.md` (or
+`trade-surveillance.md` / `comms-surveillance.md`) in-line: the red flags, the obligation the scenario serves, what "true
 positive" means here. Don't invent it.
 
 **3. Drive `tuning-analyst`** (CLAUDE.md §6 - static statistical analysis on masked/synthetic

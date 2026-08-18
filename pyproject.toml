@@ -15,3 +15,23 @@ addopts = "-q"
 [tool.ruff]
 # Matches the existing house style; long regex/comment lines are left as-is by the formatter.
 line-length = 100
+# Third-party/vendored code and virtualenvs are never the review target, but nothing scoped
+# them out before this (found live, 2026-08-10: a "whole repo" breadth deep-review would
+# sweep vendor/ - 269 tracked files, 61% of all tracked Python lines - plus any on-disk
+# .venv/). ruff's own default excludes don't cover a TRACKED vendor/ dir.
+extend-exclude = ["vendor", ".venv", "evals/runs"]
+# Without this, exclude/extend-exclude only applies to ruff's OWN discovery walk (e.g.
+# `ruff check .`) - an explicitly-passed path (`ruff check vendor/some_file.py`, e.g. an
+# agent that enumerated files itself rather than pointing ruff at a directory) would still
+# be checked. Confirmed live: `ruff check vendor/` found 878 errors despite the exclude
+# above, until this was added.
+force-exclude = true
+
+[tool.bandit]
+# Same reasoning as ruff's extend-exclude above - bandit does not respect .gitignore, so a
+# tracked vendor/ dir (or an on-disk .venv/) gets swept unless explicitly excluded here.
+exclude_dirs = ["vendor", ".venv", "evals/runs"]
+
+[tool.mypy]
+# Same reasoning again - mypy does not respect .gitignore either.
+exclude = '(^|/)(vendor|\.venv|evals/runs)/'

@@ -13,6 +13,11 @@ evidence basis, the audit-compatible skeleton, iteration log, brief/email DoD bo
 a platform knowledge base so assessors know **every place a requirement can be satisfied** -
 in a Quantexa estate that is emphatically not just the Scala.
 
+**The standard open applies before any assessment work begins, even when this skill is invoked
+directly.** Read `.claude/skills/.shared/engagement-bookends.md` and follow it - the Engagement
+Brief and `engagement_state init` (unless `/engage` already wrote them) before step 0, the closing
+bookend at the end.
+
 **0. Read the knowledge base first.** `references/quantexa-kb.md` (in this skill's directory)
 holds the verified platform knowledge: artifact taxonomy, the scoring DAG and pipeline stages,
 code-vs-config split, build conventions, version sensitivities, and the assessment traps.

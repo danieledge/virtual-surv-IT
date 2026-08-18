@@ -1,0 +1,1762 @@
+/* Engagement Command Centre - presentation layer, round 3 of the dashboard reskin.
+
+   Round 1/2 fix: this view used to be `commandcentre.css`, a deliberately separate,
+   permanently-dark `.cc-root` world with its own `--cc-*` token block, completely disconnected
+   from the rest of the app - exactly what read as "mish mash... hints of a white background...
+   the theme isn't cohesive" in the user's own words, since it sat as a bordered dark box inside
+   the light-themed page. That file and its isolation are deleted. This file has NO tokens of
+   its own beyond a handful of scoped, *derived* conveniences (below) - every color, radius and
+   font here is the SAME shared token src/index.css already defines for the rest of the page
+   (`--surface-0..5`, `--border`/`--border-strong`, `--accent`/`--accent-hover`/`--accent-muted`,
+   `--fg`/`--muted`, `--ok`/`--bad`/`--warn`, `--actor-1..6`/`--actor-text`,
+   `--radius-lg/-md/-sm`), so the Command Centre now follows whichever theme (light/dark) the
+   OS/browser has, exactly like Portfolio/Sessions.
+
+   Token mapping (old --cc-* -> new shared, see the round 3 report for the full table):
+   --cc-bg/-bg-elevated/-bg-panel -> no wrapper background at all (was the actual bug) /
+     --surface-3 / --surface-2; --cc-border/-border-strong -> --border/--border-strong;
+   --cc-text/-text-dim/-text-faint -> --fg/--muted/--cc-muted-faint (derived below, index.css
+   has no third muted step yet); --cc-accent -> --accent; --cc-loop -> --warn (kept as a name
+   below only as a derived alias, see rationale below); --cc-success/-error -> --ok/--bad;
+   --agent-1..6 -> --actor-1..6 (agentColorVar in ccVisuals.ts); --cc-token-input/-output ->
+   --accent / a color-mix of --accent+--muted (no new hex); --cc-mono/-sans -> Tailwind's
+   theme('fontFamily.mono'/'fontFamily.sans') (same effect as the `font-mono`/`font-sans`
+   utility classes, resolved here since most of this file is unlayered structural CSS rather
+   than JSX classNames); --cc-radius -> --radius-sm (8px, closest existing step to the old 5px).
+
+   --cc-loop decision: kept as a *derived* local custom property (not a new independent color -
+   see the `--cc-warn-*` block below), reusing --warn rather than inventing a token, because
+   loop/rework events read as "amber = attention" in exactly the same way --warn already does
+   everywhere else in the app, and nothing else in the Command Centre uses --warn - so there is
+   no risk of an ordinary warning state visually colliding with a loop/rework state here. The
+   actor palette in index.css already documents choosing its 6 colors to stay clear of the
+   amber/orange --warn hue for this exact reason, i.e. --warn was already earmarked as the
+   "rework" color family app-wide; this view just starts using it explicitly. */
+
+.cc-root {
+  /* ---- derived-only local aliases ----
+     None of these are a new color: every one is `color-mix()`'d live off an existing shared
+     token, scoped to this subtree only (not added to :root), so nothing here can drift from
+     the shared palette or leak a parallel token family into the rest of the app. */
+  --cc-muted-faint: color-mix(in srgb, var(--muted) 70%, transparent);
+  --cc-warn-soft: color-mix(in srgb, var(--warn) 14%, transparent); /* matches .badge-warn's own recipe in index.css */
+  --cc-warn-mid: color-mix(in srgb, var(--warn) 45%, transparent);
+  --cc-accent-glow: color-mix(in srgb, var(--accent) 45%, transparent);
+  /* Text/pill-label color for text sitting on a solid --accent fill. --surface-0 (the page's
+     own floor color) happens to work in both themes: it's near-white in light mode (readable on
+     light mode's dark teal --accent) and near-black in dark mode (readable on dark mode's bright
+     mint --accent) - exactly the contrast --border-strong (== --accent) was already chosen
+     against --surface-0 for, so this is a genuine reuse, not a new color. */
+  --cc-on-accent: var(--surface-0);
+
+  color: var(--fg);
+}
+
+.cc-root * {
+  box-sizing: border-box;
+}
+
+.cc-root h1,
+.cc-root h2,
+.cc-root h3 {
+  margin: 0;
+  text-wrap: balance;
+  font-family: theme('fontFamily.sans');
+}
+
+.cc-root dl,
+.cc-root dd,
+.cc-root ol,
+.cc-root p {
+  margin: 0;
+}
+
+.cc-root button {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* ---- synthetic-data ribbon ----
+   Kept sticky + a hazard-stripe treatment (still unmissable, the one non-negotiable). Both
+   stripe tones mix --warn into --surface-2 (an opaque surface), not `transparent` - the
+   original version here mixed into `transparent`, which made the whole badge semi-see-through.
+   Harmless at rest, but this badge is `position: sticky` - once real content scrolls underneath
+   a translucent sticky element, that content shows straight through it (confirmed live: a phone
+   screenshot on the published Artifact, 2026-08-09, showed the header's TOKENS/COST/CONFIDENCE
+   row bleeding through the stripe once scrolled). Mixing into an opaque surface keeps the same
+   two-tone diagonal look in both themes while actually blocking what's behind it, like the old
+   literal-hex version did before this file's round-3 rewrite. */
+.cc-synthetic-badge {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--warn) 30%, var(--surface-2)),
+    color-mix(in srgb, var(--warn) 30%, var(--surface-2)) 10px,
+    color-mix(in srgb, var(--warn) 12%, var(--surface-2)) 10px,
+    color-mix(in srgb, var(--warn) 12%, var(--surface-2)) 20px
+  );
+  color: var(--fg);
+  font-family: theme('fontFamily.mono');
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--warn);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.cc-synthetic-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 6px var(--cc-warn-mid);
+}
+
+/* ---- layout ---- */
+.cc-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  gap: 1rem;
+  padding: 1rem;
+  align-items: start;
+  min-width: 0;
+}
+.cc-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+.cc-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: sticky;
+  top: 3rem;
+  min-width: 0;
+}
+@media (max-width: 960px) {
+  .cc-layout {
+    grid-template-columns: 1fr;
+  }
+  .cc-sidebar {
+    position: static;
+  }
+}
+@media (max-width: 640px) {
+  .cc-layout {
+    padding: 0.65rem;
+    gap: 0.7rem;
+  }
+}
+@media (max-width: 420px) {
+  .cc-layout {
+    padding: 0.5rem;
+    gap: 0.6rem;
+  }
+}
+
+.cc-panel-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* generic surfaces shared by header/pulse/timeline/sidebar panels - same elevation step
+   (--surface-2) as `.ui-card` in index.css, so a Command Centre panel and an ordinary page card
+   read as the same surface. */
+.cc-header,
+.cc-pulse,
+.cc-timeline-panel,
+.cc-replay,
+.cc-panel {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1rem;
+}
+@media (max-width: 640px) {
+  .cc-header,
+  .cc-pulse,
+  .cc-timeline-panel,
+  .cc-replay,
+  .cc-panel {
+    padding: 0.7rem 0.75rem;
+  }
+}
+
+/* ---- header ---- */
+.cc-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.cc-header-eyebrow {
+  display: block;
+  font-family: theme('fontFamily.mono');
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.cc-header-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.2rem 0;
+  flex-wrap: wrap;
+}
+.cc-header-name {
+  font-size: 1.2rem;
+  font-weight: 650;
+  margin: 0;
+}
+.cc-header-meta {
+  display: block;
+  font-family: theme('fontFamily.mono');
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- header sub-card (Started / ID) ---- */
+.cc-header-subcard {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.5rem 1.6rem 0.5rem 0.7rem;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-width: 9rem;
+}
+.cc-header-subcard-menu {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.5rem;
+  color: var(--cc-muted-faint);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.cc-header-subcard-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.cc-header-subcard-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cc-muted-faint);
+}
+.cc-header-subcard-value {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.7rem;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+/* ---- confidence ring gauge ---- */
+.cc-metric-confidence dd {
+  margin-top: 0.15rem;
+}
+.cc-confidence-gauge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+}
+.cc-confidence-ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.cc-confidence-ring-track {
+  stroke: var(--border-strong);
+}
+.cc-confidence-ring-value {
+  transition: stroke-dashoffset 300ms ease;
+}
+.cc-confidence-ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+/* ---- header metric trend micro-labels (tokens/cost per minute) ---- */
+.cc-metric-trend {
+  display: block;
+  margin-top: 0.1rem;
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.cc-status-pill {
+  font-family: theme('fontFamily.mono');
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.cc-status-resolved {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.cc-status-investigating {
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+.cc-status-blocked {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+}
+
+.cc-metrics-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.4rem;
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--border);
+}
+@media (max-width: 480px) {
+  .cc-metrics-strip {
+    gap: 0.85rem 1.1rem;
+  }
+}
+.cc-metric dt {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--cc-muted-faint);
+  margin-bottom: 0.1rem;
+}
+.cc-metric dd {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+.cc-metric-sub {
+  font-size: 0.74rem;
+  font-weight: 400;
+  color: var(--cc-muted-faint);
+}
+
+/* ---- mobile: header subcard + confidence gauge crowding at <=480px ---- */
+@media (max-width: 480px) {
+  .cc-header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cc-header-subcard {
+    min-width: 0;
+    width: 100%;
+  }
+  .cc-header-name {
+    font-size: 1.05rem;
+  }
+  .cc-confidence-gauge {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
+/* ---- pulse strip ---- */
+.cc-pulse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.cc-info-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.4rem;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--cc-muted-faint);
+  font-size: 0.6rem;
+  font-style: italic;
+  font-family: theme('fontFamily.mono');
+  cursor: help;
+}
+/* Pulse track is wrapped (see EngagementPulse.tsx) in a horizontally-scrollable container with
+   a computed min-width (~4.4rem/marker) - same honest "scrolls inside its own contained box"
+   pattern already used for the hero AgentTimeline, applied here so captions never collide at
+   narrow widths instead of silently overlapping. */
+.cc-pulse-track-scroll {
+  overflow-x: auto;
+  padding: 0 3rem 0.15rem;
+  /* The first/last marker-group is horizontally centered on its 0%/100% position via
+     translateX(-50%) (pre-existing behavior, unchanged), so up to half of an edge caption's
+     width (e.g. "Discovery"/"Resolution") legitimately extends past the 0%/100% marks. Without
+     this padding that overhang becomes "scrollable overflow" for this overflow-x:auto wrapper
+     and forces a visible horizontal scrollbar even on a wide desktop where everything otherwise
+     fits - this padding absorbs it so a real scrollbar only appears once the JS-computed
+     min-width genuinely can't fit (narrow/phone widths). */
+}
+.cc-pulse-track {
+  position: relative;
+  height: 3.6rem;
+  margin: 0.9rem 0.5rem 0;
+}
+/* The JS-computed min-width (EngagementPulse.tsx) only needs to force scrolling once phone
+   widths make percentage-only spacing risk caption collisions (see the trouble-spot comment
+   above the wrapper in EngagementPulse.tsx). Above that, restore the original fluid 100%-width
+   behavior so desktop/tablet still shows the whole pulse strip at a glance with no needless
+   scrollbar - !important is required here only because it's overriding a JS-set inline style,
+   the one legitimate case for it in this file. */
+@media (min-width: 641px) {
+  .cc-pulse-track {
+    min-width: 0 !important;
+  }
+}
+.cc-pulse-segment {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  background: var(--border-strong);
+  transform: translateY(-50%);
+}
+.cc-pulse-segment::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 3px 0 3px 5px;
+  border-color: transparent transparent transparent var(--border-strong);
+  transform: translateY(-50%);
+}
+.cc-pulse-segment.is-solid {
+  opacity: 0.9;
+}
+.cc-pulse-segment.is-light {
+  opacity: 0.4;
+}
+.cc-pulse-marker-group {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+.cc-pulse-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--tone, var(--muted));
+  background: color-mix(in srgb, var(--tone, var(--muted)) 20%, var(--surface-2));
+  color: var(--tone, var(--muted));
+  cursor: pointer;
+  padding: 0;
+}
+.cc-pulse-marker-icon {
+  color: var(--tone, var(--muted));
+}
+.cc-pulse-marker-pending {
+  opacity: 0.35;
+  background: var(--surface-2);
+}
+.cc-pulse-marker.is-selected {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone, var(--accent)) 45%, transparent);
+}
+.cc-pulse-marker:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.cc-pulse-caption {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cc-muted-faint);
+  white-space: nowrap;
+  max-width: 5.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 480px) {
+  .cc-pulse-caption {
+    max-width: 3.6rem;
+    font-size: 0.56rem;
+  }
+}
+
+.cc-pulse-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(2px);
+  min-width: 12rem;
+  max-width: 18rem;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.72rem;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  z-index: 30;
+}
+.cc-pulse-marker:hover .cc-pulse-tooltip,
+.cc-pulse-marker:focus-visible .cc-pulse-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+.cc-pulse-tooltip-time {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.cc-pulse-tooltip-type {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.cc-pulse-tooltip-agent {
+  color: var(--fg);
+  font-weight: 600;
+}
+.cc-pulse-tooltip-summary {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* ---- hero timeline ---- */
+.cc-timeline {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.cc-timeline-labels {
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.cc-timeline-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.7rem;
+  border-bottom: 1px dashed var(--border);
+}
+.cc-lane-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 5px currentColor;
+}
+.cc-timeline-label-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.cc-timeline-label-name {
+  font-size: 0.78rem;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-timeline-label-role {
+  font-size: 0.66rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Inherently wide (pxPerSecond-scaled SVG) - stays horizontally scrollable inside its own
+   contained box rather than being forced/compressed to fit a phone width, same honest pattern
+   as everywhere else in this file. Preserved unchanged from the pre-reskin CSS. */
+.cc-timeline-scroll {
+  overflow-x: auto;
+  flex: 1;
+}
+
+.cc-ruler-grid {
+  stroke: color-mix(in srgb, var(--border-strong) 35%, transparent);
+}
+.cc-ruler-label {
+  fill: var(--cc-muted-faint);
+  font-family: theme('fontFamily.mono');
+  font-size: 9px;
+}
+.cc-lane-line {
+  stroke: var(--border);
+}
+
+.cc-block {
+  cursor: pointer;
+  stroke: var(--surface-3);
+  stroke-width: 1.5;
+  transition:
+    opacity 200ms ease,
+    filter 150ms ease;
+}
+.cc-block-loop {
+  stroke: var(--warn);
+  stroke-width: 2;
+}
+.cc-block-pending {
+  opacity: 0.3;
+}
+.cc-block.is-selected {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 4px var(--cc-accent-glow));
+}
+.cc-block:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Block title/duration text sits on top of a solid --actor-N fill - --actor-text is the
+   purpose-built shared token for exactly this (index.css already flips it white/near-black per
+   theme so it stays readable against both themes' actor palette), not a literal near-black
+   like the old permanently-dark version used. */
+.cc-block-title {
+  fill: var(--actor-text);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: theme('fontFamily.sans');
+}
+.cc-block-duration {
+  fill: var(--actor-text);
+  opacity: 0.78;
+  font-size: 8.5px;
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+}
+.cc-block-badge-icon {
+  fill: none;
+  stroke: var(--actor-text);
+  opacity: 0.75;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- thread connectors (chronological flow, distinct from handoff/loop arcs) ---- */
+.cc-thread {
+  stroke: var(--border-strong);
+  stroke-dasharray: 3 3;
+  opacity: 0.55;
+}
+.cc-thread-group-pending {
+  opacity: 0.3;
+}
+.cc-envelope-badge-circle {
+  fill: var(--surface-3);
+  stroke: var(--accent);
+  stroke-width: 1.2;
+}
+.cc-envelope-badge-icon {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- loop span brackets under the ruler ---- */
+.cc-loop-bracket-line {
+  stroke: var(--warn);
+  opacity: 0.6;
+}
+.cc-loop-bracket-label {
+  fill: var(--warn);
+  font-family: theme('fontFamily.mono');
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* ---- current-time cursor pill ---- */
+.cc-cursor-pill {
+  fill: var(--accent);
+}
+.cc-cursor-pill-text {
+  fill: var(--cc-on-accent);
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.cc-arc-group-pending {
+  opacity: 0.25;
+}
+.cc-arc {
+  fill: none;
+  cursor: pointer;
+  transition: opacity 200ms ease;
+}
+.cc-arc-handoff {
+  stroke: var(--accent);
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: cc-arc-draw 480ms ease-out forwards;
+  animation-delay: var(--delay, 0ms);
+}
+.cc-arc-loop {
+  stroke: var(--warn);
+  stroke-dasharray: 9 6;
+  opacity: 0;
+  animation:
+    cc-arc-fade-in 260ms ease-out forwards,
+    cc-arc-flow 900ms linear infinite;
+  animation-delay: var(--delay, 0ms), calc(var(--delay, 0ms) + 260ms);
+}
+.cc-arc-glow {
+  stroke: var(--warn);
+  opacity: 0.28;
+  filter: blur(2.5px);
+  animation: cc-arc-glow-pulse 2.4s ease-in-out infinite;
+  animation-delay: var(--delay, 0ms);
+}
+.cc-arc.is-selected {
+  filter: drop-shadow(0 0 5px currentColor);
+}
+.cc-arc:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cc-cursor {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 4px var(--cc-accent-glow));
+}
+
+@keyframes cc-arc-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes cc-arc-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes cc-arc-flow {
+  from {
+    stroke-dashoffset: 30;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes cc-arc-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.18;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ---- shared sidebar panel bits ---- */
+.cc-panel-loop {
+  border-color: var(--cc-warn-mid);
+}
+.cc-empty-state {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.cc-badge {
+  display: inline-block;
+  font-family: theme('fontFamily.mono');
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  margin-bottom: 0.5rem;
+}
+/* Tone recipes deliberately match index.css's .badge-ok/-bad/-warn/-neutral (14% color-mix over
+   transparent) so a Command Centre badge and an ordinary page badge agree exactly. */
+.cc-badge-neutral {
+  color: var(--muted);
+  background: var(--surface-3);
+}
+.cc-badge-accent {
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+.cc-badge-loop {
+  color: var(--warn);
+  background: var(--cc-warn-soft);
+}
+.cc-badge-error {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+}
+.cc-badge-success {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+
+.cc-detail-title {
+  font-size: 1rem;
+  font-weight: 650;
+  margin-bottom: 0.3rem;
+}
+.cc-detail-route {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+.cc-detail-route-time {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  color: var(--cc-muted-faint);
+}
+.cc-detail-summary {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.cc-status-inline {
+  font-weight: 700;
+}
+.cc-status-inline-success {
+  color: var(--ok);
+}
+.cc-status-inline-error {
+  color: var(--bad);
+}
+.cc-status-inline-accent {
+  color: var(--accent);
+}
+.cc-status-inline-neutral {
+  color: var(--muted);
+}
+
+.cc-detail-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.6rem 0.8rem;
+  margin-top: 0.8rem;
+}
+@media (max-width: 420px) {
+  .cc-detail-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.cc-detail-meta-item dt {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cc-muted-faint);
+  margin-bottom: 0.1rem;
+}
+.cc-detail-meta-item dd {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--fg);
+}
+
+.cc-why-panel {
+  position: relative;
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+.cc-why-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+.cc-why-gear {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.7rem;
+  color: var(--cc-muted-faint);
+  font-size: 0.8rem;
+}
+.cc-why-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.cc-why-row {
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr);
+  column-gap: 0.5rem;
+  align-items: start;
+}
+.cc-why-row-icon {
+  grid-row: span 2;
+  text-align: center;
+  line-height: 1.4rem;
+  color: var(--accent);
+  font-size: 0.7rem;
+}
+.cc-why-row dt {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cc-muted-faint);
+}
+.cc-why-row dd {
+  font-size: 0.8rem;
+  color: var(--fg);
+  line-height: 1.4;
+}
+.cc-confidence-shift {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--warn);
+}
+
+.cc-loop-iterations {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.cc-loop-iteration {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+.cc-loop-iteration-number {
+  flex-shrink: 0;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: theme('fontFamily.mono');
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--warn);
+  background: var(--cc-warn-soft);
+  border: 1px solid var(--cc-warn-mid);
+}
+.cc-loop-iteration-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.cc-loop-iteration-label {
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+.cc-loop-iteration-detail {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.cc-loop-iteration-agent {
+  font-family: theme('fontFamily.mono');
+  font-size: 0.68rem;
+  color: var(--cc-muted-faint);
+}
+
+/* ---- loop mini-stat row (cost / tokens / % of engagement) ---- */
+.cc-loop-ministat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--border);
+}
+.cc-loop-ministat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: center;
+  padding: 0.4rem 0.3rem;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+.cc-loop-ministat-value {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--warn);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-loop-ministat-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cc-muted-faint);
+}
+
+/* ---- cost by agent ---- */
+.cc-panel-subtitle {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0.9rem 0 0.4rem;
+}
+.cc-cost-total {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--fg);
+  margin-bottom: 0.6rem;
+}
+.cc-cost-total-tokens {
+  font-size: 1.1rem;
+  margin-bottom: 0.4rem;
+}
+
+.cc-cost-stacked-bar {
+  display: flex;
+  height: 10px;
+  width: 100%;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+}
+.cc-cost-stacked-segment {
+  display: block;
+  height: 100%;
+}
+
+.cc-cost-legend {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.cc-cost-legend-row {
+  display: grid;
+  /* minmax(0, 1fr), not bare 1fr - a bare 1fr track's minimum size is its content's min-content,
+     which for a long agent name can force the whole row (and its --surface-2 panel) wider than
+     its container, i.e. exactly the phone-width overflow this round was asked to fix. */
+  grid-template-columns: 0.6rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cc-cost-legend-swatch {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.cc-cost-legend-name {
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-cost-legend-amount {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.74rem;
+}
+.cc-cost-legend-pct {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
+  color: var(--cc-muted-faint);
+  min-width: 2.2rem;
+  text-align: right;
+}
+
+.cc-token-breakdown {
+  padding-top: 0.6rem;
+  margin-top: 0.6rem;
+  border-top: 1px dashed var(--border);
+}
+.cc-token-stacked-bar {
+  display: flex;
+  height: 8px;
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+}
+.cc-token-segment {
+  display: block;
+  height: 100%;
+}
+/* Input/output derived from --accent (never new hex): input is the accent itself, output is a
+   desaturated blend of accent+muted - visually distinct, still only built from existing shared
+   tokens. */
+.cc-token-segment-input {
+  background: var(--accent);
+}
+.cc-token-segment-output {
+  background: color-mix(in srgb, var(--accent) 50%, var(--muted));
+}
+.cc-token-breakdown-caption {
+  margin-top: 0.4rem;
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+/* ---- top event types by cost ---- */
+.cc-top-types {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.cc-top-types-row {
+  display: grid;
+  grid-template-columns: 0.55rem minmax(3.2rem, 4.6rem) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cc-top-types-swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.cc-top-types-label {
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-top-types-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.cc-top-types-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+.cc-top-types-amount {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  text-align: right;
+}
+.cc-top-types-pct {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.66rem;
+  color: var(--cc-muted-faint);
+  min-width: 2rem;
+  text-align: right;
+}
+
+/* ---- conversation panel ---- */
+.cc-conversation-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+.cc-conversation-card {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.cc-conversation-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+  flex-wrap: wrap;
+}
+.cc-conversation-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 4px currentColor;
+}
+.cc-conversation-agent {
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+.cc-conversation-role {
+  font-family: theme('fontFamily.mono');
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--accent-muted);
+  border-radius: 999px;
+}
+.cc-conversation-time {
+  margin-left: auto;
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.66rem;
+  color: var(--cc-muted-faint);
+}
+.cc-conversation-text {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.cc-conversation-footer {
+  margin-top: 0.45rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--border);
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.66rem;
+  color: var(--cc-muted-faint);
+}
+.cc-conversation-arrow {
+  color: var(--cc-muted-faint);
+  font-size: 0.85rem;
+}
+.cc-conversation-rule {
+  margin: 0.8rem 0 0.6rem;
+  border: none;
+  border-top: 1px dashed var(--border);
+}
+.cc-conversation-result {
+  font-size: 0.8rem;
+  color: var(--fg);
+  line-height: 1.5;
+}
+.cc-conversation-result-label {
+  font-family: theme('fontFamily.mono');
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-right: 0.3rem;
+}
+
+/* ---- engagement state counters ---- */
+.cc-state-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem;
+}
+.cc-state-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-align: left;
+  cursor: default;
+  min-width: 0;
+}
+.cc-state-row-button {
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
+}
+.cc-state-row-button:hover {
+  border-color: var(--accent-muted);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-3));
+}
+.cc-state-row-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cc-state-value {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.cc-state-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+/* ---- replay controls ---- */
+.cc-replay {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.cc-replay-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease;
+}
+.cc-replay-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.cc-replay-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cc-replay-btn-play {
+  border-color: var(--accent-muted);
+  color: var(--accent);
+}
+.cc-replay-btn:disabled,
+.cc-speed-btn:disabled,
+.cc-replay-scrubber:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.cc-replay-btn:disabled:hover {
+  border-color: var(--border-strong);
+  color: inherit;
+}
+
+.cc-replay-speeds {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.cc-speed-btn {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  font-family: theme('fontFamily.mono');
+  font-size: 0.72rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+.cc-speed-btn.is-active {
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-weight: 700;
+}
+.cc-speed-btn:hover {
+  color: var(--fg);
+}
+.cc-speed-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cc-replay-scrubber {
+  flex: 1;
+  min-width: 8rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.cc-replay-scrubber:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cc-replay-time {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* ---- motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .cc-root * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .cc-arc-handoff,
+  .cc-arc-loop {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+/* ---- collapsible sections (2026-08-09 phone UX pass) ----
+   Native <details>/<summary> (CcCollapsible.tsx) - open by default on desktop/tablet, collapsed
+   by default on phone (useDefaultOpen), fixing "even the metrics at the beginning require
+   significant scroll": every Command Centre section used to stack unconditionally on phone.
+   `<details>` already gets `.cc-panel`'s padding/border/surface - these rules only style the
+   summary/chevron/peek/body layout on top of that. */
+.cc-collapsible {
+  padding: 0;
+}
+.cc-collapsible-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.cc-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+.cc-collapsible-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+.cc-collapsible-chevron {
+  flex-shrink: 0;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 150ms ease;
+}
+.cc-collapsible[open] > .cc-collapsible-summary .cc-collapsible-chevron {
+  transform: rotate(45deg);
+}
+.cc-collapsible-title {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.cc-collapsible-peek {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: auto;
+  padding-left: 0.5rem;
+}
+/* Peek stat is redundant with the fully-open body, and desktop has room to just show
+   everything - only earns its keep as a glance-while-collapsed affordance on phone. */
+@media (min-width: 641px) {
+  .cc-collapsible[open] .cc-collapsible-peek {
+    display: none;
+  }
+}
+.cc-collapsible-body {
+  padding: 0 1rem 0.9rem;
+}
+@media (max-width: 640px) {
+  .cc-collapsible-summary {
+    padding: 0.7rem 0.75rem;
+  }
+  .cc-collapsible-body {
+    padding: 0 0.75rem 0.7rem;
+  }
+}
+
+/* ---- scroll nav (real touch affordance, not a styled native scrollbar - see CcScrollNav.tsx's
+   own doc comment for why: ::-webkit-scrollbar doesn't render on iOS Safari at all, which is
+   exactly why this was missing on the user's actual phone despite looking fine in every
+   headless-Chrome check this project ran). ---- */
+.cc-scroll-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+}
+.cc-scroll-nav-btn {
+  flex-shrink: 0;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--fg);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.cc-scroll-nav-btn:hover {
+  background: var(--surface-4);
+}
+.cc-scroll-nav-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cc-scroll-nav-track {
+  position: relative;
+  flex: 1;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--surface-4);
+  overflow: hidden;
+}
+.cc-scroll-nav-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 120ms ease;
+}
+
+/* ---- desktop/mobile dual-render swap (2026-08-09) ----
+   AgentTimeline's SVG canvas and EngagementPulse's horizontal strip each get a phone-specific
+   vertical-list alternative instead of horizontal scroll - same pure-CSS breakpoint-swap
+   pattern (both variants render unconditionally, no JS matchMedia, no first-paint flicker)
+   already used by .timeline-desktop/.timeline-mobile in index.css for the OTHER swimlane view,
+   same 560px breakpoint for consistency. */
+.cc-timeline-desktop,
+.cc-pulse-desktop {
+  display: block;
+}
+.cc-timeline-mobile,
+.cc-pulse-mobile {
+  display: none;
+}
+@media (max-width: 560px) {
+  .cc-timeline-desktop,
+  .cc-pulse-desktop {
+    display: none;
+  }
+  .cc-timeline-mobile,
+  .cc-pulse-mobile {
+    display: block;
+  }
+}
+
+/* ---- Agent Timeline mobile spine list (AgentTimelineMobileList.tsx) ---- */
+.cc-tl-mobile-spine {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 3px solid var(--border);
+}
+.cc-tl-mobile-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.cc-tl-mobile-row:hover {
+  background: var(--surface-3);
+}
+.cc-tl-mobile-row.is-selected {
+  background: var(--accent-muted);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.cc-tl-mobile-row-loop {
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+.cc-tl-mobile-row-loop.is-selected {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  box-shadow: inset 2px 0 0 var(--warn);
+}
+.cc-tl-mobile-avatar {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  color: var(--actor-text);
+}
+.cc-tl-mobile-avatar-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+.cc-tl-mobile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.cc-tl-mobile-meta {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.cc-tl-mobile-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+.cc-tl-mobile-agent {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* ---- Engagement Pulse mobile list (EngagementPulseMobileList.tsx) ---- */
+.cc-pulse-mobile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.cc-pulse-mobile-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cc-pulse-mobile-row.is-selected {
+  border-color: var(--tone, var(--accent));
+  box-shadow: 0 0 0 1px var(--tone, var(--accent));
+}
+.cc-pulse-mobile-row-pending {
+  opacity: 0.45;
+}
+.cc-pulse-mobile-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--tone, var(--muted));
+  background: color-mix(in srgb, var(--tone, var(--muted)) 20%, var(--surface-2));
+  color: var(--tone, var(--muted));
+}
+.cc-pulse-mobile-icon-glyph {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.cc-pulse-mobile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.cc-pulse-mobile-meta {
+  font-family: theme('fontFamily.mono');
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+.cc-pulse-mobile-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+.cc-pulse-mobile-agent {
+  font-size: 0.72rem;
+  color: var(--muted);
+}

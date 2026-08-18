@@ -40,6 +40,28 @@ Use ONE consistent spelling: forward slashes, double quotes, every time. A missi
 template is never a reason to refuse a deliverable: produce it to the documented structure and
 flag that the template was unavailable.
 
+## Reading team docs vs. writing the user's own deliverables - never the same root
+
+The rule above is about **reading** the team's own docs/templates/skills (`$PLUGIN_ROOT` in
+installed-plugin mode). **Writing `artifacts/...` is a completely different concern and never
+uses `$PLUGIN_ROOT`** - every deliverable (`artifacts/<slug>/...`, `engagement-state.json`,
+`START-HERE.md`, findings packs) is **always relative to the current working directory** - the
+user's actual project, whatever that is this session - **regardless of run mode.**
+
+**Live-reproduced failure (2026-08-08, twice, both times with no Bash tool available this
+session):** with no `pwd`/shell to confirm the actual working directory, and having just
+successfully read team docs from an absolute path under `$PLUGIN_ROOT`, real deliverable files
+were written to that SAME absolute path instead of the working directory - landing inside the
+team's own plugin source tree rather than the user's project. The fix is mechanical, not
+judgement: **use a relative path (`artifacts/...`) for every deliverable write, always** - never
+an absolute path built from `$PLUGIN_ROOT`, and never an absolute path recycled from a team-doc
+`Read` call, no matter how confident the session is about its own location. A relative path
+resolves correctly against the real working directory by construction; an absolute path
+requires knowing what that directory is, which is exactly the thing unconfirmable without a
+shell. If a tool ever reports the actual working directory (a probe result, a prior Read's
+resolved path shown back), that confirms it - but the default, with or without that
+confirmation, is: deliverables are relative paths, full stop.
+
 ## Chained skills are dormant
 
 Every team skill carries `disable-model-invocation: true`, so **no skill can invoke another**

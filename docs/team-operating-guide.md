@@ -8,12 +8,14 @@
 
 ## Roster & routing (who does what)
 
-**Names** (Morgan + 16): Amara (`business-analyst`), Mateo (`rules-developer`), Ana
+**Names** (Morgan + 13): Amara (`business-analyst`), Mateo (`rules-developer`), Ana
 (`data-analyst`), Theo (`tuning-analyst`), Mei (`ml-engineer`), Kenji (`platform-engineer`),
-Linh (`qa-engineer`), Hassan (`tm-sme`), Camila (`trade-surveillance-sme`), Cleo
-(`comms-surveillance-sme`), Viktor (`model-validator`), Ravi (`code-reviewer`), Thabo
+Linh (`qa-engineer`), Viktor (`model-validator`), Ravi (`code-reviewer`), Thabo
 (`performance-reviewer`), Layla (`compliance-reviewer`), Yuki (`data-quality-reviewer`), Pip
-(`review-scorer`). Canonical roster: `/meet-the-team`.
+(`review-scorer`). Canonical roster: `/meet-the-team`. **Domain typology advice (AML, market
+abuse, e-comms) is no longer an agent**: it lives in the three `docs/sme/` knowledge packs,
+consulted in-line just-in-time (usage rules in `docs/sme/README.md`; the former personas
+Hassan, Camila and Cleo are retired - never attribute new work to them).
 
 Route by **deliverable type**, not habit:
 
@@ -27,17 +29,22 @@ Route by **deliverable type**, not habit:
 | TM model validation | `tuning-analyst` (data work) + `model-validator` (independent verdict) - see `/validate-tm-model` |
 | ML / AI component (then independent `model-validator`) | `ml-engineer` |
 | Independent testing & QA evidence | `qa-engineer` |
-| Code review · performance review · audit/compliance review | `code-reviewer` · `performance-reviewer` · `compliance-reviewer` |
+| Code review (bugs, security, maintainability) | `code-reviewer` |
+| Performance / scalability review | `performance-reviewer` |
+| Audit / compliance review (detection logic, regulated data, §4/§5 trail only - not every code review) | `compliance-reviewer` |
 | Security audit / threat model (OWASP ASVS / CWE) - `/security-audit` | `code-reviewer` (security lens; no separate SecOps agent by design - see `docs/agent-design.md` §4) |
 | Data-quality / feed-completeness / surveillance-coverage assurance | `data-quality-reviewer` (independent; no Write/Edit - Bash for analysers/diffs, execution-gated per CLAUDE.md §7) |
-| Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | by domain: `tm-sme` (AML) · `trade-surveillance-sme` (market abuse) · `comms-surveillance-sme` (e-comms/voice) - advise only, never edit |
+| Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | **no spawn** - the consulting agent (PM or specialist) reads the matching `docs/sme/` pack in-line: `tm-monitoring.md` (AML) · `trade-surveillance.md` (market abuse) · `comms-surveillance.md` (e-comms/voice); cite the pack, never a persona |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
-## Command index (canonical - all 24 skills)
+## Command index (canonical - all 26 skills)
 
 - `/engage` - front door: intake + orchestration for any request (problem, review or build)
 - `/engage-light` - explicit low-ceremony profile: same safety gates + code chain, one-page
   brief, 2-3 agents, short summary email, no delivery report; refuses detection logic, upgrades to standard
+- `/map-codebase` - deterministic first-contact skeleton pass + a small synthesis team,
+  producing/refreshing the curated codebase map (ADR-007 Phase 1, `--refresh` re-verifies only
+  drifted areas)
 - `/meet-the-team` - Morgan introduces the roster (canonical intro)
 - `/prepare-data` - safe data onboarding (synthetic or masked) before any agent sees it
 - `/demo` - guided end-to-end demo on synthetic data, every decision narrated
@@ -61,6 +68,9 @@ Route by **deliverable type**, not habit:
 - `/run-evals` - team-quality eval harness against golden cases (regression net)
 - `/preferences` - view/change project-wide settings (docx export, regulatory citations);
   quick utility, no engagement opened
+- `/dashboard` - regenerate the local, static, cross-project observability dashboard (every
+  project + engagement this machine has evidence of, ADR-013); quick utility, read-only, no
+  engagement opened.
 
 ## Asking questions (standing user preference)
 
@@ -315,26 +325,18 @@ this behaviour, so a regression here is caught by `/run-evals`.
    prose where a mechanical check exists (`check_artifacts` covers the greppable ones).
 7. **The critique/DoD gate is a FIX-LIST, not a report - these are checks on the team's OWN
    output.** A finding with a deterministic remedy is the team's to **fix and re-check**, never
-   the user's to be handed: **auto-fix** a missing `.md`/`.html` sibling (render), an off-roster
-   or wrong-role persona name (`ROSTER-UNKNOWN`/`ROSTER-ROLE-MISMATCH` - correct to the canonical
-   roster, never invent a specialist), a roster name unmarked as an agent or an agent combined
-   with a human on one sign-off line (`AGENT-UNMARKED`/`AGENT-HUMAN-COMBINED` - add the 🤖 /
-   Virtual Surveillance IT attribution, split the line - "Voice, names & console"), a missing
-   interim banner or a "final" asserted while open,
-   a non-portable absolute source path, an incomplete source index, a missing evidence tag where
-   the legend is defined. **Escalate (ask via the question tool), don't self-fix**, only what
-   needs a human: a rationale contradicted by the evidence ("the email says X but the artifact
-   says Y"), a sign-off on unverifiable authority, a scope/acceptance call. Listing an auto-fixable
+   the user's to be handed; only genuine judgement calls (contradicted rationale, unverifiable
+   authority, scope/acceptance) escalate to the user via the question tool. Full auto-fix vs.
+   escalate tiers: `docs/DEFINITION-OF-DONE.md` / `close-checklist.md`. Listing an auto-fixable
    defect as a delivered "documentation-standards failure" is itself a process failure (live
    lesson 2026-07-23; DoD "the gate is a fix-list").
 
 ## Engagement state & artifact naming (lifecycle discipline)
 
 Born of a live failure (2026-07-22): an engagement paused on an unanswered clarification, the
-close never ran so **no DoD gate ever fired**, an interim report with a final-sounding filename
-was read as the delivery - and QA had never run, with "test scripts to be developed" cited but
-never developed. A gate that only runs at close is no gate when the close never happens; state
-must be visible **between** gates.
+close never ran, and an interim report with a final-sounding filename was read as the delivery
+with QA never having run. A gate that only runs at close is no gate when the close never
+happens - state must be visible **between** gates.
 
 - **Every engagement is in exactly one state**, recorded in the START-HERE living index
   (`docs/templates/start-here.md`): **⏳ in progress** · **⛔ blocked - awaiting input** ·
@@ -460,7 +462,7 @@ skills point here rather than restating paths. Filenames are workspace-relative.
 | Produced code + its tests + QA scripts | workspace root, tests/QA in the SAME scope as the code they verify (a grouping subfolder carries its own tests + QA handover - the gate checks per scope); code delivered into the working project's source tree follows the escalation rule instead |
 | Delivery report (close-only) | `delivery-report.md` |
 | Engagement-summary email (close-only) | `engagement-summary-<slug>.txt` (never rendered to HTML) |
-| Findings packs / machine-readable source | `data/findings-*.json` (validated recursively; excluded from the .html-sibling and index checks) |
+| Findings packs / machine-readable source | `data/findings-*.jsonl` (validated recursively; excluded from the .html-sibling and index checks) |
 | Standalone `/prepare-data` output (no engagement open) | `artifacts/data-prep/` (root lane, outside any workspace) |
 
 Project-level (never per-engagement): the codebase map at `docs/codebase-map.md` or
@@ -506,55 +508,9 @@ the user informed and in charge, check before anything irreversible.
 
 ## Orchestration discipline (evidence-based - see `docs/internal/research-virtual-team.md`)
 
-- **Right-size first.** Multi-agent costs ~15× the tokens - use the **leanest** set that fits (a
-  narrow change → one builder + one reviewer, not the whole team). **State the intended agent
-  count and why, out loud, before ANY delegation - not only at the intake gate.** The rule used
-  to say "at the gate", which left a real hole: an engagement with no fan-out planning gate (a
-  close-only pass, a reconciliation, a review that turns up one thing needing a specialist)
-  reaches its first `Task` call having never stated a count, and a count recorded afterwards in
-  the footprint is a receipt, not a decision. So: if you are about to engage anyone, say who and
-  why in one line first, **even when the decision emerged mid-engagement**; and when the answer
-  is nobody, say that too ("no fan-out, I'll handle this myself") - a stated zero is
-  right-sizing, silence is not. (Live 2026-08-01: a close-only engagement delegated to two
-  specialists with no count stated anywhere, and the engagement that did MORE work was scored
-  worse than four earlier solo runs that did less.) Reserve full fan-out for high-value, broad
-  deliverables. Numeric
-  heuristic: simple fact-finding → 1 agent, 3-10 tool calls; direct comparison → 2-4 agents,
-  10-15 calls each; full delivery → the minimal sufficient chain.
-- **Don't delegate:** iterative back-and-forth, phases sharing significant context, quick
-  targeted changes, latency-sensitive steps - those stay in the main loop. **Do delegate:**
-  verbose self-contained work, tool-restricted review, research that returns a summary.
-- **Delegate with explicit, non-overlapping briefs** (weak delegation is the #1 failure): objective,
-  scope boundaries (what *another* agent owns), inputs/artifacts to read, expected output format.
-  **A subagent inherits none of the conversation** - its brief is the only channel in, so put every
-  needed input in it; an underspecified brief is what makes two agents duplicate work or leave a gap.
-- **Condensed returns (standing rule - a hard budget, not a nicety).** Every brief instructs the
-  subagent to return a distilled summary within a **hard budget of ≤ ~1,500 tokens (~30 lines)**;
-  the artifact carries the detail. Anthropic's sub-agent guidance puts a good distilled return at
-  **1,000-2,000 tokens** - a subagent may explore over tens of thousands of tokens internally but
-  must hand back only the distilled result. **A return over budget is a defect to trim, not
-  something to pass through:** the subagent's final message lands verbatim in the orchestrator's
-  context, so a verbose return balloons Morgan and pushes a long engagement toward premature
-  compaction. The orchestrator's context is an attention budget (Anthropic's context-engineering
-  guidance); state the budget in the brief, and if a return blows it, send it back to be distilled
-  (or distil it before acting) rather than carrying the bloat. A PostToolUse hook on Task
-  completion (`scripts/subagent_return_budget.py`, audit finding #4, 2026-07-30) now gives one-line
-  feedback the moment a return is clearly (2x) over budget - advisory, never blocking, don't rely
-  on it instead of briefing well in the first place.
-- **Coordinate through artifacts, not chatter (the "blackboard")** - agents read/write the shared
-  set (Delivery Report, RTM, specs); each step's output is the next step's input.
-- **Challenge the agents - the PM is a sceptic, not a relay.** Don't pass findings through verbatim:
-  **spot-check, don't re-score** (the scorer already applied the rubric - challenge every Critical,
-  anything regulated, anything whose evidence basis looks thin, a sample of the rest, **and a sample
-  of the _filtered_ set** - a real issue scored just under the threshold is a false negative, the
-  costliest miss in a regulated review and the one mechanical scoring can silently make, so don't
-  only audit what was reported), downgrade or drop what fails, **promote anything wrongly filtered**,
-  and verify the evidence basis (📊 observed/measured vs 🧠 inferred - never let
-  an inference reach the user as fact; "observed" for something seen directly in data, "measured" for
-  a computed/executed number, **📄 "coded" for an explicit literal read from source with nothing run**
-  (never let a read constant masquerade as 📊 measured) - see the legend in
-  `docs/WAYS-OF-WORKING.md`). Prefer an adversarial second look over duplicated work.
-- **Agents self-verify before returning** - plan, then check output against the brief; state any
-  gap rather than hiding it (a flagged gap is cheap, a silent one is a defect). (Anthropic guidance;
-  see `docs/agent-design.md`.)
-- **Run the orchestrator on opus** - routing, challenging findings and §4/§5 calls are deep work.
+Read `docs/team-operating-guide-orchestration.md` (plugin mode:
+`$PLUGIN_ROOT/docs/team-operating-guide-orchestration.md`) the first time you actually
+delegate/dispatch in an engagement - right-sizing, concurrent dispatch (the Workflow tool and its
+fallback), the large-context review-split protocol, condensed-returns budget, and the
+challenge-the-agents rule all live there now. Not needed for the open itself - extracted
+2026-08-14 (open-latency review) so it no longer costs every `/engage` its own read.

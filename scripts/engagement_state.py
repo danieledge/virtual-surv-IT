@@ -30,10 +30,17 @@ Usage (all consent-free team tooling, `python -m scripts.engagement_state <cmd>`
   add-outstanding TEXT
   resolve-outstanding SUBSTRING
   set-decision KEY VALUE
+  set-decisions --json '{"key": "value", ...}'  # batch form, one process for several decisions
   set-team "Name (role)" ...
   finalise-artifacts
   set-footprint [--agents N] [--tokens TEXT]
-  log-note TEXT                # dated event/completion note - NOT the outstanding list
+  set-budget [--daily-usd N] [--engagement-usd N]   # advisory pacing - the org spend limit
+                                                    # stays the hard stop
+  budget-status                # spent-vs-cap from this project's transcripts (read-only)
+  log-note TEXT [--tag NAME]   # dated event/completion note - NOT the outstanding list;
+                                # --tag (e.g. review-loop) marks a bracketed prefix the
+                                # dashboard timeline reads to pick an icon - plain notes
+                                # need no tag and render exactly as before
   add-ratification TEXT        # a decision awaiting human ratification (status pending)
   ratify SUBSTRING [--by WHO]  # human-confirmed: pending -> ratified, dated
   set-active SLUG              # ACTIVE-engagement marker (R1); cleared by clear-active/close
@@ -46,6 +53,15 @@ open work (the live run parked "COMPLETE" notes in outstanding, hiding convergen
 `ratifications` make approval state structured - artifacts asserting a ratification the
 state still records as pending is a `RATIFIED-CLAIM-PENDING` gate finding. v1 files remain
 valid and upgrade in place on their first mutation.
+
+`settings_snapshot` (additive, 2026-08-08, no schema bump - same treatment as `footprint`):
+`init` best-effort snapshots the 5 team-preferences flags (docx/citations/review-split/
+workflow-dispatch/map-skeleton), fully resolved through the project -> machine-default ->
+built-in precedence chain (`engage_probe.resolve_preferences()`), as a point-in-time record
+of what was enabled when the engagement OPENED - never re-resolved later, so it stays true
+to history even if the project's preferences change afterwards. `None` when the probe
+module can't be loaded (foreign install edge case) or the project has no preferences file
+- optional metadata, never load-bearing. Feeds the dashboard's per-engagement settings chips.
 
 Close ordering: `set-team` and `finalise-artifacts` must precede `set-status closed` -
 closed-state validation requires a non-empty team and no interim artifact rows (born of the
@@ -70,12 +86,14 @@ with validate + render.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as _dt
 import hashlib
 import json
 import os
 import sys
-from pathlib import Path
+import time
+from pathlib import Path, PurePosixPath
 
 STATE_FILENAME = "engagement-state.json"
 INDEX_FILENAME = "START-HERE.md"
@@ -124,16 +142,80 @@ def _force_utf8_output() -> None:
 
 def _default_artifacts_dir() -> Path:
     root = os.environ.get("CLAUDE_PROJECT_DIR")
-    base = Path(root) if root else Path.cwd()
+    # 2026-08-14 Fable-model audit finding (C2): the ancestor-walk below used to run
+    # UNCONDITIONALLY, even when CLAUDE_PROJECT_DIR is explicitly set - but that value
+    # is already authoritative (Claude Code's own notion of "the project"), so walking
+    # ABOVE it to find some OTHER directory named "artifacts" can only ever escape the
+    # intended project, never correctly refine it. Concrete failure: a project at
+    # /home/user/artifacts/myproject (nothing to do with an engagement pack, just an
+    # unrelated directory name one level up) resolved to /home/user/artifacts as the
+    # "artifacts root" - outside the project entirely, and every engagement pack wrote
+    # there. The walk is only safe, and only needed, for the cwd FALLBACK case this
+    # comment already documents (a session that has genuinely cd'd inside an existing
+    # artifacts/<slug>/ workspace of the CURRENT project) - CLAUDE_PROJECT_DIR being
+    # set means that ambiguity doesn't exist; trust it directly.
+    if root:
+        return Path(root) / "artifacts"
+    base = Path.cwd()
     # A session that has cd'd INSIDE artifacts/ (e.g. into an existing workspace) must
     # not nest a new pack there - a live init from artifacts/<old>/ created
-    # artifacts/<old>/artifacts/<new>/ (2026-07-30). Resolve to the OUTERMOST
-    # `artifacts` directory on the path instead of blindly appending another one.
+    # artifacts/<old>/artifacts/<new>/ (2026-07-30). Resolve to the NEAREST `artifacts`
+    # ancestor on the path (the one we're actually inside), not blindly appending
+    # another one - and not the outermost either (2026-08-14: the original fix took
+    # the outermost match, which has the identical escape risk one level down if any
+    # ancestor further up cwd also happened to be named "artifacts").
     resolved = base.resolve()
     tops = [p for p in (resolved, *resolved.parents) if p.name == "artifacts"]
     if tops:
-        return tops[-1]  # outermost = the project's real artifacts root
+        return tops[0]  # nearest match = the workspace we're actually inside
     return base / "artifacts"
+
+
+def _project_root_for(pack_dir: Path) -> Path:
+    """Best-effort working-project root for a pack dir (init's settings-snapshot lookup
+    only - never load-bearing for validation or the registry): the parent of the NEAREST
+    `artifacts` ancestor, mirroring _default_artifacts_dir()'s logic in reverse
+    (2026-08-14: both now take the nearest match, not the outermost - the outermost had
+    the same project-escape risk _default_artifacts_dir's own audit finding (C2)
+    describes, if any ancestor further up pack_dir also happened to be named
+    "artifacts"). Falls back to the pack's own parent for a bespoke --dir layout with no
+    `artifacts` ancestor at all (e.g. some test fixtures) - team-preferences.json simply
+    won't be found there, which resolve_preferences() already treats as "no project
+    preferences set" (built-in defaults)."""
+    resolved = pack_dir.resolve()
+    tops = [p for p in (resolved, *resolved.parents) if p.name == "artifacts"]
+    if tops:
+        return tops[0].parent
+    return resolved.parent
+
+
+def _safe_slug_join(base: Path, slug: str) -> Path | None:
+    """`base / slug` with a path-traversal check - returns None (never raises) when the
+    join would escape `base`, so every call site can print its own error and exit 2.
+
+    Found by a framework-wide audit (2026-08-07), verified before fixing: every workspace
+    command builds its target directory as `<artifacts-root> / <slug>` with no validation
+    at all, and `slug` is whatever a --slug flag (or a state file's own recorded slug, for
+    `migrate`) happens to contain. Two real escapes, not just an unlikely edge case:
+      1. Path.__truediv__ DISCARDS the left side entirely when the right is absolute -
+         `Path("artifacts") / "/etc/passwd"` is literally `Path("/etc/passwd")`, not an
+         error and not a relative join. A slug of `/etc/passwd` (or any absolute path)
+         targets that path directly.
+      2. A `..`-bearing slug resolves outside `base` on `.resolve()`, same as any other
+         directory-traversal - `Path("artifacts") / "../../.claude/hooks"` resolves two
+         levels above the intended root.
+    A character-blocklist would chase these one symbol at a time and miss the next one;
+    checking the RESOLVED result's actual containment inside `base` closes both by
+    construction, regardless of what characters got there. `base` itself is resolved too,
+    so this holds even when `base` itself hasn't been resolved by the caller yet."""
+    if not slug:
+        return None
+    candidate = (base / slug).resolve()
+    try:
+        candidate.relative_to(base.resolve())
+    except ValueError:
+        return None
+    return candidate
 
 
 # ------------------------------------------------------------------ workspaces (0.31)
@@ -164,9 +246,20 @@ def read_active(root: Path) -> str | None:
 
 
 def write_active(root: Path, slug: str) -> None:
+    """Records WHICH SESSION set the marker too (2026-08-17 live report): a new
+    engagement's intake runs before its workspace init, so at that turn's end the
+    marker still names the PREVIOUS engagement - and the DoD stop gate, keying its
+    auto-fix instruction on the marker alone, sent the model off repairing the old
+    pack the moment the user opened new work. With the setting session recorded, the
+    gate can scope its fix instruction to a pack THIS session actually activated and
+    surface everything else without actioning it."""
     root.mkdir(parents=True, exist_ok=True)
+    record = {"slug": slug, "set": _dt.date.today().isoformat()}
+    sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if sid:
+        record["session"] = sid
     (root / ACTIVE_MARKER).write_text(
-        json.dumps({"slug": slug, "set": _dt.date.today().isoformat()}, indent=2) + "\n",
+        json.dumps(record, indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -176,6 +269,60 @@ def clear_active(root: Path, slug: str | None = None) -> None:
     if slug is not None and read_active(root) != slug:
         return
     (root / ACTIVE_MARKER).unlink(missing_ok=True)
+
+
+# Which Claude Code SESSION last acted on this project's engagement layer (2026-08-16
+# live report: a pure-dormant "hello" session was pulled into another session's leftover
+# open engagement, because the engagement-scoped hooks keyed on disk state alone - one
+# open pack gated every later session in the project, and true dormancy became
+# impossible there). Every mutating CLI call (plus set-active) stamps the calling
+# session's id here, read from the CLAUDE_CODE_SESSION_ID env var Claude Code exposes to
+# Bash tool commands; the persona anchor and the DoD stop gate arm only when their own
+# hook payload's session_id matches the stamp, so a session that never drove the team
+# stays genuinely dormant (user decision: fully silent - open engagements still surface
+# at every front door: the /engage resume menu, virt-surv go, and the statusline).
+# An absent env var (a human running the CLI from a plain terminal, or an older Claude
+# Code) leaves any existing stamp untouched: session ids are unique, so a stale stamp
+# can only ever match the session that wrote it, never a new one.
+TEAM_SESSION_MARKER = ".team-session.json"
+
+
+def stamp_team_session(root: Path) -> None:
+    """Record the calling session as the one driving this project's engagements.
+    Advisory marker - never fails a state mutation over it, and writes nothing when the
+    session id isn't in the environment."""
+    sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if not sid:
+        return
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        (root / TEAM_SESSION_MARKER).write_text(
+            json.dumps({"session": sid, "stamped": _dt.date.today().isoformat()}) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def read_team_session(root: Path) -> str | None:
+    """The stamped session id, or None. Fail toward None (= hooks stay dormant)."""
+    try:
+        sid = json.loads((root / TEAM_SESSION_MARKER).read_text(encoding="utf-8")).get("session")
+    except Exception:
+        return None
+    return sid if isinstance(sid, str) and sid else None
+
+
+def _stamp_root(pack_dir: Path | None) -> Path:
+    """The artifacts root the session stamp belongs to - the same level the hooks read
+    (project_root/artifacts). Mirrors _registry_root_for's shape rule: a flat pack IS
+    the artifacts root; a workspace pack's root is its parent; no pack dir resolved yet
+    (init/set-active before resolution) means the default artifacts dir."""
+    if pack_dir is None:
+        return _default_artifacts_dir()
+    if pack_dir.name == "artifacts":
+        return pack_dir
+    return pack_dir.parent
 
 
 def workspace_states(root: Path) -> list[Path]:
@@ -198,6 +345,11 @@ def workspace_states(root: Path) -> list[Path]:
 
 ARCHIVE_MARKER = ".archive"
 
+# C5's per-pack mutation lock (see _state_lock below) - moved up here, next to the other
+# filename constants, so _FINGERPRINT_EXCLUDE can reference it without a forward-reference
+# NameError.
+LOCK_FILENAME = ".engagement-state.lock"
+
 
 def is_archived(pack: Path) -> bool:
     """True when the directory carries the `.archive` marker."""
@@ -214,19 +366,49 @@ def archived_slugs(root: Path) -> list[str]:
     return sorted(p.name for p in root.iterdir() if p.is_dir() and is_archived(p))
 
 
-# Files the closed-pack fingerprint ignores: the state file (the fingerprint is stored
-# inside it), the generated index renders (re-rendered by the same mutation that stores
-# the fingerprint) and the archive marker itself. Everything else - the deliverables -
-# is covered by name, size and mtime.
-_FINGERPRINT_EXCLUDE = {STATE_FILENAME, "START-HERE.md", "START-HERE.html", ARCHIVE_MARKER}
+# Files the closed-pack fingerprint's STAT-ONLY walk ignores: the state file (hashed by
+# CONTENT instead - see compute_fingerprint's docstring, M3), the generated index renders
+# (re-rendered by the same mutation that stores the fingerprint), the archive marker, and
+# the mutation lock file itself. LOCK_FILENAME was added after a real regression (2026-08
+# full-suite run): compute_fingerprint runs from INSIDE _cmd_set_status, i.e. inside the
+# C5 lock - the lock file exists on disk at that exact moment, gets stat-walked into the
+# stored fingerprint, and is then deleted (the lock releases) before anything else ever
+# recomputes it - so a later, unlocked recomputation could never match the stored value.
+# Purely operational bookkeeping, same category as the state file and index renders -
+# never a deliverable, never legitimately part of what the fingerprint is verifying.
+_FINGERPRINT_EXCLUDE = {
+    STATE_FILENAME,
+    "START-HERE.md",
+    "START-HERE.html",
+    ARCHIVE_MARKER,
+    LOCK_FILENAME,
+}
 
 
 def compute_fingerprint(pack: Path) -> str:
-    """A cheap stat-only fingerprint of the pack's deliverable files.
+    """A cheap stat-only fingerprint of the pack's deliverable files, PLUS the state
+    file's own content.
 
     Stored in the state at a successful close; while it still matches, scanners skip
     the full content re-scan (the verification the pack passed at close still stands).
-    Any edit to a deliverable changes size or mtime and forces a real re-scan."""
+    Any edit to a deliverable changes size or mtime and forces a real re-scan.
+
+    M3 (2026-08 Fable audit): the state file itself used to be excluded from the walk
+    below with nothing to replace it - a hand-edit to engagement-state.json after close
+    (status flipped back, verdict tampered, an outstanding item quietly removed) left
+    every stat-only deliverable untouched, so the fingerprint still matched and a later
+    scan silently skipped re-validating the very record that had changed. The exclusion
+    from the stat-only walk stays (self-referential otherwise: the fingerprint gets
+    written back INTO the file it was computed from, so its own size/mtime would never
+    stabilise) but a CURATED subset of its content is now hashed in separately - the
+    fields that actually determine whether the close is still valid (status, close date,
+    verdict, outstanding, team, artifacts), not the whole state dict. Whole-dict hashing
+    was the first attempt and broke a real, deliberate pre-existing contract
+    (test_fingerprint_ignores_state_and_renders): a `log-note` after close only appends to
+    `log` - harmless, no bearing on close validity - and must not force a full re-scan any
+    more than a routine index re-render should. Narrowing to the validity-relevant fields
+    catches every tampering case the docstring above actually names while leaving that
+    contract intact."""
     entries = []
     for p in sorted(pack.rglob("*")):
         if not p.is_file() or p.name in _FINGERPRINT_EXCLUDE:
@@ -236,13 +418,36 @@ def compute_fingerprint(pack: Path) -> str:
         except OSError:
             continue
         entries.append(f"{p.relative_to(pack)}|{st.st_size}|{int(st.st_mtime)}")
+    try:
+        full_state = json.loads((pack / STATE_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        full_state = None
+    if isinstance(full_state, dict):
+        eng = full_state.get("engagement") or {}
+        validity_subset = {
+            "status": full_state.get("status"),
+            "closed": eng.get("closed") if isinstance(eng, dict) else None,
+            "verdict": full_state.get("verdict"),
+            "outstanding": full_state.get("outstanding"),
+            "team": full_state.get("team"),
+            "artifacts": full_state.get("artifacts"),
+        }
+        entries.append(
+            f"{STATE_FILENAME}|" + json.dumps(validity_subset, sort_keys=True, ensure_ascii=False)
+        )
     return hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
 
 
-def scan_engagements(root: Path) -> list[dict]:
+def scan_engagements(root: Path, known: tuple[Path, dict] | None = None) -> list[dict]:
     """Registry rows derived from the packs on disk (flat pack first, then workspaces).
     Archived (`.archive`-marked) packs are excluded - the registry names them in its own
-    collapsed line via archived_slugs()."""
+    collapsed line via archived_slugs().
+
+    `known`, if given, is `(pack_dir, state)` for a pack whose state was JUST validated
+    and written to disk by the caller (_write_state) - reusing it in-memory avoids
+    reading the very file we just wrote back off disk. Every OTHER pack is still read
+    fresh, unconditionally: this is a one-row substitution, not a cache, so the registry
+    keeps its "always regenerated, never drifts" guarantee (2026-08-03 perf audit)."""
     rows: list[dict] = []
     candidates: list[tuple[str, Path]] = []
     if state_path(root).is_file():
@@ -250,9 +455,10 @@ def scan_engagements(root: Path) -> list[dict]:
     candidates.extend(
         (sp.parent.name, sp.parent) for sp in workspace_states(root) if not is_archived(sp.parent)
     )
+    known_pack, known_state = known if known is not None else (None, None)
     for slug, pack in candidates:
         try:
-            state = load_state(pack)
+            state = known_state if known is not None and pack == known_pack else load_state(pack)
         except Exception:
             rows.append(
                 {
@@ -280,18 +486,30 @@ def scan_engagements(root: Path) -> list[dict]:
     return rows
 
 
+_RENDER_HTML_MODULE_CACHE = None
+
+
 def _load_render_html_module():
     """Import scripts.render_html in BOTH run modes (package import when available,
     __file__-relative load under direct-path plugin invocation). None = module
     unavailable; callers then degrade to .md-only rather than raising ImportError
     ("No module named 'scripts.render_html'" - live corp report 2026-07-31, where
-    plugin-mode path invocation has no scripts.* package on sys.path)."""
+    plugin-mode path invocation has no scripts.* package on sys.path).
+
+    2026-08-03 perf audit: render_files() and render_registry() each call this
+    independently within ONE _write_state() call - in plugin mode (fast branch always
+    fails), that used to re-parse and re-exec render_html.py twice per mutation.
+    Memoized in a module-level variable, same reasoning as check_artifacts.py's own
+    loaders."""
+    global _RENDER_HTML_MODULE_CACHE
     try:
         from scripts import render_html  # normal `-m` / package mode
 
         return render_html
     except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
         pass
+    if _RENDER_HTML_MODULE_CACHE is not None:
+        return _RENDER_HTML_MODULE_CACHE
     try:
         import importlib.util
 
@@ -299,14 +517,17 @@ def _load_render_html_module():
         spec = importlib.util.spec_from_file_location("render_html", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _RENDER_HTML_MODULE_CACHE = module
         return module
     except Exception:
         return None
 
 
-def render_registry(root: Path) -> list[Path]:
-    """(Re)generate the derived root registry. Removes it when no packs remain."""
-    rows = scan_engagements(root)
+def render_registry(root: Path, known: tuple[Path, dict] | None = None) -> list[Path]:
+    """(Re)generate the derived root registry. Removes it when no packs remain.
+
+    `known` is threaded straight through to scan_engagements() - see its docstring."""
+    rows = scan_engagements(root, known=known)
     archived = archived_slugs(root)
     json_path = root / REGISTRY_JSON
     md_path = root / REGISTRY_MD
@@ -370,12 +591,34 @@ def render_registry(root: Path) -> list[Path]:
 
 def _registry_root_for(pack_dir: Path) -> Path | None:
     """The artifacts root whose registry covers this pack, or None for a standalone flat
-    pack (e.g. a test tmp dir with no sibling workspaces and no registry)."""
+    pack (e.g. a test tmp dir with no sibling workspaces and no registry).
+
+    2026-08-14 Fable-model audit finding (C3): this used to compute `pack_dir.parent`
+    and treat it uniformly as "the artifacts root" - correct for a WORKSPACE pack
+    (pack_dir = artifacts/<slug>/, parent = artifacts/, genuinely the registry-worthy
+    level) but wrong for a FLAT pack, where pack_dir IS the artifacts root itself
+    (artifacts/engagement-state.json directly) and pack_dir.parent is the PROJECT
+    ROOT one level too high. workspace_states(project_root) then found artifacts/
+    (with its own state file) indistinguishable from any genuine workspace
+    subdirectory, so a standalone flat pack with NO real siblings still satisfied the
+    "has a workspace" check and returned the project root as the registry root -
+    every flat-pack mutation wrote engagements.json/ENGAGEMENTS.md/.html into the
+    user's own git-tracked repo. Fixed by branching on pack_dir's own shape instead
+    of always trusting pack_dir.parent: a flat pack (pack_dir.name == "artifacts")
+    only ever consults its OWN subdirectories for genuine siblings, never its parent;
+    a workspace pack keeps the original, correct parent-based logic - including
+    "trivially counts as its own sibling", which is intentional there (ANY workspace
+    pack gets a registry, single or not - see test_init_default_creates_workspace_
+    and_registry, unaffected by this fix). Note: this does not migrate a registry
+    file a pre-fix run may have already written at the wrong location - a separate,
+    one-time cleanup concern, not something to silently move here."""
+    if pack_dir.name == "artifacts":
+        if state_path(pack_dir).is_file() and workspace_states(pack_dir):
+            return pack_dir  # flat pack that ALSO has genuine sibling workspaces
+        return None
     parent = pack_dir.parent
     if workspace_states(parent) or (parent / REGISTRY_JSON).is_file():
         return parent
-    if state_path(pack_dir).is_file() and workspace_states(pack_dir):
-        return pack_dir  # flat pack that ALSO has sibling workspaces under it
     return None
 
 
@@ -387,7 +630,11 @@ def resolve_pack_dir(args: argparse.Namespace) -> Path:
     root = _default_artifacts_dir()
     slug = getattr(args, "target_slug", None)
     if slug:
-        return root / slug
+        safe = _safe_slug_join(root, slug)
+        if safe is None:
+            print(f"--slug {slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+            sys.exit(2)
+        return safe
     candidates: list[Path] = []
     if state_path(root).is_file():
         candidates.append(root)
@@ -589,6 +836,10 @@ def validate_state(state: dict) -> list[str]:
     if footprint is not None and not isinstance(footprint, dict):
         problems.append("'footprint' must be an object")
 
+    settings_snapshot = state.get("settings_snapshot")
+    if settings_snapshot is not None and not isinstance(settings_snapshot, dict):
+        problems.append("'settings_snapshot' must be an object")
+
     # R3: the sanctioned consent-outcome record may hold NON-granting outcomes only.
     outcome_rec = state.get(_CONSENT_OUTCOME_KEY)
     if outcome_rec is not None:
@@ -635,6 +886,11 @@ def render_markdown(state: dict) -> str:
     status_line = _STATUS_RENDER.get(status, status)
     if status == "closed" and closed_date:
         status_line = f"{_STATUS_RENDER['closed']} {closed_date}"
+    elif status == "in_progress":
+        # CSS-only pulse (render_html.py's own trusted _CSS, never bleach-sanitised model
+        # content) - an `id`, not `class`: bleach's attribute allow-list permits `id` on any
+        # tag but strips `class` from `span`, and START-HERE has exactly one status per page.
+        status_line = f'<span id="status-in-progress">{status_line}</span>'
 
     verdict = state.get("verdict") or (
         "none yet - engagement not closed, DoD not yet run"
@@ -816,9 +1072,14 @@ def embedded_content_hash(index_text: str) -> str | None:
     return None
 
 
-def render_files(artifacts_dir: Path) -> list[Path]:
-    """Write START-HERE.md (+ .html when the renderer's deps exist) from the state file."""
-    state = load_state(artifacts_dir)
+def render_files(artifacts_dir: Path, known_state: dict | None = None) -> list[Path]:
+    """Write START-HERE.md (+ .html when the renderer's deps exist) from the state file.
+
+    `known_state`, if given, is used instead of re-reading `artifacts_dir`'s state off
+    disk - for _write_state(), which already holds the just-validated, just-written state
+    in memory (2026-08-03 perf audit). The standalone `render` command has no such state
+    in hand and always reads fresh, exactly as before."""
+    state = known_state if known_state is not None else load_state(artifacts_dir)
     problems = validate_state(state)
     if problems:
         raise ValueError("state invalid: " + "; ".join(problems))
@@ -850,6 +1111,49 @@ def render_files(artifacts_dir: Path) -> list[Path]:
     return written
 
 
+_LOCK_STALE_SECONDS = 30  # a single CLI mutation is a short in-process op; older = a dead holder
+_LOCK_WAIT_SECONDS = 5
+
+
+@contextlib.contextmanager
+def _state_lock(artifacts_dir: Path):
+    """Advisory cross-process mutex around one read-modify-write cycle on
+    engagement-state.json. 2026-08 audit (C5): parallel Workflow-tool dispatch can run
+    several mutating commands (set-status, add-artifact, log-note, ...) against the SAME
+    pack concurrently - without this, two concurrent load_state()/_write_state() cycles
+    race (classic lost-update: second writer silently clobbers the first's change) with
+    no error from either process. Portable (os.O_CREAT | os.O_EXCL only, no fcntl/msvcrt
+    dependency) since this project's install targets include Windows; a stale lock from a
+    process that died mid-mutation is reclaimed by age rather than left to jam every
+    future command against the pack forever."""
+    lock_path = artifacts_dir / LOCK_FILENAME
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    deadline = time.time() + _LOCK_WAIT_SECONDS
+    fd = None
+    while fd is None:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                age = time.time() - lock_path.stat().st_mtime
+            except FileNotFoundError:
+                continue  # released between our open() and stat() - retry immediately
+            if age > _LOCK_STALE_SECONDS:
+                lock_path.unlink(missing_ok=True)  # holder is gone - reclaim it
+                continue
+            if time.time() >= deadline:
+                raise SystemExit(
+                    f"another engagement_state process holds the lock on {artifacts_dir} "
+                    f"(age {age:.1f}s) - if it's genuinely dead, delete {lock_path} by hand"
+                )
+            time.sleep(0.05)
+    try:
+        os.close(fd)
+        yield
+    finally:
+        lock_path.unlink(missing_ok=True)
+
+
 def _write_state(artifacts_dir: Path, state: dict) -> None:
     """Validate, then atomically write the state and re-render the human view."""
     problems = validate_state(state)
@@ -862,11 +1166,14 @@ def _write_state(artifacts_dir: Path, state: dict) -> None:
     tmp = target.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, target)
-    for path in render_files(artifacts_dir):
+    for path in render_files(artifacts_dir, known_state=state):
         print(f"wrote {path}")
     registry_root = _registry_root_for(artifacts_dir)
     if registry_root is not None:
-        render_registry(registry_root)
+        # The pack we just wrote is reused in-memory (known=) rather than re-read off
+        # disk; every other row in the registry is still scanned fresh, unconditionally
+        # (2026-08-03 perf audit) - see scan_engagements()'s docstring.
+        render_registry(registry_root, known=(artifacts_dir, state))
 
 
 # ---------------------------------------------------------------------------- commands
@@ -877,7 +1184,11 @@ def _cmd_init(args: argparse.Namespace) -> int:
     # keeps flat semantics (tests, custom layouts, pre-0.31 behaviour).
     workspaced = args.dir is None
     if args.dir is None:
-        args.dir = _default_artifacts_dir() / args.slug
+        safe = _safe_slug_join(_default_artifacts_dir(), args.slug)
+        if safe is None:
+            print(f"--slug {args.slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+            return 2
+        args.dir = safe
     else:
         # Explicit --dir: refuse a target nested inside another engagement pack or a
         # second artifacts level (artifacts/<old>/artifacts/<new> - the 2026-07-30
@@ -899,6 +1210,13 @@ def _cmd_init(args: argparse.Namespace) -> int:
     if target.exists():
         print(f"refusing to overwrite existing {target}", file=sys.stderr)
         return 2
+    settings_snapshot = None
+    probe = _load_engage_probe()
+    if probe is not None:
+        try:
+            settings_snapshot = probe.resolve_preferences(_project_root_for(args.dir))
+        except Exception:  # nosec B110 - best-effort snapshot, never blocks init
+            settings_snapshot = None
     state = {
         "schema": SCHEMA_VERSION,
         "engagement": {
@@ -914,6 +1232,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
         "team": [],
         "verdict": None,
         "footprint": {"agents": None, "approx_tokens": None},
+        "settings_snapshot": settings_snapshot,
         "outstanding": [
             "independent QA - not yet run",
             "DoD check_artifacts - not yet run",
@@ -996,10 +1315,17 @@ def _mutate(args: argparse.Namespace, fn) -> int:
     return 0
 
 
+_CHECK_ARTIFACTS_MODULE_CACHE = None
+
+
 def _load_checker():
     """scripts.check_artifacts in BOTH run modes (package import, then __file__-relative -
     the same dual-mode pattern check_artifacts uses for THIS module). None = unavailable;
-    the close gate then degrades to closed-state validation only (noted on stderr)."""
+    the close gate then degrades to closed-state validation only (noted on stderr).
+    Memoized (2026-08-03 perf audit) - same reasoning as the other loaders in this file
+    and in check_artifacts.py: the fallback branch re-parses+re-execs a ~90KB file, and
+    only needs to happen once per process regardless of how many times this is called."""
+    global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
         from scripts import check_artifacts  # normal `-m` / package mode
 
@@ -1007,6 +1333,8 @@ def _load_checker():
     # Probe only; fall through to the file-relative loader.
     except Exception:  # nosec B110
         pass
+    if _CHECK_ARTIFACTS_MODULE_CACHE is not None:
+        return _CHECK_ARTIFACTS_MODULE_CACHE
     try:
         import importlib.util
 
@@ -1014,6 +1342,36 @@ def _load_checker():
         spec = importlib.util.spec_from_file_location("check_artifacts", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _CHECK_ARTIFACTS_MODULE_CACHE = module
+        return module
+    except Exception:
+        return None
+
+
+_ENGAGE_PROBE_MODULE_CACHE = None
+
+
+def _load_engage_probe():
+    """scripts.engage_probe in BOTH run modes, same dual-mode/memoized pattern as
+    _load_checker(). None = unavailable; _cmd_init then simply skips the settings
+    snapshot - optional metadata, never load-bearing for the engagement itself."""
+    global _ENGAGE_PROBE_MODULE_CACHE
+    try:
+        from scripts import engage_probe  # normal `-m` / package mode
+
+        return engage_probe
+    except Exception:  # nosec B110 - probe only; fall through to the file-relative loader
+        pass
+    if _ENGAGE_PROBE_MODULE_CACHE is not None:
+        return _ENGAGE_PROBE_MODULE_CACHE
+    try:
+        import importlib.util
+
+        path = Path(__file__).with_name("engage_probe.py")
+        spec = importlib.util.spec_from_file_location("engage_probe", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _ENGAGE_PROBE_MODULE_CACHE = module
         return module
     except Exception:
         return None
@@ -1023,6 +1381,26 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
     state = load_state(args.dir)
     _upgrade(state)
     before = json.loads(json.dumps(state))  # rollback snapshot (register R6)
+    if args.status == "closed":
+        # C4a (2026-08 Fable audit): the close path below writes the closed state to
+        # disk FIRST, then rolls back to `before` if the gate refuses. That rollback is
+        # itself a validated write - if `before` (the pre-close snapshot) is not
+        # itself schema-valid, the rollback write raises SystemExit before the
+        # CLOSE-REFUSED explanation ever prints, stranding the pack CLOSED on disk with
+        # no findings gate having actually passed it. Check this upfront, before any
+        # write happens, so a close attempt against an already-invalid state fails
+        # loudly here instead of silently later.
+        before_problems = validate_state(before)
+        if before_problems:
+            for problem in before_problems:
+                print(f"INVALID (pre-close state): {problem}", file=sys.stderr)
+            print(
+                "CLOSE-REFUSED: the state file is not valid before this close attempt - "
+                "fixing the underlying state (not the close command) resolves this. No "
+                "write was made.",
+                file=sys.stderr,
+            )
+            return 1
     state["status"] = args.status
     if args.verdict:
         state["verdict"] = args.verdict
@@ -1062,13 +1440,27 @@ def _cmd_set_status(args: argparse.Namespace) -> int:
         return 0
     try:
         gate_findings = ca.check(args.dir)
-    except Exception as exc:  # a broken checker must not strand the state half-written
+    except Exception as exc:
+        # C4b (2026-08 Fable audit): this used to fail OPEN - keep the close, tell the
+        # user to run the checker by hand. A checker crash proves nothing about whether
+        # the pack actually meets the DoD; keeping an unevidenced close on a crash
+        # contradicts the whole "done is evidenced, not claimed" posture this gate
+        # exists to enforce. Fail closed instead, the same as a real findings list: roll
+        # back to `before` (already validated above, so this write cannot itself fail)
+        # and refuse the close.
         print(
-            f"note: close gate errored ({exc}) - close kept, run the checker by hand",
+            f"CLOSE-REFUSED: the close gate crashed ({exc}) - treating this as a gate "
+            "failure, not a pass.",
             file=sys.stderr,
         )
-        clear_active(args.dir.parent, args.dir.name)
-        return 0
+        _write_state(args.dir, before)
+        print(
+            f"CLOSE-REFUSED: rolled back to '{before.get('status')}'. Run `python -m "
+            "scripts.check_artifacts` by hand to see the underlying error, fix it, and "
+            "re-run `set-status closed`.",
+            file=sys.stderr,
+        )
+        return 1
     if not gate_findings:
         # 0.33.2 fast path: the pack just passed the full gate - fingerprint it so later
         # scans can skip an unchanged closed pack instead of re-reading every file.
@@ -1099,6 +1491,47 @@ def _cmd_set_profile(args: argparse.Namespace) -> int:
 
 
 def _cmd_add_artifact(args: argparse.Namespace) -> int:
+    def _heal_path(raw: str) -> str:
+        """Paths are recorded relative to the PACK dir, but heal the two misspellings a
+        live session actually produced (2026-08-16, corp Windows): a PROJECT-relative
+        path that re-names the pack ("artifacts/<slug>/x.md" while --dir already points
+        at artifacts/<slug>/, which double-resolved and wrongly flagged the row
+        added_before_file_existed) and an absolute path inside the pack. Only rewrites
+        when the given form does NOT resolve and the healed form DOES - an honestly
+        missing file keeps its given path and its flag."""
+        # Absolute first: `pack_dir / <absolute>` IS the absolute path, so the
+        # relative-form existence check below would short-circuit and record the
+        # absolute path verbatim instead of healing it.
+        given = Path(raw)
+        if given.is_absolute():
+            try:
+                healed = given.resolve().relative_to(args.dir.resolve()).as_posix()
+            except (ValueError, OSError):
+                return raw
+            if (args.dir / healed).exists():
+                print(
+                    f"note: healed absolute path {raw} -> {healed} (artifact paths "
+                    "are recorded relative to the pack dir)",
+                    file=sys.stderr,
+                )
+                return healed
+            return raw
+        if (args.dir / raw).exists():
+            return raw
+        parts = PurePosixPath(raw.replace("\\", "/")).parts
+        if len(parts) > 2 and parts[0] == "artifacts" and parts[1] == args.dir.name:
+            healed = str(PurePosixPath(*parts[2:]))
+            if (args.dir / healed).exists():
+                print(
+                    f"note: healed project-relative path {raw} -> {healed} (artifact "
+                    "paths are recorded relative to the pack dir)",
+                    file=sys.stderr,
+                )
+                return healed
+        return raw
+
+    args.path = _heal_path(args.path)
+
     def fn(state: dict) -> None:
         entry = {
             "path": args.path,
@@ -1148,13 +1581,73 @@ def _cmd_resolve_outstanding(args: argparse.Namespace) -> int:
     return 0
 
 
+def _reject_consent_decision_keys(keys) -> bool:
+    """True (having explained why on stderr) when a decision key tries to record the
+    execution-consent answer through the generic decisions map. Live block (2026-08-16,
+    corp Windows): the model ran `set-decision "execution-consent" "Yes - marker present
+    at .claude/.exec-consent"` and the consent-write guard default-denied the whole Bash
+    call - to a lexical guard, an interpreter command whose argument text names the
+    protected marker is indistinguishable from an attempt to write it. The dedicated
+    command exists precisely to avoid that shape (`record-consent-outcome asked|declined`
+    carries no marker path, and a recorded outcome is never a grant, ADR-006 §5).
+    Refusing here makes the safe path the only path, instead of leaving two documented
+    ways to record the same fact where one of them trips the guard."""
+    for key in keys:
+        if "consent" in str(key).lower():
+            print(
+                f"refusing to record {key!r} via set-decision(s): consent outcomes have "
+                "one sanctioned, guard-safe command - `record-consent-outcome "
+                "asked|declined` - and never belong in the generic decisions map. "
+                "Keep the consent marker's filename/path out of every decision and "
+                "log-note text.",
+                file=sys.stderr,
+            )
+            return True
+    return False
+
+
 def _cmd_set_decision(args: argparse.Namespace) -> int:
+    if _reject_consent_decision_keys([args.key]):
+        return 2
     return _mutate(args, lambda s: s.setdefault("decisions", {}).__setitem__(args.key, args.value))
+
+
+def _cmd_set_decisions(args: argparse.Namespace) -> int:
+    """Batch form of set-decision (corp perf report, 2026-08-10): intake commonly records
+    several decisions in one breath (data-attestation, fix-cycle, and others) via one Bash
+    call chaining N separate `set-decision` invocations with `&&` - N full interpreter cold
+    starts for what is conceptually one write. This does the same mutation in ONE process,
+    ONE load/upgrade/render cycle, same reasoning as bash_hook_dispatcher.py's 5-processes-
+    to-1 consolidation, different call site. `set-decision` (singular) is unchanged and
+    still the right tool for a single decision."""
+    try:
+        pairs = json.loads(args.json)
+    except (json.JSONDecodeError, TypeError) as e:
+        print(f"invalid --json: {e}", file=sys.stderr)
+        return 2
+    if not isinstance(pairs, dict) or not pairs:
+        print("--json must be a non-empty JSON object of {key: value}", file=sys.stderr)
+        return 2
+    if _reject_consent_decision_keys(pairs.keys()):
+        return 2
+
+    def fn(state: dict) -> None:
+        decisions = state.setdefault("decisions", {})
+        for key, value in pairs.items():
+            decisions[key] = value
+
+    return _mutate(args, fn)
 
 
 def _cmd_log_note(args: argparse.Namespace) -> int:
     def fn(state: dict) -> None:
-        entry = f"{_dt.date.today().isoformat()}: {args.text}"
+        date = _dt.date.today().isoformat()
+        tag = getattr(args, "tag", None)
+        # Bracket-tag convention, not a new field: `log` stays a plain list[str] (zero
+        # validate_state/schema change) while giving the dashboard timeline enough signal
+        # to pick an icon (e.g. --tag review-loop for a "sent back to X" handoff). Untagged
+        # notes render byte-identical to before this existed.
+        entry = f"{date} [{tag}]: {args.text}" if tag else f"{date}: {args.text}"
         log = state.setdefault("log", [])
         if entry not in log:
             log.append(entry)
@@ -1197,14 +1690,31 @@ def _cmd_set_team(args: argparse.Namespace) -> int:
     return _mutate(args, lambda s: s.__setitem__("team", list(args.members)))
 
 
+def _resolve_slug_arg(args: argparse.Namespace) -> str | None:
+    """set-active/archive/unarchive take their slug positionally, unlike every other
+    resolvable subcommand's `--slug TARGET_SLUG` - a live report (2026-08-03) found
+    `archive --slug X` exits 2 with no hint that the flag isn't accepted there, because
+    the positional (`args.slug`) and the mirrored flag (`args.target_slug`, from `common`)
+    are different attributes and only the positional was ever read. Accept either; the
+    positional wins if both are somehow given."""
+    return getattr(args, "slug", None) or getattr(args, "target_slug", None)
+
+
 def _cmd_set_active(args: argparse.Namespace) -> int:
     root = args.dir or _default_artifacts_dir()
-    target = root / args.slug
+    slug = _resolve_slug_arg(args)
+    if not slug:
+        print("set-active: give a <slug> or --slug", file=sys.stderr)
+        return 2
+    target = _safe_slug_join(root, slug)
+    if target is None:
+        print(f"--slug {slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+        return 2
     if not ((target / STATE_FILENAME).is_file() or (target / INDEX_FILENAME).is_file()):
         print(f"no engagement workspace at {target} - nothing to mark ACTIVE", file=sys.stderr)
         return 2
-    write_active(root, args.slug)
-    print(f"ACTIVE engagement: {args.slug} ({ACTIVE_MARKER})")
+    write_active(root, slug)
+    print(f"ACTIVE engagement: {slug} ({ACTIVE_MARKER})")
     return 0
 
 
@@ -1223,10 +1733,15 @@ def _cmd_archive(args: argparse.Namespace) -> int:
     if args.all_closed:
         targets = [sp.parent for sp in workspace_states(root) if not is_archived(sp.parent)]
     else:
-        if not args.slug:
-            print("archive: give a <slug> or --all-closed", file=sys.stderr)
+        slug = _resolve_slug_arg(args)
+        if not slug:
+            print("archive: give a <slug> (or --slug), or --all-closed", file=sys.stderr)
             return 2
-        targets = [root / args.slug]
+        safe = _safe_slug_join(root, slug)
+        if safe is None:
+            print(f"--slug {slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+            return 2
+        targets = [safe]
     archived_now = 0
     for pack in targets:
         if not state_path(pack).is_file():
@@ -1300,7 +1815,14 @@ def _cmd_archive(args: argparse.Namespace) -> int:
 
 def _cmd_unarchive(args: argparse.Namespace) -> int:
     root = args.dir or _default_artifacts_dir()
-    pack = root / args.slug
+    slug = _resolve_slug_arg(args)
+    if not slug:
+        print("unarchive: give a <slug> or --slug", file=sys.stderr)
+        return 2
+    pack = _safe_slug_join(root, slug)
+    if pack is None:
+        print(f"--slug {slug!r} escapes the artifacts root - refusing", file=sys.stderr)
+        return 2
     marker = pack / ARCHIVE_MARKER
     if not marker.is_file():
         print(f"{pack.name} is not archived (no {ARCHIVE_MARKER})", file=sys.stderr)
@@ -1361,6 +1883,115 @@ def _cmd_set_footprint(args: argparse.Namespace) -> int:
     return _mutate(args, fn)
 
 
+def _cmd_set_budget(args: argparse.Namespace) -> int:
+    """Record the engagement's spend budget (2026-08-17, assessment recommendation 1).
+    Advisory pacing state, never enforcement: the hard stop stays the org-side spend
+    limit (workspace/member caps); this exists so the PM can SEE the cap coming at every
+    gate (budget-status below) and degrade or park deliberately instead of being
+    hard-stopped mid-review by a limit the session never knew about."""
+
+    def fn(state: dict) -> None:
+        budget = state.setdefault("budget", {})
+        if args.daily_usd is not None:
+            budget["daily_usd"] = args.daily_usd
+        if args.engagement_usd is not None:
+            budget["engagement_usd"] = args.engagement_usd
+        budget["set"] = _dt.date.today().isoformat()
+
+    return _mutate(args, fn)
+
+
+def _load_dashboard_module():
+    """dashboard.py's transcript pricing, importable in BOTH run modes - the same
+    package-then-file-relative fallback pattern as the render_html import."""
+    try:
+        from scripts import dashboard
+
+        return dashboard
+    # Probe only; fall through to the file-relative loader.
+    except Exception:  # nosec B110
+        pass
+    import importlib.util
+
+    candidate = Path(__file__).resolve().with_name("dashboard.py")
+    try:
+        spec = importlib.util.spec_from_file_location("dashboard", candidate)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
+def _cmd_budget_status(args: argparse.Namespace) -> int:
+    """Spent-vs-cap at a gate, in one compact block the PM states beside the team-sizing
+    line. Spend is 📊 measured from this project's session transcripts at list prices
+    (dashboard.py's pricing, cache tiers included) but the ATTRIBUTION is an
+    approximation and says so: transcripts are per session and project-wide, so parallel
+    work in the same project counts toward the same number. HEADROOM= gives the PM a
+    categorical to act on (ok / approaching at >=70% / exceeded) - the degrade ladder
+    lives in the engage skill, the org-side spend limit stays the hard stop. Read-only;
+    no budget recorded prints one pointer line and exits 0."""
+    state = load_state(args.dir)
+    budget = state.get("budget") or {}
+    daily = budget.get("daily_usd")
+    ceiling = budget.get("engagement_usd")
+    if not daily and not ceiling:
+        print(
+            "no budget recorded - set one with: set-budget --daily-usd <N> "
+            "[--engagement-usd <N>] (docs/INTEGRATIONS.md is unrelated; this is "
+            "advisory pacing state, ADR-006)"
+        )
+        return 0
+    spent_today = spent_since_open = None
+    dash = _load_dashboard_module()
+    if dash is not None:
+        try:
+            project_root = _stamp_root(args.dir).parent
+            parsed = dash.parse_transcripts(
+                dash.transcripts_dir_for(project_root, Path.home() / ".claude")
+            )
+            today = _dt.date.today().isoformat()
+            opened = (state.get("engagement") or {}).get("opened") or today
+            spent_today = sum(
+                s["cost_usd"] for s in parsed["sessions"] if s.get("date") == today
+            )
+            spent_since_open = sum(
+                s["cost_usd"] for s in parsed["sessions"] if (s.get("date") or "") >= opened
+            )
+        except Exception:
+            spent_today = spent_since_open = None
+
+    def verdict(spent, cap):
+        if spent is None or not cap:
+            return "unknown"
+        if spent >= cap:
+            return "exceeded"
+        if spent >= 0.7 * cap:
+            return "approaching"
+        return "ok"
+
+    def money(v):
+        return f"${v:.2f}" if v is not None else "unknown"
+
+    worst = "unknown"
+    for spent, cap in ((spent_today, daily), (spent_since_open, ceiling)):
+        v = verdict(spent, cap)
+        rank = {"unknown": 0, "ok": 1, "approaching": 2, "exceeded": 3}
+        if rank[v] > rank[worst]:
+            worst = v
+    if daily:
+        print(f"DAILY cap={money(daily)} spent_today={money(spent_today)}")
+    if ceiling:
+        print(f"ENGAGEMENT ceiling={money(ceiling)} spent_since_open={money(spent_since_open)}")
+    print(f"HEADROOM={worst}")
+    print(
+        "(spend is measured from this project's session transcripts at list prices, "
+        "project-wide - parallel work in this project counts toward the same number)"
+    )
+    return 0
+
+
 _OPEN_STATUSES = ("in_progress", "blocked", "closing")
 
 
@@ -1415,19 +2046,41 @@ def _cmd_list(args: argparse.Namespace) -> int:
 
 def _cmd_migrate(args: argparse.Namespace) -> int:
     """Move a legacy FLAT pack into its own workspace artifacts/<slug>/ (everything in the
-    root except existing workspace dirs and the registry), then regenerate the registry."""
+    root except existing workspace dirs, the registry, and the root-level ACTIVE/lock
+    markers), then regenerate the registry."""
     root = args.dir or _default_artifacts_dir()
     if not state_path(root).is_file():
         print(f"no flat pack at {root} - nothing to migrate", file=sys.stderr)
         return 2
     state = load_state(root)
     slug = (state.get("engagement") or {}).get("slug") or "engagement"
-    target = root / slug
+    target = _safe_slug_join(root, slug)
+    if target is None:
+        print(
+            f"the pack's own recorded slug {slug!r} escapes the artifacts root - refusing "
+            "to migrate; fix the slug in the state file first",
+            file=sys.stderr,
+        )
+        return 2
     if target.exists():
         print(f"refusing: {target} already exists", file=sys.stderr)
         return 2
     target.mkdir(parents=True)
-    keep = {REGISTRY_JSON, REGISTRY_MD, Path(REGISTRY_MD).stem + ".html", slug}
+    # M2 (2026-08 Fable audit): ACTIVE_MARKER and LOCK_FILENAME are root-level, cross-
+    # workspace bookkeeping - not part of any one pack's own files. A root that already
+    # has a genuine sibling workspace (the flat-pack-with-siblings case _registry_root_for
+    # supports) can carry both alongside the flat pack being migrated; leaving them out of
+    # `keep` swept them into the new workspace dir instead, losing the root's ACTIVE
+    # tracking (read_active(root) silently goes back to None) and stranding a stale lock
+    # file inside the migrated pack instead of at the root it actually locks.
+    keep = {
+        REGISTRY_JSON,
+        REGISTRY_MD,
+        Path(REGISTRY_MD).stem + ".html",
+        ACTIVE_MARKER,
+        LOCK_FILENAME,
+        slug,
+    }
     workspace_dirs = {sp.parent.name for sp in workspace_states(root)}
     import shutil
 
@@ -1440,6 +2093,38 @@ def _cmd_migrate(args: argparse.Namespace) -> int:
     print(f"migrated flat pack -> {target} ({moved} item(s))")
     render_registry(root)
     return 0
+
+
+# C5: commands that read-modify-write engagement-state.json (directly or via _mutate()) -
+# gated through _state_lock in main()'s dispatch below. _cmd_init/_cmd_archive lock the
+# ROOT they resolve args.dir to (they can create/touch more than one pack), which is a
+# coarser-grained but still-correct simplification: one mutation at a time per root, not
+# per pack. Deliberately excludes genuinely read-only commands (_cmd_validate, _cmd_show,
+# _cmd_list), _cmd_render (rewrites the human view/registry, never engagement-state.json
+# itself - _write_state's atomic os.replace already makes concurrent reads of that file
+# safe without a lock), and _cmd_set_active/_cmd_clear_active/_cmd_unarchive/_cmd_migrate
+# (single-value marker writes or one-off structural moves, not read-modify-write races).
+_MUTATING_CMDS = {
+    _cmd_init,
+    _cmd_set_status,
+    _cmd_set_phase,
+    _cmd_set_profile,
+    _cmd_add_artifact,
+    _cmd_add_outstanding,
+    _cmd_resolve_outstanding,
+    _cmd_set_decision,
+    _cmd_set_decisions,
+    _cmd_log_note,
+    _cmd_add_ratification,
+    _cmd_ratify,
+    _cmd_set_team,
+    _cmd_archive,
+    _cmd_record_consent_outcome,
+    _cmd_set_runtime,
+    _cmd_finalise_artifacts,
+    _cmd_set_footprint,
+    _cmd_set_budget,
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1476,6 +2161,12 @@ def main(argv: list[str] | None = None) -> int:
     common.add_argument("--slug", dest="target_slug", default=argparse.SUPPRESS)
 
     p = sub.add_parser("init", help="create the state file and first render")
+    # Not parents=[common]: common's own --slug (dest target_slug, "which pack to operate
+    # on") would collide with init's --slug below (a different meaning - the NEW
+    # engagement's slug). --dir alone, same SUPPRESS-default reasoning as common's, so an
+    # omitted --dir here doesn't clobber a value already parsed at the top level (see the
+    # comment above common's own definition).
+    p.add_argument("--dir", type=Path, default=argparse.SUPPRESS)
     p.add_argument("--title", required=True)
     p.add_argument("--slug", required=True)
     p.add_argument("--requested-by", default=None)
@@ -1553,11 +2244,30 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_set_decision)
 
     p = sub.add_parser(
+        "set-decisions",
+        parents=[common],
+        help="record several decisions in one process (renders once) - batch form of "
+        "set-decision, for intake sequences that used to chain N separate invocations",
+    )
+    p.add_argument(
+        "--json",
+        required=True,
+        help='JSON object, e.g. \'{"data-attestation": "...", "fix-cycle": "..."}\'',
+    )
+    p.set_defaults(fn=_cmd_set_decisions)
+
+    p = sub.add_parser(
         "log-note",
         parents=[common],
         help="append a dated event/completion note to the log (renders)",
     )
     p.add_argument("text")
+    p.add_argument(
+        "--tag",
+        default=None,
+        help="optional short tag (e.g. review-loop) rendered as a bracketed prefix - the "
+        "dashboard timeline uses it to pick an icon; plain notes need no tag",
+    )
     p.set_defaults(fn=_cmd_log_note)
 
     p = sub.add_parser(
@@ -1582,19 +2292,24 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_set_team)
 
     p = sub.add_parser(
-        "set-active", help="record the session's ACTIVE engagement on disk (R1 marker)"
+        "set-active",
+        parents=[common],
+        help="record the session's ACTIVE engagement on disk (R1 marker)",
     )
-    p.add_argument("slug")
+    p.add_argument("slug", nargs="?", help="or use --slug, like every other subcommand")
     p.set_defaults(fn=_cmd_set_active)
 
-    p = sub.add_parser("clear-active", help="remove the ACTIVE-engagement marker")
+    p = sub.add_parser("clear-active", parents=[common], help="remove the ACTIVE-engagement marker")
     p.set_defaults(fn=_cmd_clear_active)
 
     p = sub.add_parser(
         "archive",
+        parents=[common],
         help="mark a closed pack .archive - excluded from every scan (in-place, no move)",
     )
-    p.add_argument("slug", nargs="?", help="workspace directory name under artifacts/")
+    p.add_argument(
+        "slug", nargs="?", help="workspace directory name under artifacts/, or use --slug"
+    )
     p.add_argument(
         "--all-closed", action="store_true", help="archive every closed, unarchived pack"
     )
@@ -1606,8 +2321,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.set_defaults(fn=_cmd_archive)
 
-    p = sub.add_parser("unarchive", help="remove the .archive marker (back in scan scope)")
-    p.add_argument("slug")
+    p = sub.add_parser(
+        "unarchive", parents=[common], help="remove the .archive marker (back in scan scope)"
+    )
+    p.add_argument("slug", nargs="?", help="or use --slug, like every other subcommand")
     p.set_defaults(fn=_cmd_unarchive)
 
     p = sub.add_parser(
@@ -1644,7 +2361,25 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--tokens", default=None)
     p.set_defaults(fn=_cmd_set_footprint)
 
-    p = sub.add_parser("list", help="list this project's engagements (registry scan)")
+    p = sub.add_parser(
+        "set-budget",
+        parents=[common],
+        help="record the engagement's spend budget - advisory pacing, never the hard stop",
+    )
+    p.add_argument("--daily-usd", dest="daily_usd", type=float, default=None)
+    p.add_argument("--engagement-usd", dest="engagement_usd", type=float, default=None)
+    p.set_defaults(fn=_cmd_set_budget)
+
+    p = sub.add_parser(
+        "budget-status",
+        parents=[common],
+        help="spent-vs-cap from this project's transcripts (read-only; safe at any gate)",
+    )
+    p.set_defaults(fn=_cmd_budget_status)
+
+    p = sub.add_parser(
+        "list", parents=[common], help="list this project's engagements (registry scan)"
+    )
     p.add_argument(
         "--menu",
         action="store_true",
@@ -1654,7 +2389,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_list)
 
     p = sub.add_parser(
-        "migrate", help="move a legacy flat pack into its own artifacts/<slug>/ workspace"
+        "migrate",
+        parents=[common],
+        help="move a legacy flat pack into its own artifacts/<slug>/ workspace",
     )
     p.set_defaults(fn=_cmd_migrate)
 
@@ -1670,6 +2407,19 @@ def main(argv: list[str] | None = None) -> int:
     ):
         args.dir = resolve_pack_dir(args)
     try:
+        if args.fn in _MUTATING_CMDS or args.fn is _cmd_set_active:
+            # Any team-layer ACTION marks this session as the engaged one (set-active
+            # included: it is how a resumed session claims its workspace). Read-only
+            # commands (list/show/validate/render) deliberately do not stamp - a
+            # dormant session that merely inspected state must stay dormant.
+            stamp_team_session(_stamp_root(args.dir))
+        if args.fn in _MUTATING_CMDS:
+            # _cmd_init/_cmd_archive resolve their own root when args.dir wasn't given
+            # (see the exclusion list above) - lock the same directory they'll actually
+            # touch, not None.
+            lock_dir = args.dir if args.dir is not None else _default_artifacts_dir()
+            with _state_lock(lock_dir):
+                return args.fn(args)
         return args.fn(args)
     except FileNotFoundError:
         print(f"no {STATE_FILENAME} in {args.dir} - run init first", file=sys.stderr)

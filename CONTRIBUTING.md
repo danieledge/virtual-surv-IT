@@ -26,7 +26,7 @@ be introduced later; until then, opening a PR constitutes that agreement.
 A promotion is a release: the DoD requires prompt-touching changes to be **eval-gated**, and the
 gate is now mechanical, not a documented intention:
 
-1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 43 golden cases) in a
+1. On `dev`, run the **golden-slice `/run-evals`** (a representative ~10-15 of the 45 golden cases) in a
    Claude Code session on this repo.
 2. Record the result as **`evals/eval-baseline-<version>.md`** (date · cases run · pass/fail ·
    notes; `Scope: full` — or `Scope: deterministic-only` for a patch release with no prompt
@@ -114,6 +114,7 @@ Run what CI runs:
 pytest                                       # all unit tests must pass
 python -m scripts.validate_masking           # masking safety + detection fidelity
 python -m scripts.validate_manifest          # declared agents/skills resolve
+python -m scripts.validate_references        # internal doc/script references still resolve
 ruff check scripts/ .claude/hooks/ rules/ tests/
 ruff format --check scripts/ .claude/hooks/ rules/ tests/
 bandit -r scripts/ .claude/hooks/ -q
@@ -136,6 +137,7 @@ What each tool is and does (all of these run automatically in CI on every push/P
 | **shellcheck** | A linter for **Bash** scripts (catches shell bugs/quoting issues). Lint only - it does not reformat. | the `*.sh` + git-hook scripts |
 | **validate_masking** | Proves the masking config is both **safe** (no original PII survives) and **useful** (detection still fires on masked data). `--in <file>` scans your actual masked output. | `scripts/`, `config/masking-schema.yaml` |
 | **validate_manifest** | Checks the plugin manifest (`plugin.json`) matches the repo - every declared agent/skill/hook actually exists. | `.claude-plugin/` |
+| **validate_references** | A link checker pointed **inwards**: extracts every path a doc, skill or agent mentions and fails on any that will not resolve. The repo's most common defect is a document citing something that moved or was renamed, and each instance used to be caught by adding another bespoke assertion to `test_docs_consistency.py` *after* it broke. Deliberately ignores three classes so it does not cry wolf: files the team creates at **runtime** or that live in the **user's** project, **placeholders** and globs, and a short `_KNOWN_ABSENT` list where **every entry carries a written reason** (a retired script named in an ADR's revision history, a hypothetical attacker file in a threat model). A test asserts each excuse has a real reason, so the list cannot become a way to silence a break. `--orphans` also lists docs nothing references. | `docs/`, `.claude/`, `evals/`, the root `.md` files |
 | **convert_file** | The file-conversion front door: Excel/CSV/PDF/DOCX in, CSV/JSONL/MD out, lossless by default, schema-gated on request, JSON evidence report every run. Dependencies vendored in `vendor/` (no pip needed). | `scripts/convert_file.py`, `vendor/`, `config/feed-schema-example.yaml` |
 
 Two things worth knowing:
@@ -146,7 +148,7 @@ Two things worth knowing:
 - **The three safety hooks are a separate thing** from this tooling - they run *inside Claude
   Code* to block raw-data reads, un-consented code execution, and model writes of the consent
   marker / settings / the hooks themselves. They're explained in `docs/house-rules.md` and
-  threat-modelled in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
+  threat-modelled in ADR-002.
 
 ## Adding or changing components
 
@@ -207,7 +209,7 @@ asserting parsed-JSON equality of the `PreToolUse` block (`.claude/settings.json
 the permissions list, so the whole files differ by design). **Editing the hook
 files from inside a Claude session requires the human-set `CST_ALLOW_CONFIG_EDIT=1`** (the
 consent-write guard blocks model edits of them - by design). See `docs/house-rules.md` and
-[`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
+ADR-002.
 
 ## Conventions
 

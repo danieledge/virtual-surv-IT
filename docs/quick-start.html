@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quick start - The Compliance Surveillance Engineering Team</title>
+<style>
+  :root{
+    --paper:#f2efe7; --card:#fbfaf6; --ink:#16181c; --muted:#5f6570; --faint:#6b7079;
+    --rule:#ddd8cc; --accent:#1f4a42; --accent-soft:#e8efec;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --paper:#14161a; --card:#1b1e24; --ink:#e9e7e1; --muted:#a2a8b3; --faint:#949aa6;
+    --rule:#31353d; --accent:#6fbfae; --accent-soft:#1b2b28;
+  }}
+  :root[data-theme="dark"]{
+    --paper:#14161a; --card:#1b1e24; --ink:#e9e7e1; --muted:#a2a8b3; --faint:#949aa6;
+    --rule:#31353d; --accent:#6fbfae; --accent-soft:#1b2b28;
+  }
+  :root[data-theme="light"]{
+    --paper:#f2efe7; --card:#fbfaf6; --ink:#16181c; --muted:#5f6570; --faint:#6b7079;
+    --rule:#ddd8cc; --accent:#1f4a42; --accent-soft:#e8efec;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 var(--sans);
+       padding:1.5rem 1.1rem 3rem;}
+  .wrap{max-width:1180px;margin:0 auto}
+
+  .tab{display:inline-block;background:var(--card);border:1px solid var(--rule);
+       border-bottom:none;border-radius:6px 6px 0 0;padding:.42rem .95rem;margin-bottom:-1px;
+       font:600 .63rem/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+       color:var(--muted);}
+
+  .sheet{background:var(--card);border:1px solid var(--rule);border-radius:0 8px 8px 8px;
+       padding:1.6rem 1.7rem;position:relative;overflow:hidden;}
+  .sheet::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;
+       background:var(--accent);}
+  @media (max-width:720px){.sheet{padding:1.2rem 1.1rem}}
+
+  .chiprow{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:1.1rem}
+  .chip{border:1px solid var(--rule);border-radius:5px;padding:.28rem .7rem;
+        font:600 .63rem/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+        color:var(--muted);}
+  .ver{margin-left:auto;font:.68rem/1 var(--mono);color:var(--faint);}
+
+  h1{font:700 clamp(1.55rem,3.8vw,2.25rem)/1.14 var(--serif);margin:.2rem 0 0;
+     max-width:16ch;letter-spacing:-.01em;}
+  .hr{width:54px;height:2px;background:var(--ink);opacity:.65;margin:1.05rem 0;}
+  .lede{color:var(--muted);max-width:66ch;margin:0 0 1.25rem;font-size:.95rem;}
+
+  .guarantees{border:1px solid var(--rule);border-radius:7px;padding:.75rem .85rem;
+       background:var(--paper);}
+  .guarantees .glbl{display:block;font:700 .6rem/1 var(--mono);letter-spacing:.14em;
+       text-transform:uppercase;color:var(--accent);margin-bottom:.6rem;}
+  .always{display:flex;flex-wrap:wrap;gap:.6rem;}
+  @media (max-width:620px){.always{gap:.55rem}.always span{width:100%}}
+  .always span{border:1px solid var(--rule);border-radius:5px;background:var(--paper);
+       padding:.4rem .65rem;font:.72rem/1.35 var(--mono);color:var(--muted);}
+  .always b{color:var(--accent);font-weight:700;letter-spacing:.1em;}
+  .always code{background:none;padding:0;color:var(--muted);font-size:1em;}
+
+  .seal{position:absolute;right:1.5rem;top:1.5rem;width:92px;height:92px;border-radius:50%;
+        border:1.5px solid var(--accent);opacity:.45;display:grid;place-items:center;
+        text-align:center;color:var(--accent);
+        font:700 .5rem/1.6 var(--mono);letter-spacing:.15em;text-transform:uppercase;}
+  @media (max-width:860px){.seal{display:none}}
+
+  section{margin-top:1.1rem;background:var(--card);border:1px solid var(--rule);
+          border-radius:8px;padding:1.3rem 1.5rem;}
+  @media (max-width:720px){section{padding:1.1rem}}
+  h2{font:italic 600 1.15rem/1.3 var(--serif);margin:0 0 .55rem;position:relative;
+     border-bottom:1px solid var(--rule);padding-bottom:.55rem;}
+  h2::after{content:"";position:absolute;left:0;bottom:-1px;width:2.4rem;height:2px;
+       background:var(--accent);}
+  .sub{color:var(--muted);font-size:.9rem;margin:0 0 1.1rem;}
+
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:.85rem;}
+  @media (max-width:900px){.grid3{grid-template-columns:1fr 1fr}}
+  @media (max-width:620px){.grid3{grid-template-columns:1fr}}
+  .cell{border:1px solid var(--rule);border-radius:6px;padding:.85rem .95rem;
+        background:var(--paper);}
+  .cell .n{font:700 .66rem/1 var(--mono);color:var(--accent);letter-spacing:.08em;}
+  .cell h3{font:700 .97rem/1.35 var(--serif);margin:.45rem 0 .5rem;}
+  .cell p{margin:0;color:var(--muted);font-size:.845rem;line-height:1.55;}
+  .cell code{background:var(--card);border:1px solid var(--rule);border-radius:3px;
+       padding:.03em .28em;font:.86em/1.3 var(--mono);color:var(--ink);}
+
+  .cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:1.1rem;
+        margin-top:1.1rem;align-items:start;width:100%;}
+  .cols > section{min-width:0;width:100%;}
+  @media (max-width:900px){.cols{grid-template-columns:1fr}}
+
+  ol.steps{list-style:none;counter-reset:s;margin:0;padding:0;}
+  ol.steps li{counter-increment:s;display:grid;grid-template-columns:26px 1fr;gap:.7rem;
+       padding:.6rem 0;}
+  ol.steps li::before{content:counter(s);display:grid;place-items:center;width:22px;height:22px;
+       border-radius:4px;background:var(--accent-soft);color:var(--accent);
+       border:1px solid var(--rule);font:700 .72rem/1 var(--mono);}
+  ol.steps b{font-size:.93rem}
+  ol.steps .big{font:700 1.25rem/1.2 var(--mono);color:var(--ink);display:block}
+  ol.steps p{margin:.28rem 0 0;color:var(--muted);font-size:.85rem}
+  .eg{margin:.45rem 0 .3rem;padding:.5rem .7rem;background:var(--paper);
+      border:1px solid var(--rule);border-radius:5px;color:var(--muted);
+      font-style:italic;font-size:.82rem;}
+
+  .cmdgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 1.6rem;}
+  @media (max-width:620px){.cmdgrid{grid-template-columns:1fr}}
+  .cat{font:700 .62rem/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+       color:var(--faint);margin:1rem 0 .5rem;}
+  .cmd{margin-bottom:.6rem}
+  .cmd code{font:600 .82rem/1.4 var(--mono);color:var(--ink);background:none;padding:0;}
+  .cmd p{margin:.08rem 0 0;color:var(--muted);font-size:.8rem;line-height:1.45;}
+
+  .alpha{display:inline-block;vertical-align:.05em;border:1px solid var(--usr,#b4671f);
+       color:var(--usr,#b4671f);border-radius:3px;padding:.06em .38em;margin-left:.3rem;
+       font:700 .58rem/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;}
+  :root{--usr:#a25a17}
+  @media (prefers-color-scheme:dark){:root{--usr:#e0a35e}}
+  :root[data-theme="dark"]{--usr:#e0a35e}
+  :root[data-theme="light"]{--usr:#a25a17}
+
+
+
+  /* pre-1.0 notice, same substance as the README's */
+  .poc{border:1px solid var(--warn);border-left:5px solid var(--warn);
+       background:var(--warns);color:var(--ink);border-radius:7px;
+       padding:.8rem 1rem;margin:0 0 1rem;font-size:.83rem;line-height:1.6;}
+  .poc .lbl{display:block;font:700 .6rem/1 var(--mono);letter-spacing:.14em;
+       text-transform:uppercase;color:var(--warn);margin-bottom:.3rem;}
+  .poc b{color:var(--ink)}
+  :root{--warn:#a25a17;--warns:#faf1e6}
+  @media (prefers-color-scheme:dark){:root{--warn:#e0a35e;--warns:#2b2117}}
+  :root[data-theme="dark"]{--warn:#e0a35e;--warns:#2b2117}
+  :root[data-theme="light"]{--warn:#a25a17;--warns:#faf1e6}
+  .ver a{color:var(--faint);text-decoration:none;border-bottom:1px dotted var(--rule)}
+  .ver a:hover{color:var(--accent)}
+
+  /* terminal mockups beside each step */
+  .term-win{margin:.6rem 0 .2rem;border:1px solid var(--tline);border-radius:7px;
+       overflow:hidden;background:var(--tbg);box-shadow:0 3px 12px rgba(0,0,0,.09);}
+  .tbar{display:flex;align-items:center;gap:.32rem;padding:.34rem .55rem;
+       background:var(--tbar);border-bottom:1px solid var(--tline);}
+  .tbar i{width:.5rem;height:.5rem;border-radius:50%;background:var(--tdot);display:block}
+  .tbar span{margin-left:.35rem;font:.6rem/1 var(--mono);color:var(--tmut);
+       letter-spacing:.1em;text-transform:uppercase}
+  .term-win pre{margin:0;padding:.6rem .7rem;overflow-x:auto;white-space:pre;
+       font:.72rem/1.55 var(--mono);color:var(--tfg);}
+  .term-win .pr{color:var(--tmut)}
+  .term-win .in{color:var(--tin)}
+  .term-win .mo{color:var(--tmo);font-weight:600}
+  .term-win .cm{color:var(--tcm)}
+  .term-win .q{color:var(--tq)}
+  .term-win .sel{color:var(--tsel);font-weight:600}
+  .term-win .ok{color:var(--tok)}
+  .term-win .wn{color:var(--twn)}
+  :root{--tbg:#1c2029;--tbar:#252a35;--tline:#333a48;--tdot:#4a5162;--tfg:#d7dbe4;
+        --tmut:#8b93a5;--tin:#9ecbff;--tmo:#e8c07a;--tcm:#7fd6c2;--tq:#c8a2e0;
+        --tsel:#87d7a0;--tok:#87d7a0;--twn:#e8a87c;}
+
+
+  .cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.1rem;
+       margin-top:1.1rem;align-items:start;width:100%;}
+  .cols2 > section{min-width:0;width:100%;}
+  /* same breakpoint as .cols: a 860/900 mismatch left a band where one grid
+     stacked and the other did not, which read as a half-width bug on a phone. */
+  @media (max-width:900px){.cols2{grid-template-columns:minmax(0,1fr)}}
+  ul.gets,ul.cannot{margin:0;padding:0;list-style:none;}
+  ul.gets li,ul.cannot li{padding:.45rem 0 .45rem 1.35rem;border-top:1px solid var(--rule);
+       position:relative;color:var(--muted);font-size:.845rem;line-height:1.5;}
+  ul.gets li:first-child,ul.cannot li:first-child{border-top:none}
+  ul.gets li b,ul.cannot li b{color:var(--ink);font-weight:600}
+  ul.gets li::before{content:"\2713";position:absolute;left:0;top:.45rem;color:var(--accent);
+       font-weight:700;font-size:.82rem;}
+  ul.cannot li::before{content:"\2715";position:absolute;left:0;top:.45rem;color:var(--warn);
+       font-weight:700;font-size:.8rem;}
+  .foot-note{margin:.8rem 0 0;padding-top:.6rem;border-top:1px solid var(--rule);
+       color:var(--faint);font-size:.76rem;line-height:1.5;}
+
+  /* Inline glossary: a term the reader can tap or hover to unfold, so the vocabulary
+     lives where it is used instead of in a list they have to hold in their head. */
+  .term{position:relative;display:inline-block;border-bottom:1px dotted var(--accent);
+       color:inherit;cursor:help;}
+  .term:focus{outline:none}
+  .term:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+  .term > .def{position:absolute;left:0;top:calc(100% + .5rem);z-index:30;
+       width:min(19rem,74vw);background:var(--card);border:1px solid var(--rule);
+       border-radius:7px;box-shadow:0 8px 26px rgba(0,0,0,.13);padding:.62rem .72rem;
+       font:.79rem/1.5 var(--sans);color:var(--muted);font-style:normal;font-weight:400;
+       letter-spacing:0;text-transform:none;text-align:left;
+       opacity:0;visibility:hidden;transform:translateY(-3px);
+       transition:opacity .14s ease,transform .14s ease;}
+  .term:hover > .def,.term:focus > .def{opacity:1;visibility:visible;transform:none}
+  .term > .def b{display:block;color:var(--ink);margin-bottom:.22rem;
+       font:600 .72rem/1.3 var(--mono);letter-spacing:.04em;text-transform:uppercase;}
+  .term.r > .def{left:auto;right:0}
+  @media (max-width:620px){.term > .def{width:min(17rem,80vw)}}
+  .termhint{color:var(--faint);font-size:.76rem;font-style:italic;}
+
+  .terms{display:grid;grid-template-columns:1fr 1fr;gap:.1rem 1.6rem;}
+  @media (max-width:760px){.terms{grid-template-columns:1fr}}
+  .terms div{padding:.42rem 0;border-top:1px solid var(--rule);}
+  .terms dt{font:600 .84rem/1.4 var(--mono);color:var(--ink);}
+  .terms dd{margin:.1rem 0 0;color:var(--muted);font-size:.82rem;line-height:1.5;}
+  .terms .said{color:var(--faint);font-style:italic;}
+
+  ul.bp{margin:0;padding-left:1.05rem}
+  ul.bp li{margin-bottom:.55rem;color:var(--muted);font-size:.86rem}
+  ul.bp b{color:var(--ink)}
+
+  footer{margin-top:1.4rem;color:var(--faint);font-size:.76rem;text-align:center}
+  footer a{color:var(--muted)}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="poc">
+    <span class="lbl">Standing advisory</span>
+    <b>⚗️ Proof of concept, under active development.</b> An experiment, not production or
+    regulatory tooling. It is <b>pre-1.0</b> and changes often; behaviour and interfaces may
+    break between updates, and it can get things wrong.
+    <b>Review everything it produces; never rely on it as a control or as regulatory advice.</b>
+  </div>
+
+  <div class="tab">Case file · Quick-start reference</div>
+
+  <div class="sheet">
+    <div class="seal">Audit<br>ready<br>evidence</div>
+    <div class="chiprow">
+      <span class="chip">Quick-start · new users</span>
+      <span class="ver">▸ compliance-surveillance-team · v0.33.6</span>
+    </div>
+
+    <h1>The Compliance Surveillance Engineering Team</h1>
+    <div class="hr"></div>
+    <p class="lede">A virtual delivery team for transaction-monitoring, trade-surveillance and
+      comms-surveillance engineering. Morgan (the PM) coordinates 16 named specialists to build,
+      test, review and hand over solutions, keeping the evidence for each step as it goes.</p>
+
+    <div class="guarantees">
+      <span class="glbl">Runtime guarantees</span>
+      <div class="always">
+      <span><b>Always on</b> · agents are blocked from reading <code>data/raw/</code></span>
+      <span><b>Always on</b> · code under review is not run without your consent</span>
+      <span><b>Always on</b> · all data is treated as PII/MNPI unless masked or synthetic</span>
+      </div>
+    </div>
+    <p style="margin:.85rem 0 0;font-size:.78rem;color:var(--faint);max-width:74ch">These <span class="term" tabindex="0" role="button">guards<span class="def"><b>hook · guard</b>Code that runs before a tool call and can refuse it. This is what makes the safety rules enforcement, rather than instructions the model could talk itself out of.</span></span> run before every <span class="term" tabindex="0" role="button">tool call<span class="def"><b>tool call</b>The model doing something rather than saying something: reading a file, running a command. Every one passes the guards first.</span></span>, engaged or dormant. They are a real control against mistakes and prompt injection, not a sandbox against a determined attacker: see <a href="safety-model.md">the safety model</a> for what each one does and does not guarantee.</p>
+  </div>
+
+  <section>
+    <h2>How this actually works</h2>
+    <p class="sub">The whole mental model, no framework jargon required. <span class="termhint">Dotted terms unfold: tap or hover for a plain-English definition.</span></p>
+    <div class="grid3">
+      <div class="cell"><div class="n">§1</div>
+        <h3>An AI framework: one <span class="term" tabindex="0" role="button">orchestrator<span class="def"><b>orchestrator</b>The agent that plans and delegates rather than doing the work itself. Here, that is Morgan. Also called a lead or a router.</span></span>, multiple <span class="term r" tabindex="0" role="button">subagents<span class="def"><b>agent · subagent</b>A separate AI worker with its own instructions, tools and memory. Morgan is one; each specialist is another.</span></span></h3>
+        <p>Morgan orchestrates: planning, delegating. Mateo, Linh, Ravi and the rest are
+        subagents, each with its own prompt, toolset and isolated <span class="term" tabindex="0" role="button">context<span class="def"><b>context</b>Everything the model can currently see: your messages, files it has read, results so far. It is finite, which is why each specialist gets a tight brief instead of the whole history.</span></span>, seeing only its brief.
+        That isolation is a feature: because specialists cannot see one another's reasoning,
+        every review stays independent.</p></div>
+
+      <div class="cell"><div class="n">§2</div>
+        <h3>Morgan coordinates the work rather than performing it herself</h3>
+        <p>Morgan is the PM. She takes your request, decides which specialists the job actually
+        needs, briefs them precisely, checks what comes back, and reports to you. You deal with
+        Morgan directly; the rest of the team works behind the scenes.</p></div>
+
+      <div class="cell"><div class="n">§3</div>
+        <h3>A loop is an iteration cycle, not a failure</h3>
+        <p>A failed check does not stop the work, it becomes another iteration until the work meets
+        the standard. Same idea as a PR review: flagged, fixed, re-reviewed. The AI term is
+        <span class="term" tabindex="0" role="button">evaluator-optimizer<span class="def"><b>evaluator-optimizer</b>A two-role pattern: one pass produces the work, a separate pass judges it against a standard, and the work loops until it clears. The judging pass is deliberately not the author.</span></span>: one pass produces the work, an independent pass checks it against a named standard, and it ships once that pass clears.</p></div>
+
+      <div class="cell"><div class="n">§4</div>
+        <h3>Talk to Morgan like you would a real PM</h3>
+        <p>There is no command language to learn. Describe the outcome you want, in your own words.
+        Morgan asks clarifying questions, flags anything unrealistic or risky, and checks in
+        before anything material happens. Hand her context exactly as you would a colleague (a
+        screenshot, a spec, an existing script) and she will work from it.</p></div>
+
+      <div class="cell"><div class="n">§5</div>
+        <h3>📊 and 🧠 separate what was checked from what was reasoned</h3>
+        <p>These are the tags you will see in every report, so they are worth knowing. 📊 marks
+        something verified directly: a test run, a query executed, a metric taken from the data.
+        🧠 marks reasoning that goes beyond the evidence, still useful, but flagged so it is not read as fact, which is the practical guard against <span class="term r" tabindex="0" role="button">hallucination<span class="def"><b>hallucination</b>Confident output that is not grounded in anything real. Tagging every claim by its basis makes the difference visible instead of leaving you to guess.</span></span>. 📄 marks a value read straight from source code, with nothing run.</p></div>
+
+      <div class="cell"><div class="n">§6</div>
+        <h3>Every piece of work gets its own folder</h3>
+        <p>Each engagement lives in <code>artifacts/&lt;name&gt;/</code>: its brief, specs, code, tests,
+        and a living <code>START-HERE.md</code> status page showing where it stands, written to disk precisely so it survives <span class="term" tabindex="0" role="button">compaction<span class="def"><b>compaction</b>What happens when a long conversation is summarised to fit. Anything that matters is kept on disk so it is not lost when this happens.</span></span>. Several can
+        sit in the same project at once, each independent; one root index lists them all.</p></div>
+    </div>
+  </section>
+
+  <div class="cols">
+    <section style="margin-top:0">
+      <h2>Getting started</h2>
+      <p class="sub">The team is dormant by default. Nothing below happens until you ask for it. <span class="termhint">Terminal panels are condensed from a real recorded run.</span></p>
+      <ol class="steps">
+        <li><div>
+          <span class="big">/engage</span>
+          <p>Type this to start anything. It is the one command to remember. <b>Recommended
+          launch:</b> run <code>virt-surv go</code> from your project folder first (the install
+          helper's alias step sets it up) - it shows the project's team settings, lets you pick
+          resume-or-new with arrow keys before Claude Code starts, and pre-seeds this command
+          for you.</p>
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="pr">&gt;</span> <span class="in">/engage</span>
+
+<span class="mo">🎩 Morgan (PM)</span> hi, I'm Morgan, your PM on the Compliance
+   Surveillance Engineering team. We're on <span class="ok">team v0.33.6</span>.
+   Anytime you want the full roster, just type <span class="cm">/meet-the-team</span>.
+
+🆕 <span class="ok">In the current release:</span> a framework-audit remediation
+   pass. (Full detail: CHANGELOG.md)</pre></div>
+        </div></li>
+
+        <li><div>
+          <b>Describe the work</b> in plain English: a problem, a review, or something to build.
+          <p>No need to name a specialist. Morgan classifies it and routes it.</p>
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="pr">&gt;</span> <span class="in">A utility to de-duplicate our alert exports, with a
+  10-minute near-duplicate window. Samples are synthetic.</span>
+
+<span class="mo">🎩</span> <span class="ok">Classification:</span> a clear build-from-spec, a small utility
+   with defined inputs and testable rules. Routing it as a build
+   engagement (spec, build, independent QA, code review,
+   compliance review), not a review.</pre></div>
+        </div></li>
+
+        <li><div>
+          <b>Answer the safety gate.</b> Two standing notices, then the questions batched into one
+          screen. Nothing proceeds until you answer.
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="mo">🎩</span> <span class="wn">🛡️ DATA SAFETY.</span> 📡 Everything you point me at goes to the
+   model provider. 🔴 Raw data is hard-blocked. 🟠 For anything
+   else you confirm it carries no PII/MNPI. 🤖 I can't verify
+   that for you. 🟢 Unsure? Go synthetic.
+
+<span class="q">[gate]</span> Data safety: is the data involved safe to use?
+<span class="sel">[you ]</span> Yes, synthetic, no prohibited PII
+
+<span class="q">[gate]</span> Execution: should the team run the test suite?
+<span class="sel">[you ]</span> Yes, I'll grant consent
+
+<span class="mo">🎩</span> Recorded. Intent alone unlocks nothing. When you're ready,
+   type this yourself: <span class="cm">touch .claude/.exec-consent</span>
+   No marker, no run, regardless of that answer.</pre></div>
+        </div></li>
+
+        <li><div>
+          <b>Watch the right-sizing.</b> Before any fan-out Morgan says how many specialists and
+          why, so the cost is a stated decision rather than a surprise.
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="mo">🎩</span> Build's done, 12/12 of Kenji's own tests passed.
+
+   <span class="ok">Right-sizing:</span> engaging three specialists in parallel, each
+   an independent lens on the same code. Linh (QA) for boundary
+   evidence, Ravi (code review) for correctness and security,
+   Layla (compliance) for auditability. <span class="ok">No further fan-out.</span></pre></div>
+        </div></li>
+
+        <li><div>
+          <b>A loop is normal.</b> Findings go back for a fix and get re-reviewed. The team says
+          plainly when something is <i>not</i> finished.
+          <div class="term-win"><div class="tbar"><i></i><i></i><i></i><span>claude</span></div>
+            <pre><span class="mo">🎩</span> <span class="wn">Critical:</span> the drop logic only checks <span class="cm">alert_id</span>, never
+   whether the rows match. Two rows sharing an id but differing
+   in risk score: one is silently deleted. <span class="wn">Worse, one of Kenji's
+   own tests locks that in as correct behaviour.</span>
+
+   <span class="wn">This is not closed</span>, outstanding: two criticals to fix, plus
+   two business calls I will not guess at.
+
+   ...fix pass, then the same three re-review...
+
+<span class="ok">🎩 ✅ Closed, verdict: Ready.</span> 0 open findings. 26 builder
+   tests + 30 independent QA tests passing. Everything in
+   <span class="cm">artifacts/alert-dedup-utility/</span></pre></div>
+        </div></li>
+      </ol>
+    </section>
+
+    <section style="margin-top:0">
+      <h2>The handful worth knowing</h2>
+      <p class="sub">There are 24 commands. You do not need them: <code>/engage</code> reaches
+        the rest for you. These are the ones worth recognising early. Type <code>/</code> in
+        Claude Code to see them all, or read the full index in the
+        <a href="team-operating-guide.md">operating guide</a>.</p>
+      <div class="cmdgrid">
+        <div>
+          <div class="cat" style="margin-top:0">Have a look first</div>
+          <div class="cmd"><code>/demo</code>
+            <p>watch the whole team work, on synthetic data, before trusting it with anything real</p></div>
+          <div class="cmd"><code>/meet-the-team</code>
+            <p>who the 16 specialists are and what each one owns</p></div>
+
+          <div class="cat">Before any real data</div>
+          <div class="cmd"><code>/prepare-data</code> <span class="alpha">Alpha</span>
+            <p><b>Do not rely on this workflow.</b> It is alpha: a lightweight, best-effort
+            helper, <b>not</b> an anonymisation pipeline. Bring data your organisation has
+            already masked with approved tooling, or fully synthetic data. Its synthetic
+            generation is the part to trust; treat its masking as a rough first pass you still
+            verify. Masked output remains personal data.</p></div>
+        </div>
+        <div>
+          <div class="cat" style="margin-top:0">The everyday work</div>
+          <div class="cmd"><code>/deep-review</code>
+            <p>review existing code properly, before a PR or an audit</p></div>
+          <div class="cmd"><code>/new-scenario</code>
+            <p>a detection scenario from spec through build to sign-off</p></div>
+          <div class="cmd"><code>/analyse-data</code>
+            <p>a question you want evidenced, not yet an answer</p></div>
+          <div class="cmd"><code>/engage-light</code>
+            <p>a small fix that does not need the full ceremony</p></div>
+
+          <div class="cat">Finishing</div>
+          <div class="cmd"><code>/handover</code>
+            <p>hand real code to a real dev or ops team, with the QA evidence</p></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="cols2">
+    <section style="margin-top:0">
+      <h2>What every engagement leaves behind</h2>
+      <p class="sub">The point of the ceremony. All of it on disk, in the engagement's own folder.</p>
+      <ul class="gets">
+        <li><b>Engagement brief</b> the plan, decisions taken, open questions, who was engaged</li>
+        <li><b>The work itself</b> code, specs, config, each with its own tests</li>
+        <li><b>QA handover</b> independent test evidence, every cycle kept including failed ones</li>
+        <li><b>Review findings</b> what was raised, and how each one was dispositioned</li>
+        <li><b>Delivery report</b> the consolidated record, in <code>.md</code> and <code>.html</code></li>
+        <li><b>Summary email</b> a short cover note stating the token and agent footprint</li>
+        <li><b>START-HERE index</b> a status page that is generated, never hand-written</li>
+      </ul>
+    </section>
+
+    <section style="margin-top:0">
+      <h2>What Morgan cannot do</h2>
+      <p class="sub">Worth knowing, because these are enforced in code rather than promised in a
+        prompt.</p>
+      <ul class="cannot">
+        <li><b>Grant permission to run your code.</b> The consent marker is yours to create; she
+          is blocked from writing it, and says so rather than asking you to work around it.</li>
+        <li><b>Edit her own guardrails.</b> Writes to the safety hooks and the harness config are
+          refused.</li>
+        <li><b>Sign off her own work.</b> Human sign-off is the one item on the Definition of Done
+          that only you can complete.</li>
+        <li><b>Close an engagement with findings open.</b> The close runs the mechanical gate and
+          refuses, rolling back, until it is clean.</li>
+        <li><b>Quietly leave something unfinished.</b> A turn that ends waiting on you is recorded
+          as blocked, with the outstanding list named.</li>
+      </ul>
+      <p class="foot-note">The read and execution guards are strong controls on the file tools and
+        a real deterrent on the shell, but they are lexical there rather than a sandbox. The
+        <a href="safety-model.md">safety model</a> states exactly what each one guarantees.</p>
+    </section>
+  </div>
+
+  <section>
+    <h2>What people ask first</h2>
+    <p class="sub">The questions that come up before anyone trusts a team of agents with real work.</p>
+    <div class="grid3">
+      <div class="cell">
+        <h3>Will it change my code without asking?</h3>
+        <p>Builders write files; the reviewers and specialists who advise cannot edit anything,
+        by tool grant rather than by request. Work lands in the engagement's own folder unless
+        you ask for it in your source tree, nothing is committed or pushed for you, and each
+        phase stops at a gate for your answer.</p></div>
+
+      <div class="cell">
+        <h3>What does one engagement cost, and how long?</h3>
+        <p>Across the 12 engagements in our own most recent test run: <b>$0.53 to $16.82</b>
+        (median about $4) and <b>3 to 42 minutes</b> (median 13). Those were headless runs that
+        cannot reuse the specialists' prompt cache, so an interactive session should cost less.
+        Bigger scope means more specialists, and more specialists means more tokens.</p></div>
+
+      <div class="cell">
+        <h3>Where does my data go?</h3>
+        <p>Anything you point the team at is sent to the model provider as context, the same as
+        any other Claude session. The protected raw-data folder is blocked outright; everything
+        else is your judgement call, which is why the sheet keeps saying to mask or synthesise
+        first.</p></div>
+
+      <div class="cell">
+        <h3>Why a team, rather than just asking Claude?</h3>
+        <p>One assistant checking its own output is marking its own homework. Here the reviewer
+        never saw the builder's reasoning, so the second opinion is genuinely independent. That
+        separation is the entire point, and it is also why this costs more than a single
+        prompt.</p></div>
+
+      <div class="cell">
+        <h3>Will I get the same answer twice?</h3>
+        <p>Not word for word. The mechanical checks are deterministic: same input, same result,
+        every time. The judgement parts vary at the margin, so wording, ordering and genuinely
+        borderline findings can shift between runs, while a clear-cut one is far more stable.
+        Treat any single run as one careful pass rather than an exhaustive sweep: reports record
+        the model and version, and absence of a finding is not evidence of absence. If something
+        is load-bearing, verify it rather than relying on one pass.</p></div>
+
+      <div class="cell">
+        <h3>Can I stop it half way?</h3>
+        <p>Yes, interrupt whenever you like. Anything already written stays on disk and the
+        engagement records itself as blocked rather than finished, so it never quietly looks
+        complete. A later session reads that state and picks up where it stopped.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Best practices</h2>
+    <div class="grid3">
+      <div class="cell">
+        <ul class="bp">
+          <li><b>Mention your materials:</b> a screenshot, a spec, an existing script. Morgan works
+            from what you hand her, and guesses less when you hand her more.</li>
+          <li><b>Say what "done" means:</b> review only, or also fixed, or also handed over. Agreed
+            before work starts beats renegotiated after.</li>
+        </ul>
+      </div>
+      <div class="cell">
+        <ul class="bp">
+          <li><b>Push back.</b> Morgan is meant to be a sceptic rather than a yes-man, and so are you. Multi-agent work costs roughly 15x the <span class="term" tabindex="0" role="button">tokens<span class="def"><b>token</b>The unit models are billed and budgeted in, roughly a word-piece. Why the team engages the smallest set of specialists that fits rather than all 16.</span></span> of a single pass, which is why the team stays lean.
+            If a finding looks thin, ask what the evidence actually was.</li>
+          <li><b>Check the tags.</b> 📊 was measured, 🧠 was reasoned. If something important is
+            🧠, that's your cue to verify it before relying on it.</li>
+        </ul>
+      </div>
+      <div class="cell">
+        <ul class="bp">
+          <li><b>Do not hand it unmasked data.</b> Bring data already masked by your
+            organisation's approved tooling, or go fully synthetic. <code>/prepare-data</code> is
+            alpha and should not be relied on for it. Pseudonymised is not anonymous.</li>
+          <li><b>It is a starting point.</b> A proof of concept whose output is for real engineers and
+            reviewers to check, not a replacement for them.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <a href="https://github.com/danieledge/virtual-surv-IT">github.com/danieledge/virtual-surv-IT</a><br>
+    Deeper detail: <a href="OVERVIEW.md">docs/OVERVIEW.md</a> (plain English) ·
+    <a href="team-operating-guide.md">the operating guide</a> (standing rules and routing) ·
+    <a href="internal/engagement-flow-poster-flowchart.html">the engagement-flow poster</a>
+    (the same journey as a technical diagram, plus guards, repo checks and evals).
+  </footer>
+</div>
+</body>
+</html>

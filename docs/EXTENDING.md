@@ -49,7 +49,7 @@ Or one non-interactive command:
 ```bash
 python3 -m scripts.extensions add-tool --name cx \
   --command "cxcli scan --format sarif -o {workspace}/data/cx.sarif {target}" \
-  --lenses security --replaces bandit,semgrep --output sarif \
+  --lenses security --replaces bandit --output sarif \
   --severity-map error=critical,warning=warning
 ```
 
@@ -63,7 +63,7 @@ whether the binary resolves on PATH. Or hand-edit the same thing into
 ```json
 {"analysers": [
   {"name": "cx", "command": "cxcli scan --format sarif -o {workspace}/data/cx.sarif {target}",
-   "probe": "cxcli", "lenses": ["security"], "replaces": ["bandit", "semgrep"],
+   "probe": "cxcli", "lenses": ["security"], "replaces": ["bandit"],
    "output": "sarif", "severity_map": {"error": "critical", "warning": "warning"}}
 ]}
 ```
@@ -87,11 +87,11 @@ Commands must be plain argv: any `; | & $ >` refuses the entry (you'll see
 `EXTENSIONS-INVALID` - that's the smuggling defence working).
 
 During reviews the team now runs your tool for the security lens, and `replaces` means
-findings are NOT degraded because bandit/semgrep are absent. SARIF output flows through:
+findings are NOT degraded because bandit is absent. SARIF output flows through:
 
 ```bash
 python3 -m scripts.convert_sarif artifacts/<ws>/data/cx.sarif --slug <slug> --scope "src/"
-python3 -m scripts.validate_findings artifacts/<ws>/data/findings-<slug>.json
+python3 -m scripts.validate_findings artifacts/<ws>/data/findings-<slug>.jsonl
 ```
 
 Expected: a schema-valid findings pack, 📊 measured, rendered into the standard review.
@@ -132,6 +132,11 @@ Then declare the steps as close actions in `docs/team-extensions.md`:
   description = delivery-report summary, label `virt-team`.
 - Copy the engagement workspace to \\share\surveillance\packs\<slug>-<date>\.
 
+> **Jira and PR-comment presence have a first-class, mechanically-validated config of
+> their own** - off by default, project-scoped, documented in one place:
+> [`docs/INTEGRATIONS.md`](INTEGRATIONS.md). The free-form extension recipes below stay
+> the right tool for everything else (company analysers, bespoke close actions, KBs).
+
 ## Integrations
 
 - atlassian MCP: Jira project SURV, Confluence space SURV-DOC.
@@ -170,6 +175,6 @@ travel with it).
 
 - Contract template + field-by-field docs: [`templates/team-extensions.md`](templates/team-extensions.md)
 - Design + threat analysis (why the parser never executes, why prefixes are literal, what
-  the adversarial golden case covers): [`adr/ADR-009-company-extensions.md`](adr/ADR-009-company-extensions.md)
+  the adversarial golden case covers): ADR-009
 - No contract at all? Plain `CLAUDE.md` steering still works for everything above - the
   contract makes it structured, discoverable and eval-tested.

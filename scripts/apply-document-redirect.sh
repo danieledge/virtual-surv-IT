@@ -1,49 +1,38 @@
 #!/usr/bin/env bash
-# Wire the document-input redirect (scripts/staged_hooks/document_input_redirect.py) into
-# BOTH tracked hook files as a PreToolUse hook on Read|Bash:
-#   .claude/settings.json  -> repo-as-project mode
-#   hooks/hooks.json        -> installed-plugin distribution
+# SUPERSEDED - document_input_redirect is already registered in
+# scripts/bash_hook_dispatcher.py's own _CHECKS table (the 2026-07-31 P4 consolidation
+# that collapsed five separate Bash-matching hooks, this one included, into ONE process
+# per call). This script predates that consolidation and was never updated afterwards -
+# every time it (or scripts/apply-outstanding.sh, which runs it automatically) ran, it
+# silently RE-WIRED a standalone "Read|Bash" PreToolUse entry for
+# scripts/document_input_redirect.py on top of the dispatcher's own entry, duplicating
+# the check on every matching tool call and spawning an extra cold-start process per
+# call the P4 consolidation exists specifically to avoid. Caught twice: once by a
+# 2026-08-13 Fable-model audit (reverted by hand), and again the same day when a later
+# apply-outstanding.sh run silently reintroduced it - this script was the actual root
+# cause both times, never fixed at the source until now.
 #
-# The hook blocks binary-document reads/hand-parsing DURING A LIVE ENGAGEMENT ONLY and
-# redirects to the vendored converter (scripts/convert_file.py). Dormant sessions are
-# untouched. It is a quality redirect, not a safety guard, and fails open.
+# Kept as a thin redirect (not deleted outright) in case anything still references this
+# filename directly - deleting a named, documented human-run script out from under a
+# stale doc link is worse than a clear pointer. scripts/document_input_redirect.py
+# itself is unaffected and still current; only THIS script's wiring behaviour is retired.
 #
-# HUMAN-RUN by design (hook/config edits are human-only, ADR-002 rec 5). Idempotent.
+# Exits 0 (not 1): a redirect that makes no changes is a legitimate, expected outcome -
+# scripts/apply-outstanding.sh loops over every apply-*.sh unconditionally and relies on
+# each one being a safe, always-succeeds no-op when there's nothing for it to do;
+# exiting nonzero here would abort that whole batch under set -e for a script whose only
+# job now is explaining why it does nothing.
+#
 #   Usage:  bash scripts/apply-document-redirect.sh
-#   Undo:   remove the entry from both files (or `git checkout` them)
-# Afterwards: commit both hook files; restart the session (or /hooks) to reload.
 set -euo pipefail
-
-here="$(cd "$(dirname "$0")/.." && pwd)"
-
-# The hook script runs from scripts/ (like the DoD stop gate), via the portable launcher.
-cp "$here/scripts/staged_hooks/document_input_redirect.py" "$here/scripts/document_input_redirect.py"
-echo "document_input_redirect: staged copy installed to scripts/."
-
-python3 - "$here/.claude/settings.json" "$here/hooks/hooks.json" <<'PY'
-import json, sys
-
-cmd = (
-    'sh "${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh" '
-    '"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/document_input_redirect.py"'
-)
-
-for path in sys.argv[1:]:
-    try:
-        with open(path, encoding="utf-8") as fh:
-            cfg = json.load(fh)
-    except FileNotFoundError:
-        print(f"skip (not found): {path}")
-        continue
-    pre = cfg.setdefault("hooks", {}).setdefault("PreToolUse", [])
-    if any(h.get("command") == cmd for entry in pre for h in entry.get("hooks", [])):
-        print(f"already wired: {path}")
-        continue
-    pre.append({"matcher": "Read|Bash", "hooks": [{"type": "command", "command": cmd}]})
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(cfg, fh, indent=2)
-        fh.write("\n")
-    print(f"wired document-input redirect into: {path}")
-PY
-
-echo "Done. Confirm: python3 -m pytest tests/test_document_redirect.py -q; then commit both hook files + scripts/document_input_redirect.py and restart the session (or /hooks)."
+echo "apply-document-redirect.sh is superseded - nothing to apply."
+echo ""
+echo "document_input_redirect is already covered by scripts/bash_hook_dispatcher.py's own"
+echo "consolidated dispatch (its _CHECKS table) - the single PreToolUse entry already wired"
+echo "for Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit|NotebookRead|WebFetch|Bash runs"
+echo "it, along with every other consolidated check, in ONE process per call. A standalone"
+echo "entry for this script alone would only duplicate that check and cost an extra"
+echo "cold-start process per matching call - exactly what the P4 consolidation exists to"
+echo "avoid. If a standalone entry exists in hooks/hooks.json or .claude/settings.json,"
+echo "remove it (git checkout, or a targeted edit) rather than running this script."
+exit 0

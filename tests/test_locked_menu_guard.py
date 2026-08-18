@@ -37,10 +37,13 @@ def _q(header, options, multi=False):
     }
 
 
+# Origin joined the locked set 2026-08-17 (user request: the was-it-vibe-coded question,
+# folded forward from the retired post-gate scope screen into the menu itself).
 VALID_REVIEW_MENU = [
     _q("Depth", ["Quick", "Deep", "Audit", "None"]),
     _q("Performance", ["Yes", "No"]),
     _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
+    _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
 ]
 
 VALID_STAGE1 = [_q("Artifacts", ["Consolidated Delivery Report", "Separate artifacts", "Both"])]
@@ -122,7 +125,8 @@ def test_wrong_multiselect_on_depth_flagged():
         _q("Depth", ["Quick", "Deep", "Audit", "None"], multi=True),
         _q("Performance", ["Yes", "No"]),
         _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
-    ]
+            _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
+]
     proc = _run(bad)
     assert proc.returncode == 2
     assert "multiSelect: false" in proc.stderr
@@ -162,9 +166,13 @@ def test_reworded_option_flagged():
 # ------------------------------------------------------------------ artifact-menu: valid
 
 
-def test_correct_stage1_passes():
+def test_any_stage1_packaging_question_is_retired_drift():
+    """2026-08-17 user decision: every real engagement chose the Consolidated Delivery
+    Report, so packaging is a stated default, never a question - even the previously
+    canonical construction now flags."""
     proc = _run(VALID_STAGE1)
-    assert proc.returncode == 0
+    assert proc.returncode == 2
+    assert "RETIRED" in proc.stderr
 
 
 def test_correct_stage2_passes():
@@ -184,10 +192,67 @@ def test_stage2_subset_of_canonical_options_is_legal():
     assert proc.returncode == 0
 
 
+# ------------------------------------------- (Recommended) marker (2026-08-04 live report)
+# The AskUserQuestion tool's own guidance: "make that the first option in the list and add
+# '(Recommended)' at the end of the label" - a canonical option carrying that marker must
+# still pass, on both locked menus.
+
+
+def test_recommended_marker_on_review_menu_option_passes():
+    good = [
+        _q("Depth", ["Quick (Recommended)", "Deep", "Audit", "None"]),
+        _q("Performance", ["Yes", "No"]),
+        _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
+            _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
+]
+    proc = _run(good)
+    assert proc.returncode == 0
+    assert proc.stderr == ""
+
+
+def test_recommended_marker_on_multiple_options_passes():
+    good = [
+        _q("Depth", ["Quick", "Deep", "Audit", "None"]),
+        _q("Performance", ["Yes (Recommended)", "No"]),
+        _q("Fix-cycle", ["Report only", "Apply fixes (Recommended)", "Fix → re-review loop"]),
+            _q("Origin", ["AI-assisted / vibe-coded", "Mixed", "Hand-written"]),
+]
+    proc = _run(good)
+    assert proc.returncode == 0
+
+
+def test_recommended_marker_does_not_resurrect_the_retired_stage1():
+    bad = [
+        _q(
+            "Artifacts",
+            ["Consolidated Delivery Report (Recommended)", "Separate artifacts", "Both"],
+        )
+    ]
+    proc = _run(bad)
+    assert proc.returncode == 2
+    assert "RETIRED" in proc.stderr
+
+
+def test_recommended_marker_on_artifact_menu_stage2_passes():
+    good = [
+        _q("Reviews", ["Code & Compliance Review (Recommended)", "Performance Review"], multi=True)
+    ]
+    proc = _run(good)
+    assert proc.returncode == 0
+
+
+def test_recommended_marker_does_not_mask_a_genuinely_invented_option():
+    """The suffix strip must not become a bypass - a bogus label plus the marker is
+    still bogus once the marker is removed."""
+    bad = [_q("Artifacts", ["Consolidated Delivery Report", "Neither (Recommended)"])]
+    proc = _run(bad)
+    assert proc.returncode == 2
+
+
 # ------------------------------------------------------------------ artifact-menu: drift
 
 
-def test_stage1_wrong_multiselect_flagged():
+def test_stage1_wrong_multiselect_still_drift_via_retirement():
     bad = [
         _q("Artifacts", ["Consolidated Delivery Report", "Separate artifacts", "Both"], multi=True)
     ]
@@ -228,3 +293,70 @@ def test_staged_and_live_match_when_installed():
     assert LIVE_HOOK.read_bytes() == HOOK.read_bytes(), (
         "staged locked-menu guard not yet applied - run: bash scripts/apply-locked-menu-guard.sh"
     )
+
+
+def test_legacy_three_question_menu_now_flags_the_missing_origin():
+    """The pre-2026-08-17 shape (no Origin) is drift now - the guard names what joined."""
+    legacy = [
+        _q("Depth", ["Quick", "Deep", "Audit", "None"]),
+        _q("Performance", ["Yes", "No"]),
+        _q("Fix-cycle", ["Report only", "Apply fixes", "Fix → re-review loop"]),
+    ]
+    proc = _run(legacy)
+    assert proc.returncode == 2
+    assert "Origin" in proc.stderr
+
+
+# --- locked Target menu (2026-08-17 user decision: "it changes nearly every time") ---------
+
+_TARGET_FULL = [
+    "Uncommitted changes",
+    "Branch vs main",
+    "Whole working directory",
+    "A file or folder I'll name",
+]
+
+
+def test_target_menu_canonical_full_set_passes():
+    r = _run([_q("Target", _TARGET_FULL)])
+    assert r.returncode == 0, r.stderr
+
+
+def test_target_menu_non_git_subset_passes():
+    r = _run([_q("Target", ["Whole working directory", "A file or folder I'll name"])])
+    assert r.returncode == 0, r.stderr
+
+
+def test_target_menu_reworded_option_flagged():
+    opts = ["Uncommitted changes", "Branch vs main", "Whole codebase", "A file or folder I'll name"]
+    r = _run([_q("Target", opts)])
+    assert r.returncode == 2
+    assert "target-menu drift" in r.stderr
+
+
+def test_target_menu_dropped_option_flagged():
+    r = _run([_q("Target", _TARGET_FULL[:3])])
+    assert r.returncode == 2
+    assert "target-menu drift" in r.stderr
+
+
+def test_target_menu_multiselect_flagged():
+    r = _run([_q("Target", _TARGET_FULL, multi=True)])
+    assert r.returncode == 2
+    assert "multiSelect: false" in r.stderr
+
+
+def test_target_menu_recommended_suffix_is_not_drift():
+    opts = ["Uncommitted changes (Recommended)"] + _TARGET_FULL[1:]
+    r = _run([_q("Target", opts)])
+    assert r.returncode == 0, r.stderr
+
+
+def test_target_labels_match_the_reference_doc():
+    """The guard's canonical set and target-menu.md must name the same options - a
+    retier that updates one without the other would block every legitimate ask."""
+    doc = (REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "target-menu.md").read_text(
+        encoding="utf-8"
+    )
+    for label in _TARGET_FULL:
+        assert f"**{label}**" in doc, f"target-menu.md missing option {label!r}"

@@ -11,14 +11,38 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
 
 import scripts.dod_stop_gate as gate
 
 
-def _run(monkeypatch, capsys, payload: dict):
+def _run_bare(monkeypatch, capsys, payload: dict):
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
     rc = gate.main()
     return rc, capsys.readouterr().out
+
+
+# Session scoping (2026-08-16): the STAGED hook arms only when the payload's session_id
+# matches the acting-session stamp in artifacts/.team-session.json. The live copy under
+# test here ignores both until the staged fix is applied, so adding them now is inert -
+# and it keeps this whole suite green the moment the human runs the apply script.
+_SID = "sess-live-suite"
+
+
+def _stamped_run(run_fn, monkeypatch, capsys, payload: dict):
+    payload.setdefault("session_id", _SID)
+    cwd = payload.get("cwd")
+    if cwd:
+        art = Path(cwd) / "artifacts"
+        if art.is_dir():
+            (art / ".team-session.json").write_text(
+                json.dumps({"session": _SID}), encoding="utf-8"
+            )
+    return run_fn(monkeypatch, capsys, payload)
+
+
+def _run(monkeypatch, capsys, payload: dict):
+    return _stamped_run(_run_bare, monkeypatch, capsys, payload)
 
 
 def test_stop_hook_active_is_noop(monkeypatch, capsys):
@@ -70,6 +94,49 @@ def test_open_but_clean_does_not_nudge(tmp_path, monkeypatch, capsys):
     assert rc == 0
     # May legitimately be silent (clean) - assert we did not hard-error and produced no block.
     assert out == "" or json.loads(out).get("decision") != "block"
+
+
+def test_unscored_review_pack_surfaces_in_nudge(tmp_path, monkeypatch, capsys):
+    """PACK-UNSCORED reaches the model through the existing Stop-hook path with no new
+    wiring - an open engagement whose scored-kind pack records no review-scorer pass is
+    nudged at turn end, while the scorer delegation can still run."""
+    from scripts.findings_pack_io import write_pack
+
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    (art / "START-HERE.md").write_text(
+        "Status: ⏳ in progress\n\n- `data/findings-t.jsonl`\n", encoding="utf-8"
+    )
+    (art / "START-HERE.html").write_text("<p>ok</p>\n", encoding="utf-8")
+    write_pack(
+        art / "data" / "findings-t.jsonl",
+        {
+            "slug": "t",
+            "scope": "s",
+            "mode": "audit",
+            "verdict": "conditional",
+            "findings": [
+                {
+                    "id": "F1",
+                    "title": "t",
+                    "severity": "warning",
+                    "location": "a.py:1",
+                    "basis": "coded",
+                    "standard": "CWE-1",
+                    "problem": "p",
+                    "likely_cause": "c",
+                    "impact": "i",
+                    "fix": {"diff": "-x\n+y", "why": "w"},
+                    "disposition": "open",
+                }
+            ],
+        },
+    )
+    rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
+    assert rc == 0
+    decision = json.loads(out)
+    assert decision["decision"] == "block"
+    assert "PACK-UNSCORED" in decision["reason"]
 
 
 # --------------------------------------------- machine-readable state first (ADR-006)
@@ -135,3 +202,148 @@ def test_only_blocked_workspaces_stay_silent(tmp_path, monkeypatch, capsys):
     )
     rc, out = _run(monkeypatch, capsys, {"cwd": str(tmp_path)})
     assert rc == 0 and out == ""
+
+
+# --- deferral permission when the user's most recent ask is unrelated new work (2026-08-12) ---
+#
+# Live report: the nudge's own directive tone ("resume and FINISH it") led a session to divert
+# into completing an old engagement's DoD work instead of a just-requested new engagement -
+# the hook has no visibility into what the user actually asked for, only that a pack is gated.
+# Fixed at the instruction level: an explicit, bounded permission to defer, with a hard
+# constraint against silently suppressing the finding via the log-note marker while deferring
+# (that marker means "acted on", and recording it without acting would be a real loophole -
+# a way to make a gap disappear from the nudge without ever having addressed it).
+#
+# Loads scripts/staged_hooks/dod_stop_gate.py directly (importlib, by path) rather than
+# importing scripts.dod_stop_gate - this fix is staged, not yet human-applied to the live
+# copy (test_hooks_in_sync.py's test_staged_matches_live correctly flags that as pending,
+# same posture as every other staged hook change), so testing the live import would test
+# unfixed code.
+
+
+def _load_staged_gate():
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "staged_hooks" / "dod_stop_gate.py"
+    spec = importlib.util.spec_from_file_location("staged_dod_stop_gate", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_reason_permits_deferring_for_unrelated_new_work():
+    staged = _load_staged_gate()
+    reason = staged._reason(
+        ["PACK-UNSCORED: findings-t.jsonl carries 3 finding(s)..."], [], "slug", "abc123"
+    )
+    assert "clearly asked for" in reason and "something else" in reason
+    assert "proceed with THAT first" in reason
+
+
+def test_reason_forbids_recording_the_suppression_marker_while_deferring():
+    """The deferral permission must not double as a silent-suppress loophole - recording
+    the log-note marker means "acted on", not "saw and moved past"."""
+    staged = _load_staged_gate()
+    reason = staged._reason(
+        ["PACK-UNSCORED: findings-t.jsonl carries 3 finding(s)..."], [], "slug", "abc123"
+    )
+    assert "do **NOT** record" in reason
+    assert 'log-note "dod-nudged:abc123"' in reason
+
+
+def test_load_checker_does_not_grow_sys_path_on_repeat_calls(tmp_path):
+    """M3 (2026-08-14 daemon-safety audit): same bug class already fixed in
+    persona_anchor.py's own _load_checker, missed here - this hook is re-exec'd fresh
+    per Stop event INSIDE the daemon when daemon-served (stop_hook_dispatcher.py loads
+    it via importlib on every call), so an unconditional sys.path.insert would grow
+    the daemon's process-global sys.path without bound over its life. Calling
+    _load_checker twice with the SAME project_root must not add a second entry."""
+    import sys
+
+    staged = _load_staged_gate()
+    project_root = tmp_path
+    before = list(sys.path)
+    staged._load_checker(project_root)
+    after_first = list(sys.path)
+    staged._load_checker(project_root)
+    after_second = list(sys.path)
+
+    added_by_first = [p for p in after_first if p not in before]
+    assert len(added_by_first) <= 1  # at most the one, deliberate insert
+    assert after_second == after_first, (
+        "a second call with the same project_root grew sys.path again - the dedup "
+        "check did not hold"
+    )
+
+
+# --- session-owned ACTIVE marker + other-pack summarisation (2026-08-17 live report) ------
+
+
+def _owned_setup(tmp_path, marker_session: str):
+    """Two gated workspaces, ACTIVE marker on 'previous', arming stamp for THIS session."""
+    art = tmp_path / "artifacts"
+    for slug in ("previous", "sibling"):
+        (art / slug).mkdir(parents=True)
+        (art / slug / "engagement-state.json").write_text(
+            json.dumps({"schema": 2, "status": "in_progress"}), encoding="utf-8"
+        )
+    (art / ".active-engagement.json").write_text(
+        json.dumps({"slug": "previous", "session": marker_session}), encoding="utf-8"
+    )
+    (art / ".team-session.json").write_text(
+        json.dumps({"session": "sess-mine"}), encoding="utf-8"
+    )
+    return art
+
+
+def _run_staged(monkeypatch, capsys, payload, project):
+    staged = _load_staged_gate()
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
+    rc = staged.main()
+    return rc, capsys.readouterr().out
+
+
+def test_another_sessions_active_pack_gets_no_fix_list(tmp_path, monkeypatch, capsys):
+    """The 7-minute live detour (2026-08-17): a fresh engagement's intake ended a turn
+    while the ACTIVE marker still named the previous engagement - the fix-list sent the
+    model off repairing it. A marker owned by ANOTHER session now yields surface-only
+    output: no AUTO-FIX instruction, an explicit do-not-act, and summaries instead of
+    finding bodies."""
+    _owned_setup(tmp_path, marker_session="sess-somebody-else")
+    rc, out = _run_staged(
+        monkeypatch, capsys, {"session_id": "sess-mine", "cwd": str(tmp_path)}, tmp_path
+    )
+    assert rc == 0
+    decision = json.loads(out)
+    reason = decision["reason"]
+    assert "do NOT fix" in reason
+    assert "AUTO-FIX" not in reason
+    assert "finding(s):" in reason  # summarised
+    assert "expected" not in reason  # no finding BODIES (schema detail text)
+
+
+def test_own_sessions_active_pack_keeps_the_fix_list(tmp_path, monkeypatch, capsys):
+    _owned_setup(tmp_path, marker_session="sess-mine")
+    rc, out = _run_staged(
+        monkeypatch, capsys, {"session_id": "sess-mine", "cwd": str(tmp_path)}, tmp_path
+    )
+    assert rc == 0
+    reason = json.loads(out)["reason"]
+    assert "AUTO-FIX" in reason  # the fix-list applies - this session owns the pack
+    assert "[previous]" in reason
+    # ...but the SIBLING pack is still summarised, never pasted in full
+    assert "[sibling]" in reason
+    assert "finding(s):" in reason
+
+
+def test_legacy_marker_without_session_keeps_old_behaviour(tmp_path, monkeypatch, capsys):
+    art = _owned_setup(tmp_path, marker_session="ignored")
+    (art / ".active-engagement.json").write_text(
+        json.dumps({"slug": "previous"}), encoding="utf-8"
+    )
+    rc, out = _run_staged(
+        monkeypatch, capsys, {"session_id": "sess-mine", "cwd": str(tmp_path)}, tmp_path
+    )
+    assert rc == 0
+    assert "AUTO-FIX" in json.loads(out)["reason"]

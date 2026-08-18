@@ -12,10 +12,15 @@
 > act of any engagement is to **read `docs/team-operating-guide.md`**: the standing rules,
 > roster and routing table live there, not here.
 >
-> The one always-on exception is **safety**: all **three** guard hooks stay armed even in a
-> dormant session - the `data/raw/` read block (§5), the code-execution gate and the consent-write
-> gate (§7) - so a blocked command outside an engagement is expected, not a bug. Never put real
-> PII/MNPI or secrets into context (§5).
+> The one exception is **safety** - the three guard hooks, session-scoped with carve-outs since 2026-08-17:
+> the **`data/raw/` read block (§5) stays armed in every session** - data protection never
+> follows invocation - as do the write-protections on the consent marker, the hook files, git
+> execution config and the session stamp (a dormant session must not pre-forge or disarm what a
+> later engaged session inherits). The **code-execution gate (§7) and the settings
+> write-protection arm only in sessions that invoked the team** (`/engage` step 0 stamps the
+> session), so a dormant session in an enabled project is plain Claude Code - it runs its own
+> tests and manages its own config freely. A raw-data or marker/hook block outside an engagement
+> is still expected, not a bug. Never put real PII/MNPI or secrets into context (§5).
 
 > ℹ️ The regulatory scope (§2) and tech stack (§3) ship as **example defaults** in
 > `docs/scope-and-stack.md` so the team works out of the box - replace them with your real
@@ -81,15 +86,16 @@ small iterations, returning to the user at each gate. Start with `/engage` (or a
 command); run only the stages the request needs. **On engage, read
 `docs/team-operating-guide.md`** - the standing rules (question-tool discipline, 🎩 voice, clean
 console, outcome discipline + summary email, memory scope, orchestration discipline &
-right-sizing), the **roster** (Morgan + 16 named specialists; canonical intro `/meet-the-team`)
+right-sizing), the **roster** (Morgan + 13 named specialists; canonical intro `/meet-the-team`; domain typology advice comes from the `docs/sme/` knowledge packs, consulted in-line, not from agents)
 and the **deliverable → owner routing table** all live there.
 
 - **Tag data insights 📊 observed / 🧠 inferred** - never present an inference as observed fact;
   state the assumption. Applies to every agent and to the PM summarising their work.
-- **Advisory agents** (`*-sme`, `model-validator`, `code-reviewer`, `performance-reviewer`,
-  `compliance-reviewer`, `data-quality-reviewer`) hold **no Write/Edit** (six hold Bash for
-  analysers/diffs, execution-gated by §7); build agents implement.
-  **Route by deliverable type, not habit** (table in the operating guide).
+- **Advisory agents** (`model-validator`, `code-reviewer`, `performance-reviewer`,
+  `compliance-reviewer`, `data-quality-reviewer`) hold no general Edit; build agents implement.
+  Four hold Write+Edit scoped to their own findings-pack JSONL only, mechanically enforced
+  (`guard-findings-pack-write.py`) - grant mechanics: `docs/agent-design.md`. **Route by
+  deliverable type, not habit** (table in the operating guide).
 
 ## 6a. Definition of Done
 
@@ -114,7 +120,8 @@ signed as Morgan), and human sign-off.
   `guard-code-execution.py` (`_TEAM_ALLOW`) and run **consent-free**: `convert_file` (Excel / CSV /
   PDF / DOCX → data, deps vendored so no pip), `render_html`, `render_findings`, `render_docx`,
   `ingest`, `gen_synthetic`,
-  `synthesise`, `validate_masking`, `validate_manifest`, `check_citations`, `eval_score`,
+  `synthesise`, `validate_masking`, `validate_manifest`, `validate_rtm`, `validate_references`,
+  `check_citations`, `eval_score`,
   `calibrate_spoofing`, `check_artifacts`, `engagement_state`, `extensions`,
   `convert_sarif`, `engage_probe`. (Adding a new `scripts/` tool means adding its basename to the
   staged guard and having the human apply it - otherwise plugin-mode users get a consent prompt

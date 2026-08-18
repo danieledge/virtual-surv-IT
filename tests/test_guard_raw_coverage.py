@@ -23,8 +23,10 @@ sync test. It does now, and it FAILS rather than skips until applied.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -56,7 +58,9 @@ def project_with_raw(tmp_path):
     raw.mkdir(parents=True)
     (raw / "trades.csv").write_text("account,amount\nACC1,100\n", encoding="utf-8")
     (tmp_path / ".claude").mkdir()
-    (tmp_path / ".claude" / "settings.json").write_text('{"deny": ["data/raw/**"]}', encoding="utf-8")
+    (tmp_path / ".claude" / "settings.json").write_text(
+        '{"deny": ["data/raw/**"]}', encoding="utf-8"
+    )
     return tmp_path
 
 
@@ -107,9 +111,7 @@ def test_unknown_tool_gets_defence_in_depth_scan(project_with_raw):
 
 
 def test_unknown_tool_unrelated_input_allowed(project_with_raw):
-    assert not _blocks(
-        project_with_raw, "mcp__jira__create_issue", {"summary": "fix the parser"}
-    )
+    assert not _blocks(project_with_raw, "mcp__jira__create_issue", {"summary": "fix the parser"})
 
 
 @pytest.mark.parametrize("tool", ["Write", "Edit", "MultiEdit", "NotebookEdit"])
@@ -153,14 +155,56 @@ def test_ancestor_search_allowed_when_no_raw_data(project_without_raw):
 
 def test_sibling_scoped_search_still_allowed(project_with_raw):
     """Searching the masked lane must keep working even with raw data present."""
-    assert not _blocks(
-        project_with_raw, "Grep", {"pattern": "account", "path": "data/masked"}
-    )
+    assert not _blocks(project_with_raw, "Grep", {"pattern": "account", "path": "data/masked"})
 
 
 def test_direct_raw_path_still_blocks(project_with_raw):
     assert _blocks(project_with_raw, "Read", {"file_path": "data/raw/trades.csv"})
     assert _blocks(project_with_raw, "Grep", {"pattern": "x", "path": "data/raw"})
+
+
+# ------------------------------------------------ presence cache (2026-08-10 corp report)
+# Every hook invocation is a fresh subprocess (no shared in-memory state), so these exercise
+# the FILE cache exactly as real usage would - same reason _run() below already shells out.
+
+
+def test_pathless_grep_writes_a_presence_cache_file(project_with_raw):
+    cache = project_with_raw / ".claude" / ".raw-data-present"
+    assert not cache.exists()
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
+    assert cache.is_file()
+    assert cache.read_text(encoding="utf-8").strip() == "true"
+
+
+def test_cached_presence_used_within_ttl_even_if_the_file_is_then_removed(project_with_raw):
+    """Proves the cache is actually consulted, not just written: prime it with raw data
+    present, then remove the only raw file and call again immediately - a fresh, uncached
+    check would now correctly return False, but a cache hit inside the 30s TTL should still
+    return the stale (but not yet expired) True."""
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})  # primes the cache
+    for f in (project_with_raw / "data" / "raw").iterdir():
+        f.unlink()
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})  # still cached True
+
+
+def test_expired_cache_is_not_trusted(project_with_raw):
+    """A cache entry older than the TTL must trigger a real re-check, not be trusted blindly
+    - the opposite of the previous test, forcing the expiry branch instead of the hit one."""
+    cache = project_with_raw / ".claude" / ".raw-data-present"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text("false", encoding="utf-8")  # stale + wrong: real data IS present
+    stale = time.time() - 31  # just past the 30s TTL
+    os.utime(cache, (stale, stale))
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})  # re-checked, correct
+
+
+def test_cache_write_failure_does_not_break_the_check(project_with_raw):
+    """Cache write is an optimization only, never load-bearing - if the cache PATH is
+    unwritable (here: occupied by a directory instead of a file), the guard must still
+    reach the correct, real answer rather than erroring or silently allowing."""
+    cache = project_with_raw / ".claude" / ".raw-data-present"
+    cache.mkdir(parents=True)  # occupies the path so write_text() must fail
+    assert _blocks(project_with_raw, "Grep", {"pattern": "account"})
 
 
 # ------------------------------------------------ fix 3: search-pattern false positive
@@ -216,6 +260,158 @@ def test_search_with_raw_file_operand_still_blocks(project_with_raw, command):
 def test_non_search_bash_commands_unchanged(project_with_raw, command):
     """Only search verbs get the pattern exemption; everything else keeps the old behaviour."""
     assert _blocks(project_with_raw, "Bash", {"command": command})
+
+
+# ------------------------------------------------ compound-command segment splitting
+# (2026-08-03 fable audit): a multi-statement command used to be shlex-split and judged as
+# ONE invocation, so words from a LATER, unrelated statement became "file operands" of an
+# EARLIER search verb - a live false positive during the audit's own session.
+
+
+def test_compound_command_segments_judged_independently(project_with_raw):
+    """A clean search in statement 1 must not be contaminated by statement 2's tokens."""
+    assert not _blocks(
+        project_with_raw, "Bash", {"command": 'grep -rn "commit" tests/test_guards.py; echo done'}
+    )
+    assert not _blocks(
+        project_with_raw,
+        "Bash",
+        {"command": 'grep -rn "commit" tests/test_guards.py && ls artifacts/'},
+    )
+
+
+def test_compound_command_first_segments_raw_operand_still_blocks(project_with_raw):
+    """The fix must not weaken detection - a REAL raw file operand in an early segment
+    still blocks, whatever comes after it."""
+    assert _blocks(
+        project_with_raw, "Bash", {"command": "grep -rn account data/raw/trades.csv; echo done"}
+    )
+
+
+def test_compound_command_second_segments_raw_operand_still_blocks(project_with_raw):
+    """A raw file operand in a LATER segment (not the first) must still block - segmenting
+    must not accidentally only check the first statement."""
+    assert _blocks(
+        project_with_raw, "Bash", {"command": "echo start; grep -rn account data/raw/trades.csv"}
+    )
+
+
+# ---------------------------- command substitution inside double quotes (2026-08-07) -------
+#
+# Same _segments() bug guard-code-execution.py had (found by a framework-wide audit): `` ` ``/
+# `$(` were gated on the same quote check as the ordinary delimiters, so a substitution
+# wrapped in double quotes never became its own segment. Fixed identically here for
+# consistency. UNLIKE the exec guard, this guard's final checks (RAW_MARKERS/_RAW_MARKER_RE)
+# are substring/regex scans over whatever segment text exists, not position-anchored patterns
+# - traced by hand and confirmed live below: the LIVE (pre-fix) guard already blocks every
+# case here too, because "data/raw" matches as a substring wherever it lands in the segment.
+# So this fix is a genuine hardening / cross-guard consistency improvement, NOT the closure of
+# an active gap in THIS specific guard - stated precisely, not oversold.
+
+
+def test_double_quoted_substitution_of_raw_path_blocks_on_both_guards(project_with_raw):
+    """Confirms no regression from the fix AND confirms the pre-fix guard was already safe
+    here (traced: the marker check is a substring scan, not anchored, so segmentation
+    precision doesn't change the outcome for this guard the way it does for the exec guard's
+    `^pytest\\b`-style anchored patterns)."""
+    cmd = 'echo "$(cat data/raw/trades.csv)"'
+    assert _blocks(project_with_raw, "Bash", {"command": cmd})
+    live_proc = subprocess.run(
+        [sys.executable, str(LIVE_PATH)],
+        input=json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}),
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "CLAUDE_PROJECT_DIR": str(project_with_raw)},
+    )
+    assert live_proc.returncode == 2  # already blocked pre-fix - see comment above
+
+
+def test_backtick_substitution_of_raw_path_still_blocks(project_with_raw):
+    assert _blocks(project_with_raw, "Bash", {"command": 'echo "`cat data/raw/trades.csv`"'})
+
+
+def test_double_quoted_substitution_with_no_raw_data_still_allowed(project_without_raw):
+    """The fix must not become a new false positive - a substitution with no raw marker at
+    all must still be allowed through, quotes or not."""
+    assert not _blocks(project_without_raw, "Bash", {"command": 'echo "$(cat data/masked/x.csv)"'})
+
+
+# ------------------------------------------------ quote-aware segment splitting
+# (2026-08-03, second fix): the naive split above chops INSIDE a quoted argument too - a
+# log message using ';' or '&&' as ordinary punctuation got sliced into a bogus fragment.
+# Live in an eval run: `engagement_state log-note "...close as-is; no real source data
+# exists..." && next-command` was split mid-sentence, right after the semicolon inside the
+# quotes, producing a garbage "segment" that spuriously matched an unrelated pattern.
+
+
+def test_semicolon_inside_quoted_argument_is_not_a_segment_boundary():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "graw", REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
+    )
+    graw = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(graw)
+    cmd = 'echo "close as-is; no real source data exists" && echo done'
+    segs = graw._segments(cmd)
+    assert segs == ['echo "close as-is; no real source data exists"', "echo done"]
+
+
+def test_ampersand_and_pipe_inside_quotes_are_not_boundaries():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "graw", REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
+    )
+    graw = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(graw)
+    assert graw._segments('echo "a && b | c"') == ['echo "a && b | c"']
+    assert graw._segments("echo 'a && b | c'") == ["echo 'a && b | c'"]
+
+
+def test_quoted_text_does_not_shield_a_genuine_later_boundary():
+    """The fix must not over-correct into treating the WHOLE command as unsplittable - a
+    real boundary after the closing quote still splits."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "graw", REPO / "scripts" / "staged_hooks" / "guard-raw-data.py"
+    )
+    graw = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(graw)
+    segs = graw._segments('echo "a; b" && echo "c; d"')
+    assert segs == ['echo "a; b"', 'echo "c; d"']
+
+
+# ------------------------------------------------ git commit/tag message exemption
+# (2026-08-03): `git commit -m "..."` is prose the user wrote, not a file read - it must not
+# trip the marker scan just for MENTIONING the guard's own marker string.
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'git commit -m "fix: reads of data/raw/ were unsafe, closed the gap"',
+        'git commit --message="mentions data/raw in passing"',
+        'git tag -m "release notes mention data/raw handling"',
+        "git commit --message=data/raw/mentioned/inline",  # same exemption, inline `=` form
+    ],
+)
+def test_git_commit_or_tag_message_mentioning_marker_allowed(project_with_raw, command):
+    assert not _blocks(project_with_raw, "Bash", {"command": command})
+
+
+def test_git_commit_message_file_argument_still_blocks(project_with_raw):
+    """The exemption covers the -m/--message VALUE only. `-F <file>` names an actual FILE to
+    read (the message comes FROM that file), so it stays covered."""
+    assert _blocks(project_with_raw, "Bash", {"command": "git commit -F data/raw/message.txt"})
+
+
+def test_git_subcommand_other_than_commit_or_tag_gets_no_message_exemption(project_with_raw):
+    """`-m` is used by several git subcommands for unrelated purposes (e.g. `git show -m`,
+    `git log -m`) - only `commit`/`tag` are message-authoring subcommands, so only those get
+    the exemption. A marker-shaped -m value elsewhere still trips the ordinary scan."""
+    assert _blocks(project_with_raw, "Bash", {"command": "git log -m data/raw/trades.csv"})
 
 
 # ------------------------------------------------ crash / payload semantics preserved

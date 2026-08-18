@@ -45,7 +45,7 @@ safety rails that stop confidential data ever reaching the AI.
   So an agent can actually *do* work (open files, write code, run it) rather than only
   chatting about it.
 
-- **Subagent** - one agent set up for **a single, focused role**. This project has 16 of
+- **Subagent** - one agent set up for **a single, focused role**. This project has 13 of
   them. Each has a short "job description" (a small text file in `.claude/agents/`) telling
   it what it's responsible for and what it's allowed to touch.
 
@@ -68,9 +68,6 @@ They're your experts and reviewers, kept that way on purpose so they stay indepe
 | Member | Type | What they do (in plain terms) |
 |---|---|---|
 | **Amara** `business-analyst` | 🔧 Builder | Turns what a regulation requires into clear, testable written requirements, and works out how a rule change affects the detection already in place |
-| **Hassan** `tm-sme` | 🧠 Advisor | Money-laundering expert (transaction monitoring) |
-| **Camila** `trade-surveillance-sme` | 🧠 Advisor | Market-abuse expert (spoofing, insider dealing…) |
-| **Cleo** `comms-surveillance-sme` | 🧠 Advisor | Trader-chat / email monitoring expert |
 | **Mateo** `rules-developer` | 🔧 Builder | Writes the detection code + tests |
 | **Ana** `data-analyst` | 🔧 Builder | Exploratory analysis, false-positive analysis, data-quality, reconciliation, reporting/MI |
 | **Theo** `tuning-analyst` | 🔧 Builder | Sets and defends the alert thresholds - how sensitive each rule is - and shows the trade-off between catching more and raising too many false alarms |
@@ -83,6 +80,12 @@ They're your experts and reviewers, kept that way on purpose so they stay indepe
 | **Layla** `compliance-reviewer` | 🧠 Advisor | Final check: is it auditable, safe, well-tested, done? |
 | **Yuki** `data-quality-reviewer` | 🧠 Advisor | Independently checks the data is complete & accurate, and that nothing in scope goes unmonitored |
 | **Pip** `review-scorer` | ⚙️ Helper | A lightweight, low-cost assistant that does the routine review prep - working out what kind of code it is, scoring findings, filtering noise - so the senior reviewers spend their effort on judgement |
+
+> **Where did the domain experts go?** The money-laundering, market-abuse and trader-chat
+> expertise used to be three more advisors (Hassan, Camila and Cleo). Since 2026-08-17 it
+> ships as three **knowledge packs** (`docs/sme/`) that any team member reads on demand -
+> same expertise, no extra teammate to brief, faster and cheaper to consult. Documents cite
+> the pack itself rather than a person.
 
 > Why this matters: a reviewer who could quietly fix the thing they're reviewing isn't
 > really an independent check. Advisor independence is enforced by the tools each one is
@@ -201,7 +204,7 @@ It's the template every other detection in this team would follow.
 | Path | What it is |
 |---|---|
 | `CLAUDE.md` | The team handbook - shared rules every AI member reads first |
-| `.claude/agents/` | The 16 job descriptions (one file per team member) |
+| `.claude/agents/` | The 13 job descriptions (one file per team member) |
 | `.claude/skills/` | Workflow shortcuts, e.g. `/new-scenario` runs the whole team chain |
 | `.claude/hooks/` | The automatic guard that blocks the AI from real data |
 | `rules/` | The actual detection code (the spoofing example) |
@@ -214,9 +217,12 @@ It's the template every other detection in this team would follow.
 
 ## 8. How you'd actually use it
 
-1. Open this project in **Claude Code** (Anthropic's coding tool). The 16 team members are
-   loaded but stay **dormant** - a normal session behaves like ordinary Claude Code until you
-   invoke the team.
+1. Open the project in **Claude Code** - the recommended way is **`virt-surv go`** from
+   your project folder (set up once via the install helper's alias step): it shows the
+   team settings, lets you pick resume-or-new before the session starts, and launches
+   Claude Code with that choice pre-seeded. Starting `claude` by hand works identically.
+   The 13 team members are loaded but stay **dormant** - a normal session behaves like
+   ordinary Claude Code until you invoke the team.
 2. **Start with the Project Manager - "Morgan".** Type `/engage` and describe whatever
    you've got - a rough idea, some code to check, or a full set of requirements. Morgan is
    warm and plain-speaking, with a can-do but realistic attitude - it'll find a way forward,

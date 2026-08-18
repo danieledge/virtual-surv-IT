@@ -30,4 +30,5 @@ Language-specific checks for TypeScript and JavaScript (review tooling, dashboar
 
 Use the shared format in `docs/review/output-format.md`: `file:line`, confidence, evidence
 basis (📊 measured / 🧠 inferred), and a `diff`-style fix + "why this works". Drive
-ESLint/`tsc`/`semgrep` where available. Defer §4/§5 to `compliance-reviewer`.
+ESLint/`tsc` where available (`semgrep` deliberately excluded - see `code-reviewer.md` for
+why). Defer §4/§5 to `compliance-reviewer`.

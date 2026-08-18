@@ -1,0 +1,51 @@
+{
+  "schema": 2,
+  "engagement": {
+    "title": "Quick review: fx_rate_loader.py",
+    "slug": "fx-rate-loader-review",
+    "requested_by": null,
+    "opened": "2026-08-18",
+    "closed": null
+  },
+  "status": "in_progress",
+  "profile": "standard",
+  "phase": "delivery",
+  "team": [
+    "Ravi (code-reviewer)"
+  ],
+  "verdict": null,
+  "footprint": {
+    "agents": null,
+    "approx_tokens": null
+  },
+  "settings_snapshot": {
+    "extra_formats": [],
+    "regulatory_citations": true,
+    "large_context_review_split": false,
+    "parallel_dispatch_via_workflow": true,
+    "standards_critique": false,
+    "map_skeleton": false
+  },
+  "outstanding": [
+    "DoD check_artifacts - not yet run"
+  ],
+  "log": [],
+  "ratifications": [],
+  "artifacts": [
+    {
+      "path": "artifacts/REVIEW-fx-rate-loader.md",
+      "title": "Quick review findings: fx_rate_loader.py",
+      "status": "interim",
+      "added": "2026-08-18",
+      "added_before_file_existed": true
+    }
+  ],
+  "decisions": {
+    "go-ahead": "quick review, report + fix the one Warning (user, 2026-08-17)"
+  },
+  "team_version": null,
+  "execution_consent_outcome": {
+    "outcome": "declined",
+    "date": "2026-08-18"
+  }
+}

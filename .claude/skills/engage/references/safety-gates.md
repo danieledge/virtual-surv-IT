@@ -34,23 +34,28 @@ grant that authorisation to itself**: a second hook (`guard-consent-writes.py`, 
 blocks any model write of the consent marker or the settings files. On **"Yes"**, ask the user to
 perform the actual consent act **themselves** - and **always show the command with the absolute
 project path** (resolve the project root first, e.g. from `pwd`; never a bare relative path, which
-silently creates the marker in the wrong place if their terminal is elsewhere): type
-**`! touch /absolute/path/to/project/.claude/.exec-consent`** (`!` as the *first* character of the
-prompt line runs it as their own shell command - on Windows the `!` shell is Git Bash, so `touch`
-works there too). **Give the command matched to where the user will type it** - a Windows user
-pasting into their own terminal has no `touch`:
-- PowerShell: `ni "C:\absolute\path\.claude\.exec-consent" -Force`
-- cmd.exe: `type nul > "C:\absolute\path\.claude\.exec-consent"`
-- any bash/zsh terminal (macOS/Linux/Git Bash): `touch /absolute/path/.claude/.exec-consent`
-On Windows, show the PowerShell form alongside the `!` form by default. Alternatively
-`CST_ALLOW_EXEC=1` in the launch environment (the hard override - also human-only). **Never wrap
-consent-granting in a helper script** - the act stays a literal command the human types. **Verify
-the marker exists** (a read-only `ls .claude/.exec-consent` is allowed) before executing anything;
-if the user answered "Yes" but the marker never appears, execution is still blocked - say so
-plainly, keep dynamic findings 🧠 inferred, and never present the menu answer as consent. On
-**"No"**, **delete** `.claude/.exec-consent` if it exists (`rm` is allowed - closing the gate is
-always fail-safe), so the gate stays closed. Repeat the responsibility note in the final Delivery
-Report.
+silently creates the marker in the wrong place if their terminal is elsewhere).
+
+**Which form(s) to show - checked against the step-0 probe's `OS=` field, never inferred or
+guessed from context:**
+- **`! touch /absolute/path/to/project/.claude/.exec-consent`** - always show this one (`!` as
+  the *first* character of the prompt line runs it as their own shell command; on Windows the `!`
+  shell is Git Bash, so `touch` works there too).
+- **`OS=Windows` → ALSO show the PowerShell form in the SAME message, every time, no exceptions**:
+  `ni "C:\absolute\path\.claude\.exec-consent" -Force` (a Windows user pasting into their own
+  terminal has no `touch`; live report 2026-08-03: the `!` form was given alone on a Windows host,
+  leaving the user with a command that doesn't work in their own terminal).
+- If the user's own messages point at `cmd.exe` specifically, add that form too:
+  `type nul > "C:\absolute\path\.claude\.exec-consent"`.
+
+Alternatively `CST_ALLOW_EXEC=1` in the launch environment (the hard override - also human-only).
+**Never wrap consent-granting in a helper script** - the act stays a literal command the human
+types. **Verify the marker exists** (a read-only `ls .claude/.exec-consent` is allowed) before
+executing anything; if the user answered "Yes" but the marker never appears, execution is still
+blocked - say so plainly, keep dynamic findings 🧠 inferred, and never present the menu answer as
+consent. On **"No"**, **delete** `.claude/.exec-consent` if it exists (`rm` is allowed - closing
+the gate is always fail-safe), so the gate stays closed. Repeat the responsibility note in the
+final Delivery Report.
 
 ## Data-safety disclaimer (show at startup too, right next to the execution one - CLAUDE.md §5)
 
@@ -79,6 +84,15 @@ must never re-ask them. As soon as `engagement_state init` has run:
 - `set-decision data-attestation "<answer / no data involved>"`
 - `set-decision fix-cycle "<the review menu's Q3 answer>"`
 - `record-consent-outcome asked|declined` - a "No" or "unsure" records `declined`.
+
+**The consent outcome goes through `record-consent-outcome` ONLY - never `set-decision`, and
+never put the consent marker's filename or path (`.exec-consent`) into any decision, log-note
+or other Bash-command text.** The consent-write guard judges the whole command line lexically:
+an interpreter command whose argument text names the protected marker is blocked as a write
+attempt, however innocent the intent (live block 2026-08-16: `set-decision "execution-consent"
+"Yes - marker present at ..."` was denied mid-intake; `engagement_state` now also refuses
+consent-shaped keys mechanically). Hand the human the exact `touch` command in **chat text**,
+where the guard does not apply - not inside a Bash call.
 
 The recorded outcome is **never a grant**: the grant stays the human-created marker only, and the
 state file cannot represent one (ADR-002). Repeat the execution- and data-responsibility notes in

@@ -68,8 +68,10 @@ design: nothing is trusted until it's tied to something checkable, and your sign
 the final gate.
 
 **What analysers does the review use, and what happens if I don't have them installed?**
-The standard ones per language when present (ruff, mypy, bandit, semgrep, gitleaks,
-shellcheck and friends). At engage-time the team inventories what's actually installed and
+The standard ones per language when present (ruff, mypy, bandit, gitleaks, shellcheck and
+friends - semgrep and pip-audit are deliberately not used, even if you have them installed,
+after repeated corp-proxy hangs from network calls neither could reliably avoid). At
+engage-time the team inventories what's actually installed and
 works with that; nothing silently pretends a tool ran. Missing analyser? The review still
 happens, statically, and the report says exactly which tools ran and which findings are
 therefore 🧠 inferred rather than 📊 measured. Same philosophy for the environment: no

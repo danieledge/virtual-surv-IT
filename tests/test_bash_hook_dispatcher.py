@@ -92,10 +92,40 @@ def test_consent_write_block_matches_the_real_guard_exactly():
     assert dispatched.stderr.strip() == direct.stderr.strip()
 
 
-def test_module_form_redirect_matches_the_real_hook_exactly(tmp_path):
+def test_module_form_redirect_transparent_rewrite_matches_the_real_hook_exactly(tmp_path):
+    """2026-08-04: a full match now rewrites transparently (exit 0, JSON stdout with
+    updatedInput) instead of blocking - the dispatcher must forward that stdout exactly
+    like the standalone hook, not just the exit code. `print()` inside a guard's own
+    main() is never redirected by the dispatcher (only stdin is), so this also pins that
+    the JSON isn't lost or interleaved with anything else in _CHECKS."""
     payload = {
         "tool_name": "Bash",
         "tool_input": {"command": "python3 -m scripts.check_artifacts artifacts"},
+        "cwd": str(tmp_path),
+    }
+    env = {"CLAUDE_PLUGIN_ROOT": str(REPO_ROOT)}
+    dispatched = _run_dispatcher(payload, env=env)
+    direct = _run_guard(REPO_ROOT / "scripts" / "module_form_redirect.py", payload, env=env)
+    assert dispatched.returncode == direct.returncode == 0
+    assert dispatched.stdout == direct.stdout
+    assert dispatched.stderr == direct.stderr == ""
+    out = json.loads(dispatched.stdout)["hookSpecificOutput"]
+    assert out["permissionDecision"] == "allow"
+    assert "check_artifacts.py" in out["updatedInput"]["command"]
+
+
+def test_module_form_redirect_partial_match_block_matches_the_real_hook_exactly(tmp_path):
+    """The other branch: when only SOME matched names resolve to a bundled copy, the
+    hook still falls back to blocking - pinned separately from the transparent-rewrite
+    case above so a regression in either branch is caught."""
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": (
+                "python3 -m scripts.check_artifacts artifacts && "
+                "python3 -m scripts.totally_made_up_script run"
+            )
+        },
         "cwd": str(tmp_path),
     }
     env = {"CLAUDE_PLUGIN_ROOT": str(REPO_ROOT)}
@@ -125,6 +155,46 @@ def test_malformed_stdin_allows_and_never_raises():
     )
     assert result.returncode == 0
     assert "Traceback" not in result.stderr
+
+
+def test_findings_pack_guard_blocks_edit_through_the_real_dispatched_path():
+    """2026-08-14 Fable-model audit finding, BLOCKER: guard-findings-pack-write.py's own
+    main() checks `tool_name not in ("Write", "Edit")` and CLAUDE.md documents its scope
+    as "Write and Edit, both scoped ... mechanically enforced" - but this dispatcher's own
+    _CHECKS entry only ever registered {"Write"}, so an Edit call from one of the four
+    scoped review agents never reached this guard at all in the live dispatched path
+    (the ONLY path a real Claude Code session actually uses - there is no standalone
+    hooks.json entry for this guard). The guard's own test suite invoked it as a direct
+    subprocess, bypassing this dispatcher entirely, so it stayed green while the real
+    enforcement was dead code for Edit. This test exercises the REAL dispatcher against
+    the REAL guard (both unmodified, exactly like every other fidelity test in this
+    file) with an Edit call outside the allowed findings-pack path from a scoped agent -
+    the one case that must be blocked and, before this fix, silently wasn't."""
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "src/app.py"},
+        "agent_type": "code-reviewer",
+    }
+    result = _run_dispatcher(payload)
+    assert result.returncode == 2, (
+        "an Edit outside the findings-pack path from a scoped review agent must be "
+        "BLOCKED - if this is 0, the dispatcher's _CHECKS entry for "
+        "guard_findings_pack_write has regressed back to {'Write'} only"
+    )
+
+
+def test_findings_pack_guard_still_allows_edit_inside_the_pack_path():
+    """The other half of the same fix, proven together so a too-broad fix (blocking
+    ALL Edits) would be caught just as fast as the too-narrow one above: a scoped
+    agent editing its OWN findings pack must still be allowed through the real
+    dispatched path."""
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "artifacts/my-slug/data/findings-code-reviewer.jsonl"},
+        "agent_type": "code-reviewer",
+    }
+    result = _run_dispatcher(payload)
+    assert result.returncode == 0
 
 
 def test_staged_and_live_are_byte_synced():
@@ -228,16 +298,37 @@ def test_every_applicable_check_sees_the_full_original_payload(monkeypatch):
     monkeypatch.setattr(bhd, "_load", fake_load)
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps(payload)))
     assert bhd.main() == 0
-    assert seen == [payload]  # only guard_consent_writes applies to a bare Write
+    # Two checks apply to a bare Write (guard_consent_writes, then guard_findings_pack_write,
+    # 2026-08-03) - each must see its own fresh, complete copy of the payload.
+    assert seen == [payload, payload]
 
 
-def test_missing_guard_file_skips_that_check_without_crashing(monkeypatch, tmp_path):
-    """A clone missing one of the underlying scripts (unusual layout, partial checkout)
-    must not brick every tool call it would have gated - fail open for that ONE check."""
+def test_missing_safety_guard_file_fails_closed(monkeypatch, tmp_path, capsys):
+    """2026-08-07 fix (found by a framework-wide audit): a missing FILE for a fail_closed
+    guard used to unconditionally skip that check (fail OPEN), asymmetric with a file that
+    exists but fails to LOAD, which already failed closed below. There is no legitimate
+    reason for a shipped safety-guard file to be missing from a working install - a
+    missing file and a load failure are both "this guard cannot run", and now follow the
+    identical fail_closed policy."""
     monkeypatch.setattr(
         bhd,
         "_CHECKS",
         (("guard_raw_data", tmp_path / "does-not-exist.py", {"Read"}, True),),
+    )
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps({"tool_name": "Read"})))
+    assert bhd.main() == 2
+    assert "failing closed" in capsys.readouterr().err
+
+
+def test_missing_redirect_file_still_skips_without_blocking(monkeypatch, tmp_path):
+    """document_input_redirect/module_form_redirect are fail_closed=False (convenience
+    redirects, never a safety control) - a missing file for THESE must still skip that one
+    check without blocking, unchanged by the 2026-08-07 fix above, which is conditional on
+    fail_closed."""
+    monkeypatch.setattr(
+        bhd,
+        "_CHECKS",
+        (("document_input_redirect", tmp_path / "does-not-exist.py", {"Read"}, False),),
     )
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps({"tool_name": "Read"})))
     assert bhd.main() == 0

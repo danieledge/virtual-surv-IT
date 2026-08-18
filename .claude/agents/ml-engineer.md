@@ -26,7 +26,7 @@ Operating principles:
 - Your work will be independently challenged by `model-validator`. Build to be validated.
 
 When invoked:
-1. Frame the problem and the detection objective; confirm labels/ground truth availability.
+1. Frame the problem and the detection objective; confirm labels/ground truth availability. Your working scope arrives in the dispatch brief (file list, plus the codebase map's PATH when the project has one - read the map for wider context); **never enumerate the repository yourself** - `git ls-files` is the fallback inventory (map-first rule, 2026-08-17).
 2. Choose an approach appropriate to the risk and data, justifying it (favour interpretable
    methods unless complexity is warranted and explainability is preserved).
 3. Implement training, evaluation and inference, with metrics for precision, recall,

@@ -38,7 +38,7 @@ Surveillance-specific BA:
   controls, data feeds and specs are affected, and the change plan.
 
 When invoked:
-1. Clarify the underlying obligation / business goal and the stakeholders.
+1. Clarify the underlying obligation / business goal and the stakeholders. When specifying against an EXISTING codebase, read `docs/codebase-map.md` (path in your brief) for what already exists and the integration points - never crawl the repository to find out (map-first rule, 2026-08-17).
 2. Elicit and analyse; **return material open questions to the orchestrator** (a subagent cannot
    ask the user - Morgan asks via the question tool and comes back) - never invent thresholds or scope.
 3. Produce the right artifact(s) for the task (see `docs/templates/`): BRD, FSD, user stories,

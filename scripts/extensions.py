@@ -39,7 +39,14 @@ import sys
 from pathlib import Path
 
 _SECTIONS = ("Standing instructions", "Close actions", "Analyser registry", "Integrations")
-_META_RE = re.compile(r"[;|&$`<>]")
+# C9 (2026-08 audit): \n and \r were missing from the blocked set - in an actual shell,
+# a bare newline separates statements exactly like `;` does, so "safe" argv split on
+# whitespace by str.split() at registration time was no defense against a command string
+# that hides a second statement on its own line for whatever eventually runs it as a
+# shell command (an agent's Bash tool, a future script). `;` was refused; `\n` achieving
+# the identical effect was not - closing that gap here, not narrowing the plain-argv
+# contract.
+_META_RE = re.compile(r"[;|&$`<>\n\r]")
 _JSON_FENCE_RE = re.compile(r"```json\s*\n(.*?)\n```", re.S)
 
 
@@ -123,6 +130,34 @@ def load(file: Path) -> dict:
     sections = split_sections(text)
     registry, problems = parse_registry(sections.get("Analyser registry", ""))
     return {"sections": sections, "registry": registry, "problems": problems}
+
+
+def _load_raw_registry_entries(file: Path) -> list:
+    """The registry's raw `analysers` array exactly as JSON parsed it - valid or not,
+    UNFILTERED by parse_registry()'s validation. `load()["registry"]` is valid-entries-
+    only (by design, for `show`/`check`); add-tool's upsert must not build the file it
+    writes back from that filtered view.
+
+    M7 (2026-08 Fable audit): `_cmd_add_tool` used to do exactly that - rebuild the
+    registry from `load(file)["registry"]`, so a pre-existing entry parse_registry()
+    already flagged as a problem (bad name/command, a refused shell metacharacter, an
+    unrecognised shape) vanished, silently and unreported, the instant add-tool touched
+    the file for anything else. An invalid entry staying on disk is not a safety issue -
+    this script never executes registry commands (module docstring) - so there is no
+    reason to destroy it instead of leaving it for a human to fix or remove on purpose."""
+    if not file.is_file():
+        return []
+    text = file.read_text(encoding="utf-8", errors="replace")
+    section = split_sections(text).get("Analyser registry", "")
+    m = _JSON_FENCE_RE.search(section)
+    if not m:
+        return []
+    try:
+        data = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return []
+    entries = data.get("analysers")
+    return entries if isinstance(entries, list) else []
 
 
 def _cmd_show(args: argparse.Namespace) -> int:
@@ -242,7 +277,7 @@ def _cmd_add_tool(args: argparse.Namespace) -> int:
         )
         return 2
     file = args.file or default_file()
-    entries = load(file)["registry"] if file.is_file() else []
+    raw_entries = _load_raw_registry_entries(file)
     entry: dict = {"name": args.name}
     if args.mcp:
         entry["mcp"] = args.mcp
@@ -256,7 +291,9 @@ def _cmd_add_tool(args: argparse.Namespace) -> int:
         entry["severity_map"] = dict(
             pair.split("=", 1) for pair in args.severity_map.split(",") if "=" in pair
         )
-    entries = [e for e in entries if e.get("name") != args.name] + [entry]
+    entries = [
+        e for e in raw_entries if not (isinstance(e, dict) and e.get("name") == args.name)
+    ] + [entry]
     _write_registry(file, entries)
     print(f"registered {args.name} in {file}")
     if args.mcp:

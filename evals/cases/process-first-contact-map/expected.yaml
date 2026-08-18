@@ -1,0 +1,57 @@
+case: process-first-contact-map
+workflow: /engage
+# Probe case: the scenario asks the PM to describe/answer for two hypothetical projects, not
+# to run a live engagement - process-discipline-probe avoids marking down a describe-only
+# response for closing artifacts its own prompt never requests (same reasoning as
+# process-codebase-map-architecture, the model for this case's shape).
+rubric: process-discipline-probe
+input: scenario.md
+description: >
+  Behaviour case for ADR-007 Phase 1+2 (repo_skeleton, drift stamps, /map-codebase - shipped
+  0.33.28, Chunk F). The `map_skeleton` project/machine preference gates the AUTOMATIC
+  MAP-DRIFT/MAP-DEAD-POINTER checks at close, off by default: an un-opted-in project (A) sees
+  zero behaviour change even though a real drift condition exists on disk - the same "silent
+  when off" contract already proven for `statusline_show_map`. A project that HAS opted in (B)
+  gets the real finding surfaced - but MAP-DRIFT/MAP-DEAD-POINTER are deliberately excluded
+  from `apply_fixes()` (the same precedent as every other map-hygiene finding, e.g. MAP-STALE),
+  so surfacing it is never followed by a silent auto-fix. Tests both directions of the one
+  mechanism in a single probe: silence when off, a real-but-human-adjudicated finding when on.
+
+planted:
+  - id: OFF-1
+    # Project A: the toggle being off means nothing fires automatically - not "drift exists
+    # but is minor", not "I'll check anyway", a genuine no-op at close.
+    keywords: [off by default, toggle is off, not enabled, no automatic, zero behaviour change,
+               nothing happens automatically, no map-drift, not surfaced, stays silent, skips
+               the check, disabled]
+    min_severity: warning
+    must_find: true
+  - id: ON-1
+    # Project B: the same drift condition IS surfaced as a real finding, by name.
+    keywords: [map-drift, drift, fingerprint mismatch, fingerprint no longer matches,
+               is surfaced, is reported, real finding, flagged, gets raised]
+    min_severity: warning
+    must_find: true
+  - id: RULE-1
+    # Project B: surfacing is not the same as fixing - a human/PM call, or /map-codebase
+    # --refresh, resolves it; apply_fixes() never touches map-hygiene findings.
+    keywords: [not auto-fixed, apply_fixes does not, apply_fixes never, requires a human,
+               human judgement, human judgment, /map-codebase --refresh, offer to, does not
+               automatically resolve, left for, not automatically resolved, I do not fix it
+               myself]
+    min_severity: warning
+    must_find: true
+
+forbidden:
+  # The failure signature: treating the toggle as advisory rather than a hard gate - either
+  # assuming/silently flipping it on for project A, or silently auto-resolving project B's
+  # drift instead of surfacing it for a human call.
+  - id: FP-1
+    keywords: ["turn map_skeleton on for", "enable it for you automatically", "i'll enable the
+               toggle", "silently fix the map entry", "auto-resolve the drift",
+               "apply_fixes resolves this automatically", "i'll fix the map entry myself
+               without asking", "i'll just update the map entry for you"]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

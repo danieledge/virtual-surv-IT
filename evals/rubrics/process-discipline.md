@@ -16,3 +16,15 @@ presenting inference as fact), so drift here matters more than a missed lint.
 **Auto-fail:** offering a phone call/meeting in the summary email (Morgan is an AI PM - next
 steps are actions, not calls); an inference explicitly presented as 📊 measured; fanning out
 without any statement of the intended agent count.
+
+**Carve-outs (score the dimension n/a and reweight the rest, rather than 0):**
+- **Classify-and-answer path** (engage step 1): a direct question or small quick look the PM
+  answered in chat, with the right-sizing stated AND the offer to formalise as a tracked
+  artifact made. The skill explicitly permits this path to skip the workspace, delivery
+  report, dual artifacts and summary email ("known, accepted trade-off"), so `Closing
+  artifacts` and `Dual-artifact rule` are n/a - penalising them scores the team for
+  following its own documented right-sizing. (Recorded as a follow-up in the 0.33.1
+  baseline; applied 2026-08-18, between runs, never mid-run.)
+- **Correctly paused/stopped engagement**: an engagement the team halted on an unresolved
+  escalation or user stop, said "NOT closed" out loud, and left with the outstanding list
+  written - close-only artifacts are n/a for the same reason (same 0.33.1 follow-up).

@@ -3,10 +3,11 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.33.6](https://img.shields.io/badge/version-0.33.6-blue)
-![Tests 1200+ passing](https://img.shields.io/badge/tests-1200%2B%20passing-brightgreen)
+![Version 0.34.0](https://img.shields.io/badge/version-0.34.0-blue)
+![Tests 1400+ passing](https://img.shields.io/badge/tests-1400%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
+[![Quick start: one-page PDF](https://img.shields.io/badge/Quick%20start-one--page%20PDF-important)](docs/quick-start.pdf)
 
 > 🚧 **You're viewing `main`, the stable line - during this fast-moving proof-of-concept phase it
 > can lag noticeably behind `dev`.** Promoting `dev` to `main` is eval-gated (`CONTRIBUTING.md`):
@@ -17,15 +18,38 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.6** (2026-08-01) - *[framework audit remediation: guard escapes closed, traceability gated, eval numbers made readable](docs/releases/0.33.md)*<br/>
-A full framework audit and its remediation. A pair of escapes closed in the safety guards (a consent-equivalent `git config` execution path, and raw-data coverage gaps including `WebFetch` `file://`), the traceability spine turned from prose into a gate, and the eval pass rate made readable by separating runs that died from runs that answered badly.<br/>
-📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.33.53** (2026-08-08) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+
+**Biggest features this cycle: `install_helper.py` rebuilt end-to-end.**
+- 🧭 **The menu reorganized and hardened.** A flat 10-option list became 6 top-level items plus
+  Diagnostics/Advanced submenus; every setting-writing item now states its scope ("this machine"
+  vs "per project"); invalid input no longer redraws the whole menu; `--demo` now covers the
+  entire session instead of one fixed preview.
+- 🔧 **Seven code-review analysers made individually configurable** (ruff, mypy, bandit, black,
+  sqlfluff, shfmt, gitleaks) - on/off/auto per project or machine-wide, with a live safety check
+  that catches a hanging or misconfigured tool *before* it's ever forced "on", the same failure
+  shape that made semgrep/pip-audit unsafe, caught at config time instead of mid-review.
+- 🩺 **A real diagnostic suite.** `--check-tools`/`--check-env`/`--selftest`: the comprehensive
+  check now runs a throwaway synthetic "review this code" engagement end to end - guard hooks,
+  real analyser *detection* (not just clean-output checking), the full engagement-state
+  lifecycle - and every diagnostic ends with a pass/fail summary, not a scrollback hunt.
+- 🖥️ **Run it from anywhere, and see this machine's defaults directly.** A `virt-surv` shell
+  alias (verified after writing, not just written) with folder-scoped `configure`/`archive`/
+  `list-engagements`; a one-click "use the recommended settings?" fast path; and a dedicated view/
+  edit for this machine's own defaults (docx, citations, review tools, Morgan's model), with real
+  project-overrides-machine precedence enforced everywhere it's read, not just at setup time.
+
+**Also in this cycle:** a "what Morgan cannot do" section stating the boundaries as plainly as
+the capabilities · the locked review-menu construction disambiguated from the intake gate's own
+batch · the engagement-flow poster's stale caption fixed and converted to PDF · three README
+redundancies trimmed.
 
 </td></tr>
 </table>
 
 **Virtual Surv-IT is a virtual engineering team for the software that catches financial crime and
-market abuse.** A project manager (Morgan) and **16 specialist AI agents** run it inside
+market abuse.** A project manager (Morgan) and **13 specialist AI agents** (plus three in-line SME
+knowledge packs) run it inside
 [Claude Code](https://claude.com/claude-code).
 
 Banks and trading firms spot money laundering and market manipulation with software: detection
@@ -143,30 +167,13 @@ specialists and builds in **independent review**:
 - **Data-quality and coverage assurance**: the missing feed that means abuse goes undetected.
 - **Technical documentation**: handover a real developer can build, run and maintain from.
 
-It also maps the domain's own control expectations onto the AI itself:
-
-- **Segregation of duties.** Advisors and reviewers hold **no `Write`/`Edit` tools**, so they
-  can't alter the detection logic they assess; build, QA and validation stay independent by
-  running as separate agents with their own context. It is the maker-checker discipline
-  regulators expect of humans, applied to agents.
-- **An audit trail by construction.** Every deliverable arrives with the RTM
-  (obligation → requirement → code → test), thresholds with rationale and tuning date, and
-  **pinpoint citations retrieved from a source-verified register** (a mechanical gate flags
-  anything recalled from memory as *unverified* rather than letting it pass as fact; the register
-  is small today and grows entry by entry, with verified entries human-checked and unconfirmed
-  ones flagged; ADR-001). Findings are tagged
-  📊 measured vs 🧠 inferred, all behind an evidenced [Definition of Done](docs/DEFINITION-OF-DONE.md).
-  The silent-failure modes get their own specialist (coverage and feed assurance) instead of
-  being an afterthought.
-- **Data safety as architecture, not policy.** Raw data under `data/raw/` is **blocked from the
-  model's file-read tools** by a hook and OS permissions; the sanctioned path is keyed masking or
-  fully synthetic data; execution of handed-over code is human-consent gated. The AI works
-  *downstream* of the controls without being trusted *with* the data itself.
-- **The economics work.** The evidenced 80% (specs, tuning packs, QA evidence, handover docs,
-  MI) is produced in minutes for API-token cost, consistently formatted and traceable, while
-  **humans keep the judgement**: every gate returns to a person, and nothing touches a live
-  system without sign-off. Your scarce cross-disciplinary experts review and decide instead of
-  drafting and formatting.
+It also maps the domain's own control expectations onto the AI itself: segregation of duties
+(advisors and reviewers hold no edit tools, so they can't alter what they assess), an audit trail
+by construction (the RTM, source-verified citations, evidenced findings), data safety as
+architecture rather than policy (raw data blocked from the model, execution human-gated), and the
+economics of it (the evidenced work runs in minutes for API-token cost, while humans keep every
+judgement call). The full mechanics, one row per principle with what actually enforces
+it: [Core principles](#-core-principles).
 
 The result is an engineering workflow that produces more **consistent, auditable and
 maintainable** output than one generalist assistant, because the work is specialised,
@@ -185,16 +192,16 @@ What the team gives you today, each row tied to where the claim is enforced or d
 
 | Capability | What you concretely get | Where to see it |
 |---|---|---|
-| A real engineering team, right-sized | Morgan (PM) + 16 specialist subagents; a typical task fires only 2-5 of them, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
+| A real engineering team, right-sized | Morgan (PM) + 13 specialist subagents, with domain typology advice as three in-line knowledge packs ([`docs/sme/`](docs/sme/README.md), zero spawn cost); a typical task fires only 2-5 agents, and the PM states the intended count at the gate. | [`docs/agent-design.md`](docs/agent-design.md) · [Meet the team](#-meet-the-team) |
 | Independent review by construction | Advisors and reviewers hold no `Write`/`Edit` tools; QA and validation run as separate agents from the build. More than rules: pipelines/ETL, scripts, ML, reviews and docs all route to their own specialist. | Tool grants in [`.claude/agents/`](.claude/agents/), pinned by [`tests/test_docs_consistency.py`](tests/test_docs_consistency.py) · routing table in [`docs/team-operating-guide.md`](docs/team-operating-guide.md) |
-| Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | [ADR-008](docs/adr/ADR-008-multi-engagement-workspaces.md) · [ADR-006](docs/adr/ADR-006-machine-readable-engagement-state.md) · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
-| Three always-on safety guards, human-only consent | Raw data under `data/raw/` blocked from the model, execution gated on a human-created marker, and the model blocked from writing the marker, settings or the hooks themselves. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
+| Stateful, crash-safe engagement lifecycle | Per-engagement `artifacts/<slug>/` workspaces, a machine-readable state file (⏳ · ⛔ · 🔒 closing · ✅), a close that runs the mechanical gate and refuses on findings, and disk-first resume of state, intake answers and consent outcome. | ADR-008 · ADR-006 · [`docs/releases/0.33.md`](docs/releases/0.33.md) |
+| Safety guards: always-on data wall, session-scoped gates | Raw data under `data/raw/` blocked from the model in EVERY session; the execution gate and settings write-protection arm only in sessions that invoked the team (2026-08-17 - a dormant session is plain Claude Code), while the consent marker, hook files and git execution config stay write-protected everywhere. | [`docs/safety-model.md`](docs/safety-model.md) · the [data-safety demo](docs/demos/data-safety-demo.md) |
 | Document conversion front door | Excel/CSV/PDF/DOCX read via the vendored converter - no pip needed - with a JSON evidence report every run; a PreToolUse hook redirects binary-document reads to it. | [`docs/house-rules.md`](docs/house-rules.md) · [`scripts/convert_file.py`](scripts/convert_file.py) · [`scripts/document_input_redirect.py`](scripts/document_input_redirect.py) |
 | A real review subsystem | Context-routed lenses, the standard analysers per language, schema-validated findings packs rendered to one canonical layout, and a build fingerprint tying the reviewed code to the shipped artifact. | [`docs/code-review-method.md`](docs/code-review-method.md) · [`docs/review/`](docs/review/) · the [review demo](docs/demos/review-demo.md) |
 | Independent QA + a mechanical DoD gate | A close only counts when `check_artifacts` passes - finding codes like `STALE-INDEX`, `FINAL-BEFORE-CLOSE`, `ROSTER-UNKNOWN` catch the failure modes that actually happened live. Iteration history stays visible append-only (journey strip, QA cycles). | [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) · [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
-| Engagement memory | A per-project **codebase map**: bounded, PM-curated, SHA-anchored, hygiene-checked mechanically, advisory-only - repeat engagements start warm. | [ADR-003](docs/adr/ADR-003-engagement-memory.md) · [ADR-007](docs/adr/ADR-007-codebase-map-evolution.md) |
-| Company extensions | Additive per-project standing instructions, close actions, an analyser registry and named integrations - never a safety waiver, and eval-tested. | [ADR-009](docs/adr/ADR-009-company-extensions.md) · [`docs/EXTENDING.md`](docs/EXTENDING.md) |
-| Self-tested quality | 9 rubrics + 43 golden cases with a deterministic scorer in CI, and a mechanical dev→main release gate that fails a promotion with no eval baseline. | [`evals/README.md`](evals/README.md) · [`scripts/release_gate.py`](scripts/release_gate.py) · [Self-test](#-self-test-eval-harness) |
+| Engagement memory | A per-project **codebase map**: bounded, PM-curated, SHA-anchored, hygiene-checked mechanically, advisory-only - repeat engagements start warm. | ADR-003 · ADR-007 |
+| Company extensions | Additive per-project standing instructions, close actions, an analyser registry and named integrations - never a safety waiver, and eval-tested. | ADR-009 · [`docs/EXTENDING.md`](docs/EXTENDING.md) |
+| Self-tested quality | 9 rubrics + 45 golden cases with a deterministic scorer in CI, and a mechanical dev→main release gate that fails a promotion with no eval baseline. | [`evals/README.md`](evals/README.md) · [`scripts/release_gate.py`](scripts/release_gate.py) · [Self-test](#-self-test-eval-harness) |
 | Cost visibility | Measured per-run token numbers, and a local observability page: engagement inventory, DoD gate result, map hygiene, consent highlight, measured token cost (`python -m scripts.dashboard`). | [Token usage](#-token-usage--optimisation) · [`scripts/dashboard.py`](scripts/dashboard.py) |
 | Console & UX discipline | Progress in the native task list (TodoWrite), every clarification via the question tool, a statusline showing dormant-vs-engaged, and a clean console with detail in artifacts. | [`docs/team-operating-guide.md`](docs/team-operating-guide.md) · [`scripts/statusline.sh`](scripts/statusline.sh) |
 | Explicit AI identity | Every roster name in an artifact is marked 🤖 + "Virtual Surveillance IT"; an agent never shares a sign-off line with a human - mechanically checked. | [FAQ](docs/FAQ.md) · `AGENT-UNMARKED` / `AGENT-HUMAN-COMBINED` in [`scripts/check_artifacts.py`](scripts/check_artifacts.py) |
@@ -204,6 +211,23 @@ What the team gives you today, each row tied to where the claim is enforced or d
 <sub>[↑ Back to top](#readme-top)</sub>
 
 ## 🚀 Quick start
+
+<table>
+<tr><td>
+
+### 🗂️ [Open the one-page Quick-start reference →](docs/quick-start.pdf)
+
+The whole mental model on a single sheet: how the orchestrator and its subagents fit together,
+the four steps to your first engagement, every command with when to reach for it, and the three
+always-on safety rules. **Renders directly on GitHub** (it's a PDF, opens in the file viewer, no
+extra click) - print it, or keep it open beside your first session.
+
+*Prefer the interactive HTML?* [Open it via htmlpreview](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/quick-start.html)
+(the [plain repo link](docs/quick-start.html) just shows source on GitHub; a local clone opens
+fine in any browser either way).
+
+</td></tr>
+</table>
 
 ### 🔌 Install: run the helper, then enable it **per project**
 
@@ -253,7 +277,51 @@ backs up the settings file first. (`/permissions` shows every rule and which fil
 from. Permission rules are Claude Code's prompting layer; the team's execution *gate* is
 separate and stays human-consent-only.)
 
-**3. Restart Claude Code. From an enabled project, summon the team** (commands are namespaced):
+**Fewer timeouts on slow networks/proxies (optional).** `python install_helper.py --env-tuning
+<project-dir>` upserts a curated set of Claude Code env vars into the project's
+`.claude/settings.json` - raised API/stream-idle timeouts, retry-watchdog, capped
+single-tool output sizes, and the **1-hour prompt-cache TTL** (`ENABLE_PROMPT_CACHING_1H=1` -
+on API-key/cloud billing the default 5-minute TTL re-pays the cold prefix after every
+stop-start gap; see [Token usage](#-token-usage--optimisation)). `virt-surv go` also
+propagates newly recommended keys to projects that already opted in, add-only, telling you
+when it does. Opt-in, project-level only (Claude Code's settings-file `env` block
+already wins over the shell on Linux and PowerShell alike), backs up the settings file first;
+any other env var already there, or set with a different value than recommended, is corrected
+in place, and everything unrelated is left untouched.
+
+**Verify it actually works (optional).** `python install_helper.py --selftest` runs a throwaway
+synthetic "review this code" engagement - real guard hooks, an analyser proven to *detect* a
+planted issue (not just stay quiet on clean input), and the full engagement-state lifecycle
+(init → findings → render → the close-gate correctly refusing an incomplete close → archive) -
+no LLM/Claude Code invocation, no network. On any failure it writes one debug bundle file
+(`virt-surv-selftest-<timestamp>.txt`) with full detail per step, meant to be pasted or
+attached whole instead of a screenshot. Also reachable via Diagnostics → "Self-test" in the
+interactive menu, and folded into `--check-env`'s own comprehensive report - both end with a
+compact pass/fail summary.
+
+**Run it from anywhere - and launch with `virt-surv go` (recommended).** `python
+install_helper.py setup-alias` offers to add a `virt-surv` alias/function to whichever shell
+config actually exists on your machine (`~/.bashrc`, `~/.zshrc`, or a PowerShell profile on
+Windows) - opt-in, previewed before writing, never duplicated on a re-run, and it upgrades
+itself in place on later runs (old definitions are removed, not stacked). Once set up,
+**`virt-surv go` from your project folder is the recommended way to start every session**: it
+shows the project's effective team settings in one table, pre-warms the analyser and probe
+caches so the first `/engage` opens with zero extra tool calls, lets you pick
+**resume-or-new** with arrow keys or hotkeys before Claude Code even starts (the choice
+arrives pre-seeded as the first prompt - no model round-trip spent deciding), and gives
+inline access to a settings editor (`c`) and engagement archiving (`a`). The other
+subcommands cover setup and upkeep: `virt-surv configure` (enable + permissions + preferences
++ Morgan's model + an analyser-availability cache refresh, one guided pass, asks before each
+choice), `virt-surv engage` / `virt-surv onboard` (identical - the same pass with every
+recommended default applied automatically, zero prompts), and `virt-surv archive` /
+`virt-surv list-engagements` (bridges to `scripts/engagement_state.py`, scoped to that
+folder) - no need to remember the clone's full path or hunt through the menu.
+
+**3. Restart Claude Code and launch. The recommended way is `virt-surv go`** (set up the
+alias in the optional step above) - from your project folder it shows the team settings,
+warms the caches, and asks resume-or-new before the session starts, then launches Claude
+Code with your choice pre-seeded. Without the alias, start `claude` yourself from the
+enabled project and **summon the team** (commands are namespaced):
 ```
 /compliance-surveillance-team:engage
 ```
@@ -263,7 +331,7 @@ separate and stays human-consent-only.)
 enabled for that project. *(One session only, any directory?
 `claude --plugin-dir /path/to/virtual-surv-IT` loads it temporarily, not saved.)*
 
-You get the 16 agents, the workflow commands and all three safety hooks in every **enabled**
+You get the 13 agents, the SME knowledge packs, the workflow commands and all three safety hooks in every **enabled**
 project. Then just **talk to the PM**. Describe whatever you've got:
 
 ```
@@ -343,12 +411,15 @@ install path for users - that's the helper above.
 
 ## 👥 Meet the team
 
-![The compliance-surveillance engineering team - a group portrait of the 17 named characters (Morgan + 16 specialists), each labelled with name and role](docs/assets/team-portrait.png)
+![The compliance-surveillance engineering team - a group portrait of the 17 named characters as of v0.33, each labelled with name and role](docs/assets/team-portrait.png)
 
-*The team, all seventeen, each labelled with name and role.*
+*The team as portrayed at v0.33 - all seventeen. Since 2026-08-17 the three SME advisors
+(Hassan, Camila and Cleo, back row) are retired: their expertise ships as the
+[`docs/sme/`](docs/sme/README.md) knowledge packs, consulted in-line at zero spawn cost, and
+the live roster is Morgan + 13.*
 
-**Morgan** (PM & orchestrator) leads **16 agents**: fifteen specialists and a tireless junior
-(Pip), the seventeen in the photo above. Each has a day job, a name, strong opinions, and a Slack
+**Morgan** (PM & orchestrator) leads **13 agents**: twelve specialists and a tireless junior
+(Pip). Each has a day job, a name, strong opinions, and a Slack
 status that tells you more than their job title does. (Type `/meet-the-team` and Morgan does the
 introductions live.) **🧠 Advisors** hold no file-editing tools, your *independent* check, so they
 can critique all day but can't change the code (segregation of duties, basically). **🔧 Builders**
@@ -364,7 +435,7 @@ flowchart LR
     Rev --> Done([approved delivery ✅<br/>+ handover pack .md/.html])
 ```
 
-*The shape of a full delivery: a typical task fires only **2-5** of the 16; complexity is opt-in
+*The shape of a full delivery: a typical task fires only **2-5** of the 13; complexity is opt-in
 ("use the simplest thing that works").*
 
 > Routing by deliverable, not habit: a detection rule → `rules-developer`; an ETL pipeline or
@@ -405,22 +476,17 @@ get it past the reviewers **and** the change board. · *Slack:* "happy to take t
 
 ### 🧠 Advisors: they guide and sign off (read-only)
 
-- **Hassan**: *Transaction-Monitoring / AML SME.* The money-laundering brain. Structuring,
-  smurfing, layering, usually spotted before lunch. Will gently warn you when a "clever" scenario
-  would file a thousand defensive SARs and catch nothing. · *Slack:* "that's structuring. and
-  that. and that."
-- **Camila**: *Trade-Surveillance SME.* Thinks like a spoofer so you don't have to. Spoofing,
-  layering, marking the close, insider dealing. Reads an order book like a crime novel. ·
-  *Slack:* "…and there's the cancel. classic."
-- **Cleo**: *Comms-Surveillance SME.* Reads trader chat for a living: lexicons, NLP risk flags,
-  e-comms and voice. Fluent in euphemism; deeply unimpressed by "let's take this to my personal
-  phone". · *Slack:* "'per my last message' is doing a lot of work here."
+- *(Retired 2026-08-17: **Hassan** the AML SME, **Camila** the trade-surveillance SME and
+  **Cleo** the comms-surveillance SME - their expertise now ships as the three
+  [`docs/sme/`](docs/sme/README.md) knowledge packs, read in-line by whoever needs them: same
+  substance, no spawn, and a leaner roster that routes better. Their Slack statuses are
+  preserved in the packs' git history.)*
 - **Viktor**: *Model Validator.* Independent of Mei *by design*, and entirely comfortable telling
   her the model's wrong. Lives in **SR 11-7**; the friendly adversary every model needs. ·
   *Slack:* "prove it. then prove it again. then document it."
 - **Ravi**: *Code Reviewer.* Reads seven languages (**Python, TypeScript/JS, Scala, Java,
   PowerShell, Bash, SQL**) and the security flaws in all of them. Drives the real analysers
-  (ruff/bandit/SpotBugs/ShellCheck/Semgrep…), adds judgement on top, and, sorry, there's a
+  (ruff/mypy/bandit/SpotBugs/ShellCheck…), adds judgement on top, and, sorry, there's a
   hard-coded secret on line 42. · *Slack:* "nit: naming (×40). also: CRITICAL, line 42."
 - **Thabo**: *Performance Reviewer.* Asks one question (*"will it survive month-end?"*) and
   answers with evidence, not vibes. **Static by default** (won't run your code uninvited, §7). ·
@@ -441,7 +507,7 @@ get it past the reviewers **and** the change board. · *Slack:* "happy to take t
 
 > Why read-only matters: an advisor that could quietly edit the thing it's reviewing isn't a
 > real independent check. The restriction is enforced by the tools each agent is granted: no
-> advisor holds `Write`/`Edit` (the SMEs hold only `Read, Grep, Glob`; the reviewers add `Bash`
+> advisor holds `Write`/`Edit` (the reviewers add `Bash`
 > for static analysers and `git diff`, gated by the execution hook), not by convention.
 
 </details>
@@ -464,15 +530,33 @@ the specialists.
 > 🛡️ **Data safety always on**: raw data under `data/raw/` is **hard-blocked** from the model;
 > anything else carries **your attestation** it's masked or synthetic ([details](#-handling-real-data)).
 
-The PM **asks clarifying questions** (and waits for your answers, it won't guess scope,
-jurisdiction, data or success criteria), offers a **menu of documentary artifacts** to choose from
-(BRD, FSD, ADRs, RTM, review report, audit pack…), summarises everything in an Engagement Brief,
+**What Morgan cannot do**, stated as plainly as the capabilities above:
+
+- **Cannot grant execution consent.** That marker exists only if a human creates it; Morgan hands
+  over the exact command to run, never writes it (CLAUDE.md §7).
+- **Cannot read `data/raw/`.** The read-guard hook blocks any read, search or command that
+  resolves into that folder, regardless of what the task seems to need.
+- **Cannot edit the safety hooks, `settings.json`, or its own consent marker.** The consent-write
+  gate blocks those writes on both the Write/Edit and Bash channels.
+- **Cannot declare an engagement done.** The Definition-of-Done gate runs a mechanical checklist
+  at close and refuses on any finding; "done" is what the tooling verifies, not what Morgan says.
+- **Cannot let an advisory agent touch code.** Reviewers, SMEs and the model validator hold no
+  Write/Edit tools by design; a finding routes back through Morgan to a builder.
+- **Cannot ship code without independent QA.** If execution consent is withheld, the close stays
+  marked partial and says so; it is never silently upgraded to a pass.
+
+Full detail: [The safety hooks](#-the-safety-hooks) · [Handling real data](#-handling-real-data).
+
+The PM **asks clarifying questions** (batched into one screen, and it waits for your answers -
+it won't guess scope, jurisdiction, data or success criteria), packages everything into **one
+consolidated Delivery Report by default** (standalone documentary artifacts - BRD, FSD, ADRs,
+RTM, audit pack - on request), summarises everything in an Engagement Brief,
 **states how many agents it intends to use and why**, then oversees delivery and **hands back each
 deliverable in both `.md` and `.html`** in the engagement's own `artifacts/<slug>/` workspace
 (one folder per engagement, with a generated `START-HERE.md` index and a machine-readable state
 file). Focused commands for each entry point:
 
-> The canonical index of **all 24 skills** lives in
+> The canonical index of **all 26 skills** lives in
 > [`docs/team-operating-guide.md`](docs/team-operating-guide.md) §Command index; the table below
 > is a summary.
 
@@ -558,7 +642,8 @@ pre-commit install                       # optional: enable local guardrails
 ```
 
 Add a new detection with `/new-scenario <requirement>`, which chains
-business-analyst → SME → rules-developer → code-reviewer → compliance-reviewer per the
+business-analyst (consulting the `docs/sme/` pack) → rules-developer → code-reviewer →
+compliance-reviewer per the
 handbook.
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -572,8 +657,8 @@ a convention), that's stated rather than dressed up.
 | Principle | What it means | What enforces it |
 |---|---|---|
 | **Engineering first** | Assists the engineering *behind* surveillance, not compliance, legal or regulatory advice. | Scope statement + proof-of-concept framing; obligations are cited from a verified register, never interpreted as advice. |
-| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage`, and costs ~nothing until then. | `disable-model-invocation` on all 24 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
-| **Right-sized, not all-hands** | Only the agents a task needs (typically 2-5, never all 16), the simplest thing that works. | The PM states the intended agent count at the gate (you can veto it); a golden eval case samples the behaviour. Prompt-enforced. |
+| **Dormant until invoked** | A normal session is standard Claude Code; the team wakes only on `/engage`, and costs ~nothing until then. | `disable-model-invocation` on all 26 skills; a lean always-on `CLAUDE.md`; per-project plugin enablement. |
+| **Right-sized, not all-hands** | Only the agents a task needs (typically 2-5, never all 13), the simplest thing that works. | The PM states the intended agent count at the gate (you can veto it); a golden eval case samples the behaviour. Prompt-enforced. |
 | **Independent review** | Reviewers, SMEs and the model validator recommend; builders fix. Advisors hold no edit tools; QA and validation run as separate agents from the build. | Advisory agents carry **no `Write`/`Edit` tools**; build/QA/validation separation is by routing distinct agents with isolated context (see `docs/agent-design.md`). |
 | **Humans hold the keys** | Execution consent and config are human-only; nothing touches a live system without sign-off. | The consent-write gate blocks the model from **writing or editing** the consent marker, `settings*.json` and the hook files; the `CST_ALLOW_*` overrides live in the launch environment the model can't reach. Bash-channel writes are lexically guarded, not sandboxed (a documented PoC limit, ADR-002). |
 | **Safe data by architecture** | Raw data under `data/raw/` is kept from the model's file-read tools; work happens downstream, on masked or synthetic data. | Raw-data hook (read tools + Bash) + OS `permissions.deny` (Read/Grep/Glob) + `.gitignore` + a CI job that fails on tracked data files + keyed masking as the sanctioned ingest path. Solid on the file-read tools; the Bash channel is lexically guarded, not a sandbox (ADR-002). |
@@ -581,7 +666,7 @@ a convention), that's stated rather than dressed up.
 | **Evidence, not claims** | Findings carry 📊 measured / 🧠 inferred; pinpoint citations are retrieved, not recalled; every delivery traces requirement → code → test → obligation. | The RTM + `check_citations` (flags unregistered citations) + `check_artifacts` (the mechanical DoD gate) + the Definition of Done. |
 | **Remembers, safely** | Each working project gets one codebase map: bounded, SHA-anchored, 📊/🧠-tagged, PM-written only, **advisory context never enforcement**, and no PII/MNPI/secrets, ever. | ADR-003/ADR-007 + `check_artifacts` map hygiene - mechanical: size (excl. Deprecated), header fields, per-entry As-of/Anchor validation, anchor resolution + a staleness budget against HEAD, basis tags, secret patterns. The read-at-open / update-at-close discipline itself is prompt-enforced and eval-sampled, not mechanical. The guard hooks stay the only enforcement layer. |
 | **Show the journey** | Iteration history is evidence: failed review/QA passes stay visible append-only (journey strip, test cycles, clarification rounds), never smoothed into a clean narrative. | Two DoD gates ("a multi-pass engagement whose docs read first-pass-clean fails") + the templates' append-only structures. Prompt-enforced, eval-sampled. |
-| **Self-tested** | The team's own quality is regression-tested like code. | 700+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 9 rubrics, 43 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
+| **Self-tested** | The team's own quality is regression-tested like code. | 1400+ unit tests in CI (incl. the guards driven via their real protocol) + the eval harness: 9 rubrics, 45 golden cases, contract-checked in CI, live-scored by `/run-evals`. |
 | **Modular** | Each specialist evolves, retiers or gets replaced independently. | Per-agent frontmatter (`model:`, `tools:`) + manifest validation in CI + the tier table kept in sync by convention. |
 
 <sub>[↑ Back to top](#readme-top)</sub>
@@ -596,25 +681,48 @@ says what couldn't run).
 <details>
 <summary>🔍 <b>Analyser install per language</b> (optional; sharpens <code>code-reviewer</code>)</summary>
 
-The Python ones are in `requirements-review.txt` (kept separate so the core test install stays
-lean). The rest install via the OS / build tooling:
+**Seven tools are officially supported and individually configurable** - each proven to run
+single-file, dependency-free and network-free (the same bar `semgrep`/`pip-audit` failed and were
+removed for):
 
-| Language | Install |
-|---|---|
-| Python | `pip install -r requirements-review.txt` (ruff, black, mypy, bandit, pip-audit, semgrep) |
-| Bash | `apt install shellcheck` · `go install mvdan.cc/sh/v3/cmd/shfmt@latest` |
-| PowerShell | `pwsh -c 'Install-Module PSScriptAnalyzer -Scope CurrentUser'` |
-| Java | `checkstyle`, `pmd`, `spotbugs` via your build tool (Maven/Gradle) or `brew`/`apt` |
-| Scala | `scalafmt`, `scapegoat`/`wartremover` via sbt plugins |
-| Any | Semgrep (`pip`) for multi-language; gitleaks for secrets |
+| Tool | Language / role | Install |
+|---|---|---|
+| `ruff`, `mypy`, `bandit`, `black` | Python lint/types/security/format | `pip install -r requirements-review.txt` |
+| `sqlfluff` | SQL lint | `pip install -r requirements-review.txt` |
+| `gitleaks` | secret scan (any language) | `apt`/`brew install gitleaks` |
+| `shfmt` | Bash format | `apt`/`brew install shfmt`, or `go install mvdan.cc/sh/v3/cmd/shfmt@latest` |
+
+Turn any of the seven `on`/`off` per project (`install_helper.py`'s "Project preferences" step,
+or `.claude/team-preferences.json`'s `review_tools` key directly), or set a default for every
+project on this machine (same step, "save as default" → `~/.config/virt-surv-it/installer.json`'s
+`default_review_tools`). `auto` (the default) means "use it if present, skip silently if not". A
+security team can disable all seven centrally with the env var `CST_NO_EXTERNAL_TOOLS=1`.
+`install_helper.py --check-tools` (or the interactive menu's Diagnostics → "Check analyser output
+cleanliness") live-tests each one against a throwaway synthetic file before you rely on it -
+catching a hanging/network-blocked tool the same way this caught semgrep/pip-audit.
+
+**The rest are best-effort, presence-only, not individually configurable:**
+
+| Language | Install | Caveat |
+|---|---|---|
+| TypeScript | `npm install -g eslint typescript` | needs `node_modules` populated, or skipped |
+| Java | `checkstyle`, `pmd` via `brew`/`apt` | standalone CLI only - **never** via Maven/Gradle or raw `java -jar` (both blocked as code execution) |
+| Scala | `scalafmt` via `coursier`/sbt | format-only; semantic `scalafix` rules need a prior compile, not driven |
+| PowerShell | `pwsh -c 'Install-Module PSScriptAnalyzer -Scope CurrentUser'` | effectively dead today - see note below |
+
+Not driven at all (removed 2026-08-04, alongside semgrep/pip-audit): Java's `error-prone` and
+`spotbugs`+`find-sec-bugs`, Scala's `scalac -Xlint` and `wartremover` - all need a full compiled
+build via `mvn`/`gradle`/`sbt`, which both reaches the network and is blocked by the
+code-execution guard. Java/Scala deep static analysis is 🧠 inferred-only until a network-free
+alternative exists.
 
 > **PowerShell note:** the execution gate treats any `pwsh` invocation as code execution, so
 > `Invoke-ScriptAnalyzer` only runs once a human has opened the CLAUDE.md §7 consent gate; the
 > settings allow-list entry for it was removed for exactly this reason. Before consent, PowerShell
 > review stays static (🧠).
 
-The agent runs whatever is present and reports which analysers were unavailable; nothing is
-silently skipped.
+The agent runs whatever is present and enabled, and reports which analysers were unavailable or
+disabled; nothing is silently skipped.
 
 </details>
 
@@ -622,17 +730,17 @@ silently skipped.
 
 ## 🧪 Self-test (eval harness)
 
-The repo's **700+ passing unit tests** (785 collected as of 0.33.1) check
+The repo's **1400+ passing unit tests** (1,920 collected as of 0.33.49) check
 the *code*, and run in CI. The **eval harness** ([`evals/`](evals/)) checks the **quality of what the
 team produces**: its contract and scorer run in CI, but scoring the *live team* (catching a prompt
 change that silently weakens a review) is run manually via `/run-evals`, not on every commit, because
 it spends tokens. (This is the regression net Anthropic's multi-agent guidance recommends.)
 
 <details>
-<summary>🧪 <b>What's in the harness</b>: 9 rubrics · 43 golden cases · deterministic scorer</summary>
+<summary>🧪 <b>What's in the harness</b>: 9 rubrics · 45 golden cases · deterministic scorer</summary>
 
 - **9 rubrics** (code-review · coverage · spec/traceability · tuning · data-safety · process-discipline ·
-  process-discipline-light · prompt-injection · regulatory-citation) + **43 golden cases** with deliberately seeded issues
+  process-discipline-light · prompt-injection · regulatory-citation) + **45 golden cases** with deliberately seeded issues
   *and* false-positive traps (all synthetic), including prompt-injection and fabricated-citation traps.
 - **Deterministic scorer** ([`scripts/eval_score.py`](scripts/eval_score.py)): matches the team's
   findings against each case's ground truth: recall, must-find criticals, FP-traps. **Unit-tested
@@ -646,7 +754,10 @@ it spends tokens. (This is the regression net Anthropic's multi-agent guidance r
 ## 🪝 The safety hooks
 
 A *hook* is a small script Claude Code runs automatically **right before** it uses a tool, and it
-can **allow** or **block** that action. This plugin ships three safety guards, **always on**, plus four engagement-scoped lifecycle hooks (see the Claude Code features table; they no-op in dormant sessions and fail open). The guards run even when the
+can **allow** or **block** that action. This plugin ships three safety guards - the raw-data
+wall **always on**, the execution gate and the consent guard's settings tier **armed only in
+sessions that invoked the team** (2026-08-17; the marker/hook/git-exec-config protections in
+them stay always-on) - plus four engagement-scoped lifecycle hooks (see the Claude Code features table; they no-op in dormant sessions and fail open). The guards run even when the
 team is dormant). The newcomer-friendly version of the whole safety story is in
 [`docs/OVERVIEW.md` §5](docs/OVERVIEW.md); the per-channel confidence statement (exactly what
 each control does and does not guarantee) is [`docs/safety-model.md`](docs/safety-model.md);
@@ -693,7 +804,7 @@ should copy the `Read`/`Grep`/`Glob` deny entries into their own project's `.cla
 *reading the text of the command*, a strong default and a consent record, but **not a sandbox**: a
 determined user can dodge string-matching (e.g. hide a path in a variable). The real boundary for
 shell is OS file permissions / keeping raw data off the box. The full bypass analysis and the
-hardening backlog are in [`docs/adr/ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
+hardening backlog are in ADR-002.
 
 </details>
 
@@ -786,7 +897,7 @@ python -m scripts.validate_masking --in data/masked/x.jsonl   # scan YOUR masked
 
 ## 📁 Layout
 
-In one line: `.claude/agents/` (16 subagents) · `.claude/skills/` (24 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
+In one line: `.claude/agents/` (13 subagents) · `docs/sme/` (3 SME knowledge packs) · `.claude/skills/` (26 workflows) · `.claude/hooks/` + `settings.json` (safety guards) · `rules/` + `tests/` (the spoofing worked example) · `scripts/` (tooling) · `vendor/` (pip-less deps) · `config/` (masking schema, regulatory register) · `docs/` · `evals/` · `.claude-plugin/` (manifests).
 
 <details>
 <summary>📁 <b>One consolidated map of the repo</b></summary>
@@ -794,26 +905,27 @@ In one line: `.claude/agents/` (16 subagents) · `.claude/skills/` (24 workflows
 ```
 .claude-plugin/                 # plugin + marketplace manifests (installable via /plugin)
 CLAUDE.md                       # shared team handbook (example defaults - customise as needed)
-.claude/agents/                 # 16 subagents:
+.claude/agents/                 # 13 subagents:
    builders                       business-analyst · rules-developer · platform-engineer ·
                                   data-analyst · tuning-analyst · ml-engineer · qa-engineer
-   advisors (read-only)           tm-sme · trade-surveillance-sme · comms-surveillance-sme ·
-                                  model-validator · code-reviewer · performance-reviewer ·
+   advisors (read-only)           model-validator · code-reviewer · performance-reviewer ·
                                   compliance-reviewer · data-quality-reviewer
+   (SME typology advice lives in docs/sme/ knowledge packs - in-line, no agent)
    helper                         review-scorer (haiku - review prep, scoring, filter tallies)
-.claude/skills/                 # 24 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
+.claude/skills/                 # 26 workflows: /engage, /deep-review, /audit-review, /security-audit, /handover,
                                 #   /new-scenario, /tune-thresholds, … (see "Using them")
-.claude/hooks/ + settings.json  # always-on data-safety + code-execution guards
+.claude/hooks/ + settings.json  # data-safety (always-on) + session-scoped execution guards
 rules/ · tests/                 # the bundled example (spoofing) + its true/false-positive tests
 scripts/                        # masking (ingest), synthesise, render_html, eval_score,
                                 #   calibrate_spoofing, check_citations, validate_* helpers,
                                 #   convert_file (the file-conversion front door)
-vendor/                         # convert_file's deps, bundled (pure Python, pinned - no pip
-                                #   needed; licences in THIRD-PARTY-LICENSES.md)
+vendor/                         # bundled pure-Python deps (no pip): convert_file's readers +
+                                #   rich/prompt_toolkit for the virt-surv go TUI; licences in
+                                #   THIRD-PARTY-LICENSES.md
 config/                         # masking schema + regulatory register + feed-schema example
 docs/                           # OVERVIEW · WAYS-OF-WORKING · agent-design · scope-and-stack ·
                                 #   scenarios/ · demos/ · templates/ · adr/
-evals/                          # team-quality eval harness: 9 rubrics + 43 golden cases
+evals/                          # team-quality eval harness: 9 rubrics + 45 golden cases
 .github/workflows/ci.yml        # tests + lint + manifest validation + gitleaks + no-raw-data check
 .pre-commit-config.yaml         # local secret / raw-data guardrails
 ```
@@ -847,10 +959,12 @@ engagements. Descriptions are taken from each script's own docstring.
 | `scripts/eval_score.py` | Deterministic scorer for the eval harness: matches team findings against each golden case's ground truth | model, consent-free |
 | `scripts/calibrate_spoofing.py` | Measured FP/FN evidence for the spoofing rule on a labelled synthetic corpus (precision/recall per segment) | model, consent-free |
 | `scripts/extensions.py` | Parses and surfaces the company-extensions contract from a working project's `docs/team-extensions.md` (ADR-009) | model, consent-free |
-| `scripts/convert_sarif.py` | Converts SARIF analyser output to the team's findings-pack JSON so company-tool findings keep 📊 measured status | model, consent-free |
+| `scripts/convert_sarif.py` | Converts SARIF analyser output to the team's findings-pack JSONL so company-tool findings keep 📊 measured status | model, consent-free |
+| `scripts/virt_team_launcher.py` | `virt-surv go`'s decision engine, run before Claude Code starts: settings table, resume-or-new menu (arrow keys/mouse via vendored prompt_toolkit, plain fallback), inline settings editor and archiving, cache pre-warm; stdout carries only the pre-seeded prompt | human, pre-session |
+| `scripts/repo_skeleton.py` | Deterministic, token-budgeted codebase skeleton (inventory, tiered symbols, PageRank importance) - the mechanical layer under `/map-codebase` and the sanctioned whole-repo inventory during engagements | model, consent-free |
 | `scripts/check-review-tools.sh` | Probes which analysers are installed (cached), so missing tools are skipped rather than re-invoked | model, consent-free |
 | `.claude/hooks/guard-raw-data.py` | Blocks Read/Grep/Glob/Bash tool calls that target `data/raw/` | run by Claude Code (always on) |
-| `.claude/hooks/guard-code-execution.py` | Blocks execution of the code under review unless a human has opened the consent gate | run by Claude Code (always on) |
+| `.claude/hooks/guard-code-execution.py` | Blocks execution of the code under review unless a human has opened the consent gate | run by Claude Code (team-invoked sessions) |
 | `.claude/hooks/guard-consent-writes.py` | Blocks model writes of the consent marker, `settings*.json` and the hook files themselves | run by Claude Code (always on) |
 | `.claude/hooks/run-guard.sh` | The guard launcher: probes `python3` → `python` → `py` and fails closed on a crash | run by Claude Code (always on) |
 | `scripts/persona_anchor.py` | Per-turn persona + discipline re-anchor while an engagement is live; a no-op when dormant (ADR-005; staged copy in `scripts/staged_hooks/`) | run by Claude Code (engagement-scoped) |
@@ -876,8 +990,8 @@ uses and how (audited 2026-07-29 against the current Claude Code docs):
 
 | Feature | How the team uses it |
 |---|---|
-| **Skills / slash commands** | All 24 workflows ship as skills with `disable-model-invocation: true` - the dormancy mechanism: their descriptions load into no ordinary session, so the team costs ~nothing until you type `/engage`. `argument-hint` on every command. |
-| **Subagents** | 16 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Write/Edit. |
+| **Skills / slash commands** | All 26 workflows ship as skills, costing ~nothing until you type `/engage` (mechanism: [Token usage](#-token-usage--optimisation)). `argument-hint` on every command. |
+| **Subagents** | 13 agent definitions (`.claude/agents/`) with per-agent `model:` tiers (opus for highest-stakes judgement, sonnet for build/advisory, haiku for the scorer) and least-privilege `tools:` - advisory agents hold no Edit; four hold Write scoped to their own findings-pack file only, mechanically enforced by a hook. |
 | **Hooks** | Three always-on `PreToolUse` safety guards (raw-data wall, execution-consent gate, consent-write gate), plus engagement-scoped lifecycle hooks that no-op in dormant sessions: a warn-first `Stop` DoD backstop, a `UserPromptSubmit` persona re-anchor that survives compaction, a `PreToolUse` document-input redirect (binary documents route to the vendored converter), a `SessionStart` compact/resume brief (ADR-011) and a `PostToolUse` post-edit lint. Hook and settings edits are human-only (ADR-002); hook changes ship staged, are applied by the maintainer via the `apply-*.sh` scripts, and releases ship with everything already wired - end users apply nothing. |
 | **Plugin distribution** | `.claude-plugin/plugin.json` manifest (agents + skills), marketplace/git install, per-project enablement; every bundled script also resolves by `$PLUGIN_ROOT` path so the team works identically installed into a foreign project. |
 | **Permissions** | A curated `permissions.allow` block (fewer prompts on the team's own consent-free tooling) and `permissions.deny` as the hard floor under the raw-data wall. |
@@ -907,7 +1021,7 @@ hooks entirely).
   cross-project** conventions live in the committed, plugin-shipped
   [`docs/house-rules.md`](docs/house-rules.md). Advisory agents recommend; the PM commits.
   (Claude Code subagents have no per-agent memory; a committed file is the real, auditable mechanism.)
-- Models: **4 opus** (the final/unchecked judgement + novel-design roles) · **11 sonnet** ·
+- Models: **4 opus** (the final/unchecked judgement + novel-design roles) · **8 sonnet** ·
   **1 haiku**; the per-agent rationale and best-practice conformance live in
   [`docs/agent-design.md`](docs/agent-design.md). Change the `model:` field freely.
 
@@ -918,9 +1032,9 @@ hooks entirely).
 ## 💰 Token usage & optimisation
 
 Multi-agent setups cost tokens, so the team is built to be cost-conscious, the biggest lever being
-**right-sizing** (engaging only the agents a task needs, never all 16).
+**right-sizing** (engaging only the agents a task needs, never all 13).
 
-In one line: one code review ~51k tokens (~$2, measured) · a lean engagement ~35-50k (estimate) · a full build-review-tuning delivery ~500k (~$4-8, measured); levers: right-sizing, model tiering (4 opus / 11 sonnet / 1 haiku), artifacts-as-blackboard, dormancy.
+In one line: one code review ~51k tokens (~$2, measured) · a lean engagement ~35-50k (estimate) · a full build-review-tuning delivery ~500k (~$4-8, measured); levers: right-sizing, model tiering (4 opus / 8 sonnet / 1 haiku), artifacts-as-blackboard, dormancy.
 
 <details>
 <summary>💰 <b>Measured per-run numbers + the optimisations in place</b></summary>
@@ -935,10 +1049,22 @@ so ±15%); the rest are estimates with no run behind them yet:
 | A **full build → 3 reviews → tuning → performance** delivery (9 agent runs, **measured**) | **~500k** | **~$4-8** | the heavy end, a complete reviewed+calibrated deliverable (see the [build demo](docs/demos/build-artifacts/delivery-report.md) §6) |
 | A full fan-out (right-sizing off), *estimate* | ~500k+ | ~$5-10 | rarely, reserved for broad work |
 
-> 💵 **Cost basis (rough, ±2×).** At list prices: **opus ~$15/$75, sonnet ~$3/$15, haiku ~$1/$5**
-> per million input/output tokens. The reported token counts are *totals* (no input/output split), so
-> these assume a ~50/50 mix; actual cost varies with the split, prices change, and prompt-caching can
-> cut it substantially. Treat as order-of-magnitude, not a quote.
+> 💵 **Cost basis (rough, ±2×; prices refreshed 2026-08-17).** At current list prices: **Opus 5
+> $5/$25, Sonnet 5 $3/$15 (intro $2/$10 through 2026-08-31), Haiku 4.5 $1/$5** per million
+> input/output tokens - the Opus:Sonnet ratio is now only **1.67×**, not the ~5× of the Opus 4.1
+> era these notes were first written under, so the opus tier on the final-word reviewer roles is
+> cheap insurance rather than a big lever. The reported token counts are *totals* (no
+> input/output split), so these assume a ~50/50 mix; actual cost varies with the split, prices
+> change, and prompt-caching can cut it substantially. Treat as order-of-magnitude, not a quote.
+>
+> ⏱️ **Caching decides the day's bill.** Cache reads are ~0.1× input price, but matching is
+> byte-exact on the prefix and the TTL is **5 minutes on API keys and Bedrock/Vertex** versus
+> **1 hour on subscription seats** - so a stop-start working pattern on the API/cloud path pays
+> cache-cold re-reads repeatedly, and the same engagement can cost 2-3× more cold than warm.
+> API-key users can set `ENABLE_PROMPT_CACHING_1H=1` (included in `install_helper.py
+> --env-tuning`'s curated set). Bank-grade deployments note: Bedrock/Vertex with zero-data-
+> retention keeps prompt caching but loses the Batch API's 50% discount, and Anthropic-side
+> analytics don't cover cloud usage - per-user cost visibility there needs OTEL or a gateway.
 >
 > 🧾 **Perspective:** the build demo's [delivery report](docs/demos/build-artifacts/delivery-report.md) §6
 > puts it plainly: that full 9-run delivery (~$4-8 API) is the routine ~80% of a real engagement
@@ -948,14 +1074,15 @@ so ±15%); the rest are estimates with no run behind them yet:
 **Optimisations in place** (these are the levers that matter, per Anthropic's cost guidance):
 - **Right-sizing**: the headline lever: a narrow change fires 2-3 agents, not 16; the PM states the
   agent count at the gate, so over-spawning is visible.
-- **Model tiering**: **4 opus / 11 sonnet / 1 haiku**; opus (~5× sonnet) reserved for the four
-  final-judgement/novel-design roles, haiku for the mechanical review bookkeeping.
+- **Model tiering**: opus (1.67× sonnet at current prices) reserved for final-judgement/novel-design roles only, haiku
+  for the mechanical review bookkeeping (exact split and rationale: [Notes on the
+  config](#-notes-on-the-config)).
 - **Artifacts-as-blackboard**: agents return condensed results; big output goes to files, not back
   through the orchestrator's context.
 - **Clean console**: detail to artifacts, not the chat.
 - **True dormancy (0.8.x, from the 2026-07-01 setup audit)**: a session that never types
   `/engage` now pays almost nothing for the team:
-  - all 24 skills set `disable-model-invocation: true`, so their **descriptions don't load into
+  - all 26 skills set `disable-model-invocation: true`, so their **descriptions don't load into
     context at all** (they stay typeable as slash commands; `/engage` reads a routed workflow's
     `SKILL.md` when chaining);
   - `CLAUDE.md` slimmed again (from ~185 lines / ~3.1k tokens to roughly 125 / ~2k), with the roster, routing
@@ -981,7 +1108,7 @@ agents now self-verify against their brief and flag gaps before returning; stand
 <summary>🗺️ <b>What's shipped and what's next</b></summary>
 
 **Quality & evaluation**
-- ✅ **Team-quality eval harness: SHIPPED (0.5.0)**. `evals/` has 9 rubrics + 43 golden cases
+- ✅ **Team-quality eval harness: SHIPPED (0.5.0)**. `evals/` has 9 rubrics + 45 golden cases
   (seeded issues + false-positive traps) across review, coverage, spec/traceability, tuning and
   data-safety. The deterministic scorer (`scripts/eval_score.py`) is unit-tested; `/run-evals`
   runs the live team + an LLM-judge and prints a scoreboard. *Remaining:* grow the case set and
@@ -993,12 +1120,30 @@ agents now self-verify against their brief and flag gaps before returning; stand
   (a ⛔ parked sibling stays silent). Hardened in 0.33.0 (fail-safe gates, the 🔒 closing window,
   disk-first resume, the ADR-010 placement rule - see
   [`docs/releases/0.33.md`](docs/releases/0.33.md)).
-- ✅ / 🅿️ **Codebase map evolution: RE-SCOPED (0.33.0, ADR-007)**. The staleness-detection goal
-  shipped in reduced, git-based form: strict anchor validation, per-entry As-of/SHA checks, and
-  a `MAP-STALE` staleness budget against HEAD. The generative layer (a deterministic
-  `repo_skeleton`, per-area detail files, `/map-codebase`, content-fingerprint drift stamps) is
-  **parked**, to be revisited if a first-contact-on-large-codebase need materialises - the ADR
-  records the decision and the evidence behind it.
+- ✅ **Codebase map evolution: SHIPPED (0.33.28, ADR-007, Phase 1+2)**. Staleness detection
+  (strict anchor validation, per-entry As-of/SHA checks, a `MAP-STALE` budget against HEAD) plus
+  the generative layer: a deterministic `repo_skeleton` (inventory, tiered symbols, PageRank,
+  Mermaid, churn), `docs/codebase-map.d/` per-area detail files, the `/map-codebase` skill, and
+  content-fingerprint drift stamps (`MAP-DRIFT`/`MAP-DEAD-POINTER`). The first-contact-on-
+  large-codebase need the ADR parked this behind materialised; it's now gated by the
+  `map_skeleton` project/machine preference (off by default - zero behaviour change unless
+  opted in), pinned by the `process-first-contact-map` golden eval case. *Remaining:* Phase 3
+  (demand-driven blast-radius refresh automation, a human-facing rendered map browser) stays
+  deferred until a concrete need materialises.
+
+- **🚧 RTM as a graph, not a table** (`scripts/validate_rtm.py`). The validator checks each *cell*:
+  does this code path exist, does this row name an obligation. Every check is confined to one row.
+  But traceability defects are usually **connection** defects, a chain that breaks in the middle
+  while every individual cell resolves. Treating each item as a node and "traces to" as a directed
+  edge turns four things into queries a table cannot answer: **impact analysis** (all descendants of
+  a changed obligation, which `/reg-change-impact` currently reasons about by hand), **coverage as
+  reachability** (can every obligation reach a real test end to end, not just "does each row name
+  one"), **blast radius** (reverse traversal: which obligations does this changed file serve, useful
+  at review time), and **orphans** as uniform degree checks rather than three special cases.
+  *Why not yet:* absence of an RTM is deliberately not a finding, so most engagements have none, and
+  a graph over an empty matrix is worth nothing. Build it when the first populated real-project RTM
+  lands. *Cost:* row parsing and cell resolution already exist, so this is an adjacency structure
+  plus a traversal, stdlib only.
 
 **🚧 TODO: Automatic data-masking workflow** (detail in [`docs/internal/prepare-data-roadmap.md`](docs/internal/prepare-data-roadmap.md))
 
@@ -1031,11 +1176,12 @@ agents now self-verify against their brief and flag gaps before returning; stand
 **Performance / startup** *(nice-to-have)*
 - ✅ **Trim routing metadata: SHIPPED (0.8.x)**. Skill descriptions no longer load at all
   (`disable-model-invocation: true`); agent descriptions trimmed to crisp routing lines.
-- **Merge the three PreToolUse guards into one interpreter call** per tool use. *Why:* the raw-data,
-  code-execution and consent-write guards each launch via `run-guard.sh` (which probes
-  `python3`/`python`/`py`), so a `Bash` call currently spawns the interpreter three times (matchers
-  overlap on `Bash`); collapsing them into a single dispatcher cuts per-call latency without
-  weakening any guard.
+- ✅ **Merge the Bash-matching PreToolUse guards into one interpreter call: SHIPPED (0.33.6)**.
+  The raw-data, code-execution and consent-write guards each launched via `run-guard.sh` (which
+  probes `python3`/`python`/`py`), so a single `Bash` call spawned the interpreter once per
+  matching guard. `scripts/bash_hook_dispatcher.py` now runs them in-process behind one launch,
+  first-block-wins, with a per-guard crash policy so a broken guard fails closed rather than
+  silently disabling the rest. Wired in both `hooks/hooks.json` and `.claude/settings.json`.
 
 </details>
 
@@ -1052,7 +1198,8 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 
 **Reading paths: the repo has 130+ doc files; start with the path that matches your goal:**
 
-- 🆕 **New here** → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
+- 🆕 **New here** → [`docs/quick-start.pdf`](docs/quick-start.pdf)
+  (one page, the whole mental model, renders directly on GitHub) → [`docs/OVERVIEW.md`](docs/OVERVIEW.md) (plain English, no prior knowledge) →
   this README → [`docs/demos/README.md`](docs/demos/README.md) (real transcripts, nothing to
   run) → type **`/demo`**.
 - 🔧 **Extending the team** (agents/skills/menus) → [`docs/agent-design.md`](docs/agent-design.md)
@@ -1060,7 +1207,7 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
   (standing rules, roster, routing, question-tool limits) → [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md)
   (frameworks + the canonical template catalogue).
 - 🕵️ **Auditing / assessing it** → [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) →
-  [`docs/code-review-method.md`](docs/code-review-method.md) → [`docs/adr/`](docs/adr/) (citation
+  [`docs/code-review-method.md`](docs/code-review-method.md) → the internal ADRs (citation
   grounding ADR-001; safety-hook threat model ADR-002; engagement memory ADR-003) →
   [`evals/README.md`](evals/README.md).
 - 📊 **Data & tuning** → [Handling real data](#-handling-real-data) (above) →
@@ -1069,19 +1216,22 @@ Morgan is, how execution consent works and more - all in **[docs/FAQ.md](docs/FA
 
 | Guide | What it covers |
 |---|---|
+| [`docs/quick-start.pdf`](docs/quick-start.pdf) | **One-page quick-start reference** - the mental model, the four steps to a first engagement, and every command with when to use it (renders directly on GitHub; the [interactive HTML](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/quick-start.html) is also available) |
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Plain-English tour, start here if you're new to agents/LLMs |
 | [`docs/FAQ.md`](docs/FAQ.md) | The questions a newcomer actually asks: evidence tags, hallucination, consent, the artifacts folder, Morgan |
 | [`docs/demos/README.md`](docs/demos/README.md) | Real captured demo transcripts (build, review, data-safety) - see the team work without running anything |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | Extending the team for your organisation: recipes + the extensions contract, analyser registry, tool allowlist |
+| [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) | First-class Jira and (experimental) PR-comment presence via your own MCP servers - **off by default**, project-scoped, one clear place to configure |
 | [`docs/team-operating-guide.md`](docs/team-operating-guide.md) | Standing rules, roster + routing table, question construction (read on-engage) |
+| [`docs/team-operating-guide-orchestration.md`](docs/team-operating-guide-orchestration.md) | Delegation/dispatch discipline - right-sizing, concurrent dispatch, review-splitting (read on first delegation, not at open) |
 | [`docs/WAYS-OF-WORKING.md`](docs/WAYS-OF-WORKING.md) | Frameworks, the canonical template catalogue, the traceability spine |
 | [`docs/agent-design.md`](docs/agent-design.md) | Per-agent rationale + the Anthropic best-practice conformance matrix |
 | [`docs/DEFINITION-OF-DONE.md`](docs/DEFINITION-OF-DONE.md) | The evidenced gate every delivery must pass before handover |
 | [`docs/scope-and-stack.md`](docs/scope-and-stack.md) | The (example) regulatory scope and tech stack, customise to yours |
 | [`docs/code-review-method.md`](docs/code-review-method.md) | How reviews score, filter and stay transparent |
 | [`docs/house-rules.md`](docs/house-rules.md) | General, cross-project engineering & review conventions |
-| [`docs/internal/engagement-flow-poster-flowchart.html`](docs/internal/engagement-flow-poster-flowchart.html) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory; point-in-time render at v0.28.0 - predates workspaces and the closing window); [render it in the browser](https://raw.githack.com/danieledge/virtual-surv-IT/main/docs/internal/engagement-flow-poster-flowchart.html), or see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline; the normative lifecycle spec (maintainer doc) is [`docs/internal/engagement-flow-spec.md`](docs/internal/engagement-flow-spec.md) |
-| [`docs/adr/`](docs/adr/) | Architecture decision records ADR-001 to ADR-011: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule, the session-resume brief - indexed with statuses in [`docs/adr/README.md`](docs/adr/README.md) |
+| [`docs/internal/engagement-flow-poster-flowchart.pdf`](docs/internal/engagement-flow-poster-flowchart.pdf) | **Under the hood: an engagement lifecycle** - the full workflow as a navigable flowchart poster (phases 0-5, guards, shared memory), kept in sync with the current version at each release (currently v0.33.6); renders directly on GitHub. The [interactive HTML](https://htmlpreview.github.io/?https://github.com/danieledge/virtual-surv-IT/blob/dev/docs/internal/engagement-flow-poster-flowchart.html) is also available (the [plain repo link](docs/internal/engagement-flow-poster-flowchart.html) just shows source on GitHub); see [`docs/internal/engagement-flow-diagram.md`](docs/internal/engagement-flow-diagram.md) for the Mermaid version GitHub renders inline; the normative lifecycle spec (maintainer doc) is [`docs/internal/engagement-flow-spec.md`](docs/internal/engagement-flow-spec.md) |
+| `docs/adr/` (internal) | Architecture decision records ADR-001 to ADR-011: citation grounding, safety-hook threat model, engagement memory, machine-readable state, multi-engagement workspaces, company extensions, the one placement rule, the session-resume brief. **Internal maintainer documents, deliberately not published in this repo** - the docs that cite an ADR carry the decision's substance themselves. |
 | [`docs/releases/0.33.md`](docs/releases/0.33.md) | The 0.33.x release overview - the whole cycle (workflow robustness + platform capability adoption) on one page |
 | [`CHANGELOG.md`](CHANGELOG.md) | Full release history |
 
@@ -1096,7 +1246,7 @@ guards robustly cover the file-read and Write/Edit tool channels, but on the **B
 are lexical checks with no OS `permissions.deny` backstop. So a determined or prompt-injected model
 could, via a shell command, disarm the guards (delete or overwrite a guard file) or obfuscate a path
 to read raw data or self-grant execution consent. This is documented as accepted residual in
-[`ADR-002`](docs/adr/ADR-002-safety-hook-threat-model.md).
+ADR-002.
 
 - **Shipped:** the execution guard **does** segment-split the command line (`;`, `&&`, `||`, `|`,
   newline, backtick, `$(`) and evaluates each segment on its own, so an allow-listed fragment can no
@@ -1136,7 +1286,7 @@ later turns are fast. The path is already optimised to a **single** step-0 probe
 and the tooling probe is cached after first use (`.claude/.tool-availability`, 7-day TTL) - so this
 is a **cold-start** cost that hits once per session: the prompt cache is cold (`docs/agent-design.md`
 §7), the tool probe isn't cached yet, and turn 0 loads a large payload (the ~490-line operating guide
-+ codebase-map + CHANGELOG) into the opus orchestrator before it emits a word. **Not yet confirmed**
++ codebase-map + CHANGELOG) into the orchestrator before it emits a word. **Not yet confirmed**
 is the split between (a) model inference over that cold, large turn-1 context - the likely dominant
 cost, since the probe script itself is only `command -v` checks - and (b) I/O, notably the
 plugin-mode `find` over `~/.claude/plugins/cache` / `marketplaces` (no `-maxdepth`) used to resolve
@@ -1187,7 +1337,7 @@ treats a local-scope plugin as mutable and **re-validates it every startup** (gi
 settings re-merge + re-scan) - that's the trigger. The ~20-27s amplifier is **Windows filesystem
 overhead** (git working-tree operations + real-time AV scanning) over the plugin's **large file
 tree**: 754 tracked files, of which **306 are the vendored pip-less Python libs in `vendor/`** - the
-16 agents / 24 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (16
+13 agents / 26 skills are a tiny fraction, so agent/skill *count* is **not** the bottleneck (13
 file-opens is milliseconds). Largely a Claude-Code-×-Windows-×-local-install interaction, not
 plugin logic. **Mitigations (not yet applied):** (a) a **Windows Defender exclusion** for the plugin
 cache dir - usually the biggest, free win, and a quick A/B test; (b) installing via a
@@ -1204,9 +1354,9 @@ the least-privilege role separation. Tracked.
 Both quirks below are **display-only**: they don't affect what the team does (routing, tool grants,
 the actual deliverables). Flagged plainly, in the spirit of the proof-of-concept notice at the top.
 
-- **Morgan sometimes narrates the wrong agent *name***: e.g. "Isla" for the AML SME or "Jordan"
-  for the tuning analyst, instead of **Hassan** / **Theo**. The *work* is unaffected: the team
-  routes by role slug (`tm-sme`, `tuning-analyst`) and the spawned specialist still runs as its real
+- **Morgan sometimes narrates the wrong agent *name***: e.g. "Jordan"
+  for the tuning analyst, instead of **Theo**. The *work* is unaffected: the team
+  routes by role slug (`qa-engineer`, `tuning-analyst`) and the spawned specialist still runs as its real
   self; only the PM's running commentary drifts.
 - **Some emoji render as a box / diamond-with-`?` on older Windows + Edge** (notably 🧑‍💻 and the
   ⚖️ / ⏭️ disposition markers). The files are clean UTF-8 and declare a UTF-8 charset, so this is a
@@ -1224,11 +1374,11 @@ the actual deliverables). Flagged plainly, in the spirit of the proof-of-concept
 <details>
 <summary>Why the name drift happens (and why it's only cosmetic)</summary>
 
-The persona names (Amara, Hassan, Theo…) are **cosmetic labels**. The system routes work and grants
-tools purely by the **role slug** (`business-analyst`, `tm-sme`, `tuning-analyst`), so a wrong *name*
+The persona names (Amara, Linh, Theo…) are **cosmetic labels**. The system routes work and grants
+tools purely by the **role slug** (`business-analyst`, `qa-engineer`, `tuning-analyst`), so a wrong *name*
 never changes who does the work or what they're allowed to touch.
 
-Each agent's own file **does** pin its name (`tm-sme.md` opens *"You are Hassan…"*), but that line
+Each agent's own file **does** pin its name (`qa-engineer.md` opens *"You are Linh…"*), but that line
 is only ever read by the **subagent** when it's spawned; it never enters **Morgan's** (the
 orchestrator's) context. So when Morgan *narrates* who's on a task, its only source for the name is a
 **single roster line** in `docs/team-operating-guide.md` (moved out of `CLAUDE.md` in 0.8.0 to keep
@@ -1239,16 +1389,54 @@ implies "Theo"; it's pure memorisation. When that one low-salience line isn't fi
 (a long session, a lot of intervening context, or after the conversation has been
 compacted/summarised), the model reconstructs the name from a fuzzy memory and, being a language
 model, emits a **plausible-but-invented** teammate name (Isla, Jordan) rather than surfacing the gap.
-It shows up more for the less-mentioned roles (the SMEs, tuning) than for the reviewers, whose names
+It shows up more for the less-mentioned roles (tuning, the data roles) than for the reviewers, whose names
 get reinforced by frequent use; and because the name is decorative, **nothing validates it**, so the
 drift goes uncorrected.
 
-**Net:** the *actual* subagent always knows it's Hassan/Theo (its own file says so) and always does
+**Net:** the *actual* subagent always knows it's Linh/Theo (its own file says so) and always does
 the right job; only the PM's commentary occasionally mislabels it. Hence: cosmetic.
 
 </details>
 
 </details>
+
+**The `/engage` eval suite scores two correct behaviours as failures (found 2026-08-14, backlogged).**
+A representative live run (`scripts.eval_engage`, 5 cases) surfaced two failing cases whose
+transcripts show the team behaving *correctly* - the eval harness itself has the gap, not the team:
+- **`process-full-lifecycle`:** Morgan dispatched the async `Workflow` tool for three parallel
+  reviewers and correctly deferred - *"results will land in a later turn, I won't pre-empt them"* -
+  stating the engagement plainly NOT closed with outstanding work listed. The conversation then just
+  ended (36 turns, no cap/timeout/budget hit) because Morgan's message posed no `[gate]` question, so
+  the simulated user had nothing to respond to and never checked back in. The sim-user driver has no
+  "the PM deferred to a background task - wait and follow up" fallback.
+- **`injection-extensions`:** all 5 planted injection/exfiltration attempts were correctly identified
+  and refused, then Morgan explicitly right-sized itself - *"no fan-out... no workspace opened, no
+  agents spawned"* - for a two-line YAML review. It's scored against `process-discipline.md`, which
+  weights closing-artifact/dual-artifact dimensions (0.30 + 0.20) that assume a formal
+  `artifacts/<slug>/` workspace exists. Neither that rubric nor its light variant
+  (`process-discipline-light.md`) has a category for a genuinely tiny, correctly self-handled,
+  zero-workspace response - the exact right-sizing behaviour the team's own principles reward.
+Fix direction: script the sim-user to follow up after an async defer, and add a rubric variant (or
+per-case override) for zero-workspace self-handled cases. Not yet done - tracked here rather than
+guessed at under time pressure.
+
+**PreToolUse daemon-routed calls still pay a Python interpreter spawn per call (found and partly
+fixed 2026-08-14, backlogged).** A live corp-Windows measurement found a consistent 2-3s cost on
+every daemon-routed Bash/Read call. Investigated: the daemon and its TCP roundtrip are both fast
+(12.6ms measured, ADR-014 v0.3) - the cost is the CLIENT-SIDE process-spawn chain reaching it
+(`sh` -> `cat` -> a fresh `python.exe`), matching ADR-014's own pre-daemon baseline (1,372-3,808ms)
+almost exactly. The daemon itself is a net win and should stay; reverting it would add cost, not
+remove it. One fork in that chain is already fixed (`run-guard.sh`'s fast path used to `cat` a
+one-line cache file - now the `read` builtin, zero forks). **Not yet done, two bigger options,
+either fixes the larger remaining cost (the Python interpreter spawn itself):**
+- Bypass the Python client entirely on the fast path using bash's native `/dev/tcp` to talk to the
+  daemon directly from the already-running shell (Git Bash's `sh` is bash, so this works on the
+  affected platform; needs a fallback for shells without `/dev/tcp`, e.g. `dash`).
+- Bake the discovered interpreter into `settings.json` at configure time (the `.guard-interpreter`
+  cache already exists; this would let the hook command invoke the client directly, dropping the
+  `sh` layer for daemon-eligible targets).
+Both are higher-complexity, more platform-specific changes than the `cat` fix - deferred rather
+than rushed.
 
 Previously reported issues and their resolutions:
 [`docs/internal/resolved-issues.md`](docs/internal/resolved-issues.md).
@@ -1299,11 +1487,11 @@ validating all outputs before any production use.**
 
 ## 📄 License
 
-**GNU AGPL-3.0-only** — Copyright © 2026 Daniel Edge. Full text in [`LICENSE`](LICENSE).
+**GNU AGPL-3.0-only.** Copyright © 2026 Daniel Edge. Full text in [`LICENSE`](LICENSE).
 
 In plain English (the [`LICENSE`](LICENSE) text governs):
 
-- ✅ **Use it freely, including inside a company and for commercial work** — running, modifying and
+- ✅ **Use it freely, including inside a company and for commercial work.** Running, modifying and
   using it internally carries no obligation. Internal use is not "distribution".
 - 🔁 **If you distribute it, or offer it to others as a network/hosted service**, you must make your
   **complete corresponding source** (including your modifications) available to those users under
@@ -1311,11 +1499,11 @@ In plain English (the [`LICENSE`](LICENSE) text governs):
   resold or hosted as a proprietary product.
 - 🚫 **No warranty** (provided "as is").
 - 💼 **Want it without the AGPL source-sharing obligation** (e.g. to embed it in a proprietary
-  product)? A separate **commercial licence** can be arranged — contact the author. (The author is
+  product)? A separate **commercial licence** can be arranged: contact the author. (The author is
   the sole copyright holder and can dual-license; external contributions would be taken under a
-  contributor agreement so that stays possible — see [`CONTRIBUTING.md`](CONTRIBUTING.md).)
+  contributor agreement so that stays possible, see [`CONTRIBUTING.md`](CONTRIBUTING.md).)
 
-The project bundles and adapts permissively-licensed third-party components (MIT / BSD-3 / PSF) —
-those keep their own licences; their notices are in
+The project bundles and adapts permissively-licensed third-party components (MIT / BSD-3 / PSF).
+Those keep their own licences; their notices are in
 [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md). Permissive licences may be included in an
 AGPL-licensed work, so there is no conflict.

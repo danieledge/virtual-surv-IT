@@ -13,6 +13,27 @@ the very next Bash call, ~2 minutes total for just the open sequence, even with 
 individual hang already fixed. This dispatcher runs the SAME five checks - unmodified,
 imported by file path, not reimplemented - in ONE process instead of five.
 
+(2026-08-03: `guard_findings_pack_write` joined the registry below as a sixth check, added
+after this consolidation rather than migrated into it - the "five" above is the historical
+count from the original migration, not a ceiling. New checks register the same way: an entry
+in `_CHECKS` below - but unlike the 2026-08-03 addition, a check that needs a tool_name NOT
+already in the top-level PreToolUse matcher (hooks.json / settings.json) also needs that
+matcher widened, or its process never starts. That happened once already: the 2026-08-01
+raw-data-guard coverage fix (ADR-002 rec 22) taught guard-raw-data.py to handle WebFetch and
+NotebookRead, but neither the matcher nor this file's own tool set were updated to match, so
+the new code path was dead until the 2026-08-05 review caught it and this comment plus the
+_CHECKS entry below were corrected. Check both places when a guard's tool coverage changes.
+It happened AGAIN, on a security boundary this time: guard-findings-pack-write.py was
+extended (2026-08-06) to scope Edit as well as Write for the four advisory review agents
+(CLAUDE.md §6's "mechanically enforced ... neither grant can widen in practice" claim) -
+the guard's own main() checks `tool_name not in ("Write", "Edit")`, but this file's _CHECKS
+entry was never widened past {"Write"}, so an Edit call from a scoped agent never reached
+this guard at all in the live dispatched path. The guard's OWN test suite invoked it as a
+direct subprocess, bypassing this file entirely, so it stayed green while the real
+enforcement was dead code. Found by a 2026-08-14 Fable-model audit, fixed the same day -
+see tests/test_bash_hook_dispatcher.py's dispatcher-level Edit test, which the guard-direct
+test suite could never have caught on its own.)
+
 Design constraints, all deliberate:
   - Each guard's own main() is called directly, never re-executed via its own
     `if __name__ == "__main__":` block (that block is what wires each guard's exit
@@ -53,12 +74,23 @@ _HOOKS_DIR = Path(__file__).resolve().parent.parent / ".claude" / "hooks"
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 
 _CHECKS = (
-    ("guard_raw_data", _HOOKS_DIR / "guard-raw-data.py", {"Read", "Grep", "Glob", "Bash"}, True),
+    (
+        "guard_raw_data",
+        _HOOKS_DIR / "guard-raw-data.py",
+        {"Read", "Grep", "Glob", "Bash", "WebFetch", "NotebookRead"},
+        True,
+    ),
     ("guard_code_execution", _HOOKS_DIR / "guard-code-execution.py", {"Bash"}, True),
     (
         "guard_consent_writes",
         _HOOKS_DIR / "guard-consent-writes.py",
         {"Write", "Edit", "MultiEdit", "NotebookEdit", "Bash"},
+        True,
+    ),
+    (
+        "guard_findings_pack_write",
+        _HOOKS_DIR / "guard-findings-pack-write.py",
+        {"Write", "Edit"},
         True,
     ),
     (
@@ -68,6 +100,11 @@ _CHECKS = (
         False,
     ),
     ("module_form_redirect", _SCRIPTS_DIR / "module_form_redirect.py", {"Bash"}, False),
+    # Map-first enforcement (2026-08-17): denies bare full-tree enumeration in
+    # ENGAGED sessions only, naming the sanctioned inventory sources. Advisory
+    # infra polarity (fail_open on a missing/broken file) - it is a cost rule,
+    # not a safety wall; the module itself returns 2 to deny when armed.
+    ("enumeration_redirect", _SCRIPTS_DIR / "enumeration_redirect.py", {"Bash"}, False),
 )
 
 
@@ -120,9 +157,22 @@ def main() -> int:
         if tool not in tools:
             continue
         try:
-            if not path.is_file():
-                continue  # missing guard file - fail open for THAT check only
+            missing = not path.is_file()
         except OSError:
+            missing = True
+        if missing:
+            # 2026-08-07 (found by a framework-wide audit): this used to unconditionally
+            # `continue` here regardless of fail_closed - a missing safety-guard FILE
+            # (accidental deletion, a broken install, tampering that bypasses the
+            # Bash-lexical mutation check) failed OPEN, asymmetric with the "failed to
+            # LOAD" branch three lines below, which already correctly fails closed for
+            # the same class of guard. There is no legitimate reason for a shipped guard
+            # file to be missing from a working install, so this now follows the exact
+            # same fail_closed policy as a load failure - both are "this guard cannot
+            # run", and a guard that cannot run must not silently pass.
+            if fail_closed:
+                sys.stderr.write(f"{name} guard file not found; failing closed (blocked).\n")
+                return 2
             continue
         module = _load(name, path)
         if module is None:

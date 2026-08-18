@@ -1,18 +1,17 @@
-# Artifact menu - LOCKED two-stage construction (read at the packaging step)
+# Artifact menu - standalone selection only (the packaging question is RETIRED)
 
-> Loaded just-in-time by `engage` step 3. Two stages because the question tool caps a question at
-> 4 options - **never spec one giant multi-select of every template** (an 11-option list forces
-> improvisation). `scripts/locked_menu_guard.py` (audit finding #7, 2026-07-30) mechanically
-> checks stage 1's options and each stage-2 group's multiSelect/option-set before the question
-> reaches the user - don't rely on it instead of following this file.
+> Loaded just-in-time by `engage` step 3, and ONLY when the user has asked for standalone
+> documents (or adjusted packaging at the go-ahead gate). **The old stage-1 "How should the
+> deliverables be packaged?" question is retired (2026-08-17 user decision): every real
+> engagement chose the Consolidated Delivery Report, so it is the stated default in the brief,
+> never a question - and `scripts/locked_menu_guard.py` now flags a re-asked packaging question
+> as drift.** The grouped construction below exists because the question tool caps a question
+> at 4 options - **never spec one giant multi-select of every template** (an 11-option list
+> forces improvisation); the guard also checks each group's multiSelect/option-set before the
+> question reaches the user.
 
-**Stage 1** (header `Artifacts`, `multiSelect: false`):
-*"How should the deliverables be packaged?"* →
-**Consolidated Delivery Report** (the default - everything as sections of one document) ·
-**Separate artifacts** (standalone documents, e.g. a change request for a ticket) ·
-**Both** (the consolidated report plus selected standalones).
-
-**Stage 2 - only if "Separate" or "Both"** - ONE batched call of grouped multi-selects
+**Standalone selection - when the user asked for separate artifacts (with or without the
+consolidated report)** - ONE batched call of grouped multi-selects
 (each `multiSelect: true`, each ≤4 options; skip any group irrelevant to the engagement):
 - header `Spec docs`: Engagement Brief · BRD · FSD · RTM
 - header `Reviews`: Code & Compliance Review · Performance Review · Model Validation Report · ADRs

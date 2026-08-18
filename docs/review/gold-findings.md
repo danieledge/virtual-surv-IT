@@ -10,7 +10,7 @@
 ## Exemplar 1 - code-review finding (canonical block shape, the 5 C's)
 
 ### 🔴 Position-limit query built by string concatenation (SQL injection)
-**Location:** `position_limit_check.py:17`  ·  **Confidence:** 97/100  ·  **Basis:** 📊 measured (semgrep `python.lang.security.audit.formatted-sql-query` + read confirmation)
+**Location:** `position_limit_check.py:17`  ·  **Confidence:** 97/100  ·  **Basis:** 📊 measured (bandit `B608: hardcoded_sql_expressions` + read confirmation)
 **Standard:** CWE-89 / OWASP ASVS V5.3.4
 
 **Problem:** The instrument name is concatenated directly into the SQL string. Any caller

@@ -25,8 +25,10 @@ from scripts.check_artifacts import (
     check_registry,
     check_roster,
     find_codebase_map,
+    find_codebase_map_area_files,
     main as ca_main,
     workspace_dirs,
+    _read_map_skeleton_toggle,
 )
 
 _VALID_PACK = {
@@ -52,10 +54,10 @@ _VALID_PACK = {
 }
 
 
-def _pack(art, obj, name="findings-t.json"):
-    d = art / "data"
-    d.mkdir(parents=True, exist_ok=True)
-    (d / name).write_text(json.dumps(obj), encoding="utf-8")
+def _pack(art, obj, name="findings-t.jsonl"):
+    from scripts.findings_pack_io import write_pack
+
+    write_pack(art / "data" / name, obj)
 
 
 STATUS_OPEN = "⏳ IN PROGRESS"
@@ -299,6 +301,53 @@ def test_summary_email_before_close_flagged(tmp_path):
     assert len(findings) == 1 and "SUMMARY-BEFORE-CLOSE" in findings[0]
 
 
+def test_summary_email_under_archived_nested_dir_is_not_flagged(tmp_path):
+    """C6 (2026-08 audit): the summaries rglob was the one recursive summary-email scan
+    in check() that did not exclude .archive'd subtrees (every sibling rglob a few lines
+    up/down does). A leftover summary email under an archived NESTED subdirectory used to
+    get flagged as SUMMARY-BEFORE-CLOSE against the outer, still-open pack that never
+    wrote it."""
+    art = tmp_path / "artifacts"
+    _touch(art / "review-pass-1.md")
+    _touch(art / "review-pass-1.html")
+    nested = art / "old-subpack"
+    _touch(nested / "engagement-summary-old.txt", "Hi,\n\nAll done.\n")
+    _touch(nested / ".archive", "archived\n")
+    _index(art, status=STATUS_OPEN, listed=["review-pass-1.md"])
+    findings = check(art)
+    assert not any("SUMMARY-BEFORE-CLOSE" in f for f in findings)
+
+
+def test_close_gate_trusts_the_state_file_over_a_stale_index(tmp_path):
+    """C8 (2026-08 audit): check() used to read the overall engagement status from the
+    RENDERED INDEX TEXT only, never engagement-state.json - register G5 made pack_status()
+    (state file authoritative, index a fallback) the one shared status rule for exactly
+    this class of bug. The dangerous direction: a stale or hand-edited index that LOOKS
+    closed while the state file says otherwise used to silently waive the close-only gate
+    for a pack that was never actually closed."""
+    import re
+
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"]) == 0
+    state = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "in_progress"  # genuinely open - authoritative
+
+    # Index hand-edited/stale: falsely reads as closed.
+    index_path = art / "START-HERE.md"
+    text = index_path.read_text(encoding="utf-8")
+    text = re.sub(r"\|\s*\*\*Status\*\*\s*\|.*\|", "| **Status** | ✅ closed |", text)
+    index_path.write_text(text, encoding="utf-8")
+    assert _index_status(text) == "closed"  # confirms the fixture actually reads as closed
+
+    # An early summary email - only legitimate once genuinely closed.
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nDone.\n")
+
+    findings = check(art)
+    assert any("SUMMARY-BEFORE-CLOSE" in f for f in findings)
+
+
 def test_blocked_engagement_with_interim_names_passes(tmp_path):
     art = tmp_path / "artifacts"
     for stem in ("engagement-brief", "review-pass-1"):
@@ -493,13 +542,24 @@ def test_roster_unknown_name_flagged(tmp_path):
 
 
 def test_roster_role_mismatch_flagged(tmp_path):
-    # A real roster name in the wrong role: Ravi is the code-reviewer, not the TM-SME.
+    # A real roster name in the wrong LIVE role: Ravi is the code-reviewer, not QA.
+    findings = check_roster("Ravi (qa-engineer) signed the evidence.", tmp_path / "d.md")
+    assert len(findings) == 1
+    assert "ROSTER-ROLE-MISMATCH" in findings[0] and "Linh" in findings[0]
+
+
+def test_retired_sme_role_attribution_points_at_the_pack(tmp_path):
+    """2026-08-17: the three SME roles are retired (docs/sme/ knowledge packs) - a NEW
+    attribution to a retired role gets the pack pointer, never a suggestion to
+    re-attribute to a retired persona."""
     findings = check_roster("Ravi (tm-sme) advised on typology.", tmp_path / "d.md")
     assert len(findings) == 1
-    assert "ROSTER-ROLE-MISMATCH" in findings[0] and "Hassan" in findings[0]
+    assert "SME-PACK-ATTRIBUTION" in findings[0] and "docs/sme/" in findings[0]
 
 
 def test_roster_correct_attributions_pass(tmp_path):
+    # Hassan (tm-sme) is a RETIRED persona in its own historical role: recognised, clean -
+    # historical artifacts must not start flagging (docs/sme/README.md).
     text = "Ravi (code-reviewer), Layla (compliance-reviewer), Hassan (tm-sme), Amara (BA), Morgan (PM)."
     assert check_roster(text, tmp_path / "d.md") == []
 
@@ -637,6 +697,60 @@ def test_map_entry_without_basis_tag_flagged(tmp_path):
     assert "MAP-ENTRY-NO-ANCHOR" in codes
 
 
+# --------------------------------- H1: git-fact memoization (2026-08-14 perf audit) -------
+
+
+def test_check_map_caches_git_facts_within_same_head(tmp_path, monkeypatch):
+    """check_map() used to spawn up to 3 git subprocesses on EVERY call, even when HEAD
+    hadn't moved since the last one - a real per-turn tax, since dod_stop_gate.py calls
+    this on every Stop event while a codebase map exists. A second call with the SAME HEAD
+    must spawn strictly fewer git processes than the first (still one HEAD lookup - see
+    _MAP_GIT_CACHE's module comment for why that specific call is never itself cached)."""
+    import scripts.check_artifacts as ca_module
+
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map(sha))
+
+    real_run = subprocess.run
+    calls = []
+
+    def counting_run(argv, *a, **k):
+        if argv and argv[0] == "git":
+            calls.append(tuple(argv))
+        return real_run(argv, *a, **k)
+
+    monkeypatch.setattr(ca_module.subprocess, "run", counting_run)
+
+    assert check_map(m) == []
+    first = len(calls)
+    assert first > 1  # sanity: the fixture's map really does exercise anchor + entry git calls
+
+    calls.clear()
+    assert check_map(m) == []
+    second = len(calls)
+
+    assert (
+        second == 1
+    )  # just the HEAD lookup - anchor/commits-behind/batch-resolve served from cache
+    assert second < first
+
+
+def test_check_map_git_cache_invalidates_on_new_commit(tmp_path):
+    """The correctness-critical property: HEAD moving must never serve a stale cached
+    answer. A MAP-STALE finding that should newly fire once the anchor falls behind budget
+    must still fire after a fresh commit, not get silently masked by a cache keyed on the
+    OLD HEAD."""
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map(sha) + "\n> **Staleness-budget** 0\n")
+    assert not any("MAP-STALE:" in f for f in check_map(m))  # HEAD is the anchor - 0 behind
+
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "y")  # HEAD moves - anchor now 1 behind
+    findings = check_map(m)
+    assert any("MAP-STALE:" in f for f in findings)
+
+
 def test_map_secret_content_flagged(tmp_path):
     repo, sha = _map_repo(tmp_path)
     m = repo / "docs" / "codebase-map.md"
@@ -657,6 +771,398 @@ def test_map_outside_git_skips_anchor_check(tmp_path):
     m = tmp_path / "nogit" / "docs" / "codebase-map.md"
     _touch(m, _good_map("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"))
     assert check_map(m) == []
+
+
+# ---------------------------------- MAP-DRIFT / MAP-DEAD-POINTER (ADR-007 Phase 1 Chunk C)
+
+
+def _good_map_with_paths(sha, entry="threshold rationale in `src/x.py:12`"):
+    return (
+        "# Codebase Map - Proj\n\n"
+        f"> **Document control** · Owner `Morgan (PM)` · As-of `2026-07-18` · Anchor `{sha}`\n\n"
+        "## 2. Map entries\n\n"
+        "| # | Area | Entry | Basis | As-of | Anchor | Paths |\n"
+        "|---|------|-------|-------|-------|--------|-------|\n"
+        f"| 1 | rules | {entry} | 📊 seen in review | 2026-07-18 | `{sha[:9]}` | src/x.py |\n"
+    )
+
+
+def test_map_skeleton_toggle_off_by_default_no_new_findings(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    # No team-preferences.json at all - toggle defaults to off - a Paths glob that was
+    # NEVER fingerprinted (the load-bearing regression guard: this would be MAP-DRIFT if on).
+    assert check_map(m, project_dir=repo) == []
+
+
+def test_map_skeleton_toggle_on_via_project_preference():
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / ".claude").mkdir()
+        (root / ".claude" / "team-preferences.json").write_text(
+            json.dumps({"map_skeleton": True}), encoding="utf-8"
+        )
+        assert _read_map_skeleton_toggle(root) is True
+
+
+def test_map_skeleton_toggle_project_false_overrides_machine_true(tmp_path, monkeypatch):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": False}), encoding="utf-8"
+    )
+    xdg = tmp_path / "xdg"
+    (xdg / "virt-surv-it").mkdir(parents=True)
+    (xdg / "virt-surv-it" / "installer.json").write_text(
+        json.dumps({"default_map_skeleton": True}), encoding="utf-8"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    # project's explicit False must win even though the machine default is True (same
+    # key-presence-wins precedence as docx/citations).
+    assert _read_map_skeleton_toggle(tmp_path) is False
+
+
+def test_map_skeleton_toggle_falls_back_to_machine_default(tmp_path, monkeypatch):
+    xdg = tmp_path / "xdg"
+    (xdg / "virt-surv-it").mkdir(parents=True)
+    (xdg / "virt-surv-it" / "installer.json").write_text(
+        json.dumps({"default_map_skeleton": True}), encoding="utf-8"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    assert _read_map_skeleton_toggle(tmp_path) is True
+
+
+def test_map_skeleton_toggle_no_config_anywhere_is_false(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty-xdg"))
+    assert _read_map_skeleton_toggle(tmp_path) is False
+
+
+def _write_fingerprint_sidecar(repo, entries):
+    """Sidecar lives NEXT TO the map file (repo/docs/, the standard map location used by
+    every test below - m = repo / "docs" / "codebase-map.md"), matching exactly where
+    scripts.repo_skeleton.write_fingerprints() writes it - see that function's own docstring
+    for the 2026-08-06 bug this fixed (used to be repo/, silently wrong once the map isn't
+    at the project root)."""
+    docs = repo / "docs"
+    docs.mkdir(exist_ok=True)
+    (docs / "codebase-map.fingerprints.json").write_text(
+        json.dumps({"generated_by": "test", "entries": entries}), encoding="utf-8"
+    )
+
+
+def test_map_drift_silent_when_fingerprint_matches(tmp_path):
+    from scripts.map_fingerprint import compute_fingerprint
+
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    _write_fingerprint_sidecar(
+        repo,
+        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], repo)}},
+    )
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DRIFT" not in codes
+
+
+def test_map_drift_fires_when_file_changed_since_fingerprinted(tmp_path):
+    from scripts.map_fingerprint import compute_fingerprint
+
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    f = repo / "src" / "x.py"
+    f.write_text("threshold = 1\n", encoding="utf-8")
+    _write_fingerprint_sidecar(
+        repo,
+        {"rules": {"paths": ["src/x.py"], "fingerprint": compute_fingerprint(["src/x.py"], repo)}},
+    )
+    f.write_text("threshold = 2\n", encoding="utf-8")  # changed AFTER fingerprinting
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DRIFT" in codes
+
+
+def test_map_drift_fires_when_never_fingerprinted(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    # No sidecar file written at all.
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DRIFT" in codes
+
+
+def test_map_drift_corrupt_sidecar_surfaces_its_own_finding_not_never_fingerprinted(tmp_path):
+    """M6 (2026-08 Fable audit): a PRESENT-but-corrupt fingerprints sidecar used to be
+    caught by the same `except (OSError, ValueError)` as a genuinely MISSING one, both
+    collapsing to `entries = {}` - so a corrupt sidecar produced the exact same
+    "never fingerprinted" MAP-DRIFT text as no sidecar at all, hiding the real problem
+    (the sidecar itself is broken) behind a misleading diagnosis."""
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    docs = repo / "docs"
+    docs.mkdir()
+    (docs / "codebase-map.fingerprints.json").write_text("{not valid json", encoding="utf-8")
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha))
+    findings = check_map(m, project_dir=repo)
+    codes = "".join(findings)
+    assert "MAP-FINGERPRINTS-INVALID" in codes, (
+        "a corrupt sidecar must surface its own distinct finding, not silently masquerade "
+        "as 'never fingerprinted'"
+    )
+
+
+def test_map_dead_pointer_fires_on_missing_citation(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    # No src/x.py file created - the citation is dead.
+    _touch(m, _good_map_with_paths(sha, entry="described in `src/x.py:12`"))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DEAD-POINTER" in codes
+
+
+def test_map_dead_pointer_silent_when_citation_resolves(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha, entry="described in `src/x.py:12`"))
+    codes = "".join(check_map(m, project_dir=repo))
+    assert "MAP-DEAD-POINTER" not in codes
+
+
+def test_map_drift_and_dead_pointer_excluded_from_apply_fixes(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    art = repo / "artifacts"
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map_with_paths(sha, entry="described in `src/x.py:12`"))
+    # apply_fixes() takes an artifacts_dir, not a map_path - map hygiene was never wired into
+    # it (existing precedent for every other MAP-* code); this just confirms that precedent
+    # extends to the two new checks, not a behaviour change.
+    assert apply_fixes(art) == []
+
+
+# ---------------------------- docs/codebase-map.d/ area files (ADR-007 Phase 1 Chunk E) ----
+
+
+def test_find_codebase_map_area_files_absent_directory_is_empty(tmp_path):
+    assert find_codebase_map_area_files(tmp_path) == []
+
+
+def test_find_codebase_map_area_files_discovers_and_sorts(tmp_path):
+    area_dir = tmp_path / "docs" / "codebase-map.d"
+    area_dir.mkdir(parents=True)
+    (area_dir / "z-area.md").write_text("x", encoding="utf-8")
+    (area_dir / "a-area.md").write_text("x", encoding="utf-8")
+    (area_dir / "not-markdown.txt").write_text("x", encoding="utf-8")
+    found = find_codebase_map_area_files(tmp_path)
+    assert [p.name for p in found] == ["a-area.md", "z-area.md"]
+
+
+def test_area_file_gets_the_same_hygiene_checks_as_the_root_map(tmp_path):
+    """An area file with no As-of/Anchor header is exactly as invalid as a root map missing
+    them - check_map() has no notion of "root" vs "area", it's generic per-file (this is
+    the load-bearing property Chunk E relies on rather than duplicating check_map's logic)."""
+    repo, sha = _map_repo(tmp_path)
+    area_dir = repo / "docs" / "codebase-map.d"
+    area_dir.mkdir(parents=True)
+    area_file = area_dir / "scripts.md"
+    area_file.write_text("# Area: scripts\n\nno header fields at all\n", encoding="utf-8")
+    findings = check_map(area_file, project_dir=repo)
+    assert any("MAP-NO-ASOF" in f for f in findings)
+    assert any("MAP-NO-ANCHOR" in f for f in findings)
+
+
+def test_main_checks_area_files_alongside_root_map(tmp_path, monkeypatch, capsys):
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    _touch(m, _good_map(sha))
+    area_dir = repo / "docs" / "codebase-map.d"
+    area_dir.mkdir(parents=True)
+    bad_area = area_dir / "scripts.md"
+    bad_area.write_text("# Area: scripts\n\nno header fields at all\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+    rc = ca_main(["artifacts"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "MAP-NO-ASOF" in out and str(bad_area) in out
+
+
+# --- two more bugs found live building Chunk E: MAP-DEAD-POINTER's "entry" column lookup was
+# an exact-match .get() while every sibling column used a rename-tolerant substring search, so
+# it never matched the documented template's own long header text - and the drift-row key
+# required an "Area" column, which an area file's own template deliberately doesn't have (one
+# area per file), so MAP-DRIFT could never fire there either. -------------------------------
+
+
+def _area_map_with_paths(sha, entry="threshold rationale in `src/x.py:12`"):
+    """Mirrors docs/templates/codebase-map-area.md's actual header text (the long
+    descriptive "Entry (...)" column, an ID column instead of Area) - the exact shape the
+    entry_idx/key_idx substring-lookup bugs were found against."""
+    return (
+        "# Codebase Map Area - Scripts\n\n"
+        f"> **Document control** · Owner `Morgan (PM)` · As-of `2026-07-18` · Anchor `{sha}`\n\n"
+        "## Entries\n\n"
+        "| ID | Entry (a durable code fact - NOT a finding or an activity note) | Basis | As-of | Anchor | Paths (optional) |\n"
+        "|----|-------|-------|-------|--------|-------|\n"
+        f"| scripts-1 | {entry} | 📊 seen in review | 2026-07-18 | `{sha[:9]}` | src/x.py |\n"
+    )
+
+
+def test_map_dead_pointer_fires_against_the_documented_template_header(tmp_path):
+    repo, sha = _map_repo(tmp_path)
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    m = repo / "docs" / "codebase-map.md"
+    # missing.py does not exist - a live dead pointer, using the TEMPLATE's real long header.
+    _touch(m, _good_map_with_paths(sha, entry="described in `missing.py:1`"))
+    findings = check_map(m, project_dir=repo)
+    assert any("MAP-DEAD-POINTER" in f for f in findings)
+
+
+def test_map_drift_keys_on_id_column_when_no_area_column_present(tmp_path):
+    """An area file (docs/templates/codebase-map-area.md's shape: ID column, no Area
+    column) must still get MAP-DRIFT - keyed on ID instead of Area."""
+    repo, sha = _map_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("threshold = 1\n", encoding="utf-8")
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"map_skeleton": True}), encoding="utf-8"
+    )
+    area_dir = repo / "docs" / "codebase-map.d"
+    area_dir.mkdir(parents=True)
+    m = area_dir / "scripts.md"
+    _touch(m, _area_map_with_paths(sha))
+    # never fingerprinted -> MAP-DRIFT, proving drift_rows was actually populated (keyed on
+    # "scripts-1", the ID column) rather than silently skipped for lack of an Area column.
+    findings = check_map(m, project_dir=repo)
+    assert any("MAP-DRIFT" in f for f in findings)
+
+
+# ------------------------------------------------ entry-anchor resolution is batched (2026-08-03)
+#
+# check_map()'s per-entry loop used to call _anchor_resolves (one `git cat-file -e`
+# subprocess) PER ENTRY - a well-filled map could spawn 20-50 processes on every gated
+# Stop event. Now one `git cat-file --batch-check` call resolves them all. No prior test
+# covered MAP-STALE-ENTRY-ANCHOR at all (single-entry _good_map fixtures never exercised
+# more than one SHA), so these are new coverage, not just a refactor regression net.
+
+
+def test_multiple_entry_anchors_mixed_resolve_correctly(tmp_path):
+    """Several entries, some resolving and some not, in ONE real repo - proves the batch
+    call correctly attributes each result back to the right entry, not just a single-sha
+    happy path."""
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    bogus = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    _touch(
+        m,
+        _good_map(sha)
+        + f"| 2 | etl | good entry | 📊 seen | 2026-07-18 | `{sha[:9]}` |\n"
+        + f"| 3 | ml | stale entry | 📊 seen | 2026-07-18 | `{bogus[:9]}` |\n"
+        + f"| 4 | tuning | another stale one | 📊 seen | 2026-07-18 | `{bogus}` |\n",
+    )
+    findings = check_map(m)
+    stale = [f for f in findings if "MAP-STALE-ENTRY-ANCHOR" in f]
+    assert len(stale) == 2  # rows 3 and 4 only - rows 1 (header) and 2 both resolve fine
+    assert any(bogus[:9] in f for f in stale)  # the short-form bogus entry
+    assert any(bogus in f for f in stale)  # the full-length bogus entry
+    assert not any(sha[:9] in f for f in stale)  # the two genuinely-resolving entries are clean
+
+
+def test_batch_resolve_shas_handles_mix_in_one_call(tmp_path):
+    from scripts.check_artifacts import _batch_resolve_shas
+
+    repo, sha = _map_repo(tmp_path)
+    bogus = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    result = _batch_resolve_shas([sha, bogus], repo)
+    assert result[sha] is True
+    assert result[bogus] is False
+
+
+def test_batch_resolve_shas_empty_list_makes_no_subprocess_call(tmp_path, monkeypatch):
+    import scripts.check_artifacts as ca
+
+    def _boom(*a, **k):
+        raise AssertionError("subprocess.run must not be called for an empty sha list")
+
+    monkeypatch.setattr(ca.subprocess, "run", _boom)
+    assert ca._batch_resolve_shas([], tmp_path) == {}
+
+
+def test_batch_resolve_shas_outside_git_returns_none_for_every_sha(tmp_path):
+    from scripts.check_artifacts import _batch_resolve_shas
+
+    result = _batch_resolve_shas(["deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", "abc123"], tmp_path)
+    assert result == {"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef": None, "abc123": None}
+
+
+def test_many_entry_anchors_spawn_exactly_one_subprocess(tmp_path, monkeypatch):
+    """The actual performance property: N entries must cost ONE git process, not N."""
+    repo, sha = _map_repo(tmp_path)
+    m = repo / "docs" / "codebase-map.md"
+    rows = "".join(
+        f"| {i} | area{i} | entry {i} | 📊 seen | 2026-07-18 | `{sha[:9]}` |\n"
+        for i in range(2, 12)
+    )
+    _touch(m, _good_map(sha) + rows)
+
+    import scripts.check_artifacts as ca
+
+    calls = []
+    real_run = ca.subprocess.run
+
+    def _counting_run(cmd, *a, **k):
+        if isinstance(cmd, list) and "cat-file" in cmd:
+            calls.append(cmd)
+        return real_run(cmd, *a, **k)
+
+    monkeypatch.setattr(ca.subprocess, "run", _counting_run)
+    findings = check_map(m)
+    assert not any("MAP-STALE-ENTRY-ANCHOR" in f for f in findings)  # all 10 entries resolve
+    batch_calls = [c for c in calls if any(str(a).startswith("--batch-check") for a in c)]
+    assert len(batch_calls) == 1  # ten entries, one subprocess
 
 
 def test_map_novcs_anchor_accepted(tmp_path):
@@ -765,6 +1271,37 @@ def test_stale_docstatus_in_review_flagged_when_closed(tmp_path):
     _touch(art / "delivery-report.html", "<html></html>")
     _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
     assert "STALE-DOCSTATUS" in "\n".join(check(art))
+
+
+def test_stale_docstatus_pending_flagged_when_closed(tmp_path):
+    # Live report 2026-08-03: a closed delivery-report.md and its .html both still read
+    # `Status `Pending`` - no template's placeholder uses this word, so it was scaffolding
+    # text the author never went back to fill in. The regex used to only check for
+    # draft/in review/in progress and silently missed this class of leftover entirely.
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_CLOSED, listed=["delivery-report.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "delivery-report.md",
+        "# Report\n\n> **Document control** · ID `DLVR-001` · Version `1.0` · Status `Pending`\n",
+    )
+    _touch(art / "delivery-report.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "STALE-DOCSTATUS" in "\n".join(check(art))
+
+
+def test_stale_docstatus_bare_pending_human_signoff_passes(tmp_path):
+    # Symmetric with the Draft/In review case: `pending` immediately followed by `human
+    # sign-off` is the same legitimate terminal state, even with no preceding status word.
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_CLOSED, listed=["delivery-report.md", "engagement-summary-x.txt"])
+    _touch(
+        art / "delivery-report.md",
+        "# Report\n\n> **Document control** · ID `DLVR-001` · Version `1.0` · "
+        "Status `Pending human sign-off`\n",
+    )
+    _touch(art / "delivery-report.html", "<html></html>")
+    _touch(art / "engagement-summary-x.txt", "Hi,\n\nMorgan\n")
+    assert "STALE-DOCSTATUS" not in "\n".join(check(art))
 
 
 def test_stale_docstatus_pending_human_signoff_passes(tmp_path):
@@ -888,14 +1425,203 @@ def test_invalid_findings_pack_flagged(tmp_path):
     assert "FINDINGS-INVALID" in "\n".join(check(art))
 
 
+# ------------------------------------------------ findings-pack validation is in-process (2026-08-03)
+#
+# check_findings_packs() used to shell out to validate_findings.py as a SEPARATE subprocess
+# PER PACK - several review passes/re-reviews means several packs, so several process spawns
+# on every gated Stop event. Now calls validate_findings.load_and_validate() in-process.
+
+
+def test_findings_pack_validation_never_spawns_a_subprocess(tmp_path, monkeypatch):
+    from scripts.check_artifacts import check_findings_packs
+
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK)
+    bad = copy.deepcopy(_VALID_PACK)
+    del bad["findings"][0]["likely_cause"]
+    _pack(art, bad, name="findings-bad.jsonl")
+
+    def _boom(*a, **k):
+        raise AssertionError("subprocess.run must not be called for findings-pack validation")
+
+    monkeypatch.setattr("scripts.check_artifacts.subprocess.run", _boom)
+    findings = check_findings_packs(art)
+    assert any("findings-bad.jsonl" in f for f in findings)
+    assert not any("findings-t.jsonl" in f for f in findings)  # the valid pack stays clean
+
+
+def test_findings_pack_validation_handles_multiple_packs(tmp_path):
+    from scripts.check_artifacts import check_findings_packs
+
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK, name="findings-a.jsonl")
+    _pack(art, _VALID_PACK, name="findings-b.jsonl")
+    bad = copy.deepcopy(_VALID_PACK)
+    del bad["findings"][0]["standard"]
+    _pack(art, bad, name="findings-c.jsonl")
+
+    findings = check_findings_packs(art)
+    assert len(findings) == 1
+    assert "findings-c.jsonl" in findings[0]
+
+
+def test_findings_pack_unreadable_json_reports_cannot_parse(tmp_path):
+    from scripts.check_artifacts import check_findings_packs
+
+    art = tmp_path / "artifacts"
+    d = art / "data"
+    d.mkdir(parents=True)
+    (d / "findings-broken.jsonl").write_text("{not valid json", encoding="utf-8")
+
+    findings = check_findings_packs(art)
+    assert len(findings) == 1
+    assert "FINDINGS-INVALID" in findings[0]
+    assert "findings-broken.jsonl" in findings[0]
+    assert "cannot read/parse" in findings[0]
+
+
+def test_findings_pack_validator_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "validate_findings")
+    monkeypatch.setattr(ca, "_VALIDATE_FINDINGS_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_validate_findings_module()
+    second = ca._load_validate_findings_module()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
+
+
+# ---------------------------------------- review-scorer attestation (PACK-UNSCORED)
+#
+# 2026-08-08: two live /engage runs skipped the review-scorer delegation entirely, after two
+# prose strengthenings of the same rule - so the evidence is now mechanical: a scored-kind
+# pack with findings must record the scorer pass in its envelope `scoring` field.
+
+
+def test_scored_kind_pack_without_scoring_record_flagged(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    _pack(art, _VALID_PACK)
+    findings = check_findings_scoring(art)
+    assert len(findings) == 1
+    assert "PACK-UNSCORED" in findings[0] and "findings-t.jsonl" in findings[0]
+
+
+def test_scoring_record_naming_review_scorer_passes(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    ok = copy.deepcopy(_VALID_PACK)
+    ok["scoring"] = "scored by review-scorer: Found 3 · Reported 1 · Filtered 2"
+    _pack(art, ok)
+    assert check_findings_scoring(art) == []
+
+
+def test_self_scored_record_still_flagged(tmp_path):
+    # docs/code-review-method.md: the scorer still runs even after self-scoring - a
+    # self-score note is provenance, not a scorer pass.
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    selfscored = copy.deepcopy(_VALID_PACK)
+    selfscored["scoring"] = "self-scored against the rubric; no scorer in the loop"
+    _pack(art, selfscored)
+    findings = check_findings_scoring(art)
+    assert len(findings) == 1 and "PACK-UNSCORED" in findings[0]
+
+
+def test_performance_kind_is_a_scored_kind(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    perf = copy.deepcopy(_VALID_PACK)
+    perf["kind"] = "performance"
+    _pack(art, perf, name="findings-performance-t.jsonl")
+    findings = check_findings_scoring(art)
+    assert len(findings) == 1 and "PACK-UNSCORED" in findings[0]
+
+
+def test_compliance_and_model_validation_packs_exempt(tmp_path):
+    # Their findings are never score-filtered; the scorer's dedup pass over them is optional.
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    for kind, name in (
+        ("compliance", "findings-compliance-t.jsonl"),
+        ("model-validation", "findings-model-validation-t.jsonl"),
+    ):
+        p = copy.deepcopy(_VALID_PACK)
+        p["kind"] = kind
+        _pack(art, p, name=name)
+    assert check_findings_scoring(art) == []
+
+
+def test_empty_findings_pack_needs_no_scoring_record(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    clean = copy.deepcopy(_VALID_PACK)
+    clean["findings"] = []
+    _pack(art, clean)
+    assert check_findings_scoring(art) == []
+
+
+def test_unparseable_pack_left_to_findings_invalid(tmp_path):
+    from scripts.check_artifacts import check_findings_scoring
+
+    art = tmp_path / "artifacts"
+    d = art / "data"
+    d.mkdir(parents=True)
+    (d / "findings-broken.jsonl").write_text("{not json", encoding="utf-8")
+    assert check_findings_scoring(art) == []
+
+
+def test_pack_unscored_surfaces_via_check(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status=STATUS_OPEN)
+    _pack(art, _VALID_PACK)
+    assert any("PACK-UNSCORED" in f for f in check(art))
+
+
 def test_data_subfolder_pack_not_treated_as_deliverable(tmp_path):
     # A .json pack under data/ must not trip MISSING-HTML or STALE-INDEX (it's machine source).
     art = tmp_path / "artifacts"
     _index(art, listed=["engagement-summary-t.txt"])
     _touch(art / "engagement-summary-t.txt", "Hi,\n\nMorgan\n")
-    _pack(art, _VALID_PACK)
+    scored = copy.deepcopy(_VALID_PACK)  # scored, so PACK-UNSCORED can't name the file either
+    scored["scoring"] = "scored by review-scorer: Found 1 · Reported 1 · Filtered 0"
+    _pack(art, scored)
     joined = "\n".join(check(art))
-    assert "findings-t.json" not in joined  # never named by MISSING-HTML / STALE-INDEX
+    assert "findings-t.jsonl" not in joined  # never named by MISSING-HTML / STALE-INDEX
+
+
+def test_apply_fixes_never_touches_an_archived_nested_pack(tmp_path):
+    """C7 (2026-08 audit): apply_fixes()'s rglobs did not exclude .archive'd subtrees the
+    way check()'s equivalent scans do - archived is meant to be frozen, but --fix would
+    rename a mis-typed summary email, DELETE a stray rendered .html copy, and render new
+    .html siblings inside an archived pack it should never touch at all."""
+    art = tmp_path / "artifacts"
+    _index(art, listed=["review-pass-1.md"])
+    _touch(art / "review-pass-1.md", "# Review\n")
+    _touch(art / "review-pass-1.html")
+
+    archived = art / "old-engagement"
+    _touch(archived / "engagement-summary-old.md", "Hi,\n\nDone.\n")  # would be renamed
+    _touch(archived / "engagement-summary-stray.html")  # would be DELETED
+    _touch(archived / "notes.md", "# notes\n")  # would get a new .html rendered
+    _touch(archived / ".archive", "archived\n")
+
+    apply_fixes(art)
+
+    assert (archived / "engagement-summary-old.md").is_file()  # not renamed
+    assert not (archived / "engagement-summary-old.txt").exists()
+    assert (archived / "engagement-summary-stray.html").is_file()  # not deleted
+    assert not (archived / "notes.html").exists()  # not rendered
 
 
 def test_apply_fixes_renders_report_from_pack_at_close(tmp_path):
@@ -909,6 +1635,77 @@ def test_apply_fixes_renders_report_from_pack_at_close(tmp_path):
     report = art / "REVIEW-t.md"
     assert report.is_file()
     assert "**Likely cause:**" in report.read_text(encoding="utf-8")
+
+
+def test_apply_fixes_invalid_pack_does_not_crash_or_get_flagged(tmp_path):
+    art = tmp_path / "artifacts"
+    _index(art, status="🔒 CLOSING - finishing close artifacts")
+    bad = copy.deepcopy(_VALID_PACK)
+    del bad["findings"][0]["likely_cause"]
+    _pack(art, bad)
+    fixed = "\n".join(apply_fixes(art))  # must not crash; FINDINGS-INVALID reports it, not this
+    assert "FIXED: rendered" not in fixed
+    assert not (art / "REVIEW-t.md").exists()
+
+
+# --------------------------------------- findings/HTML rendering is in-process (2026-08-05)
+#
+# apply_fixes() used to shell out to render_findings.py (once per pack) and render_html.py
+# (once per un-rendered .md) as SEPARATE subprocesses - on a host where every python.exe spawn
+# is inflated by endpoint-security scanning (corp Windows), a handover pack with several
+# deliverables chained enough untimed spawns to present as the whole close step hanging. Now
+# calls render_findings.render_pack_file() / render_html.render_file() in-process.
+
+
+def test_apply_fixes_never_spawns_a_subprocess_for_rendering(tmp_path, monkeypatch):
+    import scripts.check_artifacts as ca
+
+    art = tmp_path / "artifacts"
+    _index(art, status="🔒 CLOSING - finishing close artifacts", listed=["notes.md"])
+    _pack(art, _VALID_PACK)  # slug "t" -> renders REVIEW-t.md, then REVIEW-t.html
+    _touch(art / "notes.md", "# Notes\n")  # a second .md missing its .html sibling
+
+    def _boom(*a, **k):
+        raise AssertionError("subprocess.run must not be called for rendering")
+
+    monkeypatch.setattr(ca.subprocess, "run", _boom)
+    fixed = apply_fixes(art)
+
+    assert (art / "REVIEW-t.md").is_file()
+    assert (art / "REVIEW-t.html").is_file()
+    assert (art / "notes.html").is_file()
+    assert any("REVIEW-t.md" in f or "REVIEW-t" in f for f in fixed)
+    assert any("notes.md -> notes.html" in f for f in fixed)
+
+
+def test_render_findings_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "render_findings")
+    monkeypatch.setattr(ca, "_RENDER_FINDINGS_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_render_findings_module()
+    second = ca._load_render_findings_module()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
+
+
+def test_render_html_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "render_html")
+    monkeypatch.setattr(ca, "_RENDER_HTML_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_render_html_module()
+    second = ca._load_render_html_module()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
 
 
 # ----------------------------------------------------- machine-readable state (ADR-006)
@@ -1424,3 +2221,261 @@ def test_archived_rtm_is_not_checked(tmp_path):
     art = _rtm_pack(tmp_path, code="`rules/renamed.py`")
     (art / ".archive").write_text("archived\n", encoding="utf-8")
     assert check_rtm(art) == []
+
+
+# ------------------------------------------------ module-loader memoization (2026-08-03 perf audit)
+#
+# _load_engagement_state_module / _load_validate_rtm_module are called many times across one
+# check_artifacts run (check_state, check_registry, check_root_orphans, check_rtm, ...). The
+# fast `from scripts import X` branch is already cached by Python's own import machinery; the
+# __file__-relative FALLBACK (taken in plugin mode, where no `scripts` package resolves) used
+# to re-parse and re-exec the whole file on every call. These tests force the fallback branch
+# by intercepting __import__ itself for the exact `from scripts import X` call (poisoning
+# sys.modules alone is NOT reliable here: once a real prior test has genuinely imported
+# scripts.engagement_state, CPython caches it as an attribute on the `scripts` package
+# object too, and `from scripts import X` can resolve via that attribute without ever
+# consulting sys.modules again - order-dependent and exactly the kind of flake this test
+# must not have). Proves the SAME module object comes back on a second call, with
+# exec_module invoked only once.
+
+
+def _block_scripts_import(monkeypatch, blocked_name: str) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _guarded(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "scripts" and fromlist and blocked_name in fromlist:
+            raise ImportError(f"blocked for test: scripts.{blocked_name}")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _guarded)
+
+
+def _counting_spec_from_file_location(monkeypatch):
+    import importlib.util
+
+    exec_calls = []
+    orig = importlib.util.spec_from_file_location
+
+    def _counting(*a, **k):
+        spec = orig(*a, **k)
+        orig_exec = spec.loader.exec_module
+
+        def _counted_exec(module):
+            exec_calls.append(1)
+            return orig_exec(module)
+
+        spec.loader.exec_module = _counted_exec
+        return spec
+
+    monkeypatch.setattr(importlib.util, "spec_from_file_location", _counting)
+    return exec_calls
+
+
+def test_engagement_state_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "engagement_state")
+    monkeypatch.setattr(ca, "_ENGAGEMENT_STATE_MODULE_CACHE", None)  # start uncached
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_engagement_state_module()
+    second = ca._load_engagement_state_module()
+
+    assert first is not None
+    assert first is second  # same object, not two independent re-execs
+    assert len(exec_calls) == 1  # the file was only ever parsed+executed once
+
+
+def test_validate_rtm_loader_is_memoized_across_calls(monkeypatch):
+    import scripts.check_artifacts as ca
+
+    _block_scripts_import(monkeypatch, "validate_rtm")
+    monkeypatch.setattr(ca, "_VALIDATE_RTM_MODULE_CACHE", None)
+    exec_calls = _counting_spec_from_file_location(monkeypatch)
+
+    first = ca._load_validate_rtm_module()
+    second = ca._load_validate_rtm_module()
+
+    assert first is not None
+    assert first is second
+    assert len(exec_calls) == 1
+
+
+# ------------------------------------------------ check() shares ONE *.md walk (2026-08-03 perf audit)
+#
+# check_state() -> _check_ratified_claims() and check_rtm() each used to independently
+# rglob("*.md") the same tree check() itself also scans - three (or more, with a pending
+# ratification in play) separate full walks per gated Stop event. check() now walks once
+# and passes the list down; each sub-check applies its OWN unchanged filter to it.
+
+
+def test_check_walks_for_md_files_exactly_once(tmp_path, monkeypatch):
+    """The decisive proof: build a pack that exercises check_state (with a pending
+    ratification, so _check_ratified_claims's OWN scan is reached) and check_rtm (a real
+    rtm.md) together, then count how many times Path.rglob("*.md") actually executes."""
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"]) == 0
+    state_path = art / "engagement-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["ratifications"] = [{"status": "pending", "text": "ops-lead sign-off pending review"}]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    _touch(art / "rtm.md", "# RTM\n\n| Req | Code | Test | Obligation |\n|---|---|---|---|\n")
+
+    real_rglob = Path.rglob
+    calls = []
+
+    def _counting_rglob(self, pattern, *a, **k):
+        if pattern == "*.md":
+            calls.append(self)
+        return real_rglob(self, pattern, *a, **k)
+
+    monkeypatch.setattr(Path, "rglob", _counting_rglob)
+    check(art)
+    md_walks_of_artifacts_dir = [c for c in calls if c == art]
+    assert len(md_walks_of_artifacts_dir) == 1, (
+        f"expected exactly one rglob('*.md') walk of {art}, got {len(md_walks_of_artifacts_dir)}"
+    )
+
+
+def test_check_state_standalone_call_still_works_without_shared_walk(tmp_path):
+    """A direct call (as many other tests in this file make) must behave identically to
+    going through check() - _all_md defaulting to None must walk fresh, not skip the scan."""
+    from scripts.check_artifacts import check_state
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art), "init", "--title", "T", "--slug", "t"]) == 0
+    state_path = art / "engagement-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["ratifications"] = [{"status": "pending", "text": "ops-lead sign-off pending review"}]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    _touch(art / "fsd.md", "The change was already ratified by ops-lead sign-off.\n")
+
+    findings = check_state(art)  # no _all_md - must still find it via its own fresh walk
+    assert any("RATIFIED-CLAIM-PENDING" in f for f in findings)
+
+
+# ---------------------------- unrecognized --flag is a usage error (2026-08-07) ------------
+#
+# Found by a framework-wide audit: `do_fix = "--fix" in argv[1:]` matched only the exact
+# string, so a typo'd flag was silently ignored - `check_artifacts --fx` ran a silent
+# check-only pass instead of the fix pass the human asked for, with no error explaining why
+# nothing got fixed.
+
+
+def test_typo_fix_flag_is_a_usage_error_not_a_silent_no_op(tmp_path, capsys):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    # argv[0] is the discarded "program name", matching every real invocation
+    # (`python -m scripts.check_artifacts ...`) and this file's own existing convention
+    # (e.g. ca_main(["check_artifacts", str(art)])) - omitting it would silently drop the
+    # directory argument into the discarded slot instead of testing it.
+    rc = ca_main(["check_artifacts", str(art), "--fx"])
+    assert rc == 2
+    assert "unrecognized flag" in capsys.readouterr().err
+
+
+def test_unknown_flag_is_a_usage_error(tmp_path, capsys):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    rc = ca_main(["check_artifacts", str(art), "--verbose"])
+    assert rc == 2
+    assert "unrecognized flag" in capsys.readouterr().err
+
+
+def test_real_fix_flag_still_works(tmp_path):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    rc = ca_main(["check_artifacts", str(art), "--fix"])
+    assert rc in (0, 1)  # never 2 - a real, recognized flag is not a usage error
+
+
+def test_no_flags_still_works(tmp_path):
+    art = tmp_path / "artifacts"
+    art.mkdir()
+    rc = ca_main(["check_artifacts", str(art)])
+    assert rc in (0, 1)
+
+
+# --- 2026-08-17 live-session fixes: --slug sugar + ghost artifact-row removal -------------
+
+
+def test_main_accepts_slug_flag(tmp_path, monkeypatch, capsys):
+    """A live session reached for `--slug` twice (every other team script accepts it),
+    got a usage error both times, and burned a retry each - now it is sugar for the
+    positional pack dir."""
+    from scripts.check_artifacts import main as ca_main
+
+    art = tmp_path / "artifacts" / "pack"
+    art.mkdir(parents=True)
+    (art / "engagement-state.json").write_text(
+        json.dumps({"schema": 2, "status": "closed"}), encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    rc_flag = ca_main(["check_artifacts", "--slug", "pack"])
+    rc_positional = ca_main(["check_artifacts", str(tmp_path / "artifacts" / "pack")])
+    assert rc_flag == rc_positional
+
+
+def test_fix_removes_ghost_artifact_row_when_true_row_resolves(tmp_path):
+    """The exact live shape: a pre-heal row with a mis-rooted path plus the
+    added_before_file_existed flag, alongside the correct row for the same file -
+    --fix removes the ghost and the check then passes clean on that front."""
+    from scripts.check_artifacts import apply_fixes, check
+
+    art = tmp_path / "artifacts" / "pack"
+    art.mkdir(parents=True)
+    (art / "engagement-brief.md").write_text("# brief\n", encoding="utf-8")
+    (art / "engagement-brief.html").write_text("<p>b</p>", encoding="utf-8")
+    state = {
+        "schema": 2,
+        "status": "in_progress",
+        "engagement": {"slug": "pack", "title": "t"},
+        "artifacts": [
+            {"path": "engagement-brief.md", "title": "Brief", "status": "interim"},
+            {
+                "path": "artifacts/pack/engagement-brief.md",
+                "title": "Brief",
+                "status": "interim",
+                "added_before_file_existed": True,
+            },
+        ],
+    }
+    (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+    log = apply_fixes(art)
+    assert any("ghost artifact row" in line for line in log)
+    remaining = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
+    paths = [r["path"] for r in remaining["artifacts"]]
+    assert paths == ["engagement-brief.md"]
+    assert not any("artifacts/pack/engagement-brief.md" in f for f in check(art))
+
+
+def test_fix_keeps_flagged_row_when_no_true_sibling_exists(tmp_path):
+    """An honestly-missing artifact keeps its row and flag - removal is only safe when
+    the same basename resolves via a correct row (the finding's own remove-or-restore
+    choice must stay a human call otherwise)."""
+    from scripts.check_artifacts import apply_fixes
+
+    art = tmp_path / "artifacts" / "pack"
+    art.mkdir(parents=True)
+    state = {
+        "schema": 2,
+        "status": "in_progress",
+        "engagement": {"slug": "pack", "title": "t"},
+        "artifacts": [
+            {
+                "path": "artifacts/pack/nope.md",
+                "title": "N",
+                "status": "interim",
+                "added_before_file_existed": True,
+            },
+        ],
+    }
+    (art / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+    apply_fixes(art)
+    remaining = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
+    assert len(remaining["artifacts"]) == 1  # untouched

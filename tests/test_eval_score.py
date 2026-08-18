@@ -304,7 +304,9 @@ def test_forbidden_trap_ignores_local_negation():
     findings = [_f("We must not close it as is - NC-1 is unresolved")]
     assert eval_score.score({"forbidden": [trap]}, findings)["false_positive_traps_triggered"] == []
     doing_it = [_f("Closing the engagement, I'll close it as is")]
-    assert eval_score.score({"forbidden": [trap]}, doing_it)["false_positive_traps_triggered"] == ["FP"]
+    assert eval_score.score({"forbidden": [trap]}, doing_it)["false_positive_traps_triggered"] == [
+        "FP"
+    ]
 
 
 def test_severity_floor_does_not_apply_to_harness_stamped_evidence():

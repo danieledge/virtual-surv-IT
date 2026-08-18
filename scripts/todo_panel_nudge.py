@@ -70,16 +70,29 @@ def _reason(slug: str | None, phase: str) -> str:
     )
 
 
+_CHECK_ARTIFACTS_MODULE_CACHE = None
+
+
 def _load_checker(project_root: Path):
     """Mirrors dod_stop_gate.py's loader exactly (G3 fix: package import first, then a
-    __file__-relative fallback for plugin mode against a foreign project)."""
+    __file__-relative fallback for plugin mode against a foreign project). Memoized the
+    same way, for the same reason (2026-08-03 perf audit)."""
+    global _CHECK_ARTIFACTS_MODULE_CACHE
     try:
-        sys.path.insert(0, str(project_root))
+        # M3 (2026-08-14 daemon-safety audit): deduped, not an unconditional insert -
+        # mirrors dod_stop_gate.py's own identical fix (and persona_anchor.py's
+        # original one). Re-exec'd fresh per Stop event inside the daemon when
+        # daemon-served, so an unconditional insert would grow the daemon's
+        # process-global sys.path without bound over its life.
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
         from scripts import check_artifacts
 
         return check_artifacts
     except Exception:  # nosec B110
         pass
+    if _CHECK_ARTIFACTS_MODULE_CACHE is not None:
+        return _CHECK_ARTIFACTS_MODULE_CACHE
     import importlib.util
 
     here = Path(__file__).resolve()
@@ -92,6 +105,7 @@ def _load_checker(project_root: Path):
                 spec = importlib.util.spec_from_file_location("check_artifacts", candidate)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
+                _CHECK_ARTIFACTS_MODULE_CACHE = module
                 return module
         except Exception:  # nosec B112
             continue
@@ -124,6 +138,22 @@ def main() -> int:
     cwd = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
     artifacts = cwd / "artifacts"
     if not artifacts.is_dir():
+        return 0
+
+    # Session scoping (2026-08-16 live report, same fix as the staged DoD stop gate
+    # and persona anchor): a pack left open by ANOTHER session must not nudge a
+    # session that never drove the team. Arm only when this payload's session_id
+    # matches the acting-session stamp engagement_state writes to
+    # artifacts/.team-session.json on every mutating command; missing either id, or a
+    # mismatch, means a dormant session - stay silent.
+    session_id = data.get("session_id")
+    try:
+        stamped = json.loads(
+            (artifacts / ".team-session.json").read_text(encoding="utf-8")
+        ).get("session")
+    except Exception:
+        stamped = None
+    if not session_id or stamped != session_id:
         return 0
 
     ca = _load_checker(cwd)

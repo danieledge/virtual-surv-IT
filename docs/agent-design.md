@@ -12,10 +12,10 @@
    `data-analyst` does exploratory/FP/MI work and **cedes threshold calibration to
    `tuning-analyst`**).
 2. **Least privilege, enforced by `tools:`.** Every agent declares its tools explicitly.
-   **Advisory/reviewer agents hold no `Write`/`Edit`** - that independence is a *tool grant*, not a
+   **Advisory/reviewer agents hold no `Edit`** - that independence is a *tool grant*, not a
    polite request. (Six also hold `Bash` for static analysers / `git diff`; execution of the *code
    under review* is gated by `guard-code-execution.py` (§7) - so the precise claim is "no
-   Write/Edit", not strictly "read-only".) Build agents get exactly what they need
+   Edit", not strictly "read-only".) Build agents get exactly what they need
    (`data-analyst`, `tuning-analyst` and `qa-engineer` hold `Write` for their own
    scripts/evidence but **not** `Edit`, so they never alter live detection source;
    `business-analyst` is a build agent whose `Edit` grant covers spec/doc authoring - its
@@ -26,6 +26,33 @@
    one: CLAUDE.md §7 forbids hand-parsing documents, so an elicitation agent with no `Bash`
    could not legitimately read a PDF or DOCX at all. `qa-engineer` is the precedent, same
    Write-not-Edit posture and the same rendering need).
+
+   **2026-08-03 token-usage audit: four advisory agents also gained `Write`, narrower still
+   than the build-agent grants above** - `code-reviewer`, `compliance-reviewer`,
+   `model-validator` and `performance-reviewer` each held no Write at all, so their full
+   structured findings-pack JSON had to transit the orchestrator's context TWICE (once as
+   the Task return, once again when the orchestrator re-emitted it as a Write) purely
+   because they had no way to persist their own output. Granting `Write` lets each author
+   its own pack directly, halving that cost - but a bare `Write` grant is a much bigger
+   blast radius than "author one JSON file", so unlike the build agents' project-wide Write
+   access, this grant is scoped to exactly one path pattern
+   (`artifacts/<slug>/data/findings-*.jsonl`) and **mechanically enforced**, not just
+   prompted: `guard-findings-pack-write.py` (a PreToolUse hook keyed on the `agent_type`
+   field Claude Code provides for subagent tool calls) blocks any Write from these four
+   agents that doesn't match that shape.
+
+   **2026-08-06 (live freedom-dashboard diagnostic): the same four agents also gained
+   `Edit`, scoped by the same guard to the identical path pattern.** The Write grant above
+   comes with a size cap (`_MAX_FINDINGS_PER_WRITE`, opt-in via `large_context_review_split`)
+   that blocks an oversized single Write to avoid tripping a corporate proxy timeout - but
+   without Edit, an agent that hit the cap had no sanctioned way to chunk past it the way the
+   orchestrator can, and a live run showed exactly that: `performance-reviewer` hit the cap
+   and silently dropped findings rather than splitting the write. `Edit` closes that gap and
+   is deliberately exempt from the size cap (it *is* the escape hatch), but stays scoped to
+   the same findings-pack path only - not a broader capability, the same narrow one extended
+   to a second tool. The tool-grant-as-independence principle above still holds in full: none
+   of these four gained the ability to alter the code or model they're reviewing, only their
+   own findings-pack JSONL.
 3. **Match the model to the work (see §2).** Cheap tier for mechanical, top tier only where it
    changes outcomes.
 4. **Right-size every engagement.** Multi-agent costs ~15× the tokens; the PM uses the *leanest*
@@ -48,32 +75,58 @@
 
 ## 2. Model-tiering rationale
 
-**Principle.** The orchestrator (**Morgan**) runs on **opus** and independently re-scrutinises every
-agent's *findings* - so there's already a top-tier backstop at the synthesis layer. Therefore reserve
-opus for judgment that is **(a) the final, independent word with no downstream re-check**, **(b) deep/
-subtle enough that a miss is costly and hard to catch**, or **(c) genuinely novel design**. Everything
+**Principle.** The orchestrator (**Morgan**) defaults to **sonnet** - testing to date has not yielded
+any better results from opus for orchestration, and the orchestrator's own cost multiplies across
+every skill file, hook injection and subagent return that lands in its context, so the cheaper tier
+is the default; opus remains available per-project for critical/high-stakes engagements
+(`install_helper.py`, menu option 8). This means the specialist tiers below stand on their own
+footing, not on "Morgan backstops everything": a specialist whose findings ARE independently
+re-checked by another specialist or by the PM's own challenge pass can safely run sonnet regardless
+of the orchestrator's own tier; a specialist that is the **final, independent word with no
+downstream re-check** must be opus itself, since nothing else catches its mistakes. Reserve opus for
+judgment that is **(a) the final, independent word with no downstream re-check**, **(b) deep/subtle
+enough that a miss is costly and hard to catch**, or **(c) genuinely novel design**. Everything
 evidenced and re-checkable → **sonnet**. Purely mechanical → **haiku**.
 
 | Agent | Tier | Why this tier |
 |---|---|---|
 | `model-validator` | **opus** | The *last word* on model soundness; adversarial; nobody re-checks it. |
 | `compliance-reviewer` | **opus** | Final audit/DoD gate before handover; a missed audit-trail/secret/PII is high-consequence and unchecked downstream. |
-| `code-reviewer` | **opus** | Subtle cross-language **security** judgement analysers miss; high blast radius. |
+| `code-reviewer` | **opus** | Subtle cross-language **security** judgement analysers miss; high blast radius. **Depth-tiered at dispatch since 2026-08-17**: Audit-depth passes ride this opus frontmatter (the pack is the final audit word); Deep-depth passes dispatch with a `sonnet` override by default (independently scored + PM-challenged), opus opt-in priced at the review menu; Quick runs in-session and never spawns it at all. |
 | `ml-engineer` | **opus** | Novel ML/NLP **design**; subtle failure modes (leakage, overfitting) are cheaper to avoid than to catch and re-do. |
-| `business-analyst` | sonnet | Structured elicitation/spec work; re-checked by SMEs, reviewers and the PM. |
-| `rules-developer` | sonnet | Detection code + tests, built **from an SME-validated spec** and independently reviewed (code + compliance) before merge - two checks up front that `ml-engineer`'s *novel* design lacks (its validation is post-build). **A specific engagement may escalate to opus for genuinely novel/complex scenario logic** where a subtle miss is as costly as a model error; the tier is per-engagement, the default sonnet. |
+| `business-analyst` | sonnet | Structured elicitation/spec work; re-checked against the SME packs, by reviewers and the PM. |
+| `rules-developer` | sonnet | Detection code + tests, built **from a spec validated against the `docs/sme/` packs** and independently reviewed (code + compliance) before merge - two checks up front that `ml-engineer`'s *novel* design lacks (its validation is post-build). **A specific engagement may escalate to opus for genuinely novel/complex scenario logic** where a subtle miss is as costly as a model error; the tier is per-engagement, the default sonnet. |
 | `data-analyst` | sonnet | Evidenced exploratory analysis/MI; figures are checkable. |
 | `tuning-analyst` | sonnet | Threshold calibration backed by **evidence** (ATL/BTL, dry-run) and re-checked by `model-validator`/PM. |
 | `platform-engineer` | sonnet | Well-trodden pipeline/ETL/infra patterns. |
 | `qa-engineer` | sonnet | Methodical, structured test design + evidence. |
-| `tm-sme` · `trade-surveillance-sme` · `comms-surveillance-sme` | sonnet | Knowledge-heavy **advice**, re-challenged by the PM, builders and reviewers - not deep unchecked reasoning. |
 | `performance-reviewer` | sonnet | **Static-only** (profilers removed): bounded Big-O / query-shape / memory reasoning sonnet handles well. |
 | `data-quality-reviewer` | sonnet | Structured coverage mapping + reconciliation; checklist-driven. |
 | `review-scorer` | **haiku** | Purely mechanical - context detection, lens selection, scoring, tallies. |
 
-**Net: 4 opus · 11 sonnet · 1 haiku.** The two next-cheapest swing choices are `code-reviewer` and
+**Net: 4 opus · 8 sonnet · 1 haiku** (13 agents; the three knowledge-only SME advisors became `docs/sme/` packs on 2026-08-17 - assessment rec 5: knowledge belongs in on-demand reference material, agents exist for tool grants, tiers and independence; the packs are consulted in-line at zero spawn cost). The two next-cheapest swing choices are `code-reviewer` and
 `ml-engineer` (both have a backstop - analysers + PM, and `model-validator` respectively); drop them
 to sonnet if cost must be pushed harder, accepting a small risk on deep security/model-design quality.
+
+**Pricing reality check (2026-08-17, assessment rec 3).** The tiering above was originally priced
+against the Opus 4.1-era ~5x premium ($15/$75 vs $3/$15 per million tokens). Opus 5 lists at
+$5/$25 - a **1.67x** ratio - so the retier-down lever saves far less than the intuition it was
+written under (roughly $1-2 per full review cycle), and the opus tier on the four final-word roles
+is now cheap insurance. Prefer keeping the tiers and spending the cost effort on right-sizing and
+caching (README §Token usage) instead; the retier lever remains documented for genuinely
+cost-pinched estates.
+
+**Verification-pass audit note (Opus 5, same date).** Anthropic's Opus 5 guidance is that the
+model self-verifies well enough that redundant verification scaffolding is pure cost. In THIS
+domain, independent review is often itself the deliverable - segregation of duties and the
+review's own audit trail are evidence a regulator reads - so **every pass whose independence is
+the point stays** (qa vs builder, model-validator vs ml-engineer, the reviewer trio at close).
+The audit target is passes that exist only as quality insurance with no evidentiary role: a
+second same-lens look, a re-check the DoD gate already performs mechanically, or PM re-review of
+an already-independently-reviewed artifact. One live datapoint supports pruning with care rather
+than by reflex: a 2026-08-01 engagement that did MORE checking scored WORSE than cheaper solo
+runs on the same case. When trimming, remove the pass in the skill that chains it, never by
+weakening an agent's own definition.
 
 ## 3. Deliberate deviations from the generic guidance
 
@@ -84,23 +137,23 @@ to sonnet if cost must be pushed harder, accepting a small risk on deep security
 - **Explicit `model:` on every agent (not `inherit`).** Inheriting the session model is the generic
   default, but a *team* wants deterministic cost control, so each agent pins its tier per §2.
 
-## 4. Why 16 agents (and not fewer / more)
+## 4. Why 13 agents (and not fewer / more)
 
-16 is the **library** size, not a per-task spawn count. The PM engages the **minimal sufficient
+13 is the **library** size, not a per-task spawn count. The PM engages the **minimal sufficient
 subset** (typically 2-5) for the deliverable at hand, and the team is dormant by default - so the
 breadth costs nothing unless a task needs it. The roster spans the deliverables (detection rules,
 pipelines, ETL, ML, reviews across 7 languages, three surveillance domains, independent
 validation/QA/DQ). The over-fragmentation risk is controlled by: removing real overlaps (the
 `data-analyst`/`tuning-analyst` boundary), distinct non-colliding descriptions, and the right-sizing
-rule so a given task fires 2-3 agents, never all 16. We did **not** add agents for thin slices (no
+rule so a given task fires 2-3 agents, never the whole library. We did **not** add agents for thin slices (no
 separate SecOps agent - folded into `code-reviewer` + `platform-engineer`).
 
 ## 5. Conformance matrix (vs Claude Code subagent guidance)
 
 | Best-practice item | Status | How |
 |---|---|---|
-| Frontmatter complete (name·description·tools·model) | ✅ | All 16. |
-| `tools:` least-privilege; advisors hold no Write/Edit | ✅ | Verified - zero advisors hold Write/Edit. (6 hold `Bash` for analysers/diffs; code-under-review execution is hook-gated, §7 - "no Write/Edit", not strictly "read-only".) |
+| Frontmatter complete (name·description·tools·model) | ✅ | All 13. |
+| `tools:` least-privilege; advisors hold no general Edit | ✅ | Verified - zero advisors hold an unscoped Edit. (6 hold `Bash` for analysers/diffs, execution-gated §7; 4 hold `Write` and `Edit`, both scoped to their own findings-pack path only, mechanically enforced by `guard-findings-pack-write.py` - "no general Edit, Write+Edit scoped", not strictly "read-only".) |
 | Description = clear when-to-use trigger | ✅ | Standardised "When the team is engaged, use for…"; overlaps removed. |
 | Model tiering (not all-one-tier; documented) | ✅ | §2 above; 4/11/1 split. |
 | Reasonable agent count / no routing collisions | ✅ | §4; one historical overlap fixed. |
@@ -130,17 +183,17 @@ and this matrix are the guard against drift.*
 | Never vague briefs (they cause duplicated work / gaps) | ✅ | "the #1 failure is weak delegation" (CLAUDE.md §6). |
 | **Scale effort to complexity**; state the number of agents | ✅ | PM states intended agent count + why at the gate (`engage` §5). |
 | Budget **~15× tokens**; reserve multi-agent for high value | ✅ | "~15× the tokens" cited verbatim (CLAUDE.md §6). |
-| **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 11 sonnet / 1 haiku. |
+| **Tier models per role** (cheap routine, strong high-stakes) | ✅ | §2 - 4 opus / 8 sonnet / 1 haiku. |
 | Return **condensed results**; persist big outputs as **artifacts**, not via the orchestrator's context | 🟡 | Blackboard (Delivery Report / RTM) + a **hard ≤~1,500-token / ~30-line return budget** stated in the delegation brief and each agent's return instruction (operating guide §Orchestration; an over-budget return is a stated defect to trim, aligned to Anthropic's 1-2k-token sub-agent return), **backstopped by a hook**: `scripts/subagent_return_budget.py` is a PostToolUse hook on the `Task` matcher (wired in `.claude/settings.json` + `hooks/hooks.json`) that measures the actual return and gives Morgan one nudge when it is clearly over budget (trigger: 2× the stated ceiling, so a borderline return is never flagged). Still 🟡, for two reasons stated plainly: the hook fires **after** the return has landed, so it prompts a trim rather than preventing the context cost; and the token count is a `chars / 4` estimate (a hook has no access to the model's tokenizer). It is advisory by design - fails open, silent outside a live engagement. |
-| **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no Write/Edit (Bash, where granted, is execution-gated, §7). |
+| **Restrict tools per subagent** (limit blast radius) | ✅ | Least privilege; advisors hold no general Edit (Bash, where granted, is execution-gated §7; Write/Edit, where granted, are scoped to one findings-pack path and mechanically enforced). |
 | Guard the failure modes (over-spawn · duplicate · runaway · premature stop) | ✅ | Right-size + state-count (over-spawn); non-overlapping briefs (duplicate); fix-loop stop conditions (runaway); never-dead-end (premature stop). |
 | Don't multi-agent when agents **share context / are tightly dependent** | 🟡 | We do multi-agent *coding* but via **chaining** (build → review), not parallel fan-out on interdependent code - the safe form of it. |
 | Humans in the loop; evals **early & small** | ✅ | Human sign-off (Definition of Done); PM returns at every gate; `tests/` is the small eval set. |
 | **External memory** for long horizons | ✅ | **Project-scoped:** project-specific memory lives in the working project's own `CLAUDE.md` (the plugin ships no project memory - it's installed across many projects); `docs/house-rules.md` holds only **general, cross-project** conventions. Subagent context isolation (CLAUDE.md §6). |
-| **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 9 rubrics + 43 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
+| **LLM-as-judge** rubric for output quality | ✅ | Shipped: the `evals/` harness - 9 rubrics + 45 golden cases, a deterministic scorer (`scripts/eval_score.py`, unit-tested) plus an LLM-judge via `/run-evals`. Complements the reviewer + Definition-of-Done model. |
 | Subagent **self-assessment** (plan → evaluate → refine) | 🟡 | A team-wide *convention* (CLAUDE.md §6: agents self-verify and flag gaps), but a single line - not a structured plan→evaluate→refine loop in each prompt. We lean on **independent** verification (reviewer chains, `model-validator`) instead - arguably stronger, but a different lesson. |
 | **Production tracing** / end-state checkpoints | 🟡 | Interactive model: PM 🎩 attribution + a short status log + user gates, rather than autonomous tracing (which matters most for long-running headless agents). |
-| **Dozens-hundreds** of agents → orchestrate via a **script/Workflow** | ➖ | Not applicable - right-sizing keeps us at 2-5 agents per engagement; we never reach that scale. |
+| **Dozens-hundreds** of agents → orchestrate via a **script/Workflow** | 🟡 | Not at that scale - right-sizing keeps us at 2-5 agents per engagement. But the *mechanism* is adopted for a different reason: independent review-pass fan-outs default to the Workflow tool's deterministic `parallel()` (`parallel_dispatch_via_workflow`, `.claude/skills/.shared/workflow-dispatch.md`) because three live-tested prompt-only fixes could not make batched Task dispatch stick (0.33.47-0.33.49). |
 
 **Net:** strong conformance on the high-value lessons. The 🟡s are deliberate partials - some are
 deliberate fits to our *interactive, human-gated* model (vs Anthropic's long-running autonomous
