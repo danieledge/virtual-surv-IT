@@ -97,7 +97,7 @@ experimentation, threshold analyzer, evaluation reasons, detection assurance.
 
 ### Phase 2 - mechanical explain capability on the worked example (code, ~a day)
 
-5. **`scripts/explain_rule.py`** (worked-example scope: spoofing): given a session id and
+5. **a new `explain_rule` script under scripts/** (worked-example scope: spoofing): given a session id and
    a sessions file, re-evaluate `detect_spoofing`'s conditions WITHOUT short-circuit and
    emit the truth table - condition, observed value, required value, pass/fail, first
    failing condition in normal order - plus counterfactual distance-to-threshold per
@@ -111,7 +111,7 @@ experimentation, threshold analyzer, evaluation reasons, detection assurance.
 
 ### Phase 3 - detection-health doctrine (docs + small script, ~half a day)
 
-8. **Scenario-health section** (operating guide or a new `docs/detection-health.md`,
+8. **Scenario-health section** (operating guide or a new detection-health doc under docs/,
    referenced by `/assess-coverage` and `/tune-thresholds`): silent-scenario heartbeats
    (zero alerts is a state, with expected cadence per scenario/segment), per-segment
    volume baselines with change-point correlation against deploy/config/feed-volume
