@@ -17,7 +17,8 @@ Procedure: `close-checklist.md`, "Company extension close actions".
 **Analyser registry.** A registered tool re-routes the review lenses: one carrying `replaces:`
 **covers** its lens, so do **not** degrade or caveat findings because a bundled default analyser
 is absent. Convert SARIF output with `<python> -m scripts.convert_sarif` so its findings stay
-📊 measured rather than 🧠 inferred.
+📊 measured rather than 🧠 inferred. The registry parser (`scripts.extensions`) never executes
+registry commands - presence checks only.
 
 **Consent.** A registered tool that will need RUNNING makes the intake execution-consent question
 applicable. Plain binaries run consent-free; an interpreter-wrapped registered tool runs under

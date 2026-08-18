@@ -28,9 +28,9 @@
   ],
   "tier_budgets": {
     "ALWAYS_LOADED": 3300,
-    "OPEN_TIME": 26300,
-    "ROUTE_TIME": 48600,
-    "AGENT_TIME": 23800,
+    "OPEN_TIME": 18600,
+    "ROUTE_TIME": 48400,
+    "AGENT_TIME": 23500,
     "DEFERRED": null
   },
   "files": {
@@ -42,7 +42,7 @@
     ".claude/agents/code-reviewer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 5364
+      "baseline_tokens": 5116
     },
     ".claude/agents/compliance-reviewer.md": {
       "tier": "AGENT_TIME",
@@ -102,7 +102,7 @@
     ".claude/skills/.shared/engage-open.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 4220
+      "baseline_tokens": 3728
     },
     ".claude/skills/.shared/engagement-bookends.md": {
       "tier": "ROUTE_TIME",
@@ -162,7 +162,7 @@
     ".claude/skills/deep-review/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 5071
+      "baseline_tokens": 4884
     },
     ".claude/skills/demo/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -182,7 +182,7 @@
     ".claude/skills/engage/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7326
+      "baseline_tokens": 7191
     },
     ".claude/skills/engage/references/artifact-menu.md": {
       "tier": "DEFERRED",
@@ -197,7 +197,7 @@
     ".claude/skills/engage/references/extensions.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 441
+      "baseline_tokens": 466
     },
     ".claude/skills/engage/references/integrations.md": {
       "tier": "DEFERRED",
@@ -339,6 +339,31 @@
       "loads_per_engagement": 1.0,
       "baseline_tokens": 958
     },
+    "docs/operating-guide.d/artifacts-lifecycle.md": {
+      "tier": "DEFERRED",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 3250
+    },
+    "docs/operating-guide.d/command-index.md": {
+      "tier": "DEFERRED",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 827
+    },
+    "docs/operating-guide.d/delivery-standards.md": {
+      "tier": "DEFERRED",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 1256
+    },
+    "docs/operating-guide.d/run-mode-detail.md": {
+      "tier": "DEFERRED",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 1368
+    },
+    "docs/operating-guide.d/untrusted-content.md": {
+      "tier": "DEFERRED",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 936
+    },
     "docs/review/agent-router.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
@@ -437,7 +462,7 @@
     "docs/team-operating-guide.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 10448
+      "baseline_tokens": 4098
     }
   }
 }

@@ -40,6 +40,7 @@ MANDATORY_GLOBS = (
     ".claude/agents/*.md",
     "docs/team-operating-guide.md",
     "docs/team-operating-guide-orchestration.md",
+    "docs/operating-guide.d/*.md",
 )
 
 # Files loaded at every standard engagement open (engage-open.md instructs the guide read;

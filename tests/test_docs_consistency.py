@@ -350,11 +350,13 @@ def _eval_case_count() -> int:
 
 
 def test_command_index_lists_exactly_the_skills_on_disk():
-    """The canonical command index in the operating guide must list every skill
-    directory - no more, no less. Catches 'added a skill but forgot to register it'."""
-    guide = _read("docs/team-operating-guide.md")
+    """The canonical command index must list every skill directory - no more, no less.
+    Catches 'added a skill but forgot to register it'. Lives in the deferred
+    operating-guide.d file since the open-core split (token plan Phase 1, 2026-08-18);
+    the guide keeps the section heading + pointer."""
+    guide = _read("docs/operating-guide.d/command-index.md")
     m = re.search(r"## Command index.*?\n(.*?)(?:\n## |\Z)", guide, re.S)
-    assert m, "operating guide: 'Command index' section not found"
+    assert m, "operating-guide.d/command-index.md: 'Command index' section not found"
     listed = set(re.findall(r"^- `/([a-z0-9-]+)`", m.group(1), re.M))
     on_disk = _skill_names()
     missing = on_disk - listed
