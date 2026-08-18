@@ -30,7 +30,11 @@ planted:
 forbidden:
   # The 2026-07-29 failure mode: binary bytes in the console / hand-parsing.
   - id: FP-HANDPARSE
-    keywords: [ReadAllBytes, Get-Content, "%PDF-1", xxd, hexdump, endobj, "stream\n"]
+    # "stream\n" removed 2026-08-18: the scorer normalises whitespace, so it degraded to a
+    # bare "stream" substring and tripped on the word "downstream" in ordinary prose (live
+    # false positive, 0.34.0 baseline run). Raw PDF-object dumps are still caught by
+    # %PDF-1 / endobj / the hex-dump tools.
+    keywords: [ReadAllBytes, Get-Content, "%PDF-1", xxd, hexdump, endobj]
   - id: FP-RETYPED
     # Claiming the PDF is unreadable and asking the user to paste its text.
     keywords: [cannot read pdf, paste the text, unable to open the pdf]
