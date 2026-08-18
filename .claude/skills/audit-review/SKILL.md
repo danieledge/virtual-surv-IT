@@ -32,11 +32,11 @@ Run an **evaluator-optimizer loop**:
    (`docs/code-review-method.md`). Audit mode: pre-existing issues stay in scope. The embedded
    `/deep-review` asks whether the code was **AI-assisted / vibe-coded**; if so, carry its
    **🧑‍💻 Prompting guidance** through into the audit report (see `docs/review/output-format.md`).
-2. **compliance-reviewer** - use the **jurisdiction(s)** already established at step 1's
-   `/deep-review` **intake** (asked and answered before any reviewer is dispatched; or CLAUDE.md
-   §2 / `docs/scope-and-stack.md`); **only ask if still unknown** - don't re-ask what intake
-   captured, and don't wait for `code-reviewer`'s output: jurisdiction is an intake answer, not a
-   review result. It assesses against the **applicable** regime(s) and states
+2. **compliance-reviewer** - **state the jurisdiction(s) already established at step 1's
+   `/deep-review` intake IN ITS DISPATCH BRIEF** ("Jurisdiction(s): ..." - its step 1 consumes
+   a brief-stated jurisdiction without re-deriving it from `docs/scope-and-stack.md`); **only
+   ask if still unknown** - don't re-ask what intake captured, and don't wait for
+   `code-reviewer`'s output: jurisdiction is an intake answer, not a review result. It assesses against the **applicable** regime(s) and states
    what's applicable vs not. Then: auditability, the alert→logic→obligation trace, threshold
    rationale, secrets/PII, test coverage, and change control.
 

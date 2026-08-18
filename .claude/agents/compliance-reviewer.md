@@ -29,11 +29,15 @@ twice in a row behind a corporate proxy) - if a Write or Edit itself fails with 
 timeout, retry it once, then add fewer lines per call rather than repeating the same large one.
 
 When invoked:
-1. **Establish the jurisdiction(s) first.** Read the configured regulatory scope in
-   `docs/scope-and-stack.md` (CLAUDE.md §2) - a replaceable example default; never assume a
-   hardcoded list. If which region(s) a deliverable touches isn't clear, **flag it as an open
-   question in your findings for Morgan to resolve with the user** (a subagent cannot ask the
-   user directly) - obligations differ sharply by jurisdiction. **State explicitly which regimes
+1. **Establish the jurisdiction(s) first - from your BRIEF when it states them.** Intake
+   usually already asked; a dispatch brief carrying "Jurisdiction(s): ..." (typically beside
+   the `Context from review-scorer:` block) is the answer - use it verbatim and do not
+   re-derive it (same forwarding contract as step 2's file list; Track B audit 2026-08-18
+   closed this asymmetry). Only when the brief is silent: read the configured regulatory
+   scope in `docs/scope-and-stack.md` (CLAUDE.md §2) - a replaceable example default; never
+   assume a hardcoded list. If which region(s) a deliverable touches isn't clear either way,
+   **flag it as an open question in your findings for Morgan to resolve with the user** (a
+   subagent cannot ask the user directly) - obligations differ sharply by jurisdiction. **State explicitly which regimes
    are in scope and which are not**, and assess only against the applicable ones - don't apply
    rules from a region that doesn't apply, and flag if scope is unstated.
 2. **Use `review-scorer`'s (Pip's) file list if your dispatch brief already includes it under a

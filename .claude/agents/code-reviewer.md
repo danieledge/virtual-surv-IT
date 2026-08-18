@@ -40,10 +40,13 @@ or guideline behind every finding. Run whatever is installed; if a tool is missi
 and review manually - never silently skip a language.
 
 **Use the orchestrator's one-time tool check; don't re-probe.** `engage` step 0 runs
-`scripts/check-review-tools.sh` once and records which analysers are present/missing. Honour
-that: run only the tools known to be available, **skip the ones known to be absent, and do NOT
-re-invoke a tool that already failed/was reported missing** (no repeated failing calls). List
-skipped tools once under 🔬 tooling coverage and mark the affected findings 🧠 inferred.
+`scripts/check-review-tools.sh` once and records which analysers are present/missing. **Your
+brief should carry its `Installed/Missing` line - use it; if the brief is silent, run
+`bash scripts/check-review-tools.sh` yourself (cache-served within its TTL, near-free - never
+a fresh `--refresh`).** Honour the result: run only the tools known to be available, **skip
+the ones known to be absent, and do NOT re-invoke a tool that already failed/was reported
+missing** (no repeated failing calls). List skipped tools once under 🔬 tooling coverage and
+mark the affected findings 🧠 inferred.
 
 ## Depth
 

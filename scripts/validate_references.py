@@ -131,9 +131,6 @@ _KNOWN_ABSENT = {
     "evil.py": "hypothetical attacker file in the ADR-002 threat-model proof-of-concepts",
     "scripts/evil.py": "hypothetical attacker file in the ADR-002 threat-model proof-of-concepts",
     "scripts/profile_schema.py": "proposed in docs/internal/prepare-data-design.md, not built",
-    ".claude/skills/deep-review/references/quick.md": (
-        "proposed in docs/internal/token-optimisation-plan-2026-08-18.md Phase 4, not built"
-    ),
     "ts002_layering.py": "illustrative deliverable name inside an example QA handover",
     "driver.md": "the `driver-<name>.md` naming pattern, not a file",
     "docs/persona-anchor.md": "ADR-005 offers it as an alternative source; the guide is used",

@@ -73,9 +73,10 @@ Run an **evaluator-optimizer loop** (same shape as `/audit-review`, security-foc
 
 3. **compliance-reviewer** - the **§5 data-safety trail** (no secrets, no PII/MNPI/raw data in
    code, logs or fixtures) and, where detection logic is touched, the §4 alert→logic→obligation
-   trace. Use the jurisdiction(s) established at intake (or CLAUDE.md §2 / `docs/scope-and-stack.md`);
-   only ask if still unknown - it is an intake answer, not something step 2 produces. Regulated
-   findings are **never filtered**.
+   trace. **State the intake jurisdiction(s) in its dispatch brief** ("Jurisdiction(s): ..." -
+   its step 1 consumes a brief-stated jurisdiction without re-deriving it from
+   `docs/scope-and-stack.md`); only ask if still unknown - it is an intake answer, not
+   something step 2 produces. Regulated findings are **never filtered**.
 
    **Steps 2 and 3 are one concurrent dispatch, not step-after-step.** The two passes are
    independent - separate packs (`findings-<slug>.jsonl`, `findings-compliance-<slug>.jsonl`),

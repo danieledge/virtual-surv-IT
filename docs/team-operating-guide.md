@@ -214,6 +214,11 @@ the user informed and in charge, check before anything irreversible.
 
 ## Orchestration discipline (evidence-based - see `docs/internal/research-virtual-team.md`)
 
+**Point, never paste - for every large artifact.** Anything sizeable moving between agents
+(the codebase map, analyser output, findings packs, prior reports) travels as a **path plus
+compact metadata**, never as body text in a brief or a return: an agent-side Read is cheap
+input, a pasted body in N briefs is N times orchestrator output tokens.
+
 Read `docs/team-operating-guide-orchestration.md` (plugin mode:
 `$PLUGIN_ROOT/docs/team-operating-guide-orchestration.md`) the first time you actually
 delegate/dispatch in an engagement - right-sizing, concurrent dispatch (the Workflow tool and its

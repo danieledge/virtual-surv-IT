@@ -46,20 +46,10 @@ review menu never ran, so ask ONE batched call first - Fix-cycle + Origin (+ jur
 and states what's applicable vs not.
 
 **Quick runs in-session - no fan-out (2026-08-17 cost decision).** When the chosen depth is
-**Quick**, skip the whole pipeline below: no subagent, no workspace, no scorer round-trip.
-YOU run it, turingmind-style: diff-scoped by default (`git diff`, changed code only -
-pre-existing issues out of scope). **Nothing to diff?** A NAMED target (a file, a small
-module) takes the diff's place - same in-session mechanics over that one bounded read - but
-if the named target won't sit comfortably in one context, that was never a Quick question:
-offer Deep instead of silently ballooning the read. No diff AND no named target = nothing to
-review: say so and ask what they want looked at - never invent scope to have something to do.
-Then: analysers first if available, then the router's selected
-lenses read inline and applied sequentially over that one scope, findings scored against
-`docs/code-review-method.md`'s rubric in-context and presented with the honest label
-"quick-tier: self-scored, no independent scorer at this depth". 🔴/🟠 to the console;
-artifact only if asked. The evidence machinery (packs, scorer independence, DoD) is what
-Deep and Audit buy - a Quick "am I OK to commit?" costs cents this way instead of a subagent
-chain. If Quick surfaces something structural, offer the Deep upgrade; never silently deepen.
+**Quick**, read `references/quick.md` (this skill's folder; plugin mode under `$PLUGIN_ROOT`)
+and follow it INSTEAD of everything below - it is the complete Quick recipe (in-session,
+diff-scoped, analysers + inline lenses, self-scored with the honest label). None of the
+pipeline below applies at Quick depth.
 
 **3. Run the tiered review** (CLAUDE.md §6; method `docs/code-review-method.md`; lenses
 `docs/review/lenses/`; router `docs/review/agent-router.md`):
@@ -170,9 +160,10 @@ the target directories with `git ls-files <dir>` - never a whole-repo walk.
    `code-reviewer`/`compliance-reviewer`, not the scorer.
 5. For anything touching detection logic, hand to **compliance-reviewer** for the §4/§5 trail -
    **forward Pip's file list here too, same `Context from review-scorer:` label as step 2**
-   (2026-08-12: this dispatch is sequential, after step 1's Pip call has already returned, so
-   the same context-forwarding step 2's dispatch of `code-reviewer` already does applies here
-   too - `compliance-reviewer.md`'s own step 2 is written to look for that label).
+   (this dispatch is sequential, after step 1's Pip call has returned;
+   `compliance-reviewer.md`'s own step 2 is written to look for that label), **and state the
+   intake jurisdiction(s) in the same brief** ("Jurisdiction(s): ...") - its step 1 consumes a
+   brief-stated jurisdiction without re-deriving it from `docs/scope-and-stack.md`.
 6. **Morgan's challenge pass** *(the orchestrator's own tier - sonnet by default, opus if
    configured for this engagement)* - a **spot-check, not a re-score**: the scorer already
    applied the rubric (step 4), and re-scoring everything on opus pays twice for the same

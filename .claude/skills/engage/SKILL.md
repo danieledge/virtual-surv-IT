@@ -311,8 +311,12 @@ boundaries and what another agent owns · inputs & artifacts to read · **the RE
 paths of every handbook doc the specialist must verify against** (DoD, coding standards, review
 method, templates - in a plugin install the working repo has no `docs/DEFINITION-OF-DONE.md`, so
 pass the `$PLUGIN_ROOT` copies you resolved at step 0; a specialist without the path reports
-"cannot verify", which stalls the gate) · expected output format · **return a distilled summary,
-target under ~30 lines, full detail to the artifact**. Coordinate via the **shared artifacts**
+"cannot verify", which stalls the gate) · **the session runtime facts a subagent inherits none
+of**: the probe's `<python>` word and `$PLUGIN_ROOT` (agent files write bare `python -m
+scripts.*`; on a corp Windows box or plugin install that guess fails - Track B audit
+2026-08-18) plus, for reviewer briefs, the probe's tooling `Installed/Missing` line ·
+expected output format · **return a distilled summary, target under ~30 lines, full detail to
+the artifact**. Coordinate via the **shared artifacts**
 (Delivery Report, RTM), not conversation. Review each output against the brief, keep a short
 status log, and return to the user at each gate.
 

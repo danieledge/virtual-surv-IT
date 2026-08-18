@@ -28,9 +28,9 @@
   ],
   "tier_budgets": {
     "ALWAYS_LOADED": 3300,
-    "OPEN_TIME": 18600,
-    "ROUTE_TIME": 48400,
-    "AGENT_TIME": 23500,
+    "OPEN_TIME": 18800,
+    "ROUTE_TIME": 48200,
+    "AGENT_TIME": 23700,
     "DEFERRED": null
   },
   "files": {
@@ -42,12 +42,12 @@
     ".claude/agents/code-reviewer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 5116
+      "baseline_tokens": 5171
     },
     ".claude/agents/compliance-reviewer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2335
+      "baseline_tokens": 2431
     },
     ".claude/agents/data-analyst.md": {
       "tier": "AGENT_TIME",
@@ -132,7 +132,7 @@
     ".claude/skills/audit-review/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2473
+      "baseline_tokens": 2485
     },
     ".claude/skills/beta-assess-quantexa/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -162,7 +162,12 @@
     ".claude/skills/deep-review/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 4884
+      "baseline_tokens": 4670
+    },
+    ".claude/skills/deep-review/references/quick.md": {
+      "tier": "DEFERRED",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 577
     },
     ".claude/skills/demo/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -182,7 +187,7 @@
     ".claude/skills/engage/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7191
+      "baseline_tokens": 7269
     },
     ".claude/skills/engage/references/artifact-menu.md": {
       "tier": "DEFERRED",
@@ -287,7 +292,7 @@
     ".claude/skills/security-audit/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2742
+      "baseline_tokens": 2767
     },
     ".claude/skills/tune-thresholds/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -462,7 +467,7 @@
     "docs/team-operating-guide.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 4098
+      "baseline_tokens": 4184
     }
   }
 }
