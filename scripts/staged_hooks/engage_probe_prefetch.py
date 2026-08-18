@@ -45,6 +45,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 
 # \b alone is too loose here: a hyphen counts as a word boundary, so "/engage-lighter"
@@ -156,6 +157,15 @@ def _build_block(interp: str, project_dir: Path, prompt: str = "") -> str | None
         f"INTERPRETER={interp}",
         report,
     ]
+    lines += _tail_lines(project_dir, prompt)
+    return "\n".join(lines)
+
+
+def _tail_lines(project_dir: Path, prompt: str) -> list:
+    """Everything after the report - the flag, the (conditional) resume menu, and the
+    closing tag. Shared by the live build and the go-written cache fast path so the two
+    can never drift."""
+    lines: list = []
     flag = _engage_flag(prompt)
     if flag:
         lines.append(f"ENGAGE_FLAG={flag}")
@@ -168,7 +178,7 @@ def _build_block(interp: str, project_dir: Path, prompt: str = "") -> str | None
         )
         lines.append("no open-pack commentary; go straight to classifying the work)")
         lines.append("</engage-probe-result>")
-        return "\n".join(lines)
+        return lines
     try:
         menu_json = _resume_menu_json(project_dir)
     except Exception:
@@ -184,6 +194,64 @@ def _build_block(interp: str, project_dir: Path, prompt: str = "") -> str | None
             menu_json,
         ]
     lines.append("</engage-probe-result>")
+    return lines
+
+
+_PROBE_CACHE_TTL_S = 3600
+
+
+def _cached_block(project_dir: Path, data: dict, prompt: str) -> str | None:
+    """The corp fast path (2026-08-18 user request: the in-session probe can take
+    minutes on corporate boxes): serve the go-written .claude/engage-probe.json with
+    zero probe computation - only the session stamp and the resume menu are done live
+    (the stamp MUST be live: the cache is written pre-session, deliberately unstamped,
+    and no pre-session process may forge session scoping; the menu changed the moment
+    the previous engagement opened). Pure accelerator: any staleness (TTL, prefs mtime
+    change, toggled off, missing) returns None and the live path runs exactly as
+    before - a plain `claude` + manual /engage is never broken by this."""
+    try:
+        raw = json.loads(
+            (project_dir / ".claude" / "engage-probe.json").read_text(encoding="utf-8")
+        )
+        age = time.time() - float(raw.get("computed_at_epoch") or 0)
+        if age < 0 or age > _PROBE_CACHE_TTL_S:
+            return None
+        prefs_file = project_dir / ".claude" / "team-preferences.json"
+        prefs_mtime = int(prefs_file.stat().st_mtime) if prefs_file.is_file() else 0
+        if prefs_mtime != int(raw.get("prefs_mtime") or -1):
+            return None  # settings changed since go - recompute live
+        try:
+            prefs = json.loads(prefs_file.read_text(encoding="utf-8-sig"))
+            if isinstance(prefs, dict) and prefs.get("probe_cache") is False:
+                return None  # toggled off
+        except Exception:
+            pass
+        report = raw.get("report") or ""
+        interp = raw.get("interpreter") or ""
+        if not report or not interp:
+            return None
+    except Exception:
+        return None
+    sid = data.get("session_id")
+    if sid:
+        try:
+            art = project_dir / "artifacts"
+            art.mkdir(parents=True, exist_ok=True)
+            (art / ".team-session.json").write_text(
+                json.dumps({"session": sid}), encoding="utf-8"
+            )
+        except Exception:
+            pass  # the first engagement_state mutation stamps as a fallback
+    lines = [
+        "<engage-probe-result>",
+        "Pre-computed by `virt-surv go` (probe cache) and served by the prefetch hook -",
+        "use these values directly, do NOT run the Bash bootstrap heredoc for this open,",
+        "and never compose a substitute probe of your own. Still read",
+        "docs/team-operating-guide.md yourself using PLUGIN_ROOT below.",
+        f"INTERPRETER={interp}",
+        report,
+    ]
+    lines += _tail_lines(project_dir, prompt)
     return "\n".join(lines)
 
 
@@ -198,6 +266,16 @@ def main() -> int:
         return 0  # not an engage-open.md consumer - zero cost, dormancy preserved
 
     project_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or Path.cwd())
+    try:
+        # Corp fast path FIRST (2026-08-18): a fresh go-written probe cache serves the
+        # whole block with zero probe computation - no interpreter-cache requirement
+        # either, since nothing needs spawning.
+        cached = _cached_block(project_dir, data, prompt)
+        if cached:
+            print(cached)
+            return 0
+    except Exception:
+        pass
     interp = _read_cache(project_dir)
     if not interp:
         return 0  # cold cache: first-ever run in this project, let the live probe handle it

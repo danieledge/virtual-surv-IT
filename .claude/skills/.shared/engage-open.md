@@ -30,7 +30,21 @@ turns between the probe and your opening banner**.
 `<engage-probe-result>` block (injected by the `engage_probe_prefetch` hook before your turn
 started, steady-state only - a cold interpreter cache or the hook not being wired means it
 never appears), use those values directly and skip the Bash heredoc below entirely - same
-data, zero tool calls. Otherwise (no block, or anything about it looks wrong) run the heredoc
+data, zero tool calls.
+
+**No injected block? Try the go-written probe cache next (2026-08-18, the corp fast
+path - the live probe can take minutes on corporate boxes):** Read the FILE
+`.claude/engage-probe.json` (one Read call, no shell). If it exists and its
+`computed_at` is recent (same day and plausibly within the hour - the hook applies the
+exact TTL mechanically; your direct read is the fallback, so be conservative), use its
+`report` and `interpreter` exactly as if injected. Two live pieces remain yours: the
+resume-or-new data (`--new` needs none - zero discovery; `--resume <slug>`/no-flag runs
+ONE `<python> -m scripts.engagement_state list --menu` command), and the session stamp,
+which the first `engagement_state` command writes automatically - never hand-write it.
+A stale, missing or odd-looking cache file means fall through to the heredoc; the cache
+is an accelerator, never load-bearing.
+
+Otherwise (no block, no usable cache) run the heredoc
 exactly as documented; it is the fallback, still fully live and tested, not being retired.
 
 The bootstrap below is a tested Python heredoc - a drift-pinned twin of `scripts/find_plugin_root.py`

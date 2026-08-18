@@ -5924,6 +5924,7 @@ def test_advanced_submenu_full_mapping():
         "8": "fixbashrc",
         "9": "cleanplugincache",
         "10": "aliasmanage",
+        "11": "gitbashperf",
         "b": "back",
     }
 
@@ -7718,3 +7719,49 @@ def test_cleaner_demo_leaves_the_registry_alone(tmp_path, monkeypatch, capsys):
     assert "would be repaired" in out
     assert reg.read_text(encoding="utf-8") == original
     assert not (reg_dir / "installed_plugins.json.bak").exists()
+
+
+def test_gitbash_perf_appends_gated_snippet_and_is_idempotent(tmp_path, monkeypatch, capsys):
+    """2026-08-18 corp diagnosis: Git Bash completion functions replayed through Claude
+    Code's shell snapshot cost ~6s per Bash call. The fix appends a $CLAUDECODE-gated
+    unload to the bash profile (interactive terminals untouched), versioned-marker
+    idempotent; creating a NEW .bash_profile sources ~/.profile first so an existing
+    profile chain is never shadowed."""
+    import install_helper as ih
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.chdir(tmp_path)  # not a git repo - the git-flags branch stays silent
+    rc = ih.run_gitbash_perf(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    profile = home / ".bash_profile"
+    content = profile.read_text(encoding="utf-8")
+    assert content.startswith("[ -f ~/.profile ] && . ~/.profile\n")  # chain preserved
+    assert 'if [ -n "$CLAUDECODE" ]' in content  # gated - terminals keep completions
+    assert "complete -r" in content
+    assert "appended to" in out
+    # idempotent: second run detects the marker, writes nothing new
+    before = content
+    rc = ih.run_gitbash_perf(ih.Style(False), ih.marks(), assume_yes=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "already installed" in out
+    assert profile.read_text(encoding="utf-8") == before
+
+
+def test_gitbash_perf_demo_writes_nothing(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".profile").write_text("# mine\n", encoding="utf-8")
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.chdir(tmp_path)
+    rc = ih.run_gitbash_perf(ih.Style(False), ih.marks(), assume_yes=True, demo=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "demo mode" in out
+    assert (home / ".profile").read_text(encoding="utf-8") == "# mine\n"
+    assert not (home / ".bash_profile").exists()

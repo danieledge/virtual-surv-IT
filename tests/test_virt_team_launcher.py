@@ -485,7 +485,7 @@ def test_menu_c_with_a_change_refreshes_the_table(tmp_path, monkeypatch, capsys)
     monkeypatch.chdir(project)
     mod = _load()
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
-    answers = iter(["c", "8", "b", "n"])  # enable jira, done, start new
+    answers = iter(["c", "9", "b", "n"])  # enable jira, done, start new
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = mod.main()
     out = capsys.readouterr()
@@ -690,13 +690,13 @@ def test_config_editor_row8_toggles_the_jira_integration(tmp_path, monkeypatch, 
         encoding="utf-8",
     )
     mod = _load()
-    answers = iter(["8", "b"])  # toggle off, done
+    answers = iter(["9", "b"])  # toggle off, done
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
     assert prefs["integrations"]["jira"]["enabled"] is False
     assert prefs["integrations"]["jira"]["project_key"] == "SURV"  # preserved for re-enable
-    answers = iter(["8", "b"])  # back on
+    answers = iter(["9", "b"])  # back on
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
@@ -710,7 +710,7 @@ def test_config_editor_jira_enable_without_key_says_where_to_set_it(
 ):
     project = _plugin_enabled_project(tmp_path)
     mod = _load()
-    answers = iter(["8", "b"])
+    answers = iter(["9", "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     prefs = json.loads(
@@ -1001,7 +1001,7 @@ def test_config_editor_env_toggle_on_applies_recommended_set(tmp_path, monkeypat
     env bundle add-only, same contract as the go-time propagation."""
     project = _plugin_enabled_project(tmp_path)
     mod = _load()
-    answers = iter(["7", "b"])
+    answers = iter(["8", "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
@@ -1023,7 +1023,7 @@ def test_config_editor_env_toggle_off_keeps_custom_tuned_values(tmp_path, monkey
         encoding="utf-8",
     )
     mod = _load()
-    answers = iter(["7", "b"])
+    answers = iter(["8", "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))

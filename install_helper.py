@@ -1225,6 +1225,7 @@ _ADVANCED_ACTIONS = {
     "8": "fixbashrc",
     "9": "cleanplugincache",
     "10": "aliasmanage",
+    "11": "gitbashperf",
     "b": "back",
 }
 
@@ -1338,6 +1339,10 @@ def choose_action(style: Style) -> str:
                     (
                         "10",
                         "Manage the 'virt-surv' alias (register/update it, or change the 'go' launch command)",
+                    ),
+                    (
+                        "11",
+                        "Git Bash performance fix (Claude Code shell-snapshot slowness on Windows)",
                     ),
                     ("b", "Back"),
                 ),
@@ -4928,6 +4933,96 @@ def run_setup_alias(
 _CLAUDE_LAUNCH_CMD_KEY = "claude_launch_command"
 
 
+_GITBASH_PERF_MARKER = "# --gitbash-perf: Claude Code completion unload v1"
+_GITBASH_PERF_SNIPPET = (
+    f"\n{_GITBASH_PERF_MARKER} (added by install_helper.py)\n"
+    "# Git Bash's system profile loads ~84 git completion functions; Claude Code's shell\n"
+    "# snapshot re-encodes and replays them through subprocess pipelines (~37ms per spawn\n"
+    "# on Windows), measured at ~6s of overhead PER Bash call. Under Claude Code only\n"
+    "# ($CLAUDECODE is set) the completions are unset - interactive terminals keep them.\n"
+    'if [ -n "$CLAUDECODE" ]; then\n'
+    "    for _cc_fn in $(compgen -A function 2>/dev/null | grep '^_'); do\n"
+    '        unset -f "$_cc_fn" 2>/dev/null\n'
+    "    done\n"
+    "    unset _cc_fn\n"
+    "    complete -r 2>/dev/null\n"
+    "fi\n"
+)
+
+# Per-repo git settings that speed the git subprocesses everything here spawns (probe
+# branch/log reads, statusline) - all long-documented Windows performance flags.
+_GIT_PERF_SETTINGS = (("core.fscache", "true"), ("core.preloadindex", "true"), ("core.untrackedcache", "true"))
+
+
+def run_gitbash_perf(
+    style: Style, mark_map: dict, assume_yes: bool = False, demo: bool = False
+) -> int:
+    """Advanced item 11 (2026-08-18, from a corp live diagnosis: Claude Code taking 1-2
+    minutes to a first prompt on Windows Git Bash, ~6s per Bash call): two mechanical
+    fixes plus printed advice for what needs IT.
+
+    1. The $CLAUDECODE-gated completion unload into the bash profile - the measured
+       ~15x fix (snapshot ~6,196ms -> ~261ms). Gated so interactive terminals keep
+       their completions; versioned marker keeps it idempotent. Appends to the first
+       existing of ~/.bash_profile / ~/.profile; creating a NEW .bash_profile sources
+       ~/.profile first so an existing profile chain is never silently shadowed.
+    2. Per-repo git performance flags on the CURRENT directory's repo when it is one
+       (core.fscache/preloadindex/untrackedcache).
+    3. Advice only (admin/IT territory): antivirus exclusions for the project dir,
+       short local paths over deep/network ones, WSL2 as the structural alternative."""
+    ok = mark_map["ok"]
+    s = style
+    print("")
+    print(s.bold("Git Bash performance fix (Claude Code on Windows)"))
+    home = Path.home()
+    profile = None
+    for name in (".bash_profile", ".profile"):
+        if (home / name).is_file():
+            profile = home / name
+            break
+    create_new = profile is None
+    if create_new:
+        profile = home / ".bash_profile"
+    existing = profile.read_text(encoding="utf-8", errors="replace") if profile.is_file() else ""
+    if _GITBASH_PERF_MARKER in existing:
+        print(f"{s.dim('-')} {profile}: the completion-unload fix is already installed")
+    else:
+        print(f"  Would append to {profile}:")
+        print(s.dim("    " + _GITBASH_PERF_SNIPPET.strip().replace("\n", "\n    ")))
+        if demo:
+            print(s.dim("    (demo mode - nothing written)"))
+        elif confirm("  Add it?", default=True, assume_yes=assume_yes, style=s):
+            try:
+                with profile.open("a", encoding="utf-8") as fh:
+                    if create_new:
+                        fh.write('[ -f ~/.profile ] && . ~/.profile\n')
+                    fh.write(_GITBASH_PERF_SNIPPET)
+                print(f"{ok} appended to {profile} - new Claude Code sessions get fast Bash calls")
+            except OSError as exc:
+                print(s.yellow(f"  ! could not write {profile}: {exc}"))
+    repo = Path.cwd()
+    if (repo / ".git").exists():
+        if demo:
+            print(s.dim(f"    would set git perf flags on {repo} (fscache/preloadindex/untrackedcache)"))
+        elif confirm(
+            f"  Also set git performance flags on this repo ({repo.name})?",
+            default=True,
+            assume_yes=assume_yes,
+            style=s,
+        ):
+            for key, val in _GIT_PERF_SETTINGS:
+                run_cmd(["git", "-C", str(repo), "config", key, val])
+            print(f"{ok} git perf flags set ({', '.join(k for k, _ in _GIT_PERF_SETTINGS)})")
+    print(
+        s.dim(
+            "  Needs IT/admin (advice only): antivirus exclusions for the project folder and\n"
+            "  the Git Bash install; prefer short local paths (C:/dev/...) over deep or\n"
+            "  network-homed ones; WSL2 avoids the Windows process-spawn overhead entirely."
+        )
+    )
+    return 0
+
+
 def run_howto(style: Style) -> int:
     """Menu item 5 (2026-08-18 user request): Morgan explains, in plain words, how to
     actually use the plugin day to day. Narrative, not a reference - the README and
@@ -7708,6 +7803,9 @@ def _main(argv=None) -> int:
                 did_anything = did_anything or not args.demo
             elif action == "howto":
                 run_howto(style)  # read-only narrative - never counts as "did anything"
+            elif action == "gitbashperf":
+                run_gitbash_perf(style, marks(), args.yes, args.demo)
+                did_anything = did_anything or not args.demo
             elif action == "demo":
                 # A one-shot preview of the full flow, not a persistent toggle - restored
                 # afterward so picking "Demo" once doesn't silently keep every LATER menu

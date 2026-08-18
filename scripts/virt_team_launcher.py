@@ -223,6 +223,7 @@ _TOGGLE_PREFS = (
     ("parallel dispatch (Workflow)", "parallel_dispatch_via_workflow"),
     ("standards critique", "standards_critique"),
     ("codebase-map skeleton", "map_skeleton"),
+    ("probe pre-cache at go", "probe_cache"),
 )
 
 
@@ -1272,6 +1273,74 @@ def _plugin_version() -> str:
         return ""
 
 
+_PROBE_CACHE_TTL_S = 3600
+
+
+def _write_probe_cache(project_dir: Path) -> None:
+    """Run the engage probe ENTIRELY OUTSIDE Claude Code (2026-08-18 user request: corp
+    boxes take minutes per in-session probe - go is where a human is already watching a
+    terminal). Writes .claude/engage-probe.json: the full report plus invalidation keys
+    (epoch + human timestamp, prefs mtime, plugin version, interpreter). The prefetch
+    hook serves it with zero computation; the engage-open Read path uses it when the
+    hook didn't fire. The SESSION STAMP is deliberately not written here - no session
+    exists pre-launch, and engage_probe's own guard skips stamping without
+    CLAUDE_CODE_SESSION_ID; the serving side stamps live. Interactive runs only (a tty
+    check keeps tests and automation off this path); freshness-gated so repeat go runs
+    don't recompute; best-effort - failure just means the live probe runs."""
+    try:
+        if not sys.stdin.isatty():
+            return
+        scripts_dir = _scripts_dir()
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        import engage_probe
+
+        if not engage_probe.resolve_preferences(project_dir).get("probe_cache", True):
+            return  # toggled off ([c] item 7) - the live probe is the only path
+        import time
+
+        out = project_dir / ".claude" / "engage-probe.json"
+        prefs = project_dir / ".claude" / "team-preferences.json"
+        prefs_mtime = int(prefs.stat().st_mtime) if prefs.is_file() else 0
+        try:
+            existing = json.loads(out.read_text(encoding="utf-8"))
+            fresh = (
+                time.time() - float(existing.get("computed_at_epoch") or 0)
+                < _PROBE_CACHE_TTL_S
+                and int(existing.get("prefs_mtime") or -1) == prefs_mtime
+                and existing.get("plugin_version") == _plugin_version()
+            )
+            if fresh:
+                return
+        except Exception:
+            pass
+        from find_plugin_root import find_plugin_root
+
+        print(
+            _Ink().dim(
+                "    warming the engage probe cache (the slow parts run here, "
+                "not inside the session)..."
+            ),
+            file=sys.stderr,
+        )
+        plugin_root = find_plugin_root(Path.home(), project_dir)
+        report = engage_probe.build_report(plugin_root, project_dir)
+        if not report:
+            return
+        payload = {
+            "computed_at_epoch": int(time.time()),
+            "computed_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
+            "plugin_version": _plugin_version(),
+            "prefs_mtime": prefs_mtime,
+            "interpreter": Path(sys.executable).as_posix(),
+            "report": report,
+        }
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    except Exception:
+        pass  # cosmetic tier - the live probe is always the fallback
+
+
 def _prewarm_guard_interpreter(project_dir: Path) -> None:
     """The engage-probe PREFETCH hook only runs when .claude/.guard-interpreter is
     warm - a cold cache means the FIRST /engage of a fresh project pays the big inline
@@ -1515,6 +1584,7 @@ def _print_project_defaults(project_dir: Path) -> None:
         ),
         ("standards critique", "on" if prefs.get("standards_critique") else "off"),
         ("codebase-map skeleton", "on" if prefs.get("map_skeleton") else "off"),
+        ("probe pre-cache at go", "on" if prefs.get("probe_cache", True) else "off"),
     ]
     tools = raw.get("review_tools") or {}
     overrides = ", ".join(f"{k}:{v}" for k, v in sorted(tools.items()) if v != "auto")
@@ -1679,6 +1749,10 @@ def main() -> int:
         pass  # cosmetic - the table must never cost the launch
     try:
         _prewarm_guard_interpreter(project_dir)
+    except Exception:
+        pass
+    try:
+        _write_probe_cache(project_dir)
     except Exception:
         pass
     try:

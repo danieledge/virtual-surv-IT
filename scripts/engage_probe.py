@@ -671,7 +671,7 @@ def resolve_preferences(project_dir: Path) -> dict:
 
     Returns {"extra_formats": list[str], "regulatory_citations": bool,
     "large_context_review_split": bool, "parallel_dispatch_via_workflow": bool,
-    "standards_critique": bool, "map_skeleton": bool}."""
+    "standards_critique": bool, "map_skeleton": bool, "probe_cache": bool}."""
     prefs = read_team_preferences(project_dir)
     # Project setting wins if this project has ever explicitly set it (even to "off" -
     # write_team_preferences always records extra_formats/regulatory_citations once a
@@ -703,6 +703,12 @@ def resolve_preferences(project_dir: Path) -> dict:
         map_skeleton_on = prefs["map_skeleton"]
     else:
         map_skeleton_on = machine_defaults.get("default_map_skeleton", False)
+    # probe_cache (2026-08-18): go pre-computes the engage probe to
+    # .claude/engage-probe.json so slow corp boxes skip the in-session minutes. ON by
+    # default - it is a pure accelerator (absent/stale cache = the live probe exactly
+    # as before, so a plain `claude` + manual /engage is never broken by it); an
+    # explicit false disables both the go-time write and the serving side.
+    probe_cache_on = prefs.get("probe_cache", True)
     return {
         "extra_formats": extra_formats,
         "regulatory_citations": citations_on,
@@ -710,6 +716,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "parallel_dispatch_via_workflow": workflow_dispatch_on,
         "standards_critique": standards_critique_on,
         "map_skeleton": map_skeleton_on,
+        "probe_cache": probe_cache_on,
     }
 
 

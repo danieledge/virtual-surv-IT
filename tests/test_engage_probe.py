@@ -352,6 +352,7 @@ def test_resolve_preferences_returns_dict_matching_build_report(tmp_path, monkey
         "parallel_dispatch_via_workflow": True,  # built-in default, no machine tier
         "standards_critique": False,  # built-in default, no machine tier
         "map_skeleton": False,  # built-in default
+        "probe_cache": True,  # built-in default (2026-08-18)
     }
 
 
@@ -365,6 +366,7 @@ def test_resolve_preferences_all_builtin_defaults_when_nothing_set(tmp_path, mon
         "parallel_dispatch_via_workflow": True,
         "standards_critique": False,
         "map_skeleton": False,
+        "probe_cache": True,  # 2026-08-18: on by default - a pure accelerator
     }
 
 
