@@ -41,12 +41,11 @@ Run the engagement like this:
 **0. Fast open.** Read the FILE `.claude/skills/.shared/engage-open.md` (plugin mode:
 `$PLUGIN_ROOT/.claude/skills/.shared/engage-open.md`). **`.shared/` is a SIBLING of this
 skill's own folder** - one level up, directly under `skills/`, never inside `skills/engage/`
-(live stumble 2026-08-16: a session Read the `skills/engage` directory itself, then guessed
-`skills/engage/.shared`, and burned two failed calls on a corp box where every call is
-seconds). One Read of that exact path, then follow it exactly: the operating-guide
-read, the chained-workflow rule, the one-compound-Bash-call probe, and every banner rule
-(allow-list tip, document formats, model, what's new). Shared verbatim with `/engage-light` - both
-front doors open identically.
+(guessed-path Reads have burned failed calls on corp boxes - live 2026-08-16; incident-log
+#21). One Read of that exact path, then follow it exactly: the operating-guide read, the
+chained-workflow rule, the one-compound-Bash-call probe, and every banner rule (allow-list
+tip, document formats, model, what's new). Shared verbatim with `/engage-light` - both front
+doors open identically.
 
 **Then your VERY NEXT output is the opening banner + disclaimers + the batched question below** -
 same no-turns-in-between target as step 0. If no gated question applies and classification is
@@ -93,8 +92,7 @@ With the target known: show both disclaimers (text) at startup, then ask in a **
 - **Resume-or-new** (header `Engagements`) - only when 0b's menu has open engagements AND no
   `--resume`/`--new` flag pre-answered it: 0b's question rides THIS batch as its fourth
   question (top `shown` engagements + "Start new", recommendation per
-  `references/resume-menu.md`) instead of its own later round-trip (2026-08-17 flow review: the opening
-  used to be a series of screens that batch into one).
+  `references/resume-menu.md`) instead of its own later round-trip (2026-08-17 flow review).
 
 Record the answers; don't re-ask per file/command. **`data/raw/` stays hard-blocked regardless.**
 Repeat the execution- and data-responsibility notes in the final Delivery Report. **Persist them
@@ -104,19 +102,17 @@ outcome is never a grant (ADR-002).
 
 **0b. Existing engagements?** **First check the initial user message itself for `--resume <slug>`
 or `--new`** - `virt-surv go` (when the user launches Claude Code through it) computes this
-SAME resume-or-new decision outside any LLM entirely and pre-encodes the answer
-into the very first prompt, precisely because letting the model work it out cost real turns and
-occasionally picked the wrong option before self-correcting. When present, this is the answer -
-**do not ask the question at all.**
+SAME resume-or-new decision outside any LLM entirely and pre-encodes the answer into the very
+first prompt. When present, this is the answer - **do not ask the question at all.**
 
 - **`--new` → skip straight to classifying as new work, with ZERO engagement discovery** -
   nothing to validate ("new" is valid whatever is open): no `list --menu`, no artifacts
   listing, no `ENGAGEMENTS.md`, no hand-rolled "check first" substitute probe, and no
-  open-pack commentary in chat - not even "one engagement is open but I'll skip it" (the
-  go menu just showed the human that exact list and they chose new - re-surfacing it
-  re-litigates their decision; live 2026-08-17, twice). The prefetch block confirms the
-  flag as `ENGAGE_FLAG=--new` and omits `RESUME_MENU` on purpose. Siblings seen while
-  creating your workspace in step 4 are not an invitation to comment.
+  open-pack commentary in chat - not even "one engagement is open but I'll skip it". The go
+  menu just showed the human that list and they chose new; re-surfacing it re-litigates their
+  decision (twice live 2026-08-17; incident-log #14). The prefetch block confirms the flag as
+  `ENGAGE_FLAG=--new` and omits `RESUME_MENU` on purpose. Siblings seen while creating your
+  workspace in step 4 are not an invitation to comment.
 - **`--jira <url-or-key>` (BETA, rides with `--new`)** - the engagement's request IS the
   named ticket: a colleague raised it in Jira, a human picked it up in the go menu (that
   pick is the approval to start). First action after the banner: fetch the issue
@@ -158,11 +154,9 @@ in your banner line and target its workspace in every state command (`--slug <sl
   **answer it in the chat and stop there - the rest of the engagement flow (steps 3-7: artifact
   menu, workspace, delivery oversight, close checklist, summary email) does not run by
   default.** Do not offer "commission further work" / "formalise as a Delivery Report" as menu
-  options the scenario itself never asked for - a token-usage audit (2026-08-03) traced a probe
-  case's cost 8x over its own baseline to exactly this: the PM's own follow-up question offered
-  formalisation, the offer was taken, and the full engagement machinery (workspace, three
-  artifacts, three renders, repeated DoD fix-verify passes, a close gate) ran for what was a
-  two-question chat answer. It is fine to ask "want this written up as a tracked artifact?" as a
+  options the scenario itself never asked for - a PM-offered formalisation, once taken, has run
+  the full engagement machinery at 8x the baseline cost of what was a two-question chat answer
+  (token audit 2026-08-03). It is fine to ask "want this written up as a tracked artifact?" as a
   single low-key option - never a menu of escalation paths. Only open a workspace (step 4) if the
   user's own reply genuinely asks for one. **Known, accepted trade-off**: this path leaves no
   persisted record - no `engagement-state.json`, no registry entry, nothing `ENGAGEMENTS.md`
@@ -261,10 +255,10 @@ WORKSPACE-relative, and when several engagements exist target yours with `--slug
 `add-artifact engagement-brief.md --title "..."` lists the brief. **Write the brief's actual
 content (and render its HTML) before this call, not after** - registering the row first leaves
 `added_before_file_existed: true` on the entry, which the DoD backstop correctly flags as
-STALE-INDEX (live report, 2026-08-12: this happened on a session's very first turn, before the
-brief had actually been drafted) if the file is still missing whenever a turn ends. If you
-genuinely must register before the write for some reason, finish the write in the SAME turn and
-re-run `add-artifact` on the same path afterward to clear the flag - never leave it stuck.
+STALE-INDEX if the file is still missing whenever a turn ends (live 2026-08-12; incident-log
+#22). If you genuinely must register before the write for some reason, finish the write in the
+SAME turn and re-run `add-artifact` on the same path afterward to clear the flag - never leave
+it stuck.
 From here on the state file is
 authoritative and START-HERE is its rendered view: **never hand-edit START-HERE**. Record every
 artifact with `add-artifact`, every status change with `set-status`, every open question with

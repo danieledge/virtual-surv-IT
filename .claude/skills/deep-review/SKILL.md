@@ -10,17 +10,17 @@ Run a **deep (detailed) code review** of: **$ARGUMENTS**.
 `git diff`), ask where the code is - a path/glob, repo/branch, commit range, or to paste it -
 and wait. Don't review an assumed target.
 
-**2. Derive the fine scope - state it, don't re-ask it (2026-08-17 flow review).** The
-go-ahead gate must be FINAL: a live run recorded "proceed as briefed" and then asked four more
-scope questions, so the brief now carries the derived scope and the gate approves it. Derive:
+**2. Derive the fine scope - state it, don't re-ask it.** The go-ahead gate must be FINAL:
+the brief carries the derived scope and the gate approves it - post-gate scope questions are
+a defect (live 2026-08-17; incident-log #33). Derive:
 - **Dimensions** from depth + target: Deep → **Core + quality** (bugs & logic · security ·
   language-specific · architecture · docs/comments · style & form) unless the target plausibly
   touches detection logic, regulated data or the engagement is compliance-sensitive → **Full
   review** (adds 📋 compliance/audit, §4/§5 trail). Audit depth always Full. A user-named
   bespoke mix always wins. (`compliance-reviewer` and citation retrieval cost real tokens -
   never spend them on general-purpose code by habit.)
-- **Target** the same way (2026-08-17 user request: no standalone "what should I review?"
-  turn): an uncommitted/branch diff → the diff; a path/module named in the request → that.
+- **Target** the same way (no standalone "what should I review?" turn - user request
+  2026-08-17): an uncommitted/branch diff → the diff; a path/module named in the request → that.
   Only when NEITHER exists is the target a real question - LOCKED construction in
   `engage`'s `references/target-menu.md` (guard-enforced; "Whole working directory" is
   the review-everything option) - riding `engage`'s 0a intake batch (the Work-type slot),
@@ -69,8 +69,8 @@ chain. If Quick surfaces something structural, offer the Deep upgrade; never sil
 router's canonical topology: the code is read into context once and every lens reuses it).
 **Security is a lens, never its own pass, whenever a code review is already running** -
 a chained `/security-audit` folds its focus into the same pass's lens set instead of
-dispatching more agents (live 2026-08-16/17: deep + security + perf on a small repo went out
-as 6 subagent passes where the topology prices 3, roughly doubling the engagement's cost).
+dispatching more agents (6 passes went out where the topology prices 3, roughly doubling the
+cost - live 2026-08-16/17; incident-log #17).
 Split into per-component passes ONLY when `LARGE_CONTEXT_REVIEW_SPLIT=on`, the target
 genuinely exceeds one context, or corporate-proxy timeouts have already bitten this session
 (the split's original purpose, and it demonstrably helps there) - name which reason applies
@@ -86,14 +86,13 @@ rather than silently absorbing the cost difference.
 
 **Deep reads a MAP, not the repo:** widen scope beyond the diff only via a targeted
 related-file map built once up front - importers of the changed files, their imports, and
-their test files - and read only what the map names (turingmind's Phase-1C pattern; the live
-6-pass run's per-pass cold repo reads are exactly what this avoids). Never browse the
-codebase breadth-first from inside a review pass. **When `docs/codebase-map.md` exists, it
-is that map already** (2026-08-17 live report: three dispatched reviewers each re-crawled a
-repo whose map existed): the dispatch brief carries the in-scope FILE LIST plus the map's
-PATH with "read it for wider context - do not enumerate the repo" - **point, never paste**
-(the map body in N briefs is N times orchestrator output tokens; an agent-side Read is cheap
-input, and a diff-scoped pass needs no map read at all). Search discipline applies throughout (operating guide, orchestration §Exploration discipline): 2-3 miss budget, small files whole, batched lookups, grep for symbols only. Trust it only after a cheap
+their test files - and read only what the map names (turingmind's Phase-1C pattern). Never
+browse the codebase breadth-first from inside a review pass. **When `docs/codebase-map.md`
+exists, it is that map already** (dispatched reviewers have re-crawled a mapped repo - live
+2026-08-17; incident-log #16): the dispatch brief carries the in-scope FILE LIST plus the
+map's PATH with "read it for wider context - do not enumerate the repo" - **point, never paste**
+(the map body in N briefs is N times orchestrator output tokens; an agent-side Read is
+cheap input, and a diff-scoped pass needs no map read at all). Search discipline applies throughout (operating guide, orchestration §Exploration discipline): 2-3 miss budget, small files whole, batched lookups, grep for symbols only. Trust it only after a cheap
 staleness look (map's stated date vs `git log -1 --format=%ci`); if drifted, refresh just
 the target directories with `git ls-files <dir>` - never a whole-repo walk.
 
@@ -104,15 +103,10 @@ the target directories with `git ls-files <dir>` - never a whole-repo walk.
 > §Orchestration discipline). A fan-out plan that names the reviewers but not `review-scorer`
 > is wrong; Found/Reported/Filtered counts self-scored by the reviewer are a defect to redo via
 > Pip, not accept. Skipping the haiku helper saves nothing - it moves rote work onto the most
-> expensive tier, whether that's the reviewer self-scoring (below) or the orchestrator doing
-> Pip's context step inline. Two live failures, two different shapes of the same mistake:
-> **2026-08-07** - a full audit-depth review ran with zero `review-scorer` calls, the stated
-> plan never named Pip, and the reviewers self-scored, noting it in their own packs. **2026-08-10**
-> - step 4 (scoring) was correctly queued for Pip, but step 1 (context) wasn't: the
-> orchestrator read the analyser outputs, detected languages and picked lenses itself, then
-> self-disclosed it in the task list as "effectively done inline by Morgan." Faster in the
-> moment, but sonnet doing haiku's rote work still costs more, and a plan can fail this rule
-> one step at a time, not just wholesale.
+> expensive tier. This rule failed live twice in different shapes despite being documented -
+> once wholesale (no Pip at all, reviewers self-scored) and once one step at a time (scoring
+> delegated, context done inline) - so it holds per STEP, not per plan (2026-08-07 and
+> 2026-08-10; incident-log #8).
 
 1. **Context** - a real `Task` tool call, `subagent_type: review-scorer` (haiku), not the
    orchestrator doing the equivalent work itself - detect languages, list changed files/lines,
@@ -152,15 +146,13 @@ the target directories with `git ls-files <dir>` - never a whole-repo walk.
    confirmation, not its findings as text - see `.claude/skills/.shared/workflow-dispatch.md`
    for the exact convention.
    **Fallback** (preference off, tool absent, or the Workflow call failed):
-   dispatch them as **concurrent Task calls in one
-   message** - never one per turn; the `performance-reviewer` pass joins the
-   same message. **Live-tested failure mode (2026-08-07/08, three attempts): stating this rule
-   was not enough
-   on its own - the calls still went out one per turn every time**, which is why the Workflow
-   path is the default. On the fallback, follow the operating guide's literal
-   procedure: list every independent call first, then emit all of them as Task tool-uses in
-   this ONE response before reading any of their results. N independent passes = N Task
-   tool-uses in this turn, not N turns.
+   dispatch them as **concurrent Task calls in one message** - never one per turn; the
+   `performance-reviewer` pass joins the same message. **Prose alone failed this rule three
+   times running - the calls still went out one per turn every time - which is why the
+   Workflow path is the default** (2026-08-07/08; incident-log #7). On the fallback, follow
+   the operating guide's literal procedure: list every independent call first, then emit all
+   of them as Task tool-uses in this ONE response before reading any of their results. N
+   independent passes = N Task tool-uses in this turn, not N turns.
 4. **Score & filter** *(delegate to `review-scorer`, haiku)* - apply the scoring rubric and
    produce the Found/Reported/Filtered counts (`docs/code-review-method.md`). This is the one
    genuinely sequential step in the fan-out (it depends on the packs existing), and it runs
@@ -223,8 +215,8 @@ the target directories with `git ls-files <dir>` - never a whole-repo walk.
    must always be populated (2-4 constructive points on the author's coding style and what to
    improve next time; if the code is strong, say what's done well), **even on a clean pass** - the
    renderer emits it as the `## 🔵 Developer guidance` section. `check_artifacts` mechanically
-   flags a missing or empty section as `FINDINGS-NO-DEV-GUIDANCE` (audit finding #2, 2026-07-30 -
-   this used to be a prose-only reminder with no backstop), but don't rely on the gate to catch it.
+   flags a missing or empty section as `FINDINGS-NO-DEV-GUIDANCE`, but don't rely on the gate to
+   catch it.
 
 **5. Close - don't dead-end.** Summarise from the scoreboard, then offer concrete next steps
 with a recommendation - *"3 🔴, 5 🟠. I can fix the criticals, run `/remediate`, or produce a

@@ -2,12 +2,8 @@
 
 > Shared by `/engage` and `/engage-light` - both front doors open identically; light only differs
 > from step 1 onward. Repo path: `.claude/skills/.shared/engage-open.md`; installed plugin:
-> `$PLUGIN_ROOT/.claude/skills/.shared/engage-open.md`. This used to be duplicated in full inside
-> `engage-light/SKILL.md` ("read `.claude/skills/engage/SKILL.md` for the shared mechanics") - that
-> meant every `/engage-light` invocation paid for the ENTIRE parent skill (BRD/FSD chain,
-> artifact-menu machinery, the full delivery flow) just to reach this shared open, making the
-> "low-ceremony" front door cost more raw text than plain `/engage`. Extracted so both doors read
-> only this, not each other's full file.
+> `$PLUGIN_ROOT/.claude/skills/.shared/engage-open.md`. Extracted so each door reads only this
+> file, never the other's full skill (cost fix; history: docs/internal/incident-log.md).
 
 **Read `docs/team-operating-guide.md` at the open (step 0)**: the standing rules (question-tool
 discipline, 🎩 voice, clean console, outcome discipline + the required engagement-summary email,
@@ -54,41 +50,32 @@ cache hit) never pays for its text. Do not reconstruct the block from memory - r
 
 
 **Run the block from wherever you already are - NEVER prepend `cd`.** The block uses
-`Path.cwd()` to detect repo-as-project vs plugin mode and to find the working project's own
-`artifacts/`; a `cd` into the plugin repo first (live corp report 2026-08-17) silently flips a
-plugin-mode session into repo-as-project and points the engagement state at the wrong project.
+`Path.cwd()` to detect the mode; a prior `cd` silently flips a plugin-mode session into
+repo-as-project and points engagement state at the wrong project (live 2026-08-17;
+incident-log #19).
 
 **Windows path rule, for every Bash call this session:** the Bash tool is Git Bash even on
 Windows, so an absolute Windows path is written with FORWARD slashes inside double quotes
-(`"C:/Users/x/project"`); backslashes are shell escapes and get eaten (live corp report
-2026-08-16: a hand-composed `cd C:\Users\...` arrived as `C:Usersdev...`, failed, and the
-open was wrongly judged probe-broken). **Never hand-compose a substitute probe - the bootstrap
-block IS the probe**; on failure it now prints the inner error itself as `PROBE-STDERR:` lines.
-That ban includes "lighter" partial probes observed live (2026-08-17): grepping the skills
-tree for probe field names, or ad-hoc `engagement_state` calls to "check first" before the
-real probe - one probe (the prefetch block or the heredoc), nothing before it, nothing
-beside it.
+(`"C:/Users/x/project"`) - backslashes are shell escapes and get eaten, and a mangled path has
+wrongly been judged a broken probe (live 2026-08-16; incident-log #12). **Never hand-compose a
+substitute probe - the bootstrap block IS the probe**, and on failure it prints the inner
+error as `PROBE-STDERR:` lines. The ban includes "lighter" partial probes - grepping for probe
+field names, ad-hoc `engagement_state` calls to "check first" (both seen live 2026-08-17) -
+one probe, nothing before it, nothing beside it.
 
-The interpreter order (warm cache first, then Windows-aware) and `PYTHONIOENCODING=utf-8` are
-still load-bearing, not decoration - the cache key is `CLAUDE_PROJECT_DIR`-scoped, not
-plugin-root-scoped (rationale: `.claude/skills/engage/references/probe-contract.md`). **On `PROBE_FAILED`**, retry the block once by hand
-(never guess, never silently give up) and read
-`.claude/skills/engage/references/probe-contract.md` (plugin mode:
-`$PLUGIN_ROOT/.claude/skills/engage/references/probe-contract.md`) - the probe's contract, the
-rationale for each part of the bootstrap, and the known failure modes. That file is for failures
-only; a healthy open never reads it.
+**On `PROBE_FAILED`**: retry the block once by hand (never guess, never silently give up) and
+read `.claude/skills/engage/references/probe-contract.md` (plugin mode:
+`$PLUGIN_ROOT/.claude/skills/engage/references/probe-contract.md`) - the probe's contract and
+known failure modes. Failures only; a healthy open never reads it.
 
 The script prints, in order: `INTERPRETER=` (python3/python/py, **or a full absolute path** -
-the cache can be pre-seeded with one, e.g. `C:\Python313\python.EXE`; live corp-Windows report,
-2026-08-14: an unquoted absolute path used directly in a later Bash command lost its backslashes
-to the shell, `command not found`. This IS `<python>` for every later script call in this
-session: use it verbatim, **always double-quoted** (`"<python>" -m scripts.<name>`, never bare)
-since a path can contain spaces or backslashes an unquoted shell word will corrupt - **never
-re-probe**), `PLUGIN_ROOT=`, `OS=Windows|POSIX` (the host, computed - **use it instead of
-inferring Windows-ness later**; the exec-consent command in
-`.claude/skills/engage/references/safety-gates.md` reads this field directly, so a Windows host
-always gets the PowerShell form shown alongside the `!` form, not only when something else in the
-conversation happens to make Windows obvious), `PYTHON_VERSION=`, `PLUGIN_VERSION=`, `BRANCH=`,
+the cache can be pre-seeded with one, e.g. `C:\Python313\python.EXE`. This IS `<python>` for
+every later script call in this session: use it verbatim, **always double-quoted**
+(`"<python>" -m scripts.<name>`, never bare - an unquoted path loses its backslashes to the
+shell; live 2026-08-14, incident-log #12 - **never re-probe**), `PLUGIN_ROOT=`,
+`OS=Windows|POSIX` (the host, computed - **use it instead of inferring Windows-ness later**;
+the exec-consent command in `.claude/skills/engage/references/safety-gates.md` reads this
+field directly), `PYTHON_VERSION=`, `PLUGIN_VERSION=`, `BRANCH=`,
 `PREV_TEAM_VERSION=`, `VERSION_CHANGED=yes|no` (computed - never re-derive it), `EXTRA_FORMATS=`,
 `REGULATORY_CITATIONS=on|off`, `LARGE_CONTEXT_REVIEW_SPLIT=on|off` (project preference - `on`
 means split a large, multi-component review by component from the start rather than waiting to
@@ -173,34 +160,26 @@ rule even if this stayed silent at open.
 
 **Tooling inventory (banner, one short line, every engagement).** The probe's tooling report
 already computes present/missing counts for the seven configurable analysers (cached, TTL-bound -
-**never re-probed just to compose this line**) and states outright that a missing tool degrades
-its dependent findings from 📊 measured to 🧠 inferred. That link was previously visible only in
-the raw probe output Morgan reads, never surfaced to the user - state it as one line so it's known
-before, not discovered after, a review. All seven present: *"✅ full tool-backed coverage this
-session."* Any missing: *"🧠 <tool, tool> not installed - dependent findings will be inferred, not
-measured (install for 📊 coverage)."* Name only the missing tools, not the best-effort/unsupported
-language list (TypeScript/Java/etc.) - that stays in the raw report for when it's actually
-relevant. If the user later installs a missing tool, tell them to re-run
-`bash scripts/check-review-tools.sh --refresh` (or the plugin-mode path form) rather than waiting
-out the cache TTL - stated once, not repeated every engagement.
+**never re-probed just to compose this line**). State the degradation link as one line so it's
+known before, not discovered after, a review. All seven present: *"✅ full tool-backed coverage
+this session."* Any missing: *"🧠 <tool, tool> not installed - dependent findings will be
+inferred, not measured (install for 📊 coverage)."* Name only the missing supported tools, not
+the best-effort/unsupported language list. If the user later installs a missing tool, tell them
+once to re-run `bash scripts/check-review-tools.sh --refresh` rather than waiting out the TTL.
 
 **Model (banner, one short line, every engagement).** State which model you are actually
-running as this session (e.g. *"running as Sonnet 4.6"*) - your own identity, not a file read:
-`.claude/settings.json`'s `model` key (if any) is the *configured default*, which can differ from
-what's actually running if a session overrode it via `/model` or the setting was only just
-applied. Sonnet is the documented default for the orchestrator - testing to date has not yielded
-any better results from opus for orchestration; opus remains available for critical/high-stakes
-engagements. State this every time, not only when asked - a live report (2026-08-03) found a user
-only discovered they were running sonnet from a provenance stamp buried in a signed-off email,
-well after the engagement had already run on it. If you don't know how to change it, say so:
-*"(change with `python install_helper.py`, menu option 8, or `--model-project . --model opus`)"*.
+running as this session (e.g. *"running as Sonnet 4.6"*) - your own identity, not a file read
+(`.claude/settings.json`'s `model` key is only the configured default). Sonnet is the
+documented orchestrator default; opus stays available for critical/high-stakes engagements.
+Every time, not only when asked (live 2026-08-03: a user discovered their model from a
+provenance stamp after the fact). If you don't know how to change it, say so: *"(change with
+`python install_helper.py`, menu option 8, or `--model-project . --model opus`)"*.
 
 **What's new (banner, one short line only).** Branch on the printed `VERSION_CHANGED=`; never
-re-derive it. The probe prints `WHATS_NEW=` - the newest CHANGELOG entry's heading (`WHATS_NEW=`)'s **heading line
+re-derive it. The probe prints `WHATS_NEW=` - the newest CHANGELOG entry's **heading line
 only** (the **plugin's**, or the repo's own in repo-as-project, **not** the working
-project's). The entry body is deliberately never printed - it is dev-facing detail, and it
-used to land in the transcript on every post-update open (live 2026-08-17). Do not go read
-CHANGELOG.md to expand it.
+project's). The entry body is deliberately never printed - dev-facing detail (live 2026-08-17,
+incident-log #18). Do not go read CHANGELOG.md to expand it.
 - `yes` **and** `PREV_TEAM_VERSION=` non-empty → *"🆕 Since last time (vX → vY): "* + the
   `WHATS_NEW=` title in plain words, ending *"(full detail: CHANGELOG.md)"*.
 - `yes` **and** `PREV_TEAM_VERSION=` empty (first engagement, no prior record) → *"🆕 In the

@@ -22,12 +22,11 @@ line**, as many as fit in that same call. **To add more findings, append** - Edi
 last existing line, inserting the new finding-lines after it (each finding's own unique `id`
 makes that match trivially safe) - in batches of roughly 4-6. Never rewrite an existing line,
 never touch the envelope after the first Write, never Edit anywhere but that same one path.
-This is a genuine append, not a patch: unlike the old single-JSON-object format, nothing
-existing is ever at risk from a partial or interrupted call. A generation that's too large for
-one call can still time out regardless of the guard (seen live 2026-08-05: an oversized
-single-object Write timed out twice in a row behind a corporate proxy) - if a Write or Edit
-itself fails with an API/operation timeout, retry it once, then add fewer lines per call rather
-than repeating the same large one.
+This is a genuine append, not a patch: nothing existing is ever at risk from a partial or
+interrupted call. An oversized call can still time out regardless of the guard - identical
+retries hit the same proxy limit every time (live 2026-08-05; incident-log #9) - so if a Write
+or Edit fails with an API/operation timeout, retry it once, then add fewer lines per call
+rather than repeating the same large one.
 
 **Don't execute the code under review (CLAUDE.md §7).** Static analysers (ruff, mypy, bandit,
 ShellCheck) *parse* the code - safe. **Running the code**
@@ -132,18 +131,13 @@ individually configurable, and each has a caveat:
   inferred-only before that.
 
 **`semgrep` and `pip-audit` are deliberately NOT used, even if installed** (removed
-2026-08-04, after `--quiet`/`--disable-version-check`/`--metrics=off` fixes still weren't
-enough - see git history for the measurements). Both make network calls with no reliable
-offline mode found: `pip-audit` refreshes its vulnerability index on every run even
-against zero packages and doesn't fail fast when that network is blocked; `semgrep` makes
-an unconditional version-check ping regardless of `--config`, and `--config auto`
-additionally re-fetches its ruleset over the network on every single run with no local
-caching observed. Both caused repeated live corp-proxy hangs. Neither is listed in
-`scripts/check-review-tools.sh`'s probe, so neither ever shows as "available" - **do not
-invoke them even if you notice they happen to be on PATH.** Python security coverage is
-`bandit` only for now; SQL and the language-agnostic "Any" row lose dedicated
-security-analyser coverage entirely until a network-safe replacement is found - flag this
-explicitly as 🧠 inferred-only coverage for those, same as any other missing tool.
+2026-08-04: both make unconditional network calls with no reliable offline mode and caused
+repeated live corp-proxy hangs - quiet/offline flags were tried and measured insufficient,
+see git history). Neither is listed in `scripts/check-review-tools.sh`'s probe, so neither
+ever shows as "available" - **do not invoke them even if you notice they happen to be on
+PATH.** Python security coverage is `bandit` only for now; SQL and the language-agnostic
+"Any" row lose dedicated security-analyser coverage until a network-safe replacement exists -
+flag this explicitly as 🧠 inferred-only coverage for those, same as any other missing tool.
 
 ## Method - score, filter, be transparent
 
@@ -155,10 +149,9 @@ thresholds or a broken alert→logic→obligation trace (§4).
 When invoked:
 1. **Use `review-scorer`'s (Pip's) file list and language breakdown if your dispatch brief
    already includes it under a `Context from review-scorer:` label, and verify it's complete
-   before trusting it** - don't re-run `git diff`
-   or re-derive language grouping for context you already have (2026-08-12: closes a confirmed
-   duplication - Pip runs this exact detection step first in the standard pipeline, per
-   `deep-review/SKILL.md`, and its output was going unused). Pip states the total file count
+   before trusting it** - don't re-run `git diff` or re-derive language grouping for context
+   you already have (Pip runs this exact detection step first in the standard pipeline;
+   forwarding fix 2026-08-12). Pip states the total file count
    alongside the list (`review-scorer.md`) - **if the list you were given doesn't match that
    count, it was truncated to fit Pip's own summary budget; fall back to `git diff` yourself
    rather than review an incomplete file set.** Only run `git diff` (or inspect the named
@@ -174,8 +167,7 @@ When invoked:
    **Never enumerate the repository yourself** (no `ls`/Glob sweeps, no breadth-first
    browsing): the brief's file list IS your scope, and for wider context read the codebase
    map at the path the brief names (`docs/codebase-map.md` when the project has one) instead
-   of walking directories - a live 2026-08-17 run had every dispatched reviewer
-   independently re-discover a repo whose map already existed. In a git repo with no list
+   of walking directories (live 2026-08-17; incident-log #16). In a git repo with no list
    and no map, `git ls-files <dir>` (bounded to the target) is the inventory of last resort. Search discipline (2026-08-18, evidence-based): orientation FIRST - the brief's list, the map, or one `repo_skeleton` call - never an opening grep on a concept word; read small files WHOLE (one read beats three greps); batch independent lookups into a single call; after 2-3 search misses read the skeleton or the likeliest file instead of guessing synonyms - grep is pinpoint symbol lookup, never exploration and never coverage proof.
 2. **Run the available analysers ONCE, up front - before any lens pass.** Only the tools the
    step-0 probe reported available for the languages in scope (table above). Hold their output
@@ -239,14 +231,11 @@ Follow **`docs/review/output-format.md`** exactly - it is the single canonical f
 - **Component-split reviews write their own pack too, same as any other pass - just to your
   own component-qualified path**, not the shared canonical name (operating guide
   §Orchestration discipline: `findings-<slug>-<component>.jsonl`, given to you in the
-  dispatch brief - use exactly that path, never guess your own). This used to be the one
-  exception ("return findings as text instead, the orchestrator writes the merged pack") -
-  that existed only to stop multiple passes racing on ONE shared path; since each pass now
-  gets its own distinct path, that race can't happen and there's no reason to route findings
-  through prose text first (live-verified 2026-08-10: the write-scoping guard fires
-  identically for this whether you're dispatched via `Task` or via `Workflow`). Morgan still
-  does the final cross-component MERGE into the canonical `findings-<slug>.jsonl` herself,
-  reading your pack back rather than reconstructing it from your prose.
+  dispatch brief - use exactly that path, never guess your own; the write-scoping guard is
+  live-verified for both `Task` and `Workflow` dispatch, 2026-08-10, incident-log #11).
+  Morgan still does the final cross-component MERGE into the canonical
+  `findings-<slug>.jsonl` herself, reading your pack back rather than reconstructing it from
+  your prose.
 - **Console** gets the clean traffic-light **scoreboard** (`🔴/🟠/🟡/🔵/🔇` counts +
   `Found/Reported/Filtered`). Never dump a wall of tables.
 - **Return a distilled summary to the orchestrator, not the JSON** - the scoreboard, headline
