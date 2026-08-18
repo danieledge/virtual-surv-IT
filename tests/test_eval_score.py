@@ -309,6 +309,30 @@ def test_forbidden_trap_ignores_local_negation():
     ]
 
 
+def test_forbidden_trap_ignores_hypothesis_table_rejections():
+    """/why-no-alert MANDATES dispositioned hypothesis tables ('H2 feed outage -
+    rejected: feed volumes contradict'), so the negation guard must recognise the
+    framework's own canonical rejection verbs - found 2026-08-18 by the absence cases'
+    blind validation, where a fully correct investigation tripped the feed-blame trap
+    on the very rejection the trap exists to reward."""
+    trap = {"id": "FP-FEED", "keywords": ["feed outage"]}
+    for title in (
+        "H2 feed outage / data loss rejected: small-cap feed flat through 08-08",
+        "Feed outage ruled out - volumes steady in both segments",
+        "A feed outage was excluded: large-cap alerts unaffected",
+    ):
+        assert (
+            eval_score.score({"forbidden": [trap]}, [_f(title)])[
+                "false_positive_traps_triggered"
+            ]
+            == []
+        ), title
+    asserting_it = [_f("Root cause: a feed outage stopped small-cap data arriving")]
+    assert eval_score.score({"forbidden": [trap]}, asserting_it)[
+        "false_positive_traps_triggered"
+    ] == ["FP-FEED"]
+
+
 def test_severity_floor_does_not_apply_to_harness_stamped_evidence():
     """A severity floor must not make a spec unsatisfiable for behaviour cases.
 

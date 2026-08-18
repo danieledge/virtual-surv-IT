@@ -171,6 +171,10 @@ _INTENT_SOURCES = frozenset({"prose"})
 _NEGATION_RE = re.compile(
     r"\b(must not|must never|should not|shouldn'?t|cannot|can'?t|will not|won'?t|do not|don'?t|"
     r"never|rather than|instead of|without|refus\w*|declin\w*|avoid\w*|"
+    # The hypothesis-table vocabulary /why-no-alert MANDATES for dispositioned candidates
+    # (2026-08-18, found by the absence cases' own blind validation: "H2 feed outage -
+    # rejected" tripped the feed-blame trap the rejection exists to satisfy):
+    r"reject\w*|ruled out|rule[sd]? out|excluded|not established|disprov\w*|"
     r"not (?:close|accept|approve|proceed|sign|assume|resolve))\b",
     re.IGNORECASE,
 )

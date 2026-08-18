@@ -1,9 +1,14 @@
 # Enhancement plan: alert-absence investigation ("why did this not alert?")
 
-Status: PROPOSED 2026-08-18. Sources: a framework capability audit (agent-run, full report
-summarised in section 1) and external deep research (industry practice, regulator fact
-patterns, RCA-agent design, rule-engine explain techniques - key citations inline).
-Nothing below is implemented.
+Status: ALL FOUR PHASES IMPLEMENTED 2026-08-18 (user: "go" / "complete all 4 phases").
+Phase 1: /why-no-alert skill + routing row + SME under-alerting sections + roster
+touch-ups. Phase 2: scripts/explain_rule.py + calibrate_spoofing --near-miss + allow-list
+staged. Phase 3: docs/detection-health.md wired into /assess-coverage and
+/tune-thresholds. Phase 4: evals/cases/absence-case-level + absence-volume-drop
+(contract-tested; blind-run validated at implementation - see the section appended at the
+bottom). Sources: a framework capability audit (agent-run, summarised in section 1) and
+external deep research (industry practice, regulator fact patterns, RCA-agent design,
+rule-engine explain techniques - key citations inline).
 
 ## Why this query family matters
 
@@ -148,3 +153,21 @@ Building real change-point/heartbeat MONITORING infrastructure (that is the clie
 platform's job; the team advises on and specifies it - the doctrine in Phase 3 is what
 the team itself applies when asked). No new agent: the audit shows the roster covers the
 chain; what is missing is the method, the mechanical trace, and the routing.
+
+## Phase 4 validation (2026-08-18, blind runs at implementation)
+
+Both cases were validated the /run-evals way - a clean agent got only the inlined skill
+and the input (never the manifest), a second uncontaminated agent normalised the output,
+and the deterministic scorer graded it:
+
+| Case | Result | Notes |
+|---|---|---|
+| absence-case-level | PASS - recall 1.0, 0 traps | Localised the miss to the outsized condition with the exact figures (3.71x vs 5.0x, alerts at qty >= 512.5), rejected all seven alternative hypotheses with evidence, refused to open the grader files unprompted, and surfaced a genuine calibration blind spot (a small-trading spoofer sits permanently under a trader-median multiple) with a designed-control recommendation |
+| absence-volume-drop | PASS - recall 1.0, 0 traps | Change-point 2026-08-05, small-cap only (large-cap masking named), threshold v2.4 accepted with the co-timing + segment-scope evidence, feed and patching explicitly rejected, BTL-first remediation plus a lookback for the suppressed window |
+
+The validation also caught a real scorer defect: the trap negation guard did not
+recognise "rejected"/"ruled out"/"excluded" - the exact vocabulary the skill MANDATES for
+dispositioned hypotheses - so the volume-drop run's correctly-rejected feed hypothesis
+tripped the feed-blame trap on first scoring. Fixed in eval_score's negation lexicon with
+a pinning unit test; the corrected scorer passes both runs and the full contract suite.
+The cases join the golden slice at the next release baseline for a fully judged run.
