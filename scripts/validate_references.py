@@ -134,6 +134,16 @@ _KNOWN_ABSENT = {
     "ts002_layering.py": "illustrative deliverable name inside an example QA handover",
     "driver.md": "the `driver-<name>.md` naming pattern, not a file",
     "docs/persona-anchor.md": "ADR-005 offers it as an alternative source; the guide is used",
+    "docs/internal/token-optimisation-plan-2026-08-18.md": (
+        "local-only planning doc (gitignored 2026-08-18, owner decision) - present on the dev "
+        "box, absent in clones"
+    ),
+    "docs/internal/ai-runtime-economics-audit-2026-08.md": (
+        "local-only planning doc (gitignored 2026-08-18, owner decision)"
+    ),
+    "docs/internal/prompt-inventory-baseline-2026-08.md": (
+        "local-only planning doc (gitignored 2026-08-18, owner decision)"
+    ),
 }
 
 _SCAN_ROOTS = ("docs", ".claude", "evals")

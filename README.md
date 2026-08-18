@@ -3,8 +3,8 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.34.0](https://img.shields.io/badge/version-0.34.0-blue)
-![Tests 1400+ passing](https://img.shields.io/badge/tests-1400%2B%20passing-brightgreen)
+![Version 0.35.0](https://img.shields.io/badge/version-0.35.0-blue)
+![Tests 1900+ passing](https://img.shields.io/badge/tests-1900%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
 [![Quick start: one-page PDF](https://img.shields.io/badge/Quick%20start-one--page%20PDF-important)](docs/quick-start.pdf)
@@ -12,31 +12,27 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.33.53** (2026-08-08) · 📖 [Release overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.35.0** (2026-08-18) · 📖 [0.33-cycle overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
-**Biggest features this cycle: `install_helper.py` rebuilt end-to-end.**
-- 🧭 **The menu reorganized and hardened.** A flat 10-option list became 6 top-level items plus
-  Diagnostics/Advanced submenus; every setting-writing item now states its scope ("this machine"
-  vs "per project"); invalid input no longer redraws the whole menu; `--demo` now covers the
-  entire session instead of one fixed preview.
-- 🔧 **Seven code-review analysers made individually configurable** (ruff, mypy, bandit, black,
-  sqlfluff, shfmt, gitleaks) - on/off/auto per project or machine-wide, with a live safety check
-  that catches a hanging or misconfigured tool *before* it's ever forced "on", the same failure
-  shape that made semgrep/pip-audit unsafe, caught at config time instead of mid-review.
-- 🩺 **A real diagnostic suite.** `--check-tools`/`--check-env`/`--selftest`: the comprehensive
-  check now runs a throwaway synthetic "review this code" engagement end to end - guard hooks,
-  real analyser *detection* (not just clean-output checking), the full engagement-state
-  lifecycle - and every diagnostic ends with a pass/fail summary, not a scrollback hunt.
-- 🖥️ **Run it from anywhere, and see this machine's defaults directly.** A `virt-surv` shell
-  alias (verified after writing, not just written) with folder-scoped `configure`/`archive`/
-  `list-engagements`; a one-click "use the recommended settings?" fast path; and a dedicated view/
-  edit for this machine's own defaults (docx, citations, review tools, Morgan's model), with real
-  project-overrides-machine precedence enforced everywhere it's read, not just at setup time.
-
-**Also in this cycle:** a "what Morgan cannot do" section stating the boundaries as plainly as
-the capabilities · the locked review-menu construction disambiguated from the intake gate's own
-batch · the engagement-flow poster's stale caption fixed and converted to PDF · three README
-redundancies trimmed.
+**Biggest features this cycle: the front door became a launcher, and the token bill got engineered.**
+- 🚪 **`virt-surv go` is the front door** (0.34.0). The resume-or-new decision, environment
+  probe and interpreter discovery are computed *outside* the LLM and pre-encoded into the
+  session's first prompt - no more burning turns rediscovering the machine. Engagements can
+  now be picked up straight from a Jira ticket (beta), delivered back to the ticket at close.
+- ⚡ **Corporate-box performance, measured.** A persistent guard daemon takes safety-hook
+  response from ~307ms cold start to ~12.6ms; one dispatcher process replaces five per Bash
+  call; a Git Bash fix cut shell-snapshot startup ~15x. Built against live reports from
+  locked-down Windows estates.
+- 💰 **Token economics overhauled against a measured audit** (0.35.0). A cold engagement open
+  now costs ~28% fewer standing tokens: the operating guide split into an open-core with
+  detail loaded on route, the probe bootstrap moved to its miss path, tool reports compacted
+  to what prompts actually consume, and review context forwarded once instead of re-derived
+  per agent. A prompt-budget check in CI fails the build if any prompt file quietly regrows,
+  and every eval run now records per-agent cost attribution.
+- 🧾 **Review flows tightened end to end** (0.34.0-0.35.0): one consolidated reviewer pass
+  runs all lenses (security is a lens, never a second fan-out), Quick reviews run in-session
+  from a ~1k-token recipe, and the Level 0-3 cost ladder (Answer/Quick/Deep/Audit) is the
+  stated cost model - independence bought deliberately, never by habit.
 
 </td></tr>
 </table>

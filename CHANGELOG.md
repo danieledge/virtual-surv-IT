@@ -3,6 +3,63 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.35.0] - 2026-08-18 - Token economics overhaul: measured audit, open-core guide, ~28% cheaper opens, cost attribution
+
+The runtime cost architecture audited end to end and then cut against measured baselines,
+executing `docs/internal/token-optimisation-plan-2026-08-18.md` (born of two external AI
+reviews, both re-derived against the live files before acting - one had cited a "775k-token
+review" that exists nowhere in this repo or its git history; the real documented ceiling is
+the ~500k full delivery).
+
+- **Phase 0 - runtime economics audit** (`docs/internal/ai-runtime-economics-audit-2026-08.md`):
+  five tracks - static prompt inventory, a context-duplication/handoff matrix over eight shared
+  facts, measured tool-output economics, a 41-incident failure-economics catalogue (now
+  `docs/internal/incident-log.md`), and per-run cost attribution. Ranked top-15 with
+  quality-frontier classes; false economies (removing scorer/QA independence) explicitly
+  rejected.
+- **Prompt-budget backstop**: `tests/test_prompt_budget.py` + `tests/prompt-budgets.json` pin
+  every prompt-bearing file's baseline and tier budget in CI - growth >15% or a tier over
+  budget fails until deliberately re-pinned (`--pin`/`--report` maintenance CLI).
+- **Operating guide split into an open-core** (10.4k → 4.3k tok at every open): section bodies
+  defer to `docs/operating-guide.d/` (command index, run-mode detail, untrusted-content long
+  form, delivery standards, artifacts/lifecycle/placement) behind hard read-triggers; every
+  heading kept so cross-references resolve. Validated by four live process evals (run
+  `20260818T190738Z`, 3 raw passes incl. 0.99 on the deferred placement table + 1 adjudicated
+  scoring artifact - see `evals/eval-baseline-0.35.0.md`).
+- **Probe bootstrap deferred to its miss path**: the step-0 heredoc moved to
+  `engage/references/probe-bootstrap.md`, read only when both fast paths (injected prefetch,
+  probe cache) miss; drift-pin repointed and a no-inline-regrowth check added. engage-open
+  5,140 → 3,728 tok.
+- **Tool-output compaction (measured)**: `check-review-tools.sh` default output is now
+  names+counts (1,458 → 511 B, cached and re-served every open; full report behind
+  `--verbose`); dead `STANDARDS_CRITIQUE=` probe line removed (zero consumers, test-pinned);
+  `budget-status` per-gate disclaimer dropped; `list --menu`/`RESUME_MENU` serialise `open` as
+  slugs via `resume_menu_json` while in-process consumers keep full rows (the first cut broke
+  the launcher's archive-all - caught by the full suite, split rows-in-process/slugs-on-wire,
+  pinned by test).
+- **Incident narratives stripped from runtime prompts** (first pass: engage-open, engage,
+  deep-review, code-reviewer): each rule keeps its invariant plus a dated tag into the
+  incident log; rules whose record shows prose alone failed live keep their one-sentence
+  failed-live note.
+- **Review pipeline (Phase 4)**: Quick depth now loads a ~1.1k self-contained recipe
+  (`deep-review/references/quick.md`) instead of the 4.9k pipeline; `compliance-reviewer`
+  consumes a brief-stated jurisdiction before deriving from `scope-and-stack.md` (deep-review,
+  audit-review and security-audit dispatches state it - closes the audit's worst duplication
+  gap, an opus-tier re-derivation); delegation briefs carry the session runtime facts
+  subagents inherit none of (`<python>`, `$PLUGIN_ROOT`, tooling line); `code-reviewer.md`
+  compressed 5.4k → 4.7k/dispatch (gated by a live pipeline eval, run `20260818T201205Z`:
+  recall 1.0, judge 0.81).
+- **Cost attribution (Track D)**: every eval case run now persists its per-message usage
+  series plus a computed attribution block (main-loop vs subagent output split, per-model
+  totals - `eval_engage.usage_attribution`, unit-tested).
+- **Stated cost model + cache contract**: the Level 0-3 ladder (Answer/Quick/Deep/Audit) and
+  a generalised point-never-paste rule join the open-core guide;
+  `docs/internal/cache-contract.md` records every shared fact's owner/lifetime/invalidation
+  in one table.
+- Net effect: a cold `/engage` open pays ~20.1k tokens of standing text vs ~27.7k at the
+  0.34.0 baseline (~28% off every open), ratcheted in CI so it cannot silently regrow. Full
+  suite 2,397 passing; five live eval sessions gated the behaviour-touching changes.
+
 ## [0.34.0] - 2026-08-17 - virt-surv go becomes the front door; review and build flows tightened end to end
 
 Two days of live corporate-laptop testing drove this release: every item below traces to a

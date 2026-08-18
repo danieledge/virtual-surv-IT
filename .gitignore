@@ -97,3 +97,10 @@ human-steps.sh
 scripts/apply-dod-stop-hook.sh
 scripts/apply-persona-anchor.sh
 scripts/apply-guard-precision.sh
+
+# Internal planning docs kept local-only by owner decision (2026-08-18) - never pushed to
+# GitHub. Same spirit as docs/adr (untracked 2026-08-13); the incident log and cache
+# contract remain tracked because runtime prompts and the reference chain lean on them.
+docs/internal/token-optimisation-plan-2026-08-18.md
+docs/internal/ai-runtime-economics-audit-2026-08.md
+docs/internal/prompt-inventory-baseline-2026-08.md
