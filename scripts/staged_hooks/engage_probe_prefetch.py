@@ -114,7 +114,12 @@ def _resume_menu_json(project_dir: Path) -> str | None:
             sys.path.insert(0, str(scripts_dir))
         import engagement_state
 
-        menu = engagement_state.resume_menu(project_dir / "artifacts")
+        # resume_menu_json, not resume_menu: the injected block is model context, so
+        # `open` travels as slugs only (rows stay for in-process consumers - see
+        # engagement_state.resume_menu_json's docstring). getattr fallback covers a
+        # mixed-version install where this hook outruns an older engagement_state.
+        menu_fn = getattr(engagement_state, "resume_menu_json", engagement_state.resume_menu)
+        menu = menu_fn(project_dir / "artifacts")
         return json.dumps(menu, ensure_ascii=False, indent=2)
     except Exception:
         return None

@@ -1,8 +1,10 @@
-"""Drift detector: .claude/skills/.shared/engage-open.md embeds a condensed copy of
-scripts/find_plugin_root.py's discovery algorithm inline (a Python heredoc the model
-hand-types into the step-0 Bash call) - it CANNOT import the real module, since locating
-it is exactly the problem being solved (2026-08-04 redesign, see find_plugin_root.py's own
-docstring for the "unexpected EOF" corp Windows report that motivated it).
+"""Drift detector: .claude/skills/engage/references/probe-bootstrap.md embeds a condensed
+copy of scripts/find_plugin_root.py's discovery algorithm (a Python heredoc the model
+hand-types into the step-0 Bash call; moved out of engage-open.md 2026-08-18, token plan
+Phase 2, so steady-state opens don't pay for its text) - it CANNOT import the real module,
+since locating it is exactly the problem being solved (2026-08-04 redesign, see
+find_plugin_root.py's own docstring for the "unexpected EOF" corp Windows report that
+motivated it).
 
 Two textual copies of the same algorithm is an accepted, unavoidable trade-off here (not a
 free duplication) - this test is the mechanical backstop so they can't silently drift, same
@@ -21,7 +23,8 @@ from pathlib import Path
 from scripts.find_plugin_root import find_plugin_root
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DOC = REPO_ROOT / ".claude" / "skills" / ".shared" / "engage-open.md"
+DOC = REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "probe-bootstrap.md"
+OPEN_DOC = REPO_ROOT / ".claude" / "skills" / ".shared" / "engage-open.md"
 
 _HEREDOC_RE = re.compile(r"<<'PY'\n(.*?)\nPY\n", re.DOTALL)
 
@@ -29,8 +32,16 @@ _HEREDOC_RE = re.compile(r"<<'PY'\n(.*?)\nPY\n", re.DOTALL)
 def _extract_heredoc() -> str:
     text = DOC.read_text(encoding="utf-8")
     m = _HEREDOC_RE.search(text)
-    assert m, "engage-open.md: no <<'PY' ... PY heredoc found - did the bootstrap move?"
+    assert m, "probe-bootstrap.md: no <<'PY' ... PY heredoc found - did the bootstrap move?"
     return m.group(1)
+
+
+def test_engage_open_points_at_bootstrap_and_carries_no_inline_copy():
+    """engage-open.md must send the miss path to the reference file and must NOT regrow an
+    inline heredoc (the whole point of the Phase 2 extraction)."""
+    text = OPEN_DOC.read_text(encoding="utf-8")
+    assert "references/probe-bootstrap.md" in text
+    assert not _HEREDOC_RE.search(text), "engage-open.md regrew an inline bootstrap heredoc"
 
 
 def _run_discovery_only(home: Path, cwd: Path) -> str:

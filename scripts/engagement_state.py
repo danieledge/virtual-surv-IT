@@ -1984,11 +1984,10 @@ def _cmd_budget_status(args: argparse.Namespace) -> int:
         print(f"DAILY cap={money(daily)} spent_today={money(spent_today)}")
     if ceiling:
         print(f"ENGAGEMENT ceiling={money(ceiling)} spent_since_open={money(spent_since_open)}")
+    # No trailing attribution disclaimer: it restated a rule the docstring and the engage
+    # skill already carry, ~190B consumed by nothing at every gate (token audit Track C,
+    # 2026-08-18). The caveat lives in this function's docstring and ADR-006.
     print(f"HEADROOM={worst}")
-    print(
-        "(spend is measured from this project's session transcripts at list prices, "
-        "project-wide - parallel work in this project counts toward the same number)"
-    )
     return 0
 
 
@@ -2006,7 +2005,10 @@ def resume_menu(root: Path, max_shown: int = 3) -> dict:
     or None}. `open` sorted by `opened` date descending (None sorts last - an unreadable
     open date is not "most recent"); `shown` is the top `max_shown`; `default` is the
     ACTIVE marker's slug when it is itself an open engagement, else the most recent open
-    one, else None (nothing to resume - "start new" is the only real option)."""
+    one, else None (nothing to resume - "start new" is the only real option).
+
+    In-process consumers (the launcher's archive-all iterates `open`'s FULL rows) use
+    this; anything serialising the menu for a model context uses resume_menu_json()."""
     rows = [r for r in scan_engagements(root) if r.get("status") in _OPEN_STATUSES]
     rows.sort(key=lambda r: r.get("opened") or "", reverse=True)
     active = read_active(root)
@@ -2023,10 +2025,21 @@ def resume_menu(root: Path, max_shown: int = 3) -> dict:
     }
 
 
+def resume_menu_json(root: Path, max_shown: int = 3) -> dict:
+    """The MODEL-FACING serialisation of resume_menu(): identical shape except `open` is
+    slugs only. Its two prompt-side consumers are "is it empty?" and `--resume <slug>`
+    membership validation, and the full rows duplicated `shown`'s top entries verbatim,
+    doubling the JSON at every non---new open (token audit Track C, 2026-08-18). The
+    first cut changed resume_menu() itself and broke the launcher's archive-all (full
+    suite, same day) - hence the split: rows in process, slugs on the wire."""
+    menu = resume_menu(root, max_shown)
+    return {**menu, "open": [r.get("dir") or r.get("slug") for r in menu["open"]]}
+
+
 def _cmd_list(args: argparse.Namespace) -> int:
     root = args.dir or _default_artifacts_dir()
     if getattr(args, "menu", False):
-        menu = resume_menu(root)
+        menu = resume_menu_json(root)
         print(json.dumps(menu, ensure_ascii=False, indent=2))
         return 0
     rows = scan_engagements(root)

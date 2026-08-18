@@ -383,7 +383,10 @@ def test_resolve_preferences_standards_critique_project_override(tmp_path, monke
     assert resolved["standards_critique"] is True
 
 
-def test_build_report_emits_standards_critique_on_when_set(tmp_path):
+def test_build_report_never_prints_standards_critique(tmp_path):
+    """The preference resolves (test above) but is deliberately NOT a probe line - it had
+    zero prompt consumers, so printing it was dead output on every open (token audit
+    Track C, 2026-08-18). Pin the removal so it doesn't quietly return."""
     (tmp_path / ".claude-plugin").mkdir()
     (tmp_path / ".claude-plugin" / "plugin.json").write_text(
         json.dumps({"version": "9.9.9"}), encoding="utf-8"
@@ -397,7 +400,7 @@ def test_build_report_emits_standards_critique_on_when_set(tmp_path):
         json.dumps({"standards_critique": True}), encoding="utf-8"
     )
     out = build_report("", tmp_path)
-    assert "STANDARDS_CRITIQUE=on" in out
+    assert "STANDARDS_CRITIQUE" not in out
 
 
 def test_build_report_emits_all_fields_repo_as_project(tmp_path):

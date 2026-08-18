@@ -16,7 +16,7 @@ The plugin-root bootstrap - locating the script itself in an installed plugin, t
 this that can't simply call a bundled script by path, since locating it IS the problem - is a
 Python heredoc, not hand-assembled bash. `scripts/find_plugin_root.py` is the canonical, tested
 implementation of the same discovery algorithm (`tests/test_find_plugin_root.py`); the heredoc
-embedded in `.claude/skills/.shared/engage-open.md` is a condensed twin of it that CANNOT `import` the real module for
+embedded in `.claude/skills/engage/references/probe-bootstrap.md` (read on the miss path from `.claude/skills/.shared/engage-open.md` step 0) is a condensed twin of it that CANNOT `import` the real module for
 the same bootstrapping reason, so `tests/test_engage_open_bootstrap.py` mechanically checks the
 two never drift apart (same role `test_hooks_in_sync.py` plays for staged-vs-live guard files).
 

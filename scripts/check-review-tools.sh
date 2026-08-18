@@ -5,17 +5,26 @@
 #
 #   bash scripts/check-review-tools.sh            # serve a fresh cache if present, else probe + cache
 #   bash scripts/check-review-tools.sh --refresh  # force a re-probe (run after changing your toolchain)
+#   bash scripts/check-review-tools.sh --verbose  # fresh probe, FULL report (roles + install hints)
 #
 # Cache file:  .claude/.tool-availability   (override with CST_TOOLCHECK_CACHE)
 # Freshness:   CST_TOOLCHECK_TTL_DAYS days  (default 7); older -> re-probe automatically.
-# Prints a present/missing table + an install hint per missing tool. Exit code is always 0
-# (this is a report, not a gate). The cache holds only tool-presence booleans - no secrets.
+# Default output is the COMPACT report (names + counts - what the probe/banner actually
+# consume; token audit Track C, 2026-08-18: the full per-tool hint list re-served ~1.6KB
+# into every engagement open while the prompts consume only counts + missing names). The
+# full human-facing report with roles and install hints lives behind --verbose. The cache
+# always holds the compact form. Exit code is always 0 (this is a report, not a gate).
+# The cache holds only tool-presence booleans - no secrets.
 set -uo pipefail
 
 CACHE="${CST_TOOLCHECK_CACHE:-.claude/.tool-availability}"
 TTL_DAYS="${CST_TOOLCHECK_TTL_DAYS:-7}"
 REFRESH=0
-case "${1:-}" in --refresh | --force) REFRESH=1 ;; esac
+VERBOSE=0
+case "${1:-}" in
+  --refresh | --force) REFRESH=1 ;;
+  --verbose) REFRESH=1 VERBOSE=1 ;;
+esac
 
 # Allow-list presence - computed FRESH on every run (both cache paths), never cached: the
 # user may add it minutes after being tipped, and a stale "missing" would nag for the TTL.
@@ -34,8 +43,7 @@ allowlist_line() {
 if [ "$REFRESH" -eq 0 ] && [ -f "$CACHE" ] && [ -n "$(find "$CACHE" -mtime "-${TTL_DAYS}" 2>/dev/null)" ]; then
   cat "$CACHE"
   echo
-  echo "(cached - from a probe within the last ${TTL_DAYS} day(s); re-run with --refresh after"
-  echo " installing or removing analysers.)"
+  echo "(cached, <${TTL_DAYS}d - refresh with --refresh after installing/removing analysers; hints: --verbose)"
   allowlist_line
   exit 0
 fi
@@ -128,8 +136,11 @@ TOOLS=(
 # CLAUDE.md §7). Re-add them here if/when measured profiling is re-enabled via the consent flow.
 
 present=()
+present_names=()
 missing=()
+missing_names=()
 disabled=()
+disabled_names=()
 required_missing=()
 for entry in "${TOOLS[@]}"; do
   IFS='|' read -r bin role hint <<<"$entry"
@@ -139,16 +150,28 @@ for entry in "${TOOLS[@]}"; do
   done
   if [ "$state" = "off" ]; then
     disabled+=("$bin ($role) - disabled by config, not probed")
+    disabled_names+=("$bin")
     continue
   fi
   if command -v "$bin" >/dev/null 2>&1; then
     present+=("$bin ($role)")
+    present_names+=("$bin")
   elif [ "$state" = "on" ]; then
     required_missing+=("$bin - $role  →  $hint  (config requires this tool 'on')")
   else
     missing+=("$bin - $role  →  $hint")
+    missing_names+=("$bin")
   fi
 done
+
+# Comma-join helper for the compact report's name lists.
+join_names() {
+  local out="" item
+  for item in "$@"; do
+    if [ -z "$out" ]; then out="$item"; else out="$out, $item"; fi
+  done
+  echo "$out"
+}
 
 # Artifact-renderer libraries (Python, not CLI binaries - a single import probe, not
 # command -v). Checked here so a missing renderer is known BEFORE Morgan attempts a
@@ -172,9 +195,48 @@ if [ -n "${PY_PROBE:-}" ]; then
   fi
 fi
 
-# Build the report once, then both cache and print it.
+# Build the COMPACT report (default output + what gets cached): names and counts only -
+# every consumer (probe banner, dashboard's Installed/Missing regexes, the reviewers'
+# skip-missing rule) uses exactly this; roles and install hints are --verbose material.
 report="$(
   echo "=== Review/perf tooling check ==="
+  echo "Checked: $(date '+%Y-%m-%d %H:%M')"
+  echo
+  if [ "${#present_names[@]}" -eq 0 ]; then
+    echo "✅ Installed (0): (none)"
+  else
+    echo "✅ Installed (${#present_names[@]}): $(join_names "${present_names[@]}")"
+  fi
+  if [ "${#missing_names[@]}" -eq 0 ]; then
+    echo "⚠️  Missing (0): none - full tool-backed 📊 coverage"
+  else
+    echo "⚠️  Missing (${#missing_names[@]}) - reviews still run but degrade to inference-only (🧠) for these: $(join_names "${missing_names[@]}")"
+    echo "   (install hints: bash scripts/check-review-tools.sh --verbose)"
+  fi
+  if [ "${#required_missing[@]}" -gt 0 ]; then
+    echo "❌ Required by config but not installed (${#required_missing[@]}):"
+    printf '   - %s\n' "${required_missing[@]}"
+  fi
+  if [ "${#disabled_names[@]}" -gt 0 ]; then
+    echo "⏭  Disabled by config (${#disabled_names[@]}): $(join_names "${disabled_names[@]}")"
+  fi
+  if [ -n "${CST_NO_EXTERNAL_TOOLS:-}" ]; then
+    echo "🔒 CST_NO_EXTERNAL_TOOLS is set - all seven supported analysers treated as disabled"
+    echo "   (best-effort, unsupported analysers are unaffected by this switch)."
+  fi
+  echo "Artifact renderers:"
+  if [ "${#renderers[@]}" -gt 0 ]; then printf '   ✅ %s\n' "${renderers[@]}"; fi
+  if [ "${#render_missing[@]}" -gt 0 ]; then printf '   ⚠️  %s\n' "${render_missing[@]}"; fi
+)"
+
+# Cache the compact form (best-effort; never fail the report if the cache can't be written).
+if mkdir -p "$(dirname "$CACHE")" 2>/dev/null; then
+  printf '%s\n' "$report" >"$CACHE" 2>/dev/null || true
+fi
+
+if [ "$VERBOSE" -eq 1 ]; then
+  # Full human-facing report: roles + an install hint per missing tool.
+  echo "=== Review/perf tooling check (verbose) ==="
   echo "Checked: $(date '+%Y-%m-%d %H:%M')"
   echo
   echo "✅ Installed (${#present[@]}):"
@@ -202,17 +264,9 @@ report="$(
   echo "Artifact renderers:"
   if [ "${#renderers[@]}" -gt 0 ]; then printf '   ✅ %s\n' "${renderers[@]}"; fi
   if [ "${#render_missing[@]}" -gt 0 ]; then printf '   ⚠️  %s\n' "${render_missing[@]}"; fi
-  echo
-  echo "Note: Morgan records this once and skips the missing tools for the rest of the session"
-  echo "(does not re-invoke them). Install the ones you care about for measured (📊) findings."
-)"
-
-# Cache it (best-effort; never fail the report if the cache can't be written).
-if mkdir -p "$(dirname "$CACHE")" 2>/dev/null; then
-  printf '%s\n' "$report" >"$CACHE" 2>/dev/null || true
+else
+  printf '%s\n' "$report"
 fi
-
-printf '%s\n' "$report"
 
 allowlist_line
 exit 0

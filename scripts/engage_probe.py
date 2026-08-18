@@ -821,7 +821,10 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
     citations_on = resolved["regulatory_citations"]
     review_split_on = resolved["large_context_review_split"]
     workflow_dispatch_on = resolved["parallel_dispatch_via_workflow"]
-    standards_critique_on = resolved["standards_critique"]
+    # standards_critique deliberately NOT printed (token audit Track C, 2026-08-18): the
+    # preference is read from team-preferences.json by its actual consumers (launcher,
+    # installer, DoD text) - no skill or agent ever branched on the probe line, so it was
+    # dead output on every open. The preference itself stays in resolve_prefs.
     map_skeleton_on = resolved["map_skeleton"]
     tool_report = run_tool_probe(root, project_dir, root_is_trusted)
     extensions_block = run_extensions_show(root, project_dir, root_is_trusted)
@@ -839,7 +842,6 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         f"REGULATORY_CITATIONS={'on' if citations_on else 'off'}",
         f"LARGE_CONTEXT_REVIEW_SPLIT={'on' if review_split_on else 'off'}",
         f"PARALLEL_DISPATCH_VIA_WORKFLOW={'on' if workflow_dispatch_on else 'off'}",
-        f"STANDARDS_CRITIQUE={'on' if standards_critique_on else 'off'}",
         f"MAP_SKELETON={'on' if map_skeleton_on else 'off'}",
     ]
     integ_line = integrations_report_line(resolve_integrations(project_dir))

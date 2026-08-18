@@ -28,7 +28,7 @@
   ],
   "tier_budgets": {
     "ALWAYS_LOADED": 3300,
-    "OPEN_TIME": 27300,
+    "OPEN_TIME": 26300,
     "ROUTE_TIME": 48600,
     "AGENT_TIME": 23800,
     "DEFERRED": null
@@ -102,7 +102,7 @@
     ".claude/skills/.shared/engage-open.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 5140
+      "baseline_tokens": 4220
     },
     ".claude/skills/.shared/engagement-bookends.md": {
       "tier": "ROUTE_TIME",
@@ -204,10 +204,15 @@
       "loads_per_engagement": 1.0,
       "baseline_tokens": 1140
     },
+    ".claude/skills/engage/references/probe-bootstrap.md": {
+      "tier": "DEFERRED",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 1288
+    },
     ".claude/skills/engage/references/probe-contract.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3867
+      "baseline_tokens": 3889
     },
     ".claude/skills/engage/references/resume-menu.md": {
       "tier": "DEFERRED",

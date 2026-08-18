@@ -1226,3 +1226,23 @@ def test_render_registry_with_no_known_reads_every_pack_fresh(tmp_path, monkeypa
     es_module.render_registry(art)
 
     assert pack in read_packs
+
+
+def test_resume_menu_json_slims_open_to_slugs_but_resume_menu_keeps_rows(tmp_path):
+    """Token audit Track C (2026-08-18): the model-facing menu carries `open` as slugs
+    only (its prompt consumers are emptiness + --resume membership checks; full rows
+    duplicated `shown`), while the in-process resume_menu() keeps full rows - the
+    launcher's archive-all iterates them (broke live in the first cut, same day)."""
+    from scripts.engagement_state import main as es_main
+    from scripts.engagement_state import resume_menu, resume_menu_json
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art / "pack"), "init", "--title", "Pack", "--slug", "pack"]) == 0
+
+    rows_menu = resume_menu(art)
+    assert rows_menu["open"] and isinstance(rows_menu["open"][0], dict)
+
+    json_menu = resume_menu_json(art)
+    assert json_menu["open"] == ["pack"]
+    assert json_menu["shown"] and isinstance(json_menu["shown"][0], dict)
+    assert json_menu["default"] == "pack"
