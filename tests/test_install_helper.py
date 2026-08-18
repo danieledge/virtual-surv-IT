@@ -1001,7 +1001,7 @@ def test_demo_mode_executes_nothing_and_writes_nothing(monkeypatch, tmp_path, ca
     out = capsys.readouterr().out
     assert rc == 0
     assert "DEMO MODE" in out and "would run:" in out
-    assert "Summon the team" in out and "nothing was executed" in out
+    assert "virt-surv go" in out and "summon the team" in out and "nothing was executed" in out
     assert not (tmp_path / "xdg").exists()  # no config file created
     assert not (tmp_path / "clone").exists()  # no clone created
     assert not (tmp_path / "home").exists()  # no user settings written
@@ -1249,7 +1249,7 @@ def test_menu_setup_only_skips_sync_and_uses_clone_asis(monkeypatch, tmp_path, c
     assert not any("checkout" in c or "clone" in c for c in git_calls)
     assert "Step 2 of 8" in out  # truthful numbering (+ guard cache + pending-hook-fixes steps)
     assert "code not updated" in out and "Code not updated" in out
-    assert "Summon the team" in out
+    assert "virt-surv go" in out and "summon the team" in out
 
 
 def test_upfront_update_check_prints_before_menu(monkeypatch, tmp_path, capsys):
@@ -5879,9 +5879,10 @@ def test_main_dispatches_folder_subcommand_before_argparse(monkeypatch):
 # --- reorganised menu / submenus --------------------------------------------------------------
 
 
-def test_top_level_menu_actions_are_the_expected_four():
+def test_top_level_menu_actions_are_the_expected_five():
     """2026-08-17 restructure: manage-engagements retired (folder subcommands carry it),
-    alias moved under Advanced as the two-option manager."""
+    alias moved under Advanced as the two-option manager. 2026-08-18: 'Help: using the
+    plugin' (Morgan's narrative) joins as item 5."""
     from install_helper import MENU_ACTIONS
 
     assert MENU_ACTIONS == {
@@ -5889,6 +5890,7 @@ def test_top_level_menu_actions_are_the_expected_four():
         "2": "configure",
         "3": "diagnostics",
         "4": "advanced",
+        "5": "howto",
         "q": "quit",
     }
 
@@ -6458,7 +6460,7 @@ def test_invalid_menu_choice_reprompts_without_redrawing_menu(monkeypatch, tmp_p
     ih.main([])
     out = capsys.readouterr().out
     assert out.count("What can I do for you?") == 1  # drawn once, not once per bad keystroke
-    assert out.count("1-4 or q, please.") == 2  # one error per invalid attempt
+    assert out.count("1-5 or q, please.") == 2  # one error per invalid attempt
 
 
 # --- --demo must cover the WHOLE menu session, every action, not just one path ---------------
@@ -7615,3 +7617,18 @@ def test_clean_plugin_cache_never_offers_unattributable_dirs(tmp_path, monkeypat
     rc = ih.run_clean_plugin_cache(ih.Style(False), ih.marks(), assume_yes=True)
     assert rc == 0
     assert other.exists()  # untouched, unmentioned as removable
+
+
+def test_menu_5_shows_morgans_howto_narrative(monkeypatch, tmp_path, capsys):
+    """2026-08-18 user request: 'Help: using the plugin' displays Morgan's narrative -
+    leading with virt-surv go as the way to start, carrying the AI-identity line, and
+    read-only (a help view never counts as having changed anything)."""
+    import install_helper as ih
+
+    _menu_session(monkeypatch, tmp_path, ["5", "q"])
+    ih.main([])
+    out = capsys.readouterr().out
+    assert "Morgan (PM) here" in out
+    assert "AI agent with Virtual Surveillance IT" in out
+    assert "virt-surv go" in out
+    assert "nothing changed" in out  # read-only: the quit path still says so

@@ -1170,6 +1170,7 @@ MENU_ACTIONS = {
     "2": "configure",
     "3": "diagnostics",
     "4": "advanced",
+    "5": "howto",
     "q": "quit",
 }
 
@@ -1246,6 +1247,7 @@ def choose_action(style: Style) -> str:
             ("2", "Configure a project (per project - enable/permissions/preferences/model)"),
             ("3", "Diagnostics..."),
             ("4", "Advanced / one-off settings..."),
+            ("5", "Help: using the plugin (Morgan explains)"),
             ("q", "Quit"),
         )
         for key, text in options:
@@ -1263,7 +1265,7 @@ def choose_action(style: Style) -> str:
                 return "full"
             if answer in MENU_ACTIONS:
                 break
-            print("  1-4 or q, please.")
+            print("  1-5 or q, please.")
         action = MENU_ACTIONS[answer]
         if action == "diagnostics":
             resolved = _choose_submenu(
@@ -2178,15 +2180,17 @@ class Installer:
                 else "install_helper.py --configure ."
             )
             self.say(
-                "  1. Set up a project: cd into its root folder - the same folder you'll "
-                f"run `claude` from - and run 'virt-surv configure' (or '{fallback}' if "
-                "you skipped the alias above) to review or change the defaults "
-                "(citations, review-split, docx, codebase-map skeleton, tuned env vars, "
-                "permissions, Morgan's model). Or 'virt-surv engage' (or 'virt-surv "
-                "onboard' - same thing) to apply every default with zero prompts and go "
-                "straight to launching claude."
+                "  1. Set up a project (first time only): cd into its root folder and run "
+                f"'virt-surv configure' (or '{fallback}' if you skipped the alias above) "
+                "to review the defaults - or 'virt-surv engage' / 'virt-surv onboard' to "
+                "apply every default with zero prompts."
             )
-            self.say("  2. Restart Claude Code to load the new version.")
+            self.say(
+                "  2. Then just: cd into the project and type 'virt-surv go' - it shows "
+                "your team settings, asks resume-or-new, and launches Claude Code with "
+                "the choice pre-seeded. (A Claude Code session already open elsewhere "
+                "needs a restart to load the new version.)"
+            )
         self.say("")
         # The celebratory "summon the team" close is only accurate for a full/setup run
         # that actually finished clean - live-caught (fable UX review, 2026-08-05): a
@@ -2196,7 +2200,13 @@ class Installer:
         # a plain close instead - they were never "installing the team" to begin with.
         any_failed = any(status == "fail" for _name, status, _detail in self.tracker.steps)
         if self.subset in ("full", "setup") and not any_failed:
-            self.say(s.green("Done. Summon the team with /compliance-surveillance-team:engage"))
+            self.say(
+                s.green(
+                    "Done. cd into your project and type 'virt-surv go' to start "
+                    "(or launch claude yourself and summon the team with "
+                    "/compliance-surveillance-team:engage)."
+                )
+            )
             hat = "🎩 " if _can_encode("🎩") else ""
             self.say(f"{hat}I look forward to working with you. - Morgan")
         elif any_failed:
@@ -4890,6 +4900,60 @@ def run_setup_alias(
 _CLAUDE_LAUNCH_CMD_KEY = "claude_launch_command"
 
 
+def run_howto(style: Style) -> int:
+    """Menu item 5 (2026-08-18 user request): Morgan explains, in plain words, how to
+    actually use the plugin day to day. Narrative, not a reference - the README and
+    quick-start PDF carry the detail; this is the 60-second version a new user reads
+    once from inside the installer."""
+    s = style
+    hat = "🎩 " if _can_encode("🎩") else ""
+    print("")
+    print(s.bold(f"{hat}Morgan (PM) here - I'm an AI agent with Virtual Surveillance IT."))
+    print("Here's how working with the team goes, start to finish:")
+    print("")
+    print(s.bold("  Starting a session"))
+    print(
+        "  cd into your project folder and type " + s.cyan("virt-surv go") + ". You'll see\n"
+        "  your project's team settings at a glance, then a menu: resume an open piece of\n"
+        "  work, start something new, or just launch. Pick with the arrow keys (or the\n"
+        "  hotkeys) and Claude Code starts with your choice already typed in. If a project\n"
+        "  isn't set up yet, go walks you through it first."
+    )
+    print("")
+    print(s.bold("  Working with me"))
+    print(
+        "  Describe whatever you've got in plain English - a problem to solve, code to\n"
+        "  review, something to build, data to analyse. I classify it, ask what I genuinely\n"
+        "  need to know (batched, one screen), tell you how many specialists I intend to\n"
+        "  use and roughly what it will cost, and wait for your go-ahead. Then I run the\n"
+        "  work in small stages and come back to you at each gate. You only invoke the team\n"
+        "  once per piece of work - after that, just reply normally."
+    )
+    print("")
+    print(s.bold("  What you get back"))
+    print(
+        "  Everything lands in your project under artifacts/<engagement>/ - the brief, the\n"
+        "  work itself, reviews with evidence, and a closing summary email, each as .md and\n"
+        "  rendered .html. A START-HERE.md index shows where any engagement stands."
+    )
+    print("")
+    print(s.bold("  The standing safety rules"))
+    print(
+        "  I never read data/raw/ (hard-blocked), never run the code under review without\n"
+        "  your explicit consent (you create the marker; my asking is not the grant), and\n"
+        "  treat all real-looking data as sensitive - synthetic or masked only. Outside an\n"
+        "  engagement the plugin is dormant: a normal session is just ordinary Claude Code."
+    )
+    print("")
+    print(
+        s.dim(
+            "  More detail: README.md · docs/quick-start.pdf (one page) · /meet-the-team\n"
+            "  inside a session introduces the 13 specialists."
+        )
+    )
+    return 0
+
+
 def run_alias_manage(
     style: Style,
     mark_map: dict,
@@ -7527,6 +7591,8 @@ def _main(argv=None) -> int:
             elif action == "aliasmanage":
                 run_alias_manage(style, marks(), args.yes, args.demo, args.repo)
                 did_anything = did_anything or not args.demo
+            elif action == "howto":
+                run_howto(style)  # read-only narrative - never counts as "did anything"
             elif action == "demo":
                 # A one-shot preview of the full flow, not a persistent toggle - restored
                 # afterward so picking "Demo" once doesn't silently keep every LATER menu
