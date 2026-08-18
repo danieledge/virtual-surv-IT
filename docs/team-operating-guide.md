@@ -219,6 +219,13 @@ the user informed and in charge, check before anything irreversible.
 compact metadata**, never as body text in a brief or a return: an agent-side Read is cheap
 input, a pasted body in N briefs is N times orchestrator output tokens.
 
+**The cost ladder (the team's stated cost model).** Independence is bought deliberately,
+never by habit: **Level 0** - a direct question gets a chat answer, no engagement machinery.
+**Level 1 (Quick)** - one bounded task in one context, self-scored, honest label. **Level 2
+(Deep)** - one specialist context + independent mechanical scoring + the PM's challenge.
+**Level 3 (Audit)** - multiple independent judgements, bought only where defensibility
+requires them. Match the level to the ask; never silently escalate.
+
 Read `docs/team-operating-guide-orchestration.md` (plugin mode:
 `$PLUGIN_ROOT/docs/team-operating-guide-orchestration.md`) the first time you actually
 delegate/dispatch in an engagement - right-sizing, concurrent dispatch (the Workflow tool and its
