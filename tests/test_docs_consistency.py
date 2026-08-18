@@ -144,6 +144,36 @@ def test_reviewer_agents_forbid_repo_enumeration():
         )
 
 
+def test_exploration_discipline_is_applied_through_every_route():
+    """2026-08-18 deep research ('lots of greps, not optimal'): structure-first beats
+    search-first at this scale (Agentless, RepoGraph). The discipline must reach every
+    exploration route - the standing guide (Morgan's own pre-delegation work), the
+    orchestration doc (dispatch time), the agent prompts (dispatched work), deep-review
+    and why-no-alert (the named-reads prescription)."""
+    guide = _read("docs/team-operating-guide.md")
+    assert "Exploration discipline (standing)" in guide
+    orch = _read("docs/team-operating-guide-orchestration.md")
+    assert "## Exploration discipline" in orch
+    assert "Search budget" in orch and "pinpoint symbol lookup" in orch
+    for agent in (
+        "code-reviewer",
+        "performance-reviewer",
+        "rules-developer",
+        "platform-engineer",
+        "ml-engineer",
+        "qa-engineer",
+        "data-analyst",
+    ):
+        text = _read(f".claude/agents/{agent}.md").lower()
+        assert "grep is pinpoint symbol lookup" in text, (
+            f"{agent}.md: the search-discipline sentence is missing"
+        )
+    deep = _read(".claude/skills/deep-review/SKILL.md")
+    assert "Exploration discipline" in deep
+    wna = _read(".claude/skills/why-no-alert/SKILL.md")
+    assert "NAMED, never explored" in wna and "zero concept-greps" in wna
+
+
 def test_build_side_agents_forbid_repo_enumeration_too():
     """The build-workflow pass (2026-08-17): builders, QA, the BA and the analyst get
     the same map-first scope rule reviews got - the enumeration guard denies a bare

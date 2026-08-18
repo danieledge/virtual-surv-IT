@@ -224,3 +224,26 @@
   from opus for orchestration, so sonnet is the default; opus remains available per-project for
   critical/high-stakes engagements (`install_helper.py`, menu option 8, or
   `--model-project . --model opus`).
+
+## Exploration discipline (2026-08-18, evidence-based)
+
+Every search round-trip is a full model turn re-reading the whole context; the measured
+evidence (Agentless's $0.34/issue skeleton-walk localisation, RepoGraph's +32.8%
+resolve-rate from a code graph, Anthropic's own "infinite exploration" warning) says
+structure-first beats search-first at this repo scale. Five rules, for Morgan and every
+dispatched agent alike:
+
+1. **Orientation before any search**: the codebase map, the brief's file list, or ONE
+   `repo_skeleton` call - never an opening grep on a concept word.
+2. **Search budget**: after 2-3 misses, stop guessing synonyms - read the skeleton or
+   the likeliest file whole instead. A miss spiral is the worst documented failure mode.
+3. **Read small files whole** (one Read beats three greps plus their per-turn context
+   tax); grep-plus-window only on genuinely large files.
+4. **Batch independent lookups into one turn** - parallel calls, alternation patterns
+   (`rg 'foo|bar'`) - never serial single greps.
+5. **Grep is pinpoint symbol lookup, never exploration or coverage proof**: search for
+   names the map or a read file already gave you; "who uses X" goes to the import graph.
+
+Briefs remain the sharing mechanism: exploration results travel as file lists with
+one-line roles, so downstream agents read named files instead of re-searching
+(the map-first briefing rule, `docs/review/agent-router.md`).

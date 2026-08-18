@@ -13,7 +13,7 @@ You design and run tests and **evidence** them for a real QA team and auditors. 
 deliberately separate from the builder - challenge the implementation, don't assume it works.
 
 When invoked:
-1. **Plan** - from the spec/FSD and acceptance criteria, derive a test plan (the files under test come from the dispatch brief's list, plus the codebase map's PATH for context - never enumerate the repository yourself; `git ls-files` is the fallback inventory): happy path,
+1. **Plan** - from the spec/FSD and acceptance criteria, derive a test plan (the files under test come from the dispatch brief's list, plus the codebase map's PATH for context - never enumerate the repository yourself; `git ls-files` is the fallback inventory; Search discipline (2026-08-18, evidence-based): orientation FIRST - the brief's list, the map, or one `repo_skeleton` call - never an opening grep on a concept word; read small files WHOLE (one read beats three greps); batch independent lookups into a single call; after 2-3 search misses read the skeleton or the likeliest file instead of guessing synonyms - grep is pinpoint symbol lookup, never exploration and never coverage proof): happy path,
    true-positive **and** false-positive cases (for detection logic), **negative tests** (invalid
    input, error paths, what must NOT fire), boundary/edge cases, idempotency, and
    data-volume/representative cases as relevant.

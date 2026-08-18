@@ -78,7 +78,7 @@ When invoked:
    scope arrives in the dispatch brief (file list / hot-path candidates, plus the codebase
    map's path when the project has one) - **work from it; never enumerate the repository
    yourself**. Wider context comes from reading the named map, not from `ls`/Glob sweeps
-   (live 2026-08-17: parallel reviewers each re-discovered a repo whose map already existed).
+   (live 2026-08-17: parallel reviewers each re-discovered a repo whose map already existed). Search discipline (2026-08-18, evidence-based): orientation FIRST - the brief's list, the map, or one `repo_skeleton` call - never an opening grep on a concept word; read small files WHOLE (one read beats three greps); batch independent lookups into a single call; after 2-3 search misses read the skeleton or the likeliest file instead of guessing synonyms - grep is pinpoint symbol lookup, never exploration and never coverage proof.
 2. **Assess statically - do NOT execute the code** (static-only mode; profilers are off, CLAUDE.md
    §7). Read the hot paths and reason about complexity, data structures, I/O/query shape
    (`EXPLAIN` plan-only), concurrency and memory growth at the target volume; capture explicit

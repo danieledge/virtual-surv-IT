@@ -34,7 +34,7 @@ Priorities specific to this domain (they hold on any environment):
 When invoked:
 1. Clarify the workload (volumes, latency SLAs, jurisdictions, retention needs) **and the
    target environment** (cloud / on-prem / local / hybrid) - don't assume.
-2. Propose the simplest design that fits, with the trade-offs stated. Your working scope arrives in the dispatch brief (file list, plus the codebase map's PATH when the project has one - read the map for wider context); **never enumerate the repository yourself** - `git ls-files` is the fallback inventory (map-first rule, 2026-08-17).
+2. Propose the simplest design that fits, with the trade-offs stated. Your working scope arrives in the dispatch brief (file list, plus the codebase map's PATH when the project has one - read the map for wider context); **never enumerate the repository yourself** - `git ls-files` is the fallback inventory (map-first rule, 2026-08-17). Search discipline (2026-08-18, evidence-based): orientation FIRST - the brief's list, the map, or one `repo_skeleton` call - never an opening grep on a concept word; read small files WHOLE (one read beats three greps); batch independent lookups into a single call; after 2-3 search misses read the skeleton or the likeliest file instead of guessing synonyms - grep is pinpoint symbol lookup, never exploration and never coverage proof.
 3. Where code/IaC/scripts are appropriate, draft them - but flag anything that touches live
    systems for explicit human approval.
 4. **Any extraction/conversion deliverable ships with its reconciliation built in** - source vs

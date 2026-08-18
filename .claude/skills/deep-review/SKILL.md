@@ -93,7 +93,7 @@ is that map already** (2026-08-17 live report: three dispatched reviewers each r
 repo whose map existed): the dispatch brief carries the in-scope FILE LIST plus the map's
 PATH with "read it for wider context - do not enumerate the repo" - **point, never paste**
 (the map body in N briefs is N times orchestrator output tokens; an agent-side Read is cheap
-input, and a diff-scoped pass needs no map read at all). Trust it only after a cheap
+input, and a diff-scoped pass needs no map read at all). Search discipline applies throughout (operating guide, orchestration §Exploration discipline): 2-3 miss budget, small files whole, batched lookups, grep for symbols only. Trust it only after a cheap
 staleness look (map's stated date vs `git log -1 --format=%ci`); if drifted, refresh just
 the target directories with `git ls-files <dir>` - never a whole-repo walk.
 

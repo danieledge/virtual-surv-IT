@@ -36,6 +36,12 @@ stage (📊 where mechanically checked, 🧠 where inferred - CLAUDE.md §6):
 | (e) Post-generation | Deduplicated, suppressed, or filtered after generation, before a case? | `data-analyst` |
 | (f) Scope | Is the scenario even in scope for this typology/instrument/venue/channel? | `/assess-coverage` machinery |
 
+**Retrieval for the walk is NAMED, never explored** (2026-08-18 exploration
+discipline): the codebase map or one `repo_skeleton` call for orientation, then the
+rule/config file read WHOLE (house rules keep detection logic small), then the
+shipped explain tooling - zero concept-greps on the happy path; grep only to locate
+a symbol the map already named.
+
 Consult the matching `docs/sme/` pack's under-alerting section in-line for
 typology-specific causes at each stage - cite the pack, never a persona.
 

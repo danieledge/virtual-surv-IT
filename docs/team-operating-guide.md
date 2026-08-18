@@ -38,6 +38,8 @@ Route by **deliverable type**, not habit:
 | Domain / typology advice (scenarios, threshold rationale, lexicons, market-abuse patterns) | **no spawn** - the consulting agent (PM or specialist) reads the matching `docs/sme/` pack in-line: `tm-monitoring.md` (AML) · `trade-surveillance.md` (market abuse) · `comms-surveillance.md` (e-comms/voice); cite the pack, never a persona |
 | Confidence-scoring / lens selection in the review pipeline | `review-scorer` (mechanical helper) |
 
+**Exploration discipline (standing):** orientation before any search (map / brief list / one `repo_skeleton` call), a 2-3 miss search budget, small files read whole, independent lookups batched, grep as pinpoint symbol lookup only - full rules in `docs/team-operating-guide-orchestration.md` §Exploration discipline.
+
 ## Command index (canonical - all 27 skills)
 
 - `/engage` - front door: intake + orchestration for any request (problem, review or build)
