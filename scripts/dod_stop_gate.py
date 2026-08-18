@@ -132,14 +132,16 @@ def _reason(
         if slug
         else f'engagement_state log-note "{_NUDGE_MARKER_PREFIX}{findings_hash}"'
     )
+    # Other packs are a COUNT, never a list (2026-08-18 live report: even summarised
+    # code lines sent a --new session reasoning about siblings' tasks every stop before
+    # "deciding to move on" - existence is the only fact this session needs; the go
+    # menu is the human surface where open engagements actually get picked up).
     other_block = ""
-    if other_findings:
-        other_bullet = "\n- ".join(other_findings)
+    if other_findings and active_findings:
         other_block = (
-            "\n\nOther open engagements in this project also have outstanding DoD findings "
-            "(surfaced so silent drift is never missed entirely, but NOT auto-fixed here - "
-            "stay scoped to your active engagement unless the user asks you to switch):\n- "
-            f"{other_bullet}"
+            f"\n\n({len(other_findings)} other open engagement(s)/area(s) in this project "
+            "also carry outstanding DoD findings - not this session's scope; do not fix, "
+            "list or narrate them. They get picked up from the go menu.)"
         )
     if active_findings:
         bullet = "\n- ".join(active_findings)
@@ -169,26 +171,29 @@ def _reason(
             "you were just given, no matter how quick the detour looks."
         )
     elif not session_owned:
-        # NOTHING here belongs to work this session started (2026-08-17 live report:
-        # a fresh engagement's intake ended a turn before its workspace existed, the
+        # NOTHING here belongs to work this session started (2026-08-17 live report: a
+        # fresh engagement's intake ended a turn before its workspace existed, the
         # ACTIVE marker still named the PREVIOUS engagement, and the model spent 7
-        # minutes repairing it against the deferral rule). No fix-list at all in this
-        # state - existence and shape only, and an explicit do-not-act.
+        # minutes repairing it). 2026-08-18 tightening: even the per-pack code
+        # summaries cost a reasoning detour every stop - this is now ONE compact
+        # paragraph, count only, no per-pack lines.
         head = (
-            "🎩 DoD backstop (Stop hook, warn-first): open engagement(s) in this project "
-            "carry outstanding DoD findings, summarised below. **None of them belongs to "
-            "work this session started - do NOT fix, open or narrate them now.** Continue "
-            "with the user's current request; mention them at most in one line, and only "
-            "switch if the user explicitly asks."
+            f"🎩 DoD backstop (Stop hook, warn-first): {len(other_findings)} open "
+            "engagement(s)/area(s) in this project carry outstanding DoD findings. "
+            "**None belongs to work this session started - do NOT fix, open, list or "
+            "narrate them.** Continue with the user's current request; open engagements "
+            "get picked up from the go menu."
         )
+        other_block = ""
     else:
-        # The active engagement itself is clean - only OTHER open engagements have
-        # findings. Still worth one nudge (so a silently-never-closed sibling is never
-        # missed project-wide) but there is nothing here for THIS session to act on.
+        # Session-owned with a CLEAN active engagement: main() suppresses this case
+        # entirely now (2026-08-18) - nothing for this session to act on means no
+        # nudge at all. Kept as a harmless fallback should a caller still reach it.
         head = (
             "🎩 DoD backstop (Stop hook, warn-first): your active engagement has no "
             "outstanding DoD findings of its own."
         )
+        other_block = ""
     return (
         f"{head}"
         f"{other_block}"
@@ -389,6 +394,12 @@ def main() -> int:
         return 0  # fail open - never brick a stop over a checker error
 
     if not active_findings and not other_findings:
+        return 0
+    if not active_findings and active_owned:
+        # This session owns its active engagement and IT is clean - siblings' findings
+        # are none of this session's business (2026-08-18 user report: a --new session
+        # kept spending tokens on other engagements' DoD tasks before "moving on").
+        # The human surface for those is the go menu's open-engagement list.
         return 0
 
     findings_hash = _findings_hash(active_findings + other_findings)
