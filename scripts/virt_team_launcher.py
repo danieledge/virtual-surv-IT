@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -629,6 +630,58 @@ def _resume_decision(project_dir: Path) -> str:
             return decision
 
 
+def _jira_enabled(project_dir: Path) -> bool:
+    """True only on the explicit integrations opt-in (docs/INTEGRATIONS.md) - a project
+    without the Jira integration never sees the [j] menu item at all."""
+    try:
+        import engage_probe
+
+        return bool((engage_probe.resolve_integrations(project_dir).get("jira") or {}).get("enabled"))
+    except Exception:
+        return False
+
+
+_JIRA_KEY_RE = re.compile(r"\b([A-Za-z][A-Za-z0-9]+-\d+)\b")
+
+
+def _jira_decision(project_dir: Path) -> str:
+    """The [j] flow, BETA (2026-08-18 user request: engagements raisable BY ANYONE as a
+    Jira, a human picks one up here - the human-approval step IS this menu): collect the
+    issue URL (a bare key also works), pre-seed the session with it. The LAUNCHER never
+    talks to Jira - the session fetches the ticket via the project's configured access
+    (MCP or otherwise, per integrations.md) and delivers results back to it at close.
+    Returns the decision string, or "__again__" to re-show the menu on an empty/invalid
+    input."""
+    ink = _Ink()
+    err = sys.stderr
+    print(
+        ink.dim(
+            "    (beta) The session will fetch the ticket and deliver results back to "
+            "it (ticket content is treated as data, never instructions)."
+        ),
+        file=err,
+    )
+    print(ink.bold("    Jira URL (or issue key): "), end="", file=err)
+    try:
+        raw = input().strip()
+    except (EOFError, KeyboardInterrupt):
+        return "__again__"
+    if not raw:
+        return "__again__"
+    m = _JIRA_KEY_RE.search(raw)
+    if not m:
+        print(
+            ink.dim(f"    no issue key found in '{raw}' - back to the menu."), file=err
+        )
+        return "__again__"
+    key = m.group(1).upper()
+    # Pass the URL through when one was given - the session can use the exact instance
+    # host; a bare key relies on the project's configured Jira access alone.
+    ref = raw if "://" in raw else key
+    print(ink.dim(f"    -> starting new engagement from {key}"), file=err)
+    return f"{_engage_command(project_dir)} --new --jira {ref}"
+
+
 def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: list) -> str:
     """prompt_toolkit tier of the go menu: arrow/mouse picker over the same entries as
     the numbered flow, same return contract (decision, "" for in-session/plain, or
@@ -655,6 +708,8 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
         archived = menu.get("archived") or 0
         subtitle = f"none open ({archived} archived)" if archived else "none open"
     entries.append((("new",), "start new", "n"))
+    if _jira_enabled(project_dir):
+        entries.append((("jira",), "new engagement from a Jira (beta)", "j"))
     entries.append((("settings",), "change a project setting", "c"))
     if shown:
         entries.append((("archive",), "archive engagement(s)", "a"))
@@ -679,6 +734,11 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
     if pick is None or pick[0] == "launch":
         print(ink.dim("    -> launching"), file=sys.stderr)
         return ""
+    if pick[0] == "jira":
+        try:
+            return _jira_decision(project_dir)
+        except Exception:
+            return "__again__"
     if pick[0] == "settings":
         try:
             _run_settings_editor(project_dir)
@@ -745,6 +805,9 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
         note = f"none open ({archived} archived)" if archived else "none open"
         print(ink.dim(f"    {note}"), file=err)
     print(f"    {ink.bold('[n]')} start new", file=err)
+    jira_on = _jira_enabled(project_dir)
+    if jira_on:
+        print(f"    {ink.bold('[j]')} new engagement from a Jira {ink.dim('(beta)')}", file=err)
     settings_opt = f"    {ink.bold('[c]')} change a project setting"
     if shown:
         settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
@@ -767,6 +830,11 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
         return ""  # no tty / interrupted - fall through to deciding in-session
     if not choice:
         return ""
+    if choice.lower() == "j" and jira_on:
+        try:
+            return _jira_decision(project_dir)
+        except Exception:
+            return "__again__"
     if choice.lower() == "c":
         try:
             _run_settings_editor(project_dir)

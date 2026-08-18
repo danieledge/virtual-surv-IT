@@ -66,6 +66,19 @@ absent or a call fails, the engagement **continues and says so** (the failure la
 the delivery report as an outstanding item); tracker availability is never load-bearing
 for the work itself.
 
+## Inbound: start an engagement FROM a Jira (beta)
+
+With the Jira integration enabled, `virt-surv go` shows **[j] new engagement from a
+Jira (beta)**: paste the issue URL (or a bare key) and the session launches with
+`/engage --new --jira <ref>` pre-seeded. Morgan fetches the ticket via the configured
+access, treats it as the engagement request, and delivers the results back to the
+ticket at close (summary comment + attached report). This is the human-approval model
+by construction: anyone on the team can RAISE the ticket, but an engagement only starts
+when someone with the CLI picks it up in the menu - the launcher never talks to Jira
+itself, and nothing runs unattended. Ticket content is treated as data, never as
+instructions; the session's own safety gates (execution consent, data attestation) are
+answered by the human at the keyboard, not by ticket fields.
+
 ## Pull-request comments - experimental, double-gated
 
 Posting review findings onto a pull request needs careful validation in a real corporate

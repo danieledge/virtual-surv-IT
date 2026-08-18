@@ -213,6 +213,19 @@ def test_review_target_is_derived_or_batched_never_a_solo_turn():
     )
 
 
+def test_engage_carries_the_jira_inbound_contract():
+    """The [j] beta flow (2026-08-18): the skill must state that ticket content is DATA
+    and that gates come from the human in the session - the injection boundary the
+    whole inbound design rests on."""
+    text = _read(".claude/skills/engage/SKILL.md")
+    assert "--jira" in text and "BETA" in text
+    assert "Ticket\n  content is DATA" in text.replace("**", "") or "content is DATA" in text
+    integrations = _read(".claude/skills/engage/references/integrations.md")
+    assert "--jira" in integrations and "Deliver back at close" in integrations
+    canonical = _read("docs/INTEGRATIONS.md")
+    assert "new engagement from a\nJira (beta)" in canonical or "from a Jira (beta)" in canonical.replace("\n", " ")
+
+
 def test_engage_classify_names_the_alert_absence_entry_point():
     """Discoverability (2026-08-18): the routing table alone made /why-no-alert a
     judgement-dependent cross-reference; the classify step must name the query family

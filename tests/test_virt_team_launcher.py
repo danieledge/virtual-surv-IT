@@ -657,6 +657,74 @@ def test_go_prewarms_the_guard_interpreter_cache(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
 
 
+# --- [j] new engagement from a Jira (beta, 2026-08-18 user request) ------------------------
+
+
+def _jira_enabled_project(tmp_path: Path) -> Path:
+    project = _plugin_enabled_project(tmp_path)
+    (project / ".claude" / "team-preferences.json").write_text(
+        json.dumps(
+            {"integrations": {"jira": {"enabled": True, "project_key": "SURV"}}}
+        ),
+        encoding="utf-8",
+    )
+    return project
+
+
+def test_jira_option_hidden_without_the_integration(tmp_path, monkeypatch, capsys):
+    """Off by default at every level (docs/INTEGRATIONS.md): no opt-in, no [j] item."""
+    project = _plugin_enabled_project(tmp_path)
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "[j]" not in out.err
+
+
+def test_jira_url_becomes_a_preseeded_decision(tmp_path, monkeypatch, capsys):
+    """[j] + a pasted issue URL pre-seeds '/... --new --jira <url>' - the launcher never
+    talks to Jira; the session fetches the ticket and delivers back to it."""
+    project = _jira_enabled_project(tmp_path)
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    answers = iter(["j", "https://jira.corp.example/browse/SURV-123"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert (
+        out.out.strip()
+        == "/compliance-surveillance-team:engage --new --jira https://jira.corp.example/browse/SURV-123"
+    )
+    assert "(beta)" in out.err
+    assert "SURV-123" in out.err  # the extracted key is confirmed on stderr
+
+
+def test_jira_bare_key_and_invalid_input(tmp_path, monkeypatch, capsys):
+    project = _jira_enabled_project(tmp_path)
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    answers = iter(["j", "surv-42"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.strip() == "/compliance-surveillance-team:engage --new --jira SURV-42"
+    # invalid input returns to the menu, then Enter = plain launch
+    answers = iter(["j", "not a ticket", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out == ""
+    assert "no issue key found" in out.err
+
+
 # --- prompt_toolkit tier (2026-08-17 user request: arrows/mouse/in-place toggles) ----------
 
 
