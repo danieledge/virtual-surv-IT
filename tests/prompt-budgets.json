@@ -102,7 +102,7 @@
     ".claude/skills/.shared/engage-open.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3728
+      "baseline_tokens": 3752
     },
     ".claude/skills/.shared/engagement-bookends.md": {
       "tier": "ROUTE_TIME",

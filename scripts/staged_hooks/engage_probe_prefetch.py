@@ -44,6 +44,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -205,6 +206,43 @@ def _tail_lines(project_dir: Path, prompt: str) -> list:
 _PROBE_CACHE_TTL_S = 3600
 
 
+def _git_identity(project_dir: Path) -> tuple[str, str]:
+    """(branch, head) of the working project; ('', '') when git or a repo is absent.
+    Matched strictly against the cache's stamped values - both sides are empty in a
+    non-repo, so they still match there. Part of the cache identity fingerprint
+    (2026-08-18, external token-review finding 2): TTL + prefs mtime alone could serve a
+    report whose embedded BRANCH= was written before a branch switch inside the hour."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(project_dir), "rev-parse", "--abbrev-ref", "HEAD", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        lines = (proc.stdout or "").strip().splitlines()
+        if proc.returncode == 0 and len(lines) >= 2:
+            return lines[0].strip(), lines[1].strip()
+    except Exception:
+        pass
+    return "", ""
+
+
+def _live_plugin_version() -> str:
+    """The manifest version of the install this hook belongs to - walked upward from the
+    hook file itself so the same text works from scripts/ (live) and scripts/staged_hooks/
+    (staged). '' when unreadable: the check is then skipped rather than guessing."""
+    try:
+        for anc in Path(__file__).resolve().parents:
+            manifest = anc / ".claude-plugin" / "plugin.json"
+            if manifest.is_file():
+                return str(
+                    json.loads(manifest.read_text(encoding="utf-8-sig")).get("version") or ""
+                )
+    except Exception:
+        pass
+    return ""
+
+
 def _cached_block(project_dir: Path, data: dict, prompt: str) -> str | None:
     """The corp fast path (2026-08-18 user request: the in-session probe can take
     minutes on corporate boxes): serve the go-written .claude/engage-probe.json with
@@ -223,7 +261,11 @@ def _cached_block(project_dir: Path, data: dict, prompt: str) -> str | None:
             return None
         prefs_file = project_dir / ".claude" / "team-preferences.json"
         prefs_mtime = int(prefs_file.stat().st_mtime) if prefs_file.is_file() else 0
-        if prefs_mtime != int(raw.get("prefs_mtime") or -1):
+        cached_prefs_mtime = raw.get("prefs_mtime")
+        # NOT `or -1`: a prefs-less project stamps 0, and 0-is-falsy turned that into -1,
+        # so the fast path silently never fired for the common no-preferences case
+        # (found 2026-08-18 by the cache-lifecycle test matrix).
+        if cached_prefs_mtime is None or int(cached_prefs_mtime) != prefs_mtime:
             return None  # settings changed since go - recompute live
         try:
             prefs = json.loads(prefs_file.read_text(encoding="utf-8-sig"))
@@ -231,6 +273,19 @@ def _cached_block(project_dir: Path, data: dict, prompt: str) -> str | None:
                 return None  # toggled off
         except Exception:
             pass
+        # Identity fingerprint (2026-08-18, external token-review finding 2): the cached
+        # report embeds BRANCH= and PLUGIN_VERSION= from compute time, so TTL + prefs
+        # alone can inject stale facts after a branch switch or /plugin update inside the
+        # hour. Strict empty-normalised equality; a cache written before these fields
+        # existed mismatches once, costs one live probe, and go's next run stamps them.
+        if _git_identity(project_dir) != (
+            str(raw.get("git_branch") or ""),
+            str(raw.get("git_head") or ""),
+        ):
+            return None  # branch/HEAD moved since go - recompute live
+        live_version = _live_plugin_version()
+        if live_version and str(raw.get("plugin_version") or "") != live_version:
+            return None  # plugin updated since go - recompute live
         report = raw.get("report") or ""
         interp = raw.get("interpreter") or ""
         if not report or not interp:

@@ -1302,13 +1302,38 @@ def _write_probe_cache(project_dir: Path) -> None:
         out = project_dir / ".claude" / "engage-probe.json"
         prefs = project_dir / ".claude" / "team-preferences.json"
         prefs_mtime = int(prefs.stat().st_mtime) if prefs.is_file() else 0
+        # Identity fingerprint (2026-08-18, external token-review finding 2) - stamped
+        # here, validated by the prefetch hook's _git_identity/_live_plugin_version, so a
+        # branch switch or plugin update inside the TTL invalidates instead of injecting
+        # a stale BRANCH=/PLUGIN_VERSION= fact into the session's opening context.
+        git_branch = git_head = ""
+        try:
+            import subprocess
+
+            proc = subprocess.run(
+                ["git", "-C", str(project_dir), "rev-parse", "--abbrev-ref", "HEAD", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            lines = (proc.stdout or "").strip().splitlines()
+            if proc.returncode == 0 and len(lines) >= 2:
+                git_branch, git_head = lines[0].strip(), lines[1].strip()
+        except Exception:
+            pass
         try:
             existing = json.loads(out.read_text(encoding="utf-8"))
+            # prefs comparison NOT via `or -1`: a prefs-less project stamps 0, and
+            # 0-is-falsy made every freshness check fail, recomputing on each go run
+            # (same bug as the hook's, found 2026-08-18 by the cache test matrix).
             fresh = (
                 time.time() - float(existing.get("computed_at_epoch") or 0)
                 < _PROBE_CACHE_TTL_S
-                and int(existing.get("prefs_mtime") or -1) == prefs_mtime
+                and existing.get("prefs_mtime") is not None
+                and int(existing.get("prefs_mtime")) == prefs_mtime
                 and existing.get("plugin_version") == _plugin_version()
+                and str(existing.get("git_branch") or "") == git_branch
+                and str(existing.get("git_head") or "") == git_head
             )
             if fresh:
                 return
@@ -1332,6 +1357,8 @@ def _write_probe_cache(project_dir: Path) -> None:
             "computed_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
             "plugin_version": _plugin_version(),
             "prefs_mtime": prefs_mtime,
+            "git_branch": git_branch,
+            "git_head": git_head,
             "interpreter": Path(sys.executable).as_posix(),
             "report": report,
         }

@@ -30,10 +30,11 @@ data, zero tool calls.
 
 **No injected block? Try the go-written probe cache next (2026-08-18, the corp fast
 path - the live probe can take minutes on corporate boxes):** Read the FILE
-`.claude/engage-probe.json` (one Read call, no shell). If it exists and its
+`.claude/engage-probe.json` (one Read call, no shell). If it exists, its
 `computed_at` is recent (same day and plausibly within the hour - the hook applies the
-exact TTL mechanically; your direct read is the fallback, so be conservative), use its
-`report` and `interpreter` exactly as if injected. Two live pieces remain yours: the
+exact TTL and identity fingerprint mechanically; your direct read is the fallback, so be
+conservative) and nothing suggests the branch or plugin version moved since `computed_at`,
+use its `report` and `interpreter` exactly as if injected. Two live pieces remain yours: the
 resume-or-new data (`--new` needs none - zero discovery; `--resume <slug>`/no-flag runs
 ONE `<python> -m scripts.engagement_state list --menu` command), and the session stamp,
 which the first `engagement_state` command writes automatically - never hand-write it.
