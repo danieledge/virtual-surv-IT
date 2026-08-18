@@ -235,7 +235,7 @@ single-select: **Apply the fixes** · **Show me the diff first** · **Don't chan
 *unless Q3 already authorised it* ("Apply fixes" / the fix→re-review loop) - don't double-ask what
 the user has already answered.
 
-**3. Package by default - the packaging question is retired (2026-08-17 user decision).**
+**3. Package by default - the packaging question is retired (2026-08-17 user decision).** A SINGLE-deliverable engagement skips the wrapper entirely: the deliverable carries the closing block and IS the delivery (bookends §Single-deliverable close) - never invent a wrapper or exec summary around one finished artifact.
 (Skip this step entirely for the direct-answer path in step 1 unless the user has genuinely
 asked for a tracked deliverable.) Packaging is **one consolidated Delivery Report**
 (`docs/templates/delivery-report.md`) holding every section - every real engagement chose it,

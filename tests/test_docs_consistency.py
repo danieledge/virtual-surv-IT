@@ -144,6 +144,22 @@ def test_reviewer_agents_forbid_repo_enumeration():
         )
 
 
+def test_single_deliverable_close_is_the_rule_everywhere():
+    """2026-08-18 live report: a /why-no-alert close demanded an 'engagement report'
+    over a diagnosis that already covered everything, then offered an exec summary when
+    challenged. The rule is general (any workflow): one artifact carrying the substance
+    IS the delivery - closing block appended, summary email, done."""
+    bookends = _read(".claude/skills/.shared/engagement-bookends.md")
+    assert "Single-deliverable close" in bookends
+    assert "never invent wrapper documents or executive summaries" in bookends
+    dod = _read("docs/DEFINITION-OF-DONE.md")
+    assert "Single-deliverable carve-out" in dod
+    engage = _read(".claude/skills/engage/SKILL.md")
+    assert "SINGLE-deliverable engagement skips the wrapper" in engage
+    wna = _read(".claude/skills/why-no-alert/SKILL.md")
+    assert "diagnosis report IS the delivery" in wna
+
+
 def test_exploration_discipline_is_applied_through_every_route():
     """2026-08-18 deep research ('lots of greps, not optimal'): structure-first beats
     search-first at this scale (Agentless, RepoGraph). The discipline must reach every

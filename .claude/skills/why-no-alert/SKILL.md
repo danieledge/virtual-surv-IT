@@ -71,6 +71,8 @@ evidence chain, the hypothesis table, remediation routed by stage - (c) logic de
 model-testing expectation, SR 11-7/OCC 2011-12 where TM scenarios are models). Verdicts
 are SEGMENT-granular, never aggregate-only: presence elsewhere masks absence somewhere.
 
+**The diagnosis report IS the delivery** when it is the engagement's one artifact - single-deliverable close (bookends): closing block appended, summary email, done; no separate engagement report.
+
 **Close - don't dead-end (CLAUDE.md §6).** Offer the natural next step with a
 recommendation: fix-and-retest via the routed skill, a standing detection-health check,
 or stop here with the diagnosis recorded.

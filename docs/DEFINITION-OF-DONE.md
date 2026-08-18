@@ -230,6 +230,7 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 - [ ] **Distributable** - evidence produced in `.md` **and** `.html`
       (`python -m scripts.render_html`). **By default one consolidated Delivery Report**
       (`docs/templates/delivery-report.md`) holds all sections; split into separate artifacts
+      **Single-deliverable carve-out (2026-08-18):** when one artifact already carries the engagement's substance, it IS the delivery - closing block appended to it, no separate wrapper report, no invented executive summary; the summary email still closes the engagement (bookends §Single-deliverable close).
       only if a control requires it.
 - [ ] **Reconciled at close** - before START-HERE flips to ✅, every document the engagement
       produced or touched (including code-adjacent ones: deliverable README, module

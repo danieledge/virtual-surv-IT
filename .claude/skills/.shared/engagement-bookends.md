@@ -30,6 +30,17 @@ close only.
 
 ## Standard close
 
+**Single-deliverable close (2026-08-18, any workflow):** when ONE artifact already
+carries the engagement's substance - a diagnosis report, a review report, an assessment -
+that artifact IS the delivery. Append a short closing block to it (final status/verdict,
+the team with 🤖 markers, next steps) instead of authoring a separate delivery report,
+and never invent wrapper documents or executive summaries to satisfy the packaging
+default (live 2026-08-18: a /why-no-alert close demanded an "engagement report" over a
+diagnosis that already covered everything, then offered an exec summary when challenged).
+The summary email stays - it is the short requester-facing bookend, not a duplicate of
+the deliverable. The full consolidated Delivery Report is for engagements whose substance
+spans MULTIPLE artifacts.
+
 **Author closing artifacts final-form, then gate ONCE, then close.** Write the summary email and
 delivery report complete on the first pass - final `Status:` lines (never a draft/interim word),
 every roster name carrying its 🤖 marker on first mention, no placeholder sections - **before**
