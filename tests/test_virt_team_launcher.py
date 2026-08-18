@@ -657,6 +657,53 @@ def test_go_prewarms_the_guard_interpreter_cache(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
 
 
+# --- plugin cache-lag check at go (2026-08-18 user request) --------------------------------
+
+
+def _fake_installed_plugin(tmp_path: Path, version: str) -> Path:
+    home = tmp_path / "home"
+    cache = home / ".claude" / "plugins" / "cache" / "team"
+    (cache / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+    (cache / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "compliance-surveillance-team", "version": version}),
+        encoding="utf-8",
+    )
+    (home / ".claude" / "plugins").mkdir(parents=True, exist_ok=True)
+    (home / ".claude" / "plugins" / "installed_plugins.json").write_text(
+        json.dumps({"plugins": [{"installPath": str(cache)}]}), encoding="utf-8"
+    )
+    return home
+
+
+def test_cache_lag_is_warned_with_the_fix_named(tmp_path, monkeypatch, capsys):
+    """The banner shows the CLONE version but a plugin-mode session loads the installed
+    cache - when they differ, go says so and names the fix (non-tty path: no prompt)."""
+    project = _plugin_enabled_project(tmp_path)
+    home = _fake_installed_plugin(tmp_path, "0.0.1")
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    mod = _load()
+    mod._check_plugin_cache_lag(project)
+    err = capsys.readouterr().err
+    assert "installed plugin is v0.0.1" in err
+    assert "claude plugin update compliance-surveillance-team" in err
+
+
+def test_cache_lag_silent_when_versions_agree_or_repo_as_project(tmp_path, monkeypatch, capsys):
+    project = _plugin_enabled_project(tmp_path)
+    mod = _load()
+    home = _fake_installed_plugin(tmp_path, mod._plugin_version())
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    mod._check_plugin_cache_lag(project)
+    assert "installed plugin" not in capsys.readouterr().err
+    # repo-as-project: no cache involved, silent even when a stale install exists
+    (project / "docs").mkdir(exist_ok=True)
+    (project / "docs" / "team-operating-guide.md").write_text("# ops\n", encoding="utf-8")
+    home2 = _fake_installed_plugin(tmp_path, "0.0.1")
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home2))
+    mod._check_plugin_cache_lag(project)
+    assert "installed plugin" not in capsys.readouterr().err
+
+
 # --- [j] new engagement from a Jira (beta, 2026-08-18 user request) ------------------------
 
 

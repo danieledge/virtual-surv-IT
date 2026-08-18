@@ -1292,6 +1292,112 @@ def _print_banner(project_dir: Path) -> None:
     print(f"    {ink.title(_morgan_line())}", file=err)
 
 
+def _install_paths(obj) -> list:
+    """Every "installPath" string anywhere in a plugin-registry JSON structure - same
+    walk the engage-open bootstrap uses (drift there is pinned by its own test)."""
+    out: list = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == "installPath" and isinstance(v, str):
+                out.append(v)
+            else:
+                out += _install_paths(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            out += _install_paths(item)
+    return out
+
+
+def _installed_plugin_version() -> tuple:
+    """(version, root) of the marketplace-INSTALLED copy of this plugin, or ("", "")
+    when none is registered. Deliberately registry-only: the point is to compare what a
+    plugin-mode session will actually LOAD against the clone this launcher runs from."""
+    try:
+        base = Path.home() / ".claude" / "plugins"
+        for name in ("installed_plugins.json", "config.json", "plugins.json"):
+            try:
+                data = json.loads((base / name).read_text(encoding="utf-8-sig"))
+            except Exception:
+                continue
+            for p in _install_paths(data):
+                try:
+                    text = (Path(p) / ".claude-plugin" / "plugin.json").read_text(
+                        encoding="utf-8-sig"
+                    )
+                    if "compliance-surveillance-team" not in text:
+                        continue
+                    ver = json.loads(text).get("version") or ""
+                    if ver:
+                        return ver, str(p)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return "", ""
+
+
+def _check_plugin_cache_lag(project_dir: Path) -> None:
+    """The go banner shows the CLONE's version, but a plugin-mode session loads the
+    marketplace-installed cache - which only advances on a plugin update (live
+    confusion, 2026-08-18: banner said v0.34.0 while the session would still load the
+    older installed copy). Since go runs BEFORE the session starts, this is the one
+    moment the mismatch is fixable just in time: detect it, and offer to run the update
+    so the session about to launch loads the version the banner promised. Skipped in
+    repo-as-project mode (no cache involved); silent when versions agree or nothing is
+    installed; never blocks the launch."""
+    try:
+        if (project_dir / "docs" / "team-operating-guide.md").is_file():
+            return  # repo-as-project: sessions load the repo itself, no cache to lag
+        clone_v = _plugin_version()
+        inst_v, _root = _installed_plugin_version()
+        if not clone_v or not inst_v or clone_v == inst_v:
+            return
+        ink = _Ink()
+        err = sys.stderr
+        print(
+            f"    {ink.warn('!')} installed plugin is v{inst_v} but this clone is "
+            f"v{clone_v} - the session would load v{inst_v}.",
+            file=err,
+        )
+        import shutil as _shutil
+
+        claude = _shutil.which("claude")
+        if not claude or not sys.stdin.isatty():
+            print(
+                ink.dim(
+                    "      Fix: claude plugin update compliance-surveillance-team "
+                    "(or rerun the installer, option 1)."
+                ),
+                file=err,
+            )
+            return
+        print(ink.bold("      Update the installed plugin now? [Y/n]: "), end="", file=err)
+        try:
+            answer = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return
+        if answer in ("", "y", "yes"):
+            import subprocess
+
+            proc = subprocess.run(
+                [claude, "plugin", "update", "compliance-surveillance-team"],
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+            tail = (proc.stdout or proc.stderr or "").strip().splitlines()
+            if tail:
+                print(ink.dim("      " + tail[-1]), file=err)
+            print(
+                (ink.good("      updated - the session will load the new version")
+                 if proc.returncode == 0
+                 else ink.warn("      update failed - launching on the installed version")),
+                file=err,
+            )
+    except Exception:
+        pass  # cosmetic tier - never cost the launch
+
+
 def _apply_new_recommended_defaults(project_dir: Path) -> list:
     """Plugin updates grow the recommended env set (e.g. the 1-hour prompt-cache TTL,
     2026-08-17), but a project configured before the update never hears about the new
@@ -1502,6 +1608,10 @@ def main() -> int:
         _print_banner(project_dir)
     except Exception:
         pass  # cosmetic
+    try:
+        _check_plugin_cache_lag(project_dir)
+    except Exception:
+        pass
     try:
         added = _apply_new_recommended_defaults(project_dir)
         if added:
