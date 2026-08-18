@@ -1,0 +1,35 @@
+case: absence-volume-drop
+workflow: /why-no-alert
+rubric: coverage-assessment
+input: scenario.md
+description: >
+  Volume-drop alert-absence triage (absence plan Phase 4). Small-cap alerts step from
+  ~5/day to ~0 on 2026-08-05, exactly when a small-cap threshold change (5x to 8x)
+  deployed; feed volumes are steady throughout and large-cap alerts are unchanged. A
+  correct investigation localises the change-point, names the segment, correlates it
+  with the co-timed threshold change, and does NOT blame the feed (steady in evidence)
+  or the OS patching (two days earlier, no config change, no alert effect on 08-03/04).
+
+planted:
+  - id: DROP-CHANGEPOINT
+    keywords: ["2026-08-05", "5 August", "August 5", step change, change-point, dropped from]
+    must_find: true
+  - id: DROP-SEGMENT
+    keywords: [small-cap, small cap, one segment, segment-level, large-cap unchanged, masked]
+    must_find: true
+  - id: DROP-CAUSE-THRESHOLD
+    keywords: [threshold, v2.4, 8x, raised the multiple, threshold change, tuning change]
+    must_find: true
+  - id: DROP-REMEDIATION
+    keywords: [BTL, below-the-line, below the line, shadow, before/after, re-tune, revisit the threshold]
+    must_find: false
+
+forbidden:
+  - id: FP-FEED-BLAME
+    keywords: [feed dropped, feed outage, feed volumes fell, data stopped, ingestion failure]
+  - id: FP-PATCHING-BLAME
+    keywords: [caused by the patching, OS patch broke, patching is the cause]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

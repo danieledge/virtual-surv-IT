@@ -42,6 +42,8 @@ data only):
    and the added/dropped population.
 6. Quantify the **volume ↔ coverage trade-off** at each candidate.
 
+**No threshold change ships without a segment-granular before/after alert-count diff** (shadow-diff rule, `docs/detection-health.md`) - the control that catches a change silently suppressing a segment before production does.
+
 Running these analyses (the ATL/BTL tests, the dry-run) **executes code**, so it needs the
 execution-consent gate (CLAUDE.md §7); if the guard blocks, ask the user to grant consent (it is
 human-only) - never work around it. Without consent the calibration stays 🧠 inferred.

@@ -39,7 +39,7 @@ bookend at the end.
    in-scope typology with no scenario** (an unmonitored risk).
 3. **Map & health-check the data feeds** - each scenario → the feeds it depends on (orders, trades,
    reference/news/market data, comms capture). For each feed: **is it live, complete, and timely?**
-   Flag any **missing, dead, late or partial feed** (the MW79 blind spot). Hand feed integrity to
+   Flag any **missing, dead, late or partial feed** (the MW79 blind spot). Verdicts are **segment-granular, never aggregate-only** (presence elsewhere masks absence somewhere), and the standing controls to recommend - silent-scenario heartbeats, per-segment baselines, synthetic canaries, shadow-diff on change - are in `docs/detection-health.md`. Hand feed integrity to
    `data-quality-reviewer`.
 4. **Coverage gaps** - consolidate: unmonitored typologies, scenarios with broken feeds, channels
    not captured (incl. **off-channel** comms risk). Each gap = potential undetected abuse.

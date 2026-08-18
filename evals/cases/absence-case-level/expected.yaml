@@ -1,0 +1,32 @@
+case: absence-case-level
+workflow: /why-no-alert
+rubric: coverage-assessment
+input: scenario.md
+description: >
+  Case-level alert-absence triage (absence plan Phase 4). A near-spoof session where the
+  candidate order passes every condition except one - it is 3.7x the genuine median vs
+  the 5.0x outsized threshold. A correct investigation walks the lineage chain, localises
+  the miss to the size-multiple condition with observed-vs-required values, quantifies
+  the distance (a near miss, ~26% under), and does NOT invent a feed outage (feeds are
+  stated healthy) or claim a coding defect (the rule behaved as configured).
+
+planted:
+  - id: ABS-CONDITION
+    keywords: [outsized, size multiple, large_qty_multiple, 5x, 5.0x, below the multiple]
+    must_find: true
+  - id: ABS-DISTANCE
+    keywords: ["3.7", "3.71", "26%", "25.9", distance, near miss, near-miss, would alert at]
+    must_find: true
+  - id: ABS-EVIDENCE-CHAIN
+    keywords: [cancelled, unfilled, opposite, window, condition, per-condition, truth table, explain_rule]
+    must_find: false
+
+forbidden:
+  - id: FP-FEED-OUTAGE
+    keywords: [feed outage, feed was down, feed failure, data never arrived, ingestion failure, missing feed]
+  - id: FP-RULE-DEFECT
+    keywords: [bug in the rule, coding error, defect in the rule, rule is broken, logic error in detect]
+
+pass:
+  require_all_must_find: true
+  forbid_all: true

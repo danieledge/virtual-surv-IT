@@ -1,0 +1,14 @@
+{"ts_ms": 1000, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G0", "side": "SELL", "price": 101.25, "qty": 90, "kind": "NEW"}
+{"ts_ms": 1500, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G0", "side": "SELL", "price": 101.25, "qty": 90, "kind": "FILL"}
+{"ts_ms": 3000, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G1", "side": "BUY", "price": 101.25, "qty": 100, "kind": "NEW"}
+{"ts_ms": 3500, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G1", "side": "BUY", "price": 101.25, "qty": 100, "kind": "FILL"}
+{"ts_ms": 5000, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G2", "side": "SELL", "price": 101.25, "qty": 100, "kind": "NEW"}
+{"ts_ms": 5500, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G2", "side": "SELL", "price": 101.25, "qty": 100, "kind": "FILL"}
+{"ts_ms": 7000, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G3", "side": "BUY", "price": 101.25, "qty": 110, "kind": "NEW"}
+{"ts_ms": 7500, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G3", "side": "BUY", "price": 101.25, "qty": 110, "kind": "FILL"}
+{"ts_ms": 9000, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G4", "side": "SELL", "price": 101.25, "qty": 105, "kind": "NEW"}
+{"ts_ms": 9500, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "G4", "side": "SELL", "price": 101.25, "qty": 105, "kind": "FILL"}
+{"ts_ms": 20000, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "SELL-X", "side": "SELL", "price": 101.25, "qty": 120, "kind": "NEW"}
+{"ts_ms": 21400, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "SELL-X", "side": "SELL", "price": 101.25, "qty": 120, "kind": "FILL"}
+{"ts_ms": 21000, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "CAND-1", "side": "BUY", "price": 101.25, "qty": 380, "kind": "NEW"}
+{"ts_ms": 21900, "trader": "TR-77", "instrument": "SYNTH-EQ-0042", "order_id": "CAND-1", "side": "BUY", "price": 101.25, "qty": 0.0, "kind": "CANCEL"}
