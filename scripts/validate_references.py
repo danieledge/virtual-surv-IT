@@ -137,12 +137,6 @@ _KNOWN_ABSENT = {
     ".claude/skills/deep-review/references/quick.md": (
         "proposed in docs/internal/token-optimisation-plan-2026-08-18.md Phase 4, not built"
     ),
-    "docs/internal/ai-runtime-economics-audit-2026-08.md": (
-        "Phase 0 deliverable of docs/internal/token-optimisation-plan-2026-08-18.md, not written"
-    ),
-    "docs/internal/incident-log.md": (
-        "Phase 3 deliverable of docs/internal/token-optimisation-plan-2026-08-18.md, not written"
-    ),
     "ts002_layering.py": "illustrative deliverable name inside an example QA handover",
     "driver.md": "the `driver-<name>.md` naming pattern, not a file",
     "docs/persona-anchor.md": "ADR-005 offers it as an alternative source; the guide is used",
