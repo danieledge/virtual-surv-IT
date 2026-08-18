@@ -7632,3 +7632,33 @@ def test_menu_5_shows_morgans_howto_narrative(monkeypatch, tmp_path, capsys):
     assert "AI agent with Virtual Surveillance IT" in out
     assert "virt-surv go" in out
     assert "nothing changed" in out  # read-only: the quit path still says so
+
+
+def test_installed_cache_note_flags_a_version_lag(tmp_path, monkeypatch):
+    """Same just-in-time check virt-surv go performs (2026-08-18): the banner reads the
+    clone, sessions load the installed cache - a differing installed version gets one
+    warning line naming both and pointing at option 1; agreement stays silent."""
+    import install_helper as ih
+
+    home = tmp_path / "home"
+    cache = home / ".claude" / "plugins" / "cache" / "team"
+    (cache / ".claude-plugin").mkdir(parents=True)
+    (cache / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "compliance-surveillance-team", "version": "0.0.1"}),
+        encoding="utf-8",
+    )
+    (home / ".claude" / "plugins").mkdir(parents=True, exist_ok=True)
+    (home / ".claude" / "plugins" / "installed_plugins.json").write_text(
+        json.dumps({"plugins": [{"installPath": str(cache)}]}), encoding="utf-8"
+    )
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    note = ih._installed_cache_note()
+    assert "installed plugin is v0.0.1" in note
+    assert "option 1" in note
+    # agreement: silent
+    clone_v = ih.installed_version(Path(ih.__file__).resolve().parent)
+    (cache / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "compliance-surveillance-team", "version": clone_v}),
+        encoding="utf-8",
+    )
+    assert ih._installed_cache_note() == ""

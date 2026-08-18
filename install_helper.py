@@ -381,10 +381,38 @@ def banner_version_line() -> str:
     return f"compliance-surveillance-team {suffix}"
 
 
+def _installed_cache_note() -> str:
+    """One warning line when the marketplace-INSTALLED copy's version differs from this
+    clone's, '' otherwise - the same just-in-time check `virt-surv go` performs
+    (2026-08-18: the banner said v0.34.0 while sessions would load the older installed
+    copy; here the fix is literally menu option 1)."""
+    try:
+        clone_v = installed_version(Path(__file__).resolve().parent) or ""
+        if not clone_v:
+            return ""
+        for raw in _registry_install_paths(Path.home()):
+            rp = Path(raw)
+            if not _looks_like_this_plugin(rp):
+                continue
+            v = installed_version(rp) or ""
+            if v and v != clone_v:
+                return (
+                    f"! installed plugin is v{v}, this clone is v{clone_v} - sessions "
+                    "load the INSTALLED copy; option 1 (full run) updates it"
+                )
+            return ""
+    except Exception:
+        pass
+    return ""
+
+
 def print_banner(style: Style, stream=None) -> None:
     """Boxed banner (tool name + version line) and Morgan's intro."""
     for row in render_banner([BANNER_TITLE, banner_version_line()], style, stream):
         print(row)
+    note = _installed_cache_note()
+    if note:
+        print(style.yellow(note))
     print(morgan_intro(stream))
 
 
