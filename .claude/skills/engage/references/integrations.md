@@ -8,10 +8,16 @@
 
 ## Ground rules (all modes)
 
-- **Preview-then-approve, always.** Every outward action is named in advance and taken
-  only after the human approves it: issue creation is named in the plan the go-ahead
-  gate approves; close actions are offered after the summary email exactly like
-  ADR-009 close actions. Never fire an outward call the user has not seen coming.
+- **Preview-then-approve, always - with ONE standing exception.** Every outward action is
+  named in advance and taken only after the human approves it: issue creation is named in
+  the plan the go-ahead gate approves; close actions are offered after the summary email
+  exactly like ADR-009 close actions. Never fire an outward call the user has not seen
+  coming. **The exception is the inbound `--jira` flow's deliver-back** (its section
+  below): the human's pick in the go menu IS the approval to deliver the outcome to that
+  one ticket, so asking again at close re-litigates a decision already made (2026-08-19
+  user ruling - a live close asked "should I post to the Jira?" on an engagement the
+  ticket itself had commissioned). Scope: exactly that ticket; anything outward beyond it
+  (other issues, transitions, other projects) stays gated as normal.
 - **The harness prompts on every MCP call on top of that.** Expect it; never work
   around it.
 - **Degrade gracefully, out loud.** Configured tools missing from `/mcp`, or a call
@@ -60,9 +66,19 @@ becomes the engagement request, human-approved by the pick itself. Rules:
 - **Record**: `set-decision jira-source "<ref>"` the moment the workspace exists; the
   mirror flow (above) then treats this ticket as the engagement's issue - never create a
   second one.
-- **Deliver back at close**: the summary email text as a comment (signed as Morgan, AI
-  identity stated), the delivery report attached where the access allows, and the
-  engagement verdict in the comment. Status transitions only if the human asks.
+- **Deliver back at close - unprompted, as part of the close itself** (the standing
+  exception in the ground rules: the pick was the approval; do NOT ask a close-time
+  question for this). Post the summary email text as a comment (signed as Morgan, AI
+  identity stated) with the engagement verdict, and attach the delivery report and key
+  artifacts **where the configured tools expose attachment and the calls succeed**.
+  **No attachment capability (no such tool under the prefix, or the call fails)?
+  Degrade to markdown-in-comment**: post the delivery report's content as one or more
+  markdown comments (sensibly chunked, largest-first; note in the first comment that
+  attachments weren't available so the content is inline). The harness's own MCP
+  permission prompts still apply on top - expect them; they are the platform's gate,
+  not a question from the team. Status transitions remain human-only, and a ⛔ parked
+  or PARTIAL close posts the honest status instead - never a done-transition, and
+  never a comment that reads as delivered.
 
 ## PR comments: `pr-comments:on(EXPERIMENTAL,...)`
 

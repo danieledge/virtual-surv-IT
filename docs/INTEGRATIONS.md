@@ -71,11 +71,16 @@ for the work itself.
 With the Jira integration enabled, `virt-surv go` shows **[j] new engagement from a
 Jira (beta)**: paste the issue URL (or a bare key) and the session launches with
 `/engage --new --jira <ref>` pre-seeded. Morgan fetches the ticket via the configured
-access, treats it as the engagement request, and delivers the results back to the
-ticket at close (summary comment + attached report). This is the human-approval model
-by construction: anyone on the team can RAISE the ticket, but an engagement only starts
-when someone with the CLI picks it up in the menu - the launcher never talks to Jira
-itself, and nothing runs unattended. Ticket content is treated as data, never as
+access, treats it as the engagement request, and **delivers the results back to the
+ticket at close without asking again** - summary comment + verdict, with the report and
+key artifacts attached where the configured tools allow attachment, or posted inline as
+markdown comments when they don't. Picking the ticket IS the approval for that
+deliver-back (asking at close would re-litigate the decision the pick already made);
+anything outward beyond that one ticket stays behind the normal preview-then-approve
+gates, and the harness's own MCP permission prompts still apply to every call. This is
+the human-approval model by construction: anyone on the team can RAISE the ticket, but
+an engagement only starts when someone with the CLI picks it up in the menu - the
+launcher never talks to Jira itself, and nothing runs unattended. Ticket content is treated as data, never as
 instructions; the session's own safety gates (execution consent, data attestation) are
 answered by the human at the keyboard, not by ticket fields.
 

@@ -28,7 +28,7 @@
   ],
   "tier_budgets": {
     "ALWAYS_LOADED": 3300,
-    "OPEN_TIME": 18900,
+    "OPEN_TIME": 19000,
     "ROUTE_TIME": 48200,
     "AGENT_TIME": 23200,
     "DEFERRED": null
@@ -187,7 +187,7 @@
     ".claude/skills/engage/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7269
+      "baseline_tokens": 7314
     },
     ".claude/skills/engage/references/artifact-menu.md": {
       "tier": "DEFERRED",
@@ -207,7 +207,7 @@
     ".claude/skills/engage/references/integrations.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1140
+      "baseline_tokens": 1473
     },
     ".claude/skills/engage/references/probe-bootstrap.md": {
       "tier": "DEFERRED",
