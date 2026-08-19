@@ -86,7 +86,7 @@ def _configured_launch_command() -> str:
 
 
 # Pinned to install_helper._ALIAS_VERSION by a sync test - bump both together.
-_EXPECTED_ALIAS_VERSION = 5
+_EXPECTED_ALIAS_VERSION = 6  # v6: the shell fast path matches 'engage' as well as 'go'
 
 
 def _heal_stale_alias_once() -> None:
@@ -1762,6 +1762,26 @@ def main() -> int:
         # Alias v5 support channel: print ONLY the configured launch command on stdout
         # (the shell function word-splits it), nothing else on either stream.
         print(_configured_launch_command())
+        return 0
+    if "--configure" in sys.argv[1:]:
+        # `virt-surv configure` on an already-configured project lands here (2026-08-19
+        # user request): the same banner + settings editor `go`'s [c] opens, then out -
+        # no engagement menu, no launch, and nothing on stdout (a caller capturing this
+        # process's stdout must never receive editor chatter as a launch decision).
+        args = [a for a in sys.argv[1:] if a != "--configure"]
+        target = Path(args[0]).expanduser().resolve() if args else Path.cwd()
+        try:
+            os.chdir(target)  # the editor reads/writes relative to the project
+        except OSError:
+            print(f"  not a directory: {target}", file=sys.stderr)
+            return 1
+        try:
+            # No defaults summary here on purpose: the editor below lists every setting
+            # with its current value, so printing the summary first said everything twice.
+            _print_banner(target)
+            _run_settings_editor(target)
+        except Exception:
+            return 1
         return 0
     project_dir = Path.cwd()
     if not _plugin_enabled(project_dir):

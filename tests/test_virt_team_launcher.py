@@ -606,7 +606,10 @@ def test_heal_runs_once_and_upgrades_a_stale_alias(tmp_path, monkeypatch, capsys
     assert out.out == ""  # stdout stays the decision channel even here
     content = (home / ".bashrc").read_text(encoding="utf-8")
     assert "cc --debug" not in content
-    assert "virt-surv-alias-v5" in content
+    # Derived, not hardcoded: this asserted "v5" literally and so broke on the v6 bump
+    # (2026-08-19) even though the behaviour under test - stale definition replaced by
+    # the CURRENT one - was working exactly as intended.
+    assert f"virt-surv-alias-v{mod._EXPECTED_ALIAS_VERSION}" in content
     cfg = json.loads(
         (tmp_path / "xdg" / "virt-surv-it" / "installer.json").read_text(encoding="utf-8")
     )

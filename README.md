@@ -299,11 +299,14 @@ shows the project's effective team settings in one table, pre-warms the analyser
 caches so the first `/engage` opens with zero extra tool calls, lets you pick
 **resume-or-new** with arrow keys or hotkeys before Claude Code even starts (the choice
 arrives pre-seeded as the first prompt - no model round-trip spent deciding), and gives
-inline access to a settings editor (`c`) and engagement archiving (`a`). The other
-subcommands cover setup and upkeep: `virt-surv configure` (enable + permissions + preferences
+inline access to a settings editor (`c`) and engagement archiving (`a`). **`virt-surv engage`
+is the same launch command** (2026-08-19: it used to mean project setup, which read as the
+opposite of `/engage` in a session). The other subcommands cover setup and upkeep:
+`virt-surv configure` (on a project that isn't set up yet: enable + permissions + preferences
 + Morgan's model + an analyser-availability cache refresh, one guided pass, asks before each
-choice), `virt-surv engage` / `virt-surv onboard` (identical - the same pass with every
-recommended default applied automatically, zero prompts), and `virt-surv archive` /
+choice - on an already-configured project it opens the same settings editor `go`'s `c` shows),
+`virt-surv onboard` (that same setup pass with every recommended default applied
+automatically, zero prompts), and `virt-surv archive` /
 `virt-surv list-engagements` (bridges to `scripts/engagement_state.py`, scoped to that
 folder) - no need to remember the clone's full path or hunt through the menu.
 

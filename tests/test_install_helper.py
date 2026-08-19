@@ -5679,6 +5679,61 @@ def test_dispatch_folder_subcommand_configure_defaults_to_cwd(monkeypatch):
     assert called == [Path(".")]
 
 
+def test_configure_on_a_configured_project_opens_the_launcher_editor(monkeypatch, tmp_path):
+    """2026-08-19: `virt-surv configure` on an ALREADY-configured project hands over to
+    the launcher's settings editor (the screen `go`'s [c] opens) instead of re-running
+    first-time setup. Interactive only - a piped/scripted call keeps the old path, which
+    is why the tty is stubbed here."""
+    import install_helper as ih
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "team-operating-guide.md").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: True, raising=False)
+    editor_calls, configure_calls = [], []
+    monkeypatch.setattr(ih, "_run_launcher_settings", lambda t, s: editor_calls.append(t) or 0)
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: configure_calls.append(target) or 0,
+    )
+    rc = ih._dispatch_folder_subcommand(["configure", str(tmp_path)])
+    assert rc == 0
+    assert editor_calls and not configure_calls
+
+
+def test_configure_on_an_unconfigured_project_still_runs_first_time_setup(monkeypatch, tmp_path):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.sys.stdin, "isatty", lambda: True, raising=False)
+    editor_calls, configure_calls = [], []
+    monkeypatch.setattr(ih, "_run_launcher_settings", lambda t, s: editor_calls.append(t) or 0)
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: configure_calls.append(target) or 0,
+    )
+    ih._dispatch_folder_subcommand(["configure", str(tmp_path)])
+    assert configure_calls and not editor_calls
+
+
+def test_engage_subcommand_launches_like_go(monkeypatch, tmp_path):
+    """2026-08-19 user ruling: `virt-surv engage` LAUNCHES (it used to be project setup,
+    the opposite of what /engage means in a session). `onboard` keeps the setup role."""
+    import install_helper as ih
+
+    went, configured = [], []
+    monkeypatch.setattr(ih, "_run_go", lambda t, s, mm, hat, demo=False: went.append(t) or 0)
+    monkeypatch.setattr(
+        ih,
+        "run_configure",
+        lambda target, style, mm, assume_yes=False, demo=False: configured.append(target) or 0,
+    )
+    ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
+    assert went and not configured
+    ih._dispatch_folder_subcommand(["onboard", str(tmp_path)])
+    assert configured  # onboard still sets up
+
+
 def test_dispatch_folder_subcommand_parses_demo_and_yes_flags(monkeypatch, tmp_path):
     """Live-tested gap, 2026-08-04: this dispatcher bypasses parse_args() entirely, so a
     trailing --demo was previously silently dropped instead of honoured or erroring."""
@@ -5716,7 +5771,7 @@ def test_dispatch_folder_subcommand_setup_alias(monkeypatch):
     assert ih._dispatch_folder_subcommand(["setup-alias"]) == 0
 
 
-def test_dispatch_folder_subcommand_engage_always_assume_yes(tmp_path, monkeypatch):
+def test_dispatch_folder_subcommand_onboard_always_assume_yes(tmp_path, monkeypatch):
     """2026-08-07 user request: 'virt-surv engage' applies every default with zero
     prompts - assume_yes must be True even when --yes was NOT passed, unlike 'configure'
     which only assumes yes when told to."""
@@ -5730,12 +5785,12 @@ def test_dispatch_folder_subcommand_engage_always_assume_yes(tmp_path, monkeypat
             calls.append((target, assume_yes, demo)) or 0
         ),
     )
-    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
+    rc = ih._dispatch_folder_subcommand(["onboard", str(tmp_path)])
     assert rc == 0
     assert calls == [(Path(tmp_path), True, False)]
 
 
-def test_dispatch_folder_subcommand_engage_prints_ready_message_on_success(
+def test_dispatch_folder_subcommand_onboard_prints_ready_message_on_success(
     tmp_path, monkeypatch, capsys
 ):
     import install_helper as ih
@@ -5743,14 +5798,14 @@ def test_dispatch_folder_subcommand_engage_prints_ready_message_on_success(
     monkeypatch.setattr(
         ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
     )
-    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
+    rc = ih._dispatch_folder_subcommand(["onboard", str(tmp_path)])
     assert rc == 0
     out = capsys.readouterr().out
     assert "ready to launch" in out.lower()
     assert "Morgan" in out
 
 
-def test_dispatch_folder_subcommand_engage_no_ready_message_on_failure(
+def test_dispatch_folder_subcommand_onboard_no_ready_message_on_failure(
     tmp_path, monkeypatch, capsys
 ):
     import install_helper as ih
@@ -5758,12 +5813,12 @@ def test_dispatch_folder_subcommand_engage_no_ready_message_on_failure(
     monkeypatch.setattr(
         ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 1
     )
-    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
+    rc = ih._dispatch_folder_subcommand(["onboard", str(tmp_path)])
     assert rc == 1
     assert "ready to launch" not in capsys.readouterr().out.lower()
 
 
-def test_dispatch_folder_subcommand_engage_demo_never_prints_ready_message(
+def test_dispatch_folder_subcommand_onboard_demo_never_prints_ready_message(
     tmp_path, monkeypatch, capsys
 ):
     import install_helper as ih
@@ -5771,14 +5826,15 @@ def test_dispatch_folder_subcommand_engage_demo_never_prints_ready_message(
     monkeypatch.setattr(
         ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
     )
-    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path), "--demo"])
+    rc = ih._dispatch_folder_subcommand(["onboard", str(tmp_path), "--demo"])
     assert rc == 0
     assert "ready to launch" not in capsys.readouterr().out.lower()
 
 
-def test_dispatch_folder_subcommand_onboard_is_identical_to_engage(tmp_path, monkeypatch, capsys):
-    """2026-08-07 user request: 'onboard' does exactly the same thing as 'engage' - same
-    code path, same behaviour, just a different name for a different mental model."""
+def test_dispatch_folder_subcommand_onboard_still_sets_up(tmp_path, monkeypatch, capsys):
+    """'onboard' is the SETUP word. It and 'engage' were identical (2026-08-07) until
+    2026-08-19, when 'engage' was moved to the launch path because it read as the
+    opposite of /engage in a session; onboard kept this behaviour unchanged."""
     import install_helper as ih
 
     calls = []
@@ -5830,7 +5886,7 @@ def test_dispatch_engage_prints_warning_for_home_directory(monkeypatch, tmp_path
         ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
     )
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    rc = ih._dispatch_folder_subcommand(["engage", str(tmp_path)])
+    rc = ih._dispatch_folder_subcommand(["onboard", str(tmp_path)])
     assert rc == 0
     out = capsys.readouterr().out
     assert "HOME directory" in out
@@ -5845,7 +5901,7 @@ def test_dispatch_engage_no_warning_for_ordinary_project(tmp_path, monkeypatch, 
     monkeypatch.setattr(
         ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
     )
-    rc = ih._dispatch_folder_subcommand(["engage", str(project)])
+    rc = ih._dispatch_folder_subcommand(["onboard", str(project)])
     assert rc == 0
     out = capsys.readouterr().out
     assert "Ctrl-C" not in out
@@ -5861,7 +5917,7 @@ def test_dispatch_engage_ready_message_names_the_resolved_folder(tmp_path, monke
     monkeypatch.setattr(
         ih, "run_configure", lambda target, style, mm, assume_yes=False, demo=False: 0
     )
-    rc = ih._dispatch_folder_subcommand(["engage", str(project)])
+    rc = ih._dispatch_folder_subcommand(["onboard", str(project)])
     assert rc == 0
     out = capsys.readouterr().out
     assert f"run `claude` from {project.resolve()}" in out

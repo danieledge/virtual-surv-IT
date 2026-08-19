@@ -4491,7 +4491,10 @@ _ALIAS_MARKER = "virt-surv"
 # Config changes now take effect on the next 'go' with no alias refresh and no profile
 # reload. Trade-off, stated: a launch command that is a single path WITH SPACES no
 # longer works word-split - wrap it in your own alias/function and configure that name.
-_ALIAS_VERSION = 5
+# v6 (2026-08-19): the shell fast path matches 'engage' as well as 'go' - `virt-surv
+# engage` now LAUNCHES (it used to be project setup, which read as the opposite of
+# /engage in-session). heal_stale_aliases rewrites v5 definitions at the next launch.
+_ALIAS_VERSION = 6
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
 # Any version's stamp - the removal marker for _strip_stamped_definitions.
@@ -4510,7 +4513,7 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
     if rc_path.suffix == ".ps1":
         return (
             f"function {_ALIAS_MARKER} {{ "
-            f'if ($args.Count -gt 0 -and $args[0] -eq "go") {{ '
+            f'if ($args.Count -gt 0 -and ($args[0] -eq "go" -or $args[0] -eq "engage")) {{ '
             f"$__vtRest = @(); if ($args.Count -gt 1) {{ $__vtRest = $args[1..($args.Count-1)] }}; "
             f'$__vtCmd = @((& "{interpreter}" "{launcher_path}" --launch-command) -split " +"); '
             f'if (-not $__vtCmd) {{ $__vtCmd = @("claude") }}; '
@@ -4524,7 +4527,7 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
         )
     return (
         f"{_ALIAS_MARKER}() {{ "
-        f'if [ "$1" = "go" ]; then shift; local __vt_c __vt_d; '
+        f'if [ "$1" = "go" ] || [ "$1" = "engage" ]; then shift; local __vt_c __vt_d; '
         f'__vt_c="$("{interpreter}" "{launcher_path}" --launch-command)"; '
         f'[ -n "$__vt_c" ] || __vt_c=claude; '
         f'__vt_d="$("{interpreter}" "{launcher_path}")"; '
@@ -7430,6 +7433,48 @@ def _project_root_warning(target: Path) -> Optional[str]:
     return None
 
 
+def _plugin_enabled_for_configure(target: Path) -> bool:
+    """Same 'has this project been set up?' signal the launcher uses (its own
+    _plugin_enabled): the repo-as-project marker, or .claude/team-preferences.json,
+    which run_configure writes and which exists in plugin mode too. Kept as its own tiny
+    function rather than importing the launcher - this decides only which of two setup
+    UIs to show, and must never make `virt-surv configure` depend on the launcher being
+    importable."""
+    try:
+        project = target.expanduser().resolve()
+    except OSError:
+        return False
+    return (project / "docs" / "team-operating-guide.md").is_file() or (
+        project / ".claude" / "team-preferences.json"
+    ).is_file()
+
+
+def _run_launcher_settings(target: Path, style: Style):
+    """Hand an already-configured project to the launcher's own settings editor - the
+    screen `virt-surv go`'s [c] opens (2026-08-19 user request). Returns the exit code,
+    or None when the launcher can't be run at all, in which case the caller falls back
+    to the full guided configure pass rather than leaving the user with nothing."""
+    repo = _resolve_repo_root(None)
+    scripts_dir = (repo / "scripts") if repo else Path(__file__).resolve().parent / "scripts"
+    launcher = scripts_dir / "virt_team_launcher.py"
+    if not launcher.is_file():
+        return None
+    _, interpreter = _check_interpreters(
+        ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
+    )
+    if not interpreter:
+        return None
+    try:
+        # --configure prints nothing to stdout (the launcher reserves stdout for a launch
+        # decision), so this is safe to run inline with the user's own terminal attached.
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
+            [interpreter, str(launcher), "--configure", str(target.expanduser().resolve())],
+        )
+        return proc.returncode
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
 def _run_go(target: Path, style: Style, mark_map: dict, hat: str, demo: bool = False) -> int:
     """'virt-surv go': the single unified launch command (2026-08-15 user request -
     "only one alias, separate parameter to launch" - a separate virt-team alias existed
@@ -7563,11 +7608,27 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
     if subcommand == "setup-alias":
         return run_setup_alias(style, marks(), assume_yes, demo)
     target = Path(paths[0]) if paths else Path(".")
-    if subcommand == "go":
+    if subcommand in ("go", "engage"):
+        # 'engage' LAUNCHES, same as 'go' (2026-08-19 user ruling). It used to mean
+        # project setup, which read as the exact opposite of /engage in a session and of
+        # the go menu's own "start new" - three meanings for one word. Setup keeps the
+        # word that actually describes it: 'onboard' (and 'configure').
         return _run_go(target, style, marks(), hat, demo)
     if subcommand == "configure":
+        # Already set up? Go straight to the launcher's own settings editor - the same
+        # screen `go`'s [c] opens (2026-08-19 user request: "configure should just
+        # launch go and auto-select the configure option"). Only a project with no team
+        # configuration yet gets the full guided first-time pass below.
+        # sys.stdin.isatty(): the editor is an interactive screen, so a scripted or
+        # piped `virt-surv configure` (CI, a test, `configure < /dev/null`) keeps the
+        # old non-interactive run_configure path instead of spawning a UI that has
+        # nobody to talk to - caught by the test suite hanging on exactly that.
+        if _plugin_enabled_for_configure(target) and not demo and sys.stdin.isatty():
+            rc = _run_launcher_settings(target, style)
+            if rc is not None:
+                return rc
         return run_configure(target, style, marks(), assume_yes, demo)
-    if subcommand in ("engage", "onboard"):
+    if subcommand == "onboard":
         # 2026-08-07 user request: "applies all the project defaults without prompting
         # the user, tell them what's been set, and then says claude code ready to
         # launch" - assume_yes is ALWAYS True here regardless of whether --yes was
