@@ -13,6 +13,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1026,3 +1027,63 @@ def test_config_editor_env_toggle_off_keeps_custom_tuned_values(tmp_path, monkey
     out = capsys.readouterr()
     assert "kept custom-tuned" in out.err
     assert out.out == ""
+
+
+# --- _write_probe_cache on a COLD project (2026-08-19) ------------------------------
+# The go-written probe cache had no direct test at all: every existing launcher test
+# runs without a tty, and the writer returns early on `not sys.stdin.isatty()`, so the
+# whole function was silently never exercised. A brand-new project folder is exactly
+# where the cache matters most (no .guard-interpreter, no .tool-availability, so the
+# in-session probe would run the analyser sweep cold), which is what these pin.
+
+
+class _TtyStdin(io.StringIO):
+    def isatty(self):
+        return True
+
+
+def _cold_project(tmp_path):
+    project = tmp_path / "cold"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    return project
+
+
+def test_write_probe_cache_runs_on_a_brand_new_project(tmp_path, monkeypatch, capsys):
+    """A new folder gets a full cache: the report, the interpreter (kept as its own key -
+    build_report does not emit INTERPRETER=, the prefetch hook composes that line from
+    this field) and every invalidation-fingerprint field."""
+    mod = _load()
+    project = _cold_project(tmp_path)
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    mod._write_probe_cache(project)
+    cache = project / ".claude" / "engage-probe.json"
+    assert cache.is_file(), "no probe cache written for a cold project"
+    data = json.loads(cache.read_text(encoding="utf-8"))
+    assert data["report"], "cached report is empty"
+    assert data["interpreter"], "interpreter must be stored separately from the report"
+    for field in ("computed_at_epoch", "prefs_mtime", "plugin_version", "git_branch", "git_head"):
+        assert field in data, f"fingerprint field {field} missing - the hook validates it"
+
+
+def test_write_probe_cache_declines_without_a_tty(tmp_path, monkeypatch):
+    """Scripted/piped callers write nothing - the writer is an interactive-launch
+    accelerator, and a CI run must not leave a cache behind."""
+    mod = _load()
+    project = _cold_project(tmp_path)
+    monkeypatch.setattr(sys, "stdin", io.StringIO())  # isatty() is False
+    mod._write_probe_cache(project)
+    assert not (project / ".claude" / "engage-probe.json").exists()
+
+
+def test_write_probe_cache_honours_the_probe_cache_preference(tmp_path, monkeypatch):
+    """probe_cache: false is the documented off switch ([c] item 7) - the live probe
+    becomes the only path, so nothing may be written."""
+    mod = _load()
+    project = _cold_project(tmp_path)
+    (project / ".claude" / "team-preferences.json").write_text(
+        json.dumps({"probe_cache": False}), encoding="utf-8"
+    )
+    monkeypatch.setattr(sys, "stdin", _TtyStdin())
+    mod._write_probe_cache(project)
+    assert not (project / ".claude" / "engage-probe.json").exists()
