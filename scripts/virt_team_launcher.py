@@ -736,21 +736,26 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
     the numbered flow, same return contract (decision, "" for in-session/plain, or
     "__again__" after a side action)."""
     entries = []
-    slug_w = max((len(_row_resume_token(r) or "?") for r in shown), default=0)
+    default_slug = menu.get("default") or ""
     for i, row in enumerate(shown):
+        # 2026-08-19: this tier used to render its own `resume <slug> <status> opened
+        # <date> <title>` row while the numbered tier had already moved to title-first
+        # with a detail tail - two renderers, and THIS is the one most users actually
+        # see (live screenshot). Same content in both now; one line, because a picker
+        # entry is a single selectable row.
         slug = _row_resume_token(row) or "?"
         status = row.get("status") or "?"
-        opened = row.get("opened") or ""
-        title = row.get("title") or ""
+        mark, mark_style = _STATUS_MARK.get(status, ("-", "class:dim"))
+        title = row.get("title") or slug
         frags = [
-            ("", "resume "),
-            ("class:slug", slug.ljust(slug_w)),
-            ("class:warn" if status in ("in_progress", "blocked") else "class:dim", f"  {status}"),
+            ("class:warn" if mark_style == "warn" else "class:dim", f"{mark} "),
+            ("", title),
         ]
-        if opened:
-            frags.append(("class:dim", f"  opened {opened}"))
-        if title:
-            frags.append(("", f"  {title}"))
+        detail = _row_detail(row)
+        if detail:
+            frags.append(("class:dim", f"  ·  {detail}"))
+        if slug == default_slug and len(shown) > 1:
+            frags.append(("class:on", "  <- most recent"))
         entries.append((("resume", i), frags, None))
     subtitle = ""
     if not shown:
@@ -765,7 +770,6 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
     launch_label = "decide inside the session instead" if shown else "just launch"
     entries.append((("launch",), launch_label, None))
     default_index = 0
-    default_slug = menu.get("default") or ""
     for i, row in enumerate(shown):
         if (_row_resume_token(row) or "") == default_slug:
             default_index = i
@@ -970,7 +974,10 @@ class _Ink:
         return self._c("1", t)
 
 
-def _rule(ink: _Ink, label: str = "", note: str = "", width: int = 64) -> str:
+def _rule(ink: _Ink, label: str = "", note: str = "", width: int = 0) -> str:
+    # width=0 means "fit the terminal" (2026-08-19): the old fixed 64 overflowed narrow
+    # terminals, wrapping the tail of every rule onto its own line.
+    width = width or min(_term_cols() - 2, 76)
     if not label:
         return ink.dim("=" * width)
     body = f"--- {label} "
@@ -1410,17 +1417,32 @@ def _prewarm_guard_interpreter(project_dir: Path) -> None:
         pass  # cosmetic tier - the fallback heredoc still works without it
 
 
+def _term_cols() -> int:
+    """Usable terminal width, floored at 40. Every fixed-width string in this file
+    predates any width check - a live mobile/mosh screenshot (2026-08-19) showed the
+    greeting and the rules wrapping to column 0 and reading as debris."""
+    try:
+        import shutil as _sh
+
+        return max(40, _sh.get_terminal_size((80, 24)).columns)
+    except Exception:
+        return 80
+
+
 def _morgan_line() -> str:
     """Morgan's greeting for the go screen (2026-08-17 user request: the persona should
     be visible from the very first touchpoint) - with the mandatory AI-identity
     attribution, same wording family as install_helper's opening line. The 🎩 marker is
     encoding-probed like every other glyph (cp1252 corp consoles)."""
-    try:
-        "🎩".encode(getattr(sys.stderr, "encoding", None) or "utf-8")
-        hat = "🎩 "
-    except (UnicodeEncodeError, LookupError):
-        hat = ""
-    return f"{hat}Morgan (PM) here - I'm an AI agent with Virtual Surveillance IT."
+    hat = "🎩 " if _can_encode("🎩") else ""
+    full = f"{hat}Morgan (PM) here - I'm an AI agent with Virtual Surveillance IT."
+    # Narrow terminals (mobile/mosh, live 2026-08-19) wrapped this onto a second line
+    # starting at column 0, which read as broken output. The AI-identity attribution is
+    # mandatory, so the SHORT form keeps it and drops the conversational padding rather
+    # than letting the line wrap.
+    if len(full) + 2 > _term_cols():
+        return f"{hat}Morgan (PM) - an AI agent, Virtual Surveillance IT"
+    return full
 
 
 _STATUS_MARK = {
@@ -1556,7 +1578,13 @@ def _print_banner(project_dir: Path) -> None:
     line instead of a two-row table."""
     version = _plugin_version()
     branch = _git_branch(project_dir)
-    facts = [project_dir.name]
+    # .resolve() first: a relative Path(".") has an EMPTY .name, which silently dropped
+    # the project from the identity line (caught rendering at 52 columns, 2026-08-19).
+    try:
+        project_name = project_dir.resolve().name or str(project_dir)
+    except OSError:
+        project_name = project_dir.name or str(project_dir)
+    facts = [project_name]
     if version:
         facts.append(f"v{version}")
     if branch:
