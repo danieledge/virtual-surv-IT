@@ -450,3 +450,57 @@ def test_standing_instruction_docs_age_a_baseline():
         "docs/code-review-method.md",
     ):
         assert path in rg._PROMPT_PATHS
+
+
+def test_later_cited_run_fail_overrides_earlier_pass(tmp_path, monkeypatch):
+    """2026-08-19 external audit 5B: the any-row-wins union let run A's PASS hide run B's
+    FAIL for the same case. Latest cited run wins now - a baseline declaring the case as a
+    raw pass must be flagged."""
+    _fresh(monkeypatch)
+    rerun_fail = "\n".join(
+        [json.dumps({"run_id": "20260901T000000Z", "case": _CASES[0], "mode": "run",
+                     "passed": False})]
+    )
+    root = _repo(
+        tmp_path,
+        baseline="Scope: full\n",
+        verdict=_verdict(
+            verdict="pass",
+            cases_total=len(_CASES),
+            cases_passed_raw=len(_CASES),
+            cases_adjudicated_pass=0,
+            runs=f"{_RUN}, 20260901T000000Z",
+        ),
+        results=_results_log() + rerun_fail + "\n",
+    )
+    assert any("passing raw" in f for f in rg.gate(root)), (
+        "a later cited FAIL must not be hidden by an earlier PASS"
+    )
+
+
+def test_rescore_rows_never_count_toward_raw_passes(tmp_path, monkeypatch):
+    """A mode=rescore PASS on a case whose run row FAILED is adjudication evidence, not a
+    raw pass - declaring it raw must be flagged (the 0.35.0 baseline's own rescore row
+    demonstrated the inflation)."""
+    _fresh(monkeypatch)
+    fail_then_rescore = "\n".join([
+        json.dumps({"run_id": _RUN, "case": _CASES[0], "mode": "run", "passed": False}),
+        json.dumps({"run_id": _RUN, "case": _CASES[0], "mode": "rescore", "passed": True}),
+    ] + [
+        json.dumps({"run_id": _RUN, "case": c, "mode": "run", "passed": True})
+        for c in _CASES[1:]
+    ])
+    root = _repo(
+        tmp_path,
+        baseline="Scope: full\n",
+        verdict=_verdict(
+            verdict="pass",
+            cases_total=len(_CASES),
+            cases_passed_raw=len(_CASES),
+            cases_adjudicated_pass=0,
+        ),
+        results=fail_then_rescore + "\n",
+    )
+    assert any("passing raw" in f for f in rg.gate(root)), (
+        "a rescore PASS must not inflate the raw count"
+    )

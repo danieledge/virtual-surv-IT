@@ -223,9 +223,16 @@ keeping the cacheable prefix stable so every session and every subagent re-uses 
   subagents use a **5-minute** cache TTL, so a warm chain re-uses far more than a stop-start one.
 
 **Caveats (upstream, not ours):**
-- Each **subagent builds its own cache from scratch** (5-min TTL even on a subscription; the 1-hour
-  TTL is for the main conversation only) - so the first call of each specialist is a cache-cold read.
-- The **Claude Agent SDK currently disables prompt caching for subagents** ([claude-code#29966](https://github.com/anthropics/claude-code/issues/29966), open) - so a **headless/SDK-driven** fan-out sees little subagent cache benefit until it's fixed. Interactive Claude Code runs are unaffected. Cost estimates for headless multi-agent runs should therefore **not** assume subagent caching.
+- Each **subagent builds its own cache from scratch** - the first call of each specialist is a
+  cache-cold read regardless of how warm the orchestrator's context is.
+- **SDK subagent caching WORKS as of 2026-08-18 - measured, not assumed.** This section
+  previously claimed the Agent SDK disables prompt caching for subagents
+  ([claude-code#29966](https://github.com/anthropics/claude-code/issues/29966)); our own
+  eval telemetry now refutes that for the current SDK: across two headless SDK-driven runs
+  (2026-08-18, `evals/runs/20260818T*`), **125 of 155 subagent assistant messages carried
+  non-zero `cache_read_input_tokens`**. Cost estimates for headless fan-outs may assume
+  subagent caching again; the per-run attribution files (`usage-series.jsonl`,
+  Track D) are the place to re-verify if SDK behaviour shifts.
 
 ## 8. References (Anthropic agent guidance)
 

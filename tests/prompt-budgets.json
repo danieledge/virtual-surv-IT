@@ -327,12 +327,12 @@
     "docs/WAYS-OF-WORKING.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3792
+      "baseline_tokens": 3858
     },
     "docs/agent-design.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 5872
+      "baseline_tokens": 5930
     },
     "docs/code-review-method.md": {
       "tier": "DEFERRED",

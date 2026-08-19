@@ -40,9 +40,11 @@ flowchart LR
     Reqs([requirements pack]) --> Build
 ```
 
-> The canonical index of **all 25 skills** lives in
-> [`docs/team-operating-guide.md`](team-operating-guide.md) §Command index; the table below is
-> a summary by entry point.
+> The canonical index of **all skills** lives in
+> [`docs/operating-guide.d/command-index.md`](operating-guide.d/command-index.md) (pointed at by
+> [`docs/team-operating-guide.md`](team-operating-guide.md) §Command index); the table below is
+> a summary by entry point. No count here on purpose - hand-written counts drift (this line said
+> "25" while 27 existed, 2026-08-19 audit); the consistency test derives the real number from disk.
 
 | You bring… | Command | What runs |
 |---|---|---|

@@ -15,8 +15,12 @@ acknowledge within a few days and will coordinate a fix and disclosure timeline 
 
 ## Scope - what to look for
 
-This is a plugin, not a hosted service. The security-relevant surfaces are the three always-on guard hooks (plus the engagement-scoped lifecycle hooks, which are advisory/redirect only and fail open)
-(always-on PreToolUse) plus the data-handling scripts. The per-channel confidence statement -
+This is a plugin, not a hosted service. The security-relevant surfaces are the three guard
+hooks - **two always-on in every session** (the `data/raw/` read block and the consent/config
+write protection, both PreToolUse) **plus the code-execution gate, which is
+engagement-scoped** (armed only in sessions that invoked the team; session-scoped since
+2026-08-17) - along with the advisory/redirect lifecycle hooks (fail open) and the
+data-handling scripts. The per-channel confidence statement -
 what each control does and does not guarantee - is `docs/safety-model.md`:
 
 - **The data-safety guard** (`.claude/hooks/guard-raw-data.py`) - blocks tool calls that target

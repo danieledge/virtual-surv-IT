@@ -265,8 +265,21 @@ def _runs_findings(
         )
         return findings  # counts cannot be compared against a partial evidence set
 
-    cases_recorded = {str(row.get("case")) for row in recorded}
-    cases_passed = {str(row.get("case")) for row in recorded if row.get("passed") is True}
+    # Raw pass/fail comes from mode=="run" scoring rows ONLY (a rescore row is the
+    # adjudication lane's evidence, never a raw pass), and where several cited runs scored
+    # the same case, the LATEST cited run's row is that case's raw state. The previous
+    # any-row-wins union let an early PASS hide a later FAIL, and let a rescore silently
+    # inflate the raw count (2026-08-19 external audit finding 5B; the 0.35.0 baseline's
+    # own rescore row demonstrated the inflation live).
+    scored = [row for row in recorded if str(row.get("mode") or "run") == "run"]
+    latest: dict[str, dict] = {}
+    for row in scored:  # file order breaks run_id ties: the log is append-only/chronological
+        case = str(row.get("case"))
+        prior = latest.get(case)
+        if prior is None or str(row.get("run_id")) >= str(prior.get("run_id")):
+            latest[case] = row
+    cases_recorded = set(latest)
+    cases_passed = {case for case, row in latest.items() if row.get("passed") is True}
     if counts["cases_total"] != len(cases_recorded):
         findings.append(
             f"RELEASE-GATE: {baseline_name} declares cases_total: {counts['cases_total']} but the "

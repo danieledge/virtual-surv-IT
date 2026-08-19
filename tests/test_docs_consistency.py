@@ -366,8 +366,10 @@ def test_command_index_lists_exactly_the_skills_on_disk():
 
 
 def test_skill_count_references_match_filesystem():
+    """WAYS-OF-WORKING joined the scanned set 2026-08-19 (external audit: it said '25
+    skills' while 27 existed - it simply wasn't in this list, so the drift went uncaught)."""
     n = len(_skill_names())
-    for rel in ("README.md", "docs/team-operating-guide.md"):
+    for rel in ("README.md", "docs/team-operating-guide.md", "docs/WAYS-OF-WORKING.md"):
         for found in re.findall(r"(\d+)\s+(?:skills|workflows)\b", _read(rel)):
             assert int(found) == n, (
                 f"{rel}: says {found} skills/workflows but {n} skill dirs exist on disk"
