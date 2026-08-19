@@ -487,6 +487,16 @@ def scan_engagements(root: Path, known: tuple[Path, dict] | None = None) -> list
                 # that don't want them simply ignore the extra keys.
                 "phase": state.get("phase"),
                 "outstanding": len(state.get("outstanding") or []),
+                # The first open item, for the launcher's "blocked on WHAT" line - a
+                # blocked engagement whose reason you must open a file to discover is
+                # the thing the go screen exists to prevent.
+                "outstanding_first": next(
+                    (
+                        str(item.get("item") if isinstance(item, dict) else item)
+                        for item in (state.get("outstanding") or [])
+                    ),
+                    "",
+                ),
             }
         )
     return rows

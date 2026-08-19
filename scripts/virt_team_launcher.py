@@ -866,6 +866,13 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     print(settings_opt, file=err)
     enter_label = "just launch" if not shown else "decide inside the session instead"
     print(f"  {ink.dim(f'[Enter] {enter_label}')}", file=err)
+    try:
+        suggestion = _suggestion_line(project_dir, menu)
+    except Exception:
+        suggestion = ""  # cosmetic tier - a nudge must never cost a launch
+    if suggestion:
+        print("", file=err)
+        print(f"  {ink.warn('>')} {ink.dim(suggestion)}", file=err)
     print("", file=err)
     try:
         # Live bug (2026-08-15): input(prompt) writes `prompt` to STDOUT, not stderr -
@@ -1349,17 +1356,26 @@ def _write_probe_cache(project_dir: Path) -> None:
             pass
         from find_plugin_root import find_plugin_root
 
-        print(
-            _Ink().dim(
-                "    warming the engage probe cache (the slow parts run here, "
-                "not inside the session)..."
-            ),
-            file=sys.stderr,
-        )
+        # A live spinner while the slow part runs, then a tick (2026-08-19 UX pass): on
+        # a corp box this step is seconds of apparent hang, and silence reads as a stall
+        # rather than as work being moved out of the session. rich's own status widget
+        # when the console supports it; a plain one-line note otherwise, unchanged.
+        ink = _Ink()
+        r = _rich_ui()
+        label = "warming the engage probe cache (the slow parts run here, not in session)"
         plugin_root = find_plugin_root(Path.home(), project_dir)
-        report = engage_probe.build_report(plugin_root, project_dir)
+        if r:
+            try:
+                with r["console"].status(f"[dim]{label}[/]", spinner="dots"):
+                    report = engage_probe.build_report(plugin_root, project_dir)
+            except Exception:
+                report = engage_probe.build_report(plugin_root, project_dir)
+        else:
+            print(ink.dim(f"  {label}..."), file=sys.stderr)
+            report = engage_probe.build_report(plugin_root, project_dir)
         if not report:
             return
+        print(ink.good("  probe cache ready"), file=sys.stderr)
         payload = {
             "computed_at_epoch": int(time.time()),
             "computed_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
@@ -1440,7 +1456,9 @@ def _relative_age(iso_date: str) -> str:
 
 def _row_detail(row: dict) -> str:
     """The dim tail of an engagement row: age, phase and how much is still open - the
-    'where is this up to' facts that were on disk all along but never shown."""
+    'where is this up to' facts that were on disk all along but never shown. A BLOCKED
+    engagement additionally names what it is waiting on, since "blocked" without the
+    reason just moves the question somewhere else."""
     bits = []
     age = _relative_age(row.get("opened") or "")
     if age:
@@ -1451,7 +1469,45 @@ def _row_detail(row: dict) -> str:
     outstanding = row.get("outstanding") or 0
     if outstanding:
         bits.append(f"{outstanding} open")
+    if row.get("status") == "blocked":
+        # "next:", not "waiting on:" - this is the FIRST item on the outstanding list,
+        # which may be a pre-seeded gate rather than the thing actually blocking. The
+        # honest label is what it is; the engagement itself holds the full list.
+        waiting = (row.get("outstanding_first") or "").strip()
+        if waiting:
+            if len(waiting) > 48:
+                waiting = waiting[:47].rstrip() + "…"
+            bits.append(f"next: {waiting}")
     return "  ".join(bits)
+
+
+def _suggestion_line(project_dir: Path, menu: dict) -> str:
+    """One contextual nudge under the menu, or '' when there is nothing worth saying.
+    The screen already knows these facts; surfacing one turns a static list into
+    something that reads the project (2026-08-19 UX pass). Deliberately at most ONE
+    line, and silent by default - a nudge on every launch is just noise with extra
+    steps."""
+    blocked = [r for r in (menu.get("shown") or []) if r.get("status") == "blocked"]
+    if blocked:
+        return f"{len(blocked)} engagement(s) blocked - resume to clear the outstanding list"
+    if not (menu.get("shown") or []):
+        try:
+            proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
+                ["git", "-C", str(project_dir), "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            if proc.returncode == 0:
+                changed = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()]
+                if changed:
+                    return (
+                        f"{len(changed)} uncommitted file(s) here - "
+                        "a new engagement can review them"
+                    )
+        except Exception:
+            pass
+    return ""
 
 
 def _can_encode(text: str) -> bool:
@@ -1775,7 +1831,11 @@ def _print_project_defaults(project_dir: Path) -> None:
 
     r = _rich_ui()
     print("", file=err)
-    _print_rule("Project defaults", note="'virt-surv configure' to change")
+    # Points at the KEY, not a command: both callers of this block are inside the go
+    # menu, where [c] opens the editor three lines further down - telling someone to
+    # quit and type `virt-surv configure` from a TUI that already offers the action
+    # makes no sense (2026-08-19 user report).
+    _print_rule("Project defaults", note="press [c] to change")
     ink = _Ink()
     if not notable:
         if r:
