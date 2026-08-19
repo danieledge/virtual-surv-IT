@@ -71,7 +71,7 @@ def test_non_plugin_project_is_silent_on_stdout_but_explains_on_stderr(
     out = capsys.readouterr()
     assert rc == 0
     assert out.out == ""
-    assert "doesn't look like a configured project" in out.err
+    assert "Not a configured project" in out.err
 
 
 def test_repo_as_project_marker_also_detected(tmp_path, monkeypatch, capsys):
@@ -86,7 +86,7 @@ def test_repo_as_project_marker_also_detected(tmp_path, monkeypatch, capsys):
     rc = mod.main()
     out = capsys.readouterr()
     assert rc == 0
-    assert "doesn't look like a configured project" not in out.err
+    assert "Not a configured project" not in out.err
 
 
 def test_plugin_project_no_engagements_still_pauses_with_menu(tmp_path, monkeypatch, capsys):
@@ -327,8 +327,10 @@ def test_configured_project_prints_defaults_table_on_stderr_only(tmp_path, monke
     out = capsys.readouterr()
     assert rc == 0
     assert "Project defaults" in out.err
-    assert "regulatory citations" in out.err
-    assert "jira integration" in out.err
+    # The block shows NOTABLE settings plus a folded "+N at defaults" count (2026-08-19
+    # UX pass) - it is no longer a full roll-call of every row, so assert the contract,
+    # not individual default-valued names.
+    assert "at defaults" in out.err
     # stdout stays EXACTLY the decision - the table must never leak into the capture
     assert "Project defaults" not in out.out
     assert out.out.strip() == "/compliance-surveillance-team:engage --new"
@@ -383,7 +385,7 @@ def test_first_time_setup_offer_declined_falls_back_to_explained_plain_launch(
     out = capsys.readouterr()
     assert rc == 0
     assert out.out == ""
-    assert "doesn't look like a configured project" in out.err
+    assert "Not a configured project" in out.err
 
 
 # --- new-recommended-defaults propagation at go (2026-08-17 user request) -----------------
@@ -469,7 +471,7 @@ def test_menu_c_edits_then_reasks_and_returns_decision(tmp_path, monkeypatch, ca
     out = capsys.readouterr()
     assert rc == 0
     assert out.out.strip() == "/compliance-surveillance-team:engage --new"
-    assert "Project settings" in out.err
+    assert "Project defaults" in out.err
     # Backing out unchanged stays quiet - no table reprint (the 2026-08-17
     # duplicate-table complaint); a CHANGED exit refreshes it (see the next test).
     assert "-> no changes" in out.err
@@ -521,9 +523,7 @@ def test_menu_a_archives_and_falls_through_to_plain_when_empty(tmp_path, monkeyp
     assert (art / "old" / ".archive").is_file()
 
 
-def test_archive_all_covers_every_open_pack_not_just_the_shown_cap(
-    tmp_path, monkeypatch, capsys
-):
+def test_archive_all_covers_every_open_pack_not_just_the_shown_cap(tmp_path, monkeypatch, capsys):
     """Live report (2026-08-17: "after archiving it's still showing items as open") -
     the resume menu shows at most 3 rows ("+N more not shown"), and [a] 'all' archived
     only those, so the overflow packs came straight back as open. 'all' means ALL open."""
@@ -533,9 +533,7 @@ def test_archive_all_covers_every_open_pack_not_just_the_shown_cap(
     art = project / "artifacts"
     slugs = [f"pack-{i}" for i in range(5)]
     for slug in slugs:
-        assert (
-            es.main(["--dir", str(art / slug), "init", "--title", slug, "--slug", slug]) == 0
-        )
+        assert es.main(["--dir", str(art / slug), "init", "--title", slug, "--slug", slug]) == 0
     capsys.readouterr()  # drain fixture output
     monkeypatch.chdir(project)
     mod = _load()
@@ -705,17 +703,13 @@ def test_config_editor_row8_toggles_the_jira_integration(tmp_path, monkeypatch, 
     assert capsys.readouterr().out == ""  # stdout purity
 
 
-def test_config_editor_jira_enable_without_key_says_where_to_set_it(
-    tmp_path, monkeypatch, capsys
-):
+def test_config_editor_jira_enable_without_key_says_where_to_set_it(tmp_path, monkeypatch, capsys):
     project = _plugin_enabled_project(tmp_path)
     mod = _load()
     answers = iter(["9", "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
-    prefs = json.loads(
-        (project / ".claude" / "team-preferences.json").read_text(encoding="utf-8")
-    )
+    prefs = json.loads((project / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
     assert prefs["integrations"]["jira"]["enabled"] is True
     err = capsys.readouterr().err
     assert "no project key" in err and "INTEGRATIONS.md" in err
@@ -776,9 +770,7 @@ def test_cache_lag_silent_when_versions_agree_or_repo_as_project(tmp_path, monke
 def _jira_enabled_project(tmp_path: Path) -> Path:
     project = _plugin_enabled_project(tmp_path)
     (project / ".claude" / "team-preferences.json").write_text(
-        json.dumps(
-            {"integrations": {"jira": {"enabled": True, "project_key": "SURV"}}}
-        ),
+        json.dumps({"integrations": {"jira": {"enabled": True, "project_key": "SURV"}}}),
         encoding="utf-8",
     )
     return project
@@ -907,9 +899,7 @@ def test_pt_editor_space_toggles_and_persists(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(mod, "_pt_io", lambda: {})
     with _pt_session(monkeypatch, " b"):  # toggle row 1, then done
         mod._config_editor(project)
-    prefs = json.loads(
-        (project / ".claude" / "team-preferences.json").read_text(encoding="utf-8")
-    )
+    prefs = json.loads((project / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
     assert "docx" in prefs.get("extra_formats", [])
     assert capsys.readouterr().out == ""  # stdout purity holds in the pt tier too
 
@@ -958,7 +948,7 @@ def test_banner_and_defaults_render_without_rich(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert "Virtual Surv-IT" in out.err
     assert "Project defaults" in out.err
-    assert "env tuning (1h cache TTL)" in out.err
+    assert "at defaults" in out.err  # folded default rows (2026-08-19 UX pass)
     assert out.out == ""
 
 
@@ -997,7 +987,7 @@ def test_launch_command_config_path_matches_install_helper(tmp_path, monkeypatch
 
 
 def test_config_editor_env_toggle_on_applies_recommended_set(tmp_path, monkeypatch, capsys):
-    """"ttl setting is missing on the choice c menu" - item [7] applies the recommended
+    """ "ttl setting is missing on the choice c menu" - item [7] applies the recommended
     env bundle add-only, same contract as the go-time propagation."""
     project = _plugin_enabled_project(tmp_path)
     mod = _load()

@@ -256,16 +256,20 @@ def _editor_rows(project_dir: Path):
         rows.append((label, ("on" if on else "off") + src, on))
     try:
         env = (
-            json.loads(
-                (project_dir / ".claude" / "settings.json").read_text(encoding="utf-8")
-            ).get("env")
+            json.loads((project_dir / ".claude" / "settings.json").read_text(encoding="utf-8")).get(
+                "env"
+            )
             or {}
         )
     except Exception:
         env = {}
     env_on = "ENABLE_PROMPT_CACHING_1H" in env
     rows.append((_ENV_ROW_LABEL, "applied" if env_on else "not applied", env_on))
-    jira = (prefs.get("integrations") or {}).get("jira") if isinstance(prefs.get("integrations"), dict) else {}
+    jira = (
+        (prefs.get("integrations") or {}).get("jira")
+        if isinstance(prefs.get("integrations"), dict)
+        else {}
+    )
     jira = jira if isinstance(jira, dict) else {}
     if jira.get("enabled") is True:
         key = str(jira.get("project_key") or "") or "key UNSET"
@@ -479,9 +483,7 @@ def _pt_config_editor(p, project_dir: Path) -> None:
             if src:
                 out.append(("class:sel" if sel else "class:dim", f"  {src}", _click))
             out.append(("", "\n"))
-        out.append(
-            ("class:dim", "  Enter/Space/click toggles · d machine defaults · Esc done")
-        )
+        out.append(("class:dim", "  Enter/Space/click toggles · d machine defaults · Esc done"))
         if note[0]:
             out.append(("class:note", f"\n  {note[0]}"))
         return out
@@ -550,7 +552,7 @@ def _config_editor(project_dir: Path) -> None:
             return
         note = _editor_apply(project_dir, "d" if choice == "d" else choice)
         if note:
-            print(ink.dim(f"    {note}"), file=err)
+            print(ink.dim(f"  {note}"), file=err)
 
 
 def _archive_perform(es, targets: list) -> None:
@@ -620,9 +622,7 @@ def _archive_menu(project_dir: Path, es, menu: dict) -> None:
         slug = _row_resume_token(row) or "?"
         status = row.get("status") or "?"
         print(f"    {ink.bold(f'[{i}]')} {slug}  {ink.dim(status)}", file=err)
-    print(
-        f"    {ink.bold('[all]')} archive ALL open engagements ({len(open_rows)})", file=err
-    )
+    print(f"    {ink.bold('[all]')} archive ALL open engagements ({len(open_rows)})", file=err)
     print(f"    {ink.bold('[b]')} back", file=err)
     print(
         ink.dim(
@@ -684,7 +684,9 @@ def _jira_enabled(project_dir: Path) -> bool:
     try:
         import engage_probe
 
-        return bool((engage_probe.resolve_integrations(project_dir).get("jira") or {}).get("enabled"))
+        return bool(
+            (engage_probe.resolve_integrations(project_dir).get("jira") or {}).get("enabled")
+        )
     except Exception:
         return False
 
@@ -718,9 +720,7 @@ def _jira_decision(project_dir: Path) -> str:
         return "__again__"
     m = _JIRA_KEY_RE.search(raw)
     if not m:
-        print(
-            ink.dim(f"    no issue key found in '{raw}' - back to the menu."), file=err
-        )
+        print(ink.dim(f"    no issue key found in '{raw}' - back to the menu."), file=err)
         return "__again__"
     key = m.group(1).upper()
     # Pass the URL through when one was given - the session can use the exact instance
@@ -841,27 +841,27 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
             )
             opened_col = ink.dim(f"opened {opened}") if opened else ""
             print(
-                f"    {ink.bold(f'[{i}]')} resume {slug.ljust(slug_w)}  {status_col}  "
+                f"  {ink.bold(f'[{i}]')} resume {slug.ljust(slug_w)}  {status_col}  "
                 f"{opened_col}  {title}",
                 file=err,
             )
         more = menu.get("more") or 0
         if more:
-            print(ink.dim(f"        (+{more} more not shown)"), file=err)
+            print(ink.dim(f"      (+{more} more not shown)"), file=err)
     else:
         archived = menu.get("archived") or 0
         note = f"none open ({archived} archived)" if archived else "none open"
-        print(ink.dim(f"    {note}"), file=err)
-    print(f"    {ink.bold('[n]')} start new", file=err)
+        print(ink.dim(f"  {note}"), file=err)
+    print(f"  {ink.bold('[n]')} start new", file=err)
     jira_on = _jira_enabled(project_dir)
     if jira_on:
-        print(f"    {ink.bold('[j]')} new engagement from a Jira {ink.dim('(beta)')}", file=err)
-    settings_opt = f"    {ink.bold('[c]')} change a project setting"
+        print(f"  {ink.bold('[j]')} new engagement from a Jira {ink.dim('(beta)')}", file=err)
+    settings_opt = f"  {ink.bold('[c]')} change a project setting"
     if shown:
         settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
     print(settings_opt, file=err)
     enter_label = "just launch" if not shown else "decide inside the session instead"
-    print(f"    {ink.dim(f'[Enter] {enter_label}')}", file=err)
+    print(f"  {ink.dim(f'[Enter] {enter_label}')}", file=err)
     print("", file=err)
     try:
         # Live bug (2026-08-15): input(prompt) writes `prompt` to STDOUT, not stderr -
@@ -872,7 +872,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
         # instead of a clean "--new" - garbled into a single mangled argument by the
         # time it reached the launch command. Print the prompt text ourselves, to
         # stderr, then call input() with NO argument so it never touches stdout.
-        print(_Ink().bold("    Choice: "), end="", file=err)
+        print(_Ink().bold("  Choice: "), end="", file=err)
         choice = input().strip()
     except (EOFError, KeyboardInterrupt):
         return ""  # no tty / interrupted - fall through to deciding in-session
@@ -920,6 +920,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
 # ssh session). Everything degrades to the same plain text the tests read. stdout is
 # untouched by any of this - it stays exactly the decision string.
 
+
 def _color_enabled() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
@@ -964,7 +965,11 @@ def _rule(ink: _Ink, label: str = "", note: str = "", width: int = 64) -> str:
     body = f"--- {label} "
     pad = width - len(body) - (len(note) + 1 if note else 0)
     line = body + "-" * max(pad, 3) + (f" {note}" if note else "")
-    return ink.dim(line[:width]) if not note else ink.dim(body + "-" * max(pad, 3)) + " " + ink.dim(note)
+    return (
+        ink.dim(line[:width])
+        if not note
+        else ink.dim(body + "-" * max(pad, 3)) + " " + ink.dim(note)
+    )
 
 
 _RICH_CACHE = None
@@ -1327,8 +1332,7 @@ def _write_probe_cache(project_dir: Path) -> None:
             # 0-is-falsy made every freshness check fail, recomputing on each go run
             # (same bug as the hook's, found 2026-08-18 by the cache test matrix).
             fresh = (
-                time.time() - float(existing.get("computed_at_epoch") or 0)
-                < _PROBE_CACHE_TTL_S
+                time.time() - float(existing.get("computed_at_epoch") or 0) < _PROBE_CACHE_TTL_S
                 and existing.get("prefs_mtime") is not None
                 and int(existing.get("prefs_mtime")) == prefs_mtime
                 and existing.get("plugin_version") == _plugin_version()
@@ -1426,9 +1430,7 @@ def _print_banner(project_dir: Path) -> None:
     ink = _Ink()
     err = sys.stderr
     print("", file=err)
-    print(
-        ink.dim("=== ") + ink.title("Virtual Surv-IT") + ink.dim(" " + "=" * 45), file=err
-    )
+    print(ink.dim("=== ") + ink.title("Virtual Surv-IT") + ink.dim(" " + "=" * 45), file=err)
     print(f"    project  {ink.bold(project_dir.name)}", file=err)
     if version:
         print(f"    plugin   v{version}", file=err)
@@ -1532,9 +1534,11 @@ def _check_plugin_cache_lag(project_dir: Path) -> None:
             if tail:
                 print(ink.dim("      " + tail[-1]), file=err)
             print(
-                (ink.good("      updated - the session will load the new version")
-                 if proc.returncode == 0
-                 else ink.warn("      update failed - launching on the installed version")),
+                (
+                    ink.good("      updated - the session will load the new version")
+                    if proc.returncode == 0
+                    else ink.warn("      update failed - launching on the installed version")
+                ),
                 file=err,
             )
     except Exception:
@@ -1637,9 +1641,9 @@ def _print_project_defaults(project_dir: Path) -> None:
     )
     try:
         env = (
-            json.loads(
-                (project_dir / ".claude" / "settings.json").read_text(encoding="utf-8")
-            ).get("env")
+            json.loads((project_dir / ".claude" / "settings.json").read_text(encoding="utf-8")).get(
+                "env"
+            )
             or {}
         )
         tuned = "applied" if "ENABLE_PROMPT_CACHING_1H" in env else "not applied"
@@ -1658,25 +1662,63 @@ def _print_project_defaults(project_dir: Path) -> None:
         if value == "all auto":
             return "dim"  # the neutral default - only overrides should pop
         return ""
+
+    # Signal, not a config dump (2026-08-19 UX pass): eleven rows printed on EVERY launch
+    # were mostly defaults, so the two things that actually change a session's behaviour
+    # (an armed exec-consent marker, a live Jira) had no more weight than "docx export
+    # off". Notable settings get their own lines; everything sitting at its default folds
+    # into one dim tail line that still names them, so nothing becomes invisible.
+    _DEFAULTS = {
+        "docx export": "off",
+        "regulatory citations": "on",
+        "large-context review split": "off",
+        "parallel dispatch (Workflow)": "on",
+        "standards critique": "off",
+        "codebase-map skeleton": "off",
+        "probe pre-cache at go": "on",
+        "review tools": "all auto",
+        "jira integration": "off",
+        "exec consent marker": "absent",
+        "env tuning (1h cache TTL)": "not applied",
+    }
+    notable = [(n, v) for n, v in rows if _DEFAULTS.get(n) != v]
+    at_default = [n for n, v in rows if _DEFAULTS.get(n) == v]
+
     r = _rich_ui()
     print("", file=err)
     _print_rule("Project defaults", note="'virt-surv configure' to change")
-    if r:
+    ink = _Ink()
+    if not notable:
+        if r:
+            r["console"].print("[dim]  everything at defaults[/dim]")
+        else:
+            print(ink.dim("  everything at defaults"), file=err)
+    elif r:
         table = r["Table"](box=None, show_header=False, padding=(0, 1), pad_edge=False)
         table.add_column(style="default", no_wrap=True)
-        table.add_column()
+        table.add_column(no_wrap=True)
         style_map = {"good": "green", "warn": "yellow", "dim": "dim", "": "default"}
-        for name, value in rows:
+        for name, value in notable:
             table.add_row("  " + name, r["Text"](value, style=style_map[_value_style(value)]))
         r["console"].print(table)
-        return
-    ink = _Ink()
-    width = max(len(name) for name, _ in rows)
-    for name, value in rows:
-        dots = ink.dim("." * (width - len(name) + 2))
-        style = _value_style(value)
-        shown = {"good": ink.good, "warn": ink.warn, "dim": ink.dim}.get(style, lambda t: t)(value)
-        print(f"    {name} {dots} {shown}", file=err)
+    else:
+        width = max(len(name) for name, _ in notable)
+        for name, value in notable:
+            dots = ink.dim("." * (width - len(name) + 2))
+            style = _value_style(value)
+            shown = {"good": ink.good, "warn": ink.warn, "dim": ink.dim}.get(style, lambda t: t)(
+                value
+            )
+            print(f"  {name} {dots} {shown}", file=err)
+    if at_default and notable:
+        # Count, not the roll-call: listing ten names wrapped into a paragraph and undid
+        # the decluttering. `virt-surv configure` shows every value in full. Suppressed
+        # when nothing is notable - the "everything at defaults" line above says it once.
+        tail = f"  +{len(at_default)} at defaults"
+        if r:
+            r["console"].print(f"[dim]{tail}[/dim]")
+        else:
+            print(ink.dim(tail), file=err)
 
 
 def _offer_first_time_setup(project_dir: Path) -> bool:
@@ -1694,8 +1736,8 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
     ink = _Ink()
     print("", file=err)
     _print_rule("First-time setup")
-    print(f"    (virt-team: {project_dir} has no team configuration yet.)", file=err)
-    print(ink.bold("    Run first-time project setup now? [Y/n] "), end="", file=err)
+    print(ink.dim(f"  no team configuration in {project_dir}"), file=err)
+    print(ink.bold("  Run first-time project setup now? [Y/n] "), end="", file=err)
     try:
         answer = input().strip().lower()
     except (EOFError, KeyboardInterrupt):
@@ -1736,12 +1778,20 @@ def main() -> int:
         # from a genuine cold-cache decline. This message goes to stderr - never stdout,
         # which stays reserved for the decision string alone - so it's visible in the
         # terminal without corrupting a caller's command-substitution capture.
+        # One idea per line (2026-08-19 UX pass): this used to be a single wrapped
+        # paragraph that, when the setup offer above had already printed its own
+        # unterminated prompt, ran into it and produced one unreadable line.
+        ink = _Ink()
+        print("", file=sys.stderr)
         print(
-            f"(virt-team: {project_dir} doesn't look like a configured project - no "
-            "docs/team-operating-guide.md or .claude/team-preferences.json here - "
-            "launching plainly, no resume-menu. Wrong directory? cd into your project "
-            "root first, or run 'virt-surv configure' if this project hasn't been set "
-            "up yet.)",
+            f"  {ink.warn('Not a configured project')} - launching plainly, no menu.",
+            file=sys.stderr,
+        )
+        print(ink.dim(f"  looked in: {project_dir}"), file=sys.stderr)
+        print(
+            ink.dim(
+                "  wrong directory? cd to your project root. New project? run 'virt-surv configure'."
+            ),
             file=sys.stderr,
         )
         return 0  # not a plugin-enabled project - plain launch, but now explained
