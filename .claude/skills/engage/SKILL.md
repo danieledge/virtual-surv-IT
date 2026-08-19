@@ -113,7 +113,7 @@ first prompt. When present, this is the answer - **do not ask the question at al
   decision (twice live 2026-08-17; incident-log #14). The prefetch block confirms the flag as
   `ENGAGE_FLAG=--new` and omits `RESUME_MENU` on purpose. Siblings seen while creating your
   workspace in step 4 are not an invitation to comment.
-- **`--jira <url-or-key>` (BETA, rides with `--new`)** - the engagement's request IS the
+- **`--jira <url-or-key>` (rides with `--new`)** - the engagement's request IS the
   named ticket: a colleague raised it in Jira, a human picked it up in the go menu (that
   pick is the approval to start). First action after the banner: fetch the issue
   (summary, description, comments, attachment names) via the project's configured Jira

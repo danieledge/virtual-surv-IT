@@ -493,7 +493,7 @@ def test_menu_c_with_a_change_refreshes_the_table(tmp_path, monkeypatch, capsys)
     out = capsys.readouterr()
     assert rc == 0
     assert out.err.count("Project defaults") == 2  # launch-time + refreshed
-    assert "-> jira integration (beta): on" in out.err
+    assert "-> jira integration: on" in out.err
     # the refreshed table carries the new state, and the re-rendered menu unlocks [j]
     assert "on (key UNSET)" in out.err or "jira integration" in out.err
     assert "[j]" in out.err
@@ -949,7 +949,7 @@ def test_banner_and_defaults_render_without_rich(tmp_path, monkeypatch, capsys):
     rc = mod.main()
     out = capsys.readouterr()
     assert rc == 0
-    assert "Virtual Surv-IT" in out.err
+    assert "V I R T U A L   S U R V - I T" in out.err
     assert "Project defaults" in out.err
     assert "at defaults" in out.err  # folded default rows (2026-08-19 UX pass)
     assert out.out == ""

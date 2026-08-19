@@ -481,6 +481,12 @@ def scan_engagements(root: Path, known: tuple[Path, dict] | None = None) -> list
                 "profile": state.get("profile") or "standard",
                 "opened": eng.get("opened"),
                 "closed": eng.get("closed"),
+                # Additive (2026-08-19 launcher UX pass): the go menu shows "what state
+                # is this in", which needs the phase and how much is still open. Both
+                # already sit in the state file this function has just parsed - callers
+                # that don't want them simply ignore the extra keys.
+                "phase": state.get("phase"),
+                "outstanding": len(state.get("outstanding") or []),
             }
         )
     return rows
@@ -1953,9 +1959,7 @@ def _cmd_budget_status(args: argparse.Namespace) -> int:
             )
             today = _dt.date.today().isoformat()
             opened = (state.get("engagement") or {}).get("opened") or today
-            spent_today = sum(
-                s["cost_usd"] for s in parsed["sessions"] if s.get("date") == today
-            )
+            spent_today = sum(s["cost_usd"] for s in parsed["sessions"] if s.get("date") == today)
             spent_since_open = sum(
                 s["cost_usd"] for s in parsed["sessions"] if (s.get("date") or "") >= opened
             )

@@ -66,10 +66,10 @@ absent or a call fails, the engagement **continues and says so** (the failure la
 the delivery report as an outstanding item); tracker availability is never load-bearing
 for the work itself.
 
-## Inbound: start an engagement FROM a Jira (beta)
+## Inbound: start an engagement FROM a Jira
 
 With the Jira integration enabled, `virt-surv go` shows **[j] new engagement from a
-Jira (beta)**: paste the issue URL (or a bare key) and the session launches with
+Jira**: paste the issue URL (or a bare key) and the session launches with
 `/engage --new --jira <ref>` pre-seeded. Morgan fetches the ticket via the configured
 access, treats it as the engagement request, and **delivers the results back to the
 ticket at close without asking again** - summary comment + verdict, with the report and

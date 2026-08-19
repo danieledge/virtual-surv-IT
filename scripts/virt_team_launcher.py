@@ -50,6 +50,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -273,9 +274,9 @@ def _editor_rows(project_dir: Path):
     jira = jira if isinstance(jira, dict) else {}
     if jira.get("enabled") is True:
         key = str(jira.get("project_key") or "") or "key UNSET"
-        rows.append(("jira integration (beta)", f"on ({key})", True))
+        rows.append(("jira integration", f"on ({key})", True))
     else:
-        rows.append(("jira integration (beta)", "off", False))
+        rows.append(("jira integration", "off", False))
     return rows
 
 
@@ -757,7 +758,7 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
         subtitle = f"none open ({archived} archived)" if archived else "none open"
     entries.append((("new",), "start new", "n"))
     if _jira_enabled(project_dir):
-        entries.append((("jira",), "new engagement from a Jira (beta)", "j"))
+        entries.append((("jira",), "new engagement from a Jira", "j"))
     entries.append((("settings",), "change a project setting", "c"))
     if shown:
         entries.append((("archive",), "archive engagement(s)", "a"))
@@ -827,24 +828,27 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     print("", file=err)
     _print_rule("Open engagements" if shown else "Engagements")
     if shown:
+        # 2026-08-19 UX pass: rows now LEAD with the title (what the work is), carry a
+        # status mark and a relative age, and the recommended row is marked - the raw
+        # slug/status/ISO-date table made the reader do the interpreting.
+        default_slug = menu.get("default")
         slug_w = max(len(_row_resume_token(r) or "?") for r in shown)
-        status_w = max(len(r.get("status") or "?") for r in shown)
         for i, row in enumerate(shown, 1):
             slug = _row_resume_token(row) or "?"
             status = row.get("status") or "?"
-            opened = row.get("opened") or ""
-            title = row.get("title") or ""
-            status_col = (
-                ink.warn(status.ljust(status_w))
-                if status in ("in_progress", "blocked")
-                else ink.dim(status.ljust(status_w))
-            )
-            opened_col = ink.dim(f"opened {opened}") if opened else ""
-            print(
-                f"  {ink.bold(f'[{i}]')} resume {slug.ljust(slug_w)}  {status_col}  "
-                f"{opened_col}  {title}",
-                file=err,
-            )
+            mark, style = _STATUS_MARK.get(status, ("-", "dim"))
+            mark_col = ink.warn(mark) if style == "warn" else ink.dim(mark)
+            title = row.get("title") or slug
+            detail = _row_detail(row)
+            recommended = slug == default_slug and len(shown) > 1
+            head = f"  {ink.bold(f'[{i}]')} {mark_col} {ink.bold(title)}"
+            if recommended:
+                head += "  " + ink.good("<- most recent")
+            print(head, file=err)
+            tail = f"      {ink.dim(slug.ljust(slug_w))}"
+            if detail:
+                tail += "  " + ink.dim(detail)
+            print(tail, file=err)
         more = menu.get("more") or 0
         if more:
             print(ink.dim(f"      (+{more} more not shown)"), file=err)
@@ -855,7 +859,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     print(f"  {ink.bold('[n]')} start new", file=err)
     jira_on = _jira_enabled(project_dir)
     if jira_on:
-        print(f"  {ink.bold('[j]')} new engagement from a Jira {ink.dim('(beta)')}", file=err)
+        print(f"  {ink.bold('[j]')} new engagement from a Jira", file=err)
     settings_opt = f"  {ink.bold('[c]')} change a project setting"
     if shown:
         settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
@@ -1403,38 +1407,123 @@ def _morgan_line() -> str:
     return f"{hat}Morgan (PM) here - I'm an AI agent with Virtual Surveillance IT."
 
 
+_STATUS_MARK = {
+    "in_progress": ("*", "warn"),
+    "blocked": ("!", "warn"),
+    "closing": ("~", "dim"),
+}
+
+
+def _relative_age(iso_date: str) -> str:
+    """'today' / 'yesterday' / 'N days ago' from an ISO date - a launcher screen answers
+    "how stale is this?", which a bare 2026-08-19 makes the reader compute (2026-08-19
+    UX pass). Returns '' on anything unparseable rather than guessing."""
+    try:
+        import datetime as _dt
+
+        then = _dt.date.fromisoformat(str(iso_date)[:10])
+    except (ValueError, TypeError):
+        return ""
+    days = (_dt.date.today() - then).days
+    if days < 0:
+        return ""
+    if days == 0:
+        return "today"
+    if days == 1:
+        return "yesterday"
+    if days < 14:
+        return f"{days} days ago"
+    if days < 60:
+        return f"{days // 7} weeks ago"
+    return f"{days // 30} months ago"
+
+
+def _row_detail(row: dict) -> str:
+    """The dim tail of an engagement row: age, phase and how much is still open - the
+    'where is this up to' facts that were on disk all along but never shown."""
+    bits = []
+    age = _relative_age(row.get("opened") or "")
+    if age:
+        bits.append(age)
+    phase = row.get("phase")
+    if phase:
+        bits.append(str(phase))
+    outstanding = row.get("outstanding") or 0
+    if outstanding:
+        bits.append(f"{outstanding} open")
+    return "  ".join(bits)
+
+
+def _can_encode(text: str) -> bool:
+    """Can stderr actually render these glyphs? The corp-Windows cp1252 lesson every
+    output path here already carries - previously inlined per glyph; one helper now, so
+    the wordmark and Morgan's hat make the same decision the same way."""
+    try:
+        text.encode(getattr(sys.stderr, "encoding", None) or "utf-8")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+def _git_branch(project_dir: Path) -> str:
+    """The working project's branch for the header line, '' when it isn't a git repo or
+    git isn't available. Cosmetic only - never let it cost or block a launch."""
+    try:
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
+            ["git", "-C", str(project_dir), "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if proc.returncode == 0:
+            return (proc.stdout or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+# Wordmark (2026-08-19 UX pass): an accent bar plus letter-spaced caps, NOT block-glyph
+# ASCII art - hand-drawn art at this width reads as amateur and illegible, while spaced
+# caps behind a solid bar read as a designed mark in any terminal. U+2588 is the only
+# special glyph and _can_encode gates it (cp1252 corp consoles get "|" instead).
+_WORDMARK_BAR = "█"
+_WORDMARK_TEXT = "V I R T U A L   S U R V - I T"
+_WORDMARK_TAG = "compliance surveillance engineering"
+
+
 def _print_banner(project_dir: Path) -> None:
+    """The header: wordmark, then one dim identity line (project · version · branch).
+
+    2026-08-19 UX pass: the old header was a small boxed panel whose width matched
+    nothing else on screen, so the launch read as three unrelated blocks stacked up.
+    A full-width wordmark anchors the screen and the identity facts collapse to a single
+    line instead of a two-row table."""
     version = _plugin_version()
+    branch = _git_branch(project_dir)
+    facts = [project_dir.name]
+    if version:
+        facts.append(f"v{version}")
+    if branch:
+        facts.append(branch)
+    identity = "  ·  ".join(facts)
+    bar = _WORDMARK_BAR if _can_encode(_WORDMARK_BAR) else "|"
     r = _rich_ui()
     if r:
-        body = r["Text"]()
-        body.append("project  ", style="dim")
-        body.append(project_dir.name, style="bold")
-        if version:
-            body.append("\nplugin   ", style="dim")
-            body.append(f"v{version}")
         r["console"].print()
-        r["console"].print(
-            r["Panel"](
-                body,
-                title="[bold cyan]Virtual Surv-IT[/]",
-                title_align="left",
-                box=r["panel_box"],
-                border_style="cyan",
-                padding=(0, 2),
-                expand=False,
-            )
-        )
-        r["console"].print("  " + _morgan_line(), style="cyan")
+        r["console"].print(f"  [bold cyan]{bar}[/]  [bold]{_WORDMARK_TEXT}[/]")
+        r["console"].print(f"  [bold cyan]{bar}[/]  [dim]{_WORDMARK_TAG}[/]")
+        r["console"].print()
+        r["console"].print(f"  [dim]{identity}[/]")
+        r["console"].print(f"  [cyan]{_morgan_line()}[/]")
         return
     ink = _Ink()
     err = sys.stderr
     print("", file=err)
-    print(ink.dim("=== ") + ink.title("Virtual Surv-IT") + ink.dim(" " + "=" * 45), file=err)
-    print(f"    project  {ink.bold(project_dir.name)}", file=err)
-    if version:
-        print(f"    plugin   v{version}", file=err)
-    print(f"    {ink.title(_morgan_line())}", file=err)
+    print(f"  {ink.title(bar)}  {ink.bold(_WORDMARK_TEXT)}", file=err)
+    print(f"  {ink.title(bar)}  {ink.dim(_WORDMARK_TAG)}", file=err)
+    print("", file=err)
+    print("  " + ink.dim(identity), file=err)
+    print("  " + ink.title(_morgan_line()), file=err)
 
 
 def _install_paths(obj) -> list:

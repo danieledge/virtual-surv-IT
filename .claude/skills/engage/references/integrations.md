@@ -50,7 +50,7 @@ done-state (name the transition; if the tools expose none, comment only). A ⛔ 
 or PARTIAL close posts the honest status instead; never transition to done on a
 partial.
 
-## Inbound: `--jira <url-or-key>` on the opening command (BETA)
+## Inbound: `--jira <url-or-key>` on the opening command
 
 The go menu's [j] item pre-seeds `/engage --new --jira <ref>` - a colleague's ticket
 becomes the engagement request, human-approved by the pick itself. Rules:
