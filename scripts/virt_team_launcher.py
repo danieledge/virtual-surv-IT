@@ -744,18 +744,14 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
         # with a detail tail - two renderers, and THIS is the one most users actually
         # see (live screenshot). Same content in both now; one line, because a picker
         # entry is a single selectable row.
-        slug = _row_resume_token(row) or "?"
-        status = row.get("status") or "?"
-        mark, mark_style = _STATUS_MARK.get(status, ("-", "class:dim"))
-        title = row.get("title") or slug
+        view = row_view(row, default_slug=default_slug, of_many=len(shown) > 1)
         frags = [
-            ("class:warn" if mark_style == "warn" else "class:dim", f"{mark} "),
-            ("", title),
+            ("class:warn" if view["mark_style"] == "warn" else "class:dim", f"{view['mark']} "),
+            ("", view["title"]),
         ]
-        detail = _row_detail(row)
-        if detail:
-            frags.append(("class:dim", f"  ·  {detail}"))
-        if slug == default_slug and len(shown) > 1:
+        if view["detail"]:
+            frags.append(("class:dim", f"  ·  {view['detail']}"))
+        if view["recommended"]:
             frags.append(("class:on", "  <- most recent"))
         entries.append((("resume", i), frags, None))
     subtitle = ""
@@ -784,9 +780,16 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
         default_index=default_index,
         subtitle=subtitle,
     )
-    ink = _Ink()
     if pick is _PT_FAILED:
         return "__pt_fallback__"
+    return _decision_from_pick(pick, project_dir, engagement_state, menu, shown)
+
+
+def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, shown: list) -> str:
+    """Map a picked entry to the decision string. Shared by the full-screen app tier and
+    the picker tier (2026-08-20) - both produce the SAME pick tuples, and a second copy of
+    this mapping is exactly the drift this work exists to remove."""
+    ink = _Ink()
     if pick is None or pick[0] == "launch":
         print(ink.dim("    -> launching"), file=sys.stderr)
         return ""
@@ -825,6 +828,20 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     again."""
     err = sys.stderr
     ink = _Ink()
+    # Tier order (2026-08-20): full-screen app -> picker -> numbered. Each falls through
+    # on its own sentinel, so a console that cannot run the app still gets a working menu.
+    # Opt-in while it settles: VIRT_SURV_APP=1.
+    if os.environ.get("VIRT_SURV_APP"):
+        try:
+            from launcher_app import APP_FALLBACK, run_app
+
+            pick = run_app(
+                project_dir, sys.modules[__name__], menu, shown, jira_on=_jira_enabled(project_dir)
+            )
+            if pick != APP_FALLBACK:
+                return _decision_from_pick(pick, project_dir, engagement_state, menu, shown)
+        except Exception:
+            pass  # any app failure degrades to the tiers below, never breaks the launch
     p = _ptk_ui()
     if p:
         decision = _pt_menu_round(p, project_dir, engagement_state, menu, shown)
@@ -848,20 +865,17 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
         default_slug = menu.get("default")
         slug_w = max(len(_row_resume_token(r) or "?") for r in shown)
         for i, row in enumerate(shown, 1):
-            slug = _row_resume_token(row) or "?"
-            status = row.get("status") or "?"
-            mark, style = _STATUS_MARK.get(status, ("-", "dim"))
-            mark_col = ink.warn(mark) if style == "warn" else ink.dim(mark)
-            title = row.get("title") or slug
-            detail = _row_detail(row)
-            recommended = slug == default_slug and len(shown) > 1
-            head = f"    {ink.bold(f'[{i}]')} {mark_col} {ink.bold(title)}"
-            if recommended:
+            view = row_view(row, default_slug=default_slug or "", of_many=len(shown) > 1)
+            mark_col = (
+                ink.warn(view["mark"]) if view["mark_style"] == "warn" else ink.dim(view["mark"])
+            )
+            head = f"    {ink.bold(f'[{i}]')} {mark_col} {ink.bold(view['title'])}"
+            if view["recommended"]:
                 head += "  " + ink.good("<- most recent")
             print(head, file=err)
-            tail = f"        {ink.dim(slug.ljust(slug_w))}"
-            if detail:
-                tail += "  " + ink.dim(detail)
+            tail = f"        {ink.dim(view['slug'].ljust(slug_w))}"
+            if view["detail"]:
+                tail += "  " + ink.dim(view["detail"])
             print(tail, file=err)
             if i < len(shown):
                 print("", file=err)  # one blank line BETWEEN two-line entries
@@ -1565,6 +1579,45 @@ def _suggestion_line(project_dir: Path, menu: dict) -> str:
         except Exception:
             pass
     return ""
+
+
+def row_view(row: dict, *, default_slug: str = "", of_many: bool = False) -> dict:
+    """ONE source of an engagement row's display content (2026-08-20, Phase 1).
+
+    Every tier - numbered, picker, and the full-screen app - builds its row from this, so
+    they cannot drift apart. They diverged for real on 2026-08-19: a redesign (title-first,
+    status mark, relative age, recommended marker) landed in the numbered tier only, while
+    the picker tier - the one most users actually see - kept the old
+    `resume <slug> <status> opened <date>` layout until a screenshot exposed it. Rendering
+    stays per-tier; CONTENT lives here.
+
+    Returns plain data, never styled strings, so a tier can decorate it however it likes:
+        mark/mark_style · title · slug · detail · recommended · status · lines (detail pane)
+    """
+    slug = _row_resume_token(row) or "?"
+    status = row.get("status") or "?"
+    mark, mark_style = _STATUS_MARK.get(status, ("-", "dim"))
+    lines = []
+    for label, value in (
+        ("slug", slug),
+        ("status", status),
+        ("opened", _relative_age(row.get("opened") or "")),
+        ("phase", row.get("phase") or ""),
+        ("open", f"{row.get('outstanding') or 0} item(s)" if row.get("outstanding") else ""),
+        ("next", (row.get("outstanding_first") or "") if status == "blocked" else ""),
+    ):
+        if value:
+            lines.append((label, str(value)))
+    return {
+        "mark": mark,
+        "mark_style": mark_style,
+        "title": row.get("title") or slug,
+        "slug": slug,
+        "status": status,
+        "detail": _row_detail(row),
+        "recommended": bool(default_slug) and slug == default_slug and of_many,
+        "lines": lines,
+    }
 
 
 def _can_encode(text: str) -> bool:
