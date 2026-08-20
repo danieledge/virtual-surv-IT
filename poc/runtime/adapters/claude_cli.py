@@ -21,6 +21,7 @@ never has to discover its own environment on a locked-down corporate box).
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -42,7 +43,20 @@ class ClaudeCliRuntime:
 
     name = "claude-cli"
 
-    def __init__(self, *, executable: str | None = None, model: str = "") -> None:
+    def __init__(
+        self,
+        *,
+        executable: str | None = None,
+        model: str = "",
+        prefer_subscription: bool = True,
+    ) -> None:
+        # prefer_subscription (2026-08-20, found live): an ANTHROPIC_API_KEY in the
+        # environment TAKES PRECEDENCE over a claude.ai login, so a key with no credit
+        # shadows a perfectly good subscription and every call dies with "Credit balance
+        # is too low". We unset it for the CHILD process only - the parent environment is
+        # never touched - so headless runs use the subscription the human is already
+        # signed in with. Set False to force whatever the environment says.
+        self._prefer_subscription = prefer_subscription
         # Resolved once, by us, from an already-known environment - never probed per call.
         # None means "find it"; an explicit "" means "there is none" and must NOT fall
         # back to a PATH lookup (caught by a test on a box where claude IS installed -
@@ -88,12 +102,16 @@ class ClaudeCliRuntime:
         if self._model:
             argv += ["--model", self._model]
         started = now()
+        child_env = os.environ.copy()
+        if self._prefer_subscription:
+            child_env.pop("ANTHROPIC_API_KEY", None)
         try:
             proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
                 argv,
                 capture_output=True,
                 text=True,
                 timeout=timeout_s,
+                env=child_env,
                 # stdin CLOSED, not inherited: `claude -p` waits ~3s for piped input and
                 # then warns, and an inherited terminal stdin can hang the call outright.
                 # Found by running the POC demo, not by reading the docs.
