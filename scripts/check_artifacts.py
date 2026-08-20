@@ -256,6 +256,61 @@ _AGENT_JOIN_RE = re.compile(
 _AI_MARKER = "🤖"
 
 
+def _auto_mode_findings(artifacts_dir: Path) -> list[str]:
+    """Unattended runs must never read as signed off (2026-08-20).
+
+    The same principle as QA-QUICK-NOT-PARTIAL, applied to autonomy: an engagement nobody
+    was asked about can reach every Definition-of-Done line EXCEPT human sign-off, and the
+    one thing that would make it dangerous is for it to look complete. Two gates:
+
+      AUTO-NOT-PARTIAL     - it closed without saying PARTIAL anywhere a reader will look.
+      AUTO-LEDGER-MISSING  - it recorded no assumptions. An unattended run that answered
+                             its own questions and then listed none of them has hidden the
+                             judgement calls, which is precisely what the ledger exists to
+                             prevent. (Zero assumptions is possible but rare; the finding
+                             says to record "none" explicitly rather than stay silent.)
+
+    Only fires on engagements that actually ran unattended - state carries `auto: true`."""
+    findings: list[str] = []
+    for pack in sorted(p for p in artifacts_dir.rglob("engagement-state.json") if p.is_file()):
+        workspace = pack.parent
+        if _under_archive(pack, artifacts_dir):
+            continue
+        try:
+            state = json.loads(pack.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue  # STATE-INVALID owns that failure
+        if not state.get("auto"):
+            continue
+        if str(state.get("status") or "") not in ("closed", "closing"):
+            continue  # still running, or parked - nothing to assert about a verdict yet
+        evidence = str(state.get("verdict") or "")
+        for name in ("delivery-report.md", "START-HERE.md"):
+            candidate = workspace / name
+            if candidate.is_file():
+                try:
+                    evidence += candidate.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    pass
+        if "PARTIAL" not in evidence.upper():
+            findings.append(
+                f"AUTO-NOT-PARTIAL: {workspace} ran unattended but nothing in the verdict, "
+                "delivery report or START-HERE says PARTIAL - an unattended run reaches "
+                "every DoD line except human sign-off and must say so (DoD: state "
+                "'DoD: PARTIAL - unattended run, human sign-off outstanding')"
+            )
+        decisions = state.get("decisions")
+        decisions = decisions if isinstance(decisions, dict) else {}
+        if not any(str(k).startswith("assumed-") for k in decisions):
+            findings.append(
+                f"AUTO-LEDGER-MISSING: {workspace} ran unattended but recorded no "
+                "'assumed-*' decisions - the assumption ledger is what makes an "
+                "unattended run reviewable (record each judgement call, or one entry "
+                "stating explicitly that none were needed)"
+            )
+    return findings
+
+
 def _qa_depth_findings(artifacts_dir: Path) -> list[str]:
     """QA-level honesty gates (2026-08-20). Breadth of QA is tierable; pretending a
     reduced pass was a full one is not.
@@ -1879,6 +1934,7 @@ def check(artifacts_dir: Path) -> list[str]:
         # and no level satisfies it - this gate is about honesty, that one is about
         # existence.
         findings.extend(_qa_depth_findings(artifacts_dir))
+        findings.extend(_auto_mode_findings(artifacts_dir))
 
     # The START-HERE living index: created at OPEN (with the first artifact), updated on
     # every artifact write, finalised at close (docs/templates/start-here.md). It is also

@@ -650,6 +650,9 @@ def jira_screen(project_dir: Path, mod, output=None):
     buf = [""]
     result = {"v": JIRA_CANCELLED}
     configured = mod._jira_enabled(project_dir)
+    # Offered only where the project opted in; off by default (2026-08-20 owner decision).
+    auto_offered = mod._auto_offered(project_dir)
+    auto = [False]
 
     def _detected():
         m = mod._JIRA_KEY_RE.search(buf[0])
@@ -677,6 +680,12 @@ def jira_screen(project_dir: Path, mod, output=None):
             out.append(("class:warn", "  no issue key found yet - keep typing\n"))
         else:
             out.append(("class:dim", "  waiting for a ticket reference\n"))
+        if auto_offered:
+            out.append(("", "\n"))
+            mark = g["on"] if auto[0] else g["off"]
+            out.append(("class:on" if auto[0] else "class:off", f"  {mark} "))
+            out.append(("class:warn" if auto[0] else "class:dim", "[a] run unattended"))
+            out.append(("class:dim", "  (no further questions)\n"))
         return out
 
     def _right():
@@ -702,9 +711,18 @@ def jira_screen(project_dir: Path, mod, output=None):
         return out
 
     def _footer():
-        return [("class:hint", f"  Enter start · Esc back · Ctrl-U clear   {project_dir.name}")]
+        tail = " · Ctrl-A unattended" if auto_offered else ""
+        return [("class:hint", f"  Enter start · Esc back · Ctrl-U clear{tail}")]
 
     kb = KeyBindings()
+
+    @kb.add("c-a")
+    def _auto(event):
+        # Ctrl-A, not a bare "a": every printable key is text for the ticket field, and a
+        # letter that sometimes types and sometimes toggles is how you paste a key and
+        # silently authorise an unattended run.
+        if auto_offered:
+            auto[0] = not auto[0]
 
     @kb.add(Keys.Any)
     def _type(event):
@@ -733,6 +751,7 @@ def jira_screen(project_dir: Path, mod, output=None):
         if not key:
             return  # nothing valid yet - stay on the screen rather than bouncing out
         result["v"] = raw if "://" in raw else key
+        result["auto"] = auto[0]
         event.app.exit()
 
     @kb.add("escape", eager=True)
@@ -754,6 +773,10 @@ def jira_screen(project_dir: Path, mod, output=None):
         )
     except Exception:
         return None
+    # A ref alone stays a plain string (every existing caller keeps working); an unattended
+    # pick returns (ref, True), so a caller cannot start one without noticing that it did.
+    if result["v"] != JIRA_CANCELLED and result.get("auto"):
+        return (result["v"], True)
     return result["v"]
 
 
@@ -1287,3 +1310,125 @@ def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
     except Exception:
         return ""
     return result["v"]
+
+
+AUTO_CANCELLED = "__auto_cancelled__"
+
+
+def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
+    """The single authorisation gate for an unattended run (2026-08-20).
+
+    Auto mode's whole premise is that nothing interrupts the session afterwards, so every
+    question it would have asked has to be answered HERE, while a human is present. That
+    makes this screen the entire safety story, and it is written to be read: what auto mode
+    will do, what it will not do, and what each toggle authorises.
+
+    Execution consent is granted here when asked for - see
+    virt_team_launcher.grant_execution_consent for why a launcher keypress is a legitimate
+    human grant while a session's own request never is.
+
+    Returns a dict of the authorisations, or AUTO_CANCELLED, or None if it cannot run."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    g = glyphs(mod)
+    state = {"data": False, "exec": False, "confirmed": False}
+    idx = [0]
+    rows = [
+        (
+            "data",
+            "Data is synthetic, masked or carries no PII/MNPI",
+            "your attestation; the session cannot verify it",
+        ),
+        (
+            "exec",
+            "Allow the session to RUN code unattended",
+            "grants the execution gate here, expiring, for this run",
+        ),
+    ]
+
+    def _body():
+        out = [("class:group", f"  {g['jira']}Unattended run: {ref}\n\n")]
+        out.append(("class:warn", "  This session will not stop to ask you anything.\n\n"))
+        for i, (key, label, note) in enumerate(rows):
+            sel = idx[0] == i
+            on = state[key]
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            out.append(("class:on" if on else "class:off", f"{g['on'] if on else g['off']} "))
+            out.append(("class:sel" if sel else "", label))
+            out.append(("", "\n"))
+            out.append(("class:dim", f"        {note}\n"))
+        out.append(("", "\n"))
+        out.append(("class:dim", "    Space toggles · Enter starts · Esc cancels\n"))
+        return out
+
+    def _right():
+        out = [("class:title", "\n  How auto mode works\n\n")]
+        out.append(
+            (
+                "class:dim",
+                "  It works the ticket end to\n  end and never asks you a\n  question.\n\n"
+                "  Questions it WOULD have\n  asked become recorded\n  assumptions, listed in the\n"
+                "  report and posted to the\n  ticket for you to check.\n\n"
+                "  If scope is genuinely\n  unclear, or something it\n  needs is missing, it PARKS\n"
+                "  the work and says why - it\n  does not guess.\n\n",
+            )
+        )
+        out.append(("class:warn", "  It always closes PARTIAL.\n"))
+        out.append(("class:dim", "  A human still signs off.\n\n"))
+        if state["exec"]:
+            out.append(("class:warn", "  Code execution AUTHORISED\n"))
+            out.append(("class:dim", "  for this run, then expires.\n"))
+        else:
+            out.append(("class:dim", "  No execution: review stays\n  static, findings inferred.\n"))
+        return out
+
+    def _footer():
+        return [("class:hint", "  Space toggle · Enter start unattended run · Esc cancel")]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % len(rows)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % len(rows)
+
+    @kb.add(" ")
+    def _toggle(event):
+        key = rows[idx[0]][0]
+        state[key] = not state[key]
+
+    @kb.add("enter")
+    def _start(event):
+        state["confirmed"] = True
+        event.app.exit()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    def _esc(event):
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title=f"{g['jira']}Auto mode - authorise this run",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=project_dir,
+        )
+    except Exception:
+        return None
+    if not state["confirmed"]:
+        return AUTO_CANCELLED
+    return {"data_attested": state["data"], "allow_exec": state["exec"]}

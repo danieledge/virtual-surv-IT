@@ -61,6 +61,6 @@ unlisted. Interim artifacts carry pass-scoped names (`review-pass-1`, `qa-cycle-
 
 ## Provenance
 
-Produced by the virtual compliance-surveillance engineering team
+🤖 Produced by the virtual compliance-surveillance engineering team - AI agents, Virtual Surveillance IT
 (<version> - see the Delivery Report's document control for sign-offs). Evidence basis
 tags: 📊 measured · 🧠 inferred. Questions → the engagement summary email's sender.

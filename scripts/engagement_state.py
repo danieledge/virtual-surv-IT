@@ -1061,8 +1061,15 @@ def render_markdown(state: dict) -> str:
     version = state.get("team_version") or ""
     version_bit = f" ({version})" if version else ""
     lines.append(
-        "Produced by the virtual compliance-surveillance engineering team"
-        f"{version_bit}. Evidence basis tags: 📊 measured · 🧠 inferred."
+        # 🤖 marker on the framework's OWN generated artifact (2026-08-20, spotted in a live
+        # corporate session). START-HERE is the first thing a reader opens, and it attributed
+        # the work to a team without ever saying that team is AI - the exact thing the
+        # AI-identity rule exists to prevent, missing from the one artifact the rule's own
+        # checker never inspects for it (AGENT-UNMARKED matches "Name (Role)" personas, and
+        # "the team" is not one, so nothing flagged it).
+        "🤖 Produced by the virtual compliance-surveillance engineering team"
+        f"{version_bit} - AI agents, Virtual Surveillance IT. "
+        "Evidence basis tags: 📊 measured · 🧠 inferred."
     )
     lines.append("")
     lines.append(
@@ -1257,6 +1264,9 @@ def _cmd_init(args: argparse.Namespace) -> int:
         # None until a QA pass actually happens - an engagement that builds nothing never
         # sets it, and absence must never read as "quick".
         "qa_depth": None,
+        # True only for a run the human authorised as unattended at the launcher. Drives
+        # the AUTO-* Definition-of-Done gates: such a run may never read as signed off.
+        "auto": False,
         "phase": args.phase,
         "team": [],
         "verdict": None,
@@ -1524,6 +1534,12 @@ def _cmd_set_qa_depth(args: argparse.Namespace) -> int:
     read it deterministically (the PARTIAL gate depends on that). The *why* still belongs
     in a `set-decision qa-depth "..."` alongside it."""
     return _mutate(args, lambda s: s.__setitem__("qa_depth", args.qa_depth))
+
+
+def _cmd_mark_auto(args) -> int:
+    """Flag the engagement as unattended. One-way on purpose: a run that proceeded without
+    asking anyone cannot later be relabelled as attended to dodge the AUTO-* gates."""
+    return _mutate(args, lambda s: s.__setitem__("auto", True))
 
 
 def _cmd_add_artifact(args: argparse.Namespace) -> int:
@@ -2260,6 +2276,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("profile", choices=_PROFILES)
     p.set_defaults(fn=_cmd_set_profile)
+
+    p = sub.add_parser(
+        "mark-auto",
+        parents=[common],
+        help="record that this engagement is running UNATTENDED (--auto)",
+    )
+    p.set_defaults(fn=_cmd_mark_auto)
 
     p = sub.add_parser(
         "set-qa-depth",

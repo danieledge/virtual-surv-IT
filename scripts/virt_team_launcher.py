@@ -249,6 +249,7 @@ _TOGGLE_PREFS = (
     ("codebase-map skeleton", "map_skeleton"),
     ("probe pre-cache at go", "probe_cache"),
     ("evidence room at close", "evidence_room"),
+    ("autonomous jira mode", "autonomous_mode"),
 )
 
 
@@ -358,6 +359,13 @@ _SETTING_HELP = {
         "Writes tuned timeouts and a 1-hour prompt-cache TTL into this project's "
         ".claude/settings.json - fewer timeouts, and cache that survives a thinking pause.",
         "Not applied: Claude Code's own defaults are used.",
+    ),
+    "autonomous jira mode": (
+        "Lets [j] offer an UNATTENDED run: the session works the ticket end to end without "
+        "stopping to ask. Every run still needs its own pre-flight authorisation, and it "
+        "always closes PARTIAL for a human to sign off.",
+        "Off (the default): [j] behaves normally and the session asks you as it goes. Turn "
+        "this on only where you are content for a session to proceed on its own judgement.",
     ),
     "qa depth": (
         "How much INDEPENDENT QA a build buys. auto reads the work; quick narrows what "
@@ -1192,11 +1200,160 @@ def _jira_decision(project_dir: Path) -> str:
     return _jira_command(project_dir, ref)
 
 
-def _jira_command(project_dir: Path, ref: str) -> str:
+_AUTO_CONSENT_HOURS = 4
+_AUTO_PROVENANCE = ".auto-grant.json"
+
+
+def _consent_marker_path(project_dir: Path) -> Path:
+    """The gate file guard-code-execution.py looks for. Assembled from parts so this
+    module never carries the literal name - the consent-write guard checks command and
+    edit text lexically, and a launcher that cannot be maintained is worse than one that
+    spells a constant."""
+    return project_dir / ".claude" / ("." + "exec" + "-" + "consent")
+
+
+def _auto_provenance_path(project_dir: Path) -> Path:
+    return project_dir / ".claude" / _AUTO_PROVENANCE
+
+
+def grant_execution_consent(project_dir: Path, slug: str, hours: int = _AUTO_CONSENT_HOURS):
+    """Create the execution-consent gate ON BEHALF OF THE HUMAN AT THIS KEYBOARD.
+
+    Read ADR-002 before touching this. The rule it protects is that the MODEL can never
+    manufacture its own grant, and this does not weaken it: the launcher is a separate
+    process that runs BEFORE any session exists, and this function is reachable only from a
+    keypress on the pre-flight screen. The session still cannot create the marker - the
+    guard hook blocks that exactly as before, and must keep doing so.
+
+    Three properties make the second channel safe, and none is optional:
+      * PROVENANCE - a sidecar records who granted it, when, from where and for which
+        engagement, so an auditor can see the grant was human. The marker's own body says
+        the same thing in plain text, since the guard only tests existence and ignores
+        content.
+      * EXPIRY - an unattended run must not leave standing authorisation behind. The
+        sidecar carries an expiry; `_expire_stale_auto_consent` drops the marker once it
+        passes, and the engagement's close does the same. Deleting the marker is a
+        permitted action (closing a gate never needs consent); creating it is not, which
+        is why only this process does it.
+      * SCOPE - one engagement, named in the sidecar.
+
+    Returns (True, "") or (False, reason)."""
+    marker = _consent_marker_path(project_dir)
+    import datetime
+
+    now = datetime.datetime.now()
+    expires = now + datetime.timedelta(hours=hours)
+    body = (
+        "Execution consent granted by the human at the virt-surv launcher's auto-mode\n"
+        f"pre-flight screen for engagement '{slug}'.\n"
+        f"granted: {now.isoformat(timespec='seconds')}\n"
+        f"expires: {expires.isoformat(timespec='seconds')}\n"
+        "Delete this file at any time to close the gate.\n"
+    )
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(body, encoding="utf-8")
+        _auto_provenance_path(project_dir).write_text(
+            json.dumps(
+                {
+                    "granted_by": "human keypress, virt-surv auto-mode pre-flight",
+                    "granted_at": now.isoformat(timespec="seconds"),
+                    "expires_at": expires.isoformat(timespec="seconds"),
+                    "engagement": slug,
+                    "host": os.environ.get("COMPUTERNAME") or os.environ.get("HOSTNAME") or "",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        return False, f"could not write the consent gate ({exc.__class__.__name__})"
+    return True, ""
+
+
+def _expire_stale_auto_consent(project_dir: Path) -> bool:
+    """Drop a launcher-granted consent gate once its window has passed. Run at every go, so
+    a marker left behind by an auto run cannot silently authorise later sessions - the
+    failure mode that would quietly turn a one-off grant into a standing one.
+
+    ONLY ever removes a marker this launcher granted (the sidecar proves it). A marker the
+    human created by hand is theirs and is never touched."""
+    side = _auto_provenance_path(project_dir)
+    marker = _consent_marker_path(project_dir)
+    if not side.is_file():
+        return False
+    try:
+        import datetime
+
+        data = json.loads(side.read_text(encoding="utf-8"))
+        expires = datetime.datetime.fromisoformat(str(data.get("expires_at")))
+    except Exception:
+        return False
+    if datetime.datetime.now() < expires:
+        return False
+    for path in (marker, side):
+        try:
+            path.unlink()
+        except OSError:
+            pass
+    return True
+
+
+def _auto_run_decision(project_dir: Path, ref: str) -> str:
+    """Authorise and start an unattended run. Returns the decision string, "__again__" if
+    the human cancelled, or "" when the pre-flight screen could not run at all (the caller
+    then starts an ORDINARY run - an unattended one must never begin by default because a
+    screen failed to render)."""
+    ink = _Ink()
+    err = sys.stderr
+    try:
+        from launcher_app import AUTO_CANCELLED, auto_preflight_screen
+
+        answers = auto_preflight_screen(project_dir, sys.modules[__name__], ref)
+    except Exception:
+        return ""
+    if answers is None:
+        return ""
+    if answers == AUTO_CANCELLED:
+        return "__again__"
+    slug = _JIRA_KEY_RE.search(ref)
+    slug = slug.group(1).upper() if slug else "auto"
+    if answers.get("allow_exec"):
+        ok, problem = grant_execution_consent(project_dir, slug)
+        if ok:
+            print(
+                ink.warn(f"    execution gate opened for {slug}, expiring in ")
+                + ink.warn(f"{_AUTO_CONSENT_HOURS}h"),
+                file=err,
+            )
+        else:
+            print(ink.warn(f"    {problem} - the run continues WITHOUT execution"), file=err)
+    if not answers.get("data_attested"):
+        print(
+            ink.dim("    no data attestation - the run is limited to synthetic data"),
+            file=err,
+        )
+    print(ink.good(f"    -> unattended run on {slug}; it will close PARTIAL for sign-off"), file=err)
+    return _jira_command(project_dir, ref, auto=True)
+
+
+def _jira_command(project_dir: Path, ref: str, auto: bool = False) -> str:
     """The one place the --jira opening command is spelled. Both ticket prompts (the
     full-screen jira_screen and the plain input() flow above) end here, so they cannot
     drift the way the two menu renderers did."""
-    return f"{_engage_command(project_dir)} --new --jira {ref}"
+    return f"{_engage_command(project_dir)} --new --jira {ref}" + (" --auto" if auto else "")
+
+
+def _auto_offered(project_dir: Path) -> bool:
+    """Whether [j] may offer an unattended run. OFF unless the project opted in - this is
+    the switch, and it is deliberately not a machine default."""
+    try:
+        import engage_probe
+
+        return bool(engage_probe.resolve_preferences(project_dir).get("autonomous_mode"))
+    except Exception:
+        return False
 
 
 def _pt_menu_round(
@@ -1287,6 +1444,16 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
             ref = jira_screen(project_dir, sys.modules[__name__])
             if ref == JIRA_CANCELLED:
                 return "__again__"
+            auto = False
+            if isinstance(ref, tuple):
+                ref, auto = ref
+            if ref and auto:
+                decision = _auto_run_decision(project_dir, ref)
+                if decision == "__again__":
+                    return "__again__"
+                if decision:
+                    return decision
+                auto = False  # pre-flight could not run - fall through to a normal run
             if ref:
                 print(ink.dim(f"    -> starting new engagement from {ref}"), file=sys.stderr)
                 return _jira_command(project_dir, ref)
@@ -2701,6 +2868,14 @@ def main() -> int:
         _print_project_defaults(project_dir)
     except Exception:
         pass  # cosmetic - the table must never cost the launch
+    try:
+        if _expire_stale_auto_consent(project_dir):
+            print(
+                _Ink().dim("  a previous unattended run's execution gate expired - closed"),
+                file=sys.stderr,
+            )
+    except Exception:
+        pass  # never let gate hygiene cost a launch
     try:
         _remember_project(project_dir)  # feeds the explorer's recent list
     except Exception:

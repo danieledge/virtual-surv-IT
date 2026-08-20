@@ -3,6 +3,47 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.36.0] - 2026-08-20 - Autonomous Jira mode (opt-in), and the framework's own artifact says it is AI
+
+### Autonomous mode - off by default
+
+An unattended run from a Jira ticket: pick the ticket, authorise the run once, and the
+session works it end to end without asking anything else. **Off unless the project turns
+`autonomous jira mode` on**, and even then every run needs its own explicit authorisation.
+
+The design turns on one distinction. Questions an engagement asks come in three kinds, and
+only one can simply be switched off: clarifications (removable), safety gates (execution
+consent, the data attestation) and accountability gates (plan approval, outward writes,
+sign-off). So auto mode moves every answerable gate to **one pre-flight screen** while the
+human is present, converts clarifications into a **recorded assumption ledger**, and gives
+the run **explicit stop conditions** so it parks rather than guesses.
+
+- **Pre-flight screen** states plainly what auto mode will and will not do, then takes the
+  data attestation and, optionally, an execution-consent grant.
+- **Execution consent can be granted there, and this does not weaken ADR-002.** The rule is
+  that the MODEL can never manufacture its own grant - `guard-consent-writes.py` is
+  unchanged and still blocks that. The launcher is a different process, running before any
+  session exists, driven by a keypress: the same act as creating the marker by hand. Three
+  properties keep it honest, all tested - **provenance** (who granted it, when, for which
+  engagement), **expiry** (dropped at the next `go`), and **scope** (one engagement). A
+  marker the human made by hand is never touched.
+- **Assumption ledger**: every question the run would have asked becomes a recorded
+  decision with its reasoning, surfaced in the delivery report and one ticket comment. This
+  is what makes an unattended run reviewable rather than merely fast.
+- **Parks, never guesses**: ambiguous scope, missing data or access, an unauthorised gate,
+  or no progress ends in a parked engagement that says exactly what it needs.
+- **Always closes PARTIAL.** Two new DoD gates enforce it - `AUTO-NOT-PARTIAL` (an
+  unattended run that reads as signed off) and `AUTO-LEDGER-MISSING` (one that hid its
+  judgement calls). Auto mode can reach every DoD line except human sign-off.
+
+### Fixed
+
+- **START-HERE never said the team is AI.** The generated provenance line read "Produced by
+  the virtual compliance-surveillance engineering team" with no 🤖 marker - in the first
+  artifact any reader opens. Nothing caught it because `AGENT-UNMARKED` matches
+  `Name (Role)` personas and "the team" is not one, so the AI-identity rule was missing from
+  the one artifact its own checker never inspects. Spotted in a live corporate session.
+
 ## [0.35.4] - 2026-08-20 - The five things the launcher could not do
 
 An audit of the `virt-surv go` surface against the preferences and artifacts that actually

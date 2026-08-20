@@ -671,7 +671,8 @@ def resolve_preferences(project_dir: Path) -> dict:
 
     Returns {"extra_formats": list[str], "regulatory_citations": bool,
     "large_context_review_split": bool, "parallel_dispatch_via_workflow": bool,
-    "standards_critique": bool, "map_skeleton": bool, "probe_cache": bool}."""
+    "standards_critique": bool, "map_skeleton": bool, "probe_cache": bool,
+    "autonomous_mode": bool}."""
     prefs = read_team_preferences(project_dir)
     # Project setting wins if this project has ever explicitly set it (even to "off" -
     # write_team_preferences always records extra_formats/regulatory_citations once a
@@ -715,6 +716,12 @@ def resolve_preferences(project_dir: Path) -> dict:
     # about that project's governance, not about this machine, and an opt-in artifact
     # must never appear in a folder nobody asked for it in.
     evidence_room_on = prefs.get("evidence_room", False)
+    # autonomous_mode (2026-08-20): whether the go menu may OFFER an unattended run from a
+    # Jira ticket. OFF by default and project-scoped with no machine tier - letting a
+    # session work without stopping to ask is a governance decision about that project, and
+    # it must never arrive switched on because a machine default said so. This gates the
+    # OFFER only; every run still needs its own explicit pre-flight authorisation.
+    autonomous_mode_on = prefs.get("autonomous_mode", False)
     # qa_depth (2026-08-20): how much INDEPENDENT QA a build buys. "auto" derives it from
     # the work shape; "deep" is today's full pass; "quick" narrows what gets AUTHORED
     # (not what gets run) and always closes DoD: PARTIAL. Deliberately no "none" - QA's
@@ -733,6 +740,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "map_skeleton": map_skeleton_on,
         "probe_cache": probe_cache_on,
         "evidence_room": evidence_room_on,
+        "autonomous_mode": autonomous_mode_on,
         "qa_depth": qa_depth,
     }
 
