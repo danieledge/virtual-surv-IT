@@ -184,7 +184,7 @@ work next time, e.g.:
 ### 🔇 Filtered (transparency - counts, not findings)
 | Reason | Count |
 |--------|-------|
-| Pre-existing (not in diff) | |
+| Pre-existing (not in diff) - *seen and filtered only; files never opened are not counted here, they belong in Limitations* | |
 | Below confidence threshold | |
 | Linter/formatter territory | |
 | Silenced by comment | |
@@ -210,6 +210,19 @@ What this review did **not** do, stated plainly: paths/modules out of scope, sta
 and any residual risk the reader accepts by relying on this review. A governance or audit
 reviewer reads this section first; a review with an empty limitations section reads as
 overclaiming, not as thorough.
+
+**Open it with the SCOPE sentence whenever the review excluded anything** (2026-08-20 - the
+never-filter promise is scope-bounded, `docs/code-review-method.md` §Never filter):
+
+> This review covered *&lt;the uncommitted diff, 12 files&gt;*. **Not examined:** the other
+> *&lt;180&gt;* files in this repository. Anything existing only in unchanged code - including a
+> pre-existing secret, PII in a fixture, an undocumented threshold or a broken
+> alert→logic→obligation trace - would not have been seen, because those files were never
+> read: the never-filter rule for regulated findings applies to what was **read**, not to what
+> existed. Re-run at whole-target scope to close that gap.
+
+Omit it only when nothing was excluded (a whole-target pass). It complements the provenance
+block below rather than duplicating it: provenance covers non-determinism, this covers reach.
 
 **Close this section with the standing run-provenance statement** (verbatim; the same block the
 templates in `docs/templates/` carry, so a review and a delivery report say the same thing):

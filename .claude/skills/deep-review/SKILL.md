@@ -27,14 +27,25 @@ a defect (live 2026-08-17; incident-log #33). Derive:
   or direct-mode's one batched call below; never its own screen.
 - **Breadth** from the briefed scope (the diff · named files · module · repo - whatever the
   brief already says; never widen it here).
-- **Mode** from depth: Audit → keep pre-existing in scope; otherwise change-focused (or
-  whole-target when there is no diff, per the Quick rule's scope logic).
+- **Mode** from **BREADTH, not depth** (2026-08-20 fix): diff-scoped breadth →
+  `change`; whole-target breadth → `audit`, whether that was chosen, derived from an
+  empty diff, or forced by Audit depth. **Never `change` mode over a whole-target
+  breadth**: `docs/code-review-method.md`'s "pre-existing, outside the diff" criterion
+  scores −50, so a whole-repo pass in change mode filters essentially its entire own
+  output below threshold. Audit *mode* (the pre-existing switch) is not Audit *depth*
+  (which additionally buys the architecture lens, Medium findings and the §4/§5 trail) -
+  a Deep review at full scope is legitimately `depth: deep, mode: audit`.
 - **Origin** is inherited from `engage`'s review menu (its Q4) - if it says AI-assisted/mixed,
   the report adds the **🧑‍💻 Prompting guidance** section (`docs/review/output-format.md`);
   the reviewer also adds it unprompted when the findings clearly show vibe-coding.
 
-Write one scope line into the brief ("Deep · Core + quality · whole repo · change-focused ·
-origin: mixed") - the go-ahead gate is where the user adjusts it. **Ask a scope question ONLY
+Write a scope line into the brief - **breadth and mode must agree** ("Deep · Core + quality ·
+uncommitted diff, 12 files · change · origin: mixed", or "Deep · Core + quality · whole repo ·
+audit · origin: mixed"; the old example paired whole-repo with change-focused, which is the
+self-filtering combination above). **Add a second line naming what is NOT covered** when the
+scope genuinely excludes something ("Not in scope: 180 unchanged files; pre-existing findings
+filtered per `docs/code-review-method.md`") - a count, never a file listing. The go-ahead gate
+is where the user adjusts it. **Ask a scope question ONLY
 when genuinely ambiguous** (conflicting signals about compliance-sensitivity, an unclear
 target) - one question, not a screen of axes. Invoked **directly** (not via `engage`): the
 review menu never ran, so ask ONE batched call first - Fix-cycle + Origin (+ jurisdiction if

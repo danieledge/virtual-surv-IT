@@ -29,7 +29,7 @@
   "tier_budgets": {
     "ALWAYS_LOADED": 3300,
     "OPEN_TIME": 19000,
-    "ROUTE_TIME": 48200,
+    "ROUTE_TIME": 48400,
     "AGENT_TIME": 23200,
     "DEFERRED": null
   },
@@ -42,7 +42,7 @@
     ".claude/agents/code-reviewer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 4718
+      "baseline_tokens": 4791
     },
     ".claude/agents/compliance-reviewer.md": {
       "tier": "AGENT_TIME",
@@ -162,7 +162,7 @@
     ".claude/skills/deep-review/SKILL.md": {
       "tier": "ROUTE_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 4670
+      "baseline_tokens": 4908
     },
     ".claude/skills/deep-review/references/quick.md": {
       "tier": "DEFERRED",
@@ -187,7 +187,7 @@
     ".claude/skills/engage/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7314
+      "baseline_tokens": 7312
     },
     ".claude/skills/engage/references/artifact-menu.md": {
       "tier": "DEFERRED",
@@ -197,7 +197,7 @@
     ".claude/skills/engage/references/close-checklist.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2703
+      "baseline_tokens": 2999
     },
     ".claude/skills/engage/references/extensions.md": {
       "tier": "DEFERRED",
@@ -207,7 +207,7 @@
     ".claude/skills/engage/references/integrations.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1473
+      "baseline_tokens": 1471
     },
     ".claude/skills/engage/references/probe-bootstrap.md": {
       "tier": "DEFERRED",
@@ -337,7 +337,7 @@
     "docs/code-review-method.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3053
+      "baseline_tokens": 3371
     },
     "docs/coding-standards.md": {
       "tier": "DEFERRED",
@@ -437,7 +437,7 @@
     "docs/review/output-format.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3493
+      "baseline_tokens": 3737
     },
     "docs/scope-and-stack.md": {
       "tier": "DEFERRED",

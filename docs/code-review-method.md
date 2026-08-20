@@ -32,6 +32,14 @@ performance/code finding unfiltered "to be safe" - is the mistake this split exi
 The scoring below is identical in both modes except for the "new vs pre-existing" criterion,
 which only applies in change review.
 
+**Mode follows BREADTH, not depth (2026-08-20).** Diff-scoped → change review; whole-target
+→ audit review, however that breadth arose. Pairing a whole-target breadth with change mode
+makes the −50 "outside the diff" criterion apply to essentially every finding, filtering the
+review below threshold and reporting near-nothing from a pass that read everything. Note also
+that audit *mode* is not Audit *depth*: mode is only the pre-existing switch, while depth adds
+the architecture lens, Medium findings and the §4/§5 trail. `depth: deep, mode: audit` is a
+legitimate combination (a Deep review the user asked to run over the whole target).
+
 ## Confidence score (0-100)
 
 Start at 50 and adjust:
@@ -144,6 +152,14 @@ Even if pre-existing, silenced, or "minor", **always report**:
 
 These are regulatory findings, not style - a secret doesn't become acceptable because it
 predates the diff.
+
+**The guarantee is scope-bounded, and the report must say so (2026-08-20).** "Never filtered"
+means never dropped from what was **read** - it cannot reach a secret sitting in a file the
+review never opened. A diff-scoped pass opens only the changed files, so pre-existing secrets,
+PII in fixtures, undocumented thresholds and broken traces elsewhere in the repo are **not
+examined**, not cleared. State that in the report's limitations section (the exact sentence
+lives in `docs/review/output-format.md`); presenting a diff-scoped clean pass as though the
+never-filter promise had swept the repository is an overclaim.
 
 ## Conciseness for the never-filtered reviewers
 

@@ -505,3 +505,36 @@ def test_build_solution_review_step_is_conditional():
     _assert_conditional(
         ".claude/skills/build-solution/SKILL.md", m.group(0), "step 4's review-chain sentence"
     )
+
+
+def test_review_mode_follows_breadth_not_depth():
+    """2026-08-20: mode was derived from DEPTH, so a Deep review at whole-target breadth
+    got mode:change - and code-review-method's -50 'pre-existing, outside the diff'
+    criterion then filtered essentially the entire pass below threshold. The skill's own
+    example scope line ('whole repo - change-focused') demonstrated the broken pairing.
+    Pin the rule in all three places that carry it."""
+    skill = _read(".claude/skills/deep-review/SKILL.md")
+    assert "BREADTH, not depth" in skill
+    assert "whole repo · change-focused" not in skill, "the self-filtering example is back"
+    method = _read("docs/code-review-method.md")
+    assert "Mode follows BREADTH, not depth" in method
+    reviewer = _read(".claude/agents/code-reviewer.md")
+    assert "never infer it from whether a diff exists" in reviewer.lower()
+
+
+def test_never_filter_promise_is_stated_as_scope_bounded():
+    """The never-filter guarantee (secrets, PII, undocumented thresholds) covers what was
+    READ, not what existed - a diff-scoped pass never opens the file holding a
+    pre-existing secret. Saying otherwise overclaims, so both the method and the report
+    format must carry the bound."""
+
+    # Whitespace-normalised: these docs are hard-wrapped, so a literal phrase check
+    # fails the moment a wrap lands mid-phrase (it did - "not\nexamined").
+    def _flat(text):
+        return " ".join(text.split())
+
+    method = _flat(_read("docs/code-review-method.md"))
+    assert "scope-bounded" in method and "not examined" in method.lower()
+    fmt = _flat(_read("docs/review/output-format.md"))
+    assert "Not examined:" in fmt
+    assert "applies to what was **read**" in fmt

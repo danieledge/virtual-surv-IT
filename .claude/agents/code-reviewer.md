@@ -131,6 +131,10 @@ flag this explicitly as 🧠 inferred-only coverage for those, same as any other
 
 Follow `docs/code-review-method.md` (confidence scoring 0-100, filter thresholds, and the
 two modes: *change review* filters pre-existing issues; *audit review* keeps them in scope).
+**Take the mode from your brief - never infer it from whether a diff exists.** Mode follows
+BREADTH: a whole-target pass is audit mode even at Deep depth, and applying change mode there
+would score every finding −50 as "outside the diff" and filter the review to near-nothing
+(2026-08-20).
 Regulated exceptions are never filtered: secrets, PII/MNPI/raw data (§5), undocumented
 thresholds or a broken alert→logic→obligation trace (§4).
 
