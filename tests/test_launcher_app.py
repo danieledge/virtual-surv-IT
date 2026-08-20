@@ -293,3 +293,173 @@ def test_jira_is_offered_even_without_the_integration_configured(tmp_path):
     (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
     assert launcher._jira_offered(tmp_path) is True
     assert launcher._jira_enabled(tmp_path) is False, "outward actions must stay gated"
+
+
+# --- the [j] ticket prompt as a real screen (2026-08-20 user report) -------------------------
+
+
+def _drive_jira(ptk, keys: str, project):
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text(keys)
+        with create_app_session(input=pipe, output=out):
+            ref = app.jira_screen(project, launcher, output=out)
+    return ref, buf.getvalue()
+
+
+def test_jira_screen_collects_a_key_without_leaving_the_interface(ptk, tmp_path):
+    """The whole point: picking [j] used to tear the app down and drop to a bare input()
+    on stderr. The ticket is now collected inside the same framed shell."""
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    ref, text = _drive_jira(ptk, "SURV-142\r", tmp_path)
+    assert ref == "SURV-142"
+    assert "From a Jira ticket" in text, "the framed screen never rendered"
+    assert "will open from SURV-142" in text, "no live validation of what was typed"
+
+
+def test_jira_screen_keeps_the_url_so_the_instance_host_survives(ptk, tmp_path):
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    url = "https://acme.atlassian.net/browse/SURV-9"
+    ref, _text = _drive_jira(ptk, url + "\r", tmp_path)
+    assert ref == url, "a pasted URL must pass through, not be reduced to the bare key"
+
+
+def test_jira_screen_escape_is_a_cancel_not_an_unavailable_screen(ptk, tmp_path):
+    """Same distinction the settings screen had to learn: a cancel returns to the menu,
+    only None may fall back to the plain input() prompt."""
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    app = _load("launcher_app")
+    ref, _text = _drive_jira(ptk, "\x1b", tmp_path)
+    assert ref == app.JIRA_CANCELLED
+    assert ref is not None
+
+
+def test_jira_screen_enter_on_an_unparseable_ref_stays_put(ptk, tmp_path):
+    """Enter with nothing valid must not bounce the user out of the screen; the old flow
+    returned them to the menu and made them pick [j] again."""
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    # Enter on garbage is ignored, the text stays put to be corrected, and Ctrl-U clears
+    # it. (Without the clear the two run together into one bogus key - which the live
+    # "will open from ..." line shows before Enter, so it is visible, not silent.)
+    ref, _text = _drive_jira(ptk, "nonsense\r\x15SURV-7\r", tmp_path)
+    assert ref == "SURV-7", "the first Enter should have been ignored, not exited"
+    # The "keep typing" warning is deliberately NOT asserted here: piped input is drained
+    # before a frame is painted, so no intermediate state ever reaches the output buffer.
+    # It is the returned ref that proves Enter was ignored.
+
+
+def test_jira_screen_says_when_the_project_has_no_write_back_configured(ptk, tmp_path):
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    _ref, text = _drive_jira(ptk, "\x1b", tmp_path)
+    assert "No Jira integration configured" in text
+    assert "INTEGRATIONS.md" in text
+
+
+# --- per-setting explanations in the right pane (2026-08-20 user request) ---------------------
+
+
+def test_settings_screen_explains_the_highlighted_setting(ptk, tmp_path):
+    """The pane used to describe the screen's own keys, which a user has worked out by the
+    time they read it, while "what does this setting DO?" went unanswered - asked out loud
+    about the jira row, which is what prompted this."""
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text("\x1b")  # first row highlighted, then leave
+        with create_app_session(input=pipe, output=out):
+            app.settings_screen(tmp_path, launcher, output=out)
+    text = buf.getvalue()
+    assert "docx export" in text
+    assert "Word" in text, "the first row's explanation never rendered"
+    assert "currently:" in text
+
+
+def test_every_settings_row_has_an_explanation():
+    """A new toggle with no entry renders "No description available" - true, but useless.
+    This fails the moment a setting is added without one, which is the only reliable time
+    to write it."""
+    launcher = _load("virt_team_launcher")
+    labels = [label for label, _key in launcher._TOGGLE_PREFS]
+    labels += [launcher._ENV_ROW_LABEL, launcher._JIRA_ROW_LABEL]
+    missing = [label for label in labels if not launcher.setting_help(label)]
+    assert not missing, f"settings with no explanation: {missing}"
+
+
+def test_setting_help_is_two_parts_and_stays_pane_sized():
+    """(what it does, what off means). Long enough to be useful, short enough for a ~30
+    column pane - a wall of text in there is as unread as no text."""
+    launcher = _load("virt_team_launcher")
+    for label, parts in launcher._SETTING_HELP.items():
+        assert len(parts) == 2, label
+        for part in parts:
+            assert part and part[0].isupper(), f"{label}: not a sentence"
+            assert len(part) < 320, f"{label}: too long for the pane ({len(part)})"
+
+
+def test_the_jira_explanation_says_j_still_works_when_it_is_off():
+    """The exact confusion that prompted all this: "off" on this row does not mean Jira is
+    unavailable, and the pane has to say so or the label misleads again."""
+    launcher = _load("virt_team_launcher")
+    what, off = launcher.setting_help(launcher._JIRA_ROW_LABEL)
+    assert "WRITE" in what
+    assert "[j]" in off and "does NOT hide" in off
+
+
+# --- the working directory on screen (2026-08-20 user request) -------------------------------
+
+
+def test_the_menu_shows_the_full_project_directory(ptk, tmp_path):
+    """The frame title carried the basename only, which does not distinguish two checkouts
+    of the same repo - and running from the wrong directory is a documented cause of a
+    silent plain launch on corp Windows."""
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    _pick, text = _drive(ptk, "\x1b", [_row()], project=tmp_path)
+    assert str(tmp_path.resolve())[-30:] in text.replace("\r", "")
+
+
+def test_a_long_path_keeps_its_tail_not_its_head():
+    """An over-long path loses the head: the leaf is the part that identifies which
+    project you are in, so truncating the other end would defeat the whole point."""
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    deep = Path("/" + "/".join(f"segment-{i}" for i in range(20)) + "/the-actual-project")
+    line = app.project_line(deep, launcher, width=40)
+    assert line.endswith("the-actual-project")
+    assert len(line) <= 40
+    assert line.startswith("..")
+
+
+def test_the_settings_and_jira_screens_show_it_too(ptk, tmp_path):
+    """It lives in the shared shell, so no screen can quietly lose it."""
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    tail = str(tmp_path.resolve())[-24:]
+    for run in (
+        lambda out: app.settings_screen(tmp_path, launcher, output=out),
+        lambda out: app.jira_screen(tmp_path, launcher, output=out),
+    ):
+        buf = io.StringIO()
+        out = PlainTextOutput(buf)
+        with create_pipe_input() as pipe:
+            pipe.send_text("\x1b")
+            with create_app_session(input=pipe, output=out):
+                run(out)
+        assert tail in buf.getvalue().replace("\r", "")

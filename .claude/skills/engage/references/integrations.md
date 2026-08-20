@@ -1,10 +1,15 @@
 # Reference: acting on an `INTEGRATIONS=` banner line
 
-> Loaded just-in-time: read this **only** when the step-0 probe printed an
-> `INTEGRATIONS=` line. No line = everything off = this file is never read and no
-> outward action of any kind is taken. Configuration itself lives in
-> `docs/INTEGRATIONS.md` (the user-facing page); this file is the flow's operating
-> rules.
+> Loaded just-in-time, on EITHER of two triggers: the step-0 probe printed an
+> `INTEGRATIONS=` line, **or** the opening command carried `--jira <ref>`. No line and no
+> `--jira` = everything off = this file is never read and no outward action of any kind is
+> taken. Configuration itself lives in `docs/INTEGRATIONS.md` (the user-facing page); this
+> file is the flow's operating rules.
+>
+> The second trigger exists because `[j]` became a permanent go-menu item on 2026-08-20:
+> an engagement can now start from a ticket in a project that has no `integrations` block
+> at all, and the inbound flow still needs its rules. In that state the deliver-back
+> below applies to **that one ticket only** - everything else here needs the config.
 
 ## Ground rules (all modes)
 

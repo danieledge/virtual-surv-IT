@@ -494,9 +494,9 @@ def test_menu_c_with_a_change_refreshes_the_table(tmp_path, monkeypatch, capsys)
     out = capsys.readouterr()
     assert rc == 0
     assert out.err.count("Project defaults") == 2  # launch-time + refreshed
-    assert "-> jira integration: on" in out.err
+    assert "-> jira write-back: on" in out.err
     # the refreshed table carries the new state, and the re-rendered menu unlocks [j]
-    assert "on (key UNSET)" in out.err or "jira integration" in out.err
+    assert "on (key UNSET)" in out.err or "jira write-back" in out.err
     assert "[j]" in out.err
     assert out.out.strip() == "/compliance-surveillance-team:engage --new"
 

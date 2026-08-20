@@ -3,6 +3,40 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.35.2] - 2026-08-20 - The launcher stops breaking its own illusion
+
+A UI pass driven entirely by things that were visible on screen and wrong.
+
+- **`[j]` no longer drops out of the interface.** Picking "from a Jira ticket" tore the
+  full-screen app down and fell back to a bare `input()` prompt on stderr. The ticket is
+  now collected in a framed screen like every other, with live validation of the key as
+  you type ("will open from SURV-142"), Ctrl-U to clear, Esc to go back, and a pasted URL
+  passed through intact so the instance host survives. A long URL windows on its tail
+  rather than running into the pane divider.
+- **Every setting explains itself.** The settings screen's right pane described its own
+  keyboard shortcuts, which a user has already worked out by the time they read it, while
+  "what does this one actually DO?" went unanswered - asked out loud about the Jira row,
+  which is what prompted this. The highlighted row now shows what the setting does, what
+  turning it off means, and its current value. A test fails if a new setting is added
+  without an explanation, which is the only reliable moment to write one.
+- **The Jira setting is renamed `jira write-back`.** "jira integration" implied it
+  controlled whether Jira worked at all; since `[j]` became permanent it does not. It
+  gates whether the team writes to a tracker on its own initiative, and the pane says so
+  explicitly, including that `[j]` still works when it is off.
+- **The working directory is on screen.** Only the basename was shown, which does not
+  separate two checkouts of the same repo, and running from the wrong directory is a
+  documented cause of a silent plain launch on corporate Windows. Long paths lose their
+  head, never their leaf. In the shared shell, so no screen can quietly lose it.
+- **Column fixes proven under a real pty, not just the headless harness**: the panes now
+  split 2:1 in favour of the left, label padding is capped so one long label cannot clip
+  every row's on/off column, and the value qualifier ("(machine default)") moved to the
+  explanation pane where it fits.
+- **A documentation conflict closed.** `SKILL.md` told the inbound `--jira` flow to
+  deliver back to the ticket, while `references/integrations.md` said it is never read
+  without an `INTEGRATIONS=` line - reachable only once `[j]` started appearing on
+  unconfigured projects. The reference now loads on either trigger, scoped to that one
+  ticket when the project has no config.
+
 ## [0.35.1] - 2026-08-20 - The prefetch that never fired: three cache bugs found by following one slow open
 
 A user report ("on a new project, a new engagement takes a long time - the cache isn't being

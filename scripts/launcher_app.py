@@ -86,7 +86,24 @@ def _style(mod):
     return Style.from_dict(PALETTE)
 
 
-def screen(mod, *, title, body_fn, footer_fn, key_bindings, output=None, right_fn=None):
+def project_line(project_dir: Path, mod, width=72):
+    """The working directory, in full, left-truncated to keep the tail (2026-08-20 user
+    request: "show what project directory the user is in"). The basename alone was in the
+    frame title, which is not enough when several checkouts share a name - and picking the
+    wrong directory is a documented way to get a silent plain launch on corp Windows. The
+    TAIL is the informative end, so an over-long path loses its head, never its leaf."""
+    try:
+        text = str(project_dir.resolve())
+    except Exception:
+        text = str(project_dir)
+    if len(text) > width:
+        lead = "..." if mod._can_encode("...") else ".."
+        text = lead + text[-(width - len(lead)) :]
+    return text
+
+
+def screen(mod, *, title, body_fn, footer_fn, key_bindings, output=None, right_fn=None,
+           project_dir=None):
     """One framed full-screen round, shared by EVERY launcher screen (menu, settings,
     archive). Written once so the screens cannot drift apart the way the two menu tiers
     did - the thing this whole effort exists to prevent."""
@@ -99,19 +116,35 @@ def screen(mod, *, title, body_fn, footer_fn, key_bindings, output=None, right_f
 
     body = Window(FormattedTextControl(body_fn), wrap_lines=False)
     if right_fn is not None:
+        # 2:1 in favour of the left. An even split (the original) truncated the settings
+        # rows mid-label once the explanation pane arrived and pushed the on/off column
+        # clean off the screen - proven under a pty, 2026-08-20.
         body = VSplit(
             [
-                body,
+                Window(FormattedTextControl(body_fn), wrap_lines=False, width=D(min=34, weight=2)),
                 Window(width=1, char="│" if mod._can_encode("│") else "|", style="class:dim"),
                 Window(FormattedTextControl(right_fn), width=D(min=26, weight=1), wrap_lines=True),
             ]
         )
-    root = HSplit(
-        [
+    header = [
+        Window(
+            FormattedTextControl(lambda: [("class:title", f"  {mod._morgan_line()}")]),
+            height=1,
+        )
+    ]
+    if project_dir is not None:
+        folder = "📂 " if mod._can_encode("📂") else ""
+        header.append(
             Window(
-                FormattedTextControl(lambda: [("class:title", f"  {mod._morgan_line()}")]),
+                FormattedTextControl(
+                    lambda: [("class:dim", f"  {folder}{project_line(project_dir, mod)}")]
+                ),
                 height=1,
-            ),
+            )
+        )
+    root = HSplit(
+        header
+        + [
             Frame(body, title=title),
             Window(FormattedTextControl(footer_fn), height=1),
         ]
@@ -281,6 +314,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
             footer_fn=_footer,
             key_bindings=kb,
             output=output,
+            project_dir=project_dir,
         )
     except Exception:
         return APP_FALLBACK
@@ -320,28 +354,59 @@ def settings_screen(project_dir: Path, mod, output=None):
 
     def _body():
         out = [("class:group", f"  {g['settings']}Project settings\n\n")]
-        width = max((len(label) for label, _v, _o in rows), default=0)
+        # Padding is CAPPED, not simply the longest label: one long label used to set the
+        # column for all ten rows and push the value hard against the divider, so the
+        # longest VALUE ("not applied") clipped. Rows longer than the cap keep a single
+        # separating space and sit slightly right of the column - untidier than a clip is
+        # wrong.
+        width = min(max((len(label) for label, _v, _o in rows), default=0), 24)
         for i, (label, value, on) in enumerate(rows):
             sel = idx[0] == i
             out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
-            out.append(("class:sel" if sel else "", f"{label.ljust(width + 2)}"))
+            out.append(("class:sel" if sel else "", f"{label.ljust(width + 1)} "))
             mark = g["on"] if on else g["off"]
-            out.append(("class:on" if on else "class:off", f"{mark} {value}\n"))
+            # Only the HEAD of the value here ("on" / "off" / "applied"). The qualifier
+            # that follows a double space ("  (machine default)") is longer than the
+            # column has room for and was being clipped mid-word against the divider; the
+            # explanation pane shows the value in full instead.
+            head = value.partition("  ")[0]
+            out.append(("class:on" if on else "class:off", f"{mark} {head}\n"))
         return out
 
+    def _wrap(text, width=30, indent="  "):
+        """Hand-wrapped rather than left to the Window: the right pane is a weighted
+        split, so wrap_lines would rewrap on every resize and the explanation would jump
+        around under the cursor while someone is reading it."""
+        out, line = [], ""
+        for word in text.split():
+            if line and len(line) + 1 + len(word) > width:
+                out.append(indent + line)
+                line = word
+            else:
+                line = f"{line} {word}".strip()
+        if line:
+            out.append(indent + line)
+        return "\n".join(out)
+
     def _right():
-        out = [("class:title", "\n  What this screen does\n\n")]
-        out.append(
-            (
-                "class:dim",
-                "  Enter or Space toggles the\n  highlighted setting in place.\n\n"
-                "  d  restore machine defaults\n  Esc  back to the menu\n\n",
-            )
-        )
+        # The highlighted setting explains ITSELF here (2026-08-20 user request). The old
+        # pane described the screen's keys, which everyone had already worked out by the
+        # time they were reading it, while the actual question - "what does this one DO?" -
+        # went unanswered and had to be asked out loud.
+        label, value, on = rows[idx[0]]
+        out = [("class:title", f"\n  {label}\n\n")]
+        help_text = mod.setting_help(label)
+        if help_text:
+            out.append(("", _wrap(help_text[0]) + "\n\n"))
+            out.append(("class:dim", _wrap(help_text[1]) + "\n\n"))
+        else:
+            out.append(("class:dim", "  No description available for\n  this setting yet.\n\n"))
+        out.append(("class:on" if on else "class:off", _wrap(f"currently: {value}") + "\n\n"))
+        out.append(("class:hint", "  Enter toggle · d defaults\n  Esc back\n\n"))
         if notes:
             out.append(("class:group", "  Just changed\n"))
-            for n in notes[-6:]:
-                out.append(("class:on", f"  {n}\n"))
+            for n in notes[-4:]:
+                out.append(("class:on", _wrap(n) + "\n"))
         return out
 
     def _footer():
@@ -399,6 +464,7 @@ def settings_screen(project_dir: Path, mod, output=None):
             footer_fn=_footer,
             key_bindings=kb,
             output=output,
+            project_dir=project_dir,
         )
     except Exception:
         return changed[0]
@@ -507,7 +573,150 @@ def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=
             footer_fn=_footer,
             key_bindings=kb,
             output=output,
+            project_dir=project_dir,
         )
     except Exception:
         return done[0]
     return done[0]
+
+
+JIRA_CANCELLED = "__jira_cancelled__"
+
+# Visible width of the ticket field. Conservative rather than measured: the left pane is a
+# weighted split, so the exact column count is not known at render time, and under-showing
+# is harmless (the detected key is on its own line) while over-showing collides with the
+# divider.
+_INPUT_WINDOW = 38
+
+
+def jira_screen(project_dir: Path, mod, output=None):
+    """The [j] ticket prompt as a real screen (2026-08-20 user report: "when selecting J
+    it drops out of the interface to prompt for jira ticket url").
+
+    Picking [j] used to tear down the full-screen app and fall back to a bare `input()`
+    on stderr, so the one flow a colleague is most likely to be watched through was also
+    the one that broke the illusion of an app. The typing surface is built from key
+    bindings rather than a focusable widget so the shared `screen()` shell - and its
+    stderr-only output contract - is reused unchanged.
+
+    Returns the ref to pass to `--jira` (URL when one was pasted, bare key otherwise),
+    JIRA_CANCELLED on Esc, or None when the app cannot run here (the caller then uses the
+    plain `_jira_decision` prompt, which stays fully maintained)."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+        from prompt_toolkit.keys import Keys
+    except Exception:
+        return None
+
+    g = glyphs(mod)
+    buf = [""]
+    result = {"v": JIRA_CANCELLED}
+    configured = mod._jira_enabled(project_dir)
+
+    def _detected():
+        m = mod._JIRA_KEY_RE.search(buf[0])
+        return m.group(1).upper() if m else ""
+
+    def _body():
+        out = [("class:group", f"  {g['jira']}Start an engagement from a Jira ticket\n\n")]
+        out.append(("class:dim", "  Paste the issue URL, or type the key (e.g. SURV-142).\n\n"))
+        cursor = "_" if mod._can_encode("_") else " "
+        out.append(("class:title", "  > "))
+        # Window on the TAIL, not the head: a pasted Jira URL is longer than the pane and
+        # used to run straight into the divider, hiding the very part that carries the key
+        # (proven under a real pty, 2026-08-20). The full value is still what gets returned.
+        shown = buf[0] or ""
+        if len(shown) > _INPUT_WINDOW:
+            lead = "..." if mod._can_encode("...") else ".."
+            shown = lead + shown[-(_INPUT_WINDOW - len(lead)) :]
+        out.append(("", shown))
+        out.append(("class:hint", cursor))
+        out.append(("", "\n\n"))
+        key = _detected()
+        if key:
+            out.append(("class:on", f"  {g['on']} will open from {key}\n"))
+        elif buf[0]:
+            out.append(("class:warn", "  no issue key found yet - keep typing\n"))
+        else:
+            out.append(("class:dim", "  waiting for a ticket reference\n"))
+        return out
+
+    def _right():
+        out = [("class:title", "\n  What happens next\n\n")]
+        out.append(
+            (
+                "class:dim",
+                "  The launcher never talks to\n  Jira. The session fetches the\n"
+                "  ticket itself and delivers the\n  results back to it at close.\n\n"
+                "  Ticket content is treated as\n  DATA, never as instructions.\n\n",
+            )
+        )
+        if not configured:
+            out.append(("class:warn", "  No Jira integration configured\n"))
+            out.append(
+                (
+                    "class:dim",
+                    "  here, so the session can only\n  fetch the ticket if access\n"
+                    "  already exists. See\n  docs/INTEGRATIONS.md\n\n",
+                )
+            )
+        out.append(("class:dim", "  Enter  start   Esc  back\n"))
+        return out
+
+    def _footer():
+        return [("class:hint", f"  Enter start · Esc back · Ctrl-U clear   {project_dir.name}")]
+
+    kb = KeyBindings()
+
+    @kb.add(Keys.Any)
+    def _type(event):
+        data = event.data or ""
+        if data.isprintable():
+            buf[0] += data
+
+    @kb.add(Keys.BracketedPaste)
+    def _paste(event):
+        # A pasted URL is the common case; strip newlines rather than letting them land
+        # in the ref, and keep the rest verbatim so the instance host survives.
+        buf[0] += "".join(ch for ch in (event.data or "") if ch.isprintable())
+
+    @kb.add("backspace")
+    def _back(event):
+        buf[0] = buf[0][:-1]
+
+    @kb.add("c-u")
+    def _clear(event):
+        buf[0] = ""
+
+    @kb.add("enter")
+    def _accept(event):
+        raw = buf[0].strip()
+        key = _detected()
+        if not key:
+            return  # nothing valid yet - stay on the screen rather than bouncing out
+        result["v"] = raw if "://" in raw else key
+        event.app.exit()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    def _esc(event):
+        result["v"] = JIRA_CANCELLED
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title=f"{g['jira']}From a Jira ticket  ·  {project_dir.resolve().name}",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=project_dir,
+        )
+    except Exception:
+        return None
+    return result["v"]

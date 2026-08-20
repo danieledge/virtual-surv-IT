@@ -246,7 +246,92 @@ _TOGGLE_PREFS = (
 )
 
 
-_ENV_ROW_LABEL = "env tuning (timeouts + 1h cache TTL)"
+# Shortened 2026-08-20 to match the sibling label in _print_project_defaults and, more to
+# the point, to stop the longest label in the table setting a padding width that clipped
+# every row's on/off column against the settings-screen divider. "timeouts" moved into the
+# explanation pane, which now carries the detail for every row.
+_ENV_ROW_LABEL = "env tuning (1h cache TTL)"
+
+# Renamed from the bare "jira integration" (2026-08-20 user question: "not clear what does
+# the setting jira do - what does it enable or disable or change"). Since [j] became a
+# permanent menu item, this switch no longer decides whether Jira is USABLE - starting an
+# engagement from a ticket works either way. What it decides is whether the team WRITES
+# BACK to a tracker on its own initiative, so the label names that instead.
+_JIRA_ROW_LABEL = "jira write-back"
+
+
+# What each setting actually DOES, keyed by the row label (2026-08-20 user request: "for
+# each setting show on right hand side an explanation of that setting", after asking what
+# the jira row even meant). Wording is derived from the implementations and docs that own
+# each preference - resolve_preferences for the defaults, DEFINITION-OF-DONE.md for the
+# two DoD-gating ones - rather than paraphrased from the label, because a settings screen
+# that guesses is worse than one that says nothing. Kept here, not in launcher_app, so any
+# tier can show it and there is one copy to keep true.
+_SETTING_HELP = {
+    "docx export": (
+        "Also render deliverables as .docx alongside the .md + .html every engagement "
+        "already produces. For sharing with people who live in Word.",
+        "Off: markdown and HTML only.",
+    ),
+    "regulatory citations": (
+        "Each requirement in the RTM carries the specific obligation it serves, so an "
+        "alert traces back to the rule that justifies it.",
+        "Off: the obligation link is recorded as DECLINED, never silently dropped - the "
+        "rest of the trace still holds.",
+    ),
+    "large-context review split": (
+        "Splits a big review into several passes instead of one call, so a large "
+        "findings set cannot blow the write cap or time out mid-review.",
+        "Off: one delegated review call. Worth turning on if reviews here keep hitting "
+        "the ~8-finding threshold.",
+    ),
+    "parallel dispatch (Workflow)": (
+        "Independent review passes fan out through the Workflow tool's deterministic "
+        "parallel dispatch rather than batched Task calls, which did not stick reliably.",
+        "Off: passes run one after another. Slower, but no Workflow dependency.",
+    ),
+    "standards critique": (
+        "Adds a second, independent critic pass over an already-finished deliverable, "
+        "judged against the named standard, before handover.",
+        "Off (the default): the normal review gates still apply. This is a full extra "
+        "pass, not a universal expectation.",
+    ),
+    "codebase-map skeleton": (
+        "Seeds a starter docs/codebase-map.md for a project that has none, so the team "
+        "has a map to curate instead of a blank page.",
+        "Off: the map is only ever written by hand.",
+    ),
+    "probe pre-cache at go": (
+        "Computes the engage probe HERE, outside the session, and caches it - so opening "
+        "an engagement skips work that takes minutes on a locked-down box.",
+        "Pure accelerator: a missing or stale cache just runs the live probe, so nothing "
+        "breaks either way.",
+    ),
+    "evidence room at close": (
+        "Assembles one self-contained HTML pack at close from evidence the engagement "
+        "already produced - for handing to an auditor.",
+        "Off (the default): whether a project wants an auditor-facing pack is a governance "
+        "decision, so it is never created unasked.",
+    ),
+    _ENV_ROW_LABEL: (
+        "Writes tuned timeouts and a 1-hour prompt-cache TTL into this project's "
+        ".claude/settings.json - fewer timeouts, and cache that survives a thinking pause.",
+        "Not applied: Claude Code's own defaults are used.",
+    ),
+    _JIRA_ROW_LABEL: (
+        "Lets the team WRITE to your tracker on its own initiative: raise the engagement "
+        "issue at open, comment on progress, post the summary and transition at close.",
+        "Off does NOT hide Jira: [j] on the menu still starts an engagement from a ticket "
+        "and delivers that one ticket its result. This governs everything else.",
+    ),
+}
+
+
+def setting_help(label: str) -> tuple:
+    """(what it does, what off means) for a settings row, or () when unknown. Returning
+    empty rather than a placeholder keeps an unexplained new setting visibly unexplained
+    instead of quietly wrong."""
+    return _SETTING_HELP.get(label, ())
 
 
 def _editor_rows(project_dir: Path):
@@ -292,9 +377,9 @@ def _editor_rows(project_dir: Path):
     jira = jira if isinstance(jira, dict) else {}
     if jira.get("enabled") is True:
         key = str(jira.get("project_key") or "") or "key UNSET"
-        rows.append(("jira integration", f"on ({key})", True))
+        rows.append((_JIRA_ROW_LABEL, f"on ({key})", True))
     else:
-        rows.append(("jira integration", "off", False))
+        rows.append((_JIRA_ROW_LABEL, "off", False))
     return rows
 
 
@@ -770,6 +855,13 @@ def _jira_decision(project_dir: Path) -> str:
     # host; a bare key relies on the project's configured Jira access alone.
     ref = raw if "://" in raw else key
     print(ink.dim(f"    -> starting new engagement from {key}"), file=err)
+    return _jira_command(project_dir, ref)
+
+
+def _jira_command(project_dir: Path, ref: str) -> str:
+    """The one place the --jira opening command is spelled. Both ticket prompts (the
+    full-screen jira_screen and the plain input() flow above) end here, so they cannot
+    drift the way the two menu renderers did."""
     return f"{_engage_command(project_dir)} --new --jira {ref}"
 
 
@@ -835,6 +927,21 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
         print(ink.dim("    -> launching"), file=sys.stderr)
         return ""
     if pick[0] == "jira":
+        try:
+            # Full-screen ticket prompt first (2026-08-20 user report: picking [j] used to
+            # tear the app down and drop to a bare input()). Same None/cancel contract the
+            # settings screen learned the hard way: None means the screen could not run
+            # and the plain prompt takes over; a cancel is NOT unavailability.
+            from launcher_app import JIRA_CANCELLED, jira_screen
+
+            ref = jira_screen(project_dir, sys.modules[__name__])
+            if ref == JIRA_CANCELLED:
+                return "__again__"
+            if ref:
+                print(ink.dim(f"    -> starting new engagement from {ref}"), file=sys.stderr)
+                return _jira_command(project_dir, ref)
+        except Exception:
+            pass  # any app failure degrades to the plain prompt below
         try:
             return _jira_decision(project_dir)
         except Exception:
@@ -1950,10 +2057,10 @@ def _print_project_defaults(project_dir: Path) -> None:
     jira = integrations.get("jira") or {}
     if jira.get("enabled"):
         rows.append(
-            ("jira integration", f"on ({jira['mirror']}, {jira['project_key'] or 'UNSET'})")
+            (_JIRA_ROW_LABEL, f"on ({jira['mirror']}, {jira['project_key'] or 'UNSET'})")
         )
     else:
-        rows.append(("jira integration", "off"))
+        rows.append((_JIRA_ROW_LABEL, "off"))
     pr = integrations.get("pr_comments") or {}
     if pr.get("enabled") or pr.get("locked"):
         rows.append(("pr comments", "on (EXPERIMENTAL)" if pr.get("enabled") else "locked"))
@@ -2004,7 +2111,7 @@ def _print_project_defaults(project_dir: Path) -> None:
         "codebase-map skeleton": "off",
         "probe pre-cache at go": "on",
         "review tools": "all auto",
-        "jira integration": "off",
+        _JIRA_ROW_LABEL: "off",
         "exec consent marker": "absent",
         "env tuning (1h cache TTL)": "not applied",
     }

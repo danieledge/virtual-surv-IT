@@ -80,6 +80,13 @@ posting progress comments - because those touch someone else's tracker, and defa
 them on would break this page's own "off by default" promise. On an unconfigured project
 the menu says plainly that the session can only fetch the ticket if access exists.
 
+Because of that split, the setting is labelled **`jira write-back`** in `virt-surv
+configure`, not "jira integration": *off* does not mean Jira is unavailable, it means the
+team never writes to a tracker on its own initiative. Starting an engagement from a
+ticket, and delivering the result back to **that one ticket**, works either way - the
+inbound flow reads its rules on the `--jira` flag itself, with or without an
+`INTEGRATIONS=` line. Everything else outward needs this switch on.
+
 With the Jira integration enabled, `virt-surv go` shows **[j] new engagement from a
 Jira**: paste the issue URL (or a bare key) and the session launches with
 `/engage --new --jira <ref>` pre-seeded. Morgan fetches the ticket via the configured
