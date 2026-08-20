@@ -556,3 +556,83 @@ def test_setup_screen_escape_skips(ptk, tmp_path):
 def test_the_menu_offers_the_explorer(ptk):
     _pick, text = _drive(ptk, "\x1b", [_row()])
     assert "open a different project folder" in text
+
+
+# --- artifacts, help, recents, and the scrolling engagement list ------------------------------
+
+
+def _show(ptk, fn, keys="\x1b"):
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text(keys)
+        with create_app_session(input=pipe, output=out):
+            fn(out)
+    return buf.getvalue().replace("\r", "")
+
+
+def test_artifacts_screen_lists_what_the_engagement_produced(ptk, tmp_path):
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    ws = tmp_path / "artifacts" / "demo"
+    ws.mkdir(parents=True)
+    (ws / "START-HERE.html").write_text("x", encoding="utf-8")
+    (ws / "delivery-report.html").write_text("x", encoding="utf-8")
+    text = _show(ptk, lambda o: app.artifacts_screen(tmp_path, launcher, "demo", output=o))
+    assert "START-HERE.html" in text and "delivery-report.html" in text
+    assert "Artifacts for demo" in text
+
+
+def test_artifacts_screen_says_so_when_nothing_is_rendered_yet(ptk, tmp_path):
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    (tmp_path / "artifacts" / "empty").mkdir(parents=True)
+    text = _show(ptk, lambda o: app.artifacts_screen(tmp_path, launcher, "empty", output=o))
+    assert "nothing rendered yet" in text
+
+
+def test_help_screen_explains_the_status_marks_and_the_keys(ptk, tmp_path):
+    """The settings screen explains itself; the menu's glyphs did not - a row marked with
+    the blocked mark told you something was wrong without saying what."""
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    text = _show(ptk, lambda o: app.help_screen(tmp_path, launcher, output=o))
+    for word in ("in progress", "blocked", "closing", "most recent"):
+        assert word in text
+    assert "quit, no launch" in text, "Esc's real behaviour must be stated"
+    assert "view artifacts" in text and "show all open" in text
+
+
+def test_the_menu_advertises_help_and_that_escape_does_not_launch(ptk):
+    _pick, text = _drive(ptk, "\x1b", [_row()])
+    assert "? help" in text
+    assert "Esc back to terminal" in text
+
+
+def test_the_menu_offers_artifacts_when_something_is_open(ptk):
+    _pick, text = _drive(ptk, "\x1b", [_row()])
+    assert "view an engagement's artifacts" in text
+
+
+def test_a_long_engagement_list_scrolls_instead_of_running_off_the_frame(ptk):
+    """This tier now receives EVERY open engagement, so without a viewport the rows past
+    the frame are simply invisible."""
+    rows = [_row(slug=f"eng-{i}", title=f"Engagement {i}") for i in range(20)]
+    _pick, text = _drive(ptk, "\x1b", rows)
+    assert "more below" in text, "no scroll indicator on a 20-row list"
+    assert "Engagement 0" in text
+
+
+def test_the_explorer_offers_recent_projects(ptk, tmp_path, monkeypatch):
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    recent = tmp_path / "a-recent-project"
+    recent.mkdir()
+    launcher._remember_project(recent)
+    start = tmp_path / "somewhere-else"
+    start.mkdir()
+    text = _show(ptk, lambda o: app.browse_screen(start, launcher, output=o))
+    assert "a-recent-project" in text
+    assert "recent" in text

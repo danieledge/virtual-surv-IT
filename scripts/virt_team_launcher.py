@@ -266,6 +266,41 @@ _ENV_ROW_LABEL = "env tuning (1h cache TTL)"
 _JIRA_ROW_LABEL = "jira write-back"
 
 
+# Settings that are NOT on/off (2026-08-20). The editor was boolean-only, so qa_depth -
+# a four-value preference that decides how much INDEPENDENT QA a build buys, i.e. the
+# single setting with the largest effect on both cost and assurance - could not be changed
+# from the launcher at all, only by hand-editing team-preferences.json. Enter cycles.
+# (label, storage key with dots for nesting, values in cycle order, default when unset)
+_CHOICE_PREFS = (
+    ("qa depth", "qa_depth", ("auto", "quick", "deep", "audit"), "auto"),
+    ("jira mirror", "integrations.jira.mirror", ("close-only", "live"), "close-only"),
+)
+
+
+def _choice_read(prefs: dict, key: str):
+    """Stored value at a dotted path, or None. Any wrong-typed level reads as unset -
+    same fail-to-default posture the integrations block already takes."""
+    node = prefs
+    for part in key.split("."):
+        if not isinstance(node, dict):
+            return None
+        node = node.get(part)
+    return node if isinstance(node, str) else None
+
+
+def _choice_write(prefs: dict, key: str, value: str) -> None:
+    """Set a dotted path, creating intermediate dicts and replacing wrong-typed ones."""
+    parts = key.split(".")
+    node = prefs
+    for part in parts[:-1]:
+        child = node.get(part)
+        if not isinstance(child, dict):
+            child = {}
+            node[part] = child
+        node = child
+    node[parts[-1]] = value
+
+
 # What each setting actually DOES, keyed by the row label (2026-08-20 user request: "for
 # each setting show on right hand side an explanation of that setting", after asking what
 # the jira row even meant). Wording is derived from the implementations and docs that own
@@ -323,6 +358,19 @@ _SETTING_HELP = {
         "Writes tuned timeouts and a 1-hour prompt-cache TTL into this project's "
         ".claude/settings.json - fewer timeouts, and cache that survives a thinking pause.",
         "Not applied: Claude Code's own defaults are used.",
+    ),
+    "qa depth": (
+        "How much INDEPENDENT QA a build buys. auto reads the work; quick narrows what "
+        "gets written and always closes PARTIAL; deep is the full pass; audit is the "
+        "heaviest.",
+        "There is no off: QA running, and being independent of whoever wrote the code, "
+        "is not tierable - only its breadth is.",
+    ),
+    "jira mirror": (
+        "WHEN tracker updates are posted. close-only waits until the end; live comments "
+        "as phases change.",
+        "Only bites when jira write-back is on. Work started from a ticket tracks live "
+        "regardless, unless you set close-only here.",
     ),
     _JIRA_ROW_LABEL: (
         "Whether the team WRITES to your tracker itself. On: it raises ONE issue per "
@@ -387,6 +435,10 @@ def _editor_rows(project_dir: Path):
         rows.append((_JIRA_ROW_LABEL, f"on ({key})", True))
     else:
         rows.append((_JIRA_ROW_LABEL, "off", False))
+    for label, key, values, default in _CHOICE_PREFS:
+        stored = _choice_read(prefs, key)
+        current = stored if stored in values else default
+        rows.append((label, current + ("" if stored in values else "  (default)"), current != default))
     return rows
 
 
@@ -402,11 +454,36 @@ def _editor_apply(project_dir: Path, action) -> str:
         prefs = {}
     env_i = len(_TOGGLE_PREFS) + 1
     jira_i = len(_TOGGLE_PREFS) + 2
+    last_i = jira_i + len(_CHOICE_PREFS)
     if action != "d":
         try:
             action = int(action)  # the input() tier hands over strings
         except (TypeError, ValueError):
-            return f"1-{jira_i}, d or b, please."
+            return f"1-{last_i}, d or b, please."
+    if action != "d" and jira_i < action <= last_i:
+        # Choice rows cycle rather than toggle (2026-08-20). Written even when the value
+        # lands back on the default, because "explicitly chosen" and "never set" are
+        # different states to resolve_preferences' key-presence precedence.
+        label, key, values, default = _CHOICE_PREFS[action - jira_i - 1]
+        stored = _choice_read(prefs, key)
+        try:
+            at = values.index(stored)
+        except ValueError:
+            # Unset: advance from the DEFAULT, not from values[0]. Otherwise the first
+            # press writes the value that was already in effect and reads as a dead key.
+            at = values.index(default) if default in values else -1
+        nxt = values[(at + 1) % len(values)]
+        _choice_write(prefs, key, nxt)
+        try:
+            prefs_path.parent.mkdir(parents=True, exist_ok=True)
+            prefs_path.write_text(
+                json.dumps(prefs, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            return "could not write team-preferences.json - unchanged"
+        return f"{label}: {nxt}" if label != "qa depth" or nxt == "auto" else (
+            f"qa depth: {nxt} - QA still runs and stays independent; this changes its breadth"
+        )
     if action == jira_i:
         # Jira integration toggle (2026-08-18 user report: the [c] editor was missing
         # table rows like this one). Enable/disable in place, PRESERVING the rest of
@@ -440,6 +517,11 @@ def _editor_apply(project_dir: Path, action) -> str:
     if action == "d":
         for _, key in _TOGGLE_PREFS:
             prefs.pop(key, None)
+        for _label, key, _values, _default in _CHOICE_PREFS:
+            # Top-level choice keys only: a nested one (jira mirror) lives inside a config
+            # block that "restore machine defaults" has no business dismantling.
+            if "." not in key:
+                prefs.pop(key, None)
     elif action == env_i:
         # The env bundle: ON adds the missing recommended keys, add-only, same
         # contract as the go-time propagation; OFF removes only keys still AT their
@@ -485,7 +567,7 @@ def _editor_apply(project_dir: Path, action) -> str:
         try:
             label, key = _TOGGLE_PREFS[int(action) - 1]
         except (ValueError, IndexError, TypeError):
-            return f"1-{env_i}, d or b, please."
+            return f"1-{last_i}, d or b, please."
         rows = _editor_rows(project_dir) or []
         current = bool(rows[int(action) - 1][2]) if rows else False
         if key == "extra_formats":
@@ -773,9 +855,15 @@ def _resume_decision(project_dir: Path) -> str:
         import engagement_state
     except Exception:
         return ""
+    show_all = [False]
     while True:
         try:
-            menu = engagement_state.resume_menu(project_dir / "artifacts")
+            # Every open engagement, not the top 3 (2026-08-20): the cap used to be
+            # applied HERE, so the remainder was unreachable from any tier - "+2 more not
+            # shown" with no way to reach them, and resuming an older one meant knowing
+            # its slug. The app tier scrolls the full list; the plain tiers still show
+            # three and offer [m].
+            menu = engagement_state.resume_menu(project_dir / "artifacts", max_shown=_FULL_MENU)
         except Exception:
             return ""
         shown = menu.get("shown") or []
@@ -784,7 +872,10 @@ def _resume_decision(project_dir: Path) -> str:
         # prefer it always pauses") - [c]/[a] stay reachable, and non-interactive
         # callers are unaffected: no tty means input() raises EOFError, which is the
         # same plain launch as before.
-        decision = _menu_round(project_dir, engagement_state, menu, shown)
+        decision = _menu_round(project_dir, engagement_state, menu, shown, show_all=show_all[0])
+        if decision == _SHOW_ALL:
+            show_all[0] = True
+            continue
         if decision.startswith(_CHDIR_PREFIX):
             # Project switch (2026-08-20 explorer): re-enter the SAME loop against the new
             # folder rather than returning, so the menu, settings and resume list all
@@ -803,7 +894,7 @@ def _resume_decision(project_dir: Path) -> str:
                     ),
                     file=sys.stderr,
                 )
-            for step in (_prewarm_guard_interpreter, _write_probe_cache):
+            for step in (_remember_project, _prewarm_guard_interpreter, _write_probe_cache):
                 try:
                     step(project_dir)  # the new project deserves the same warm start
                 except Exception:
@@ -814,6 +905,9 @@ def _resume_decision(project_dir: Path) -> str:
 
 
 _CHDIR_PREFIX = "__chdir__:"
+_SHOW_ALL = "__show_all__"
+_FULL_MENU = 9999  # "no cap" for resume_menu; the tiers below do their own limiting
+_PLAIN_TIER_ROWS = 3  # what the numbered/picker tiers show before offering [m]
 
 
 def _write_cd_request(target: Path) -> bool:
@@ -838,6 +932,150 @@ def _write_cd_request(target: Path) -> bool:
         return True
     except OSError:
         return False
+
+
+_RECENT_LIMIT = 8
+
+
+def _recent_projects() -> list:
+    """Project folders opened before, most recent first (2026-08-20). The explorer starts
+    from the current directory, so reaching a project you use every day meant walking the
+    tree from wherever you happened to be standing. Machine-scoped on purpose: which
+    folders THIS person works in is a fact about the machine, never about a project, so it
+    never lands in a repo. Missing entries are dropped on read rather than pruned on
+    write - a folder on an unmounted share should come back when it returns."""
+    try:
+        cfg = json.loads(_installer_config_path().read_text(encoding="utf-8"))
+        entries = cfg.get("recent_projects")
+    except Exception:
+        return []
+    if not isinstance(entries, list):
+        return []
+    out = []
+    for entry in entries:
+        if not isinstance(entry, str):
+            continue
+        candidate = Path(entry)
+        if candidate.is_dir() and candidate not in out:
+            out.append(candidate)
+    return out[:_RECENT_LIMIT]
+
+
+def _remember_project(project_dir: Path) -> None:
+    """Record a project as recently used. Best-effort and silent: a machine config that
+    cannot be written must never cost a launch."""
+    try:
+        resolved = str(project_dir.resolve())
+    except Exception:
+        return
+    path = _installer_config_path()
+    try:
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(cfg, dict):
+            cfg = {}
+    except Exception:
+        cfg = {}
+    existing = [e for e in (cfg.get("recent_projects") or []) if isinstance(e, str)]
+    cfg["recent_projects"] = [resolved] + [e for e in existing if e != resolved][: _RECENT_LIMIT - 1]
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _engagement_artifacts(project_dir: Path, slug: str) -> list:
+    """(label, path) for what an engagement actually produced, newest-looking first.
+    Rendered .html is preferred over its .md twin - the HTML is the shareable artifact and
+    the one a person means when they say "open the report"."""
+    workspace = project_dir / "artifacts" / slug
+    if not workspace.is_dir():
+        return []
+    preferred = ("START-HERE", "delivery-report", "evidence-room", "engagement-summary")
+    found = []
+    try:
+        files = [f for f in workspace.iterdir() if f.is_file()]
+    except OSError:
+        return []
+    html = {f.stem: f for f in files if f.suffix == ".html"}
+    for f in sorted(files, key=lambda x: x.name.lower()):
+        if f.suffix not in (".html", ".md", ".txt"):
+            continue
+        if f.suffix == ".md" and f.stem in html:
+            continue  # the rendered twin is already listed
+        found.append(f)
+    def rank(path):
+        for i, name in enumerate(preferred):
+            if path.stem.lower().startswith(name.lower()):
+                return i
+        return len(preferred)
+    found.sort(key=rank)
+    return [(f.name, f) for f in found]
+
+
+def _open_path(target: Path) -> str:
+    """Hand a file to the OS's own opener. Returns '' on success, else a short reason.
+    Deliberately not a viewer: reading a delivery report in a 30-column pane would be
+    worse than the browser the HTML was rendered for."""
+    import subprocess
+
+    if sys.platform == "win32":
+        argv = ["cmd", "/c", "start", "", str(target)]
+    elif sys.platform == "darwin":
+        argv = ["open", str(target)]
+    else:
+        argv = ["xdg-open", str(target)]
+    try:
+        subprocess.Popen(
+            argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL
+        )
+        return ""
+    except (OSError, ValueError) as exc:
+        return f"could not open it here ({exc.__class__.__name__}) - {target}"
+
+
+def _pick_engagement_slug(project_dir: Path, shown: list) -> str:
+    """Which engagement's artifacts to show when more than one is open. Reuses the app's
+    own picker so the choice looks like everything else; falls back to the most recent
+    rather than asking a question the plain tier cannot render well."""
+    try:
+        from launcher_app import slug_picker_screen
+
+        picked = slug_picker_screen(project_dir, sys.modules[__name__], shown)
+        if picked:
+            return picked
+    except Exception:
+        pass
+    return _row_resume_token(shown[0]) if shown else ""
+
+
+def _artifacts_plain(project_dir: Path, slug: str) -> None:
+    """Plain tier: list what exists and open one by number. Same _engagement_artifacts and
+    _open_path underneath as the screen, so the two cannot disagree about what is there."""
+    ink = _Ink()
+    err = sys.stderr
+    items = _engagement_artifacts(project_dir, slug)
+    print("", file=err)
+    _print_rule(f"Artifacts for {slug}")
+    if not items:
+        print(ink.dim("  nothing rendered yet in this workspace"), file=err)
+        return
+    for i, (label, _path) in enumerate(items, 1):
+        print(f"    {ink.bold(f'[{i}]')} {label}", file=err)
+    print(ink.bold("  Open which? (blank to skip): "), end="", file=err)
+    try:
+        choice = input().strip()
+    except (EOFError, KeyboardInterrupt):
+        return
+    if not choice:
+        return
+    try:
+        target = items[int(choice) - 1][1]
+    except (ValueError, IndexError):
+        print(ink.dim("  not a listed number"), file=err)
+        return
+    problem = _open_path(target)
+    print(ink.dim(f"  {problem or 'opened'}"), file=err)
 
 
 def _browse_decision(project_dir: Path):
@@ -961,10 +1199,17 @@ def _jira_command(project_dir: Path, ref: str) -> str:
     return f"{_engage_command(project_dir)} --new --jira {ref}"
 
 
-def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: list) -> str:
+def _pt_menu_round(
+    p, project_dir: Path, engagement_state, menu: dict, shown: list, show_all: bool = False
+) -> str:
     """prompt_toolkit tier of the go menu: arrow/mouse picker over the same entries as
     the numbered flow, same return contract (decision, "" for in-session/plain, or
     "__again__" after a side action)."""
+    # Same local cap as the numbered tier, and the same escape hatch - the picker is a
+    # fixed-height widget, so an uncapped list would simply run off it.
+    full = shown
+    shown = shown if show_all else shown[:_PLAIN_TIER_ROWS]
+    hidden = len(full) - len(shown)
     entries = []
     default_slug = menu.get("default") or ""
     for i, row in enumerate(shown):
@@ -987,6 +1232,8 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
     if not shown:
         archived = menu.get("archived") or 0
         subtitle = f"none open ({archived} archived)" if archived else "none open"
+    if hidden:
+        entries.append(((_SHOW_ALL,), f"show all {len(full)} open engagements", "m"))
     entries.append((("new",), "start a new engagement", "n"))
     if _jira_offered(project_dir):
         entries.append((("jira",), "a new engagement from a Jira ticket", "j"))
@@ -1049,6 +1296,32 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
             return _jira_decision(project_dir)
         except Exception:
             return "__again__"
+    if pick[0] == _SHOW_ALL:
+        return _SHOW_ALL
+    if pick[0] == "help":
+        try:
+            from launcher_app import help_screen
+
+            help_screen(project_dir, sys.modules[__name__])
+        except Exception:
+            pass  # cosmetic tier
+        return "__again__"
+    if pick[0] == "artifacts":
+        slug = _row_resume_token(shown[0]) if shown else ""
+        if len(shown) > 1:
+            slug = _pick_engagement_slug(project_dir, shown) or slug
+        if slug:
+            try:
+                from launcher_app import artifacts_screen
+
+                if artifacts_screen(project_dir, sys.modules[__name__], slug) is None:
+                    _artifacts_plain(project_dir, slug)
+            except Exception:
+                try:
+                    _artifacts_plain(project_dir, slug)
+                except Exception:
+                    pass
+        return "__again__"
     if pick[0] == "open":
         chosen = _browse_decision(project_dir)
         if not chosen:
@@ -1101,7 +1374,9 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
     return ""
 
 
-def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) -> str:
+def _menu_round(
+    project_dir: Path, engagement_state, menu: dict, shown: list, show_all: bool = False
+) -> str:
     """One render-and-ask round of the engagement menu. Returns the decision string, ""
     for decide-in-session, or the sentinel "__again__" after a side action ([c] settings,
     [a] archive) so the caller recomputes the menu - archiving changes it - and asks
@@ -1127,7 +1402,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
             pass  # any app failure degrades to the tiers below, never breaks the launch
     p = _ptk_ui()
     if p:
-        decision = _pt_menu_round(p, project_dir, engagement_state, menu, shown)
+        decision = _pt_menu_round(p, project_dir, engagement_state, menu, shown, show_all)
         if decision != "__pt_fallback__":
             return decision
         # The pt widget could not run in this console (live Windows report
@@ -1140,14 +1415,19 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     print("", file=err)
     print(f"  {ink.bold('How would you like to start?')}", file=err)
     print("", file=err)
+    # The menu now arrives uncapped, so THIS tier does its own limiting - a numbered
+    # input() list of thirty engagements is unusable, but the remainder must still be
+    # reachable ([m]) rather than merely counted.
+    capped = shown if show_all else shown[:_PLAIN_TIER_ROWS]
+    hidden = len(shown) - len(capped)
     if shown:
         print(f"  {ink.dim('Resume an engagement')}", file=err)
         # 2026-08-19 UX pass: rows now LEAD with the title (what the work is), carry a
         # status mark and a relative age, and the recommended row is marked - the raw
         # slug/status/ISO-date table made the reader do the interpreting.
         default_slug = menu.get("default")
-        slug_w = max(len(_row_resume_token(r) or "?") for r in shown)
-        for i, row in enumerate(shown, 1):
+        slug_w = max(len(_row_resume_token(r) or "?") for r in capped)
+        for i, row in enumerate(capped, 1):
             view = row_view(row, default_slug=default_slug or "", of_many=len(shown) > 1)
             mark_col = (
                 ink.warn(view["mark"]) if view["mark_style"] == "warn" else ink.dim(view["mark"])
@@ -1160,11 +1440,13 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
             if view["detail"]:
                 tail += "  " + ink.dim(view["detail"])
             print(tail, file=err)
-            if i < len(shown):
+            if i < len(capped):
                 print("", file=err)  # one blank line BETWEEN two-line entries
-        more = menu.get("more") or 0
-        if more:
-            print(ink.dim(f"        (+{more} more not shown)"), file=err)
+        if hidden:
+            print(
+                ink.dim(f"        (+{hidden} more)  ") + ink.bold("[m]") + ink.dim(" show all"),
+                file=err,
+            )
         print("", file=err)
     else:
         archived = menu.get("archived") or 0
@@ -1181,10 +1463,12 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     settings_opt = f"    {ink.bold('[c]')} change a project setting"
     settings_opt += f"   {ink.bold('[o]')} open a different project"
     if shown:
+        settings_opt += f"   {ink.bold('[v]')} view artifacts"
+    if shown:
         settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
     print(settings_opt, file=err)
     enter_label = "just launch" if not shown else "decide inside the session instead"
-    print(f"    {ink.dim(f'[Enter] {enter_label}')}", file=err)
+    print(f"    {ink.dim(f'[Enter] {enter_label}')}   {ink.dim('[?] help')}", file=err)
     try:
         suggestion = _suggestion_line(project_dir, menu)
     except Exception:
@@ -1224,6 +1508,12 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
         except Exception:
             pass  # cosmetic tier
         return "__again__"
+    if choice.lower() == "m" and hidden:
+        return _SHOW_ALL
+    if choice == "?":
+        return _decision_from_pick(("help",), project_dir, engagement_state, menu, shown)
+    if choice.lower() == "v" and shown:
+        return _decision_from_pick(("artifacts",), project_dir, engagement_state, menu, capped)
     if choice.lower() == "o":
         # Same mapping the other two tiers use, so the explorer cannot mean one thing
         # here and another there.
@@ -1235,6 +1525,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
             pass
         return "__again__"
     engage_cmd = _engage_command(project_dir)
+    shown = capped  # numbered picks refer to what was PRINTED
     if choice.lower() == "n":
         return f"{engage_cmd} --new"
     try:
@@ -2410,6 +2701,10 @@ def main() -> int:
         _print_project_defaults(project_dir)
     except Exception:
         pass  # cosmetic - the table must never cost the launch
+    try:
+        _remember_project(project_dir)  # feeds the explorer's recent list
+    except Exception:
+        pass  # machine config is advisory - never costs a launch
     try:
         _prewarm_guard_interpreter(project_dir)
     except Exception:

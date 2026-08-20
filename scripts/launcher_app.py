@@ -30,6 +30,10 @@ from pathlib import Path
 
 APP_FALLBACK = "__app_fallback__"
 
+# Engagement rows visible at once before the list scrolls. Same reasoning as the
+# explorer's page size: the frame height is not known when the body is built.
+_MENU_PAGE = 9
+
 
 def _bits(project_dir: Path, mod):
     """Header facts, reusing the launcher's own resolvers so nothing is re-derived."""
@@ -183,6 +187,8 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     actions.append((("settings",), f"{g['settings']}change a project setting", "c"))
     actions.append((("open",), f"{g['open']}open a different project folder", "o"))
     if shown:
+        actions.append((("artifacts",), f"{g['archive']}view an engagement's artifacts", "v"))
+    if shown:
         actions.append((("archive",), f"{g['archive']}archive engagement(s)", "a"))
     actions.append(
         (
@@ -202,7 +208,17 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         out = []
         if views:
             out.append(("class:group", f"  {g['engagements']}Resume an engagement\n"))
-            for i, v in enumerate(views):
+            # Viewport over the engagement rows (2026-08-20): this tier now receives EVERY
+            # open engagement rather than the top three, and a FormattedTextControl does
+            # not follow a cursor - without a window, row 12 of 30 is simply invisible.
+            # The action rows below are few and fixed, so only this region scrolls.
+            first, last = 0, len(views)
+            if len(views) > _MENU_PAGE:
+                first = min(max(idx[0] - _MENU_PAGE // 2, 0), len(views) - _MENU_PAGE)
+                last = first + _MENU_PAGE
+                if first:
+                    out.append(("class:dim", f"      ... {first} more above\n"))
+            for i, v in list(enumerate(views))[first:last]:
                 sel = idx[0] == i
                 out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
                 out.append(
@@ -215,9 +231,9 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
                 if v["recommended"]:
                     out.append(("class:on", "  <- most recent"))
                 out.append(("", "\n"))
-            more = menu.get("more") or 0
-            if more:
-                out.append(("class:dim", f"      (+{more} more)\n"))
+            below = len(views) - last
+            if below > 0:
+                out.append(("class:dim", f"      ... {below} more below\n"))
             out.append(("", "\n"))
         else:
             archived = menu.get("archived") or 0
@@ -269,7 +285,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
             hint = mod._suggestion_line(project_dir, menu)
         except Exception:
             hint = ""
-        out = [("class:dim", "  ↑↓ move · Enter choose · Esc decide in session")]
+        out = [("class:dim", "  ↑↓ move · Enter choose · ? help · Esc back to terminal")]
         if hint:
             out.append(("class:warn", f"   ⚠ {hint}"))
         return to_formatted_text(out)
@@ -292,6 +308,10 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     def _enter(event):
         _exit(event, items[idx[0]][0])
 
+    @kb.add("?")
+    def _help(event):
+        _exit(event, ("help",))
+
     @kb.add("escape", eager=True)
     @kb.add("c-c")
     @kb.add("q")
@@ -303,6 +323,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         ("j", ("jira",)),
         ("c", ("settings",)),
         ("o", ("open",)),
+        ("v", ("artifacts",)),
         ("a", ("archive",)),
     ):
         if any(r == ret for r, _label, _k in actions):
@@ -789,14 +810,24 @@ def browse_screen(start_dir: Path, mod, output=None):
     except Exception:
         here = [start_dir]
     entries = [_dir_entries(here[0], mod)]
+    try:
+        recents = mod._recent_projects()
+    except Exception:
+        recents = []
     idx = [0]
     result = {"v": BROWSE_CANCELLED}
 
     def _rows():
-        """(label, kind, payload) - kind is 'use' | 'up' | 'dir'."""
+        """(label, kind, payload) - kind is 'use' | 'up' | 'recent' | 'dir'."""
         rows = [(f"use this folder  ({here[0].name or here[0]})", "use", here[0])]
         if here[0].parent != here[0]:
             rows.append((".. up to " + (here[0].parent.name or str(here[0].parent)), "up", None))
+        # Recent projects jump straight there (2026-08-20): the explorer opens on the
+        # current directory, so without this, reaching a project you use daily means
+        # walking the tree from wherever you happened to be standing.
+        for recent in recents:
+            if recent != here[0]:
+                rows.append((f"{recent.name}", "recent", recent))
         for child, is_project in entries[0]:
             rows.append((child.name, "dir", (child, is_project)))
         return rows
@@ -826,6 +857,10 @@ def browse_screen(start_dir: Path, mod, output=None):
                 continue
             if kind == "up":
                 out.append(("class:dim" if not sel else "class:sel", f"{label}\n"))
+                continue
+            if kind == "recent":
+                out.append(("class:sel" if sel else "class:title", label))
+                out.append(("class:dim", "  recent\n"))
                 continue
             _child, is_project = payload
             out.append(("class:sel" if sel else "class:title", label))
@@ -885,6 +920,11 @@ def browse_screen(start_dir: Path, mod, output=None):
             event.app.exit()
         elif kind == "up":
             _parent(event)
+        elif kind == "recent":
+            # A recent entry is a destination, not a place to browse into: you picked it
+            # because you already know it is the project you want.
+            result["v"] = payload
+            event.app.exit()
         else:
             _reload(payload[0])
 
@@ -1012,4 +1052,233 @@ def setup_screen(project_dir: Path, mod, output=None):
         )
     except Exception:
         return None
+    return result["v"]
+
+
+def artifacts_screen(project_dir: Path, mod, slug: str, output=None):
+    """What an engagement produced, openable (2026-08-20). The launcher could resume and
+    archive an engagement but offered no route to its delivery report, START-HERE or
+    evidence-room pack - the one screen seen every day had no way to reach the things the
+    work exists to produce. Enter hands the file to the OS opener rather than trying to
+    render a report in a 30-column pane. Returns True when the screen ran."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    g = glyphs(mod)
+    items = mod._engagement_artifacts(project_dir, slug)
+    idx = [0]
+    note = [""]
+
+    def _body():
+        out = [("class:group", f"  {g['archive']}Artifacts for {slug}\n\n")]
+        if not items:
+            out.append(("class:dim", "    nothing rendered yet in this workspace\n"))
+            return out
+        for i, (label, _path) in enumerate(items):
+            sel = idx[0] == i
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            out.append(("class:sel" if sel else "class:title", f"{label}\n"))
+        if note[0]:
+            out.append(("class:warn", f"\n    {note[0]}\n"))
+        return out
+
+    def _right():
+        out = [("class:title", "\n  Open an artifact\n\n")]
+        out.append(
+            (
+                "class:dim",
+                "  Enter opens the highlighted\n  file with whatever your\n"
+                "  system uses for it.\n\n  Rendered .html is listed in\n"
+                "  preference to its .md twin.\n\n  Esc  back to the menu\n",
+            )
+        )
+        return out
+
+    def _footer():
+        return [("class:hint", f"  ↑↓ move · Enter open · Esc back   {slug}")]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        if items:
+            idx[0] = (idx[0] - 1) % len(items)
+
+    @kb.add("down")
+    def _down(event):
+        if items:
+            idx[0] = (idx[0] + 1) % len(items)
+
+    @kb.add("enter")
+    def _open(event):
+        if items:
+            note[0] = mod._open_path(items[idx[0]][1]) or "opened"
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("q")
+    def _esc(event):
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title=f"{g['archive']}Artifacts",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=project_dir,
+        )
+    except Exception:
+        return None
+    return True
+
+
+def help_screen(project_dir: Path, mod, output=None):
+    """The legend (2026-08-20). The settings screen explains itself, but the menu's own
+    status glyphs did not - a row marked ⛔ told you something was wrong without saying
+    what. Returns True when it ran."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    g = glyphs(mod)
+    # Every string here is sized to its pane. The first draft wrapped in BOTH columns
+    # ("Enter choose the highlighted r/ow"), which is a poor look for the screen whose
+    # entire job is explaining things.
+    rows = [
+        (g["in_progress"], "in progress", "being worked on"),
+        (g["blocked"], "blocked", "parked, outside our control"),
+        (g["closing"], "closing", "DoD gate and sign-off"),
+        (g["on"], "most recent", "resume defaults here"),
+    ]
+    keys = [
+        ("Enter", "choose highlighted"),
+        ("n", "new engagement"),
+        ("j", "from a Jira ticket"),
+        ("c", "project settings"),
+        ("o", "another project"),
+        ("a", "archive"),
+        ("v", "view artifacts"),
+        ("m", "show all open"),
+        ("?", "this screen"),
+        ("Esc", "quit, no launch"),
+    ]
+
+    def _body():
+        out = [("class:group", "  What the marks mean\n\n")]
+        for mark, name, meaning in rows:
+            out.append(("class:title", f"    {mark}  "))
+            out.append(("", f"{name}"))
+            out.append(("class:dim", f" - {meaning}\n"))
+        return out
+
+    def _right():
+        out = [("class:title", "\n  Keys\n\n")]
+        for key, meaning in keys:
+            out.append(("class:key", f"  {key.ljust(6)}"))
+            out.append(("class:dim", f"{meaning}\n"))
+        return out
+
+    def _footer():
+        return [("class:hint", "  any key returns to the menu")]
+
+    kb = KeyBindings()
+
+    @kb.add("<any>")
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    def _any(event):
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title="Help",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=project_dir,
+        )
+    except Exception:
+        return None
+    return True
+
+
+def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
+    """Pick one open engagement. Only used when several are open and the action needs to
+    know which - artifacts today. Returns the slug, or "" on cancel/unavailable."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return ""
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return ""
+
+    g = glyphs(mod)
+    rows = [(mod._row_resume_token(r) or "?", mod.row_view(r, default_slug="", of_many=True)) for r in shown]
+    idx = [0]
+    result = {"v": ""}
+
+    def _body():
+        out = [("class:group", f"  {g['engagements']}Which engagement?\n\n")]
+        first = 0
+        if len(rows) > _MENU_PAGE:
+            first = min(max(idx[0] - _MENU_PAGE // 2, 0), len(rows) - _MENU_PAGE)
+        for i, (slug, view) in list(enumerate(rows))[first : first + _MENU_PAGE]:
+            sel = idx[0] == i
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            out.append(("class:sel" if sel else "class:title", view["title"]))
+            out.append(("class:dim", f"   {slug}\n"))
+        return out
+
+    def _footer():
+        return [("class:hint", "  ↑↓ move · Enter choose · Esc back")]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % len(rows)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % len(rows)
+
+    @kb.add("enter")
+    def _pick(event):
+        result["v"] = rows[idx[0]][0]
+        event.app.exit()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    def _esc(event):
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title=f"{g['engagements']}Choose an engagement",
+            body_fn=_body,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=project_dir,
+        )
+    except Exception:
+        return ""
     return result["v"]

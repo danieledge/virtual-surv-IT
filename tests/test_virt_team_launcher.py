@@ -727,7 +727,10 @@ def test_config_editor_jira_enable_without_key_says_where_to_set_it(tmp_path, mo
     err = capsys.readouterr().err
     assert "no project key" in err and "INTEGRATIONS.md" in err
     rows = mod._editor_rows(project)
-    assert rows[-1][1] == "on (key UNSET)"
+    # By LABEL, not position: the jira row stopped being last when the choice rows
+    # (qa depth / jira mirror) were appended after it on 2026-08-20.
+    jira_row = next(r for r in rows if r[0] == mod._JIRA_ROW_LABEL)
+    assert jira_row[1] == "on (key UNSET)"
 
 
 # --- plugin cache-lag check at go (2026-08-18 user request) --------------------------------
@@ -1192,3 +1195,123 @@ def test_the_cd_request_reaches_the_shell_handshake_file(tmp_path, monkeypatch):
     assert handshake.read_text(encoding="utf-8") == str(tmp_path.resolve())
     monkeypatch.delenv("VIRT_SURV_CD_FILE")
     assert mod._write_cd_request(tmp_path) is False
+
+
+# --- the five launcher gaps closed 2026-08-20 -------------------------------------------------
+
+
+def _prefs(project):
+    return json.loads((project / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
+
+
+def test_qa_depth_is_reachable_from_the_settings_editor(tmp_path):
+    """The editor was boolean-only, so the four-value setting with the largest effect on
+    cost and assurance could not be changed from the launcher at all."""
+    mod = _load()
+    project = _plugin_enabled_project(tmp_path)
+    qa_i = len(mod._TOGGLE_PREFS) + 3
+    labels = [r[0] for r in mod._editor_rows(project)]
+    assert "qa depth" in labels and "jira mirror" in labels
+    mod._editor_apply(project, qa_i)
+    assert _prefs(project)["qa_depth"] == "quick", "first press must move OFF the default"
+    for expected in ("deep", "audit", "auto"):
+        mod._editor_apply(project, qa_i)
+        assert _prefs(project)["qa_depth"] == expected
+
+
+def test_choice_rows_cycle_and_never_silently_reduce_qa(tmp_path):
+    """Deliberately no "none": QA's existence and independence are not tierable."""
+    mod = _load()
+    values = dict((key, vals) for _l, key, vals, _d in mod._CHOICE_PREFS)
+    assert "none" not in values["qa_depth"] and "off" not in values["qa_depth"]
+
+
+def test_jira_mirror_writes_into_the_nested_integrations_block(tmp_path):
+    mod = _load()
+    project = _plugin_enabled_project(tmp_path)
+    mirror_i = len(mod._TOGGLE_PREFS) + 4
+    mod._editor_apply(project, mirror_i)
+    assert _prefs(project)["integrations"]["jira"]["mirror"] == "live"
+
+
+def test_restore_defaults_drops_qa_depth_but_not_the_integrations_block(tmp_path):
+    """'d' means "drop my project choices", not "dismantle the tracker config"."""
+    mod = _load()
+    project = _plugin_enabled_project(tmp_path)
+    mod._editor_apply(project, len(mod._TOGGLE_PREFS) + 3)  # qa depth
+    mod._editor_apply(project, len(mod._TOGGLE_PREFS) + 4)  # mirror
+    mod._editor_apply(project, "d")
+    prefs = _prefs(project)
+    assert "qa_depth" not in prefs
+    assert prefs["integrations"]["jira"]["mirror"] == "live"
+
+
+def test_the_menu_no_longer_caps_the_engagement_list(tmp_path):
+    """The cap used to be applied when BUILDING the menu, so '+2 more not shown' was
+    unreachable from every tier. It is now a per-tier display choice."""
+    mod = _load()
+    project = _plugin_enabled_project(tmp_path)
+    for i in range(7):
+        _ws(project, f"eng-{i}", opened=f"2026-08-{10 + i:02d}")
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "engagement_state", REPO_ROOT / "scripts" / "engagement_state.py"
+    )
+    es = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(es)
+    menu = es.resume_menu(project / "artifacts", max_shown=mod._FULL_MENU)
+    assert len(menu["shown"]) == 7 and menu["more"] == 0
+
+
+def test_show_all_is_a_sentinel_the_loop_handles_not_a_decision():
+    mod = _load()
+    assert mod._decision_from_pick((mod._SHOW_ALL,), Path("."), None, {}, []) == mod._SHOW_ALL
+
+
+def test_recent_projects_round_trip_and_drop_missing_folders(tmp_path, monkeypatch):
+    mod = _load()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    live = tmp_path / "live-project"
+    live.mkdir()
+    gone = tmp_path / "gone"
+    gone.mkdir()
+    mod._remember_project(gone)
+    mod._remember_project(live)
+    assert mod._recent_projects()[0] == live.resolve(), "most recent must come first"
+    gone.rmdir()
+    # Dropped on READ, not pruned on write: an unmounted share should return when it does.
+    assert live.resolve() in mod._recent_projects()
+    assert gone.resolve() not in mod._recent_projects()
+    raw = json.loads((tmp_path / "cfg" / "virt-surv-it" / "installer.json").read_text())
+    assert str(gone.resolve()) in raw["recent_projects"]
+
+
+def test_recent_projects_never_grow_without_bound(tmp_path, monkeypatch):
+    mod = _load()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    for i in range(20):
+        d = tmp_path / f"p{i}"
+        d.mkdir()
+        mod._remember_project(d)
+    raw = json.loads((tmp_path / "cfg" / "virt-surv-it" / "installer.json").read_text())
+    assert len(raw["recent_projects"]) <= mod._RECENT_LIMIT
+
+
+def test_artifacts_prefer_rendered_html_over_its_markdown_twin(tmp_path):
+    """Listing both is noise: the .html IS the shareable artifact."""
+    mod = _load()
+    ws = tmp_path / "artifacts" / "demo"
+    ws.mkdir(parents=True)
+    for name in ("START-HERE.md", "START-HERE.html", "notes.md", "delivery-report.html"):
+        (ws / name).write_text("x", encoding="utf-8")
+    names = [label for label, _p in mod._engagement_artifacts(tmp_path, "demo")]
+    assert "START-HERE.html" in names
+    assert "START-HERE.md" not in names, "the md twin should be suppressed"
+    assert "notes.md" in names, "an md with no rendered twin must still be listed"
+    assert names[0] == "START-HERE.html", "START-HERE is the index and should rank first"
+
+
+def test_artifacts_of_a_missing_workspace_is_empty_not_an_error(tmp_path):
+    mod = _load()
+    assert mod._engagement_artifacts(tmp_path, "nope") == []

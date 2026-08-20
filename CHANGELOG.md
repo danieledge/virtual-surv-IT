@@ -3,6 +3,35 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.35.4] - 2026-08-20 - The five things the launcher could not do
+
+An audit of the `virt-surv go` surface against the preferences and artifacts that actually
+exist, and then all five gaps closed.
+
+- **Settings can express more than on/off.** The editor was a boolean table, so `qa_depth`
+  - four values, and the single setting with the largest effect on both cost and assurance
+  - could not be changed from the launcher at all, only by hand-editing
+  `team-preferences.json`. Choice rows now cycle on Enter (`qa depth`, and `jira mirror`
+  for close-only vs live). The first press moves OFF the default rather than writing the
+  value already in effect, and `d` drops a top-level choice without dismantling the nested
+  integrations block. There is deliberately no `none` for QA depth: QA running, and being
+  independent of whoever wrote the code, is not tierable - only its breadth is.
+- **The engagement list is no longer capped where it cannot be uncapped.** `+2 more not
+  shown` was computed when BUILDING the menu, so the remainder was unreachable from every
+  tier and resuming an older engagement meant already knowing its slug. The cap is now a
+  per-tier display choice: the app tier receives all of them and scrolls, the plain tiers
+  still show three and offer `[m] show all`.
+- **`[v]` opens what an engagement produced** - START-HERE, the delivery report, the
+  evidence-room pack - handed to the OS opener rather than rendered into a 30-column pane.
+  Rendered `.html` is listed in preference to its `.md` twin, and START-HERE ranks first.
+- **`[?]` is a legend.** The status glyphs were unexplained: a row marked blocked told you
+  something was wrong without saying what. Marks and keys, both sized to their pane.
+- **The explorer offers recent projects.** It opened on the current directory, so reaching
+  a project you use daily meant walking the tree from wherever you were standing. Recents
+  are machine-scoped (which folders you work in is never a fact about a repo), capped, and
+  dropped on read rather than pruned on write, so a folder on an unmounted share comes back
+  when it does.
+
 ## [0.35.3] - 2026-08-20 - Project explorer, in-app first-run setup, and Esc means Esc
 
 - **Project explorer (`[o]`).** Change folder from inside the menu and carry on there:

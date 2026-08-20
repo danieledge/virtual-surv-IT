@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.35.3](https://img.shields.io/badge/version-0.35.3-blue)
+![Version 0.35.4](https://img.shields.io/badge/version-0.35.4-blue)
 ![Tests 1900+ passing](https://img.shields.io/badge/tests-1900%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.35.3** (2026-08-20) · 📖 [0.33-cycle overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.35.4** (2026-08-20) · 📖 [0.33-cycle overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle: the front door became a launcher, and the token bill got engineered.**
 - 🚪 **`virt-surv go` is the front door** (0.34.0). The resume-or-new decision, environment
