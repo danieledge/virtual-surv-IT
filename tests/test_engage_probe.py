@@ -353,6 +353,7 @@ def test_resolve_preferences_returns_dict_matching_build_report(tmp_path, monkey
         "standards_critique": False,  # built-in default, no machine tier
         "map_skeleton": False,  # built-in default
         "probe_cache": True,  # built-in default (2026-08-18)
+        "evidence_room": False,  # opt-in, off by default (2026-08-19)
     }
 
 
@@ -367,6 +368,7 @@ def test_resolve_preferences_all_builtin_defaults_when_nothing_set(tmp_path, mon
         "standards_critique": False,
         "map_skeleton": False,
         "probe_cache": True,  # 2026-08-18: on by default - a pure accelerator
+        "evidence_room": False,  # 2026-08-19: opt-in evidence pack, off by default
     }
 
 

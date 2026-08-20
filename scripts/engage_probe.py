@@ -709,6 +709,12 @@ def resolve_preferences(project_dir: Path) -> dict:
     # as before, so a plain `claude` + manual /engage is never broken by it); an
     # explicit false disables both the go-time write and the serving side.
     probe_cache_on = prefs.get("probe_cache", True)
+    # evidence_room (2026-08-19): a single self-contained HTML pack assembled at close
+    # from evidence the engagement already produced. OFF by default and project-scoped
+    # with no machine tier - whether a project wants an auditor-facing pack is a fact
+    # about that project's governance, not about this machine, and an opt-in artifact
+    # must never appear in a folder nobody asked for it in.
+    evidence_room_on = prefs.get("evidence_room", False)
     return {
         "extra_formats": extra_formats,
         "regulatory_citations": citations_on,
@@ -717,6 +723,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "standards_critique": standards_critique_on,
         "map_skeleton": map_skeleton_on,
         "probe_cache": probe_cache_on,
+        "evidence_room": evidence_room_on,
     }
 
 

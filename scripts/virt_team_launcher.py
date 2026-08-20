@@ -225,6 +225,7 @@ _TOGGLE_PREFS = (
     ("standards critique", "standards_critique"),
     ("codebase-map skeleton", "map_skeleton"),
     ("probe pre-cache at go", "probe_cache"),
+    ("evidence room at close", "evidence_room"),
 )
 
 

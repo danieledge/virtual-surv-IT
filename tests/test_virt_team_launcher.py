@@ -488,7 +488,7 @@ def test_menu_c_with_a_change_refreshes_the_table(tmp_path, monkeypatch, capsys)
     monkeypatch.chdir(project)
     mod = _load()
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
-    answers = iter(["c", "9", "b", "n"])  # enable jira, done, start new
+    answers = iter(["c", str(len(_load()._TOGGLE_PREFS) + 2), "b", "n"])  # jira, done, new
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = mod.main()
     out = capsys.readouterr()
@@ -681,9 +681,17 @@ def test_go_prewarms_the_guard_interpreter_cache(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
 
 
-def test_config_editor_row8_toggles_the_jira_integration(tmp_path, monkeypatch, capsys):
+
+def _editor_rows_idx(mod):
+    """(env_row, jira_row) as _editor_apply computes them. Hardcoded '8'/'9' here broke
+    the moment a toggle was added (2026-08-19, evidence_room) - the tests were pressing
+    a different button than they claimed to."""
+    n = len(mod._TOGGLE_PREFS)
+    return n + 1, n + 2
+
+def test_config_editor_jira_row_toggles_the_jira_integration(tmp_path, monkeypatch, capsys):
     """2026-08-18 user report: the [c] editor was missing table rows like the Jira
-    integration. Row 8 toggles integrations.jira.enabled in place, preserving the rest
+    integration. The jira row toggles integrations.jira.enabled in place, preserving the rest
     of the block (project_key survives an off/on cycle)."""
     project = _plugin_enabled_project(tmp_path)
     prefs_path = project / ".claude" / "team-preferences.json"
@@ -692,13 +700,14 @@ def test_config_editor_row8_toggles_the_jira_integration(tmp_path, monkeypatch, 
         encoding="utf-8",
     )
     mod = _load()
-    answers = iter(["9", "b"])  # toggle off, done
+    _env_i, jira_i = _editor_rows_idx(mod)
+    answers = iter([str(jira_i), "b"])  # toggle off, done
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
     assert prefs["integrations"]["jira"]["enabled"] is False
     assert prefs["integrations"]["jira"]["project_key"] == "SURV"  # preserved for re-enable
-    answers = iter(["9", "b"])  # back on
+    answers = iter([str(jira_i), "b"])  # back on
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
@@ -710,7 +719,7 @@ def test_config_editor_row8_toggles_the_jira_integration(tmp_path, monkeypatch, 
 def test_config_editor_jira_enable_without_key_says_where_to_set_it(tmp_path, monkeypatch, capsys):
     project = _plugin_enabled_project(tmp_path)
     mod = _load()
-    answers = iter(["9", "b"])
+    answers = iter([str(_editor_rows_idx(mod)[1]), "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
@@ -995,7 +1004,7 @@ def test_config_editor_env_toggle_on_applies_recommended_set(tmp_path, monkeypat
     env bundle add-only, same contract as the go-time propagation."""
     project = _plugin_enabled_project(tmp_path)
     mod = _load()
-    answers = iter(["8", "b"])
+    answers = iter([str(_editor_rows_idx(mod)[0]), "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
@@ -1017,7 +1026,7 @@ def test_config_editor_env_toggle_off_keeps_custom_tuned_values(tmp_path, monkey
         encoding="utf-8",
     )
     mod = _load()
-    answers = iter(["8", "b"])
+    answers = iter([str(_editor_rows_idx(mod)[0]), "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     saved = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))

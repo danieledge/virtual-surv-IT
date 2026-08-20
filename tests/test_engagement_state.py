@@ -597,6 +597,7 @@ def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeyp
         "standards_critique": False,
         "map_skeleton": False,
         "probe_cache": True,
+        "evidence_room": False,  # opt-in, off by default (2026-08-19)
     }
     assert validate_state(state) == []
 
@@ -612,6 +613,7 @@ def test_init_settings_snapshot_builtin_defaults_when_no_preferences_file(tmp_pa
         "standards_critique": False,
         "map_skeleton": False,
         "probe_cache": True,
+        "evidence_room": False,  # opt-in, off by default (2026-08-19)
     }
 
 
