@@ -7409,6 +7409,7 @@ _FOLDER_SUBCOMMANDS = (
     "onboard",
     "archive",
     "list-engagements",
+    "evidence",
     "setup-alias",
     "go",
 )
@@ -7447,6 +7448,64 @@ def _plugin_enabled_for_configure(target: Path) -> bool:
     return (project / "docs" / "team-operating-guide.md").is_file() or (
         project / ".claude" / "team-preferences.json"
     ).is_file()
+
+
+def _run_evidence_room(target: Path, style: Style, mark_map: dict) -> int:
+    """`virt-surv evidence [DIR]` - render an engagement's Evidence Room.
+
+    DIR may be the workspace itself (artifacts/<slug>, i.e. it holds an
+    engagement-state.json) or a project root, in which case the ACTIVE engagement is
+    used - the marker `virt-surv go` and `engagement_state init` already maintain, so
+    standing in your project root and typing the command does the obvious thing. The
+    per-project `evidence_room` gate lives in the renderer, not here: one gate, one
+    place, and this subcommand is only a convenient way to reach it."""
+    fail, ok = mark_map["fail"], mark_map["ok"]
+    project = target.expanduser().resolve()
+    workspace = project
+    if not (workspace / "engagement-state.json").is_file():
+        marker = project / "artifacts" / ".active-engagement.json"
+        slug = ""
+        try:
+            slug = json.loads(marker.read_text(encoding="utf-8")).get("slug") or ""
+        except (OSError, ValueError, AttributeError):
+            slug = ""
+        if not slug:
+            print(
+                f"{fail} no engagement found in {project} - run this from a project with an "
+                "active engagement, or pass the workspace: virt-surv evidence artifacts/<slug>"
+            )
+            return 1
+        workspace = project / "artifacts" / slug
+    repo = _resolve_repo_root(None)
+    scripts_dir = (repo / "scripts") if repo else Path(__file__).resolve().parent / "scripts"
+    renderer = scripts_dir / "render_evidence_room.py"
+    if not renderer.is_file():
+        print(f"{fail} renderer not found: {renderer}")
+        return 1
+    _, interpreter = _check_interpreters(
+        ["python", "py", "python3"] if sys.platform == "win32" else ["python3", "python", "py"]
+    )
+    if not interpreter:
+        print(f"{fail} no working Python interpreter found")
+        return 1
+    try:
+        proc = subprocess.run(  # fixed argv, shell=False  # nosec B603
+            [interpreter, str(renderer), str(workspace)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"{fail} could not run the renderer: {exc}")
+        return 1
+    message = (proc.stdout or proc.stderr or "").strip()
+    if message:
+        # A ✓ means a pack was written. "off for this project" also exits 0 (a normal
+        # outcome, not an error) but ticking it read as success when nothing happened.
+        wrote = proc.returncode == 0 and message.startswith("evidence room:")
+        mark = ok if wrote else (mark_map.get("skip", "-") if proc.returncode == 0 else fail)
+        print(f"{mark} {message}")
+    return proc.returncode
 
 
 def _run_launcher_settings(target: Path, style: Style):
@@ -7658,6 +7717,11 @@ def _dispatch_folder_subcommand(argv: list) -> Optional[int]:
             )
             print(style.dim("   - Morgan"))
         return rc
+    if subcommand == "evidence":
+        # `virt-surv evidence [<workspace>]` - the Evidence Room without remembering a
+        # module path. Bare form renders the ACTIVE engagement, which is what someone
+        # standing in their project root means (2026-08-20).
+        return _run_evidence_room(target, style, marks())
     if subcommand == "archive":
         return run_archive_engagements(target, style, marks(), demo)
     return run_list_engagements(target, style, marks())

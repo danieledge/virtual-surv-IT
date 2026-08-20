@@ -7821,3 +7821,56 @@ def test_gitbash_perf_demo_writes_nothing(tmp_path, monkeypatch, capsys):
     assert "demo mode" in out
     assert (home / ".profile").read_text(encoding="utf-8") == "# mine\n"
     assert not (home / ".bash_profile").exists()
+
+
+def test_evidence_subcommand_resolves_the_active_engagement(tmp_path, monkeypatch):
+    """`virt-surv evidence` with no argument renders the ACTIVE engagement - standing in
+    your project root and typing the command should do the obvious thing (2026-08-20)."""
+    import install_helper as ih
+    from install_helper import Style, marks
+
+    project = tmp_path / "proj"
+    ws = project / "artifacts" / "thing"
+    ws.mkdir(parents=True)
+    (ws / "engagement-state.json").write_text("{}", encoding="utf-8")
+    (project / "artifacts" / ".active-engagement.json").write_text(
+        json.dumps({"slug": "thing"}), encoding="utf-8"
+    )
+    seen = {}
+
+    def _fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        return subprocess.CompletedProcess(argv, 0, "evidence room: x.html", "")
+
+    monkeypatch.setattr(ih, "_check_interpreters", lambda names: ([], "python3"))
+    monkeypatch.setattr(ih.subprocess, "run", _fake_run)
+    assert ih._run_evidence_room(project, Style(False), marks()) == 0
+    assert str(ws) in seen["argv"][-1], "did not resolve the active engagement's workspace"
+
+
+def test_evidence_subcommand_explains_when_there_is_no_engagement(tmp_path, capsys):
+    import install_helper as ih
+    from install_helper import Style, marks
+
+    assert ih._run_evidence_room(tmp_path, Style(False), marks()) == 1
+    out = capsys.readouterr().out
+    assert "no engagement found" in out and "artifacts/<slug>" in out
+
+
+def test_evidence_subcommand_does_not_tick_a_disabled_project(tmp_path, monkeypatch, capsys):
+    """The gate message exits 0 (a normal outcome) but must not render as success - a
+    tick beside 'off for this project' reads as though a pack had been written."""
+    import install_helper as ih
+    from install_helper import Style, marks
+
+    ws = tmp_path / "artifacts" / "thing"
+    ws.mkdir(parents=True)
+    (ws / "engagement-state.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(ih, "_check_interpreters", lambda names: ([], "python3"))
+    monkeypatch.setattr(
+        ih.subprocess,
+        "run",
+        lambda argv, **kw: subprocess.CompletedProcess(argv, 0, "evidence room is off", ""),
+    )
+    assert ih._run_evidence_room(ws, Style(False), marks()) == 0
+    assert "✓" not in capsys.readouterr().out
