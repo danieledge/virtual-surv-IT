@@ -52,10 +52,14 @@ that line is present, so a project without integrations pays zero context for th
   = the brief's summary), and the key is recorded on disk
   (`engagement_state set-decision jira-issue "<KEY>"`) so a resumed session reuses it
   instead of raising a duplicate.
-- **During delivery (`"mirror": "live"` only):** phase changes and gate outcomes are
-  posted as comments / transitions as they happen. This is the one sanctioned exception
-  to the extensions contract's close-only rule, and it exists behind its own explicit
-  config value plus the gate approval.
+- **During delivery (`"mirror": "live"`):** phase and status transitions are posted as
+  short comments as they happen - a bounded 4-8 per engagement (phase moves, plus
+  blocked / closing / closed), never one per state mutation. For a team-raised issue this
+  is opt-in: an explicit config value plus approval at the go-ahead gate. **For an
+  engagement started FROM a ticket (`--jira`) it is the default** (2026-08-20): the pick
+  that started the work is the approval to keep that ticket informed, stated once in the
+  opening banner, and overridable by setting `"mirror": "close-only"` explicitly. Each
+  comment is one line and carries no artifact bodies, findings detail or data.
 - **At close:** the issue gets the closing summary (the engagement-summary email text) as
   a comment and a transition to your done-state, offered in the same
   preview-then-approve step as every other close action.

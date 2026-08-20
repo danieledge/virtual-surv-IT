@@ -39,10 +39,45 @@ summary section plus a link line naming the workspace `artifacts/<slug>/`). Reco
 key (rule above). `key=UNSET` means the config is missing `project_key`: say so at the
 gate and skip issue creation rather than guessing a project.
 
-**During delivery** - `close-only` (the default): nothing outward until close.
-`live`: ask ONCE at the go-ahead gate ("mirror phase changes to <KEY> as we go?"); on
-yes, post a short comment at each phase change and gate outcome as it happens. On no,
-behave as close-only; never re-ask mid-flight.
+**During delivery** - `close-only` (the default for a team-RAISED issue): nothing outward
+until close. `live`: ask ONCE at the go-ahead gate ("mirror phase changes to <KEY> as we
+go?"); on yes, post progress comments per the trigger set below. On no, behave as
+close-only; never re-ask mid-flight.
+
+**An INBOUND `--jira` engagement tracks live by DEFAULT (2026-08-20 user decision)** -
+no ask. Same reasoning as the deliver-back exception: the human's pick in the go menu is
+the approval to keep **that one ticket** informed of the work it commissioned, and a
+colleague watching the ticket should not have to ask where things are. State it once in
+the opening banner ("tracking progress on <KEY> as we go") so it is never a surprise, and
+honour `mirror: "close-only"` if the project has explicitly set it - an explicit config
+value always beats this default.
+
+### Progress-comment triggers (the trigger set)
+
+**Post on TRANSITIONS, never on every mutation.** START-HERE re-renders on each
+`add-artifact` / `add-outstanding` / `set-decision` / `log-note`, so following it would
+post dozens of comments and spam the ticket. The signal is the state file's own
+transitions - a bounded 4-8 comments per engagement:
+
+- **phase** changes (`open` → `classify` → `plan` → `delivery` → `close`) - one line: what
+  phase, what is happening in it.
+- **status** changes: **⛔ blocked** (the most valuable one - name WHAT it is waiting on,
+  from the outstanding list's first item, so a watcher learns the work is parked on an
+  answer without asking), **🔒 closing**, **✅ closed** (the close's own deliver-back
+  covers the substance; the transition comment is one line).
+
+One short line each. **Never** artifact bodies, findings detail, data values, secrets, or
+the consent marker's path (CLAUDE.md §5/§7) - the same synthetic/masked-only discipline as
+every artifact, and AI identity stated as in all outward text.
+
+**Do not repost.** Record the last posted transition (`set-decision jira-last-posted
+"<phase|status>"`) so a resumed or compacted session continues rather than replaying the
+engagement - the same duplicate problem `jira-issue` already solves for issue creation.
+
+**Cost, stated honestly:** every outward call carries the harness's own MCP permission
+prompt, so live tracking means roughly 4-8 prompts across an engagement. Mention that when
+the mode is stated at the open; never present it as free. A failed or absent tool never
+blocks the engagement: one line, record it as outstanding, carry on.
 
 **At close** - offer, in the standard close-action step after the summary email: post
 the summary-email text as a comment, and transition the issue to the project's

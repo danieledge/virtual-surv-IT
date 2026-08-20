@@ -570,3 +570,23 @@ def test_engage_names_the_locked_review_menu_as_four_questions():
     # The CLAIM, not the word: the file's own dated note explains what it used to say,
     # so a bare "three-question" check fails on its own history line.
     assert "three-question construction" not in skill
+
+
+def test_inbound_jira_tracks_progress_on_transitions_not_every_mutation():
+    """2026-08-20 user decision: an engagement started FROM a ticket tracks progress on
+    that ticket by default (the pick is the approval, same reasoning as the deliver-back
+    exception). The trigger set is state TRANSITIONS - START-HERE re-renders on every
+    mutation, so following it literally would spam the ticket."""
+
+    def _flat(text):
+        return " ".join(text.split())
+
+    ref = _flat(_read(".claude/skills/engage/references/integrations.md"))
+    assert "INBOUND `--jira` engagement tracks live by DEFAULT" in ref
+    assert "Post on TRANSITIONS, never on every mutation" in ref
+    assert "jira-last-posted" in ref, "no idempotency rule - a resume would repost"
+    assert "close-only" in ref, "the explicit-config override must still be honoured"
+    public = _flat(_read("docs/INTEGRATIONS.md"))
+    assert "it is the default" in public
+    skill = _flat(_read(".claude/skills/engage/SKILL.md"))
+    assert "track progress on that ticket as you go" in skill
