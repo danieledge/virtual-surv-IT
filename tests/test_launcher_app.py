@@ -407,7 +407,12 @@ def test_setting_help_is_two_parts_and_stays_pane_sized():
         assert len(parts) == 2, label
         for part in parts:
             assert part and part[0].isupper(), f"{label}: not a sentence"
-            assert len(part) < 320, f"{label}: too long for the pane ({len(part)})"
+            assert len(part) < 220, f"{label}: too long for the pane ({len(part)})"
+        # Both parts share ~19 lines of a ~30-column pane with the label and the current
+        # value. Overrun does not scroll, it CLIPS - a first attempt at the jira wording
+        # pushed "currently:" clean off the screen (caught by rendering under a pty).
+        budget = sum(len(part) for part in parts)
+        assert budget < 380, f"{label}: {budget} chars will not fit the pane together"
 
 
 def test_the_jira_explanation_says_j_still_works_when_it_is_off():
@@ -463,3 +468,91 @@ def test_the_settings_and_jira_screens_show_it_too(ptk, tmp_path):
             with create_app_session(input=pipe, output=out):
                 run(out)
         assert tail in buf.getvalue().replace("\r", "")
+
+
+# --- project explorer, setup screen, and backing out (2026-08-20 user requests) ---------------
+
+
+def test_browse_screen_lists_folders_and_marks_team_projects(ptk, tmp_path):
+    (tmp_path / "plain-folder").mkdir()
+    proj = tmp_path / "a-team-project"
+    (proj / ".claude").mkdir(parents=True)
+    (proj / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text("\x1b")
+        with create_app_session(input=pipe, output=out):
+            app.browse_screen(tmp_path, launcher, output=out)
+    text = buf.getvalue()
+    assert "a-team-project" in text and "plain-folder" in text
+    assert "team project" in text, "configured projects are not distinguished"
+    assert "use this folder" in text
+
+
+def test_browse_screen_first_row_picks_the_current_folder(ptk, tmp_path):
+    """Enter must never mean both "descend" and "choose" - that is how you open the wrong
+    project. The first row is explicitly the current folder."""
+    (tmp_path / "sub").mkdir()
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    out = PlainTextOutput(io.StringIO())
+    with create_pipe_input() as pipe:
+        pipe.send_text("\r")
+        with create_app_session(input=pipe, output=out):
+            chosen = app.browse_screen(tmp_path, launcher, output=out)
+    assert chosen == tmp_path.resolve()
+
+
+def test_browse_screen_escape_cancels(ptk, tmp_path):
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    out = PlainTextOutput(io.StringIO())
+    with create_pipe_input() as pipe:
+        pipe.send_text("\x1b")
+        with create_app_session(input=pipe, output=out):
+            chosen = app.browse_screen(tmp_path, launcher, output=out)
+    assert chosen == app.BROWSE_CANCELLED
+
+
+def test_setup_screen_offers_defaults_without_leaving_the_interface(ptk, tmp_path):
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text("\r")  # first option
+        with create_app_session(input=pipe, output=out):
+            choice = app.setup_screen(tmp_path, launcher, output=out)
+    # Only the RETURN value is asserted here: piped keys are drained before a frame is
+    # painted, so an immediately-accepted screen renders nothing. The wording is checked
+    # in the Esc test below, which does paint.
+    assert choice == app.SETUP_DEFAULTS
+
+
+def test_setup_screen_escape_skips(ptk, tmp_path):
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text("\x1b")
+        with create_app_session(input=pipe, output=out):
+            choice = app.setup_screen(tmp_path, launcher, output=out)
+    assert choice == app.SETUP_SKIP
+    text = buf.getvalue()
+    assert "First-time setup" in text
+    assert "no questions asked" in text
+    assert "leaves this screen" in text, "the guided pass must admit that it leaves"
+
+
+def test_the_menu_offers_the_explorer(ptk):
+    _pick, text = _drive(ptk, "\x1b", [_row()])
+    assert "open a different project folder" in text

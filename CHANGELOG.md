@@ -3,6 +3,28 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.35.3] - 2026-08-20 - Project explorer, in-app first-run setup, and Esc means Esc
+
+- **Project explorer (`[o]`).** Change folder from inside the menu and carry on there:
+  sub-folders are listed with team projects ticked, the first row picks the folder you are
+  in, and the list scrolls with the selection instead of walking off the frame. Choosing a
+  project re-enters the same menu against it, warms its probe cache, and **the shell
+  follows** - a launcher is a child process and cannot move its parent's cwd, so alias v7
+  passes a temp file in `VIRT_SURV_CD_FILE` and the wrapper `cd`s to it before launching.
+  An un-healed older wrapper says so rather than silently opening the previous directory.
+- **Esc returns to the terminal instead of launching Claude Code.** Backing out shared the
+  same empty decision as "just launch", so leaving the menu still started a session. It now
+  exits `97`, which both wrapper templates treat as "do not launch". `Enter` on the launch
+  row is unchanged, and a non-interactive `EOF` still means the documented plain launch -
+  only a human backing out aborts.
+- **First-time setup happens inside the interface.** A brand-new project's first impression
+  was a bare `[Y/n]` on stderr followed by a separate interactive program. It is now a
+  framed screen with three outcomes, and the middle one is labelled honestly: applying the
+  recommended defaults runs without prompting and never leaves the app (`onboard`), while
+  the guided pass genuinely is a separate program and says it will leave.
+- **Wrapper alias bumped to v7**, so existing installs self-heal on the next `virt-surv go`
+  - no re-registration needed.
+
 ## [0.35.2] - 2026-08-20 - The launcher stops breaking its own illusion
 
 A UI pass driven entirely by things that were visible on screen and wrong.

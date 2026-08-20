@@ -77,6 +77,7 @@ def glyphs(mod):
         "in_progress": "⏳" if rich else "*",
         "blocked": "⛔" if rich else "!",
         "closing": "🔒" if rich else "~",
+        "open": "📂 " if rich else "",
     }
 
 
@@ -180,6 +181,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     if jira_on:
         actions.append((("jira",), f"{g['jira']}a new engagement from a Jira ticket", "j"))
     actions.append((("settings",), f"{g['settings']}change a project setting", "c"))
+    actions.append((("open",), f"{g['open']}open a different project folder", "o"))
     if shown:
         actions.append((("archive",), f"{g['archive']}archive engagement(s)", "a"))
     actions.append(
@@ -296,7 +298,13 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     def _esc(event):
         _exit(event, None)
 
-    for key, ret in (("n", ("new",)), ("j", ("jira",)), ("c", ("settings",)), ("a", ("archive",))):
+    for key, ret in (
+        ("n", ("new",)),
+        ("j", ("jira",)),
+        ("c", ("settings",)),
+        ("o", ("open",)),
+        ("a", ("archive",)),
+    ):
         if any(r == ret for r, _label, _k in actions):
             kb.add(key)(lambda event, _r=ret: _exit(event, _r))
 
@@ -402,7 +410,8 @@ def settings_screen(project_dir: Path, mod, output=None):
         else:
             out.append(("class:dim", "  No description available for\n  this setting yet.\n\n"))
         out.append(("class:on" if on else "class:off", _wrap(f"currently: {value}") + "\n\n"))
-        out.append(("class:hint", "  Enter toggle · d defaults\n  Esc back\n\n"))
+        # No key hints here: the footer already teaches Enter/d/Esc, and repeating them
+        # cost three lines that the explanation itself needs.
         if notes:
             out.append(("class:group", "  Just changed\n"))
             for n in notes[-4:]:
@@ -710,6 +719,290 @@ def jira_screen(project_dir: Path, mod, output=None):
         screen(
             mod,
             title=f"{g['jira']}From a Jira ticket  ·  {project_dir.resolve().name}",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=project_dir,
+        )
+    except Exception:
+        return None
+    return result["v"]
+
+
+BROWSE_CANCELLED = "__browse_cancelled__"
+
+# Rows visible at once in the explorer. Fixed rather than measured: the frame height is
+# not known when the body is built, and 15 fits the 24-line terminal that is the floor
+# everywhere this runs.
+_BROWSE_PAGE = 15
+
+
+def _dir_entries(here: Path, mod, limit=200):
+    """Sub-directories of `here`, each tagged with whether it is a team project. Hidden
+    and dependency directories are skipped: they are never the answer and they bury the
+    ones that are. Unreadable directory = empty list, never a traceback."""
+    skip = {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".idea"}
+    out = []
+    try:
+        for child in sorted(here.iterdir(), key=lambda p: p.name.lower()):
+            if not child.is_dir() or child.name in skip:
+                continue
+            if child.name.startswith(".") and child.name != ".claude":
+                continue
+            try:
+                is_project = bool(mod._plugin_enabled(child))
+            except Exception:
+                is_project = False
+            out.append((child, is_project))
+            if len(out) >= limit:
+                break
+    except (OSError, PermissionError):
+        return []
+    return out
+
+
+def browse_screen(start_dir: Path, mod, output=None):
+    """Project explorer (2026-08-20 user request: "the ability to change the folder and
+    restart virt-surv go from that folder").
+
+    Rows are unambiguous by construction: the first row opens the folder you are IN,
+    ".." goes up, and any other row descends. A file picker that overloads Enter to mean
+    both "descend" and "choose" is the classic way to open the wrong project.
+
+    Team projects are ticked, so you can see which directories the plugin is actually set
+    up in rather than guessing from the name.
+
+    Returns the chosen Path, BROWSE_CANCELLED on Esc, or None when the app cannot run."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    g = glyphs(mod)
+    try:
+        here = [start_dir.resolve()]
+    except Exception:
+        here = [start_dir]
+    entries = [_dir_entries(here[0], mod)]
+    idx = [0]
+    result = {"v": BROWSE_CANCELLED}
+
+    def _rows():
+        """(label, kind, payload) - kind is 'use' | 'up' | 'dir'."""
+        rows = [(f"use this folder  ({here[0].name or here[0]})", "use", here[0])]
+        if here[0].parent != here[0]:
+            rows.append((".. up to " + (here[0].parent.name or str(here[0].parent)), "up", None))
+        for child, is_project in entries[0]:
+            rows.append((child.name, "dir", (child, is_project)))
+        return rows
+
+    def _reload(new_dir):
+        here[0] = new_dir
+        entries[0] = _dir_entries(new_dir, mod)
+        idx[0] = 0
+
+    def _body():
+        rows = _rows()
+        out = [("class:group", f"  {g['engagements']}Choose a project folder\n\n")]
+        # Viewport, not the whole list: a FormattedTextControl does not follow a cursor,
+        # so in any real projects folder the selection walked off the bottom of the frame
+        # and became invisible. Window slides to keep the highlighted row inside it.
+        top = 0
+        if len(rows) > _BROWSE_PAGE:
+            top = min(max(idx[0] - _BROWSE_PAGE // 2, 0), len(rows) - _BROWSE_PAGE)
+            if top:
+                out.append(("class:dim", f"    ... {top} above\n"))
+        window = list(enumerate(rows))[top : top + _BROWSE_PAGE]
+        for i, (label, kind, payload) in window:
+            sel = idx[0] == i
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            if kind == "use":
+                out.append(("class:on" if not sel else "class:sel", f"{label}\n"))
+                continue
+            if kind == "up":
+                out.append(("class:dim" if not sel else "class:sel", f"{label}\n"))
+                continue
+            _child, is_project = payload
+            out.append(("class:sel" if sel else "class:title", label))
+            if is_project:
+                out.append(("class:on", f"  {g['on']} team project"))
+            out.append(("", "\n"))
+        below = len(rows) - (top + _BROWSE_PAGE)
+        if below > 0:
+            out.append(("class:dim", f"    ... {below} below\n"))
+        if len(rows) == 1:
+            out.append(("class:dim", "\n    (no sub-folders here)\n"))
+        return out
+
+    def _right():
+        out = [("class:title", "\n  Project explorer\n\n")]
+        out.append(("", "  " + str(here[0])[-30:] + "\n\n"))
+        out.append(
+            (
+                "class:dim",
+                "  Enter on a folder opens it.\n  Enter on the first row picks\n"
+                "  the folder you are in.\n\n  Switching restarts the menu\n"
+                "  for that project, and the\n  session starts there too.\n\n",
+            )
+        )
+        ticked = sum(1 for _c, is_p in entries[0] if is_p)
+        if ticked:
+            out.append(("class:on", f"  {ticked} team project(s) here\n"))
+        return out
+
+    def _footer():
+        return [("class:hint", "  ↑↓ move · Enter open · Backspace up · Esc cancel")]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % max(len(_rows()), 1)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % max(len(_rows()), 1)
+
+    @kb.add("backspace")
+    @kb.add("left")
+    def _parent(event):
+        if here[0].parent != here[0]:
+            _reload(here[0].parent)
+
+    @kb.add("enter")
+    def _choose(event):
+        rows = _rows()
+        if not rows:
+            return
+        _label, kind, payload = rows[idx[0]]
+        if kind == "use":
+            result["v"] = here[0]
+            event.app.exit()
+        elif kind == "up":
+            _parent(event)
+        else:
+            _reload(payload[0])
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    def _esc(event):
+        result["v"] = BROWSE_CANCELLED
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title=f"{g['engagements']}Open a project",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=here[0],
+        )
+    except Exception:
+        return None
+    return result["v"]
+
+
+SETUP_DEFAULTS = "__setup_defaults__"
+SETUP_GUIDED = "__setup_guided__"
+SETUP_SKIP = "__setup_skip__"
+
+
+def setup_screen(project_dir: Path, mod, output=None):
+    """First-time project setup, asked INSIDE the interface (2026-08-20 user report: "it
+    currently creates and prompts for whether the user wants defaults outside of the new
+    TUI - integrate that flow").
+
+    It used to be a bare `[Y/n]` on stderr followed by a separate interactive program, so
+    the very first thing a new project showed you was the thing the TUI exists to replace.
+
+    Three outcomes, and the honest bit is the middle one: applying defaults runs without
+    prompting and stays in here, while the guided pass IS a separate interactive program
+    and cannot be hosted in this app - so the screen says it will leave rather than
+    pretending otherwise.
+
+    Returns SETUP_DEFAULTS / SETUP_GUIDED / SETUP_SKIP, or None when the app cannot run."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    g = glyphs(mod)
+    options = [
+        (SETUP_DEFAULTS, f"{g['new']}set up with recommended defaults", "no questions asked"),
+        (SETUP_GUIDED, f"{g['settings']}guided setup", "asks questions; leaves this screen"),
+        (SETUP_SKIP, f"{g['launch']}skip for now", "launch without setting up"),
+    ]
+    idx = [0]
+    result = {"v": SETUP_SKIP}
+
+    def _body():
+        out = [("class:group", f"  {g['settings']}First-time setup\n\n")]
+        out.append(("class:dim", "  No team configuration in this folder yet.\n\n"))
+        for i, (_ret, label, note) in enumerate(options):
+            sel = idx[0] == i
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            out.append(("class:sel" if sel else "class:title", label))
+            # Note on its OWN line: inline, the three notes ran past the pane edge and
+            # were clipped mid-word ("asks questions; leaves"), which is exactly the
+            # wrong half to lose.
+            out.append(("", "\n"))
+            out.append(("class:dim", f"        {note}\n"))
+            if i < len(options) - 1:
+                out.append(("", "\n"))
+        return out
+
+    def _right():
+        out = [("class:title", "\n  What setup does\n\n")]
+        out.append(
+            (
+                "class:dim",
+                "  Writes this project's own\n  team-preferences.json, so the\n"
+                "  team knows how you want it\n  to work here.\n\n"
+                "  Nothing outside this folder\n  is touched, and every setting\n"
+                "  can be changed later from\n  the menu.\n\n",
+            )
+        )
+        return out
+
+    def _footer():
+        return [("class:hint", "  ↑↓ move · Enter choose · Esc skip")]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % len(options)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % len(options)
+
+    @kb.add("enter")
+    def _pick(event):
+        result["v"] = options[idx[0]][0]
+        event.app.exit()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    def _esc(event):
+        result["v"] = SETUP_SKIP
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title=f"{g['settings']}Set up this project",
             body_fn=_body,
             right_fn=_right,
             footer_fn=_footer,

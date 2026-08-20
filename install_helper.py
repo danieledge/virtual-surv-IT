@@ -4494,7 +4494,7 @@ _ALIAS_MARKER = "virt-surv"
 # v6 (2026-08-19): the shell fast path matches 'engage' as well as 'go' - `virt-surv
 # engage` now LAUNCHES (it used to be project setup, which read as the opposite of
 # /engage in-session). heal_stale_aliases rewrites v5 definitions at the next launch.
-_ALIAS_VERSION = 6
+_ALIAS_VERSION = 7
 _ALIAS_STAMP = f"# {_ALIAS_MARKER}-alias-v{_ALIAS_VERSION}"
 
 # Any version's stamp - the removal marker for _strip_stamped_definitions.
@@ -4518,20 +4518,32 @@ def _alias_line_for(rc_path: Path, interpreter: str, launcher_path, script_path)
             f'$__vtCmd = @((& "{interpreter}" "{launcher_path}" --launch-command) -split " +"); '
             f'if (-not $__vtCmd) {{ $__vtCmd = @("claude") }}; '
             f"$__vtCmdArgs = @($__vtCmd | Select-Object -Skip 1); "
+            f"$__vtF = [System.IO.Path]::GetTempFileName(); "
+            f"$env:VIRT_SURV_CD_FILE = $__vtF; "
             f'$__vtDecision = & "{interpreter}" "{launcher_path}"; '
+            f"$__vtRc = $LASTEXITCODE; "
+            f"Remove-Item Env:\\VIRT_SURV_CD_FILE -ErrorAction SilentlyContinue; "
+            f"$__vtGo = (Get-Content $__vtF -Raw -ErrorAction SilentlyContinue); "
+            f"Remove-Item $__vtF -ErrorAction SilentlyContinue; "
+            f"if ($__vtGo -and $__vtGo.Trim()) {{ Set-Location $__vtGo.Trim() }}; "
+            f"if ($__vtRc -ne 97) {{ "
             f'if ($__vtDecision) {{ & $__vtCmd[0] @__vtCmdArgs "$__vtDecision" @__vtRest }} '
-            f"else {{ & $__vtCmd[0] @__vtCmdArgs @__vtRest }} "
+            f"else {{ & $__vtCmd[0] @__vtCmdArgs @__vtRest }} }} "
             f"}} else {{ "
             f'& "{interpreter}" "{script_path}" @args '
             f"}} }} {_ALIAS_STAMP}"
         )
     return (
         f"{_ALIAS_MARKER}() {{ "
-        f'if [ "$1" = "go" ] || [ "$1" = "engage" ]; then shift; local __vt_c __vt_d; '
+        f'if [ "$1" = "go" ] || [ "$1" = "engage" ]; then shift; local __vt_c __vt_d __vt_f __vt_r; '
         f'__vt_c="$("{interpreter}" "{launcher_path}" --launch-command)"; '
         f'[ -n "$__vt_c" ] || __vt_c=claude; '
-        f'__vt_d="$("{interpreter}" "{launcher_path}")"; '
-        f'$__vt_c ${{__vt_d:+"$__vt_d"}} "$@"; '
+        f'__vt_f="$(mktemp 2>/dev/null || echo "${{TMPDIR:-/tmp}}/virt-surv-cd.$$")"; '
+        f'__vt_d="$(VIRT_SURV_CD_FILE="$__vt_f" "{interpreter}" "{launcher_path}")"; '
+        f'__vt_r=$?; '
+        f'if [ -s "$__vt_f" ]; then cd "$(cat "$__vt_f")" || true; fi; '
+        f'rm -f "$__vt_f"; '
+        f'if [ "$__vt_r" -ne 97 ]; then $__vt_c ${{__vt_d:+"$__vt_d"}} "$@"; fi; '
         f'else "{interpreter}" "{script_path}" "$@"; fi; }} {_ALIAS_STAMP}'
     )
 

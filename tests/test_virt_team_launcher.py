@@ -1136,3 +1136,59 @@ def test_morgan_line_keeps_the_ai_identity_attribution():
     mod = _load()
     line = mod._morgan_line()
     assert "Morgan" in line and "AI agent" in line and "Virtual Surveillance IT" in line
+
+
+# --- backing out, and switching project (2026-08-20 user requests) ----------------------------
+
+
+def test_escape_returns_to_the_terminal_instead_of_launching():
+    """2026-08-20 user report: "when exiting the tui it launches claude code, it
+    shouldn't". Esc (pick None) used to share the empty decision with "just launch", so
+    backing out still started a session. Only the explicit launch row does that now."""
+    mod = _load()
+    assert mod._decision_from_pick(None, Path("."), None, {}, []) == mod._ABORT
+    assert mod._decision_from_pick(("launch",), Path("."), None, {}, []) == ""
+
+
+def test_abort_writes_nothing_to_stdout_and_exits_with_the_wrapper_code(tmp_path, monkeypatch, capsys):
+    """The wrapper skips the launch on this exit code, so it has to be the code AND a
+    clean stdout - a stray character would become the session's opening prompt."""
+    mod = _load()
+    project = _plugin_enabled_project(tmp_path)
+    monkeypatch.chdir(project)
+    monkeypatch.setattr(mod, "_resume_decision", lambda _d: mod._ABORT)
+    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
+                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache"):
+        monkeypatch.setattr(mod, name, lambda *a, **k: None)
+    rc = mod.main()
+    assert rc == mod._ABORT_EXIT_CODE == 97
+    assert capsys.readouterr().out == ""
+
+
+def test_choosing_a_new_folder_yields_the_chdir_sentinel(tmp_path, monkeypatch):
+    mod = _load()
+    target = tmp_path / "other"
+    target.mkdir()
+    monkeypatch.setattr(mod, "_browse_decision", lambda _d: target)
+    out = mod._decision_from_pick(("open",), tmp_path, None, {}, [])
+    assert out == mod._CHDIR_PREFIX + str(target)
+
+
+def test_choosing_the_same_folder_just_reshows_the_menu(tmp_path, monkeypatch):
+    """Picking the folder you are already in is a no-op, not a pointless restart."""
+    mod = _load()
+    monkeypatch.setattr(mod, "_browse_decision", lambda _d: tmp_path)
+    assert mod._decision_from_pick(("open",), tmp_path, None, {}, []) == "__again__"
+
+
+def test_the_cd_request_reaches_the_shell_handshake_file(tmp_path, monkeypatch):
+    """A launcher cannot move its parent's cwd, so the folder switch travels to the shell
+    through this file. No env var (an un-healed older wrapper) must report False rather
+    than pretending it worked."""
+    mod = _load()
+    handshake = tmp_path / "cd-request"
+    monkeypatch.setenv("VIRT_SURV_CD_FILE", str(handshake))
+    assert mod._write_cd_request(tmp_path) is True
+    assert handshake.read_text(encoding="utf-8") == str(tmp_path.resolve())
+    monkeypatch.delenv("VIRT_SURV_CD_FILE")
+    assert mod._write_cd_request(tmp_path) is False

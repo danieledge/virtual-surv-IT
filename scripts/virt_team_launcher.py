@@ -104,7 +104,13 @@ def _configured_launch_command() -> str:
 
 
 # Pinned to install_helper._ALIAS_VERSION by a sync test - bump both together.
-_EXPECTED_ALIAS_VERSION = 6  # v6: the shell fast path matches 'engage' as well as 'go'
+_EXPECTED_ALIAS_VERSION = 7  # v7: cd handshake for the project explorer + Esc exits
+# Exit code that means "the human backed out - do NOT launch" (2026-08-20 user report:
+# "when exiting the tui it launches claude code, it shouldn't"). Esc used to be folded
+# into the same empty decision as 'just launch', so backing out of the menu still
+# started a session. 97 is arbitrary but must stay in step with the wrapper templates.
+_ABORT_EXIT_CODE = 97
+_ABORT = "__abort__"
 
 
 def _heal_stale_alias_once() -> None:
@@ -319,10 +325,11 @@ _SETTING_HELP = {
         "Not applied: Claude Code's own defaults are used.",
     ),
     _JIRA_ROW_LABEL: (
-        "Lets the team WRITE to your tracker on its own initiative: raise the engagement "
-        "issue at open, comment on progress, post the summary and transition at close.",
-        "Off does NOT hide Jira: [j] on the menu still starts an engagement from a ticket "
-        "and delivers that one ticket its result. This governs everything else.",
+        "Whether the team WRITES to your tracker itself. On: it raises ONE issue per "
+        "engagement at open, after you approve a plan naming it, then comments as work "
+        "moves and posts the summary at close.",
+        "Off does NOT hide Jira. [j] still works: it starts from a ticket and reports "
+        "back to that one ticket, without ever raising issues of its own.",
     ),
 }
 
@@ -778,8 +785,97 @@ def _resume_decision(project_dir: Path) -> str:
         # callers are unaffected: no tty means input() raises EOFError, which is the
         # same plain launch as before.
         decision = _menu_round(project_dir, engagement_state, menu, shown)
+        if decision.startswith(_CHDIR_PREFIX):
+            # Project switch (2026-08-20 explorer): re-enter the SAME loop against the new
+            # folder rather than returning, so the menu, settings and resume list all
+            # belong to the project the session is about to open. The shell is asked to
+            # follow; if the wrapper is too old to have the handshake, say so rather than
+            # opening a session in the previous directory.
+            project_dir = Path(decision[len(_CHDIR_PREFIX) :])
+            ink = _Ink()
+            print(ink.good(f"    -> switched to {project_dir}"), file=sys.stderr)
+            if not _write_cd_request(project_dir):
+                print(
+                    ink.warn(
+                        "    note: this shell's virt-surv wrapper predates folder "
+                        "switching, so the session will still open in the previous "
+                        "directory. It self-heals on the next 'virt-surv go'."
+                    ),
+                    file=sys.stderr,
+                )
+            for step in (_prewarm_guard_interpreter, _write_probe_cache):
+                try:
+                    step(project_dir)  # the new project deserves the same warm start
+                except Exception:
+                    pass
+            continue
         if decision != "__again__":
             return decision
+
+
+_CHDIR_PREFIX = "__chdir__:"
+
+
+def _write_cd_request(target: Path) -> bool:
+    """Ask the SHELL to change directory (2026-08-20 project explorer).
+
+    A launcher is a child process: it cannot move its parent's cwd, and the wrapper
+    launches Claude Code from wherever the user was standing. So switching project inside
+    the menu would otherwise open a session pointed at the OLD folder - worse than not
+    offering the feature, because the menu would show one project and the session would
+    open another.
+
+    The wrapper (install_helper._alias_line_for, alias v7+) creates a temp file, passes
+    its path in VIRT_SURV_CD_FILE, and cd's to whatever it contains before launching. No
+    variable means an older wrapper that has not self-healed yet: the switch still works
+    for everything the LAUNCHER does, and the caller warns rather than silently opening
+    the wrong directory."""
+    path = os.environ.get("VIRT_SURV_CD_FILE")
+    if not path:
+        return False
+    try:
+        Path(path).write_text(str(target.resolve()), encoding="utf-8")
+        return True
+    except OSError:
+        return False
+
+
+def _browse_decision(project_dir: Path):
+    """Run the explorer and return the chosen directory, or None. App tier only - the
+    plain fallback below is a single typed path, because a numbered directory walker in
+    input() is worse than just pasting the path you already know."""
+    try:
+        from launcher_app import BROWSE_CANCELLED, browse_screen
+
+        chosen = browse_screen(project_dir, sys.modules[__name__])
+        if chosen is None:
+            return _browse_prompt(project_dir)
+        if chosen == BROWSE_CANCELLED:
+            return None
+        return chosen
+    except Exception:
+        try:
+            return _browse_prompt(project_dir)
+        except Exception:
+            return None
+
+
+def _browse_prompt(project_dir: Path):
+    """Plain tier: type or paste a folder. Same outcome, no full-screen requirement."""
+    ink = _Ink()
+    err = sys.stderr
+    print(ink.bold("    Project folder (blank to cancel): "), end="", file=err)
+    try:
+        raw = input().strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    if not raw:
+        return None
+    candidate = Path(raw).expanduser()
+    if not candidate.is_dir():
+        print(ink.dim(f"    not a folder: {candidate}"), file=err)
+        return None
+    return candidate
 
 
 def _jira_offered(project_dir: Path) -> bool:
@@ -895,6 +991,7 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
     if _jira_offered(project_dir):
         entries.append((("jira",), "a new engagement from a Jira ticket", "j"))
     entries.append((("settings",), "change a project setting", "c"))
+    entries.append((("open",), "open a different project folder", "o"))
     if shown:
         entries.append((("archive",), "archive engagement(s)", "a"))
     launch_label = "decide inside the session instead" if shown else "just launch"
@@ -923,7 +1020,13 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
     the picker tier (2026-08-20) - both produce the SAME pick tuples, and a second copy of
     this mapping is exactly the drift this work exists to remove."""
     ink = _Ink()
-    if pick is None or pick[0] == "launch":
+    if pick is None:
+        # Backing out is NOT the same as choosing to launch: Esc/Ctrl-C returns you to
+        # the terminal (2026-08-20 user report). Only the explicit launch row below
+        # starts a session with no pre-seeded decision.
+        print(ink.dim("    -> back to the terminal"), file=sys.stderr)
+        return _ABORT
+    if pick[0] == "launch":
         print(ink.dim("    -> launching"), file=sys.stderr)
         return ""
     if pick[0] == "jira":
@@ -946,6 +1049,17 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
             return _jira_decision(project_dir)
         except Exception:
             return "__again__"
+    if pick[0] == "open":
+        chosen = _browse_decision(project_dir)
+        if not chosen:
+            return "__again__"
+        try:
+            same = chosen.resolve() == project_dir.resolve()
+        except Exception:
+            same = False
+        if same:
+            return "__again__"
+        return _CHDIR_PREFIX + str(chosen)
     if pick[0] == "settings":
         try:
             # App screen first (2026-08-20): same _editor_rows/_editor_apply underneath,
@@ -1065,6 +1179,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     print("", file=err)
     print(f"  {ink.dim('Or')}", file=err)
     settings_opt = f"    {ink.bold('[c]')} change a project setting"
+    settings_opt += f"   {ink.bold('[o]')} open a different project"
     if shown:
         settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
     print(settings_opt, file=err)
@@ -1089,8 +1204,13 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
         # stderr, then call input() with NO argument so it never touches stdout.
         print(_Ink().bold("  Choice: "), end="", file=err)
         choice = input().strip()
-    except (EOFError, KeyboardInterrupt):
-        return ""  # no tty / interrupted - fall through to deciding in-session
+    except EOFError:
+        # No tty (CI, a pipe, `go < /dev/null`): the documented plain launch. NOT an
+        # abort - automation that never sees the menu must keep behaving as it always has.
+        return ""
+    except KeyboardInterrupt:
+        # A human backing out, same as Esc in the app tier (2026-08-20).
+        return _ABORT
     if not choice:
         return ""
     if choice.lower() == "j" and jira_on:
@@ -1104,6 +1224,10 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
         except Exception:
             pass  # cosmetic tier
         return "__again__"
+    if choice.lower() == "o":
+        # Same mapping the other two tiers use, so the explorer cannot mean one thing
+        # here and another there.
+        return _decision_from_pick(("open",), project_dir, engagement_state, menu, shown)
     if choice.lower() == "a":
         try:
             _archive_menu(project_dir, engagement_state, menu)
@@ -2156,21 +2280,41 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
     if not helper.is_file():
         return False
     ink = _Ink()
-    print("", file=err)
-    _print_rule("First-time setup")
-    print(ink.dim(f"  no team configuration in {project_dir}"), file=err)
-    print(ink.bold("  Run first-time project setup now? [Y/n] "), end="", file=err)
+    # In-app screen first (2026-08-20): the old bare [Y/n] meant a brand-new project's
+    # FIRST impression was the plain prompt the TUI exists to replace. `onboard` applies
+    # the project defaults with no questions, so the common answer never leaves the
+    # interface; the guided pass is a separate interactive program and is labelled as
+    # leaving rather than pretended otherwise. None = the screen could not run here, and
+    # only then does the [Y/n] fallback below appear.
+    verb = "configure"
     try:
-        answer = input().strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        return False
-    if answer in ("n", "no"):
-        return False
+        from launcher_app import SETUP_DEFAULTS, SETUP_GUIDED, SETUP_SKIP, setup_screen
+
+        choice = setup_screen(project_dir, sys.modules[__name__])
+        if choice == SETUP_SKIP:
+            return False
+        if choice == SETUP_DEFAULTS:
+            verb = "onboard"  # non-interactive: applies the defaults and reports them
+        elif choice != SETUP_GUIDED:
+            choice = None
+    except Exception:
+        choice = None
+    if choice is None:
+        print("", file=err)
+        _print_rule("First-time setup")
+        print(ink.dim(f"  no team configuration in {project_dir}"), file=err)
+        print(ink.bold("  Run first-time project setup now? [Y/n] "), end="", file=err)
+        try:
+            answer = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return False
+        if answer in ("n", "no"):
+            return False
     import subprocess
 
     try:
         proc = subprocess.run(
-            [sys.executable, str(helper), "configure", str(project_dir)],
+            [sys.executable, str(helper), verb, str(project_dir)],
             stdout=sys.stderr,
             stderr=sys.stderr,
         )
@@ -2283,6 +2427,10 @@ def main() -> int:
         decision = _resume_decision(project_dir)
     except Exception:
         decision = ""  # same reasoning - never let one piece's failure kill the other
+    if decision == _ABORT:
+        # Nothing on stdout, and a distinct exit code so the wrapper skips the launch
+        # entirely rather than starting a session the human just backed out of.
+        return _ABORT_EXIT_CODE
     if decision:
         print(decision)  # the ONLY thing that goes to stdout
     return 0
