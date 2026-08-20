@@ -30,8 +30,12 @@ def _load(name: str):
 
 @pytest.fixture
 def ptk(monkeypatch):
-    if str(VENDOR) not in sys.path:
-        sys.path.insert(0, str(VENDOR))
+    # BOTH paths: vendor/ for prompt_toolkit, and scripts/ because the launcher's
+    # helpers do bare `import engage_probe` / `import engagement_state` - which resolve
+    # in production (it runs from scripts/) but not under pytest's rootdir path.
+    for extra in (VENDOR, REPO_ROOT / "scripts"):
+        if str(extra) not in sys.path:
+            sys.path.insert(0, str(extra))
     pytest.importorskip("prompt_toolkit.application")
     monkeypatch.setenv("VIRT_SURV_FORCE_PTK", "1")
     from prompt_toolkit.application import create_app_session
@@ -171,3 +175,81 @@ def test_row_view_is_plain_data_not_styled_strings():
     view = launcher.row_view(_row())
     blob = json.dumps(view)
     assert "\x1b[" not in blob and "class:" not in blob
+
+
+# --- the other screens (2026-08-20): settings and archive on the same shell ----------
+
+
+def test_settings_screen_lists_rows_and_toggles_in_place(ptk, tmp_path):
+    """Same _editor_rows/_editor_apply the plain tier drives, so behaviour cannot
+    diverge - only presentation. Enter toggles the highlighted row for real."""
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text("\r\x1b")  # toggle the first row, then leave
+        with create_app_session(input=pipe, output=out):
+            changed = app.settings_screen(tmp_path, launcher, output=out)
+    text = buf.getvalue()
+    assert "Project settings" in text
+    assert "docx export" in text, "settings rows not rendered"
+    assert changed is True, "Enter did not toggle anything"
+    prefs = json.loads((tmp_path / ".claude" / "team-preferences.json").read_text())
+    assert prefs, "the toggle never reached team-preferences.json"
+
+
+def test_settings_screen_escape_changes_nothing(ptk, tmp_path):
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    out = PlainTextOutput(io.StringIO())
+    with create_pipe_input() as pipe:
+        pipe.send_text("\x1b")
+        with create_app_session(input=pipe, output=out):
+            changed = app.settings_screen(tmp_path, launcher, output=out)
+    assert changed is False
+    assert json.loads((tmp_path / ".claude" / "team-preferences.json").read_text()) == {}
+
+
+def test_archive_screen_states_the_open_pack_consequence(ptk):
+    """ARCHIVED-OPEN is on screen BEFORE the key is pressed - it is what a person needs
+    in order to decide, not an after-the-fact note."""
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    rows = [_row()]
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text("\x1b")
+        with create_app_session(input=pipe, output=out):
+            app.archive_screen(Path("."), launcher, None, _menu(rows), output=out)
+    text = buf.getvalue()
+    assert "Archive engagements" in text
+    assert "ARCHIVED-OPEN" in text
+    assert "archive ALL open engagements" in text
+
+
+def test_every_screen_shares_one_shell():
+    """menu, settings and archive all render through screen() - three hand-rolled
+    layouts would drift exactly as the two menu tiers did."""
+    source = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+    assert source.count("        screen(") >= 3, "a screen is not using the shared shell"
+
+
+def test_glyphs_degrade_on_a_cp1252_console(monkeypatch):
+    """Emoji only where the console can encode them - the same gate the wordmark uses."""
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    monkeypatch.setattr(launcher, "_can_encode", lambda text: False)
+    plain = app.glyphs(launcher)
+    assert plain["point"] == ">" and plain["settings"] == "" and plain["on"] == "on"
+    monkeypatch.setattr(launcher, "_can_encode", lambda text: True)
+    rich = app.glyphs(launcher)
+    assert rich["point"] == "▸" and "⚙" in rich["settings"]

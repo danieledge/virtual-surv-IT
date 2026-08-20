@@ -800,15 +800,30 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
             return "__again__"
     if pick[0] == "settings":
         try:
-            _run_settings_editor(project_dir)
+            # App screen first (2026-08-20): same _editor_rows/_editor_apply underneath,
+            # so behaviour is identical and only the presentation differs. Falls back to
+            # the numbered editor wherever the app can't run.
+            from launcher_app import settings_screen
+
+            if not settings_screen(project_dir, sys.modules[__name__]):
+                _run_settings_editor(project_dir)
         except Exception:
-            pass  # cosmetic tier
+            try:
+                _run_settings_editor(project_dir)
+            except Exception:
+                pass  # cosmetic tier
         return "__again__"
     if pick[0] == "archive":
         try:
-            _archive_menu(project_dir, engagement_state, menu)
+            from launcher_app import archive_screen
+
+            if not archive_screen(project_dir, sys.modules[__name__], engagement_state, menu):
+                _archive_menu(project_dir, engagement_state, menu)
         except Exception:
-            pass
+            try:
+                _archive_menu(project_dir, engagement_state, menu)
+            except Exception:
+                pass
         return "__again__"
     engage_cmd = _engage_command(project_dir)
     if pick[0] == "new":
