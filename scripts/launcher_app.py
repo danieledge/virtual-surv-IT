@@ -287,25 +287,30 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     return result["v"]
 
 
-def settings_screen(project_dir: Path, mod, output=None) -> bool:
+def settings_screen(project_dir: Path, mod, output=None):
     """The [c] screen as a real app: live on/off column, toggle in place, Esc to leave.
 
     Replaces a numbered re-prompt loop where every toggle reprinted the whole table.
     Drives the SAME `_editor_rows` / `_editor_apply` the plain tier uses, so behaviour
     (precedence, machine defaults, the jira row, 'd' restore) cannot diverge - only the
-    presentation differs. Returns True if anything changed."""
+    presentation differs.
+
+    Returns True/False when the screen RAN (changed anything or not), and **None when it
+    could not run at all** - the caller falls back to the numbered editor only on None.
+    Conflating the two was a live bug (2026-08-20): Esc with nothing changed returned
+    False, so cancelling the app screen dumped the user into the old numbered editor."""
     try:
         p = mod._ptk_ui()
         if not p:
-            return False
+            return None
         from prompt_toolkit.key_binding import KeyBindings
     except Exception:
-        return False
+        return None
 
     g = glyphs(mod)
     rows = mod._editor_rows(project_dir) or []
     if not rows:
-        return False
+        return None  # cannot render a settings screen without settings
     idx = [0]
     notes: list[str] = []
     changed = [False]
@@ -400,7 +405,7 @@ def settings_screen(project_dir: Path, mod, output=None) -> bool:
     return changed[0]
 
 
-def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=None) -> bool:
+def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=None):
     """The [a] screen as a real app: pick one, or all, with the consequence stated.
 
     Archiving an OPEN pack is allowed but shows as ARCHIVED-OPEN in checks - that warning
@@ -409,15 +414,15 @@ def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=
     try:
         p = mod._ptk_ui()
         if not p:
-            return False
+            return None
         from prompt_toolkit.key_binding import KeyBindings
     except Exception:
-        return False
+        return None
 
     g = glyphs(mod)
     shown = list(menu.get("shown") or [])
     if not shown:
-        return False
+        return None  # nothing to archive - let the caller decide what to say
     open_rows = list(menu.get("open") or shown)
     views = [mod.row_view(r) for r in shown]
     idx = [0]

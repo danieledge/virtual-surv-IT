@@ -213,7 +213,11 @@ def test_settings_screen_escape_changes_nothing(ptk, tmp_path):
         pipe.send_text("\x1b")
         with create_app_session(input=pipe, output=out):
             changed = app.settings_screen(tmp_path, launcher, output=out)
+    # False, NOT None: the screen RAN and the user cancelled. None means "could not run"
+    # and is the only thing that may fall back to the numbered editor - conflating them
+    # is what dropped users into the old interface on Esc (live report, 2026-08-20).
     assert changed is False
+    assert changed is not None
     assert json.loads((tmp_path / ".claude" / "team-preferences.json").read_text()) == {}
 
 
@@ -253,3 +257,28 @@ def test_glyphs_degrade_on_a_cp1252_console(monkeypatch):
     monkeypatch.setattr(launcher, "_can_encode", lambda text: True)
     rich = app.glyphs(launcher)
     assert rich["point"] == "▸" and "⚙" in rich["settings"]
+
+
+def test_escape_does_not_fall_back_to_the_old_interface(ptk, tmp_path):
+    """The live report: pressing Esc in the app dropped back to the numbered editor.
+    Cause was a conflated return - False (ran, cancelled) read the same as
+    "unavailable". The caller falls back ONLY on None."""
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    out = PlainTextOutput(io.StringIO())
+    with create_pipe_input() as pipe:
+        pipe.send_text("\x1b")
+        with create_app_session(input=pipe, output=out):
+            result = app.settings_screen(tmp_path, launcher, output=out)
+    assert result is False, "Esc must report 'ran, no change', never 'unavailable'"
+
+
+def test_screens_report_none_only_when_they_cannot_run(monkeypatch, tmp_path):
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    monkeypatch.setattr(launcher, "_ptk_ui", lambda: None)
+    assert app.settings_screen(tmp_path, launcher) is None
+    assert app.archive_screen(tmp_path, launcher, None, _menu([_row()])) is None

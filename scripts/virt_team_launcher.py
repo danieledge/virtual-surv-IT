@@ -805,7 +805,10 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
             # the numbered editor wherever the app can't run.
             from launcher_app import settings_screen
 
-            if not settings_screen(project_dir, sys.modules[__name__]):
+            # None = the app screen could not run; False = it ran and the user changed
+            # nothing (Esc). Only the former falls back - treating Esc as "unavailable"
+            # dumped the user into the old numbered editor (live report, 2026-08-20).
+            if settings_screen(project_dir, sys.modules[__name__]) is None:
                 _run_settings_editor(project_dir)
         except Exception:
             try:
@@ -817,7 +820,7 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
         try:
             from launcher_app import archive_screen
 
-            if not archive_screen(project_dir, sys.modules[__name__], engagement_state, menu):
+            if archive_screen(project_dir, sys.modules[__name__], engagement_state, menu) is None:
                 _archive_menu(project_dir, engagement_state, menu)
         except Exception:
             try:
