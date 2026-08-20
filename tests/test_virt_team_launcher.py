@@ -101,8 +101,8 @@ def test_plugin_project_no_engagements_still_pauses_with_menu(tmp_path, monkeypa
     rc = mod.main()  # pytest's captured stdin is unreadable -> EOF path -> plain launch
     out = capsys.readouterr()
     assert rc == 0 and out.out == ""
-    assert "none open" in out.err
-    assert "[n]" in out.err and "start new" in out.err
+    assert "no open engagements" in out.err  # wording clarified 2026-08-20
+    assert "[n]" in out.err and "a new engagement" in out.err
     assert "[a]" not in out.err  # nothing to archive - option hidden
 
 

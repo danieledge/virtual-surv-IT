@@ -762,9 +762,9 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
     if not shown:
         archived = menu.get("archived") or 0
         subtitle = f"none open ({archived} archived)" if archived else "none open"
-    entries.append((("new",), "start new", "n"))
+    entries.append((("new",), "start a new engagement", "n"))
     if _jira_enabled(project_dir):
-        entries.append((("jira",), "new engagement from a Jira", "j"))
+        entries.append((("jira",), "a new engagement from a Jira ticket", "j"))
     entries.append((("settings",), "change a project setting", "c"))
     if shown:
         entries.append((("archive",), "archive engagement(s)", "a"))
@@ -777,7 +777,9 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
             break
     pick = _pt_pick(
         p,
-        "Open engagements" if shown else "Engagements",
+        # Morgan ASKS rather than captioning a list (2026-08-20): the picker's title is
+        # the question, so both tiers pose the same thing.
+        "How would you like to start?",
         entries,
         default_index=default_index,
         subtitle=subtitle,
@@ -830,9 +832,16 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
             return decision
         # The pt widget could not run in this console (live Windows report
         # 2026-08-17: a silent plain launch) - the numbered tier below takes over.
+    # 2026-08-20 UX pass: Morgan ASKS, and the answers are grouped. Previously one
+    # "Open engagements" rule sat above everything, so [n] start new / [c] settings /
+    # [Enter] read as though they were open engagements; and with no blank line anywhere
+    # the whole screen ran together. Groups are dim labels, not rules - more rules on a
+    # short screen is what made it feel crowded in the first place.
     print("", file=err)
-    _print_rule("Open engagements" if shown else "Engagements")
+    print(f"  {ink.bold('How would you like to start?')}", file=err)
+    print("", file=err)
     if shown:
+        print(f"  {ink.dim('Resume an engagement')}", file=err)
         # 2026-08-19 UX pass: rows now LEAD with the title (what the work is), carry a
         # status mark and a relative age, and the recommended row is marked - the raw
         # slug/status/ISO-date table made the reader do the interpreting.
@@ -846,31 +855,38 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
             title = row.get("title") or slug
             detail = _row_detail(row)
             recommended = slug == default_slug and len(shown) > 1
-            head = f"  {ink.bold(f'[{i}]')} {mark_col} {ink.bold(title)}"
+            head = f"    {ink.bold(f'[{i}]')} {mark_col} {ink.bold(title)}"
             if recommended:
                 head += "  " + ink.good("<- most recent")
             print(head, file=err)
-            tail = f"      {ink.dim(slug.ljust(slug_w))}"
+            tail = f"        {ink.dim(slug.ljust(slug_w))}"
             if detail:
                 tail += "  " + ink.dim(detail)
             print(tail, file=err)
+            if i < len(shown):
+                print("", file=err)  # one blank line BETWEEN two-line entries
         more = menu.get("more") or 0
         if more:
-            print(ink.dim(f"      (+{more} more not shown)"), file=err)
+            print(ink.dim(f"        (+{more} more not shown)"), file=err)
+        print("", file=err)
     else:
         archived = menu.get("archived") or 0
-        note = f"none open ({archived} archived)" if archived else "none open"
-        print(ink.dim(f"  {note}"), file=err)
-    print(f"  {ink.bold('[n]')} start new", file=err)
+        note = f"no open engagements ({archived} archived)" if archived else "no open engagements"
+        print(f"  {ink.dim(note)}", file=err)
+        print("", file=err)
+    print(f"  {ink.dim('Start something new')}", file=err)
+    print(f"    {ink.bold('[n]')} a new engagement", file=err)
     jira_on = _jira_enabled(project_dir)
     if jira_on:
-        print(f"  {ink.bold('[j]')} new engagement from a Jira", file=err)
-    settings_opt = f"  {ink.bold('[c]')} change a project setting"
+        print(f"    {ink.bold('[j]')} a new engagement from a Jira ticket", file=err)
+    print("", file=err)
+    print(f"  {ink.dim('Or')}", file=err)
+    settings_opt = f"    {ink.bold('[c]')} change a project setting"
     if shown:
         settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
     print(settings_opt, file=err)
     enter_label = "just launch" if not shown else "decide inside the session instead"
-    print(f"  {ink.dim(f'[Enter] {enter_label}')}", file=err)
+    print(f"    {ink.dim(f'[Enter] {enter_label}')}", file=err)
     try:
         suggestion = _suggestion_line(project_dir, menu)
     except Exception:
@@ -1882,39 +1898,23 @@ def _print_project_defaults(project_dir: Path) -> None:
     # menu, where [c] opens the editor three lines further down - telling someone to
     # quit and type `virt-surv configure` from a TUI that already offers the action
     # makes no sense (2026-08-19 user report).
-    _print_rule("Project defaults", note="press [c] to change")
+    # ONE dim line, not a rule plus rows (2026-08-20: "too crowded"). Settings are
+    # CONTEXT for the decision below, not the headline - a rule gave them the same
+    # visual weight as the question Morgan is actually asking. `virt-surv configure`
+    # and the [c] editor still show every value in full.
     ink = _Ink()
+    bits = [f"{name} {value}" for name, value in notable]
+    if notable and at_default:
+        bits.append(f"+{len(at_default)} at defaults")
     if not notable:
-        if r:
-            r["console"].print("[dim]  everything at defaults[/dim]")
-        else:
-            print(ink.dim("  everything at defaults"), file=err)
-    elif r:
-        table = r["Table"](box=None, show_header=False, padding=(0, 1), pad_edge=False)
-        table.add_column(style="default", no_wrap=True)
-        table.add_column(no_wrap=True)
-        style_map = {"good": "green", "warn": "yellow", "dim": "dim", "": "default"}
-        for name, value in notable:
-            table.add_row("  " + name, r["Text"](value, style=style_map[_value_style(value)]))
-        r["console"].print(table)
+        bits = ["all at defaults"]  # "+11 at defaults" with nothing notable read as odd
+    line = "  Project defaults: " + "  ·  ".join(bits) + "   (press [c] to change)"
+    if r:
+        # markup=False: rich reads "[c]" as a style tag and SWALLOWS it, so the hint
+        # rendered as "(press  to change)" - caught on screen, 2026-08-20.
+        r["console"].print(line, style="dim", markup=False)
     else:
-        width = max(len(name) for name, _ in notable)
-        for name, value in notable:
-            dots = ink.dim("." * (width - len(name) + 2))
-            style = _value_style(value)
-            shown = {"good": ink.good, "warn": ink.warn, "dim": ink.dim}.get(style, lambda t: t)(
-                value
-            )
-            print(f"  {name} {dots} {shown}", file=err)
-    if at_default and notable:
-        # Count, not the roll-call: listing ten names wrapped into a paragraph and undid
-        # the decluttering. `virt-surv configure` shows every value in full. Suppressed
-        # when nothing is notable - the "everything at defaults" line above says it once.
-        tail = f"  +{len(at_default)} at defaults"
-        if r:
-            r["console"].print(f"[dim]{tail}[/dim]")
-        else:
-            print(ink.dim(tail), file=err)
+        print(ink.dim(line), file=err)
 
 
 def _offer_first_time_setup(project_dir: Path) -> bool:
