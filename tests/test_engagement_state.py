@@ -598,6 +598,7 @@ def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeyp
         "map_skeleton": False,
         "probe_cache": True,
         "evidence_room": False,  # opt-in, off by default (2026-08-19)
+        "qa_depth": "auto",  # derived from work shape unless set (2026-08-20)
     }
     assert validate_state(state) == []
 
@@ -614,6 +615,7 @@ def test_init_settings_snapshot_builtin_defaults_when_no_preferences_file(tmp_pa
         "map_skeleton": False,
         "probe_cache": True,
         "evidence_room": False,  # opt-in, off by default (2026-08-19)
+        "qa_depth": "auto",  # derived from work shape unless set (2026-08-20)
     }
 
 
@@ -1248,3 +1250,34 @@ def test_resume_menu_json_slims_open_to_slugs_but_resume_menu_keeps_rows(tmp_pat
     assert json_menu["open"] == ["pack"]
     assert json_menu["shown"] and isinstance(json_menu["shown"][0], dict)
     assert json_menu["default"] == "pack"
+
+
+def test_set_qa_depth_records_a_typed_level(tmp_path):
+    """QA level is a TYPED field, not a prose decision, so check_artifacts can read it
+    deterministically - the PARTIAL gate depends on that (2026-08-20)."""
+    from scripts.engagement_state import load_state
+    from scripts.engagement_state import main as es_main
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art / "e"), "init", "--title", "E", "--slug", "e"]) == 0
+    assert load_state(art / "e").get("qa_depth") is None  # absence is never "quick"
+    assert es_main(["--dir", str(art / "e"), "set-qa-depth", "quick"]) == 0
+    assert load_state(art / "e")["qa_depth"] == "quick"
+
+
+def test_qa_depth_rejects_an_unknown_level(tmp_path):
+    """There is deliberately no 'none' - QA's existence is not tierable, only its
+    breadth - and a typo must not silently become a reduced level."""
+    from scripts.engagement_state import main as es_main, validate_state
+
+    art = tmp_path / "artifacts"
+    assert es_main(["--dir", str(art / "e"), "init", "--title", "E", "--slug", "e"]) == 0
+    import pytest
+
+    with pytest.raises(SystemExit):  # argparse rejects the choice before any write
+        es_main(["--dir", str(art / "e"), "set-qa-depth", "none"])
+    from scripts.engagement_state import load_state
+
+    state = load_state(art / "e")
+    state["qa_depth"] = "none"
+    assert any("qa_depth" in p for p in validate_state(state))

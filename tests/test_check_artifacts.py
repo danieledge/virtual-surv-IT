@@ -2479,3 +2479,78 @@ def test_fix_keeps_flagged_row_when_no_true_sibling_exists(tmp_path):
     apply_fixes(art)
     remaining = json.loads((art / "engagement-state.json").read_text(encoding="utf-8"))
     assert len(remaining["artifacts"]) == 1  # untouched
+
+
+# --- QA depth honesty gates (2026-08-20) --------------------------------------------
+# Breadth of QA is tierable; pretending a reduced pass was a full one is not.
+
+
+def _qa_pack(tmp_path, *, qa_depth, verdict="", extra_files=()):
+    """A workspace with a QA handover and a state file at the given level."""
+    ws = tmp_path / "artifacts" / "eng"
+    ws.mkdir(parents=True)
+    _touch(ws / "qa-handover.md", "# QA handover\n")
+    state = {"status": "closed", "engagement": {"slug": "eng"}, "verdict": verdict}
+    if qa_depth is not None:
+        state["qa_depth"] = qa_depth
+    (ws / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+    for name, body in extra_files:
+        _touch(ws / name, body)
+    return tmp_path / "artifacts"
+
+
+def test_qa_quick_without_partial_is_flagged(tmp_path):
+    """The keystone: choosing cheap QA costs the word 'done'. Without this, qa_depth
+    'quick' would be a silent way to buy a full-looking verdict at half price."""
+    from scripts.check_artifacts import _qa_depth_findings
+
+    art = _qa_pack(tmp_path, qa_depth="quick", verdict="✅ Pass")
+    findings = _qa_depth_findings(art)
+    assert any("QA-QUICK-NOT-PARTIAL" in f for f in findings), findings
+
+
+def test_qa_quick_with_partial_in_the_verdict_passes(tmp_path):
+    from scripts.check_artifacts import _qa_depth_findings
+
+    art = _qa_pack(tmp_path, qa_depth="quick", verdict="DoD: PARTIAL - QA scope reduced")
+    assert not [f for f in _qa_depth_findings(art) if "QA-QUICK-NOT-PARTIAL" in f]
+
+
+def test_qa_quick_partial_may_live_in_the_delivery_report(tmp_path):
+    """The PARTIAL statement counts wherever a reader meets it, not only in the verdict."""
+    from scripts.check_artifacts import _qa_depth_findings
+
+    art = _qa_pack(
+        tmp_path,
+        qa_depth="quick",
+        verdict="",
+        extra_files=(("delivery-report.md", "DoD: PARTIAL - QA scope reduced (QA-Quick)\n"),),
+    )
+    assert not [f for f in _qa_depth_findings(art) if "QA-QUICK-NOT-PARTIAL" in f]
+
+
+def test_qa_deep_needs_no_partial(tmp_path):
+    from scripts.check_artifacts import _qa_depth_findings
+
+    art = _qa_pack(tmp_path, qa_depth="deep", verdict="✅ Pass")
+    assert not _qa_depth_findings(art)
+
+
+def test_qa_handover_without_a_declared_level_is_flagged(tmp_path):
+    from scripts.check_artifacts import _qa_depth_findings
+
+    art = _qa_pack(tmp_path, qa_depth=None, verdict="✅ Pass")
+    assert any("QA-LEVEL-UNDECLARED" in f for f in _qa_depth_findings(art))
+
+
+def test_no_qa_handover_means_no_level_nagging(tmp_path):
+    """An engagement that built nothing has no QA level and must not be asked for one -
+    CODE-NO-QA owns 'should there have been QA at all'."""
+    from scripts.check_artifacts import _qa_depth_findings
+
+    ws = tmp_path / "artifacts" / "eng"
+    ws.mkdir(parents=True)
+    (ws / "engagement-state.json").write_text(
+        json.dumps({"status": "closed", "engagement": {"slug": "eng"}}), encoding="utf-8"
+    )
+    assert _qa_depth_findings(tmp_path / "artifacts") == []

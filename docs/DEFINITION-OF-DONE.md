@@ -140,6 +140,15 @@ it. Apply the items relevant to the deliverable type - not every item fits every
   - script → idempotency and error-path tests.
 - [ ] **Independently QA'd** - `qa-engineer` (not the builder) has produced a **QA handover**
       (`qa-handover.md`) evidencing what ran, results, coverage, gaps and residual risk -
+      **at a declared LEVEL** (2026-08-20; `engagement_state set-qa-depth quick|deep|audit`).
+      The level tiers **breadth only**: existence, independence of the builder, evidence
+      preservation and the per-deliverable-type test minima hold at every level, there is no
+      `none`, and "run the COMPLETE suite" stays literal. **`quick` closes `DoD: PARTIAL - QA
+      scope reduced`** with the uncovered classes named in residual risk and the close
+      offering the upgrade ("run the deep pass → verdict upgrades") - mechanically enforced by
+      `QA-QUICK-NOT-PARTIAL`, so a cheap pass can never read as a full one, and
+      `QA-LEVEL-UNDECLARED` when a handover exists with no level recorded. Absence of a level
+      is never "quick" -
       **with the full cycle history**: one test-cycles row per pass (append-only, failed
       verdicts preserved) and defect lifecycle (raised in pass → routed to → fix evidence →
       verified fixed in pass). A multi-pass engagement whose docs read first-pass-clean fails

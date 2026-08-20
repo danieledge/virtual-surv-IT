@@ -715,6 +715,15 @@ def resolve_preferences(project_dir: Path) -> dict:
     # about that project's governance, not about this machine, and an opt-in artifact
     # must never appear in a folder nobody asked for it in.
     evidence_room_on = prefs.get("evidence_room", False)
+    # qa_depth (2026-08-20): how much INDEPENDENT QA a build buys. "auto" derives it from
+    # the work shape; "deep" is today's full pass; "quick" narrows what gets AUTHORED
+    # (not what gets run) and always closes DoD: PARTIAL. Deliberately no "none" - QA's
+    # existence and independence are not tierable, only its breadth. Project-scoped with
+    # no machine tier: how much assurance a project's code needs is a fact about that
+    # project. An unrecognised value resolves to "auto" rather than silently reducing QA.
+    qa_depth = str(prefs.get("qa_depth") or "auto").strip().lower()
+    if qa_depth not in ("auto", "quick", "deep", "audit"):
+        qa_depth = "auto"
     return {
         "extra_formats": extra_formats,
         "regulatory_citations": citations_on,
@@ -724,6 +733,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "map_skeleton": map_skeleton_on,
         "probe_cache": probe_cache_on,
         "evidence_room": evidence_room_on,
+        "qa_depth": qa_depth,
     }
 
 

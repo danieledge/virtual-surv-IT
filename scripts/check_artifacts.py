@@ -256,6 +256,59 @@ _AGENT_JOIN_RE = re.compile(
 _AI_MARKER = "🤖"
 
 
+def _qa_depth_findings(artifacts_dir: Path) -> list[str]:
+    """QA-level honesty gates (2026-08-20). Breadth of QA is tierable; pretending a
+    reduced pass was a full one is not.
+
+    QA-QUICK-NOT-PARTIAL is the keystone of the whole tiering feature: choosing cheap QA
+    costs the engagement the word "done". Without it, `qa_depth: quick` would be a silent
+    way to buy a full-looking verdict at half price. QA-LEVEL-UNDECLARED catches the other
+    direction - a QA handover that never says which level produced it, leaving a reader
+    unable to tell what was skipped.
+
+    Only fires where a QA handover actually exists: an engagement that built nothing has
+    no level and must not be nagged about one."""
+    findings: list[str] = []
+    for pack in sorted(p for p in artifacts_dir.rglob("engagement-state.json") if p.is_file()):
+        workspace = pack.parent
+        if _under_archive(pack, artifacts_dir):
+            continue
+        handovers = sorted(workspace.glob("qa-handover*.md"))
+        if not handovers:
+            continue
+        try:
+            state = json.loads(pack.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue  # STATE-INVALID owns that failure; don't double-report it here
+        level = state.get("qa_depth")
+        if not level:
+            findings.append(
+                f"QA-LEVEL-UNDECLARED: {workspace} has a QA handover but the state records "
+                "no qa_depth - a reader cannot tell what breadth of QA was bought "
+                "(`engagement_state set-qa-depth quick|deep|audit`)"
+            )
+            continue
+        if level != "quick":
+            continue
+        verdict = str(state.get("verdict") or "")
+        evidence = verdict
+        for name in ("delivery-report.md", "START-HERE.md"):
+            candidate = workspace / name
+            if candidate.is_file():
+                try:
+                    evidence += candidate.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    pass
+        if "PARTIAL" not in evidence.upper():
+            findings.append(
+                f"QA-QUICK-NOT-PARTIAL: {workspace} closed at QA level 'quick' but nothing "
+                "in the verdict, delivery report or START-HERE says PARTIAL - a reduced QA "
+                "pass must never read as a full one (DoD: state 'DoD: PARTIAL - QA scope "
+                "reduced (QA-Quick)' and name the uncovered classes in residual risk)"
+            )
+    return findings
+
+
 def check_agent_identity(text: str, where: Path) -> list[str]:
     """Flag artifacts where an agent persona could be read as a real person.
 
@@ -1819,6 +1872,13 @@ def check(artifacts_dir: Path) -> list[str]:
                     "test files (test_*/-_test.*/*.spec.*) in the same scope - delivered "
                     "code ships with its tests (DoD 'Tested')"
                 )
+        # A REDUCED QA level must never read as a full pass (2026-08-20). qa_depth is a
+        # typed state field, so this is a deterministic check rather than prose-matching:
+        # 'quick' narrows what QA authors, and the price of that is the engagement closing
+        # PARTIAL and saying so where a reader will see it. CODE-NO-QA above is untouched
+        # and no level satisfies it - this gate is about honesty, that one is about
+        # existence.
+        findings.extend(_qa_depth_findings(artifacts_dir))
 
     # The START-HERE living index: created at OPEN (with the first artifact), updated on
     # every artifact write, finalised at close (docs/templates/start-here.md). It is also

@@ -30,7 +30,7 @@
     "ALWAYS_LOADED": 3300,
     "OPEN_TIME": 19100,
     "ROUTE_TIME": 48400,
-    "AGENT_TIME": 23200,
+    "AGENT_TIME": 23700,
     "DEFERRED": null
   },
   "files": {
@@ -82,7 +82,7 @@
     ".claude/agents/qa-engineer.md": {
       "tier": "AGENT_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1102
+      "baseline_tokens": 1518
     },
     ".claude/agents/review-scorer.md": {
       "tier": "AGENT_TIME",
@@ -322,7 +322,7 @@
     "docs/DEFINITION-OF-DONE.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 5894
+      "baseline_tokens": 6082
     },
     "docs/WAYS-OF-WORKING.md": {
       "tier": "DEFERRED",

@@ -104,6 +104,12 @@ _RATIFICATION_STATUSES = ("pending", "ratified")
 _STATUSES = ("in_progress", "blocked", "closing", "closed")
 _PHASES = ("open", "classify", "plan", "delivery", "close")
 _PROFILES = ("standard", "light")
+# How much INDEPENDENT QA this engagement bought (2026-08-20). Breadth is tierable;
+# existence, independence, evidence preservation and the per-deliverable-type test
+# minima are NOT - so there is deliberately no "none". "quick" always closes
+# DoD: PARTIAL (check_artifacts QA-QUICK-NOT-PARTIAL), which is what stops a reduced
+# level from reading as a full pass.
+_QA_DEPTHS = ("quick", "deep", "audit")
 _ARTIFACT_STATUSES = ("interim", "final")
 
 # The one hard exclusion (ADR-002 / ADR-006): consent must never gain a second home here.
@@ -760,6 +766,10 @@ def validate_state(state: dict) -> list[str]:
     if profile is not None and profile not in _PROFILES:
         problems.append(f"profile must be one of {_PROFILES} (got {profile!r})")
 
+    qa_depth = state.get("qa_depth")
+    if qa_depth is not None and qa_depth not in _QA_DEPTHS:
+        problems.append(f"qa_depth must be one of {_QA_DEPTHS} (got {qa_depth!r})")
+
     outstanding = state.get("outstanding")
     if not isinstance(outstanding, list) or not all(isinstance(i, str) and i for i in outstanding):
         problems.append("'outstanding' must be a list of non-empty strings")
@@ -1244,6 +1254,9 @@ def _cmd_init(args: argparse.Namespace) -> int:
         },
         "status": "in_progress",
         "profile": args.profile,
+        # None until a QA pass actually happens - an engagement that builds nothing never
+        # sets it, and absence must never read as "quick".
+        "qa_depth": None,
         "phase": args.phase,
         "team": [],
         "verdict": None,
@@ -1504,6 +1517,13 @@ def _cmd_set_phase(args: argparse.Namespace) -> int:
 
 def _cmd_set_profile(args: argparse.Namespace) -> int:
     return _mutate(args, lambda s: s.__setitem__("profile", args.profile))
+
+
+def _cmd_set_qa_depth(args: argparse.Namespace) -> int:
+    """Record the QA level as a TYPED field, not a prose decision, so check_artifacts can
+    read it deterministically (the PARTIAL gate depends on that). The *why* still belongs
+    in a `set-decision qa-depth "..."` alongside it."""
+    return _mutate(args, lambda s: s.__setitem__("qa_depth", args.qa_depth))
 
 
 def _cmd_add_artifact(args: argparse.Namespace) -> int:
@@ -2240,6 +2260,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("profile", choices=_PROFILES)
     p.set_defaults(fn=_cmd_set_profile)
+
+    p = sub.add_parser(
+        "set-qa-depth",
+        parents=[common],
+        help="record how much INDEPENDENT QA this engagement bought (quick|deep|audit)",
+    )
+    p.add_argument("qa_depth", choices=_QA_DEPTHS)
+    p.set_defaults(fn=_cmd_set_qa_depth)
 
     p = sub.add_parser(
         "add-artifact", parents=[common], help="add/update an artifact row (renders)"
