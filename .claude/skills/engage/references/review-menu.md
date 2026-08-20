@@ -26,6 +26,25 @@ last resort, a count-only `find`/`Get-ChildItem` excluding caches, `artifacts/` 
 derived, not asked (`deep-review` step 2), and this line is where a wrong derivation gets
 corrected - never a later screen or its own turn.
 
+**State what is NOT covered, in the same message (2026-08-20).** Scope is a real cost/coverage
+choice and it was being taken silently. Two lines, never a screen, never its own turn - the
+remainder is a NUMBER from the same sizing ladder above, never a file listing:
+
+> Scope: what's changed - the uncommitted diff, 12 files.
+> Not covered: the other 180 files here. A pre-existing secret, PII in a fixture or an
+> undocumented threshold outside the diff won't be seen - those files are never read. Say
+> "full review" for the whole working directory (roughly Nx this pass), or just answer the menu.
+
+Rules: **price both scopes**, one clause each, order-of-magnitude like the depth figures.
+**Invert it when the derived scope is already full** ("whole working directory, ~180 files -
+narrower and cheaper if you only want your own changes, but nothing is uncommitted here") so
+the cheaper option is offered in both directions and the line never reads as an upsell. **Omit
+the second line entirely when nothing is excluded** - boilerplate on a complete pass is noise.
+**At Audit depth, say scope is fixed** rather than offering a narrowing: Audit keeps
+pre-existing in scope by definition, and a diff-scoped audit would be an audit-ready verdict
+over code nobody read. Never auto-widen because the diff looks small, or auto-narrow because
+the repo looks big: state, and let the user correct in one word.
+
 **Critical construction rules:**
 - **Ask Q1, Q2, Q3 and Q4 in ONE `AskUserQuestion` call** (one screen, not four round-trips).
   They remain **four distinct questions**, each `multiSelect: false`; batching the *call* is not

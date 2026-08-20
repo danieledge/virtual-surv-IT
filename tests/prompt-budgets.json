@@ -28,7 +28,7 @@
   ],
   "tier_budgets": {
     "ALWAYS_LOADED": 3300,
-    "OPEN_TIME": 19000,
+    "OPEN_TIME": 19100,
     "ROUTE_TIME": 48400,
     "AGENT_TIME": 23200,
     "DEFERRED": null
@@ -167,7 +167,7 @@
     ".claude/skills/deep-review/references/quick.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 577
+      "baseline_tokens": 695
     },
     ".claude/skills/demo/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -187,7 +187,7 @@
     ".claude/skills/engage/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7312
+      "baseline_tokens": 7409
     },
     ".claude/skills/engage/references/artifact-menu.md": {
       "tier": "DEFERRED",
@@ -227,7 +227,7 @@
     ".claude/skills/engage/references/review-menu.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1915
+      "baseline_tokens": 2266
     },
     ".claude/skills/engage/references/safety-gates.md": {
       "tier": "DEFERRED",
@@ -237,7 +237,7 @@
     ".claude/skills/engage/references/target-menu.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 582
+      "baseline_tokens": 793
     },
     ".claude/skills/handover/SKILL.md": {
       "tier": "ROUTE_TIME",
@@ -347,7 +347,7 @@
     "docs/operating-guide.d/artifacts-lifecycle.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3250
+      "baseline_tokens": 3284
     },
     "docs/operating-guide.d/command-index.md": {
       "tier": "DEFERRED",

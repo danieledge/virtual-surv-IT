@@ -538,3 +538,35 @@ def test_never_filter_promise_is_stated_as_scope_bounded():
     fmt = _flat(_read("docs/review/output-format.md"))
     assert "Not examined:" in fmt
     assert "applies to what was **read**" in fmt
+
+
+def test_review_scope_is_stated_not_asked():
+    """2026-08-20: diff-vs-full is a real cost/coverage choice that was being taken
+    silently. It is STATED in the priced message and corrected in a word - never a fifth
+    question (the tool caps at four, locked_menu_guard enforces the exact headers, and a
+    post-gate scope screen is incident-log #33). Pin the statement rule and the
+    no-parallel-question rule together."""
+
+    def _flat(text):
+        return " ".join(text.split())
+
+    menu = _flat(_read(".claude/skills/engage/references/review-menu.md"))
+    assert "State what is NOT covered" in menu
+    assert "never a file listing" in menu
+    assert "price both scopes" in menu.lower()
+    target = _flat(_read(".claude/skills/engage/references/target-menu.md"))
+    assert "IS the diff-vs-full coverage choice" in target
+    assert 'Never build a separate "Scope"' in target
+    quick = _flat(_read(".claude/skills/deep-review/references/quick.md"))
+    assert "Not covered" in quick
+
+
+def test_engage_names_the_locked_review_menu_as_four_questions():
+    """The locked menu has been four questions since Origin joined (2026-08-17) and
+    locked_menu_guard.py enforces exactly that header list, but engage/SKILL.md still
+    called it a three-question construction until 2026-08-20."""
+    skill = " ".join(_read(".claude/skills/engage/SKILL.md").split())
+    assert "four-question construction" in skill
+    # The CLAIM, not the word: the file's own dated note explains what it used to say,
+    # so a bare "three-question" check fails on its own history line.
+    assert "three-question construction" not in skill

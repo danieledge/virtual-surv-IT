@@ -40,7 +40,9 @@ happens - state must be visible **between** gates.
   awaiting the human is `add-ratification` (pending); only the human's grant justifies
   `ratify --by`; an artifact asserting a ratification the state records as pending is a
   `RATIFIED-CLAIM-PENDING` gate finding. **Session decisions persist**: the intake gate
-  answers (`set-decision` for go-ahead / fix-cycle / data-attestation), the NON-granting
+  answers (`set-decision` for go-ahead / fix-cycle / data-attestation, plus
+  review-scope / review-not-covered / review-mode on a review - the scope a reader needs to
+  know was chosen, and what it excluded), the NON-granting
   consent outcome (`record-consent-outcome asked|declined` - a grant is not representable;
   it stays the human marker only, ADR-002) and the run-mode probe (`set-runtime`) are
   recorded when given and re-read on resume, never re-asked. Close ordering: `set-status

@@ -10,6 +10,17 @@ uncommitted/branch diff or a path named in the request IS the target and is stat
 asked. When it does fire, it rides the 0a intake batch in the Work-type slot when that
 batch is being asked; standalone only when the batch already ran.
 
+**This menu IS the diff-vs-full coverage choice (2026-08-20)** - the first two options are
+"what's changed", **Whole working directory** is the full review, and a named path is a
+bounded full review of that path. **Never build a separate "Scope" or "diff vs full"
+question beside it**: the axes are identical, `AskUserQuestion` caps at four questions, and a
+second screen is the post-gate scope-question defect (incident-log #33). When the target is
+derivable, scope is stated in the priced message instead (`review-menu.md`). Cost and
+coverage for each option belong in that accompanying chat text, never inside the locked
+option wording below. On a clean tree with nothing uncommitted, mark the full option
+`Whole working directory (Recommended)` - the guard's `_strip_recommended` already tolerates
+that suffix, so it needs no guard change.
+
 **Q - "What should the review cover?"  (header `Target`, single-select):**
 
 | Label | Description (use ~verbatim) |

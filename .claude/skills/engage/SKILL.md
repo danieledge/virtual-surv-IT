@@ -206,11 +206,15 @@ If the user just typed `/engage` (or `/engage test some code`) with no concrete 
 
 **1b. If it's a review, offer the review-type menu - don't make the user know the shortcuts.**
 When the user asks for "a review" in plain English, read `references/review-menu.md` and present
-its **LOCKED** three-question construction (Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle`)
-**exactly as specified, in ONE `AskUserQuestion` call** - do not improvise, merge or reword the
-options. Q1 = None + Q2 = No → nothing to run: say so, and ask via the question tool what the
-user wants instead. **Q3 (fix-cycle) captured here is the single source of truth - the review
-skill must NOT re-ask it.**
+its **LOCKED** four-question construction (Q1 `Depth` · Q2 `Performance` · Q3 `Fix-cycle` ·
+Q4 `Origin`) **exactly as specified, in ONE `AskUserQuestion` call** - do not improvise, merge
+or reword the options; `locked_menu_guard.py` enforces exactly those four headers in that
+order (this said "three-question" until 2026-08-20, describing a menu that had been four since
+Origin joined on 2026-08-17). Q1 = None + Q2 = No → nothing to run: say so, and ask via the
+question tool what the user wants instead. **Q3 (fix-cycle) captured here is the single source
+of truth - the review skill must NOT re-ask it.** The **scope** (what's changed vs the whole
+target) is not a question: it is stated in the priced message beside the menu and corrected in
+one word - see `references/review-menu.md`.
 
 **2. Clarify only if genuinely needed - no ceremony.** Don't ask a standalone "any other
 clarifications?" round by default. **Fold** any remaining material unknown (jurisdiction, success

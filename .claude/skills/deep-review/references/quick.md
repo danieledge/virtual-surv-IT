@@ -13,6 +13,13 @@ never a Quick question: offer Deep instead of silently ballooning the read. No d
 named target = nothing to review: say so and ask what they want looked at (question tool) -
 never invent scope to have something to do.
 
+**State the scope and its exclusion in one line before running** (2026-08-20, same rule the
+deep path follows): *"Reviewing what's changed - 12 files. Not covered: the other 180 files
+here; a pre-existing issue outside the diff won't be seen."* A count, never a listing. Omit the
+second half when nothing is excluded. Quick is diff-or-one-bounded-target by design, so a
+"full review at Quick depth" is not on offer - that request routes to Deep, per the scope
+rule above.
+
 **Run it yourself, in this session:**
 1. **Analysers first, if available** - only the tools the step-0 probe reported present for
    the languages in scope, run once over the diff/target; their hits ground the passes and
