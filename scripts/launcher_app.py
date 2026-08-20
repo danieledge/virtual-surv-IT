@@ -76,8 +76,13 @@ def glyphs(mod):
         "jira": "🎫 " if rich else "",
         "launch": "🚀 " if rich else "",
         "point": "▸" if rich else ">",
-        "on": "✓" if rich else "on",
-        "off": "·" if rich else "off",
+        # ASCII fallbacks are BRACKETS, not the words "on"/"off" (2026-08-20, found on a
+        # real cp1252 Windows console). As words they collided with the value beside them:
+        # boolean rows stuttered ("docx export  off off") and, far worse, a choice row read
+        # "qa depth  off auto" - stating the setting was OFF when it was set to auto. Only
+        # the corporate console path ever showed it; the emoji path never could.
+        "on": "✓" if rich else "[x]",
+        "off": "·" if rich else "[ ]",
         "in_progress": "⏳" if rich else "*",
         "blocked": "⛔" if rich else "!",
         "closing": "🔒" if rich else "~",

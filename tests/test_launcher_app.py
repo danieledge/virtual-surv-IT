@@ -253,10 +253,27 @@ def test_glyphs_degrade_on_a_cp1252_console(monkeypatch):
     app = _load("launcher_app")
     monkeypatch.setattr(launcher, "_can_encode", lambda text: False)
     plain = app.glyphs(launcher)
-    assert plain["point"] == ">" and plain["settings"] == "" and plain["on"] == "on"
+    assert plain["point"] == ">" and plain["settings"] == ""
+    # Brackets, never the WORDS on/off: on a real cp1252 console those sat next to the
+    # value and produced "docx export  off off", and on a choice row "qa depth  off auto"
+    # - which states the opposite of the truth. Found on Windows 2026-08-20.
+    assert plain["on"] == "[x]" and plain["off"] == "[ ]"
+    assert "on" not in (plain["on"] + plain["off"]).replace("[", "").replace("]", "").strip()
     monkeypatch.setattr(launcher, "_can_encode", lambda text: True)
     rich = app.glyphs(launcher)
     assert rich["point"] == "▸" and "⚙" in rich["settings"]
+
+
+def test_no_ascii_mark_can_be_mistaken_for_a_setting_value(monkeypatch):
+    """A guard against reintroducing the collision in any glyph: no ASCII fallback may be
+    a word that also appears as a VALUE in the settings table."""
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    monkeypatch.setattr(launcher, "_can_encode", lambda text: False)
+    plain = app.glyphs(launcher)
+    values = {"on", "off", "auto", "quick", "deep", "audit", "applied", "live", "close-only"}
+    clashes = [k for k, v in plain.items() if v.strip().lower() in values]
+    assert not clashes, f"glyph(s) collide with a settings value: {clashes}"
 
 
 def test_escape_does_not_fall_back_to_the_old_interface(ptk, tmp_path):
