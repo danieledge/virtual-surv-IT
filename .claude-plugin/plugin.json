@@ -1,7 +1,7 @@
 {
   "name": "compliance-surveillance-team",
   "description": "A POC virtual compliance-surveillance ENGINEERING team for Claude Code: 13 subagents (PM-orchestrated builders + read-only reviewers, plus three in-line SME knowledge packs) that build, test, review and hand over surveillance solutions - detection rules, data pipelines, transformation scripts, ML - with a data-safety pipeline, a modular code-review subsystem (review lenses + scoreboard, integrating turingmind-code-review, MIT), and audit-ready, evidenced deliverables.",
-  "version": "0.35.0",
+  "version": "0.35.1",
   "author": {
     "name": "Daniel Edge"
   },

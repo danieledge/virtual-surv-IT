@@ -72,6 +72,14 @@ for the work itself.
 
 ## Inbound: start an engagement FROM a Jira
 
+**[j] is always on the `virt-surv go` menu** (2026-08-20), whether or not this project
+has the Jira integration configured - it is only an affordance, and picking it merely
+collects a ticket reference and pre-seeds the session prompt. The launcher never talks to
+Jira. What `jira.enabled` gates is the **outward** half - creating the issue at open and
+posting progress comments - because those touch someone else's tracker, and defaulting
+them on would break this page's own "off by default" promise. On an unconfigured project
+the menu says plainly that the session can only fetch the ticket if access exists.
+
 With the Jira integration enabled, `virt-surv go` shows **[j] new engagement from a
 Jira**: paste the issue URL (or a bare key) and the session launches with
 `/engage --new --jira <ref>` pre-seeded. Morgan fetches the ticket via the configured

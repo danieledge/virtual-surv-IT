@@ -61,6 +61,23 @@ def _scripts_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def _ensure_sibling_imports() -> None:
+    """Put scripts/ on sys.path so the six `import engage_probe`-style sibling imports
+    resolve however this file was entered. Running it as a path (`python
+    scripts/virt_team_launcher.py`) puts scripts/ at sys.path[0] for free; `python -m
+    scripts.virt_team_launcher` and importing it by spec (the tests) do not, and every
+    one of those imports sits inside an except that returns a quiet nothing - so the
+    settings editor rendered an empty table rather than failing loudly. Found 2026-08-20
+    via two editor tests that passed only when an unrelated test had polluted sys.path
+    first."""
+    here = str(_scripts_dir())
+    if here not in sys.path:
+        sys.path.insert(0, here)
+
+
+_ensure_sibling_imports()
+
+
 def _installer_config_path() -> Path:
     """Mirrors install_helper's config_path() instead of exec'ing that whole file on
     every go - a test pins the two derivations together."""
@@ -680,9 +697,22 @@ def _resume_decision(project_dir: Path) -> str:
             return decision
 
 
+def _jira_offered(project_dir: Path) -> bool:
+    """Whether to SHOW the [j] item. Always (2026-08-20 user decision: "it's an available
+    option always, by default").
+
+    Safe precisely because the item is only an affordance: picking it collects a ticket
+    ref and pre-seeds the session prompt - the LAUNCHER never talks to Jira. Outward
+    actions (creating the issue at open, mirroring progress) stay behind the explicit
+    `integrations.jira.enabled` opt-in below, because those are the ones that touch
+    someone else's tracker, and defaulting THOSE on would break the integrations
+    contract's "off by default" promise."""
+    return True
+
+
 def _jira_enabled(project_dir: Path) -> bool:
-    """True only on the explicit integrations opt-in (docs/INTEGRATIONS.md) - a project
-    without the Jira integration never sees the [j] menu item at all."""
+    """True only on the explicit integrations opt-in (docs/INTEGRATIONS.md) - this gates
+    OUTWARD actions (issue creation, progress comments), never the menu item."""
     try:
         import engage_probe
 
@@ -697,7 +727,7 @@ _JIRA_KEY_RE = re.compile(r"\b([A-Za-z][A-Za-z0-9]+-\d+)\b")
 
 
 def _jira_decision(project_dir: Path) -> str:
-    """The [j] flow, BETA (2026-08-18 user request: engagements raisable BY ANYONE as a
+    """The [j] flow (2026-08-18 user request: engagements raisable BY ANYONE as a
     Jira, a human picks one up here - the human-approval step IS this menu): collect the
     issue URL (a bare key also works), pre-seed the session with it. The LAUNCHER never
     talks to Jira - the session fetches the ticket via the project's configured access
@@ -708,11 +738,22 @@ def _jira_decision(project_dir: Path) -> str:
     err = sys.stderr
     print(
         ink.dim(
-            "    (beta) The session will fetch the ticket and deliver results back to "
-            "it (ticket content is treated as data, never instructions)."
+            "    The session will fetch the ticket and deliver results back to it "
+            "(ticket content is treated as data, never instructions)."
         ),
         file=err,
     )
+    if not _jira_enabled(project_dir):
+        # Offered everywhere, but say plainly that fetching needs configured access -
+        # better here than as a surprise mid-engagement.
+        print(
+            ink.dim(
+                "    Note: this project has no Jira integration configured, so the "
+                "session will only be able to fetch the ticket if access exists "
+                "(docs/INTEGRATIONS.md)."
+            ),
+            file=err,
+        )
     print(ink.bold("    Jira URL (or issue key): "), end="", file=err)
     try:
         raw = input().strip()
@@ -759,7 +800,7 @@ def _pt_menu_round(p, project_dir: Path, engagement_state, menu: dict, shown: li
         archived = menu.get("archived") or 0
         subtitle = f"none open ({archived} archived)" if archived else "none open"
     entries.append((("new",), "start a new engagement", "n"))
-    if _jira_enabled(project_dir):
+    if _jira_offered(project_dir):
         entries.append((("jira",), "a new engagement from a Jira ticket", "j"))
     entries.append((("settings",), "change a project setting", "c"))
     if shown:
@@ -857,7 +898,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
             from launcher_app import APP_FALLBACK, run_app
 
             pick = run_app(
-                project_dir, sys.modules[__name__], menu, shown, jira_on=_jira_enabled(project_dir)
+                project_dir, sys.modules[__name__], menu, shown, jira_on=_jira_offered(project_dir)
             )
             if pick != APP_FALLBACK:
                 return _decision_from_pick(pick, project_dir, engagement_state, menu, shown)
@@ -911,7 +952,7 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
         print("", file=err)
     print(f"  {ink.dim('Start something new')}", file=err)
     print(f"    {ink.bold('[n]')} a new engagement", file=err)
-    jira_on = _jira_enabled(project_dir)
+    jira_on = _jira_offered(project_dir)
     if jira_on:
         print(f"    {ink.bold('[j]')} a new engagement from a Jira ticket", file=err)
     print("", file=err)
@@ -1386,14 +1427,18 @@ def _write_probe_cache(project_dir: Path) -> None:
             import subprocess
 
             proc = subprocess.run(
-                ["git", "-C", str(project_dir), "rev-parse", "--abbrev-ref", "HEAD", "HEAD"],
+                ["git", "-C", str(project_dir), "rev-parse", "HEAD", "--abbrev-ref", "HEAD"],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
             lines = (proc.stdout or "").strip().splitlines()
             if proc.returncode == 0 and len(lines) >= 2:
-                git_branch, git_head = lines[0].strip(), lines[1].strip()
+                # Order is load-bearing: --abbrev-ref applies to every rev AFTER it, so the
+                # old `--abbrev-ref HEAD HEAD` stamped the branch name into BOTH fields and
+                # the head half never invalidated anything (found 2026-08-20). The hook's
+                # _git_identity runs the identical command - keep the two in step.
+                git_head, git_branch = lines[0].strip(), lines[1].strip()
         except Exception:
             pass
         try:

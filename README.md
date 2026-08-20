@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.35.0](https://img.shields.io/badge/version-0.35.0-blue)
+![Version 0.35.1](https://img.shields.io/badge/version-0.35.1-blue)
 ![Tests 1900+ passing](https://img.shields.io/badge/tests-1900%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.35.0** (2026-08-18) · 📖 [0.33-cycle overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.35.1** (2026-08-20) · 📖 [0.33-cycle overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle: the front door became a launcher, and the token bill got engineered.**
 - 🚪 **`virt-surv go` is the front door** (0.34.0). The resume-or-new decision, environment
@@ -23,6 +23,12 @@
   response from ~307ms cold start to ~12.6ms; one dispatcher process replaces five per Bash
   call; a Git Bash fix cut shell-snapshot startup ~15x. Built against live reports from
   locked-down Windows estates.
+- ⚡ **The probe prefetch actually fires now** (0.35.1). The hook that serves a pre-computed
+  engage probe read the submitted prompt from a field name Claude Code has never sent, so it
+  had never once fired: every `/engage` silently paid the full in-session probe, which is
+  minutes on a corp box. Found by following one user report about a slow open; the repo's own
+  tests had been feeding the same wrong field, so they agreed with the bug rather than
+  catching it. Two neighbouring cache bugs fell out of the same trace.
 - 💰 **Token economics overhauled against a measured audit** (0.35.0). A cold engagement open
   now costs ~28% fewer standing tokens: the operating guide split into an open-core with
   detail loaded on route, the probe bootstrap moved to its miss path, tool reports compacted

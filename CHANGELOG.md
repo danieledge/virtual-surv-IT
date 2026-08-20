@@ -3,6 +3,42 @@
 All notable changes to the compliance-surveillance-team plugin. Dates are absolute.
 This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of domain content.
 
+## [0.35.1] - 2026-08-20 - The prefetch that never fired: three cache bugs found by following one slow open
+
+A user report ("on a new project, a new engagement takes a long time - the cache isn't being
+warmed") traced to a wire-contract mismatch that every test in the repo agreed with.
+
+- **The engage-probe prefetch hook had never fired, in any session, ever.** It read the
+  submitted prompt from `data["user_input"]`; Claude Code's `UserPromptSubmit` payload calls
+  that field `prompt`. The dormancy gate therefore never matched, the hook returned 0
+  silently, and **every** `/engage` fell through to the full in-session probe - seconds here,
+  minutes on a corp box, which is the entire cost this cache was built to remove. Fixed to read
+  `prompt`, keeping `user_input` as a fallback. The field name was settled by reading the
+  shipped CLI's own hook schema (`hook_event_name: "UserPromptSubmit", prompt: ...`, v2.1.234)
+  rather than documentation, after a first answer from the docs proved wrong.
+  - **Why no test caught it:** all 21 payloads in `tests/test_engage_probe_prefetch.py` fed
+    `user_input` too, so the suite was self-consistently wrong - it pinned the hook against its
+    own bug. The tests now feed the real field, and three new ones pin the wire contract, the
+    fallback, and that a payload with no prompt at all stays zero-cost.
+- **The cache fingerprint's HEAD half was a no-op.** Both sides ran
+  `git rev-parse --abbrev-ref HEAD HEAD`, and `--abbrev-ref` applies to every rev after it, so
+  the branch name was stamped into both `git_branch` and `git_head`: a new commit on the same
+  branch never invalidated the cache. Now `rev-parse HEAD --abbrev-ref HEAD` on both sides,
+  pinned by a test asserting the head slot holds a 40-char SHA.
+- **The settings editor silently rendered nothing when `scripts/` was off `sys.path`.** Six
+  sibling imports (`import engage_probe` and friends) sit inside excepts that return a quiet
+  nothing; entering the launcher as `python -m scripts.virt_team_launcher` or by spec left
+  `_editor_rows` returning `None` and `[c]` doing nothing at all. A module-level
+  `_ensure_sibling_imports()` makes entry-method independence explicit. Two editor tests had
+  been passing only because an unrelated test polluted `sys.path` first; they now pass alone.
+- **Jira `[j]` is always on the `virt-surv go` menu** (2026-08-20 user decision), configured or
+  not. The affordance is separated from the outward actions: picking `[j]` only collects a
+  ticket reference and pre-seeds the prompt - the launcher never talks to Jira - while
+  `integrations.jira.enabled` still gates issue creation and progress comments, so
+  `docs/INTEGRATIONS.md`'s "off by default" promise holds for everything that touches someone
+  else's tracker. An unconfigured project says plainly that the session can only fetch the
+  ticket if access exists.
+
 ## [0.35.0] - 2026-08-18 - Token economics overhaul: measured audit, open-core guide, ~28% cheaper opens, cost attribution
 
 The runtime cost architecture audited end to end and then cut against measured baselines,

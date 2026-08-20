@@ -16,7 +16,7 @@ context already wrapped as `<engage-probe-result>`, `engage-open.md`'s step 0 an
 `engage/SKILL.md`'s step 0b both use it directly instead of running their own command.
 
 Dormancy-exact, two gates, in order:
-1. `user_input` must actually look like one of the three commands that read
+1. The submitted `prompt` must actually look like one of the three commands that read
    `engage-open.md` (`/engage`, `/engage-light`, `/map-codebase` - checked by grepping
    every skill file for the reference, not guessed) - a single regex check, so every
    other prompt in every other session costs nothing, same contract as
@@ -211,17 +211,21 @@ def _git_identity(project_dir: Path) -> tuple[str, str]:
     Matched strictly against the cache's stamped values - both sides are empty in a
     non-repo, so they still match there. Part of the cache identity fingerprint
     (2026-08-18, external token-review finding 2): TTL + prefs mtime alone could serve a
-    report whose embedded BRANCH= was written before a branch switch inside the hour."""
+    report whose embedded BRANCH= was written before a branch switch inside the hour.
+    `rev-parse HEAD --abbrev-ref HEAD`, in that order: --abbrev-ref applies to every rev
+    AFTER it, so the old `--abbrev-ref HEAD HEAD` abbreviated BOTH and stamped the branch
+    name twice - the HEAD half of the fingerprint was a no-op and a new commit on the same
+    branch never invalidated the cache (found 2026-08-20)."""
     try:
         proc = subprocess.run(
-            ["git", "-C", str(project_dir), "rev-parse", "--abbrev-ref", "HEAD", "HEAD"],
+            ["git", "-C", str(project_dir), "rev-parse", "HEAD", "--abbrev-ref", "HEAD"],
             capture_output=True,
             text=True,
             timeout=5,
         )
         lines = (proc.stdout or "").strip().splitlines()
         if proc.returncode == 0 and len(lines) >= 2:
-            return lines[0].strip(), lines[1].strip()
+            return lines[1].strip(), lines[0].strip()  # (branch, head) - see note above
     except Exception:
         pass
     return "", ""
@@ -321,7 +325,15 @@ def main() -> int:
         data = json.load(sys.stdin)
     except Exception:
         return 0
-    prompt = (data.get("user_input") or "").lstrip()
+    # Claude Code names this field `prompt` - verified 2026-08-20 against the shipped
+    # CLI's own hook schema (`hook_event_name: "UserPromptSubmit", prompt: ...`), not
+    # against docs. It was read as `user_input` from the start, a name Claude Code
+    # never sends, so the gate below never matched and this prefetch had NEVER fired
+    # in a real session: every /engage paid the full live probe, which is minutes on a
+    # corp box. The whole test suite fed `user_input` too, so it was self-consistently
+    # wrong. `user_input` stays as a fallback rather than being swapped out, so any
+    # caller or future rename that does send it keeps working.
+    prompt = (data.get("prompt") or data.get("user_input") or "").lstrip()
     if not _ENGAGE_RE.match(prompt):
         return 0  # not an engage-open.md consumer - zero cost, dormancy preserved
 

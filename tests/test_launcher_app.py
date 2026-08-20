@@ -282,3 +282,14 @@ def test_screens_report_none_only_when_they_cannot_run(monkeypatch, tmp_path):
     monkeypatch.setattr(launcher, "_ptk_ui", lambda: None)
     assert app.settings_screen(tmp_path, launcher) is None
     assert app.archive_screen(tmp_path, launcher, None, _menu([_row()])) is None
+
+
+def test_jira_is_offered_even_without_the_integration_configured(tmp_path):
+    """2026-08-20: [j] is an affordance, not an outward action - the launcher never talks
+    to Jira, it only pre-seeds a ticket ref - so it is offered everywhere. The OUTWARD
+    half (issue creation, progress comments) stays behind integrations.jira.enabled."""
+    launcher = _load("virt_team_launcher")
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    assert launcher._jira_offered(tmp_path) is True
+    assert launcher._jira_enabled(tmp_path) is False, "outward actions must stay gated"

@@ -789,8 +789,12 @@ def _jira_enabled_project(tmp_path: Path) -> Path:
     return project
 
 
-def test_jira_option_hidden_without_the_integration(tmp_path, monkeypatch, capsys):
-    """Off by default at every level (docs/INTEGRATIONS.md): no opt-in, no [j] item."""
+def test_jira_option_is_offered_but_outward_actions_stay_gated(tmp_path, monkeypatch, capsys):
+    """2026-08-20 user decision: [j] is available ALWAYS. It is only an affordance - the
+    launcher never talks to Jira, it collects a ticket ref and pre-seeds the prompt - so
+    offering it costs nothing. What stays off by default is the OUTWARD half (issue
+    creation, progress comments), which is what docs/INTEGRATIONS.md's "off by default"
+    promise is actually about. This test previously asserted the item was hidden."""
     project = _plugin_enabled_project(tmp_path)
     monkeypatch.chdir(project)
     mod = _load()
@@ -799,7 +803,8 @@ def test_jira_option_hidden_without_the_integration(tmp_path, monkeypatch, capsy
     rc = mod.main()
     out = capsys.readouterr()
     assert rc == 0
-    assert "[j]" not in out.err
+    assert "[j]" in out.err, "the option must be offered even unconfigured"
+    assert mod._jira_enabled(project) is False, "outward actions must stay gated"
 
 
 def test_jira_url_becomes_a_preseeded_decision(tmp_path, monkeypatch, capsys):
@@ -818,7 +823,7 @@ def test_jira_url_becomes_a_preseeded_decision(tmp_path, monkeypatch, capsys):
         out.out.strip()
         == "/compliance-surveillance-team:engage --new --jira https://jira.corp.example/browse/SURV-123"
     )
-    assert "(beta)" in out.err
+    assert "treated as data, never instructions" in out.err  # de-beta'd 2026-08-19
     assert "SURV-123" in out.err  # the extracted key is confirmed on stderr
 
 
