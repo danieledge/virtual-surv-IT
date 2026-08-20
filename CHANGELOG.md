@@ -51,6 +51,25 @@ the run **explicit stop conditions** so it parks rather than guesses.
     git repo, so two of its three suggestions dead-end. `repo_skeleton` - which works on any
     directory - now leads. The message also states that the rule matches the whole command,
     so a listing at the end of an `&&` chain blocks the earlier steps too.
+- **A DoD check that fires on most engagements is measuring an upstream gap, not
+  carelessness.** User report: "across a number of engagements the DoD check picks up
+  lacking robot emojis on agent names - most engagements see that." An audit of the
+  SOURCES artifacts are authored from found why, and the same lens then found a second
+  instance:
+  - `codebase-map.md` and `codebase-map-area.md` both attributed ownership to `Morgan (PM)`
+    with no 🤖 anywhere in the file, so **every** codebase map authored from them began life
+    guaranteed to fail `AGENT-UNMARKED`. (40 of the other 42 templates were already fine.)
+  - Of the artifact generators, only `engagement_state` emitted a marker at all.
+    `render_findings` produces a whole review document handed to developers and auditors and
+    said nothing about being AI-produced; it now does.
+  - `QA-LEVEL-UNDECLARED` reads `qa_depth` from engagement state whenever a QA handover
+    exists, but the handover template never mentioned the QA level or
+    `engagement_state set-qa-depth`. Satisfying the gate depended on remembering a step
+    nothing prompted, so it too fired by construction. The template now prompts for it and
+    states that `quick` closes PARTIAL.
+  - `tests/test_ai_identity_sources.py` pins all of it: no template may attribute work to a
+    roster persona without the marker, the whole-document generators must carry it, and the
+    generated START-HERE is asserted on its OUTPUT rather than its source.
 - **START-HERE never said the team is AI.** The generated provenance line read "Produced by
   the virtual compliance-surveillance engineering team" with no 🤖 marker - in the first
   artifact any reader opens. Nothing caught it because `AGENT-UNMARKED` matches

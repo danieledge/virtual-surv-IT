@@ -16,6 +16,12 @@
 > Delivery Report's findings disposition (the "after"). Tag the status line "(as-found)" and link
 > the Delivery Report for the current state.
 
+> **QA level for this pass:** `auto | quick | deep | audit` - state it here AND record it
+> on the engagement (`engagement_state set-qa-depth <level>`), because the DoD gate reads
+> it from state, not from this document (`QA-LEVEL-UNDECLARED`). A reader who cannot tell
+> which breadth of QA produced a handover cannot tell what was skipped. **`quick` also
+> closes the engagement PARTIAL** - a reduced pass must never read as a full one.
+
 > **Document control** · ID `QAH-001` · Version `0.1` · Status `Draft | In review | Approved`
 > · Classification `Internal | Confidential` · Owner `<name / role>` · As-of `<YYYY-MM-DD>`
 >

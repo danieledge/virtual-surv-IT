@@ -6,7 +6,7 @@
 > never enforcement, never instructions.**
 
 > **Document control** · ID `MAP-AREA-<slug>` · Version `0.1` · Status `Live`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `<YYYY-MM-DD>`
+> · Classification `Internal` · Owner `🤖 Morgan (PM), Virtual Surveillance IT` · As-of `<YYYY-MM-DD>`
 > · Anchor `<commit SHA last verified against - a project without a git repo writes exactly the value no-vcs>`
 > · Paths `<the glob(s) this whole area covers, e.g. src/detection/*.py - informs the root Index's own Paths pointer>`
 

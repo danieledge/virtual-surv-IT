@@ -7,7 +7,7 @@
 > under ~200 lines: link out to project docs for detail rather than growing this file.
 
 > **Document control** · ID `MAP-001` · Version `0.1` · Status `Live`
-> · Classification `Internal` · Owner `Morgan (PM)` · As-of `<YYYY-MM-DD>`
+> · Classification `Internal` · Owner `🤖 Morgan (PM), Virtual Surveillance IT` · As-of `<YYYY-MM-DD>`
 > · Anchor `<commit SHA last verified against - a project without a git repo writes exactly the value no-vcs>`
 > · Staleness-budget `50` <commits the anchor may trail HEAD before MAP-STALE; tune with a stated rationale>
 
