@@ -1430,13 +1430,31 @@ def _term_cols() -> int:
         return 80
 
 
+def _greeting(hour: int | None = None) -> str:
+    """Time-of-day greeting for the go screen (2026-08-19 user request). Local clock,
+    four bands - the late-night one is deliberately a nudge rather than a joke, since
+    someone launching an engagement at 01:00 is usually the person who most needs to
+    hear it. `hour` is injectable so the bands are testable without freezing the clock."""
+    if hour is None:
+        import datetime as _dt
+
+        hour = _dt.datetime.now().hour
+    if 5 <= hour < 12:
+        return "Good morning"
+    if 12 <= hour < 18:
+        return "Good afternoon"
+    if 18 <= hour < 22:
+        return "Good evening"
+    return "Working late"
+
+
 def _morgan_line() -> str:
     """Morgan's greeting for the go screen (2026-08-17 user request: the persona should
     be visible from the very first touchpoint) - with the mandatory AI-identity
     attribution, same wording family as install_helper's opening line. The 🎩 marker is
     encoding-probed like every other glyph (cp1252 corp consoles)."""
     hat = "🎩 " if _can_encode("🎩") else ""
-    full = f"{hat}Morgan (PM) here - I'm an AI agent with Virtual Surveillance IT."
+    full = f"{hat}{_greeting()}, I'm Morgan (PM) - an AI agent with Virtual Surveillance IT."
     # Narrow terminals (mobile/mosh, live 2026-08-19) wrapped this onto a second line
     # starting at column 0, which read as broken output. The AI-identity attribution is
     # mandatory, so the SHORT form keeps it and drops the conversational padding rather

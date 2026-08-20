@@ -681,13 +681,13 @@ def test_go_prewarms_the_guard_interpreter_cache(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
 
 
-
 def _editor_rows_idx(mod):
     """(env_row, jira_row) as _editor_apply computes them. Hardcoded '8'/'9' here broke
     the moment a toggle was added (2026-08-19, evidence_room) - the tests were pressing
     a different button than they claimed to."""
     n = len(mod._TOGGLE_PREFS)
     return n + 1, n + 2
+
 
 def test_config_editor_jira_row_toggles_the_jira_integration(tmp_path, monkeypatch, capsys):
     """2026-08-18 user report: the [c] editor was missing table rows like the Jira
@@ -972,12 +972,12 @@ def test_banner_carries_the_morgan_persona(tmp_path, monkeypatch, capsys):
     mod = _load()
     mod._print_banner(project)
     rich_err = capsys.readouterr().err
-    assert "Morgan (PM) here" in rich_err
+    assert "Morgan (PM)" in rich_err
     assert "AI agent with Virtual Surveillance IT" in rich_err
     monkeypatch.setattr(mod, "_rich_ui", lambda: None)
     mod._print_banner(project)
     plain_err = capsys.readouterr().err
-    assert "Morgan (PM) here" in plain_err
+    assert "Morgan (PM)" in plain_err
     assert "AI agent with Virtual Surveillance IT" in plain_err
 
 
@@ -1096,3 +1096,38 @@ def test_write_probe_cache_honours_the_probe_cache_preference(tmp_path, monkeypa
     monkeypatch.setattr(sys, "stdin", _TtyStdin())
     mod._write_probe_cache(project)
     assert not (project / ".claude" / "engage-probe.json").exists()
+
+
+def test_greeting_rotates_by_time_of_day():
+    """2026-08-19 user request: rotate morning/afternoon/evening/late. Hour is injected
+    so the bands are pinned without freezing the clock (and so the boundaries are
+    actually asserted, not assumed)."""
+    mod = _load()
+    cases = {
+        5: "Good morning",
+        7: "Good morning",
+        11: "Good morning",
+        12: "Good afternoon",
+        17: "Good afternoon",
+        18: "Good evening",
+        21: "Good evening",
+        22: "Working late",
+        23: "Working late",
+        0: "Working late",
+        4: "Working late",
+    }
+    for hour, expected in cases.items():
+        assert mod._greeting(hour) == expected, f"hour {hour}"
+
+
+def test_greeting_covers_every_hour_with_no_gaps():
+    mod = _load()
+    assert all(mod._greeting(h) for h in range(24)), "an hour fell through every band"
+
+
+def test_morgan_line_keeps_the_ai_identity_attribution():
+    """The greeting is cosmetic; the AI-identity attribution is not (CLAUDE.md §6) - it
+    must survive in both the full and the narrow-terminal short form."""
+    mod = _load()
+    line = mod._morgan_line()
+    assert "Morgan" in line and "AI agent" in line and "Virtual Surveillance IT" in line
