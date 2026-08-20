@@ -105,12 +105,17 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
                 f"no open engagements ({archived} archived)" if archived else "no open engagements"
             )
             out.append(("class:dim", f"  {note}\n\n"))
+        # Actions carry their own group headings, so "change a project setting" never
+        # reads as an engagement (the mis-grouping fixed in the plain tier on 2026-08-20).
+        printed_or = False
         out.append(("class:group", "  Start something new\n"))
-        for offset, (_ret, label) in enumerate(actions):
+        for offset, (ret, label) in enumerate(actions):
             i = len(views) + offset
+            if ret[0] in ("settings", "archive", "launch") and not printed_or:
+                out.append(("", "\n"))
+                out.append(("class:group", "  Or\n"))
+                printed_or = True
             sel = idx[0] == i
-            if label.startswith("[c]") or label.startswith("[a]"):
-                pass
             out.append(("class:sel" if sel else "", "  > " if sel else "    "))
             out.append(("class:sel" if sel else "", label + "\n"))
         return to_formatted_text(out)
@@ -136,14 +141,16 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         return to_formatted_text(out)
 
     def _footer():
+        """Keys first (a full-screen app has to teach its own navigation), then the one
+        contextual nudge if there is something worth saying."""
         try:
             hint = mod._suggestion_line(project_dir, menu)
         except Exception:
             hint = ""
-        left = f"  {_bits(project_dir, mod)}"
-        return to_formatted_text(
-            [("class:dim", left)] + ([("class:warn", f"   ⚠ {hint}")] if hint else [])
-        )
+        out = [("class:dim", "  ↑↓ move · Enter choose · Esc decide in session")]
+        if hint:
+            out.append(("class:warn", f"   ⚠ {hint}"))
+        return to_formatted_text(out)
 
     kb = KeyBindings()
 
@@ -177,8 +184,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         if i < 9:
             kb.add(str(i + 1))(lambda event, _i=i: _exit(event, ("resume", _i)))
 
-    box = "─│┌┐└┘"
-    frame_title = "Virtual Surv-IT" if not mod._can_encode(box) else "Virtual Surv-IT"
+    frame_title = f"Virtual Surv-IT  ·  {_bits(project_dir, mod)}"
     body = VSplit(
         [
             Window(FormattedTextControl(_left), wrap_lines=False),

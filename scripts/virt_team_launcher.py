@@ -830,8 +830,11 @@ def _menu_round(project_dir: Path, engagement_state, menu: dict, shown: list) ->
     ink = _Ink()
     # Tier order (2026-08-20): full-screen app -> picker -> numbered. Each falls through
     # on its own sentinel, so a console that cannot run the app still gets a working menu.
-    # Opt-in while it settles: VIRT_SURV_APP=1.
-    if os.environ.get("VIRT_SURV_APP"):
+    # Default since 2026-08-20 (user decision: "no need to poc, lets just build out the
+    # better tui"). VIRT_SURV_NO_APP=1 opts OUT, back to the picker/numbered tiers - kept
+    # as an escape hatch for a console where the app misbehaves in a way the internal
+    # fallback does not catch.
+    if not os.environ.get("VIRT_SURV_NO_APP"):
         try:
             from launcher_app import APP_FALLBACK, run_app
 
