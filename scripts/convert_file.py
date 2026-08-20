@@ -826,9 +826,24 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
             kind = "pdf"
         else:
+            # Point at the RIGHT tool rather than only listing the wrong ones (2026-08-20,
+            # from a live corporate session): a session tried to render an artifact with
+            # `convert_file <file>.md`, read "unsupported format" as a gap in the
+            # converter, and moved on without rendering the HTML at all. This tool reads
+            # document INPUTS; .md and .html are already text, and turning a .md artifact
+            # into HTML is render_html's job.
+            hint = ""
+            if suffix in (".md", ".markdown"):
+                hint = (
+                    " - .md needs no conversion (read it directly). To render one as HTML, "
+                    "use `python -m scripts.render_html <file>.md`, or "
+                    "`scripts.render_findings` for a findings pack."
+                )
+            elif suffix in (".html", ".htm"):
+                hint = " - .html is already rendered output; read it directly."
             raise ConversionError(
                 f"unsupported format {suffix!r}. Tabular: .xlsx .xlsm .xls .csv .tsv .txt; "
-                "documents: .pdf .docx. (.xlsb is not supported - re-save as .xlsx.)"
+                "documents: .pdf .docx. (.xlsb is not supported - re-save as .xlsx.)" + hint
             )
 
         if kind == "tabular":

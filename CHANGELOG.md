@@ -38,6 +38,19 @@ the run **explicit stop conditions** so it parks rather than guesses.
 
 ### Fixed
 
+- **Two error messages that sent a live session the wrong way.** Both from the same corporate
+  run as the START-HERE gap below; neither was a broken tool, both were guidance that led
+  somewhere useless.
+  - `convert_file` on a `.md` answered "unsupported format" and listed the formats it does
+    take. The session read that as a gap in the converter and moved on **without rendering
+    the HTML at all**. It now says what to use instead: `.md` needs no conversion, and
+    rendering one is `render_html`'s job (or `render_findings` for a pack).
+  - The enumeration guard's map-first message opened with "the inventory already exists -
+    read docs/codebase-map.md", which is untrue for the case that trips it most often: a
+    directory the session extracted seconds earlier, which no map covers and which is not a
+    git repo, so two of its three suggestions dead-end. `repo_skeleton` - which works on any
+    directory - now leads. The message also states that the rule matches the whole command,
+    so a listing at the end of an `&&` chain blocks the earlier steps too.
 - **START-HERE never said the team is AI.** The generated provenance line read "Produced by
   the virtual compliance-surveillance engineering team" with no 🤖 marker - in the first
   artifact any reader opens. Nothing caught it because `AGENT-UNMARKED` matches

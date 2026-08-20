@@ -80,13 +80,24 @@ def main() -> int:
             return 0
         if _ENUM_RE.search(command) and not _ALLOW_RE.search(command):
             sys.stderr.write(
+                # repo_skeleton leads (2026-08-20, live corporate session): the old wording
+                # opened with "the inventory already exists - read docs/codebase-map.md",
+                # which is untrue for the directory that actually triggers this most often -
+                # an archive the session extracted seconds earlier. No map covers it and it
+                # is not a git repo, so the first two suggestions both dead-end and the one
+                # that always works was listed third. Note also that the rule matches the
+                # WHOLE command, so a listing at the end of an && chain blocks the earlier
+                # steps too; run the extraction separately.
                 "full-tree enumeration blocked during an engagement (map-first rule, "
-                "2026-08-17): the inventory already exists - read docs/codebase-map.md "
-                "when the project has one, use `git ls-files` (or `git ls-files | wc -l` "
-                "for a count), or run `<python> -m scripts.repo_skeleton <dir>` for a "
-                "deterministic, token-budgeted skeleton. Targeted lookups (-name/-path) "
-                "and count-only pipes pass this rule; a bare recursive listing never "
-                "does. To create the standing map, route to /map-codebase.\n"
+                "2026-08-17): run `<python> -m scripts.repo_skeleton <dir>` for a "
+                "deterministic, token-budgeted inventory - this works for ANY directory, "
+                "including one you just extracted or downloaded. For the working project "
+                "itself, docs/codebase-map.md (when it has one) or `git ls-files` (or "
+                "`git ls-files | wc -l` for a count) are cheaper still. Targeted lookups "
+                "(-name/-path) and count-only pipes pass this rule; a bare recursive "
+                "listing never does. This matches the whole command, so a listing at the "
+                "end of an `&&` chain blocks the earlier steps too - run those separately. "
+                "To create the standing map, route to /map-codebase.\n"
             )
             return 2
     except Exception:
