@@ -134,6 +134,11 @@ _KNOWN_ABSENT = {
     "ts002_layering.py": "illustrative deliverable name inside an example QA handover",
     "driver.md": "the `driver-<name>.md` naming pattern, not a file",
     "docs/persona-anchor.md": "ADR-005 offers it as an alternative source; the guide is used",
+    "docs/internal/poc-runtime-boundary.md": (
+        "the runtime-boundary POC report lives on the local-only poc/runtime-boundary "
+        "branch (2026-08-20 owner decision: architecture exploration kept off the public "
+        "remote); the backlog entry cites it deliberately"
+    ),
     "docs/internal/token-optimisation-plan-2026-08-18.md": (
         "local-only planning doc (gitignored 2026-08-18, owner decision) - present on the dev "
         "box, absent in clones"
