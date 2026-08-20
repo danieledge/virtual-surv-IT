@@ -51,6 +51,17 @@ the run **explicit stop conditions** so it parks rather than guesses.
     git repo, so two of its three suggestions dead-end. `repo_skeleton` - which works on any
     directory - now leads. The message also states that the rule matches the whole command,
     so a listing at the end of an `&&` chain blocks the earlier steps too.
+- **Developer guidance is no longer manufactured for work that has no code.** Live report
+  (2026-08-21): an ANALYSIS engagement produced a developer-notes section although the task
+  involved no code at all. The gate was not at fault - a one-line "not applicable" already
+  satisfies `FINDINGS-NO-DEV-GUIDANCE`. The instruction was: it called the section mandatory
+  and said "the developer always leaves with something to learn", with no provision for a
+  deliverable that has no code and no author, so the agent invented some. "Review-shaped"
+  means anything with a `## Findings` section, and plenty carry no code - FP investigations,
+  data-quality assessments, threshold and policy reviews. `output-format.md` and the DoD now
+  say the HEADING is always present but that a non-code deliverable states in one line that
+  it does not apply and why, and never fills it with invented coding advice. Manufacturing
+  style advice for a deliverable with no source invites a reader to act on it.
 - **A DoD check that fires on most engagements is measuring an upstream gap, not
   carelessness.** User report: "across a number of engagements the DoD check picks up
   lacking robot emojis on agent names - most engagements see that." An audit of the

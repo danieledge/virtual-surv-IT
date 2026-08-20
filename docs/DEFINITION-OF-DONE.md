@@ -161,7 +161,10 @@ it. Apply the items relevant to the deliverable type - not every item fits every
 - [ ] **Code-reviewed (deep)** - `code-reviewer` ran; **no Critical findings open**;
       filtered/ reported counts recorded; every finding has a **disposition** (fixed / open /
       accepted / deferred) and the review carries a **🔵 Developer guidance - improving future
-      code** section (always present, even on a clean pass).
+      code** section (the heading is always present, even on a clean pass). **Where the
+      deliverable contains no code** - an analysis, an investigation, a policy or threshold
+      review - that section states in one line that it does not apply and why; it is never
+      filled with invented coding advice (`docs/review/output-format.md`).
 - [ ] **Critiqued against the named standard** - **opt-in, off by default**
       (`.claude/team-preferences.json` `standards_critique`, project-wide, configurable via
       `/preferences` or the installer - same mechanism as `regulatory_citations`, opposite

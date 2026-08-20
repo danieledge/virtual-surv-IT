@@ -1,4 +1,17 @@
-"""AI identity at the SOURCE, not just at the gate.
+"""DoD checks that have SOURCE support - the gate is not where a rule should first appear.
+
+Started as an AI-identity file (2026-08-20) and generalised the next day, because the two
+failure modes turned out to be the same shape seen from opposite sides:
+
+  * a check nothing upstream helps you satisfy fires on nearly every engagement
+    (AGENT-UNMARKED, QA-LEVEL-UNDECLARED), and
+  * a check whose instruction admits no exceptions gets satisfied with invented content
+    (FINDINGS-NO-DEV-GUIDANCE on an analysis with no code in it).
+
+Both are fixed at the source - a template, a generator, or the wording an agent reads - and
+pinned here so the fix cannot quietly regress.
+
+AI identity at the SOURCE, not just at the gate.
 
 2026-08-20 user report: "across a number of engagements the DoD check picks up lacking
 robot emojis on agent names - most engagements see that."
@@ -119,3 +132,55 @@ def test_the_report_templates_prompt_for_developer_guidance():
     for name in ("review-report.md", "delivery-report.md"):
         text = (REPO_ROOT / "docs" / "templates" / name).read_text(encoding="utf-8")
         assert "Developer guidance" in text, f"{name} stopped prompting for developer guidance"
+
+
+# --- a mandatory section must not become invented content (2026-08-21) -------------------------
+
+
+def test_the_output_format_tells_a_reviewer_what_to_do_when_there_is_no_code():
+    """2026-08-21 live report: an ANALYSIS engagement produced a developer-notes section
+    although the task involved no code. The gate was not at fault - a one-line "not
+    applicable" already satisfies it. The INSTRUCTION was: it said the section is mandatory
+    and that "the developer always leaves with something to learn", with no provision for a
+    deliverable that has no code and no author, so the agent manufactured some.
+
+    A review-shaped artifact is anything with a '## Findings' section, and plenty carry no
+    code at all - FP investigations, data-quality assessments, threshold reviews."""
+    text = (REPO_ROOT / "docs" / "review" / "output-format.md").read_text(encoding="utf-8")
+    assert "No code in scope" in text, "the non-code case is still undocumented"
+    assert "never invent developer notes" in text.lower() or "never invent" in text.lower()
+    assert "Not applicable" in text, "no example of the one-line declaration to copy"
+
+
+def test_the_definition_of_done_scopes_developer_guidance_to_code():
+    text = (REPO_ROOT / "docs" / "DEFINITION-OF-DONE.md").read_text(encoding="utf-8")
+    assert "contains no code" in text, "DoD still reads as an unconditional requirement"
+    assert "invented coding advice" in text
+
+
+def test_a_not_applicable_declaration_actually_satisfies_the_gate(tmp_path):
+    """The guidance above is only honest if the checker accepts what it tells people to
+    write. Asserted against the real matchers rather than assumed."""
+    import re
+
+    from scripts.check_artifacts import (
+        _DEV_GUIDANCE_HEADING_RE,
+        _DEV_GUIDANCE_PLACEHOLDER,
+        _FINDINGS_SECTION_RE,
+    )
+
+    text = (
+        "# Alert false-positive analysis\n\n## Findings\n\n"
+        "### 🔴 Threshold too tight\n**Impact if unaddressed:** volume.\n\n"
+        "## 🔵 Developer guidance - improving future code\n\n"
+        "Not applicable: this analysis reviewed alert output, no code in scope.\n"
+    )
+    assert _FINDINGS_SECTION_RE.search(text), "fixture is not review-shaped"
+    heading = _DEV_GUIDANCE_HEADING_RE.search(text)
+    assert heading, "the heading must still be present - only its CONTENT is conditional"
+    rest = text[heading.end() :]
+    nxt = re.search(r"^## ", rest, re.M)
+    body = rest[: nxt.start()] if nxt else rest
+    assert body.strip() and body.strip() != _DEV_GUIDANCE_PLACEHOLDER, (
+        "a one-line not-applicable declaration must satisfy FINDINGS-NO-DEV-GUIDANCE"
+    )

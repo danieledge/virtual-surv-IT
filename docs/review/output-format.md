@@ -156,6 +156,19 @@ but a single plain sentence is fine on a trivial diff - don't manufacture filler
 genuinely strong, say so and name what's done well. The point is the developer always leaves with
 something to learn, not just a pass/fail.
 
+**No code in scope? Say so - never invent developer notes.** "Mandatory" here means the
+heading is always present, not that coding advice must always be written. A review-shaped
+artifact is anything with a `## Findings` section, and plenty of those carry no code at all:
+a false-positive investigation, a data-quality assessment, a threshold review, a policy or
+control-mapping analysis. For those, the section is **one line stating that it does not
+apply and why** - "Not applicable: this analysis reviewed alert output, no code in scope."
+Then stop. Manufacturing style advice for a deliverable with no author and no source is
+noise dressed as diligence, it invites a reader to act on invented guidance, and it is
+exactly the "assume every task is a detection rule" habit the handbook warns against
+(2026-08-21 live report: an analysis engagement produced developer notes for work that
+involved no code). If there IS code but the review found nothing to say about its style,
+that is the "genuinely strong" case above - a different answer, written differently.
+
 ### 🧑‍💻 Prompting guidance - *only when AI-assisted / "vibe-coded" AND findings were raised*
 Include this section **only if** (a) the author said at intake the code was AI-generated/vibe-coded,
 **or** the findings plainly show it (no tests, hallucinated/non-existent APIs, inconsistent patterns,
