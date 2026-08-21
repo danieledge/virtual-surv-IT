@@ -653,3 +653,62 @@ def test_the_explorer_offers_recent_projects(ptk, tmp_path, monkeypatch):
     text = _show(ptk, lambda o: app.browse_screen(start, launcher, output=o))
     assert "a-recent-project" in text
     assert "recent" in text
+
+
+# ------------------------------------------------------- browse done & archived
+
+
+class _FakeES:
+    """finished_engagements stub - the screen's only engagement_state touchpoint."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def finished_engagements(self, root):
+        return self._rows
+
+
+def _finished_rows():
+    return [
+        _row("old-audit", "Old audit", "closed", closed="2026-08-01", archived=False),
+        _row("parked", "Parked spike", "in_progress", archived=True),
+    ]
+
+
+def _drive_finished(ptk, keys: str, rows):
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text(keys)
+        with create_app_session(input=pipe, output=out):
+            token = app.finished_screen(Path("."), launcher, _FakeES(rows), output=out)
+    return token, buf.getvalue()
+
+
+def test_menu_key_b_returns_the_finished_pick(ptk):
+    pick, text = _drive(ptk, "b", [_row()])
+    assert pick == ("finished",)
+    assert "browse done & archived" in text
+
+
+def test_finished_screen_lists_closed_and_archived_with_provenance(ptk):
+    token, text = _drive_finished(ptk, "\x1b", _finished_rows())
+    assert token == ""  # Esc = backed out, NOT None (None would mean "could not run")
+    assert "Done & archived engagements" in text
+    assert "Old audit" in text and "closed" in text
+    assert "Parked spike" in text and "archived" in text
+
+
+def test_finished_screen_enter_returns_the_selected_token(ptk):
+    token, _ = _drive_finished(ptk, "\r", _finished_rows())
+    assert token == "old-audit"
+    token, _ = _drive_finished(ptk, "\x1b[B\r", _finished_rows())  # Down, Enter
+    assert token == "parked"
+
+
+def test_finished_screen_returns_none_when_nothing_finished(ptk):
+    token, _ = _drive_finished(ptk, "\x1b", [])
+    assert token is None  # caller falls back, and the fallback owns the message

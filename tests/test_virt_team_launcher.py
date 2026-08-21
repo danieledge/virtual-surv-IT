@@ -1315,3 +1315,48 @@ def test_artifacts_prefer_rendered_html_over_its_markdown_twin(tmp_path):
 def test_artifacts_of_a_missing_workspace_is_empty_not_an_error(tmp_path):
     mod = _load()
     assert mod._engagement_artifacts(tmp_path, "nope") == []
+
+
+def test_menu_b_reviews_a_finished_engagement_stdout_pure(tmp_path, monkeypatch, capsys):
+    """[b] browse done & archived -> pick one -> stdout carries exactly the --review
+    decision and nothing else. The slug is deliberately NOT in the resume menu's open
+    list (it is archived), which is the whole point of the separate flag."""
+    import scripts.engagement_state as es
+
+    project = _plugin_enabled_project(tmp_path)
+    art = project / "artifacts"
+    assert es.main(["--dir", str(art / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
+    assert es.main(["--dir", str(art), "archive", "old", "--force"]) == 0
+    capsys.readouterr()  # drain fixture output
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    answers = iter(["b", "1"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.strip().endswith("--review old")
+    assert out.out.count("\n") <= 1  # one decision line, nothing else
+    assert "Done & archived" in out.err or "done or archived" in out.err
+
+
+def test_menu_b_backing_out_returns_to_the_menu_not_a_launch(tmp_path, monkeypatch, capsys):
+    """[b] then back must re-ask (the '__again__' loop), then an empty choice is the
+    documented plain launch - and stdout stays empty throughout."""
+    import scripts.engagement_state as es
+
+    project = _plugin_enabled_project(tmp_path)
+    art = project / "artifacts"
+    assert es.main(["--dir", str(art / "old"), "init", "--title", "Old", "--slug", "old"]) == 0
+    assert es.main(["--dir", str(art), "archive", "old", "--force"]) == 0
+    capsys.readouterr()
+    monkeypatch.chdir(project)
+    mod = _load()
+    monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
+    answers = iter(["b", "b", ""])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    rc = mod.main()
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out == ""

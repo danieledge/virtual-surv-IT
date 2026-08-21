@@ -23,6 +23,7 @@ Two things get moved entirely outside the LLM pipeline here, for two different r
 command substitution):** ALL interactive text (the menu, the prompt) goes to **stderr**.
 **stdout carries ONLY the final pre-seeded prompt**, one line, one of:
   - `<engage-cmd> --resume <slug>` - resume that open engagement
+  - `<engage-cmd> --review <slug>` - open a DONE or ARCHIVED engagement read-only
   - `<engage-cmd> --new` - start new work
   - `` (empty) - nothing to decide, or the human chose to decide inside the session
 where `<engage-cmd>` is the spelling of the engage command THIS project answers to:
@@ -780,6 +781,78 @@ def _archive_perform(es, targets: list) -> None:
         print(f"    {slug}: {marker}", file=sys.stderr)
 
 
+def _finished_menu(project_dir: Path, es) -> str:
+    """Browse DONE and ARCHIVED engagements (2026-08-21 user request) - the read side
+    of the archive story. Returns the chosen engagement's resume token ('' when the
+    user backs out or there is nothing to browse). The CALLER turns a token into the
+    `--review <slug>` decision - this menu never touches stdout.
+    prompt_toolkit tier when the terminal supports it; numbered input() otherwise."""
+    err = sys.stderr
+    ink = _Ink()
+    try:
+        rows = es.finished_engagements(project_dir / "artifacts")
+    except Exception:
+        rows = []
+    if not rows:
+        print(ink.dim("    no done or archived engagements yet"), file=err)
+        return ""
+    p = _ptk_ui()
+    if p:
+        slug_w = max((len(_row_resume_token(r) or "?") for r in rows), default=0)
+        entries = []
+        for i, row in enumerate(rows):
+            slug = _row_resume_token(row) or "?"
+            tail = "archived" if row.get("archived") else (row.get("status") or "?")
+            when = str(row.get("closed") or row.get("opened") or "")[:10]
+            entries.append(
+                (
+                    i,
+                    [
+                        ("class:slug", slug.ljust(slug_w)),
+                        ("class:dim", f"  {tail}" + (f"  {when}" if when else "")),
+                    ],
+                    None,
+                )
+            )
+        entries.append((None, "back", "b"))
+        pick = _pt_pick(
+            p,
+            "Open a done or archived engagement",
+            entries,
+            subtitle="read-only review in a Claude session - nothing is reopened",
+        )
+        if pick is not _PT_FAILED:
+            if pick is None:
+                return ""
+            return _row_resume_token(rows[pick]) or ""
+        # fall through to the numbered tier
+    print("", file=err)
+    _print_rule("Done & archived engagements")
+    for i, row in enumerate(rows, 1):
+        slug = _row_resume_token(row) or "?"
+        tail = "archived" if row.get("archived") else (row.get("status") or "?")
+        when = str(row.get("closed") or row.get("opened") or "")[:10]
+        title = row.get("title") or ""
+        print(
+            f"    {ink.bold(f'[{i}]')} {slug}  {ink.dim(tail + (f'  {when}' if when else ''))}"
+            + (f"  {ink.dim(title)}" if title else ""),
+            file=err,
+        )
+    print(f"    {ink.bold('[b]')} back", file=err)
+    print(ink.bold("    Open: "), end="", file=err)
+    try:
+        choice = input().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+    if choice in ("", "b"):
+        return ""
+    try:
+        return _row_resume_token(rows[int(choice) - 1]) or ""
+    except (ValueError, IndexError):
+        print(ink.dim("    a number or b, please."), file=err)
+        return ""
+
+
 def _archive_menu(project_dir: Path, es, menu: dict) -> None:
     """Archive engagements from the go screen (2026-08-17 user request): pick one,
     'all' archives every OPEN one (not just the 3 shown rows - live report), back to
@@ -1398,6 +1471,7 @@ def _pt_menu_round(
     entries.append((("open",), "open a different project folder", "o"))
     if shown:
         entries.append((("archive",), "archive engagement(s)", "a"))
+    entries.append((("finished",), "browse done & archived engagements", "b"))
     launch_label = "decide inside the session instead" if shown else "just launch"
     entries.append((("launch",), launch_label, None))
     default_index = 0
@@ -1530,6 +1604,26 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
             except Exception:
                 pass
         return "__again__"
+    if pick[0] == "finished":
+        # None = the app screen could not run -> numbered fallback; '' = the user
+        # backed out (Esc / back) -> just re-ask. Same None-vs-falsy contract as
+        # settings above - conflating them dumped users into the wrong tier once.
+        token = None
+        try:
+            from launcher_app import finished_screen
+
+            token = finished_screen(project_dir, sys.modules[__name__], engagement_state)
+        except Exception:
+            token = None
+        if token is None:
+            try:
+                token = _finished_menu(project_dir, engagement_state)
+            except Exception:
+                token = ""
+        if token:
+            print(ink.dim(f"    -> reviewing {token}"), file=sys.stderr)
+            return f"{_engage_command(project_dir)} --review {token}"
+        return "__again__"
     engage_cmd = _engage_command(project_dir)
     if pick[0] == "new":
         print(ink.dim("    -> starting new"), file=sys.stderr)
@@ -1633,6 +1727,7 @@ def _menu_round(
         settings_opt += f"   {ink.bold('[v]')} view artifacts"
     if shown:
         settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
+    settings_opt += f"   {ink.bold('[b]')} browse done & archived"
     print(settings_opt, file=err)
     enter_label = "just launch" if not shown else "decide inside the session instead"
     print(f"    {ink.dim(f'[Enter] {enter_label}')}   {ink.dim('[?] help')}", file=err)
@@ -1691,6 +1786,10 @@ def _menu_round(
         except Exception:
             pass
         return "__again__"
+    if choice.lower() == "b":
+        # Same mapping as the app and picker tiers, so [b] cannot mean one thing
+        # there and another here.
+        return _decision_from_pick(("finished",), project_dir, engagement_state, menu, shown)
     engage_cmd = _engage_command(project_dir)
     shown = capped  # numbered picks refer to what was PRINTED
     if choice.lower() == "n":
@@ -2253,6 +2352,9 @@ _STATUS_MARK = {
     "in_progress": ("*", "warn"),
     "blocked": ("!", "warn"),
     "closing": ("~", "dim"),
+    # The browse-finished screen shows closed packs; a distinct mark keeps a
+    # closed-but-not-archived row readable next to an ARCHIVED-OPEN one.
+    "closed": ("+", "dim"),
 }
 
 

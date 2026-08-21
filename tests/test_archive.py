@@ -249,3 +249,51 @@ def test_stale_closed_nudge_after_five_packs(tmp_path, capsys):
     ca_main(["check_artifacts", str(root)])
     out = capsys.readouterr().out
     assert "archive --all-closed" in out
+
+
+# ------------------------------------------------- browse-finished data layer
+
+
+def test_finished_engagements_returns_closed_and_archived_rows(tmp_path):
+    from scripts.engagement_state import finished_engagements
+
+    root = tmp_path / "artifacts"
+    _closed_pack(root, "done-not-archived")
+    archived = _closed_pack(root, "done-and-archived")
+    assert es_main(["--dir", str(root), "archive", "done-and-archived"]) == 0
+    # an OPEN pack must never appear
+    open_pack = root / "still-open"
+    assert es_main(["--dir", str(open_pack), "init", "--title", "open", "--slug", "still-open"]) == 0
+
+    rows = finished_engagements(root)
+    by_slug = {r["dir"]: r for r in rows}
+    assert set(by_slug) == {"done-not-archived", "done-and-archived"}
+    assert by_slug["done-not-archived"]["archived"] is False
+    assert by_slug["done-not-archived"]["status"] == "closed"
+    assert by_slug["done-and-archived"]["archived"] is True
+    assert is_archived(archived)
+
+
+def test_finished_engagements_includes_archived_open_pack(tmp_path):
+    """ARCHIVED-OPEN is invisible to the resume menu, so the browse list is the only
+    place a person can find it again - it must be here, flagged archived."""
+    from scripts.engagement_state import finished_engagements
+
+    root = tmp_path / "artifacts"
+    pack = root / "parked-open"
+    assert es_main(["--dir", str(pack), "init", "--title", "parked", "--slug", "parked-open"]) == 0
+    assert es_main(["--dir", str(root), "archive", "parked-open", "--force"]) == 0
+
+    rows = finished_engagements(root)
+    assert [r["dir"] for r in rows] == ["parked-open"]
+    assert rows[0]["archived"] is True
+    assert rows[0]["status"] == "in_progress"
+
+
+def test_list_finished_cli_prints_json_rows(tmp_path, capsys):
+    root = tmp_path / "artifacts"
+    _closed_pack(root, "cli-done")
+    capsys.readouterr()  # drop the setup verbs' own output
+    assert es_main(["--dir", str(root), "list", "--finished"]) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert rows and rows[0]["dir"] == "cli-done" and rows[0]["archived"] is False

@@ -372,6 +372,71 @@ def archived_slugs(root: Path) -> list[str]:
     return sorted(p.name for p in root.iterdir() if p.is_dir() and is_archived(p))
 
 
+def finished_engagements(root: Path) -> list[dict]:
+    """Full rows for the packs the resume menu never shows: closed and/or archived.
+
+    A deliberate SEPARATE function rather than a widening of scan_engagements - its
+    archived-exclusion at the workspace_states call is depended on by the DoD checker,
+    the stop gate, the registry and the statusline, and resume_menu's return shape is
+    pinned by tests. Same row shape as scan_engagements plus `"archived": bool`
+    (archived is a filesystem marker orthogonal to status - an ARCHIVED-OPEN pack
+    belongs here too, because it is invisible to the resume menu either way).
+    Sorted newest-finished first (closed date, falling back to opened)."""
+    rows: list[dict] = []
+    candidates: list[tuple[str, Path]] = []
+    if state_path(root).is_file():
+        candidates.append(("(flat)", root))
+    candidates.extend((sp.parent.name, sp.parent) for sp in workspace_states(root))
+    for slug, pack in candidates:
+        archived = is_archived(pack)
+        try:
+            state = load_state(pack)
+        except Exception:
+            if archived:
+                rows.append(
+                    {
+                        "slug": slug,
+                        "dir": slug,
+                        "title": "(unreadable state)",
+                        "status": "invalid",
+                        "profile": None,
+                        "opened": None,
+                        "closed": None,
+                        "phase": None,
+                        "outstanding": 0,
+                        "outstanding_first": "",
+                        "archived": True,
+                    }
+                )
+            continue
+        if not archived and state.get("status") != "closed":
+            continue
+        eng = state.get("engagement") or {}
+        rows.append(
+            {
+                "slug": slug if slug != "(flat)" else (eng.get("slug") or "(flat)"),
+                "dir": slug,
+                "title": eng.get("title"),
+                "status": state.get("status"),
+                "profile": state.get("profile") or "standard",
+                "opened": eng.get("opened"),
+                "closed": eng.get("closed"),
+                "phase": state.get("phase"),
+                "outstanding": len(state.get("outstanding") or []),
+                "outstanding_first": next(
+                    (
+                        str(item.get("item") if isinstance(item, dict) else item)
+                        for item in (state.get("outstanding") or [])
+                    ),
+                    "",
+                ),
+                "archived": archived,
+            }
+        )
+    rows.sort(key=lambda r: str(r.get("closed") or r.get("opened") or ""), reverse=True)
+    return rows
+
+
 # Files the closed-pack fingerprint's STAT-ONLY walk ignores: the state file (hashed by
 # CONTENT instead - see compute_fingerprint's docstring, M3), the generated index renders
 # (re-rendered by the same mutation that stores the fingerprint), the archive marker, and
@@ -2092,6 +2157,9 @@ def _cmd_list(args: argparse.Namespace) -> int:
         menu = resume_menu_json(root)
         print(json.dumps(menu, ensure_ascii=False, indent=2))
         return 0
+    if getattr(args, "finished", False):
+        print(json.dumps(finished_engagements(root), ensure_ascii=False, indent=2))
+        return 0
     rows = scan_engagements(root)
     if not rows:
         print(f"no engagements in {root}")
@@ -2463,6 +2531,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print the computed resume-vs-new menu (JSON: open/shown/more/archived/default) "
         "instead of the plain table - the engage skill's step 0b renders this directly",
+    )
+    p.add_argument(
+        "--finished",
+        action="store_true",
+        help="print closed and/or archived packs as JSON rows - the launcher's browse "
+        "screen and the engage skill's --review validation read this",
     )
     p.set_defaults(fn=_cmd_list)
 

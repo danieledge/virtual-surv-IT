@@ -143,6 +143,16 @@ first prompt. When present, this is the answer - **do not ask the question at al
   engagement" and "state file is the record" rules below. Not in `open` (or `open` empty) →
   fall back to the normal flow below and ask, same as if no flag had been given - **never
   silently proceed on stale data, and never error out unhelpfully either.**
+- **`--review <slug>` → a DONE or ARCHIVED engagement, READ-ONLY.** Validate first against
+  `<python> -m scripts.engagement_state list --finished` (JSON rows of closed and/or archived
+  packs; match on `dir` or `slug`) - `--resume`'s `open` list will never contain these, by
+  design. Found → this is a review, not a resumption: read that pack's `engagement-state.json`
+  and artifacts, present a short orientation (title, verdict/close date, what was delivered,
+  where the artifacts live) and answer questions about it. **Mutate nothing**: no state
+  transitions, no ACTIVE marker, no writes into the pack - and archived packs stay archived.
+  Any request to change or redo the work is NEW work: classify it as a fresh engagement that
+  references the old pack. Not found → say so, list what `--finished` did return, and fall
+  back to the normal flow below.
 
 **No flag present (typed `/engage` directly, or via a plain terminal launch)** - the flow as it
 worked before the wrapper existed: if this turn's context already has a `RESUME_MENU` field

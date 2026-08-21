@@ -86,7 +86,11 @@ def glyphs(mod):
         "in_progress": "⏳" if rich else "*",
         "blocked": "⛔" if rich else "!",
         "closing": "🔒" if rich else "~",
+        "closed": "✓" if rich else "+",
         "open": "📂 " if rich else "",
+        # Distinct from "archive" (📦, the WRITE action) - this is the read side, and
+        # the archive glyph already fronts three different labels.
+        "browse": "🗂️  " if rich and mod._can_encode("🗂️") else "",
     }
 
 
@@ -195,6 +199,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         actions.append((("artifacts",), f"{g['archive']}view an engagement's artifacts", "v"))
     if shown:
         actions.append((("archive",), f"{g['archive']}archive engagement(s)", "a"))
+    actions.append((("finished",), f"{g['browse']}browse done & archived", "b"))
     actions.append(
         (
             ("launch",),
@@ -330,6 +335,7 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         ("o", ("open",)),
         ("v", ("artifacts",)),
         ("a", ("archive",)),
+        ("b", ("finished",)),
     ):
         if any(r == ret for r, _label, _k in actions):
             kb.add(key)(lambda event, _r=ret: _exit(event, _r))
@@ -613,6 +619,108 @@ def archive_screen(project_dir: Path, mod, engagement_state, menu: dict, output=
     except Exception:
         return done[0]
     return done[0]
+
+
+def finished_screen(project_dir: Path, mod, engagement_state, output=None):
+    """The [b] screen: browse DONE and ARCHIVED engagements, Enter opens the selected
+    one in a Claude session as a read-only `--review`. The read side of the archive
+    story - archive_screen writes the marker, this is how you find the pack again.
+
+    Returns the chosen engagement's resume token, '' when the user backs out (Esc),
+    None when the screen cannot run at all (no ptk, no finished packs) - the caller
+    falls back to the numbered menu ONLY on None, same contract as settings_screen."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    try:
+        rows = engagement_state.finished_engagements(project_dir / "artifacts")
+    except Exception:
+        return None
+    if not rows:
+        return None  # the fallback menu owns the "nothing yet" message
+
+    g = glyphs(mod)
+    views = [mod.row_view(r) for r in rows]
+    idx = [0]
+    chosen: list = [""]
+
+    def _body():
+        out = [("class:group", f"  {g['browse']}Done & archived engagements\n\n")]
+        # Same viewport arithmetic as the main menu: the frame height is unknown when
+        # the body is built, so page on a constant.
+        top = max(0, min(idx[0] - _MENU_PAGE + 1, len(views) - _MENU_PAGE))
+        for i in range(top, min(top + _MENU_PAGE, len(views))):
+            v = views[i]
+            row = rows[i]
+            sel = idx[0] == i
+            out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
+            out.append(("class:dim", f"{g.get(v['status'], v['mark'])} "))
+            out.append(("class:sel" if sel else "", f"{v['title']}\n"))
+            tail = "archived" if row.get("archived") else (row.get("status") or "")
+            when = str(row.get("closed") or row.get("opened") or "")[:10]
+            out.append(("class:dim", f"      {v['slug']}  {tail}" + (f"  {when}\n" if when else "\n")))
+        if len(views) > _MENU_PAGE:
+            out.append(("class:hint", f"\n  {idx[0] + 1}/{len(views)}\n"))
+        return out
+
+    def _right():
+        row = rows[idx[0]]
+        v = views[idx[0]]
+        lines = [("class:title", f"\n  {v['title']}\n\n")]
+        for label, value in v["lines"]:
+            lines.append(("class:dim", f"  {label.ljust(8)}"))
+            lines.append(("", f"{value}\n"))
+        if row.get("archived"):
+            lines.append(("class:warn", "\n  archived (marker on disk)\n"))
+        lines.append(
+            ("class:dim", "\n  Enter opens it in Claude,\n  read-only - nothing is\n  reopened.\n")
+        )
+        return lines
+
+    def _footer():
+        return [("class:hint", "  ↑↓ move · Enter open in Claude · Esc back")]
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    def _up(event):
+        idx[0] = (idx[0] - 1) % len(views)
+
+    @kb.add("down")
+    def _down(event):
+        idx[0] = (idx[0] + 1) % len(views)
+
+    @kb.add("enter")
+    def _go(event):
+        chosen[0] = mod._row_resume_token(rows[idx[0]]) or ""
+        event.app.exit()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("q")
+    def _esc(event):
+        chosen[0] = ""
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title=f"{g['browse']}Done & archived  ·  {project_dir.resolve().name}",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=project_dir,
+        )
+    except Exception:
+        return None
+    return chosen[0]
 
 
 JIRA_CANCELLED = "__jira_cancelled__"
@@ -1198,6 +1306,7 @@ def help_screen(project_dir: Path, mod, output=None):
         ("c", "project settings"),
         ("o", "another project"),
         ("a", "archive"),
+        ("b", "browse done & archived"),
         ("v", "view artifacts"),
         ("m", "show all open"),
         ("?", "this screen"),
