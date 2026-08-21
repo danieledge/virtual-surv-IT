@@ -51,6 +51,26 @@ the run **explicit stop conditions** so it parks rather than guesses.
     git repo, so two of its three suggestions dead-end. `repo_skeleton` - which works on any
     directory - now leads. The message also states that the rule matches the whole command,
     so a listing at the end of an `&&` chain blocks the earlier steps too.
+- **Tracker comments now say something to the person reading them.** Two user
+  requirements (2026-08-21). Every Jira comment opens with a **summary from Morgan** rather
+  than a bare status token - the people watching a ticket were never in the session and have
+  no other view of the work. And when an attachment cannot be uploaded, the team posts a
+  comment saying plainly that it could not attach them, naming what they are, and giving the
+  **resolved absolute path of the engagement workspace** where the results are held. It no
+  longer pastes the delivery report body into the tracker as a fallback: unprompted, that is
+  noise in someone's ticket and an uncontrolled copy of the content, and a reader who wants
+  it inline can ask.
+- **A team-raised issue now closes like an inbound one.** It used to get the summary email
+  alone, with no report attached, so identical work reached a colleague's ticket in full or
+  in outline depending only on which door the engagement came in by. Both now attach the
+  delivery report and key artifacts on the same attach-or-say-where terms, and the
+  team-raised path stays an offer you approve.
+- **Unattended-mode detail moved behind its read-trigger.** Added inline to `engage/SKILL.md`
+  the previous day, it cost **+532 tokens at every engagement open** for a mode that is off
+  by default and rarely used - caught by this repo's own prompt-budget check, which refused
+  the growth rather than letting it re-pin quietly. The rules now live in
+  `engage/references/auto-mode.md`, read only when the flag is present, and `SKILL.md` keeps
+  a four-line trigger. Open-time cost returns to +150 rather than +532.
 - **Developer guidance is no longer manufactured for work that has no code.** Live report
   (2026-08-21): an ANALYSIS engagement produced a developer-notes section although the task
   involved no code at all. The gate was not at fault - a one-line "not applicable" already

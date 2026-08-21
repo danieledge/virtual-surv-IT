@@ -231,8 +231,17 @@ def test_a_parked_unattended_run_is_not_nagged_about_a_verdict(tmp_path):
 
 
 def test_the_skill_tells_an_auto_run_what_it_may_not_do():
+    """The detail moved behind a read-trigger on 2026-08-21 - inline in SKILL.md it cost
+    +532 tokens at EVERY engagement open for a mode that is off by default and rare. What
+    must survive that move is the trigger itself (a rule nothing routes to is not a rule)
+    and the two things a run needs before it reads anything: ask nothing, and where to
+    look."""
     skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
     assert "--auto" in skill
+    assert "ask nothing at all" in skill.lower()
+    assert "references/auto-mode.md" in skill, "the deferred detail is unreachable"
+    detail = (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "auto-mode.md"
+    ).read_text(encoding="utf-8")
     for requirement in ("assumed-", "PARTIAL", "blocked"):
-        assert requirement in skill, f"the skill never mentions {requirement}"
-    assert "Ask no questions" in skill
+        assert requirement in detail, f"the reference never mentions {requirement}"

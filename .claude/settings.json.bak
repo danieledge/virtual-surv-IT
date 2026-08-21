@@ -1,0 +1,139 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./data/raw/**)",
+      "Read(data/raw/**)",
+      "Read(/*/data/raw/**)",
+      "Read(/**/data/raw/**)",
+      "Grep(./data/raw/**)",
+      "Grep(data/raw/**)",
+      "Grep(/*/data/raw/**)",
+      "Grep(/**/data/raw/**)",
+      "Glob(./data/raw/**)",
+      "Glob(data/raw/**)",
+      "Glob(/*/data/raw/**)",
+      "Glob(/**/data/raw/**)",
+      "Write(./data/raw/**)",
+      "Write(data/raw/**)",
+      "Write(/**/data/raw/**)",
+      "Edit(./data/raw/**)",
+      "Edit(data/raw/**)",
+      "Edit(/**/data/raw/**)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(.env)",
+      "Read(/**/.env)",
+      "Read(/**/.env.*)",
+      "Read(./secrets/**)",
+      "Read(secrets/**)",
+      "Read(/**/secrets/**)",
+      "Read(./**/*.pem)",
+      "Read(/**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(/**/*.key)"
+    ],
+    "allow": [
+      "Bash(python -m scripts.gen_synthetic:*)",
+      "Bash(python3 -m scripts.gen_synthetic:*)",
+      "Bash(python -m scripts.ingest:*)",
+      "Bash(python3 -m scripts.ingest:*)",
+      "Bash(python -m scripts.validate_masking:*)",
+      "Bash(python3 -m scripts.validate_masking:*)",
+      "Bash(git diff:*)",
+      "Bash(ruff:*)",
+      "Bash(black:*)",
+      "Bash(mypy:*)",
+      "Bash(bandit:*)",
+      "Bash(pip-audit:*)",
+      "Bash(shellcheck:*)",
+      "Bash(shfmt:*)",
+      "Bash(bashate:*)",
+      "Bash(semgrep:*)",
+      "Bash(gitleaks:*)",
+      "Bash(checkstyle:*)",
+      "Bash(pmd:*)",
+      "Bash(spotbugs:*)",
+      "Bash(scalafmt:*)",
+      "Bash(scalafix:*)",
+      "Bash(python -m scripts.render_html:*)",
+      "Bash(python3 -m scripts.render_html:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/locked_menu_guard.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit|NotebookRead|WebFetch|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/bash_hook_dispatcher.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/stop_hook_dispatcher.py\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/persona_anchor.py\""
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/session_resume_brief.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/post_edit_lint.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/.claude/hooks/run-guard.sh\" \"${CLAUDE_PLUGIN_ROOT:-${CLAUDE_PROJECT_DIR:-.}}/scripts/subagent_return_budget.py\""
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/scripts/statusline.sh\""
+  }
+}

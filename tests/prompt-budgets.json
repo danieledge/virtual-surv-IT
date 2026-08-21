@@ -28,7 +28,7 @@
   ],
   "tier_budgets": {
     "ALWAYS_LOADED": 3300,
-    "OPEN_TIME": 19100,
+    "OPEN_TIME": 19300,
     "ROUTE_TIME": 48400,
     "AGENT_TIME": 23700,
     "DEFERRED": null
@@ -187,12 +187,17 @@
     ".claude/skills/engage/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 7457
+      "baseline_tokens": 7607
     },
     ".claude/skills/engage/references/artifact-menu.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
       "baseline_tokens": 413
+    },
+    ".claude/skills/engage/references/auto-mode.md": {
+      "tier": "DEFERRED",
+      "loads_per_engagement": 1.0,
+      "baseline_tokens": 652
     },
     ".claude/skills/engage/references/close-checklist.md": {
       "tier": "DEFERRED",
@@ -207,7 +212,7 @@
     ".claude/skills/engage/references/integrations.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 2026
+      "baseline_tokens": 2340
     },
     ".claude/skills/engage/references/probe-bootstrap.md": {
       "tier": "DEFERRED",
@@ -322,7 +327,7 @@
     "docs/DEFINITION-OF-DONE.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 6082
+      "baseline_tokens": 6154
     },
     "docs/WAYS-OF-WORKING.md": {
       "tier": "DEFERRED",
@@ -437,7 +442,7 @@
     "docs/review/output-format.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 3737
+      "baseline_tokens": 4003
     },
     "docs/scope-and-stack.md": {
       "tier": "DEFERRED",

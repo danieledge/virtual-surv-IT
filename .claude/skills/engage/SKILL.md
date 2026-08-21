@@ -132,28 +132,10 @@ first prompt. When present, this is the answer - **do not ask the question at al
   artifacts attached where the tools allow, markdown-in-comment fallback when they
   don't - exact rules in `references/integrations.md`, inbound section). Attachments the
   work needs are read via `convert_file`, same as any document input.
-- **`--auto` (rides with `--jira`) - UNATTENDED.** The human authorised this run on the
-  launcher's pre-flight screen and will not be asked anything else. **Ask no questions at
-  all** - not the opening batch, not a clarification, not "shall I continue?". The gates are
-  already answered: execution consent is whatever the marker says (unchanged - you still
-  never create it), the data attestation was given or withheld there (withheld = synthetic
-  data only), and the ticket pick approves deliver-back as usual.
-  - **Assumption ledger, not silence.** Every question you WOULD have asked becomes a
-    recorded decision the moment you make it: `set-decision assumed-<n> "<question> -> <what
-    you assumed> because <why>"`. They appear together in a **Assumptions made in auto mode**
-    section of the delivery report and as ONE consolidated ticket comment at close. This is
-    the deliverable that makes an unattended run reviewable - it is not optional.
-  - **PARK, never guess, when it matters.** If the request is ambiguous in a way that changes
-    *what gets built* (not merely its detail), or data/access you need is missing, or a gate
-    you were not authorised for is required, or you stop making progress: `set-status
-    blocked`, record why, post one comment to the ticket naming exactly what you need, and
-    stop. A parked engagement resumes normally. Guessing the deliverable is the one failure
-    this mode must never produce.
-  - **Always closes PARTIAL.** Auto mode reaches every DoD line except human sign-off and
-    **must never record itself as signed off**. Close as PARTIAL with "human sign-off"
-    outstanding, and say so in the first line of the closing comment.
-  - Everything else - safety gates, guards, data handling, the disclaimers, the DoD - applies
-    exactly as in an attended run. Unattended changes who is asked, never what is required.
+- **`--auto` (rides with `--jira`) - UNATTENDED.** The human authorised this run at the
+  launcher; **ask nothing at all** and **read `references/auto-mode.md` now** - it carries
+  the assumption ledger, the park-don't-guess rule and the always-PARTIAL close, and is the
+  only place they are written. Unattended changes who is asked, never what is required.
 - **`--resume <slug>` → validate the slug first** (`RESUME_MENU`/`list --menu`, same as
   below) rather than trusting it blindly: the wrapper's view could be stale (another session
   closed or archived it in the seconds between the wrapper computing the menu and this

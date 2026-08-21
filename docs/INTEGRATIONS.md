@@ -61,8 +61,18 @@ that line is present, so a project without integrations pays zero context for th
   opening banner, and overridable by setting `"mirror": "close-only"` explicitly. Each
   comment is one line and carries no artifact bodies, findings detail or data.
 - **At close:** the issue gets the closing summary (the engagement-summary email text) as
-  a comment and a transition to your done-state, offered in the same
-  preview-then-approve step as every other close action.
+  a comment, **plus the delivery report and key artifacts attached**, and a transition to
+  your done-state - offered in the same preview-then-approve step as every other close
+  action. Until 2026-08-21 a team-raised issue closed with the summary alone, so the same
+  work reached a ticket in full or in outline depending only on how the engagement started.
+
+**Every comment opens with a summary from Morgan** (2026-08-21): the people reading a
+ticket were never in the session, so a bare status token tells them nothing. **And when an
+attachment cannot be uploaded** - no such tool under the prefix, or the call fails - the
+team posts a comment saying plainly that it could not attach them, naming what they are,
+and giving the resolved absolute path of the engagement workspace where the results are
+held. It does not paste the report body in unprompted: that is noise in a tracker and an
+uncontrolled copy of the content, and a reader who wants it inline can ask.
 
 Every outward call is an MCP tool call, so the harness's own permission prompt applies on
 top of all of the above; nothing is sent anywhere silently. If the configured tools are

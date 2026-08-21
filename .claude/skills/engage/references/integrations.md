@@ -31,6 +31,15 @@
 - **Record what you created.** The moment an issue exists:
   `engagement_state set-decision jira-issue "<KEY>"` - a resumed or compacted session
   re-reads the key from state and never raises a duplicate.
+- **Every comment opens with a summary from Morgan** (2026-08-21). Ticket readers were
+  never in the session; a bare status token tells them nothing. One or two sentences on
+  where the work is and what it means for them, then the detail. Signed as Morgan, 🤖 AI
+  identity stated, never on a shared line with a human name.
+- **Attachment failed? Say so, and say WHERE** (2026-08-21). Post a comment stating plainly
+  that the artifacts could not be uploaded, naming them, and giving the **resolved absolute
+  path** of `artifacts/<slug>/`. Do not dump the report body in instead - unprompted, that
+  is noise and an uncontrolled copy; inline is a request the reader can make. Applies
+  wherever an attachment was intended.
 - **Never put secrets, real data or the consent marker's path into any outward text.**
   Issue bodies and comments carry the same synthetic/masked-only discipline as every
   artifact (CLAUDE.md §5), and outward text is written for the client's tracker
@@ -85,8 +94,10 @@ the mode is stated at the open; never present it as free. A failed or absent too
 blocks the engagement: one line, record it as outstanding, carry on.
 
 **At close** - offer, in the standard close-action step after the summary email: post
-the summary-email text as a comment, and transition the issue to the project's
-done-state (name the transition; if the tools expose none, comment only). A ⛔ parked
+the summary-email text as a comment, **attach the delivery report and key artifacts** on the
+same attach-or-say-where terms as the inbound flow (2026-08-21 - a bare summary left the
+same work reaching a ticket in full or in outline depending only on how it started), and
+transition the issue to the done-state (name the transition; if the tools expose none, comment only). A ⛔ parked
 or PARTIAL close posts the honest status instead; never transition to done on a
 partial.
 
@@ -111,10 +122,9 @@ becomes the engagement request, human-approved by the pick itself. Rules:
   question for this). Post the summary email text as a comment (signed as Morgan, AI
   identity stated) with the engagement verdict, and attach the delivery report and key
   artifacts **where the configured tools expose attachment and the calls succeed**.
-  **No attachment capability (no such tool under the prefix, or the call fails)?
-  Degrade to markdown-in-comment**: post the delivery report's content as one or more
-  markdown comments (sensibly chunked, largest-first; note in the first comment that
-  attachments weren't available so the content is inline). The harness's own MCP
+  **No attachment capability (no such tool, or the call fails)?** Post the could-not-attach
+  comment from the ground rules: what was meant to arrive, and the absolute workspace path
+  holding it. The harness's own MCP
   permission prompts still apply on top - expect them; they are the platform's gate,
   not a question from the team. Status transitions remain human-only, and a ⛔ parked
   or PARTIAL close posts the honest status instead - never a done-transition, and

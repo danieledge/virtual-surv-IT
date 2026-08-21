@@ -184,3 +184,46 @@ def test_a_not_applicable_declaration_actually_satisfies_the_gate(tmp_path):
     assert body.strip() and body.strip() != _DEV_GUIDANCE_PLACEHOLDER, (
         "a one-line not-applicable declaration must satisfy FINDINGS-NO-DEV-GUIDANCE"
     )
+
+
+# --- what a tracker comment must carry (2026-08-21) -------------------------------------------
+
+
+def test_jira_comments_carry_a_summary_and_say_where_results_are_when_attaching_fails():
+    """2026-08-21 user requirement. Two properties, both aimed at the same reader - someone
+    looking at a ticket who was never in the session:
+
+      * every comment opens with a summary from Morgan, not a bare status token;
+      * a failed attachment says so and gives the absolute workspace path, rather than
+        silently pasting the whole report body into a corporate tracker (noise, and an
+        uncontrolled copy of the content)."""
+    ref = (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "integrations.md"
+    ).read_text(encoding="utf-8")
+    assert "summary from Morgan" in ref
+    assert "could not be uploaded" in ref or "could-not-attach" in ref
+    assert "absolute" in ref and "artifacts/<slug>/" in ref
+    assert "Do not dump the report body" in ref, "the anti-paste rule is gone"
+
+
+def test_the_team_raised_close_attaches_like_the_inbound_one_does():
+    """The asymmetry this removes: identical work reached a ticket in full or in outline
+    depending only on which door it came in by."""
+    ref = (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "integrations.md"
+    ).read_text(encoding="utf-8")
+    at_close = ref[ref.index("**At close**") :][:600]
+    assert "attach the delivery report" in at_close, "team-raised close still summary-only"
+
+
+def test_unattended_detail_is_deferred_not_carried_at_every_open():
+    """--auto is off by default and rare, so its rules live behind a read-trigger rather
+    than in SKILL.md where every engagement open would pay for them (+532 tokens when they
+    were inline). The trigger has to actually name the file, or the detail is unreachable."""
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    assert "references/auto-mode.md" in skill, "SKILL.md no longer points at the detail"
+    detail = REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "auto-mode.md"
+    assert detail.is_file()
+    body = detail.read_text(encoding="utf-8")
+    for rule in ("assumed-", "PARTIAL", "blocked", "never create it"):
+        assert rule in body, f"the deferred reference dropped {rule!r}"
