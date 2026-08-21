@@ -1820,6 +1820,61 @@ def _cmd_add_ratification(args: argparse.Namespace) -> int:
     return _mutate(args, fn)
 
 
+def _now_stamp() -> str:
+    import datetime
+
+    return datetime.datetime.now().isoformat(timespec="seconds")
+
+
+SIGN_OFF_PREFIX = "human sign-off"
+
+
+def _cmd_sign_off(args: argparse.Namespace) -> int:
+    """Record a HUMAN's sign-off on a finished engagement (2026-08-21).
+
+    The reopen problem, solved without reopening. A PARTIAL close - which every unattended
+    run produces by design, and which any engagement with outstanding items produces -
+    leaves delivery complete but unsigned. Without this, putting a name to it meant either
+    editing a closed pack (destroying the as-found record the QA evidence rules exist to
+    protect) or starting a whole new engagement to sign the last one, which is absurd.
+
+    APPEND-ONLY: adds a ratification entry and leaves status, verdict and every artifact
+    exactly as they were closed. The pack still says PARTIAL, because it WAS partial at
+    close; what changes is that a person has now accepted it, and who and when.
+
+    Deliberately a launcher/CLI command a human runs, never something a session does for
+    itself - the same reasoning as the execution-consent grant. An agent signing off its
+    own work is the one thing the whole Definition-of-Done gate exists to prevent."""
+    state = load_state(args.dir)
+    _upgrade(state)
+    who = str(args.by or "").strip()
+    if not who:
+        print("sign-off: --by '<name>' is required - a signature needs a name", file=sys.stderr)
+        return 2
+    existing = [
+        r
+        for r in state.get("ratifications", [])
+        if isinstance(r, dict) and str(r.get("text", "")).startswith(SIGN_OFF_PREFIX)
+    ]
+    if existing:
+        print(f"already signed off: {existing[0].get('text')}", file=sys.stderr)
+        return 0
+
+    def fn(s: dict) -> None:
+        s.setdefault("ratifications", []).append(
+            {
+                "text": f"{SIGN_OFF_PREFIX}: {who}",
+                "status": "ratified",
+                "at": _now_stamp(),
+            }
+        )
+
+    rc = _mutate(args, fn)
+    if rc == 0:
+        print(f"signed off by {who}")
+    return rc
+
+
 def _cmd_ratify(args: argparse.Namespace) -> int:
     state = load_state(args.dir)
     _upgrade(state)
@@ -2383,6 +2438,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("profile", choices=_PROFILES)
     p.set_defaults(fn=_cmd_set_profile)
+
+    p = sub.add_parser(
+        "sign-off",
+        parents=[common],
+        help="record a HUMAN's sign-off on a finished engagement (append-only)",
+    )
+    p.add_argument("--by", required=True, help="who is signing off")
+    p.set_defaults(fn=_cmd_sign_off)
 
     p = sub.add_parser(
         "mark-auto",

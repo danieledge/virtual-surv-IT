@@ -143,6 +143,12 @@ first prompt. When present, this is the answer - **do not ask the question at al
   engagement" and "state file is the record" rules below. Not in `open` (or `open` empty) →
   fall back to the normal flow below and ask, same as if no flag had been given - **never
   silently proceed on stale data, and never error out unhelpfully either.**
+- **`--supersedes <slug>` (rides with `--new`)** - this engagement REPLACES a finished one
+  (the human chose "redo" against it in the go menu). Record the link on THIS pack the
+  moment the workspace exists (`set-decision supersedes "<slug>"`), read the old pack for
+  context, and say in the brief what is being redone and why. **Never reopen or edit the
+  superseded pack** - it stays exactly as closed; the link lives here, so the old record
+  keeps its as-found value and a reader can still follow the chain forwards.
 - **`--review <slug>` → a DONE or ARCHIVED engagement, READ-ONLY.** Validate first against
   `<python> -m scripts.engagement_state list --finished` (JSON rows of closed and/or archived
   packs; match on `dir` or `slug`) - `--resume`'s `open` list will never contain these, by
@@ -150,8 +156,10 @@ first prompt. When present, this is the answer - **do not ask the question at al
   and artifacts, present a short orientation (title, verdict/close date, what was delivered,
   where the artifacts live) and answer questions about it. **Mutate nothing**: no state
   transitions, no ACTIVE marker, no writes into the pack - and archived packs stay archived.
-  Any request to change or redo the work is NEW work: classify it as a fresh engagement that
-  references the old pack. Not found → say so, list what `--finished` did return, and fall
+  Any request to change or redo the work is NEW work: a fresh engagement
+  carrying `--supersedes <slug>` (the go menu's `r` starts one). **Sign-off is the one
+  exception and is not yours to give**: a human records it from the launcher, appended to
+  the pack, so an agent can never sign off work - its own or anyone's. Not found → say so, list what `--finished` did return, and fall
   back to the normal flow below.
 
 **No flag present (typed `/engage` directly, or via a plain terminal launch)** - the flow as it

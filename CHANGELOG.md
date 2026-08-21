@@ -67,6 +67,22 @@ the run **explicit stop conditions** so it parks rather than guesses.
     git repo, so two of its three suggestions dead-end. `repo_skeleton` - which works on any
     directory - now leads. The message also states that the rule matches the whole command,
     so a listing at the end of an `&&` chain blocks the earlier steps too.
+- **Finishing a finished engagement, without reopening it.** "What if I want to reopen?"
+  splits three ways, and only one is really a reopen. Auto mode makes the commonest case
+  routine: it always closes PARTIAL, so delivery is complete and nobody has signed.
+  - **`[s]` records a human sign-off** on the `[b]` browse screen, appending a ratification
+    with the signer's name (from git identity) and a timestamp. Status, verdict and every
+    artifact stay exactly as closed - the pack still says PARTIAL, because it *was* partial
+    at close; what changed is that a person accepted it. Taken at the LAUNCHER, never by a
+    session: an agent signing off work, its own or anyone's, is the thing the DoD gate
+    exists to prevent. Idempotent, and refuses without a name.
+  - **`[r]` starts new work that supersedes it**, pre-seeding `--new --supersedes <slug>`.
+    The link is recorded on the NEW pack, so the closed record is never edited and a reader
+    can still follow the chain forwards.
+  - **Reopening a closed pack stays forbidden.** It would destroy the as-found property the
+    QA evidence rules already protect ("rewriting it to look passed destroys that"), and the
+    DoD gate, registry and stop gate all key on status - a resurrected pack would quietly
+    re-enter machinery that assumes it is live.
 - **Adversarial audit of the Jira pipeline and auto mode, and the defects it found.** An
   independent agent was asked to falsify seven safety claims. Three held (no run goes
   unattended without a per-ticket human choice; a hand-made consent marker is never touched;

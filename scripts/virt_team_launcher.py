@@ -1453,6 +1453,89 @@ def _auto_run_decision(project_dir: Path, ref: str) -> str:
     return _jira_command(project_dir, ref, auto=True)
 
 
+def _pack_dir(project_dir: Path, slug: str) -> Path:
+    return project_dir / "artifacts" / slug
+
+
+def _sign_off_state(project_dir: Path, slug: str) -> str:
+    """Who signed a finished engagement off, or ''. Read-only."""
+    if not slug:
+        return ""
+    try:
+        state = json.loads(
+            (_pack_dir(project_dir, slug) / "engagement-state.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return ""
+    for entry in state.get("ratifications") or []:
+        text = str(entry.get("text", "")) if isinstance(entry, dict) else ""
+        if text.startswith("human sign-off:"):
+            return text.split(":", 1)[1].strip()
+    return ""
+
+
+def _signer_name() -> str:
+    """Who is at this keyboard, from git config - the same identity the commits carry.
+    Falls back to the OS user; never to a placeholder, because an unattributed signature
+    is worse than none."""
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["git", "config", "user.name"], capture_output=True, text=True, timeout=5
+        )
+        name = (proc.stdout or "").strip()
+        if name:
+            return name
+    except Exception:
+        pass
+    return os.environ.get("USER") or os.environ.get("USERNAME") or ""
+
+
+def _record_sign_off(project_dir: Path, slug: str) -> str:
+    """Append a human sign-off to a finished pack. Returns a short note for the screen.
+
+    This is the answer to "what if I want to reopen it" for the commonest case: the work
+    is delivered, a person just has not put their name to it - which every unattended run
+    produces by design. Appending a signature leaves the as-found record intact; reopening
+    the pack would not (the QA evidence rules say exactly this about retro-editing)."""
+    if not slug:
+        return "nothing selected"
+    who = _signer_name()
+    if not who:
+        return "no signer identity - set git config user.name"
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.engagement_state",
+                "sign-off",
+                "--dir",
+                str(_pack_dir(project_dir, slug)),
+                "--by",
+                who,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(_scripts_dir().parent),
+        )
+    except Exception as exc:
+        return f"could not sign off ({exc.__class__.__name__})"
+    if proc.returncode != 0:
+        return (proc.stderr or "sign-off failed").strip().splitlines()[-1][:60]
+    return f"signed off by {who}"
+
+
+def _supersede_command(project_dir: Path, slug: str) -> str:
+    """Start NEW work that replaces a finished engagement, linked to it. Never reopens the
+    old pack: the link lives on the new one, so the closed record stays exactly as closed."""
+    return f"{_engage_command(project_dir)} --new --supersedes {slug}"
+
+
 def _jira_command(project_dir: Path, ref: str, auto: bool = False) -> str:
     """The one place the --jira opening command is spelled. Both ticket prompts (the
     full-screen jira_screen and the plain input() flow above) end here, so they cannot
@@ -1669,6 +1752,9 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
                 token = ""
         if token:
             print(ink.dim(f"    -> reviewing {token}"), file=sys.stderr)
+            if isinstance(token, tuple) and token and token[0] == "supersede":
+                print(ink.dim(f"    -> new work superseding {token[1]}"), file=sys.stderr)
+                return _supersede_command(project_dir, token[1])
             return f"{_engage_command(project_dir)} --review {token}"
         return "__again__"
     engage_cmd = _engage_command(project_dir)

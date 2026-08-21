@@ -648,6 +648,14 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
     views = [mod.row_view(r) for r in rows]
     idx = [0]
     chosen: list = [""]
+    note = [""]
+
+    def _signed(i):
+        """Who signed this pack off, or '' - read fresh so [s] updates the screen."""
+        try:
+            return mod._sign_off_state(project_dir, mod._row_resume_token(rows[i]) or "")
+        except Exception:
+            return ""
 
     def _body():
         out = [("class:group", f"  {g['browse']}Done & archived engagements\n\n")]
@@ -663,7 +671,9 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
             out.append(("class:sel" if sel else "", f"{v['title']}\n"))
             tail = "archived" if row.get("archived") else (row.get("status") or "")
             when = str(row.get("closed") or row.get("opened") or "")[:10]
-            out.append(("class:dim", f"      {v['slug']}  {tail}" + (f"  {when}\n" if when else "\n")))
+            out.append(("class:dim", f"      {v['slug']}  {tail}" + (f"  {when}" if when else "")))
+            out.append(("class:on" if _signed(i) else "class:warn",
+                        "  signed off\n" if _signed(i) else "  unsigned\n"))
         if len(views) > _MENU_PAGE:
             out.append(("class:hint", f"\n  {idx[0] + 1}/{len(views)}\n"))
         return out
@@ -677,13 +687,24 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
             lines.append(("", f"{value}\n"))
         if row.get("archived"):
             lines.append(("class:warn", "\n  archived (marker on disk)\n"))
+        who = _signed(idx[0])
+        if who:
+            lines.append(("class:on", f"\n  Signed off by {who}\n"))
+        else:
+            lines.append(("class:warn", "\n  Not signed off yet\n"))
+            lines.append(("class:dim", "  s  record sign-off (appends;\n     nothing is rewritten)\n"))
         lines.append(
-            ("class:dim", "\n  Enter opens it in Claude,\n  read-only - nothing is\n  reopened.\n")
+            ("class:dim",
+             "\n  Enter opens it in Claude,\n  read-only - nothing is\n  reopened.\n"
+             "\n  r  redo as NEW work that\n     supersedes this one\n")
         )
+        if note[0]:
+            lines.append(("class:on", f"\n  {note[0]}\n"))
         return lines
 
     def _footer():
-        return [("class:hint", "  ↑↓ move · Enter open in Claude · Esc back")]
+        return [("class:hint",
+                 "  ↑↓ move · Enter open · s sign off · r redo (supersede) · Esc back")]
 
     kb = KeyBindings()
 
@@ -694,6 +715,21 @@ def finished_screen(project_dir: Path, mod, engagement_state, output=None):
     @kb.add("down")
     def _down(event):
         idx[0] = (idx[0] + 1) % len(views)
+
+    @kb.add("s")
+    def _sign(event):
+        # Recorded HERE, by the human at the keyboard - never by a session. An agent
+        # signing off its own work is the thing the Definition-of-Done gate exists to
+        # prevent, so the signature is taken where a person demonstrably is.
+        slug = mod._row_resume_token(rows[idx[0]]) or ""
+        note[0] = mod._record_sign_off(project_dir, slug)
+
+    @kb.add("r")
+    def _redo(event):
+        slug = mod._row_resume_token(rows[idx[0]]) or ""
+        if slug:
+            chosen[0] = ("supersede", slug)
+            event.app.exit()
 
     @kb.add("enter")
     def _go(event):
