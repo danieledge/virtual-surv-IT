@@ -716,12 +716,17 @@ def resolve_preferences(project_dir: Path) -> dict:
     # about that project's governance, not about this machine, and an opt-in artifact
     # must never appear in a folder nobody asked for it in.
     evidence_room_on = prefs.get("evidence_room", False)
-    # autonomous_mode (2026-08-20): whether the go menu may OFFER an unattended run from a
-    # Jira ticket. OFF by default and project-scoped with no machine tier - letting a
-    # session work without stopping to ask is a governance decision about that project, and
-    # it must never arrive switched on because a machine default said so. This gates the
-    # OFFER only; every run still needs its own explicit pre-flight authorisation.
-    autonomous_mode_on = prefs.get("autonomous_mode", False)
+    # autonomous_mode (2026-08-20, re-scoped 2026-08-21 on the owner's "auto should be per
+    # jira not entire project"): whether the [j] screen may OFFER an unattended run. It is a
+    # KILL SWITCH, not an enabler - absent means the option is offered, an explicit false
+    # removes it from that project entirely.
+    #
+    # Nothing becomes autonomous because of this. Autonomy is decided per TICKET and needs
+    # three separate deliberate acts every time: toggle unattended on the ticket screen,
+    # confirm on the pre-flight screen, and (if code is to run) tick execution consent
+    # there too. A project-wide "this project runs autonomously" mode was the wrong shape -
+    # it made a standing property out of a per-piece-of-work decision.
+    autonomous_mode_on = prefs.get("autonomous_mode", True) is not False
     # qa_depth (2026-08-20): how much INDEPENDENT QA a build buys. "auto" derives it from
     # the work shape; "deep" is today's full pass; "quick" narrows what gets AUTHORED
     # (not what gets run) and always closes DoD: PARTIAL. Deliberately no "none" - QA's

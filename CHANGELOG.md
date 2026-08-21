@@ -67,6 +67,18 @@ the run **explicit stop conditions** so it parks rather than guesses.
     git repo, so two of its three suggestions dead-end. `repo_skeleton` - which works on any
     directory - now leads. The message also states that the rule matches the whole command,
     so a listing at the end of an `&&` chain blocks the earlier steps too.
+- **Autonomy is decided per ticket, not per project** (2026-08-21 owner decision: "auto
+  should be per jira not entire project"). Shipping it as a project preference made a
+  standing property out of a judgement about one piece of work - and a project flagged
+  "autonomous" reads as a mode the whole repo is in, which was never the intent. The
+  preference is now a **kill switch rather than an enabler**: leave it alone and the option
+  is offered, turn it off to remove unattended runs from that project entirely.
+  Safe because offering grants nothing. An unattended run still takes three deliberate acts
+  every time - the `Ctrl-A` toggle on the ticket screen, the pre-flight confirmation, and a
+  separate tick for execution consent - and every gate is answered **before the session
+  starts**, since a run that will not stop to ask cannot be asked anything later. The tests
+  moved with the meaning: they no longer check "is the project switched on?" but "can a run
+  become unattended without a human choosing it for THAT ticket?".
 - **Tracker comments now say something to the person reading them.** Two user
   requirements (2026-08-21). Every Jira comment opens with a **summary from Morgan** rather
   than a bare status token - the people watching a ticket were never in the session and have

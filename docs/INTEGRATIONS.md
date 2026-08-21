@@ -113,6 +113,29 @@ launcher never talks to Jira itself, and nothing runs unattended. Ticket content
 instructions; the session's own safety gates (execution consent, data attestation) are
 answered by the human at the keyboard, not by ticket fields.
 
+## Unattended runs - decided per ticket
+
+An engagement started from a ticket can be told to run **unattended**: it works the ticket
+end to end without stopping to ask. The decision is **per Jira, never a project-wide mode**
+(2026-08-21) - making "this project runs autonomously" a standing property was the wrong
+shape for something that is a judgement about one piece of work.
+
+Nothing becomes autonomous by accident. It takes three deliberate acts, every time:
+
+1. toggle **unattended** on the ticket screen (`Ctrl-A`);
+2. confirm on the **pre-flight screen**, which states what auto mode will and will not do
+   and takes your data attestation;
+3. tick **execution consent** separately there, if the run is to be allowed to run code.
+
+Only then does the launcher pre-seed `--auto` alongside `--jira`, which is what tells the
+session to proceed without questions. Every gate is answered **before the session starts**,
+because a run that will not stop to ask cannot be asked anything later.
+
+`autonomous jira mode` in `virt-surv configure` is a **kill switch, not an enabler**: leave
+it alone and the option is offered, turn it off to remove unattended runs from the project
+entirely. An unattended run always closes **PARTIAL** with human sign-off outstanding, and
+records every judgement call it made as an assumption ledger for you to review.
+
 ## Pull-request comments - experimental, double-gated
 
 Posting review findings onto a pull request needs careful validation in a real corporate

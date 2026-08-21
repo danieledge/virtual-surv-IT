@@ -362,11 +362,10 @@ _SETTING_HELP = {
         "Not applied: Claude Code's own defaults are used.",
     ),
     "autonomous jira mode": (
-        "Lets [j] offer an UNATTENDED run: the session works the ticket end to end without "
-        "stopping to ask. Every run still needs its own pre-flight authorisation, and it "
-        "always closes PARTIAL for a human to sign off.",
-        "Off (the default): [j] behaves normally and the session asks you as it goes. Turn "
-        "this on only where you are content for a session to proceed on its own judgement.",
+        "Whether [j] may OFFER an unattended run. Autonomy is chosen per ticket: the "
+        "unattended toggle, the pre-flight confirmation, and a separate tick to run code.",
+        "Off removes the option from this project. On does NOT mean runs go unattended - "
+        "none does unless you choose it, and one always closes PARTIAL for sign-off.",
     ),
     "qa depth": (
         "How much INDEPENDENT QA a build buys. auto reads the work; quick narrows what "
@@ -1419,8 +1418,13 @@ def _jira_command(project_dir: Path, ref: str, auto: bool = False) -> str:
 
 
 def _auto_offered(project_dir: Path) -> bool:
-    """Whether [j] may offer an unattended run. OFF unless the project opted in - this is
-    the switch, and it is deliberately not a machine default."""
+    """Whether [j] may offer an unattended run - the AFFORDANCE, not the decision.
+
+    Offered unless the project explicitly turned it off (2026-08-21: "auto should be per
+    jira not entire project"). Safe because offering grants nothing: an unattended run
+    still takes three deliberate acts per ticket - toggle it on the ticket screen, confirm
+    the pre-flight, and separately tick execution consent if code is to run. Same shape as
+    [j] itself, where the menu item is always present and what it can DO is gated."""
     try:
         import engage_probe
 

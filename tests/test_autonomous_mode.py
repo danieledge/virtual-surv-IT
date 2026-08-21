@@ -37,30 +37,49 @@ def _project(tmp_path: Path, prefs: dict | None = None) -> Path:
     return tmp_path
 
 
-# --- off by default ---------------------------------------------------------------------------
+# --- per TICKET, not per project (2026-08-21) --------------------------------------------------
+#
+# Re-scoped on the owner's "auto should be per jira not entire project". The preference
+# became a kill switch rather than an enabler, so what these tests must protect changed
+# shape: not "is the project switched on?" but "can a run become unattended without a human
+# choosing it for THAT ticket?". The answer must stay no.
 
 
-def test_autonomous_mode_is_off_by_default(tmp_path):
-    """The whole feature is opt-in. A project that has never heard of it must not be
-    offered an unattended run, and no machine default may switch it on."""
-    probe = _load("engage_probe")
-    assert probe.resolve_preferences(_project(tmp_path)).get("autonomous_mode") is False
-
-
-def test_the_menu_does_not_offer_auto_until_the_project_opts_in(tmp_path):
+def test_the_option_is_offered_without_any_project_opt_in(tmp_path):
+    """Same reasoning as [j] itself: offering grants nothing. The affordance is present,
+    the decision is per ticket."""
     mod = _load("virt_team_launcher")
-    assert mod._auto_offered(_project(tmp_path)) is False
-    assert mod._auto_offered(_project(tmp_path, {"autonomous_mode": True})) is True
+    assert mod._auto_offered(_project(tmp_path)) is True
 
 
-def test_a_malformed_preference_resolves_to_off(tmp_path):
-    """Fail-to-off, the same posture as every other gate here."""
+def test_a_project_can_remove_the_option_entirely(tmp_path):
+    """The kill switch has to actually kill it - a governance decision to forbid unattended
+    work in a project must hold."""
+    mod = _load("virt_team_launcher")
+    assert mod._auto_offered(_project(tmp_path, {"autonomous_mode": False})) is False
+    probe = _load("engage_probe")
+    resolved = probe.resolve_preferences(_project(tmp_path, {"autonomous_mode": False}))
+    assert resolved.get("autonomous_mode") is False
+
+
+def test_offering_is_not_choosing(tmp_path):
+    """THE property. Offered everywhere, but a run only becomes unattended when the ticket
+    screen returns the auto flag - the plain ref alone never carries it."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    assert mod._auto_offered(project) is True
+    assert "--auto" not in mod._jira_command(project, "SURV-1")
+    assert "--auto" in mod._jira_command(project, "SURV-1", auto=True)
+
+
+def test_a_malformed_preference_still_leaves_the_option_available(tmp_path):
+    """Only an explicit false removes it; a typo must not silently disable a feature, the
+    way it must not silently enable a dangerous one."""
     probe = _load("engage_probe")
     project = _project(tmp_path, {"autonomous_mode": "yes-please"})
-    assert probe.resolve_preferences(project).get("autonomous_mode") in (False, "yes-please")
+    assert probe.resolve_preferences(project).get("autonomous_mode") is True
     mod = _load("virt_team_launcher")
-    # The launcher coerces whatever the probe returns to a strict bool for the OFFER.
-    assert mod._auto_offered(project) in (True, False)
+    assert mod._auto_offered(project) is True
 
 
 # --- the consent boundary ---------------------------------------------------------------------

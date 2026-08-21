@@ -598,7 +598,7 @@ def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeyp
         "map_skeleton": False,
         "probe_cache": True,
         "evidence_room": False,  # opt-in, off by default (2026-08-19)
-        "autonomous_mode": False,  # opt-in unattended runs, off by default (2026-08-20)
+        "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
         "qa_depth": "auto",  # derived from work shape unless set (2026-08-20)
     }
     assert validate_state(state) == []
@@ -616,7 +616,7 @@ def test_init_settings_snapshot_builtin_defaults_when_no_preferences_file(tmp_pa
         "map_skeleton": False,
         "probe_cache": True,
         "evidence_room": False,  # opt-in, off by default (2026-08-19)
-        "autonomous_mode": False,  # opt-in unattended runs, off by default (2026-08-20)
+        "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
         "qa_depth": "auto",  # derived from work shape unless set (2026-08-20)
     }
 
