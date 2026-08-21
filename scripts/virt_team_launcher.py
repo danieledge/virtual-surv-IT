@@ -1272,6 +1272,12 @@ def _jira_decision(project_dir: Path) -> str:
     return _jira_command(project_dir, ref)
 
 
+def _now_iso() -> str:
+    import datetime
+
+    return datetime.datetime.now().isoformat(timespec="seconds")
+
+
 _AUTO_CONSENT_HOURS = 4
 _AUTO_PROVENANCE = ".auto-grant.json"
 
@@ -1286,6 +1292,12 @@ def _consent_marker_path(project_dir: Path) -> Path:
 
 def _auto_provenance_path(project_dir: Path) -> Path:
     return project_dir / ".claude" / _AUTO_PROVENANCE
+
+
+# Written into the marker body so the launcher can recognise its OWN grants later without
+# depending on a sidecar that may be gone (2026-08-21 audit C3). Never change it without a
+# migration: an older marker carrying the previous wording stops being recognised as ours.
+_GRANT_SIGNATURE = "granted by the human at the virt-surv launcher"
 
 
 def grant_execution_consent(project_dir: Path, slug: str, hours: int = _AUTO_CONSENT_HOURS):
@@ -1316,7 +1328,7 @@ def grant_execution_consent(project_dir: Path, slug: str, hours: int = _AUTO_CON
     now = datetime.datetime.now()
     expires = now + datetime.timedelta(hours=hours)
     body = (
-        "Execution consent granted by the human at the virt-surv launcher's auto-mode\n"
+        f"Execution consent {_GRANT_SIGNATURE}'s auto-mode\n"
         f"pre-flight screen for engagement '{slug}'.\n"
         f"granted: {now.isoformat(timespec='seconds')}\n"
         f"expires: {expires.isoformat(timespec='seconds')}\n"
@@ -1351,18 +1363,35 @@ def _expire_stale_auto_consent(project_dir: Path) -> bool:
 
     ONLY ever removes a marker this launcher granted (the sidecar proves it). A marker the
     human created by hand is theirs and is never touched."""
+    import datetime
+
     side = _auto_provenance_path(project_dir)
     marker = _consent_marker_path(project_dir)
-    if not side.is_file():
+    if not marker.is_file():
         return False
+    # Ownership is decided by the MARKER's own body, not by the sidecar's existence
+    # (2026-08-21 audit C3/S1). Keying on the sidecar failed both ways: delete or corrupt
+    # it and a launcher grant became permanent, while a stale sidecar left beside a
+    # hand-made marker would have deleted the human's. The body is written by
+    # grant_execution_consent and says so in plain text.
     try:
-        import datetime
-
+        body = marker.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    if _GRANT_SIGNATURE not in body:
+        return False  # a marker the human made by hand - never ours to remove
+    expires = None
+    try:
         data = json.loads(side.read_text(encoding="utf-8"))
         expires = datetime.datetime.fromisoformat(str(data.get("expires_at")))
     except Exception:
-        return False
-    if datetime.datetime.now() < expires:
+        expires = None
+    if expires is None:
+        # Ours, but the window is unreadable (sidecar gone, truncated, hand-edited). Close
+        # the gate rather than leave an unbounded grant open: a gate closed too early costs
+        # one static-only run, an unbounded one is a standing authorisation nobody granted.
+        pass
+    elif datetime.datetime.now() < expires:
         return False
     for path in (marker, side):
         try:
@@ -1406,6 +1435,20 @@ def _auto_run_decision(project_dir: Path, ref: str) -> str:
             ink.dim("    no data attestation - the run is limited to synthetic data"),
             file=err,
         )
+    # Hand the fact to the workspace mechanically (2026-08-21 audit C1). The session used
+    # to be relied on to run `mark-auto`, which nothing ever told it to do, so `auto`
+    # stayed False and the AUTO-* DoD gates skipped every real unattended engagement.
+    # engagement_state init consumes this file one-shot when it creates the pack.
+    try:
+        handoff = project_dir / ".claude" / ".auto-pending.json"
+        handoff.parent.mkdir(parents=True, exist_ok=True)
+        handoff.write_text(
+            json.dumps({"ref": ref, "slug": slug, "granted_at": _now_iso()}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        print(ink.warn("    could not record the unattended flag - the DoD gates may not fire"),
+              file=err)
     print(ink.good(f"    -> unattended run on {slug}; it will close PARTIAL for sign-off"), file=err)
     return _jira_command(project_dir, ref, auto=True)
 

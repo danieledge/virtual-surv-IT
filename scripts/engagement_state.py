@@ -91,6 +91,7 @@ import datetime as _dt
 import hashlib
 import json
 import os
+import pathlib
 import sys
 import time
 from pathlib import Path, PurePosixPath
@@ -1277,6 +1278,37 @@ def _write_state(artifacts_dir: Path, state: dict) -> None:
 # ---------------------------------------------------------------------------- commands
 
 
+AUTO_HANDOFF = ".auto-pending.json"
+
+
+def project_root_for(target_dir) -> pathlib.Path:
+    """Best-effort project root for a workspace path: the directory containing the
+    `artifacts/` tree, else the target's parent. Only used to locate the launcher's
+    handoff file, so a miss degrades to "not an auto run" rather than failing."""
+    p = pathlib.Path(target_dir).resolve()
+    for parent in (p, *p.parents):
+        if parent.name == "artifacts":
+            return parent.parent
+    return p.parent
+
+
+def _consume_auto_handoff(project_root: pathlib.Path) -> bool:
+    """True when the launcher started this as an unattended run, consuming the handoff.
+
+    The launcher knows the run is unattended; the session should not have to be told and
+    then remembered to record it (that indirection is exactly what made the AUTO-* gates
+    dead code - 2026-08-21 audit C1). ONE-SHOT: the file is deleted as it is read, so a
+    stale handoff cannot silently mark a later, attended engagement as autonomous."""
+    handoff = pathlib.Path(project_root) / ".claude" / AUTO_HANDOFF
+    try:
+        if not handoff.is_file():
+            return False
+        handoff.unlink()
+        return True
+    except OSError:
+        return False
+
+
 def _cmd_init(args: argparse.Namespace) -> int:
     # New engagements are WORKSPACED by default (artifacts/<slug>/); an explicit --dir
     # keeps flat semantics (tests, custom layouts, pre-0.31 behaviour).
@@ -1331,7 +1363,14 @@ def _cmd_init(args: argparse.Namespace) -> int:
         "qa_depth": None,
         # True only for a run the human authorised as unattended at the launcher. Drives
         # the AUTO-* Definition-of-Done gates: such a run may never read as signed off.
-        "auto": False,
+        #
+        # Read from the launcher's handoff file, NOT from an instruction (2026-08-21 audit,
+        # finding C1). It was previously set only by `mark-auto`, which nothing in any skill
+        # or document ever told a session to run - so `auto` stayed False on every real
+        # unattended engagement and both AUTO-* gates skipped it. The enforcement existed
+        # only in tests that hand-built packs with auto=True. An unattended run must not
+        # depend on the unattended session remembering to declare itself.
+        "auto": _consume_auto_handoff(project_root_for(args.dir)),
         "phase": args.phase,
         "team": [],
         "verdict": None,

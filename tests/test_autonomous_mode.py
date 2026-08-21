@@ -163,13 +163,87 @@ def test_the_auto_flag_rides_with_jira_and_only_when_asked(tmp_path):
     assert mod._jira_command(project, "SURV-9", auto=True).endswith("--jira SURV-9 --auto")
 
 
-def test_state_records_an_unattended_run_and_the_flag_is_one_way(tmp_path):
-    es = _load("engagement_state")
+def test_the_launcher_hands_the_unattended_flag_to_the_workspace(tmp_path):
+    """2026-08-21 audit finding C1 - the one that mattered.
+
+    `auto` was set only by a `mark-auto` subcommand that NOTHING in any skill or document
+    ever told a session to run, so it stayed False on every real unattended engagement and
+    both AUTO-* gates skipped the pack. The enforcement existed only inside tests that
+    hand-built packs with auto=True - the gate was checked, the path to it never was.
+
+    The fix removes the model from the loop: the launcher, which already knows the run is
+    unattended, drops a handoff file and `init` consumes it. This test drives that path
+    rather than asserting the flag, so it fails if the wiring is ever broken again."""
+    import subprocess
+
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / ".auto-pending.json").write_text(
+        json.dumps({"ref": "SURV-9", "slug": "SURV-9"}), encoding="utf-8"
+    )
     workspace = tmp_path / "artifacts" / "demo"
-    workspace.mkdir(parents=True)
-    state = {"schema": 2, "status": "in_progress", "engagement": {"slug": "demo"}, "auto": False}
-    (workspace / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
-    assert "mark-auto" in es.build_parser().format_help() if hasattr(es, "build_parser") else True
+    subprocess.run(
+        [sys.executable, "-m", "scripts.engagement_state", "init",
+         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
+        cwd=REPO_ROOT, capture_output=True, check=True,
+    )
+    state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
+    assert state["auto"] is True, "the unattended flag never reached the pack"
+    assert not (tmp_path / ".claude" / ".auto-pending.json").exists(), (
+        "the handoff must be one-shot - a stale one would mark a later attended run autonomous"
+    )
+
+
+def test_an_ordinary_engagement_is_never_marked_autonomous(tmp_path):
+    """The other half: no handoff, no auto. A false positive here would make every
+    engagement close PARTIAL and demand a ledger it never needed."""
+    import subprocess
+
+    workspace = tmp_path / "artifacts" / "demo"
+    subprocess.run(
+        [sys.executable, "-m", "scripts.engagement_state", "init",
+         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
+        cwd=REPO_ROOT, capture_output=True, check=True,
+    )
+    state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
+    assert state["auto"] is False
+
+
+def test_a_launcher_grant_expires_even_if_its_sidecar_is_gone(tmp_path):
+    """Audit C3: keying ownership on the sidecar meant deleting or corrupting it turned a
+    4-hour grant into a permanent one. Ownership now comes from the marker's own body."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    mod.grant_execution_consent(project, "SURV-4")
+    (project / ".claude" / ".auto-grant.json").unlink()
+    assert mod._expire_stale_auto_consent(project) is True
+    assert not (project / ".claude" / MARKER_NAME).exists()
+
+
+def test_a_corrupt_expiry_closes_the_gate_rather_than_leaving_it_open(tmp_path):
+    """Fail SAFE: an unreadable window costs one static-only run; an unbounded grant is a
+    standing authorisation nobody gave."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    mod.grant_execution_consent(project, "SURV-5")
+    (project / ".claude" / ".auto-grant.json").write_text("{ not json", encoding="utf-8")
+    assert mod._expire_stale_auto_consent(project) is True
+    assert not (project / ".claude" / MARKER_NAME).exists()
+
+
+def test_a_hand_made_marker_survives_a_stale_sidecar(tmp_path):
+    """Audit S1: with ownership keyed on the sidecar, a leftover one would have deleted a
+    marker the human created themselves. The body check is what makes claim 3 hold."""
+    import datetime
+
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    (project / ".claude" / MARKER_NAME).write_text("granted by hand\n", encoding="utf-8")
+    (project / ".claude" / ".auto-grant.json").write_text(
+        json.dumps({"expires_at": (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat()}),
+        encoding="utf-8",
+    )
+    assert mod._expire_stale_auto_consent(project) is False
+    assert (project / ".claude" / MARKER_NAME).is_file()
 
 
 # --- the Definition-of-Done gates --------------------------------------------------------------

@@ -165,6 +165,13 @@ it. Apply the items relevant to the deliverable type - not every item fits every
       deliverable contains no code** - an analysis, an investigation, a policy or threshold
       review - that section states in one line that it does not apply and why; it is never
       filled with invented coding advice (`docs/review/output-format.md`).
+- [ ] **Unattended runs close PARTIAL** - an engagement the human authorised as unattended
+      (`--auto`) reaches every line on this list **except human sign-off**, and must never
+      record itself as signed off. It closes **PARTIAL with "human sign-off" outstanding**,
+      and carries the **assumption ledger** - every question it answered on its own
+      judgement, with its reasoning - in the delivery report and one ticket comment.
+      Mechanically checked (`AUTO-NOT-PARTIAL`, `AUTO-LEDGER-MISSING`); the flag itself is
+      recorded by the launcher, not by the run. Detail: `.claude/skills/engage/references/auto-mode.md`.
 - [ ] **Critiqued against the named standard** - **opt-in, off by default**
       (`.claude/team-preferences.json` `standards_critique`, project-wide, configurable via
       `/preferences` or the installer - same mechanism as `regulatory_citations`, opposite

@@ -109,7 +109,8 @@ anything outward beyond that one ticket stays behind the normal preview-then-app
 gates, and the harness's own MCP permission prompts still apply to every call. This is
 the human-approval model by construction: anyone on the team can RAISE the ticket, but
 an engagement only starts when someone with the CLI picks it up in the menu - the
-launcher never talks to Jira itself, and nothing runs unattended. Ticket content is treated as data, never as
+launcher never talks to Jira itself, and no engagement starts without that pick - including
+an unattended one (see below), which needs it plus a separate authorisation. Ticket content is treated as data, never as
 instructions; the session's own safety gates (execution consent, data attestation) are
 answered by the human at the keyboard, not by ticket fields.
 

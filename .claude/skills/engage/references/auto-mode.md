@@ -53,5 +53,14 @@ Auto mode reaches every Definition-of-Done line **except human sign-off**, and m
 record itself as signed off. Close as PARTIAL with "human sign-off" outstanding, and say so
 in the first line of the closing comment (`AUTO-NOT-PARTIAL` enforces it).
 
+## Close the execution gate you were given
+
+If this run was granted execution consent at the pre-flight screen, **delete the consent
+marker as part of the close**. Deleting it is always permitted - closing a gate needs no
+consent, only opening one does. The launcher expires it at the next `virt-surv go`, but
+that may be hours away, and until then the grant is open to **every** session in this
+project rather than just this engagement (2026-08-21 audit). Leave a gate open no longer
+than the work needed it.
+
 Everything else - safety gates, guards, data handling, the disclaimers, the DoD - applies
 exactly as in an attended run. **Unattended changes who is asked, never what is required.**

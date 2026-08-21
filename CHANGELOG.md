@@ -67,6 +67,34 @@ the run **explicit stop conditions** so it parks rather than guesses.
     git repo, so two of its three suggestions dead-end. `repo_skeleton` - which works on any
     directory - now leads. The message also states that the rule matches the whole command,
     so a listing at the end of an `&&` chain blocks the earlier steps too.
+- **Adversarial audit of the Jira pipeline and auto mode, and the defects it found.** An
+  independent agent was asked to falsify seven safety claims. Three held (no run goes
+  unattended without a per-ticket human choice; a hand-made consent marker is never touched;
+  stdout stays the clean decision channel). The rest were real:
+  - **The AUTO-* Definition-of-Done gates were dead code.** They key on `state["auto"]`,
+    which was set only by a `mark-auto` subcommand that **nothing in any skill or document
+    ever told a session to run**. So `auto` stayed false on every real unattended run and
+    both gates skipped the pack. The enforcement existed only inside tests that hand-built
+    packs with `auto: true` - the gate was tested, the path to it never was. Fixed by
+    removing the model from the loop: the launcher, which already knows the run is
+    unattended, writes a one-shot handoff that `engagement_state init` consumes when it
+    creates the workspace. An unattended run no longer depends on the unattended session
+    remembering to declare itself.
+  - **A launcher-granted execution gate could become permanent.** Ownership was keyed on the
+    provenance sidecar, so deleting or corrupting that file turned a 4-hour grant into an
+    unbounded one, while a stale sidecar beside a hand-made marker would have deleted the
+    human's. Ownership now comes from the marker's own body, and an unreadable window closes
+    the gate rather than leaving it open - a gate closed early costs one static-only run, an
+    unbounded one is a standing authorisation nobody gave.
+  - **The grant outlived its engagement.** The guard tests existence only, so within the
+    window any session in that project saw an open gate. The close now drops the marker
+    (deleting is always permitted), rather than waiting for the next `virt-surv go`.
+  - **`docs/INTEGRATIONS.md` contradicted itself** - "nothing runs unattended" sat directly
+    above the section documenting unattended runs - and the **DoD said nothing about auto
+    mode at all**, so a reviewer had nothing to check the PARTIAL/ledger requirement against.
+  - **A test asserted nothing**: `assert X if hasattr(es, "build_parser") else True`, where
+    no `build_parser` exists, so it evaluated to `True` forever. It is replaced by tests that
+    drive the real path end to end.
 - **Autonomy is decided per ticket, not per project** (2026-08-21 owner decision: "auto
   should be per jira not entire project"). Shipping it as a project preference made a
   standing property out of a judgement about one piece of work - and a project flagged
