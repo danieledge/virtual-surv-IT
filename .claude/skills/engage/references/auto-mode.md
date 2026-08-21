@@ -12,6 +12,10 @@ anything else**. Ask no questions at all - not the opening batch, not a clarific
 
 - **Execution consent** is whatever the marker says. Unchanged from any other run: you
   still never create it, and its absence means static review only, findings 🧠 inferred.
+  **Static-only is a degraded run, not a blocked one** - carry on and say so. Park (below)
+  only if executing is the deliverable rather than an aid to it: "run the suite and report
+  the failures" cannot be answered statically, so park and say what is needed; a code
+  review can, so review it and mark the dynamic findings inferred.
 - **Data attestation** was given or withheld at the pre-flight screen. Withheld means
   synthetic data only.
 - **Deliver-back** to the ticket is approved by the pick, exactly as in an attended
