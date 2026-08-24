@@ -302,6 +302,12 @@ def _block(what: str) -> None:
         "CST_ALLOW_EXEC=1 in the launch environment;\n"
         "- config/hook edits need CST_ALLOW_CONFIG_EDIT=1 set by the human in the launch "
         "environment.\n"
+        "This matches on the COMMAND TEXT, not on what the command would actually DO: a\n"
+        "compound chain is blocked whole when ANY part names a protected path, and quoting\n"
+        "or a heredoc body does not exempt it. So run the steps SEPARATELY, and keep\n"
+        "protected paths out of command bodies that are not actually writing to them -\n"
+        "both live causes (2026-08-21 and 2026-08-24: a documentation heredoc that merely\n"
+        "mentioned the path, and a chain whose innocent steps were blocked with it).\n"
         "Deleting the marker (closing the gate) and read-only inspection remain allowed.\n"
     )
     sys.exit(2)
