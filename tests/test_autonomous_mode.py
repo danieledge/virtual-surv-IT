@@ -338,3 +338,49 @@ def test_the_skill_tells_an_auto_run_what_it_may_not_do():
     ).read_text(encoding="utf-8")
     for requirement in ("assumed-", "PARTIAL", "blocked"):
         assert requirement in detail, f"the reference never mentions {requirement}"
+
+
+# --- the gate must be REACHED, not merely present (2026-08-24 enforcement inventory) ---------
+
+
+def test_the_auto_gate_is_reached_through_the_real_entry_point(tmp_path):
+    """The lesson of finding C1, applied to its own fix.
+
+    Every other AUTO-* test here calls `_auto_mode_findings` directly - which proves the gate
+    WORKS while proving nothing about whether anything reaches it. That is exactly the shape
+    of the original defect: the gate was correct and unreachable, and a suite full of direct
+    calls stayed green throughout.
+
+    So this one drives `check_artifacts.main()`, the entry point the DoD close and CI
+    actually invoke, over a realistic tree, and asserts the finding surfaces in its OUTPUT.
+    If the gate is ever unregistered from the check list, this fails and the direct-call
+    tests do not."""
+    import subprocess
+
+    workspace = tmp_path / "artifacts" / "demo"
+    workspace.mkdir(parents=True)
+    (workspace / "engagement-state.json").write_text(
+        json.dumps(
+            {
+                "schema": 2,
+                "status": "closed",
+                "auto": True,
+                "engagement": {"slug": "demo"},
+                "decisions": {},
+                "verdict": "DoD: MET",
+            }
+        ),
+        encoding="utf-8",
+    )
+    # Invoked as a SUBPROCESS, the way CI and the DoD close invoke it - an in-process
+    # main() call resolved the artifacts dir against the test runner's cwd and silently
+    # checked this repo instead of the fixture.
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.check_artifacts", str(tmp_path / "artifacts")],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    printed = result.stdout + result.stderr
+    assert "AUTO-NOT-PARTIAL" in printed, (
+        "the gate is not reached from main() - it can be correct and still never run"
+    )
+    assert "AUTO-LEDGER-MISSING" in printed

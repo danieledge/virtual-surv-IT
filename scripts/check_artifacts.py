@@ -1974,7 +1974,15 @@ def check(artifacts_dir: Path) -> list[str]:
         # and no level satisfies it - this gate is about honesty, that one is about
         # existence.
         findings.extend(_qa_depth_findings(artifacts_dir))
-        findings.extend(_auto_mode_findings(artifacts_dir))
+    # OUTSIDE the `if non_test_code:` block above (2026-08-24). It was inside it, so the
+    # AUTO-* gates only ran when the engagement contained code files - and an unattended run
+    # is just as often an analysis, a review or a regulatory narrative, none of which ship
+    # code. Whether a run closed honestly has nothing to do with whether it wrote any.
+    # Found by the test that drives main() rather than calling the gate directly, which is
+    # the entire point of that test: the gate was correct, registered, and unreachable for
+    # most of the engagements it exists to police - the same defect as finding C1, one level
+    # down.
+    findings.extend(_auto_mode_findings(artifacts_dir))
 
     # The START-HERE living index: created at OPEN (with the first artifact), updated on
     # every artifact write, finalised at close (docs/templates/start-here.md). It is also
