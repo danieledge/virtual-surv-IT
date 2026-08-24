@@ -475,3 +475,37 @@ def test_the_reference_tells_the_run_not_to_ask_at_the_ceiling():
     for rung in ("`park`", "`light`", "`continue`"):
         assert rung in text
     assert "advisory pacing, not a hard stop" in text
+
+
+def test_the_light_rung_cannot_be_reached_on_the_models_own_judgement():
+    """`engage-light` says the profile is chosen by invoking that command and is never
+    inferred, nor suggested as a way around a gate - and the light rung IS a way around a
+    spend gate. It is legitimate only because a human pre-authorised it at the pre-flight,
+    and the reference has to say so or the two documents contradict each other.
+
+    Fragments, not sentences: the source is hard-wrapped, so asserting a full phrase tests
+    the line breaks rather than the meaning (which it did, on the first attempt)."""
+    text = (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "auto-mode.md"
+    ).read_text(encoding="utf-8")
+    light = text[text.index("- **`light`**") :][:900]
+    assert "pre-authorised" in light, "nothing distinguishes this from inferring the profile"
+    assert "own judgement" in light
+    assert "never checks or" in light, "must say what light does NOT remove"
+    assert "set-profile light" in light, "the rung must name the mechanism it uses"
+
+
+def test_a_light_downgrade_still_cannot_close_as_complete(tmp_path):
+    """The backstop that makes the light rung safe at all. Reduced ceremony bought mid-flight
+    must never read as a full close - and because AUTO-NOT-PARTIAL applies to EVERY auto run
+    regardless of the rung taken, an engagement that dropped to light and then claimed
+    DoD: MET is caught."""
+    ca = _load("check_artifacts")
+    findings = ca._auto_mode_findings(
+        _closed_auto_pack(
+            tmp_path,
+            {"assumed-1": "dropped to light at the $25 ceiling"},
+            "DoD: MET",
+        )
+    )
+    assert any("AUTO-NOT-PARTIAL" in f for f in findings)

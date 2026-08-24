@@ -46,7 +46,14 @@ tool outright). The human chose a rung at the pre-flight screen; it is on the st
 - **`park`** (the default) - park cleanly at the next gate, per the section below. The
   engagement resumes normally, which is why it is the default: a parked run is recoverable,
   a truncated one is not.
-- **`light`** - drop to the light profile for what remains and say so in the report.
+- **`light`** - `set-profile light` for what remains, recorded as a ledger entry naming the
+  figures that triggered it. Two constraints, both real: `engage-light` says the profile is
+  chosen by invoking it and is **never inferred, nor suggested as a way around a gate** - this
+  rung is legitimate ONLY because a human pre-authorised it at the pre-flight, so never reach
+  for it on your own judgement. And light removes documents and repetition, **never checks or
+  safety**: a mid-flight downgrade drops ceremony you had already promised, which is why the
+  always-PARTIAL close (below) matters more here than anywhere - it is what stops reduced
+  ceremony reading as a full one.
 - **`continue`** - carry on and record the overrun as an outstanding item. Never silently.
 
 Record which rung you applied as an assumption-ledger entry, with the figures. The ceiling is
