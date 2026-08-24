@@ -1443,12 +1443,32 @@ def _auto_run_decision(project_dir: Path, ref: str) -> str:
         handoff = project_dir / ".claude" / ".auto-pending.json"
         handoff.parent.mkdir(parents=True, exist_ok=True)
         handoff.write_text(
-            json.dumps({"ref": ref, "slug": slug, "granted_at": _now_iso()}, indent=2) + "\n",
+            json.dumps(
+                {
+                    "ref": ref,
+                    "slug": slug,
+                    "granted_at": _now_iso(),
+                    "auto": True,
+                    # The spend ceiling and the pre-answered degrade rung travel with the
+                    # flag: engagement_state consumes all of it when it creates the pack, so
+                    # the run never has to be told any of it.
+                    "engagement_usd": answers.get("engagement_usd"),
+                    "on_budget": answers.get("on_budget") or "park",
+                },
+                indent=2,
+            )
+            + "\n",
             encoding="utf-8",
         )
     except OSError:
         print(ink.warn("    could not record the unattended flag - the DoD gates may not fire"),
               file=err)
+    cap = answers.get("engagement_usd")
+    if cap:
+        print(
+            ink.dim(f"    ceiling ${cap} - at the cap it will {answers.get('on_budget', 'park')}"),
+            file=err,
+        )
     print(ink.good(f"    -> unattended run on {slug}; it will close PARTIAL for sign-off"), file=err)
     return _jira_command(project_dir, ref, auto=True)
 

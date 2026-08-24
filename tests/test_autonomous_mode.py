@@ -384,3 +384,94 @@ def test_the_auto_gate_is_reached_through_the_real_entry_point(tmp_path):
         "the gate is not reached from main() - it can be correct and still never run"
     )
     assert "AUTO-LEDGER-MISSING" in printed
+
+
+# --- the spend ceiling and the pre-answered ladder (2026-08-24) --------------------------------
+
+
+def test_the_handoff_carries_the_ceiling_and_the_chosen_rung(tmp_path):
+    """Unattended work is the one case where nobody is watching the spend, and the attended
+    degrade ladder is a QUESTION - which this run has nobody to ask, and which
+    `--permission-mode dontAsk` denies outright. So the rung is chosen once at the pre-flight
+    and travels with the flag."""
+    import subprocess
+
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / ".auto-pending.json").write_text(
+        json.dumps({"auto": True, "engagement_usd": 25, "on_budget": "light"}), encoding="utf-8"
+    )
+    workspace = tmp_path / "artifacts" / "demo"
+    subprocess.run(
+        [sys.executable, "-m", "scripts.engagement_state", "init",
+         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
+        cwd=REPO_ROOT, capture_output=True, check=True,
+    )
+    state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
+    assert state["auto"] is True
+    assert state["budget"]["engagement_usd"] == 25
+    assert state["auto_on_budget"] == "light"
+
+
+def test_an_unattended_run_defaults_to_parking_at_the_ceiling(tmp_path):
+    """Park is the default because a parked run is recoverable and a truncated one is not -
+    and because parking is already this mode's answer to every other cannot-proceed."""
+    import subprocess
+
+    (tmp_path / ".claude").mkdir(parents=True)
+    (tmp_path / ".claude" / ".auto-pending.json").write_text(
+        json.dumps({"auto": True}), encoding="utf-8"
+    )
+    workspace = tmp_path / "artifacts" / "demo"
+    subprocess.run(
+        [sys.executable, "-m", "scripts.engagement_state", "init",
+         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
+        cwd=REPO_ROOT, capture_output=True, check=True,
+    )
+    state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
+    assert state["auto_on_budget"] == "park"
+
+
+def test_an_attended_engagement_keeps_the_ladder(tmp_path):
+    """No pre-answer for an attended run: it still gets asked, which is correct - there is
+    somebody there."""
+    import subprocess
+
+    workspace = tmp_path / "artifacts" / "demo"
+    subprocess.run(
+        [sys.executable, "-m", "scripts.engagement_state", "init",
+         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
+        cwd=REPO_ROOT, capture_output=True, check=True,
+    )
+    state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
+    assert state["auto_on_budget"] is None
+    assert state["budget"] == {}
+
+
+def test_a_corrupt_handoff_still_marks_the_run_unattended(tmp_path):
+    """Losing the budget is a smaller error than losing the flag that makes the AUTO-* gates
+    fire, so an unreadable handoff is consumed as auto rather than treated as absent."""
+    import subprocess
+
+    (tmp_path / ".claude").mkdir(parents=True)
+    handoff = tmp_path / ".claude" / ".auto-pending.json"
+    handoff.write_text("{ not json", encoding="utf-8")
+    workspace = tmp_path / "artifacts" / "demo"
+    subprocess.run(
+        [sys.executable, "-m", "scripts.engagement_state", "init",
+         "--dir", str(workspace), "--slug", "demo", "--title", "Demo"],
+        cwd=REPO_ROOT, capture_output=True, check=True,
+    )
+    state = json.loads((workspace / "engagement-state.json").read_text(encoding="utf-8"))
+    assert state["auto"] is True
+    assert not handoff.exists(), "a corrupt handoff must still be consumed, not left to recur"
+
+
+def test_the_reference_tells_the_run_not_to_ask_at_the_ceiling():
+    text = (
+        REPO_ROOT / ".claude" / "skills" / "engage" / "references" / "auto-mode.md"
+    ).read_text(encoding="utf-8")
+    assert "do not offer the degrade ladder" in text
+    assert "auto_on_budget" in text
+    for rung in ("`park`", "`light`", "`continue`"):
+        assert rung in text
+    assert "advisory pacing, not a hard stop" in text

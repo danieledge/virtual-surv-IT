@@ -1285,6 +1285,10 @@ def project_root_for(target_dir) -> pathlib.Path:
     """Best-effort project root for a workspace path: the directory containing the
     `artifacts/` tree, else the target's parent. Only used to locate the launcher's
     handoff file, so a miss degrades to "not an auto run" rather than failing."""
+    # --dir is None on the default workspaced path (the caller defaults it AFTER this runs),
+    # and the workspace then lands under the cwd's artifacts/ - so cwd IS the project root.
+    if target_dir is None:
+        return pathlib.Path.cwd()
     p = pathlib.Path(target_dir).resolve()
     for parent in (p, *p.parents):
         if parent.name == "artifacts":
@@ -1292,7 +1296,14 @@ def project_root_for(target_dir) -> pathlib.Path:
     return p.parent
 
 
-def _consume_auto_handoff(project_root: pathlib.Path) -> bool:
+# What an unattended run does when spend reaches the cap. The attended flow offers a degrade
+# ladder through the question tool (orchestration guide) - which an unattended run has nobody
+# to ask, and which `--permission-mode dontAsk` denies outright. So the human picks a rung
+# ONCE at the pre-flight screen and the run applies it silently.
+AUTO_ON_BUDGET = ("park", "light", "continue")
+
+
+def _consume_auto_handoff(project_root: pathlib.Path) -> dict:
     """True when the launcher started this as an unattended run, consuming the handoff.
 
     The launcher knows the run is unattended; the session should not have to be told and
@@ -1302,16 +1313,28 @@ def _consume_auto_handoff(project_root: pathlib.Path) -> bool:
     handoff = pathlib.Path(project_root) / ".claude" / AUTO_HANDOFF
     try:
         if not handoff.is_file():
-            return False
+            return {}
+        payload = json.loads(handoff.read_text(encoding="utf-8"))
         handoff.unlink()
-        return True
-    except OSError:
-        return False
+        return payload if isinstance(payload, dict) else {"auto": True}
+    except (OSError, ValueError):
+        # Unreadable but present: the run IS unattended, which is the safety-relevant half.
+        # Losing the budget is a smaller error than losing the flag that makes the AUTO-*
+        # gates fire, so consume it and carry on rather than treating it as absent.
+        try:
+            handoff.unlink()
+        except OSError:
+            pass
+        return {"auto": True}
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
     # New engagements are WORKSPACED by default (artifacts/<slug>/); an explicit --dir
     # keeps flat semantics (tests, custom layouts, pre-0.31 behaviour).
+    # Read the launcher's handoff ONCE, before the state dict is built: it carries the
+    # unattended flag AND the pre-answered budget/degrade choice, and consuming it twice
+    # would lose whichever half read second.
+    _handoff = _consume_auto_handoff(project_root_for(args.dir))
     workspaced = args.dir is None
     if args.dir is None:
         safe = _safe_slug_join(_default_artifacts_dir(), args.slug)
@@ -1370,7 +1393,20 @@ def _cmd_init(args: argparse.Namespace) -> int:
         # unattended engagement and both AUTO-* gates skipped it. The enforcement existed
         # only in tests that hand-built packs with auto=True. An unattended run must not
         # depend on the unattended session remembering to declare itself.
-        "auto": _consume_auto_handoff(project_root_for(args.dir)),
+        "auto": bool(_handoff),
+        # Pre-answered at the pre-flight screen, because the attended degrade ladder is a
+        # question and an unattended run has nobody to ask (and dontAsk denies the question
+        # tool outright). Absent for an attended run, which keeps the ladder.
+        "auto_on_budget": (
+            _handoff.get("on_budget")
+            if _handoff.get("on_budget") in AUTO_ON_BUDGET
+            else ("park" if _handoff else None)
+        ),
+        "budget": (
+            {"engagement_usd": _handoff["engagement_usd"], "set": _dt.date.today().isoformat()}
+            if isinstance(_handoff.get("engagement_usd"), (int, float))
+            else {}
+        ),
         "phase": args.phase,
         "team": [],
         "verdict": None,

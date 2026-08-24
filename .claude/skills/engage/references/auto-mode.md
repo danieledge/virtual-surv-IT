@@ -35,6 +35,24 @@ run reviewable rather than merely fast: the questions do not disappear, they bec
 output a human checks. An auto run that answered its own questions and recorded none of
 them has hidden its judgement calls - and `check_artifacts` fails it (`AUTO-LEDGER-MISSING`).
 
+## Spend: the ladder is already answered
+
+`budget-status` runs at every gate exactly as in an attended run. What differs is what you do
+with `HEADROOM=approaching` or `exceeded`: **do not offer the degrade ladder** - that is a
+question, and this run has nobody to ask (and `--permission-mode dontAsk` denies the question
+tool outright). The human chose a rung at the pre-flight screen; it is on the state as
+`auto_on_budget`:
+
+- **`park`** (the default) - park cleanly at the next gate, per the section below. The
+  engagement resumes normally, which is why it is the default: a parked run is recoverable,
+  a truncated one is not.
+- **`light`** - drop to the light profile for what remains and say so in the report.
+- **`continue`** - carry on and record the overrun as an outstanding item. Never silently.
+
+Record which rung you applied as an assumption-ledger entry, with the figures. The ceiling is
+**advisory pacing, not a hard stop** - the org-side spend limit is the only real one, and
+attribution is project-wide, so treat the number as a signal to reach a gate, not a fence.
+
 ## Park, never guess
 
 If the request is ambiguous in a way that changes **what gets built** (not merely its

@@ -1482,34 +1482,51 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         return None
 
     g = glyphs(mod)
-    state = {"data": False, "exec": False, "confirmed": False}
+    # Cycling choices as well as toggles (2026-08-24). Unattended work is the one case where
+    # nobody is watching the spend, and the attended degrade ladder is a QUESTION - which an
+    # unattended run has nobody to ask, and which `--permission-mode dontAsk` denies outright.
+    # Both are therefore answered here, once, while a human is present.
+    CAPS = (0, 10, 25, 50, 100)
+    ON_BUDGET = ("park", "light", "continue")
+    state = {"data": False, "exec": False, "cap": 1, "on_budget": 0, "confirmed": False}
     idx = [0]
     rows = [
-        (
-            "data",
-            "Data is synthetic, masked or carries no PII/MNPI",
-            "your attestation; the session cannot verify it",
-        ),
-        (
-            "exec",
-            "Allow the session to RUN code unattended",
-            "grants the execution gate here, expiring, for this run",
-        ),
+        ("data", "toggle", "Data is synthetic or masked",
+         "no PII/MNPI - your attestation"),
+        ("exec", "toggle", "Allow the session to RUN code unattended",
+         "grants the gate here, expiring"),
+        ("cap", "cycle", "Spend ceiling for this engagement",
+         "advisory pacing, not a hard stop"),
+        ("on_budget", "cycle", "At the ceiling",
+         "the degrade ladder, answered up front"),
     ]
+
+    def _value(key):
+        if key == "cap":
+            return "no ceiling" if CAPS[state["cap"]] == 0 else f"${CAPS[state['cap']]}"
+        return {
+            "park": "park at next gate",
+            "light": "drop to light profile",
+            "continue": "carry on, report it",
+        }[ON_BUDGET[state["on_budget"]]]
 
     def _body():
         out = [("class:group", f"  {g['jira']}Unattended run: {ref}\n\n")]
         out.append(("class:warn", "  This session will not stop to ask you anything.\n\n"))
-        for i, (key, label, note) in enumerate(rows):
+        for i, (key, kind, label, note) in enumerate(rows):
             sel = idx[0] == i
-            on = state[key]
             out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
-            out.append(("class:on" if on else "class:off", f"{g['on'] if on else g['off']} "))
-            out.append(("class:sel" if sel else "", label))
+            if kind == "toggle":
+                on = state[key]
+                out.append(("class:on" if on else "class:off", f"{g['on'] if on else g['off']} "))
+                out.append(("class:sel" if sel else "", label))
+            else:
+                out.append(("class:sel" if sel else "", label))
+                out.append(("class:title", f"  {_value(key)}"))
             out.append(("", "\n"))
             out.append(("class:dim", f"        {note}\n"))
         out.append(("", "\n"))
-        out.append(("class:dim", "    Space toggles · Enter starts · Esc cancels\n"))
+        out.append(("class:dim", "    Space cycles · Enter starts · Esc cancels\n"))
         return out
 
     def _right():
@@ -1548,8 +1565,13 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
 
     @kb.add(" ")
     def _toggle(event):
-        key = rows[idx[0]][0]
-        state[key] = not state[key]
+        key, kind = rows[idx[0]][0], rows[idx[0]][1]
+        if kind == "toggle":
+            state[key] = not state[key]
+        elif key == "cap":
+            state["cap"] = (state["cap"] + 1) % len(CAPS)
+        else:
+            state["on_budget"] = (state["on_budget"] + 1) % len(ON_BUDGET)
 
     @kb.add("enter")
     def _start(event):
@@ -1576,4 +1598,9 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         return None
     if not state["confirmed"]:
         return AUTO_CANCELLED
-    return {"data_attested": state["data"], "allow_exec": state["exec"]}
+    return {
+        "data_attested": state["data"],
+        "allow_exec": state["exec"],
+        "engagement_usd": CAPS[state["cap"]] or None,
+        "on_budget": ON_BUDGET[state["on_budget"]],
+    }
