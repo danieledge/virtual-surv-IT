@@ -217,9 +217,114 @@ def _symbols_floor(path: Path) -> list[str]:
     ][:20]  # a runaway heading-shaped file (rare) still can't blow the per-file budget
 
 
+# --------------------------------------------------------------------------- regex tier
+#
+# WHY THIS TIER EXISTS (2026-08-24). Until now anything that was not Python or Markdown got
+# NOTHING from the skeleton beyond its own filename: tree-sitter and ctags are optional
+# probes, and neither is present on a locked-down corporate box (nor, as it happens, on the
+# dev box). Surveillance systems in banks are overwhelmingly Java, C#, SQL and Scala, so the
+# codebase map degraded to a file listing on exactly the work it was built for.
+#
+# This closes that without touching the constraint that caused it: pure stdlib, no compiled
+# wheel, no install, no network. Regex is a deliberate choice, not a shortcut - a real parser
+# for five languages cannot be vendored, and the alternative on offer was nothing at all.
+#
+# HONESTY ABOUT WHAT IT IS. Regex cannot parse these languages and does not pretend to. It
+# finds DECLARATION LINES, which is what a first-contact skeleton needs ("what is in this
+# file"), and it will miss things inside unusual formatting and occasionally over-match in a
+# comment or string. That is why it is its own tier: the tier name travels with the output,
+# so a reader knows an `ast` listing is exact and a `regex` listing is indicative. Anchored
+# at line starts (allowing indentation and modifiers) to keep the over-matching low.
+_TIER_REGEX = "regex"
+
+# Modifier soup that can precede a declaration in these languages, matched loosely on purpose.
+_MODS = r"(?:(?:public|private|protected|internal|static|final|abstract|override|virtual|sealed|async|partial|synchronized|native|transient|strictfp|implicit|lazy|open|case|suspend)\s+)*"
+
+_REGEX_RULES: dict[str, tuple[tuple[str, str], ...]] = {
+    ".java": (
+        (rf"^\s*{_MODS}(?:class|interface|enum|record)\s+(\w+)", "type"),
+        (rf"^\s*{_MODS}(?:[\w<>\[\],.?\s]+\s+)?(\w+)\s*\([^;{{]*\)\s*(?:throws [\w,.\s]+)?\{{", "method"),
+    ),
+    ".cs": (
+        (rf"^\s*{_MODS}(?:class|interface|enum|struct|record)\s+(\w+)", "type"),
+        (rf"^\s*{_MODS}(?:[\w<>\[\],.?\s]+\s+)?(\w+)\s*\([^;{{]*\)\s*\{{", "method"),
+    ),
+    ".scala": (
+        (rf"^\s*{_MODS}(?:class|trait|object|enum)\s+(\w+)", "type"),
+        (rf"^\s*{_MODS}def\s+(\w+)", "def"),
+    ),
+    ".kt": (
+        (rf"^\s*{_MODS}(?:class|interface|object|enum class)\s+(\w+)", "type"),
+        (rf"^\s*{_MODS}fun\s+(?:<[^>]+>\s*)?(?:[\w.]+\.)?(\w+)", "fun"),
+    ),
+    ".sql": (
+        (
+            r"^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:GLOBAL\s+|LOCAL\s+|TEMP\w*\s+)?"
+            r"(TABLE|VIEW|PROCEDURE|PROC|FUNCTION|INDEX|TRIGGER|SCHEMA|TYPE|MATERIALIZED VIEW)"
+            r"\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.\[\]\"`]+)",
+            "sql",
+        ),
+    ),
+}
+# JS/TS share a ruleset - common in surveillance dashboards and tooling.
+_REGEX_RULES[".ts"] = _REGEX_RULES[".tsx"] = _REGEX_RULES[".js"] = _REGEX_RULES[".jsx"] = (
+    (r"^\s*(?:export\s+)?(?:abstract\s+)?class\s+(\w+)", "class"),
+    (r"^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*(\w+)", "function"),
+    (r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*=>", "arrow"),
+)
+
+_REGEX_COMPILED = {
+    suffix: tuple((re.compile(pattern), kind) for pattern, kind in rules)
+    for suffix, rules in _REGEX_RULES.items()
+}
+_REGEX_MAX_LINES = 4000  # a generated 100k-line file must not cost the whole budget
+_REGEX_MAX_SYMBOLS = 40  # per file, same reasoning as the floor tier's heading cap
+_REGEX_SKIP_NAMES = frozenset({"if", "for", "while", "switch", "catch", "do", "else", "try", "using", "lock", "return"})
+
+
+def _symbols_regex(path: Path) -> list[str] | None:
+    """Declaration-line symbols for languages with no parser available here. None when the
+    suffix has no ruleset, so the dispatcher falls through to the floor exactly as before."""
+    rules = _REGEX_COMPILED.get(path.suffix.lower())
+    if rules is None:
+        return None
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    found: list[str] = []
+    seen: set[str] = set()
+    for line in text.splitlines()[:_REGEX_MAX_LINES]:
+        stripped = line.lstrip()
+        # Cheap comment guard - control-flow keywords that look like calls are handled by
+        # _REGEX_SKIP_NAMES below, but a commented-out declaration is pure noise.
+        if stripped.startswith(("//", "*", "#", "--", "/*")):
+            continue
+        for pattern, kind in rules:
+            match = pattern.match(line)
+            if not match:
+                continue
+            groups = [g for g in match.groups() if g]
+            name = groups[-1].strip('"`[]')
+            if name.lower() in _REGEX_SKIP_NAMES:
+                continue
+            # SQL's rule captures the object type too - report "table orders", not "sql
+            # orders". Knowing a name is a VIEW rather than a PROCEDURE is most of the value
+            # of seeing it at all in a surveillance schema.
+            shown = groups[0].lower() if kind == "sql" and len(groups) > 1 else kind
+            label = f"{shown} {name}"
+            if label not in seen:
+                seen.add(label)
+                found.append(label)
+            break
+        if len(found) >= _REGEX_MAX_SYMBOLS:
+            break
+    return found
+
+
 def extract_symbols(path: Path) -> tuple[list[str], str]:
-    """Tiered dispatcher: tree-sitter -> ctags -> stdlib ast (Python only) -> filename/heading
-    floor. Returns (symbols, tier_name) - the tier is surfaced in output so a reader knows how
+    """Tiered dispatcher: tree-sitter -> ctags -> stdlib ast (Python only) -> regex
+    (Java/C#/Scala/Kotlin/SQL/JS/TS) -> filename/heading floor. Returns (symbols, tier_name) - the tier is surfaced in output so a reader knows how
     much to trust the listing (an ast-derived def list is exact; a floor-tier heading scan is
     approximate)."""
     symbols = _symbols_tree_sitter(path)
@@ -232,6 +337,9 @@ def extract_symbols(path: Path) -> tuple[list[str], str]:
         symbols = _symbols_ast_python(path)
         if symbols is not None:
             return symbols, _TIER_AST
+    symbols = _symbols_regex(path)
+    if symbols is not None:
+        return symbols, _TIER_REGEX
     return _symbols_floor(path), _TIER_FLOOR
 
 
