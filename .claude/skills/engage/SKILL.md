@@ -285,8 +285,10 @@ creates the engagement's own WORKSPACE `artifacts/<slug>/` with its `engagement-
 workspace's `START-HERE.md` + `.html` from it** (the derived root registry
 `artifacts/ENGAGEMENTS.md` lists every engagement). Every artifact path from here on is
 WORKSPACE-relative, and when several engagements exist target yours with `--slug <slug>`; then
-`add-artifact engagement-brief.md --title "..."` lists the brief. **Write the brief's actual
-content (and render its HTML) before this call, not after** - registering the row first leaves
+`add-artifact engagement-brief.md --title "..."` lists the brief. **Order: `init` (from the project
+root - it resolves `artifacts/` from the CURRENT DIRECTORY), then write the brief and render
+its HTML, then `add-artifact`.** The brief cannot exist before `init`; what must not happen is
+registering it before writing it - that leaves
 `added_before_file_existed: true` on the entry, which the DoD backstop correctly flags as
 STALE-INDEX if the file is still missing whenever a turn ends (live 2026-08-12; incident-log
 #22). If you genuinely must register before the write for some reason, finish the write in the
