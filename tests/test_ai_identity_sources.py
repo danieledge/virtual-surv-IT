@@ -227,3 +227,59 @@ def test_unattended_detail_is_deferred_not_carried_at_every_open():
     body = detail.read_text(encoding="utf-8")
     for rule in ("assumed-", "PARTIAL", "blocked", "never create it"):
         assert rule in body, f"the deferred reference dropped {rule!r}"
+
+
+# --- a table that isn't a table (2026-08-24) ---------------------------------------------------
+
+
+def _collapsed(md_text, tmp_path):
+    from scripts.check_artifacts import _collapsed_table_findings
+
+    path = tmp_path / "doc.md"
+    path.write_text(md_text, encoding="utf-8")
+    return _collapsed_table_findings(path, md_text)
+
+
+def test_a_table_written_on_one_line_is_caught(tmp_path):
+    """Live report: a client-facing regulatory narrative shipped with its Document Control
+    table rendered as one paragraph of literal pipes, `|---|---|` and all. The renderer was
+    innocent - `tables` is enabled and a well-formed table renders fine - the SOURCE had the
+    whole table on a single line, which Markdown cannot see as a table by definition.
+
+    Worth a gate because the failure is silent and asymmetric: the .md looks passable to
+    whoever wrote it, and the .html is what the client opens."""
+    text = "# T\n\n**Document Control** | Field | Value | |---|---| | Title | X |\n"
+    assert any("TABLE-COLLAPSED" in f for f in _collapsed(text, tmp_path))
+
+
+def test_a_properly_formatted_table_is_clean(tmp_path):
+    text = "# T\n\n| Field | Value |\n|---|---|\n| Title | X |\n"
+    assert _collapsed(text, tmp_path) == []
+
+
+def test_a_table_inside_a_blockquote_is_clean(tmp_path):
+    """The false positive that would have killed this check: every template's Document
+    Control block quotes its table, and a first cut flagged 62 healthy files. A checker that
+    cries wolf gets switched off, which costs more than the defect it was written for."""
+    text = "# T\n\n> | Field | Value |\n> |---|---|\n> | Title | X |\n"
+    assert _collapsed(text, tmp_path) == []
+
+
+def test_a_collapsed_table_inside_a_blockquote_is_still_caught(tmp_path):
+    """Allowing blockquotes must not create a blind spot - the reported defect was itself in
+    a quoted Document Control block."""
+    text = "# T\n\n> **Doc control** | A | B | |---|---| | x | y |\n"
+    assert any("TABLE-COLLAPSED" in f for f in _collapsed(text, tmp_path))
+
+
+def test_this_repo_has_no_collapsed_tables():
+    """Runs the check over the repo's own docs and templates - the templates are what every
+    artifact is authored from, so a collapsed table in one would propagate to every client."""
+    from scripts.check_artifacts import _collapsed_table_findings
+
+    offenders = []
+    for md in sorted((REPO_ROOT / "docs").rglob("*.md")):
+        offenders += _collapsed_table_findings(
+            md, md.read_text(encoding="utf-8", errors="replace")
+        )
+    assert not offenders, "\n".join(offenders[:5])

@@ -364,6 +364,45 @@ def _qa_depth_findings(artifacts_dir: Path) -> list[str]:
     return findings
 
 
+# A Markdown table separator row is ONLY pipes, dashes, colons and spaces. Anything else on
+# the same line means the table was written collapsed onto one line, which Python-Markdown
+# renders as a paragraph of literal pipes rather than a table.
+_SEPARATOR_RUN_RE = re.compile(r"\|\s*:?-{3,}:?\s*\|")
+_PURE_SEPARATOR_RE = re.compile(r"^[|\s:-]+$")
+
+
+def _collapsed_table_findings(md: Path, text: str) -> list[str]:
+    """TABLE-COLLAPSED - a Markdown table written without line breaks (2026-08-24).
+
+    Live report: a client-facing regulatory narrative shipped with its Document Control
+    table rendered as one paragraph of literal pipes, `|---|---|` and all. The renderer was
+    innocent (`tables` is enabled and a well-formed table renders correctly); the SOURCE had
+    the whole table on a single line, which Markdown cannot see as a table by definition.
+
+    Worth a gate rather than a style note because the failure is silent and asymmetric: the
+    .md looks passable to whoever wrote it, the .html is what the client opens, and nothing
+    else in the pipeline compares the two. Detection is exact rather than heuristic - a
+    genuine separator row contains nothing but pipes, dashes, colons and spaces, so a
+    separator run sharing a line with other content is collapsed, always."""
+    out: list[str] = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not _SEPARATOR_RUN_RE.search(line):
+            continue
+        # Strip blockquote markers first: `> |---|---|` is a table inside a blockquote, which
+        # every template's Document Control block uses and which renders correctly. Without
+        # this the check flagged 62 healthy files - a checker that cries wolf gets switched
+        # off, which would cost more than the defect it was written for.
+        bare = re.sub(r"^\s*(?:>\s*)+", "", line).strip()
+        if _PURE_SEPARATOR_RE.match(bare):
+            continue  # a normal separator row on its own line
+        out.append(
+            f"TABLE-COLLAPSED: {md}:{number} has a Markdown table written on one line - it "
+            "renders as a paragraph of literal pipes, not a table (put each row, and the "
+            "|---|---| separator, on its own line and re-render the HTML)"
+        )
+    return out
+
+
 def check_agent_identity(text: str, where: Path) -> list[str]:
     """Flag artifacts where an agent persona could be read as a real person.
 
@@ -1829,6 +1868,7 @@ def check(artifacts_dir: Path) -> list[str]:
                 f"{md})"
             )
         text = md.read_text(encoding="utf-8", errors="replace")
+        findings.extend(_collapsed_table_findings(md, text))
         # Per-BLOCK impact check: split the file at each `### ` header and require each block
         # that opens with a 🔴/🟠 finding head to carry its own impact line. A global count let
         # one block with two impact lines mask another with none (2026-07-23 review).
