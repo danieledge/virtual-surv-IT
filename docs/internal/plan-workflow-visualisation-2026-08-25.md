@@ -1,6 +1,8 @@
 # Plan: a first-class workflow view - stages, models, cost, loops
 
-**Status:** proposal, not built. 2026-08-25.
+**Status:** BUILT 2026-08-25, off by default (`workflow_view`, machine + project).
+Steps 1-6 below all landed; this document is kept as the design record and the reasoning
+behind the choices, not as an outstanding proposal.
 **Ask (owner):** "make sure the interface has a nice representation of the workflow its
 following that's both informative and looks great. we should be able to see costs at each
 stage, loops that are happening etc" + "include what model used at each step, lets make this

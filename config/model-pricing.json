@@ -1,0 +1,25 @@
+{
+  "_comment": [
+    "Rates used to turn measured token counts into an ESTIMATED cost. Ships as EXAMPLE",
+    "DEFAULTS, the same convention as docs/scope-and-stack.md - replace them with the rates",
+    "your organisation actually pays, then update rates_as_of. Every figure derived from this",
+    "file is marked inferred in every view that shows it, and no view ever presents it as a",
+    "bill. A model that is not listed here shows its tokens with a cost of 'unknown' rather",
+    "than being priced from a guess: a silently wrong currency figure is worse than a visibly",
+    "missing one, and new model IDs will keep appearing."
+  ],
+  "rates_as_of": "2026-08-01",
+  "currency": "USD",
+  "unit": "per million tokens",
+  "verified_against_invoice": false,
+  "aliases": {
+    "claude-opus-5[1m]": "claude-opus-5",
+    "claude-sonnet-5[1m]": "claude-sonnet-5"
+  },
+  "models": {
+    "claude-opus-5":            {"input": 15.00, "output": 75.00, "cache_write": 18.75, "cache_read": 1.50},
+    "claude-sonnet-5":          {"input": 3.00,  "output": 15.00, "cache_write": 3.75,  "cache_read": 0.30},
+    "claude-fable-5":           {"input": 3.00,  "output": 15.00, "cache_write": 3.75,  "cache_read": 0.30},
+    "claude-haiku-4-5-20251001":{"input": 1.00,  "output": 5.00,  "cache_write": 1.25,  "cache_read": 0.10}
+  }
+}

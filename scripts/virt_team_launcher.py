@@ -324,6 +324,7 @@ _TOGGLE_PREFS = (
     ("autonomous mode offered", "autonomous_mode"),
     ("start work unattended", "autonomous_default"),
     ("unattended in a new window", "new_window"),
+    ("workflow view", "workflow_view"),
     ("data profiling tools", "data_profiling"),
     ("document map", "document_map"),
     ("guard daemon", "guard_daemon"),
@@ -462,6 +463,13 @@ _SETTING_HELP = {
         "typed request [n]. This is a kill switch, not an enabler: it is already on.",
         "Off removes the option from this project entirely. On does not start anything "
         "unattended by itself - see 'start work unattended' for that.",
+    ),
+    "workflow view": (
+        "A live trace of the workflow: every stage, the model it ran on, what it cost and "
+        "where the work looped back. Exports to .md/.html/.json/.csv.",
+        "OFF by default: it reads Claude Code's INTERNAL session transcript, which is not a "
+        "public API and can change without notice. Tokens are measured; cost is inferred "
+        "from a rate table you should replace with your own.",
     ),
     "unattended in a new window": (
         "Opens an UNATTENDED session in its own terminal window, so this launcher survives "
@@ -1911,6 +1919,8 @@ def _pt_menu_round(
     if shown:
         entries.append((("archive",), "archive engagement(s)", "a"))
     entries.append((("finished",), "browse done & archived engagements", "b"))
+    if _workflow_view_on(project_dir):
+        entries.append((("workflow",), "workflow: stages, models, cost", "w"))
     launch_label = "decide inside the session instead" if shown else "just launch"
     entries.append((("launch",), launch_label, None))
     default_index = 0
@@ -1987,6 +1997,16 @@ def _decision_from_pick(
             help_screen(project_dir, sys.modules[__name__])
         except Exception:
             pass  # cosmetic tier
+        return "__again__"
+    if pick[0] == "workflow":
+        # Attended runs get the trace too. The need was loudest for unattended work, but
+        # nothing about "what did this cost, and where did it loop" is autonomy-specific.
+        try:
+            from launcher_app import workflow_screen
+
+            workflow_screen(project_dir, sys.modules[__name__])
+        except Exception:
+            print(ink.dim("    workflow view unavailable here"), file=sys.stderr)
         return "__again__"
     if pick[0] == "artifacts":
         slug = _row_resume_token(shown[0]) if shown else ""
@@ -2181,6 +2201,8 @@ def _menu_round(
     if shown:
         settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
     settings_opt += f"   {ink.bold('[b]')} browse done & archived"
+    if _workflow_view_on(project_dir):
+        settings_opt += f"   {ink.bold('[w]')} workflow"
     print(settings_opt, file=err)
     enter_label = "just launch" if not shown else "decide inside the session instead"
     print(f"    {ink.dim(f'[Enter] {enter_label}')}   {ink.dim('[?] help')}", file=err)
@@ -2243,6 +2265,10 @@ def _menu_round(
         # Same mapping as the app and picker tiers, so [b] cannot mean one thing
         # there and another here.
         return _decision_from_pick(("finished",), project_dir, engagement_state, menu, shown)
+    if choice.lower() == "w" and _workflow_view_on(project_dir):
+        # Same reason: a key that works in the full-screen tier and silently does nothing in
+        # the plain one is how the two menus drifted apart the first time.
+        return _decision_from_pick(("workflow",), project_dir, engagement_state, menu, shown)
     engage_cmd = _engage_command(project_dir)
     shown = capped  # numbered picks refer to what was PRINTED
     if choice.lower() == "n":
@@ -3334,6 +3360,16 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
     except OSError:
         return False
     return proc.returncode == 0 and _plugin_enabled(project_dir)
+
+
+def _workflow_view_on(project_dir: Path) -> bool:
+    """Whether the workflow trace is available in this project. Off unless asked for."""
+    try:
+        import engage_probe
+
+        return bool(engage_probe.resolve_preferences(project_dir).get("workflow_view"))
+    except Exception:
+        return False
 
 
 def _pending_auto_slug(project_dir: Path) -> str:

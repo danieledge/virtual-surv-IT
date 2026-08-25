@@ -777,6 +777,16 @@ def resolve_preferences(project_dir: Path) -> dict:
     # pre-flight being a real gate is not a reason to make the cautious answer harder to
     # keep. Turning it on is one setting, per project, chosen deliberately.
     # The kill switch above still wins: a project that removed the option cannot be armed.
+    # workflow_view (2026-08-25): the stage/model/cost/loop trace, in the launcher and as an
+    # export. OFF by default at both tiers, on the owner's instruction, and the default is
+    # the right one on its own merits: it reads Claude Code's INTERNAL transcript file, which
+    # is not a public API and can change shape without notice. A feature built on someone
+    # else's private format should be something you switch on knowingly, not something that
+    # starts reading your session logs because you updated the plugin.
+    if "workflow_view" in prefs:
+        workflow_view_on = bool(prefs["workflow_view"])
+    else:
+        workflow_view_on = bool(machine_defaults.get("default_workflow_view", False))
     # new_window (2026-08-25): open an UNATTENDED session in its own terminal window rather
     # than replacing the launcher. Only consulted for unattended runs - see
     # virt_team_launcher._new_window_wanted for why that is not a preference but a
@@ -817,6 +827,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "autonomous_mode": autonomous_mode_on,
         "autonomous_default": autonomous_default_on,
         "new_window": new_window_on,
+        "workflow_view": workflow_view_on,
         "qa_depth": qa_depth,
     }
 
