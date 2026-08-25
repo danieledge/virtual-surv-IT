@@ -323,7 +323,7 @@ _TOGGLE_PREFS = (
     ("evidence room at close", "evidence_room"),
     ("autonomous mode offered", "autonomous_mode"),
     ("start work unattended", "autonomous_default"),
-    ("unattended in a new window", "new_window"),
+    ("open the session in a new window", "new_window"),
     ("workflow view", "workflow_view"),
     ("data profiling tools", "data_profiling"),
     ("document map", "document_map"),
@@ -471,11 +471,11 @@ _SETTING_HELP = {
         "public API and can change without notice. Tokens are measured; cost is inferred "
         "from a rate table you should replace with your own.",
     ),
-    "unattended in a new window": (
-        "Opens an UNATTENDED session in its own terminal window, so this launcher survives "
-        "to show you the run's live status instead of being replaced by it.",
-        "Attended runs are unaffected - you are already in that session. Verified on real "
-        "PowerShell; a machine with no windowed terminal opens in place exactly as before.",
+    "open the session in a new window": (
+        "Opens the Claude session in its own terminal window - attended or unattended - so "
+        "this launcher survives to show the workflow and the run's status.",
+        "Without it the session replaces this screen, which is what made the workflow hard "
+        "to watch. A machine with no windowed terminal opens in place exactly as before.",
     ),
     "start work unattended": (
         "Arms the unattended toggle for new work, so a run you were going to start "
@@ -3391,11 +3391,12 @@ def _pending_auto_slug(project_dir: Path) -> str:
 def _new_window_wanted(project_dir: Path) -> bool:
     """Whether to open the session in its own window rather than in this shell.
 
-    On for an unattended run by default and for nothing else. The reason is not preference:
-    an unattended run has nobody to ask anything, so the launcher's live view is the only
-    place its progress can be seen - and that view can only exist if the launcher is still
-    alive, which means the session cannot have replaced it. An attended run has a human in
-    the session already, so a second window would just be a second window."""
+    Applies to EVERY run since 2026-08-25, attended included. It was unattended-only, on the
+    reasoning that an attended run already has a human in the session - which ignored what
+    the launcher had become. With the monitor and the workflow view living here, the TUI is
+    worth keeping alive during any run, and it can only stay alive if the session did not
+    replace it. The owner put it plainly: unattended-only was "making it hard to view the
+    workflow"."""
     try:
         import engage_probe
 
@@ -3404,12 +3405,19 @@ def _new_window_wanted(project_dir: Path) -> bool:
         return False
 
 
-def _launch_unattended_in_window(project_dir: Path, decision: str, slug: str) -> bool:
+def _launch_in_window(project_dir: Path, decision: str, slug: str = "") -> bool:
     """Open the session beside the launcher and watch it. True if the window opened.
 
+    ATTENDED OR UNATTENDED (2026-08-25, owner: "it should open in a new window if attended
+    or unattended ... making it hard to view the workflow"). It was unattended-only, on the
+    reasoning that an attended run already has a human in the session so a second window
+    adds nothing. That reasoning ignored what the launcher became: with the monitor and the
+    workflow view living here, the TUI is worth keeping ALIVE during any run, and it can
+    only stay alive if the session did not replace it.
+
     False means nothing was launched and the caller must fall back to launching in-place -
-    never a silent no-op, because the human has already authorised the run by this point
-    and a launcher that quietly declined to start it would be the worst possible outcome."""
+    never a silent no-op, because the human has already committed to a run by this point and
+    a launcher that quietly declined to start it would be the worst possible outcome."""
     ink, err = _Ink(), sys.stderr
     try:
         import launch_terminal
@@ -3441,18 +3449,33 @@ def _launch_unattended_in_window(project_dir: Path, decision: str, slug: str) ->
         )
         return False
     print(ink.good(f"    -> session opened in a new {terminal} window"), file=err)
-    try:
-        from launcher_app import monitor_screen
-
-        monitor_screen(project_dir, sys.modules[__name__], slug)
-    except Exception:
-        # The run is already going; a monitor that cannot render must not look like a
-        # failed launch. Say where to look instead.
-        print(
-            ink.dim(f"    watching unavailable - the run is in artifacts/{slug}/"),
-            file=err,
-        )
+    _watch_after_launch(project_dir, slug)
     return True
+
+
+def _watch_after_launch(project_dir: Path, slug: str) -> None:
+    """Keep the launcher useful while the session runs in its own window.
+
+    An unattended run has a known workspace, so watch it. An attended one does not yet -
+    the session creates it - so offer the workflow instead, which needs no slug and is the
+    thing that was hard to see. Neither is essential: the run is already going, and a screen
+    that cannot render must never read as a failed launch."""
+    ink = _Ink()
+    try:
+        if slug:
+            from launcher_app import monitor_screen
+
+            monitor_screen(project_dir, sys.modules[__name__], slug)
+            return
+        if _workflow_view_on(project_dir):
+            from launcher_app import workflow_screen
+
+            workflow_screen(project_dir, sys.modules[__name__])
+            return
+    except Exception:
+        pass
+    where = f"artifacts/{slug}/" if slug else "the new window"
+    print(ink.dim(f"    the session is running - see {where}"), file=sys.stderr)
 
 
 def main() -> int:
@@ -3585,37 +3608,33 @@ def main() -> int:
         except Exception:
             pass  # the exit code is the contract; the explanation is best-effort
         return _ABORT_EXIT_CODE
+    # The session opens in its OWN window - attended or unattended - so the launcher
+    # survives to show the workflow and the run's status (2026-08-25). Returning the abort
+    # code afterwards is NOT an abort: it tells the wrapper the session has already been
+    # started, so it must not start a second one. Every failure falls through to the
+    # ordinary in-place launch below.
+    #
+    # A plain launch (empty decision) is included deliberately: it is still a session, and
+    # it is still worth watching. Only the decision string differs.
+    #
+    # Every reason NOT to open a window is said out loud (2026-08-25: "it opens in the same
+    # window", with no way to tell which condition declined). A control that quietly does
+    # nothing is the defect class this repo has met five times in a week; the fix each time
+    # is to make it speak.
+    if _new_window_wanted(project_dir):
+        if _launch_in_window(project_dir, decision, _pending_auto_slug(project_dir)):
+            return _ABORT_EXIT_CODE
+    else:
+        print(
+            _Ink().dim(
+                "    new window off - opening here ([c] -> open the session in a new window)"
+            ),
+            file=sys.stderr,
+        )
     if decision:
-        # An unattended run opens in its OWN window so the launcher survives to show its
-        # status (2026-08-25). Returning the abort code afterwards is not an abort: it
-        # tells the wrapper the session has already been started, so it must not start a
-        # second one. Any failure falls through to the ordinary in-place launch below.
-        # Every reason NOT to open a window is said out loud (2026-08-25: "it opens in the
-        # same window" - and there was no way to tell WHICH of three silent conditions
-        # declined). A control that quietly does nothing is the defect class this repo has
-        # hit five times in a week; the fix each time is to make it speak.
-        if "--auto" in decision.split():
-            if not _new_window_wanted(project_dir):
-                print(
-                    _Ink().dim(
-                        "    new window off for this project - opening here "
-                        "(turn on: [c] -> unattended in a new window)"
-                    ),
-                    file=sys.stderr,
-                )
-            else:
-                slug = _pending_auto_slug(project_dir)
-                if not slug:
-                    print(
-                        _Ink().warn(
-                            "    no unattended handoff recorded - opening here. The "
-                            "pre-flight did not complete, so this run is NOT unattended."
-                        ),
-                        file=sys.stderr,
-                    )
-                elif _launch_unattended_in_window(project_dir, decision, slug):
-                    return _ABORT_EXIT_CODE
-        print(decision)  # the ONLY thing that goes to stdout
+        # The ONLY thing that ever goes to stdout, and only when there IS one: a bare
+        # print() would put a newline on the decision channel, which the shell captures.
+        print(decision)
     return 0
 
 

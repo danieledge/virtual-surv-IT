@@ -109,7 +109,7 @@ def test_a_failed_window_falls_back_and_says_so(tmp_path, monkeypatch, capsys):
     project = _project(tmp_path)
     lt = _load("launch_terminal")
     monkeypatch.setattr(lt, "available", lambda: "")
-    assert mod._launch_unattended_in_window(project, "/engage --new --auto", "slug") is False
+    assert mod._launch_in_window(project, "/engage --new --auto", "slug") is False
     assert "opening in this one instead" in capsys.readouterr().err
 
 
@@ -119,7 +119,7 @@ def test_a_terminal_that_exists_but_will_not_start_also_falls_back(tmp_path, mon
     lt = _load("launch_terminal")
     monkeypatch.setattr(lt, "available", lambda: "xterm")
     monkeypatch.setattr(lt, "open_in_new_window", lambda *a, **k: False)
-    assert mod._launch_unattended_in_window(project, "/engage --new --auto", "slug") is False
+    assert mod._launch_in_window(project, "/engage --new --auto", "slug") is False
     err = capsys.readouterr().err
     # The message names the terminal AND the command it could not start, because "could not
     # open a new window" told the reader nothing they could act on.
@@ -147,15 +147,18 @@ def test_the_wrapper_is_told_to_stand_down_only_when_a_window_opened(tmp_path, m
             monkeypatch.setattr(mod, name, lambda *a, **k: None)
     monkeypatch.setattr(mod, "_resume_decision", lambda _d: "/engage --new --auto")
 
-    monkeypatch.setattr(mod, "_launch_unattended_in_window", lambda *a: True)
+    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: True)
     assert mod.main() == mod._ABORT_EXIT_CODE
 
-    monkeypatch.setattr(mod, "_launch_unattended_in_window", lambda *a: False)
+    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: False)
     assert mod.main() == 0, "a failed window must let the wrapper launch in place"
 
 
-def test_an_attended_run_is_never_moved_to_another_window(tmp_path, monkeypatch):
-    """You are already in that session; a second window would just be a second window."""
+def test_an_attended_run_gets_a_window_too(tmp_path, monkeypatch):
+    """2026-08-25: it was unattended-only, on the reasoning that an attended run already has
+    a human in the session. That ignored what the launcher had become - with the monitor and
+    the workflow view living here, the TUI is worth keeping alive during ANY run, and it can
+    only stay alive if the session did not replace it."""
     mod = _load("virt_team_launcher")
     project = _project(tmp_path)
     monkeypatch.chdir(project)
@@ -166,9 +169,10 @@ def test_an_attended_run_is_never_moved_to_another_window(tmp_path, monkeypatch)
             monkeypatch.setattr(mod, name, lambda *a, **k: None)
     monkeypatch.setattr(mod, "_resume_decision", lambda _d: "/engage --new --request-pending")
     called = []
-    monkeypatch.setattr(mod, "_launch_unattended_in_window", lambda *a: called.append(a) or True)
-    assert mod.main() == 0
-    assert called == [], "no --auto, no new window"
+    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: called.append(a) or True)
+    assert mod.main() == mod._ABORT_EXIT_CODE, "a launched window means the wrapper stands down"
+    assert called, "an attended run must also open in its own window"
+    assert called[0][1] == "/engage --new --request-pending"
 
 
 def test_the_auto_handoff_is_read_not_consumed(tmp_path):
@@ -358,7 +362,7 @@ def test_the_windowed_launch_uses_the_same_command_the_wrapper_would(tmp_path, m
         monkeypatch.setattr(launcher_app, "monitor_screen", lambda *a, **k: None)
     except Exception:
         pass
-    mod._launch_unattended_in_window(project, "/engage --new --auto", "alpha")
+    mod._launch_in_window(project, "/engage --new --auto", "alpha")
     assert seen["cmd"] == ["cc", "--resume", "/engage --new --auto"], (
         "the configured launch command must be word-split and used verbatim, as the wrapper "
         f"does - got {seen.get('cmd')}"
@@ -381,10 +385,38 @@ def test_an_unresolvable_command_is_never_reported_as_launched(tmp_path, monkeyp
     so a bogus executable reported success. The target is resolved BEFORE spawning now."""
     lt = _load("launch_terminal")
     monkeypatch.setattr(lt, "available", lambda: "xterm")
+    # Patch the SHELL PROBE, not Popen: subprocess.run uses Popen as a context manager, so
+    # replacing Popen wholesale breaks the very lookup under test.
+    monkeypatch.setattr(lt, "_shell_knows", lambda program, terminal: False)
     called = []
     monkeypatch.setattr(lt.subprocess, "Popen", lambda *a, **k: called.append(a) or None)
     assert lt.open_in_new_window(["definitely-not-a-real-program-xyz"], tmp_path) is False
     assert called == [], "nothing should even be spawned for an unresolvable command"
+
+
+def test_a_shell_alias_is_launchable_even_though_it_is_on_no_path(tmp_path, monkeypatch):
+    """The live cause of "it opens in the same window" (2026-08-25). The user's launch
+    command is `cc`, a PowerShell profile function - it is how they always start Claude, it
+    is on no PATH, and a which()-based pre-check rejected it, so every run fell back to the
+    same window. Verified on WINTEST: which('cc') is None while the shell resolves it."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "_which", lambda name: None)
+    monkeypatch.setattr(lt, "_shell_knows", lambda program, terminal: program == "cc")
+    assert lt._resolvable("cc", "powershell.exe") is True
+    assert lt._resolvable("not-an-alias", "powershell.exe") is False
+
+
+def test_a_probe_that_cannot_run_does_not_block_a_launch(tmp_path, monkeypatch):
+    """A pre-flight that blocks a launch it merely could not VERIFY would recreate the bug
+    it exists to prevent."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "_which", lambda name: None)
+
+    def _boom(*a, **k):
+        raise OSError("no shell here")
+
+    monkeypatch.setattr(lt.subprocess, "run", _boom)
+    assert lt._resolvable("cc", "powershell.exe") is True
 
 
 def test_the_new_window_default_is_on_now_it_is_verified(tmp_path):
@@ -417,15 +449,9 @@ def test_every_reason_not_to_open_a_window_is_said_out_loud(tmp_path, monkeypatc
     off = _project(tmp_path / "a", new_window=False)
     (off / ".claude" / ".auto-pending.json").write_text(json.dumps({"slug": "x"}), encoding="utf-8")
     assert _drive_main(mod, monkeypatch, off, "/engage --new --auto") == 0
-    assert "new window off for this project" in capsys.readouterr().err
+    assert "new window off" in capsys.readouterr().err
 
-    # 2. no handoff, so the run is not actually unattended
-    nohand = _project(tmp_path / "b", new_window=True)
-    assert _drive_main(mod, monkeypatch, nohand, "/engage --new --auto") == 0
-    err = capsys.readouterr().err
-    assert "no unattended handoff" in err and "NOT unattended" in err
-
-    # 3. no terminal available
+    # 2. no terminal available
     ok = _project(tmp_path / "c", new_window=True)
     (ok / ".claude" / ".auto-pending.json").write_text(json.dumps({"slug": "x"}), encoding="utf-8")
     lt = _load("launch_terminal")
@@ -434,10 +460,19 @@ def test_every_reason_not_to_open_a_window_is_said_out_loud(tmp_path, monkeypatc
     assert "no windowed terminal found" in capsys.readouterr().err
 
 
-def test_an_attended_run_says_nothing_about_windows(tmp_path, monkeypatch, capsys):
-    """The one case that must stay quiet: no --auto, no window, nothing to explain."""
+def test_a_plain_launch_also_opens_in_a_window(tmp_path, monkeypatch):
+    """Pressing Enter with nothing pre-seeded is still a session, and still worth watching.
+    Only the decision string differs - and it must stay OFF stdout when empty, because a
+    bare newline on the decision channel is captured by the shell."""
     mod = _load("virt_team_launcher")
     project = _project(tmp_path, new_window=True)
-    assert _drive_main(mod, monkeypatch, project, "/engage --new --request-pending") == 0
-    err = capsys.readouterr().err
-    assert "window" not in err.lower()
+    seen = []
+    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: seen.append(a) or True)
+    import contextlib
+    import io
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        rc = _drive_main(mod, monkeypatch, project, "")
+    assert rc == mod._ABORT_EXIT_CODE
+    assert seen and seen[0][1] == ""
+    assert out.getvalue() == "", "an empty decision must put nothing on stdout"

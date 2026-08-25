@@ -35,6 +35,9 @@ _WINDOWS_TIERS = ("wt.exe", "pwsh.exe", "powershell.exe", "cmd.exe")
 # How long to wait for a spawned terminal to prove it did not die on its argv. Short enough
 # not to be felt, long enough for a bad command line to fail.
 _START_GRACE = 1.5
+# Asking the shell whether it knows a command starts a shell, which on Windows is not fast.
+# Generous, because timing out here means falling back to a same-window launch.
+_RESOLVE_TIMEOUT = 20
 
 _POSIX_TIERS = (
     "x-terminal-emulator",
@@ -95,8 +98,17 @@ def _posix_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
     return [exe, "-e", "sh", "-c", f"cd {_quote(str(cwd))} && {joined}"]
 
 
-def _resolvable(program: str) -> bool:
-    """Can this actually be started? An absolute path that exists, or something on PATH."""
+def _resolvable(program: str, terminal: str = "") -> bool:
+    """Can the SHELL that will run this actually start it?
+
+    `which` is the wrong authority and assuming otherwise broke a real setup (2026-08-25:
+    the user's launch command is `cc`, a PowerShell alias defined in their profile - it is
+    how they always start Claude, it is on no PATH, and the pre-check rejected it, so the
+    session fell back to the same window every time). A launch command may legitimately be
+    an alias, a function or a cmdlet; only the shell knows.
+
+    So: cheap checks first, and if those fail, ASK THE SHELL rather than conclude. Nothing
+    is more authoritative than the thing that would run it."""
     if not program:
         return False
     try:
@@ -105,7 +117,42 @@ def _resolvable(program: str) -> bool:
             return candidate.is_file()
     except (OSError, ValueError):
         return False
-    return _which(program) is not None
+    if _which(program) is not None:
+        return True
+    return _shell_knows(program, terminal)
+
+
+def _shell_knows(program: str, terminal: str) -> bool:
+    """Ask the launching shell whether it can resolve `program` - aliases and all.
+
+    Costs one short-lived process, spent once on an unattended launch, and only when the
+    cheap checks have already failed. Anything unexpected answers True: this is a
+    pre-flight, and a pre-flight that blocks a launch it merely could not verify would
+    recreate the bug it exists to prevent."""
+    try:
+        if sys.platform == "win32" and terminal in ("pwsh.exe", "powershell.exe"):
+            # The PROFILE is loaded (no -NoProfile), which is where an alias like `cc`
+            # lives - the same reason it works in the window the human already has open.
+            exe = _which(terminal) or terminal
+            probe = subprocess.run(  # noqa: S603 - argv built here, never shell
+                # No -NoProfile, deliberately: the profile is exactly where an alias like
+                # `cc` is defined, and skipping it would make the probe answer a different
+                # question from the one that matters.
+                [exe, "-NoLogo", "-Command",
+                 f"if (Get-Command {_ps_quote(program)} -ErrorAction SilentlyContinue) "
+                 "{exit 0} else {exit 1}"],
+                capture_output=True, timeout=_RESOLVE_TIMEOUT,
+            )
+            return probe.returncode == 0
+        if sys.platform != "win32":
+            probe = subprocess.run(  # noqa: S603 - argv built here, never shell
+                ["sh", "-lc", f"command -v {_quote(program)} >/dev/null 2>&1"],
+                capture_output=True, timeout=_RESOLVE_TIMEOUT,
+            )
+            return probe.returncode == 0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return True  # could not ask; do not block a launch on a failed question
+    return True
 
 
 def _quote(text: str) -> str:
@@ -156,7 +203,7 @@ def open_in_new_window(command: list[str], cwd: Path) -> bool:
     # WINTEST, PowerShell 5.1, 2026-08-25: a bogus executable reported True). The realistic
     # failure is `claude` not being on PATH for the spawned window, and this catches exactly
     # that, before the caller has been told to stand down.
-    if command and not _resolvable(command[0]):
+    if command and not _resolvable(command[0], terminal):
         return False
     try:
         if sys.platform == "darwin":
