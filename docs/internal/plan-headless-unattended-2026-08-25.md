@@ -103,8 +103,13 @@ have one.
 
 ## 7. Build order
 
-1. `headless_run.py` - argv construction and stream decoding, tested against captured
-   `stream-json` output. No process control yet.
+1. ~~`headless_run.py` - argv construction and stream decoding, tested against captured
+   `stream-json` output. No process control yet.~~ **BUILT 2026-08-25.** Three corrections
+   came from the real capture rather than the documentation, and none would have been
+   written from reading alone: `subtype` says "success" on a run that failed (`is_error` is
+   the truth); `modelUsage` publishes per-model `costUSD` *and* `canonicalModel`, so nothing
+   needs a rate table; and `rate_limit_event` is a status report carrying window utilisation,
+   not a block - treating its presence as "rate limited" flagged every healthy run.
 2. Process supervision: start, monitor, terminate cleanly, survive the launcher exiting.
 3. The pre-flight row, and `--session-id` recorded on the pack at init.
 4. Monitor reads the live state.
