@@ -176,9 +176,29 @@ case "${1##*/}" in
 	engage_probe_prefetch.py) _daemon_target="engage_probe_prefetch" ;;
 esac
 if [ -n "$_daemon_target" ]; then
+	# ON BY DEFAULT since 2026-08-25 (owner decision), with the same two-tier,
+	# project-wins precedence the Python preferences use. It was opt-in while it was new;
+	# it has since been measured at ~625ms non-daemon against ~211ms daemon-served per
+	# invocation on Windows, and both every-prompt hooks now route through it, so the
+	# default was costing every user that difference on every call to protect against a
+	# risk that has not materialised.
+	#
+	# Fail-safe direction is deliberate: anything unreadable, absent or unparseable leaves
+	# the daemon ON, because the fallback path it replaces is slower, never unsafe - the
+	# daemon runs the SAME guard code in a persistent process. Only an explicit false
+	# turns it off.
+	_use_daemon=1
+	_inst="${XDG_CONFIG_HOME:-$HOME/.config}/virt-surv-it/installer.json"
+	if [ -f "$_inst" ] && grep -q '"default_guard_daemon" *: *false' "$_inst" 2>/dev/null; then
+		_use_daemon=0
+	fi
 	_prefs="$_project_root/.claude/team-preferences.json"
-	if [ -f "$_prefs" ] && grep -q '"guard_daemon" *: *true' "$_prefs" 2>/dev/null; then
-		_use_daemon=1
+	if [ -f "$_prefs" ]; then
+		if grep -q '"guard_daemon" *: *false' "$_prefs" 2>/dev/null; then
+			_use_daemon=0
+		elif grep -q '"guard_daemon" *: *true' "$_prefs" 2>/dev/null; then
+			_use_daemon=1
+		fi
 	fi
 fi
 DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
