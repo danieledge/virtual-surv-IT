@@ -693,3 +693,66 @@ def test_a_long_request_is_never_truncated(tmp_path):
     body = _request_body(mod._new_command(project, text))
     assert body == text
     assert "sentence number 59" in body
+
+
+# --- arming vs offering (2026-08-25, owner: "i dont understand why we wouldnt have an auto
+# --- param then") ---------------------------------------------------------------------------
+#
+# autonomous_mode is a KILL SWITCH that already defaults to on, so "turning auto mode on"
+# changed nothing observable - a setting that reads as an enabler but only ever removes an
+# option. autonomous_default is the enabler it implied: it arms the unattended toggle for new
+# work. The line these tests defend is that arming changes the default ANSWER to one question
+# and never removes a question - the pre-flight still runs.
+
+
+def _prefs(project, **kv):
+    (project / ".claude" / "team-preferences.json").write_text(json.dumps(kv), encoding="utf-8")
+    return project
+
+
+def test_arming_is_off_unless_asked_for(tmp_path):
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    assert mod._auto_offered(project) is True, "the option is offered by default"
+    assert mod._auto_armed(project) is False, "but nothing is armed by default"
+
+
+def test_a_project_can_arm_unattended_for_new_work(tmp_path):
+    mod = _load("virt_team_launcher")
+    project = _prefs(_project(tmp_path), autonomous_default=True)
+    assert mod._auto_armed(project) is True
+
+
+def test_the_kill_switch_still_wins_over_arming(tmp_path):
+    """Otherwise a project that removed the option could still start armed runs - the two
+    settings would contradict each other and the more permissive one would win, which is the
+    wrong way round for anything to do with autonomy."""
+    mod = _load("virt_team_launcher")
+    project = _prefs(_project(tmp_path), autonomous_mode=False, autonomous_default=True)
+    assert mod._auto_offered(project) is False
+    assert mod._auto_armed(project) is False
+
+
+def test_arming_never_skips_the_preflight(tmp_path):
+    """The property that makes arming safe. The pre-flight is where data attestation,
+    execution consent and the spend ceiling are answered; an armed run that bypassed it would
+    be standing autonomy, which is exactly what the per-ticket rule exists to prevent."""
+    mod = _load("virt_team_launcher")
+    project = _prefs(_project(tmp_path), autonomous_default=True)
+    calls = []
+
+    class _Cancelled:
+        pass
+
+    import types
+    fake = types.SimpleNamespace(
+        AUTO_CANCELLED=_Cancelled,
+        auto_preflight_screen=lambda p, m, ref: calls.append(ref) or None,
+    )
+    sys.modules["launcher_app"] = fake
+    try:
+        decision = mod._auto_run_decision(project, "tune thresholds", request_text="tune thresholds")
+    finally:
+        sys.modules.pop("launcher_app", None)
+    assert calls == ["tune thresholds"], "the pre-flight must be consulted every time"
+    assert decision == "", "a pre-flight that cannot run must NOT start an unattended run"

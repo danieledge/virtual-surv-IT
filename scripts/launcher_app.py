@@ -822,7 +822,7 @@ def jira_screen(project_dir: Path, mod, output=None):
     configured = mod._jira_enabled(project_dir)
     # Offered only where the project opted in; off by default (2026-08-20 owner decision).
     auto_offered = mod._auto_offered(project_dir)
-    auto = [False]
+    auto = [mod._auto_armed(project_dir)]  # pre-armed only if the project asked
 
     def _detected():
         m = mod._JIRA_KEY_RE.search(buf[0])
@@ -1662,7 +1662,7 @@ def request_screen(project_dir: Path, mod, output=None):
 
     g = glyphs(mod)
     buf = [""]
-    auto = [False]
+    auto = [mod._auto_armed(project_dir)]  # pre-armed only if the project asked
     result = {"v": REQUEST_SKIPPED}
     auto_offered = mod._auto_offered(project_dir)
 

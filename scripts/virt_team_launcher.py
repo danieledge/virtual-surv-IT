@@ -321,7 +321,8 @@ _TOGGLE_PREFS = (
     ("codebase-map skeleton", "map_skeleton"),
     ("probe pre-cache at go", "probe_cache"),
     ("evidence room at close", "evidence_room"),
-    ("autonomous jira mode", "autonomous_mode"),
+    ("autonomous mode offered", "autonomous_mode"),
+    ("start work unattended", "autonomous_default"),
     ("data profiling tools", "data_profiling"),
     ("document map", "document_map"),
     ("guard daemon", "guard_daemon"),
@@ -455,11 +456,18 @@ _SETTING_HELP = {
         "On by default: it is SAFER than the alternative, which is an agent reading rows "
         "into context. Off only where no tool may touch client data at all.",
     ),
-    "autonomous jira mode": (
-        "Whether [j] may OFFER an unattended run. Autonomy is chosen per ticket: the "
-        "unattended toggle, the pre-flight confirmation, and a separate tick to run code.",
-        "Off removes the option from this project. On does NOT mean runs go unattended - "
-        "none does unless you choose it, and one always closes PARTIAL for sign-off.",
+    "autonomous mode offered": (
+        "Whether an unattended run may be OFFERED at all - from a Jira ticket [j] or a "
+        "typed request [n]. This is a kill switch, not an enabler: it is already on.",
+        "Off removes the option from this project entirely. On does not start anything "
+        "unattended by itself - see 'start work unattended' for that.",
+    ),
+    "start work unattended": (
+        "Arms the unattended toggle for new work, so a run you were going to start "
+        "unattended starts that way without reaching for Ctrl-A each time.",
+        "It changes the default ANSWER, never removes the question: an armed run still "
+        "stops at the pre-flight, where you attest the data, allow code and set the "
+        "ceiling. Off by default - unattended stays opt-in, per project.",
     ),
     "qa depth": (
         "How much INDEPENDENT QA a build buys. auto reads the work; quick narrows what "
@@ -1765,6 +1773,22 @@ def _new_decision(project_dir: Path, engagement_state=None, menu=None, shown=Non
             return decision
     print(ink.dim("    -> starting new with your request"), file=sys.stderr)
     return _new_command(project_dir, request)
+
+
+def _auto_armed(project_dir: Path) -> bool:
+    """Whether the unattended toggle starts ON for new work in this project.
+
+    The DEFAULT ANSWER to one question, never the removal of a question: an armed run still
+    stops at the pre-flight, where data attestation, execution consent and the spend ceiling
+    are answered by a human. Off unless the project (or machine) asked for it - see
+    engage_probe.resolve_preferences for why arming stays opt-in while the kill switch
+    does not."""
+    try:
+        import engage_probe
+
+        return bool(engage_probe.resolve_preferences(project_dir).get("autonomous_default"))
+    except Exception:
+        return False
 
 
 def _auto_offered(project_dir: Path) -> bool:

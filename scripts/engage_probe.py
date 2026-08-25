@@ -760,6 +760,28 @@ def resolve_preferences(project_dir: Path) -> dict:
     # there too. A project-wide "this project runs autonomously" mode was the wrong shape -
     # it made a standing property out of a per-piece-of-work decision.
     autonomous_mode_on = prefs.get("autonomous_mode", True) is not False
+    # autonomous_default (2026-08-25, owner: "i dont understand why we wouldnt have an auto
+    # param then"). The kill switch above defaults to ON, so turning "auto mode on" changed
+    # nothing observable - a setting that reads as an enabler but only ever removes an
+    # option is a genuinely confusing shape, and this is the enabler it implied.
+    #
+    # It ARMS the unattended toggle for new work, so the run you were going to start
+    # unattended starts that way without reaching for Ctrl-A every time. It does NOT skip
+    # the pre-flight: that screen is the authorisation, it is where data attestation,
+    # execution consent and the spend ceiling are answered, and an unattended run must
+    # never begin without a human passing through it. Arming changes the DEFAULT ANSWER to
+    # one question; it never removes the question. OFF by default at both tiers (owner's
+    # decision, 2026-08-25, after briefly trying the opposite): unattended stays opt-in.
+    # A project inheriting armed autonomy from a machine setting nobody remembers choosing
+    # is the standing-autonomy shape the per-ticket rule exists to prevent, and the
+    # pre-flight being a real gate is not a reason to make the cautious answer harder to
+    # keep. Turning it on is one setting, per project, chosen deliberately.
+    # The kill switch above still wins: a project that removed the option cannot be armed.
+    if "autonomous_default" in prefs:
+        autonomous_default_on = bool(prefs["autonomous_default"])
+    else:
+        autonomous_default_on = bool(machine_defaults.get("default_autonomous_default", False))
+    autonomous_default_on = autonomous_default_on and autonomous_mode_on
     # qa_depth (2026-08-20): how much INDEPENDENT QA a build buys. "auto" derives it from
     # the work shape; "deep" is today's full pass; "quick" narrows what gets AUTHORED
     # (not what gets run) and always closes DoD: PARTIAL. Deliberately no "none" - QA's
@@ -782,6 +804,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "guard_daemon": guard_daemon_on,
         "evidence_room": evidence_room_on,
         "autonomous_mode": autonomous_mode_on,
+        "autonomous_default": autonomous_default_on,
         "qa_depth": qa_depth,
     }
 
