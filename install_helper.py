@@ -1218,7 +1218,13 @@ def check_for_update_upfront(cfg: dict, style: Style, args) -> None:
     # was option 3 (found 2026-08-25) - a number in prose is a number that goes stale the
     # first time the menu is reordered, and nothing tells you.
     _diag = next((k for k, v in MENU_ACTIONS.items() if v == "diagnostics"), "3")
-    print(style.dim(f"   Pick option 1 to update, or Diagnostics ({_diag}) -> 1 to preview first."))
+    _upd = next((k for k, v in MENU_ACTIONS.items() if v == "update"), "u")
+    print(
+        style.dim(
+            f"   Pick option {_upd} for a quick update (new code + plugin, keeps your "
+            f"settings), or Diagnostics ({_diag}) -> 1 to preview first."
+        )
+    )
     print("")
 
 
@@ -1274,6 +1280,16 @@ MENU_ACTIONS = {
     "3": "diagnostics",
     "4": "advanced",
     "5": "howto",
+    # 2026-08-25: updating used to mean option 1 - the whole 13-step install, pip and all,
+    # re-asking every question the human had already answered. That is a reason not to
+    # update, which is the worst thing a plugin's update path can be.
+    #
+    # A LETTER, not a number, and not for looks. Inserting it as "2" shifted every option
+    # below it, and the scripted menu tests immediately began selecting different actions
+    # than they meant to - one landing on this very update step and running live git
+    # operations until the suite hung. Renumbering a menu silently re-points every stored
+    # keystroke: in tests, in documentation, and in muscle memory.
+    "u": "update",
     "q": "quit",
 }
 
@@ -1347,11 +1363,12 @@ def choose_action(style: Style) -> str:
         print("")
         print(s.bold("What can I do for you?"))
         options = (
-            ("1", "Install or update the team (this machine - full run, recommended)"),
+            ("1", "Install or update the team (this machine - full run)"),
             ("2", "Configure a project (per project - enable/permissions/preferences/model)"),
             ("3", "Diagnostics..."),
             ("4", "Advanced / one-off settings..."),
             ("5", "Help: using the plugin (Morgan explains)"),
+            ("u", "Update only (quick - new code + plugin, keeps every setting)"),
             ("q", "Quit"),
         )
         for key, text in options:
@@ -3171,6 +3188,33 @@ class Installer:
                 ),
                 ("Status line (optional)", self.statusline_step),
                 ("Enable for a project (optional)", self.enable_step),
+            ]
+        if self.subset == "update":
+            # JUST the update (2026-08-25 user request: "the only way to update the plugin is
+            # via option 1 and that executes a full cycle, pip the lot - how can we safely
+            # allow a quick update without the full 13-step process where the user needs to
+            # confirm everything again").
+            #
+            # Six steps, and the omissions are the point. Status line, alias, permissions,
+            # preferences, model, machine defaults and pip are all things the human already
+            # decided; re-asking them is not thoroughness, it is a reason not to update. What
+            # remains is exactly what makes new code take effect: pull it, then refresh the
+            # installed copy Claude Code actually loads.
+            #
+            # The branch is NOT re-asked either - it is whatever this machine is already
+            # tracking. An update that silently changed channel would be a different thing
+            # wearing an update's name.
+            return [
+                ("Preflight checks", self.preflight_lite),
+                ("Local clone", self.resolve_repo),
+                (lambda: f"Sync to origin/{self.branch}", self.sync_branch),
+                ("Guard interpreter cache", self.prewarm_guard_cache),
+                ("Pending hook fixes", self.check_pending_hook_fixes),
+                ("Claude Code marketplace", self.marketplace),
+                (
+                    lambda: "Plugin " + ("update" if self.mode == "update" else "install"),
+                    self.plugin,
+                ),
             ]
         if self.subset == "statusline":
             return [

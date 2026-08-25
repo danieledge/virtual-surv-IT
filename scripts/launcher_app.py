@@ -1914,9 +1914,15 @@ def _monitor_read(project_dir: Path, slug: str) -> dict:
         snap["artifacts"] = sum(1 for p in pack.rglob("*") if p.is_file()) if pack.is_dir() else 0
     except OSError:
         pass
+    # OUTSIDE the try below, and first. It used to sit after the state-file read, so the
+    # FileNotFoundError raised before the workspace exists skipped it entirely - meaning the
+    # live run data was unavailable for exactly the minutes you most need it (live report
+    # 2026-08-25: "50 seconds in and it's still not showing any workflow updates ... so I
+    # don't know if it's doing anything or broken"). The stream file exists from the moment
+    # the run starts; the pack does not appear until the session gets that far.
+    snap["headless"] = _headless_status(project_dir, slug)
     try:
         snap["state"] = _json.loads(state_path.read_text(encoding="utf-8"))
-        snap["headless"] = _headless_status(project_dir, slug)
     except FileNotFoundError:
         snap["error"] = "waiting for the session to create the workspace"
     except ValueError:
@@ -2010,8 +2016,20 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
                 rows.append(("ceiling", f"${cap}, then {rung}"))
         head = snap.get("headless") or {}
         if head:
-            rows.append(("run", "live" if head.get("live") else (
-                "finished" if head.get("finished") else "gone")))
+            if head.get("finished"):
+                run = "finished" if head.get("ok") else "FAILED"
+            elif head.get("live"):
+                run = "live" if head.get("started") else "starting"
+            else:
+                run = "gone"
+            rows.append(("run", run))
+            # Proof of life, from the first tick. Before a workspace exists these are the
+            # ONLY evidence the run is doing anything, which is precisely when it matters.
+            if head.get("events"):
+                rows.append(("activity", f"{head['events']} events, "
+                                         f"{head.get('tool_calls', 0)} tool calls"))
+            if head.get("stages"):
+                rows.append(("stages", str(len(head["stages"]))))
             if head.get("cost_usd"):
                 rows.append(("spent", f"${head['cost_usd']:.2f}"))
             if head.get("retries"):
@@ -2064,8 +2082,9 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
         out.append(
             (
                 "class:dim",
-                "  The session is running in\n  its own window. This pane\n"
-                "  reads its state file every\n  couple of seconds.\n\n"
+                "  This pane reads the run's\n  own output every couple\n"
+                "  of seconds - it works\n  whether the session has a\n"
+                "  window or none at all.\n\n"
                 "  Nothing here talks to the\n  session: closing this stops\n"
                 "  the watching, never the\n  work.\n\n"
                 "  It closes PARTIAL for your\n  sign-off, whatever it\n  finds.\n",

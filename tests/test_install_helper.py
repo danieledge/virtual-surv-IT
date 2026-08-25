@@ -5991,10 +5991,11 @@ def test_main_dispatches_folder_subcommand_before_argparse(monkeypatch):
 # --- reorganised menu / submenus --------------------------------------------------------------
 
 
-def test_top_level_menu_actions_are_the_expected_five():
+def test_top_level_menu_actions_are_the_expected_set():
     """2026-08-17 restructure: manage-engagements retired (folder subcommands carry it),
     alias moved under Advanced as the two-option manager. 2026-08-18: 'Help: using the
-    plugin' (Morgan's narrative) joins as item 5."""
+    plugin' (Morgan's narrative) joins as item 5. 2026-08-25: a quick 'update' joins as a
+    LETTER key."""
     from install_helper import MENU_ACTIONS
 
     assert MENU_ACTIONS == {
@@ -6003,8 +6004,23 @@ def test_top_level_menu_actions_are_the_expected_five():
         "3": "diagnostics",
         "4": "advanced",
         "5": "howto",
+        "u": "update",
         "q": "quit",
     }
+
+
+def test_adding_a_menu_entry_never_renumbers_the_existing_ones():
+    """The update entry was first added as "2", which shifted everything below it. The
+    scripted menu tests immediately began selecting different actions than they meant to -
+    one landed on the update step itself and ran live git operations until the suite hung.
+
+    Renumbering a menu silently re-points every stored keystroke: in tests, in
+    documentation, and in a user's muscle memory. New entries take letters."""
+    from install_helper import MENU_ACTIONS
+
+    for key, action in (("1", "full"), ("2", "configure"), ("3", "diagnostics"),
+                        ("4", "advanced"), ("5", "howto")):
+        assert MENU_ACTIONS[key] == action, f"option {key} moved - that breaks stored keystrokes"
 
 
 def test_diagnostics_submenu_full_mapping():
