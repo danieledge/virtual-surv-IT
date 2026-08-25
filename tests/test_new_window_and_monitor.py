@@ -477,60 +477,6 @@ def test_every_reason_not_to_open_a_window_is_said_out_loud(tmp_path, monkeypatc
     assert _drive_main(mod, monkeypatch, ok, "/engage --new --auto") == 0
     assert "no windowed terminal found" in capsys.readouterr().err
 
-
-def test_a_plain_launch_also_opens_in_a_window(tmp_path, monkeypatch):
-    """Pressing Enter with nothing pre-seeded is still a session, and still worth watching.
-    Only the decision string differs - and it must stay OFF stdout when empty, because a
-    bare newline on the decision channel is captured by the shell."""
-    mod = _load("virt_team_launcher")
-    project = _project(tmp_path, new_window=True)
-    seen = []
-    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: seen.append(a) or True)
-    import contextlib
-    import io
-    out = io.StringIO()
-    with contextlib.redirect_stdout(out):
-        rc = _drive_main(mod, monkeypatch, project, "")
-    assert rc == mod._ABORT_EXIT_CODE
-    assert seen and seen[0][1] == ""
-    assert out.getvalue() == "", "an empty decision must put nothing on stdout"
-
-
-def test_the_monitor_never_opens_a_second_application_from_inside_itself(tmp_path):
-    """2026-08-25: pressing w printed "coroutine 'Application.run_async' was never awaited ...
-    enable tracemalloc" into the middle of the screen. prompt_toolkit cannot start an
-    Application from inside a running one - it detects the live event loop, hands back a
-    coroutine nobody awaits, and returns None. The monitor EXITS with an intent and the
-    caller re-enters, which reads as nesting to the human and is a flat sequence to the
-    runtime."""
-    app = _load("launcher_app")
-    source = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
-    body = source.split("def monitor_screen", 1)[1].split("\ndef ", 1)[0]
-    handler = body.split('@kb.add("w")', 1)[1].split("@kb.add", 1)[0]
-    assert "workflow_screen(" not in handler, (
-        "the monitor must not call another screen from inside its own key handler"
-    )
-    assert "exit()" in handler and "MONITOR_WANTS_WORKFLOW" in handler
-    assert app.MONITOR_WANTS_WORKFLOW != app.MONITOR_CLOSED
-
-
-def test_the_caller_drives_the_monitor_and_workflow_as_a_flat_sequence(tmp_path):
-    launcher = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
-    body = launcher.split("def _watch_after_launch", 1)[1].split("\ndef ", 1)[0]
-    assert "MONITOR_WANTS_WORKFLOW" in body, "the caller must act on the intent"
-    assert "_MAX_SCREEN_HOPS" in body, "and the loop must be bounded"
-
-
-# --- watching an engagement that is already running (2026-08-25) ----------------------------
-#
-# "if an engagement is running but i accidentally exit the TUI there is no way to get back to
-# the workflow display" and "i can't open an engagement in flight". Both were true, and the
-# second is the worse one: the menu's only offer for an open engagement was --resume, which
-# STARTS a session - the wrong move when one is already going, and a route to two sessions in
-# one workspace. Watching had existed for exactly one moment: the seconds after the launcher
-# itself started a run.
-
-
 def test_the_running_engagement_is_found_from_the_active_marker(tmp_path):
     mod = _load("virt_team_launcher")
     state = _load("engagement_state")
@@ -598,10 +544,29 @@ def test_every_tier_offers_the_watch_option():
     assert '(("watch",), "watch the engagement already running", "t")' in launcher
     assert "[t]')} watch the running engagement" in launcher
     assert 'choice.lower() == "t"' in launcher
+    # And no trace of the removed workflow screen anywhere in the menus.
+    assert '(("workflow",)' not in launcher and '(("workflow",)' not in app
 
     # full-screen tier: the action AND the keypress that reaches it
     assert '(("watch",)' in app, "the app tier must offer watch"
-    assert '(("workflow",)' in app, "the app tier must offer the workflow"
     keys = app.split("for key, ret in (", 1)[1].split("):", 1)[0]
     assert '("t", ("watch",))' in keys, "t must be bound in the app tier"
-    assert '("w", ("workflow",))' in keys, "w must be bound in the app tier"
+
+
+def test_the_transcript_reader_is_gone_not_dormant():
+    """2026-08-25: "no transcript reader for unattended at all - the user can read the
+    transcript themselves". It read Claude Code's INTERNAL file, which has no recorded cost,
+    no engagement boundary, no view into a subagent's turns and no stability guarantee -
+    every one of which showed in use.
+
+    Deleted rather than left dormant: code kept in case it is useful rots into something
+    nobody dares remove, and a disabled feature still ships, still needs maintaining, and
+    still gets found by the next person. What replaces it is a supported source
+    (docs/internal/plan-supported-monitoring-2026-08-25.md)."""
+    scripts = REPO_ROOT / "scripts"
+    for gone in ("workflow_trace.py", "render_workflow.py"):
+        assert not (scripts / gone).exists(), f"{gone} came back"
+    assert not (REPO_ROOT / "config" / "model-pricing.json").exists()
+    app = (scripts / "launcher_app.py").read_text(encoding="utf-8")
+    assert "def workflow_screen" not in app
+    assert "import workflow_trace" not in app

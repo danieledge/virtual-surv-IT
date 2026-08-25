@@ -1,14 +1,25 @@
 # Plan: a first-class workflow view - stages, models, cost, loops
 
-**Status:** BUILT 2026-08-25, off by default (`workflow_view`, machine + project).
-Steps 1-6 below all landed; this document is kept as the design record and the reasoning
-behind the choices, not as an outstanding proposal.
-**Ask (owner):** "make sure the interface has a nice representation of the workflow its
-following that's both informative and looks great. we should be able to see costs at each
-stage, loops that are happening etc" + "include what model used at each step, lets make this
-uber rich - a first class feature with ability to export".
+**Status:** SUPERSEDED and REMOVED, 2026-08-25, the same day it was built.
+
+The implementation read Claude Code's internal session transcript. That source has no
+recorded cost, no engagement boundary, no visibility into a subagent's turns, and no
+stability guarantee - and every one of those limits showed in use. The owner's verdict was
+"this feels unreliable", then "no transcript reader for unattended at all - the user can
+read the transcript themselves", and both are right.
+
+`workflow_trace`, `render_workflow` and the launcher's workflow screen
+are deleted rather than left dormant, because code kept "in case it is useful" rots into
+something nobody dares remove. What replaces it is in
+`docs/internal/plan-supported-monitoring-2026-08-25.md`: `claude -p --output-format
+stream-json`, which publishes cost and the session id outright instead of having them
+inferred.
+
+Kept as the design record - the reasoning about scope, loops, cost honesty and export
+placement is what carries into the replacement.
 
 ---
+
 
 ## 1. The finding that makes this buildable
 
@@ -40,7 +51,7 @@ below treats a stage as the atom rather than pretending otherwise.
 
 The mistake to avoid is a renderer that also parses. Three modules, each testable alone:
 
-**(a) `scripts/workflow_trace.py` - pure data, no UI.**
+**(a) `workflow_trace` - pure data, no UI.**
 Reads a transcript, returns a `Trace`: ordered stages, each with `agent`, `model`, `tokens`,
 `cost`, `duration`, `tool_stats`, `status`, `loop_index`. Also the orchestrator segments
 between stages, so the timeline has no unexplained gaps. Pure functions over a file path -
@@ -50,7 +61,7 @@ below are two views onto it.
 **(b) `launcher_app.workflow_screen` - the live TUI view.**
 Reads (a) on the monitor's existing 2s refresh.
 
-**(c) `scripts/render_workflow.py` - export.**
+**(c) `render_workflow` - export.**
 The same `Trace` to `.md` + `.html` via the existing `render_html`, and `.json` + `.csv` for
 anyone who wants their own analysis. Export is not a bolt-on: it is the same object the
 screen renders, which is the only way the two cannot disagree.
@@ -146,11 +157,11 @@ need was loudest.
 
 ## 8. Build order
 
-1. `workflow_trace.py` + a captured-transcript test corpus. No UI. **This is most of it.**
+1. `workflow_trace` + a captured-transcript test corpus. No UI. **This is most of it.**
 2. Costing through the EXISTING `dashboard.py` table, with the unknown-model path tested
    first. (No new table - see above.)
 3. Loop detection over the ordered stages.
-4. `render_workflow.py` export (`.md`/`.html`/`.json`/`.csv`).
+4. `render_workflow` export (`.md`/`.html`/`.json`/`.csv`).
 5. `workflow_screen` in the launcher, pty-rendered before it is believed.
 6. Wire into the monitor and into `[v] view artifacts`.
 

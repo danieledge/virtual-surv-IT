@@ -211,8 +211,6 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     try:
         if mod._running_slug(project_dir):
             actions.append((("watch",), f"{g['launch']}watch the engagement running", "t"))
-        if mod._workflow_view_on(project_dir):
-            actions.append((("workflow",), f"{g['browse']}workflow: stages, cost", "w"))
     except Exception:
         pass  # a missing option must never cost the menu
     actions.append(
@@ -352,7 +350,6 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         ("a", ("archive",)),
         ("b", ("finished",)),
         ("t", ("watch",)),
-        ("w", ("workflow",)),
     ):
         if any(r == ret for r, _label, _k in actions):
             kb.add(key)(lambda event, _r=ret: _exit(event, _r))
@@ -1833,9 +1830,6 @@ def request_screen(project_dir: Path, mod, output=None):
 
 
 MONITOR_CLOSED = "__monitor_closed__"
-# The monitor asking its CALLER to show the workflow. It cannot show it itself: a second
-# Application started from inside a running one never runs (2026-08-25).
-MONITOR_WANTS_WORKFLOW = "__monitor_wants_workflow__"
 _MONITOR_REFRESH = 2.0  # seconds; the state file changes at human pace, not machine pace
 
 
@@ -2004,34 +1998,14 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
         )
         return out
 
-    workflow_on = False
-    try:
-        workflow_on = bool(mod._workflow_view_on(project_dir))
-    except Exception:
-        workflow_on = False
-
     def _footer():
-        tail = " · w workflow" if workflow_on else ""
-        return [("class:hint",
-                 f"  Esc stop watching (the run continues) · r refresh now{tail}")]
+        return [("class:hint", "  Esc stop watching (the run continues) · r refresh now")]
 
     kb = KeyBindings()
 
     @kb.add("r")
     def _refresh(event):
         event.app.invalidate()
-
-    @kb.add("w")
-    def _workflow(event):
-        # EXIT with an intent; never open a second Application from inside a running one.
-        # prompt_toolkit's app.run() detects the live event loop, hands back a coroutine
-        # nobody awaits, and returns None - surfacing as "coroutine 'Application.run_async'
-        # was never awaited ... enable tracemalloc" printed into the middle of the screen
-        # (reported 2026-08-25 on pressing w). The caller re-enters, so this reads as a
-        # nested view to the human while being a flat sequence to the runtime.
-        if workflow_on:
-            result["v"] = MONITOR_WANTS_WORKFLOW
-            event.app.exit()
 
     @kb.add("escape", eager=True)
     @kb.add("c-c")
@@ -2055,243 +2029,3 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
         return None
     return result["v"]
 
-
-WORKFLOW_CLOSED = "__workflow_closed__"
-_WORKFLOW_ROWS = 9  # visible stage rows; the trace itself is never truncated
-_WORKFLOW_REFRESH = 6.0  # seconds - a transcript is large and grows; the state file is not
-# Two panes of one picture are drawn milliseconds apart. Anything inside this window is the
-# same frame; well under the refresh interval, so it never masks a real update.
-_FRAME_WINDOW = 0.5
-
-
-def workflow_screen(project_dir: Path, mod, output=None, session: str = "", slug: str = ""):
-    """The workflow the team is following: stage, model, cost, and where it looped.
-
-    Reads scripts/workflow_trace - it does no parsing of its own, so this screen and the
-    exporter cannot drift apart. Refreshes on the monitor's cadence, because a running
-    engagement gains stages while you watch.
-
-    Read-only, like the monitor beside it: nothing here writes, and closing it stops the
-    watching rather than the work."""
-    try:
-        p = mod._ptk_ui()
-        if not p:
-            return None
-        from prompt_toolkit.key_binding import KeyBindings
-    except Exception:
-        return None
-
-    g = glyphs(mod)
-    top = [0]
-    note = [""]
-    frame = {"at": -1.0, "trace": None}
-
-    def _trace():
-        """The trace for THIS frame, computed at most once.
-
-        Both panes need it, and calling through twice per render doubled the work on a file
-        that can be tens of megabytes (2026-08-25 report: the view ran out of memory). A
-        short time window rather than a frame counter, because there is no frame hook to
-        count - the two panes of one picture are drawn milliseconds apart, and anything
-        inside that window is the same picture. The parser caches on (path, size, mtime)
-        too; this stops even the stat call happening twice for one frame."""
-        now = _clock()
-        if frame["trace"] is not None and (now - frame["at"]) < _FRAME_WINDOW:
-            return frame["trace"]
-        try:
-            import workflow_trace
-
-            trace = (
-                workflow_trace.parse(Path(session)) if session
-                else workflow_trace.trace_for(project_dir, slug=slug)
-            )
-        except MemoryError:
-            # Named separately because it is the one failure the reader can act on, and
-            # "unavailable" would hide it.
-            trace = {"ok": False, "stages": [],
-                     "error": "transcript too large to trace on this machine"}
-        except Exception as exc:
-            trace = {"ok": False, "stages": [],
-                     "error": f"trace unavailable ({exc.__class__.__name__})"}
-        frame["at"], frame["trace"] = now, trace
-        return trace
-
-    def _body():
-        trace = _trace()
-        out = [("class:group", f"  {g['new']}Workflow\n\n")]
-        if not trace.get("ok"):
-            out.append(("class:dim", f"  {trace.get('error', 'no trace')}\n"))
-            return out
-        totals = trace.get("totals") or {}
-        stages = trace.get("stages") or []
-        scope = trace.get("scope") or ""
-        if scope:
-            # Which run these numbers describe. Without it a session-wide total reads as one
-            # engagement's cost, which is a wrong number presented confidently.
-            out.append(("class:dim", f"  {scope[:44]}\n"))
-        out.append(("class:dim", "  "))
-        out.append(("", f"{totals.get('agent_stages', 0)} stages"))
-        out.append(("class:dim", "  ·  "))
-        out.append(("", f"{_compact(totals.get('tokens', 0))} tok"))
-        out.append(("class:dim", "  ·  "))
-        out.append(("class:warn", f"{_cost(totals.get('cost'))} est"))
-        out.append(("", "\n\n"))
-        window = stages[top[0] : top[0] + _WORKFLOW_ROWS]
-        width = min(18, max((len(s.get("agent", "")) for s in window), default=10))
-        for stage in window:
-            mark = g["on"] if stage.get("status") == "completed" else g["off"]
-            if stage.get("kind") == "orchestration":
-                mark = "·" if mod._can_encode("·") else "."
-            loop = stage.get("loop_index", 1)
-            out.append(("class:on" if stage.get("status") == "completed" else "class:dim",
-                        f"  {mark} "))
-            out.append(("", f"{stage.get('agent', '?')[:width].ljust(width)} "))
-            if loop > 1:
-                out.append(("class:warn", f"x{loop} "))
-            else:
-                out.append(("", "   "))
-            out.append(("class:dim", f"{_short(stage.get('model', '')):<7}"))
-            out.append(("", f"{_compact(stage.get('tokens', 0)):>7} "))
-            out.append(("class:warn", f"{_cost(stage.get('cost')):>9}"))
-            out.append(("", "\n"))
-        if len(stages) > _WORKFLOW_ROWS:
-            out.append(("class:dim",
-                        f"\n  {top[0] + 1}-{min(top[0] + _WORKFLOW_ROWS, len(stages))}"
-                        f" of {len(stages)}   up/down to scroll\n"))
-        if totals.get("unpriced_stages"):
-            out.append(("class:warn",
-                        f"\n  {totals['unpriced_stages']} stage(s) on an unpriced model\n"))
-        if note[0]:
-            out.append(("class:on", f"\n  {note[0]}\n"))
-        return out
-
-    def _right():
-        trace = _trace()
-        out = [("class:title", "\n  Reading the run\n\n")]
-        out.append(
-            (
-                "class:dim",
-                "  One row per stage, in the\n  order they ran.\n\n"
-                "  x2 marks a repeat - the\n  same specialist called\n  again. That is a loop,\n"
-                "  and its cost is the one\n  nobody can see today.\n\n"
-                "  Tokens are measured.\n  Cost is INFERRED from a\n  rate table and is an\n"
-                "  estimate, never a bill.\n\n"
-                "  For the SESSION total,\n  trust /cost in Claude -\n  that is the authority.\n"
-                "  These figures exist to\n  apportion it across the\n  stages, which /cost\n"
-                "  cannot do.\n\n",
-            )
-        )
-        if trace.get("rates_as_of"):
-            out.append(("class:dim", f"  rates of {trace['rates_as_of']}\n"))
-        return out
-
-    def _footer():
-        return [("class:hint", "  e export · up/down scroll · Esc back")]
-
-    kb = KeyBindings()
-
-    @kb.add("up")
-    def _up(event):
-        top[0] = max(0, top[0] - 1)
-
-    @kb.add("down")
-    def _down(event):
-        top[0] += 1
-
-    @kb.add("e")
-    def _export(event):
-        note[0] = _export_trace(project_dir, _trace(), slug)
-
-    @kb.add("escape", eager=True)
-    @kb.add("c-c")
-    @kb.add("q")
-    def _close(event):
-        event.app.exit()
-
-    try:
-        screen(
-            mod,
-            title=f"{g['new']}Workflow",
-            body_fn=_body,
-            right_fn=_right,
-            footer_fn=_footer,
-            key_bindings=kb,
-            output=output,
-            project_dir=project_dir,
-            # Slower than the status monitor on purpose: that reads one small state file,
-            # this reads a transcript that grows all session. Every refresh of a LIVE file
-            # is a real re-parse, cache or no cache, because its mtime has moved.
-            refresh_interval=_WORKFLOW_REFRESH,
-        )
-    except Exception:
-        return None
-    return WORKFLOW_CLOSED
-
-
-def _export_trace(project_dir: Path, trace: dict, slug: str = "") -> str:
-    """Write the trace out and report where, in one short line for the screen.
-
-    Into the ENGAGEMENT's workspace when we know which engagement it is (ADR-010: an
-    artifact belongs with the work it describes). `artifacts/workflow/` is the fallback for
-    a session-scoped trace that belongs to no single engagement - not the default, which is
-    what it was until 2026-08-25."""
-    if not trace.get("ok"):
-        return "nothing to export yet"
-    try:
-        import contextlib
-        import io
-        import warnings
-
-        import render_workflow
-
-        out_dir = (
-            project_dir / "artifacts" / slug if slug else project_dir / "artifacts" / "workflow"
-        )
-        # stderr is the TUI's DRAWING channel. The HTML renderer pulls in bleach, which emits
-        # a warning on import, and that warning lands in the middle of the frame - caught
-        # under a pty, 2026-08-25, garbling the screen the moment anyone pressed e. Anything
-        # a screen calls has to be silenced on this stream, not trusted to be quiet.
-        sink = io.StringIO()
-        with contextlib.redirect_stderr(sink), contextlib.redirect_stdout(sink):
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                written = render_workflow.export(trace, out_dir, ("md", "html", "json", "csv"))
-        where = f"artifacts/{slug}/" if slug else "artifacts/workflow/"
-        return f"exported {len(written)} file(s) to {where}" if written else (
-            "export produced nothing"
-        )
-    except Exception as exc:
-        return f"export failed ({exc.__class__.__name__})"
-
-
-def _compact(tokens) -> str:
-    """1_240_000 -> 1.2m. A column of raw digits is unreadable at pane width."""
-    try:
-        value = int(tokens or 0)
-    except (TypeError, ValueError):
-        return "-"
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f}m"
-    if value >= 1_000:
-        return f"{value / 1_000:.0f}k"
-    return str(value)
-
-
-def _cost(value) -> str:
-    if value is None:
-        return "unpriced"
-    if 0 < value < 0.01:
-        return f"${value:.3f}"
-    return f"${value:,.2f}"
-
-
-def _short(model: str) -> str:
-    """Family name if we know it, otherwise the DISTINCTIVE part of the id.
-
-    Truncating from the left gives "claude-" for every unknown model, which identifies
-    nothing - the vendor prefix is the one part they all share. Drop it first."""
-    for family in ("opus", "sonnet", "haiku", "fable"):
-        if family in (model or ""):
-            return family
-    tail = (model or "-").removeprefix("claude-")
-    return tail[:7] if tail else "-"

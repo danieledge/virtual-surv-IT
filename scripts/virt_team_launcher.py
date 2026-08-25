@@ -324,7 +324,6 @@ _TOGGLE_PREFS = (
     ("autonomous mode offered", "autonomous_mode"),
     ("start work unattended", "autonomous_default"),
     ("open the session in a new window", "new_window"),
-    ("workflow view", "workflow_view"),
     ("data profiling tools", "data_profiling"),
     ("document map", "document_map"),
     ("guard daemon", "guard_daemon"),
@@ -463,13 +462,6 @@ _SETTING_HELP = {
         "typed request [n]. This is a kill switch, not an enabler: it is already on.",
         "Off removes the option from this project entirely. On does not start anything "
         "unattended by itself - see 'start work unattended' for that.",
-    ),
-    "workflow view": (
-        "A live trace of the workflow: every stage, the model it ran on, what it cost and "
-        "where the work looped back. Exports to .md/.html/.json/.csv.",
-        "OFF by default: it reads Claude Code's INTERNAL session transcript, which is not a "
-        "public API and can change without notice. Tokens are measured; cost is inferred "
-        "from a rate table you should replace with your own.",
     ),
     "open the session in a new window": (
         "Opens the Claude session in its own terminal window - attended or unattended - so "
@@ -1921,8 +1913,6 @@ def _pt_menu_round(
     entries.append((("finished",), "browse done & archived engagements", "b"))
     if _running_slug(project_dir):
         entries.append((("watch",), "watch the engagement already running", "t"))
-    if _workflow_view_on(project_dir):
-        entries.append((("workflow",), "workflow: stages, models, cost", "w"))
     launch_label = "decide inside the session instead" if shown else "just launch"
     entries.append((("launch",), launch_label, None))
     default_index = 0
@@ -2007,18 +1997,6 @@ def _decision_from_pick(
             _watch_running_engagement(project_dir)
         except Exception:
             print(ink.dim("    could not open the watch view here"), file=sys.stderr)
-        return "__again__"
-    if pick[0] == "workflow":
-        # Attended runs get the trace too. The need was loudest for unattended work, but
-        # nothing about "what did this cost, and where did it loop" is autonomy-specific.
-        try:
-            from launcher_app import workflow_screen
-
-            # Scoped to the running engagement when there is one, session-wide otherwise -
-            # and the screen says which, so the two are never confused.
-            workflow_screen(project_dir, sys.modules[__name__], slug=_running_slug(project_dir))
-        except Exception:
-            print(ink.dim("    workflow view unavailable here"), file=sys.stderr)
         return "__again__"
     if pick[0] == "artifacts":
         slug = _row_resume_token(shown[0]) if shown else ""
@@ -2215,8 +2193,6 @@ def _menu_round(
     settings_opt += f"   {ink.bold('[b]')} browse done & archived"
     if _running_slug(project_dir):
         settings_opt += f"   {ink.bold('[t]')} watch the running engagement"
-    if _workflow_view_on(project_dir):
-        settings_opt += f"   {ink.bold('[w]')} workflow"
     print(settings_opt, file=err)
     enter_label = "just launch" if not shown else "decide inside the session instead"
     print(f"    {ink.dim(f'[Enter] {enter_label}')}   {ink.dim('[?] help')}", file=err)
@@ -2281,10 +2257,6 @@ def _menu_round(
         return _decision_from_pick(("finished",), project_dir, engagement_state, menu, shown)
     if choice.lower() == "t" and _running_slug(project_dir):
         return _decision_from_pick(("watch",), project_dir, engagement_state, menu, shown)
-    if choice.lower() == "w" and _workflow_view_on(project_dir):
-        # Same reason: a key that works in the full-screen tier and silently does nothing in
-        # the plain one is how the two menus drifted apart the first time.
-        return _decision_from_pick(("workflow",), project_dir, engagement_state, menu, shown)
     engage_cmd = _engage_command(project_dir)
     shown = capped  # numbered picks refer to what was PRINTED
     if choice.lower() == "n":
@@ -3410,16 +3382,6 @@ def _watch_running_engagement(project_dir: Path) -> None:
     _watch_after_launch(project_dir, slug)
 
 
-def _workflow_view_on(project_dir: Path) -> bool:
-    """Whether the workflow trace is available in this project. Off unless asked for."""
-    try:
-        import engage_probe
-
-        return bool(engage_probe.resolve_preferences(project_dir).get("workflow_view"))
-    except Exception:
-        return False
-
-
 def _pending_auto_slug(project_dir: Path) -> str:
     """The slug the pre-flight just recorded, for the monitor to watch.
 
@@ -3457,11 +3419,10 @@ def _launch_in_window(project_dir: Path, decision: str, slug: str = "") -> bool:
     """Open the session beside the launcher and watch it. True if the window opened.
 
     ATTENDED OR UNATTENDED (2026-08-25, owner: "it should open in a new window if attended
-    or unattended ... making it hard to view the workflow"). It was unattended-only, on the
-    reasoning that an attended run already has a human in the session so a second window
-    adds nothing. That reasoning ignored what the launcher became: with the monitor and the
-    workflow view living here, the TUI is worth keeping ALIVE during any run, and it can
-    only stay alive if the session did not replace it.
+    or unattended"). It was unattended-only, on the reasoning that an attended run already
+    has a human in the session so a second window adds nothing. That ignored what the
+    launcher became: with the run monitor living here, the TUI is worth keeping ALIVE during
+    any run, and it can only stay alive if the session did not replace it.
 
     False means nothing was launched and the caller must fall back to launching in-place -
     never a silent no-op, because the human has already committed to a run by this point and
@@ -3501,12 +3462,6 @@ def _launch_in_window(project_dir: Path, decision: str, slug: str = "") -> bool:
     return True
 
 
-# A bound on the monitor <-> workflow loop. Generous - a human toggling between two views
-# is normal - but finite, because an unbounded loop driven by a screen that might fail to
-# render would spin invisibly.
-_MAX_SCREEN_HOPS = 200
-
-
 def _watch_after_launch(project_dir: Path, slug: str) -> None:
     """Keep the launcher useful while the session runs in its own window.
 
@@ -3517,22 +3472,9 @@ def _watch_after_launch(project_dir: Path, slug: str) -> None:
     ink = _Ink()
     try:
         if slug:
-            from launcher_app import MONITOR_WANTS_WORKFLOW, monitor_screen, workflow_screen
+            from launcher_app import monitor_screen
 
-            # A flat loop, not nesting: prompt_toolkit cannot start an Application from
-            # inside a running one, so each screen EXITS and this decides what comes next.
-            # To the human it reads as stepping in and back out (2026-08-25).
-            for _ in range(_MAX_SCREEN_HOPS):
-                if monitor_screen(project_dir, sys.modules[__name__], slug) != (
-                    MONITOR_WANTS_WORKFLOW
-                ):
-                    return
-                workflow_screen(project_dir, sys.modules[__name__], slug=slug)
-            return
-        if _workflow_view_on(project_dir):
-            from launcher_app import workflow_screen
-
-            workflow_screen(project_dir, sys.modules[__name__])
+            monitor_screen(project_dir, sys.modules[__name__], slug)
             return
     except Exception:
         pass
