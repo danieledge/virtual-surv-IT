@@ -325,3 +325,48 @@ def test_a_live_model_id_with_suffixes_is_priced():
              "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
     assert wt.cost_of(usage, "claude-opus-5[1m]") == 5.0
     assert wt.cost_of(usage, "claude-haiku-4-5-20251001") == 1.0
+
+
+def test_an_unchanged_transcript_is_not_reparsed(tmp_path):
+    """2026-08-25: the workflow view reported running out of memory. It re-parsed the whole
+    transcript on every refresh, twice per frame, at a 2s cadence - on a file that can be
+    tens of megabytes. The plan for this feature specified caching on (path, size, mtime);
+    the first implementation streamed but did not cache."""
+    wt = _load("workflow_trace")
+    path = _write(tmp_path, [_agent("qa-engineer", "claude-sonnet-5")])
+    first = wt.parse(path)
+    assert wt.parse(path) is first, "an unchanged file must return the same object"
+
+
+def test_a_changed_transcript_is_reparsed(tmp_path):
+    """The cache must never hide a live session's progress - that is the whole point of a
+    monitor."""
+    wt = _load("workflow_trace")
+    path = _write(tmp_path, [_agent("qa-engineer", "claude-sonnet-5")])
+    before = wt.parse(path)
+    assert len([s for s in before["stages"] if s["kind"] == "agent"]) == 1
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(_agent("code-reviewer", "claude-opus-5")) + "\n")
+    after = wt.parse(path)
+    assert after is not before
+    assert len([s for s in after["stages"] if s["kind"] == "agent"]) == 2
+
+
+def test_a_failed_parse_is_never_cached(tmp_path):
+    """Otherwise a transcript that did not exist yet would stay 'missing' after it appears."""
+    wt = _load("workflow_trace")
+    path = tmp_path / "later.jsonl"
+    assert wt.parse(path)["ok"] is False
+    _write(tmp_path, [_agent("qa-engineer", "claude-sonnet-5")])
+    (tmp_path / "session.jsonl").replace(path)
+    assert wt.parse(path)["ok"] is True
+
+
+def test_the_cache_holds_one_entry_not_a_growing_dict(tmp_path):
+    """A cache that grows per file is a leak in a long-lived launcher process."""
+    wt = _load("workflow_trace")
+    for name in ("a", "b", "c"):
+        p = tmp_path / f"{name}.jsonl"
+        p.write_text(json.dumps(_agent("qa-engineer", "claude-sonnet-5")) + "\n", encoding="utf-8")
+        wt.parse(p)
+    assert set(wt._CACHE) == {"key", "trace"}, "one entry, keyed on the file being watched"

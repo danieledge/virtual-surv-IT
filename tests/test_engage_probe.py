@@ -358,7 +358,7 @@ def test_resolve_preferences_returns_dict_matching_build_report(tmp_path, monkey
         # ...and the enabler it implied, which stays opt-in (owner, 2026-08-25):
         # unattended is a deliberate per-project choice, never inherited.
         "autonomous_default": False,
-        "new_window": True,  # verified on WINTEST/PowerShell 5.1 (2026-08-25)
+        "new_window": False,  # opt-in for now (owner, 2026-08-25)
         "workflow_view": False,  # reads an internal transcript format - opt-in
         "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
         "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)
@@ -383,7 +383,7 @@ def test_resolve_preferences_all_builtin_defaults_when_nothing_set(tmp_path, mon
         # ...and the enabler it implied, which stays opt-in (owner, 2026-08-25):
         # unattended is a deliberate per-project choice, never inherited.
         "autonomous_default": False,
-        "new_window": True,  # verified on WINTEST/PowerShell 5.1 (2026-08-25)
+        "new_window": False,  # opt-in for now (owner, 2026-08-25)
         "workflow_view": False,  # reads an internal transcript format - opt-in
         "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
         "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)

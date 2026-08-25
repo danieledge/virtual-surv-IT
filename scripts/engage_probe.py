@@ -793,9 +793,16 @@ def resolve_preferences(project_dir: Path) -> dict:
     # consequence: the launcher's live status view can only exist if the launcher is still
     # alive, and it can only still be alive if the session did not replace it.
     #
-    # It shipped ON, broke on Windows (no window, no session, and the launcher had already
-    # told the shell to stand down), went OFF, and is ON again - but only after being proven
-    # on the platform that broke it, not after being reasoned about. Verified on WINTEST,
+    # OFF by default (owner, 2026-08-25: "for now turn this feature off by default"), after
+    # a run of platform-specific faults that each only appeared on a real Windows desktop:
+    # no window and no session at all, then a same-window fallback because a PowerShell alias
+    # is invisible to which(). Each is fixed and verified, but the pattern is the point -
+    # this feature touches the one thing that must never break, which is a session actually
+    # starting, and it has broken it more than once. Opt-in until it has a boring week.
+    #
+    # History, because the default has moved three times and the reasoning should not have to
+    # be reconstructed: it shipped ON, broke on Windows, went OFF, went ON again once proven
+    # on the platform that broke it, and is OFF again now. Verified on WINTEST,
     # Windows Server 2025 / PowerShell 5.1, 2026-08-25: powershell.exe found, the spawned
     # command executes, `claude --version` runs INSIDE the new console and exits 0, and a
     # command that cannot be resolved reports failure so the caller falls back to launching
@@ -810,7 +817,7 @@ def resolve_preferences(project_dir: Path) -> dict:
     if "new_window" in prefs:
         new_window_on = bool(prefs["new_window"])
     else:
-        new_window_on = bool(machine_defaults.get("default_new_window", True))
+        new_window_on = bool(machine_defaults.get("default_new_window", False))
     if "autonomous_default" in prefs:
         autonomous_default_on = bool(prefs["autonomous_default"])
     else:

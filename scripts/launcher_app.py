@@ -1819,6 +1819,9 @@ def request_screen(project_dir: Path, mod, output=None):
 
 
 MONITOR_CLOSED = "__monitor_closed__"
+# The monitor asking its CALLER to show the workflow. It cannot show it itself: a second
+# Application started from inside a running one never runs (2026-08-25).
+MONITOR_WANTS_WORKFLOW = "__monitor_wants_workflow__"
 _MONITOR_REFRESH = 2.0  # seconds; the state file changes at human pace, not machine pace
 
 
@@ -1893,6 +1896,7 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
 
     g = glyphs(mod)
     started = _clock()
+    result = {"v": MONITOR_CLOSED}
     # How long a workspace may take to appear before the monitor stops saying "waiting" and
     # starts saying something useful. A session that has started creates its pack within
     # seconds; if nothing exists after this, the far more likely explanation is that no
@@ -1993,10 +1997,15 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
 
     @kb.add("w")
     def _workflow(event):
-        # Nested rather than a mode switch: the monitor is what the human asked for and
-        # returning to it must be the default, not something to navigate back to.
+        # EXIT with an intent; never open a second Application from inside a running one.
+        # prompt_toolkit's app.run() detects the live event loop, hands back a coroutine
+        # nobody awaits, and returns None - surfacing as "coroutine 'Application.run_async'
+        # was never awaited ... enable tracemalloc" printed into the middle of the screen
+        # (reported 2026-08-25 on pressing w). The caller re-enters, so this reads as a
+        # nested view to the human while being a flat sequence to the runtime.
         if workflow_on:
-            workflow_screen(project_dir, mod, output=output)
+            result["v"] = MONITOR_WANTS_WORKFLOW
+            event.app.exit()
 
     @kb.add("escape", eager=True)
     @kb.add("c-c")
@@ -2018,11 +2027,15 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
         )
     except Exception:
         return None
-    return MONITOR_CLOSED
+    return result["v"]
 
 
 WORKFLOW_CLOSED = "__workflow_closed__"
 _WORKFLOW_ROWS = 9  # visible stage rows; the trace itself is never truncated
+_WORKFLOW_REFRESH = 6.0  # seconds - a transcript is large and grows; the state file is not
+# Two panes of one picture are drawn milliseconds apart. Anything inside this window is the
+# same frame; well under the refresh interval, so it never masks a real update.
+_FRAME_WINDOW = 0.5
 
 
 def workflow_screen(project_dir: Path, mod, output=None, session: str = ""):
@@ -2045,17 +2058,37 @@ def workflow_screen(project_dir: Path, mod, output=None, session: str = ""):
     g = glyphs(mod)
     top = [0]
     note = [""]
+    frame = {"at": -1.0, "trace": None}
 
     def _trace():
+        """The trace for THIS frame, computed at most once.
+
+        Both panes need it, and calling through twice per render doubled the work on a file
+        that can be tens of megabytes (2026-08-25 report: the view ran out of memory). A
+        short time window rather than a frame counter, because there is no frame hook to
+        count - the two panes of one picture are drawn milliseconds apart, and anything
+        inside that window is the same picture. The parser caches on (path, size, mtime)
+        too; this stops even the stat call happening twice for one frame."""
+        now = _clock()
+        if frame["trace"] is not None and (now - frame["at"]) < _FRAME_WINDOW:
+            return frame["trace"]
         try:
             import workflow_trace
 
-            if session:
-                return workflow_trace.parse(Path(session))
-            return workflow_trace.trace_for(project_dir)
+            trace = (
+                workflow_trace.parse(Path(session)) if session
+                else workflow_trace.trace_for(project_dir)
+            )
+        except MemoryError:
+            # Named separately because it is the one failure the reader can act on, and
+            # "unavailable" would hide it.
+            trace = {"ok": False, "stages": [],
+                     "error": "transcript too large to trace on this machine"}
         except Exception as exc:
-            return {"ok": False, "error": f"trace unavailable ({exc.__class__.__name__})",
-                    "stages": []}
+            trace = {"ok": False, "stages": [],
+                     "error": f"trace unavailable ({exc.__class__.__name__})"}
+        frame["at"], frame["trace"] = now, trace
+        return trace
 
     def _body():
         trace = _trace()
@@ -2154,7 +2187,10 @@ def workflow_screen(project_dir: Path, mod, output=None, session: str = ""):
             key_bindings=kb,
             output=output,
             project_dir=project_dir,
-            refresh_interval=_MONITOR_REFRESH,
+            # Slower than the status monitor on purpose: that reads one small state file,
+            # this reads a transcript that grows all session. Every refresh of a LIVE file
+            # is a real re-parse, cache or no cache, because its mtime has moved.
+            refresh_interval=_WORKFLOW_REFRESH,
         )
     except Exception:
         return None

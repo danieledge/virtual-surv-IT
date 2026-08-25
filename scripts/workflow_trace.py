@@ -177,11 +177,43 @@ def _add_usage(into: dict, more: dict) -> None:
             continue
 
 
-def parse(path: Path, rates: dict | None = None) -> dict:
+# One entry, keyed on what makes a transcript's content unique: its path, size and mtime.
+# The plan for this feature said to cache on exactly that and the first implementation did
+# not, which is how a live screen came to re-parse 31MB twice per frame at a 2s refresh -
+# reported 2026-08-25 as the workflow view running out of memory. One entry rather than a
+# dict because the caller watches ONE session; a growing cache here would be its own leak.
+_CACHE: dict = {"key": None, "trace": None}
+
+
+def _cache_key(path: Path) -> tuple | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return (str(path), stat.st_size, stat.st_mtime_ns)
+
+
+def parse(path: Path, rates: dict | None = None, use_cache: bool = True) -> dict:
     """Stream a transcript into an ordered trace. Never raises on content.
 
     Streams rather than reads: one session here was 31MB and 3,546 messages, and holding that
-    in memory to count tokens would be its own performance bug."""
+    in memory to count tokens would be its own performance bug.
+
+    CACHED on (path, size, mtime). A transcript that has not changed cannot have a different
+    trace, so re-parsing it is pure waste - and on a live screen refreshing every couple of
+    seconds it is enough waste to exhaust memory on a modest box."""
+    if use_cache:
+        key = _cache_key(path)
+        if key is not None and key == _CACHE.get("key") and _CACHE.get("trace") is not None:
+            return _CACHE["trace"]
+    trace = _parse_uncached(path, rates)
+    if use_cache and trace.get("ok"):
+        _CACHE["key"] = _cache_key(path)
+        _CACHE["trace"] = trace
+    return trace
+
+
+def _parse_uncached(path: Path, rates: dict | None = None) -> dict:
     rates = load_rates() if rates is None else rates
     stages: list[dict] = []
     pending = _blank_usage()

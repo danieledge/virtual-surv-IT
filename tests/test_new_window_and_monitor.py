@@ -160,7 +160,9 @@ def test_an_attended_run_gets_a_window_too(tmp_path, monkeypatch):
     the workflow view living here, the TUI is worth keeping alive during ANY run, and it can
     only stay alive if the session did not replace it."""
     mod = _load("virt_team_launcher")
-    project = _project(tmp_path)
+    # Explicit: the feature is opt-in now, so a test relying on the default would go green
+    # for the wrong reason the day the default moves again - and it has moved three times.
+    project = _project(tmp_path, new_window=True)
     monkeypatch.chdir(project)
     for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
                  "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
@@ -419,13 +421,13 @@ def test_a_probe_that_cannot_run_does_not_block_a_launch(tmp_path, monkeypatch):
     assert lt._resolvable("cc", "powershell.exe") is True
 
 
-def test_the_new_window_default_is_on_now_it_is_verified(tmp_path):
-    """On, off, and on again - the last move only after being proven on the platform that
-    broke it: powershell.exe found, the spawned command executes, and `claude --version`
-    runs inside the new console and exits 0."""
+def test_the_new_window_is_opt_in(tmp_path):
+    """OFF by default (owner, 2026-08-25). The faults were each fixed and verified, but they
+    were each invisible from Linux and each broke the one thing that must never break: a
+    session actually starting. Opt-in until it has a boring week."""
     mod = _load("virt_team_launcher")
-    assert mod._new_window_wanted(_project(tmp_path)) is True
-    assert mod._new_window_wanted(_project(tmp_path, new_window=False)) is False
+    assert mod._new_window_wanted(_project(tmp_path)) is False
+    assert mod._new_window_wanted(_project(tmp_path, new_window=True)) is True
 
 
 def _drive_main(mod, monkeypatch, project, decision):
@@ -476,3 +478,28 @@ def test_a_plain_launch_also_opens_in_a_window(tmp_path, monkeypatch):
     assert rc == mod._ABORT_EXIT_CODE
     assert seen and seen[0][1] == ""
     assert out.getvalue() == "", "an empty decision must put nothing on stdout"
+
+
+def test_the_monitor_never_opens_a_second_application_from_inside_itself(tmp_path):
+    """2026-08-25: pressing w printed "coroutine 'Application.run_async' was never awaited ...
+    enable tracemalloc" into the middle of the screen. prompt_toolkit cannot start an
+    Application from inside a running one - it detects the live event loop, hands back a
+    coroutine nobody awaits, and returns None. The monitor EXITS with an intent and the
+    caller re-enters, which reads as nesting to the human and is a flat sequence to the
+    runtime."""
+    app = _load("launcher_app")
+    source = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+    body = source.split("def monitor_screen", 1)[1].split("\ndef ", 1)[0]
+    handler = body.split('@kb.add("w")', 1)[1].split("@kb.add", 1)[0]
+    assert "workflow_screen(" not in handler, (
+        "the monitor must not call another screen from inside its own key handler"
+    )
+    assert "exit()" in handler and "MONITOR_WANTS_WORKFLOW" in handler
+    assert app.MONITOR_WANTS_WORKFLOW != app.MONITOR_CLOSED
+
+
+def test_the_caller_drives_the_monitor_and_workflow_as_a_flat_sequence(tmp_path):
+    launcher = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    body = launcher.split("def _watch_after_launch", 1)[1].split("\ndef ", 1)[0]
+    assert "MONITOR_WANTS_WORKFLOW" in body, "the caller must act on the intent"
+    assert "_MAX_SCREEN_HOPS" in body, "and the loop must be bounded"

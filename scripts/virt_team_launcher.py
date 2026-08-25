@@ -474,8 +474,8 @@ _SETTING_HELP = {
     "open the session in a new window": (
         "Opens the Claude session in its own terminal window - attended or unattended - so "
         "this launcher survives to show the workflow and the run's status.",
-        "Without it the session replaces this screen, which is what made the workflow hard "
-        "to watch. A machine with no windowed terminal opens in place exactly as before.",
+        "OFF by default for now. Without it the session replaces this screen, which is what "
+        "made the workflow hard to watch. No windowed terminal means it opens here anyway.",
     ),
     "start work unattended": (
         "Arms the unattended toggle for new work, so a run you were going to start "
@@ -3453,6 +3453,12 @@ def _launch_in_window(project_dir: Path, decision: str, slug: str = "") -> bool:
     return True
 
 
+# A bound on the monitor <-> workflow loop. Generous - a human toggling between two views
+# is normal - but finite, because an unbounded loop driven by a screen that might fail to
+# render would spin invisibly.
+_MAX_SCREEN_HOPS = 200
+
+
 def _watch_after_launch(project_dir: Path, slug: str) -> None:
     """Keep the launcher useful while the session runs in its own window.
 
@@ -3463,9 +3469,17 @@ def _watch_after_launch(project_dir: Path, slug: str) -> None:
     ink = _Ink()
     try:
         if slug:
-            from launcher_app import monitor_screen
+            from launcher_app import MONITOR_WANTS_WORKFLOW, monitor_screen, workflow_screen
 
-            monitor_screen(project_dir, sys.modules[__name__], slug)
+            # A flat loop, not nesting: prompt_toolkit cannot start an Application from
+            # inside a running one, so each screen EXITS and this decides what comes next.
+            # To the human it reads as stepping in and back out (2026-08-25).
+            for _ in range(_MAX_SCREEN_HOPS):
+                if monitor_screen(project_dir, sys.modules[__name__], slug) != (
+                    MONITOR_WANTS_WORKFLOW
+                ):
+                    return
+                workflow_screen(project_dir, sys.modules[__name__])
             return
         if _workflow_view_on(project_dir):
             from launcher_app import workflow_screen
