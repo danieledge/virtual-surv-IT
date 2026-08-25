@@ -70,25 +70,40 @@ def test_cache_reads_are_not_counted_as_new_tokens():
     assert wt.cache_reads(usage) == 900_000
 
 
-def test_an_unpriced_model_reports_unknown_rather_than_a_guess(tmp_path):
+def test_an_unpriced_model_reports_unknown_rather_than_a_guess():
     """New model IDs will appear. A figure derived from a neighbouring model's rate would
     look authoritative and be wrong, which is worse than a visible gap."""
     wt = _load("workflow_trace")
-    rates = {"models": {"claude-opus-5": {"input": 15, "output": 75,
-                                          "cache_write": 18.75, "cache_read": 1.5}}}
     usage = {"input_tokens": 1_000_000, "output_tokens": 0,
              "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
-    assert wt.cost_of(usage, "claude-opus-5", rates) == 15.0
-    assert wt.cost_of(usage, "claude-model-from-the-future", rates) is None
+    assert wt.cost_of(usage, "claude-opus-5") == 5.0
+    assert wt.cost_of(usage, "claude-model-from-the-future") is None
 
 
-def test_an_alias_resolves_to_its_base_model():
+def test_there_is_exactly_one_rate_table_in_the_repo():
+    """2026-08-25: the workflow view shipped with its own hand-written table that DISAGREED
+    with dashboard.py's - opus at 15/75 against 5/25, fable at 3/15 against 10/50. Two tables
+    that disagree are worse than one that is stale, because budget-status measures an
+    unattended run's ceiling against dashboard's, so the workflow view and the spend gate
+    would have reported different costs for the same run."""
     wt = _load("workflow_trace")
-    rates = {"aliases": {"claude-opus-5[1m]": "claude-opus-5"},
-             "models": {"claude-opus-5": {"input": 15, "output": 0,
-                                          "cache_write": 0, "cache_read": 0}}}
-    usage = {"input_tokens": 1_000_000}
-    assert wt.cost_of(usage, "claude-opus-5[1m]", rates) == 15.0
+    dash = _load("dashboard")
+    usage = {"input_tokens": 1_000_000, "output_tokens": 1_000_000,
+             "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
+    for model in ("claude-opus-5", "claude-sonnet-5", "claude-fable-5"):
+        assert wt.cost_of(usage, model) == round(dash.price_usage(model, usage), 4), (
+            f"{model} priced differently by the two paths"
+        )
+    assert not (REPO_ROOT / "config" / "model-pricing.json").exists(), (
+        "a second rate table has reappeared"
+    )
+
+
+def test_the_rate_provenance_is_reported():
+    """A cost with no rate date cannot be judged stale."""
+    wt = _load("workflow_trace")
+    dash = _load("dashboard")
+    assert wt.load_rates()["rates_as_of"] == dash.PRICING_AS_OF
 
 
 def test_a_total_with_an_unpriced_stage_says_so(tmp_path):
@@ -96,18 +111,13 @@ def test_a_total_with_an_unpriced_stage_says_so(tmp_path):
     wt = _load("workflow_trace")
     path = _write(tmp_path, [_agent("qa-engineer", "claude-model-x"),
                              _agent("code-reviewer", "claude-opus-5")])
-    trace = wt.parse(path, rates=wt.load_rates())
+    trace = wt.parse(path)
     assert trace["totals"]["unpriced_stages"] == 1
 
 
-def test_the_shipped_rate_table_is_readable_and_dated():
+def test_a_trace_reports_the_rate_date_it_used():
     wt = _load("workflow_trace")
-    rates = wt.load_rates()
-    assert rates.get("models"), "the shipped table must parse"
-    assert rates.get("rates_as_of"), "an undated rate table cannot be judged stale"
-    assert rates.get("verified_against_invoice") is False, (
-        "the shipped rates are example defaults and must say so"
-    )
+    assert wt.load_rates().get("rates_as_of"), "an undated cost cannot be judged stale"
 
 
 # --- stages and loops ------------------------------------------------------------------
@@ -284,3 +294,34 @@ def test_the_export_defers_to_cost_for_the_session_total(tmp_path):
     assert "/cost" in text, "the authoritative session total must be named"
     assert "authority" in text
     assert "apportion" in text, "and this table's actual job must be stated"
+
+
+def test_pricing_works_when_run_as_a_module_not_just_when_imported():
+    """2026-08-25: run as `python -m scripts.workflow_trace`, the repo root is on sys.path
+    and scripts/ is not, so `import dashboard` failed and EVERY stage priced as unknown -
+    while a direct import in a test priced fine, because the test had put scripts/ on the
+    path by hand. A test that only exercises the import-shaped path cannot see this."""
+    import subprocess
+
+    proc = subprocess.run(
+        [sys.executable, "-c",
+         "import sys; sys.path=[p for p in sys.path if p.rstrip('/').endswith('virt-survtecb')"
+         " or 'scripts' not in p]; "
+         "import importlib.util as u; "
+         f"s=u.spec_from_file_location('wt', r'{REPO_ROOT}/scripts/workflow_trace.py'); "
+         "m=u.module_from_spec(s); s.loader.exec_module(m); "
+         "print(m.cost_of({'input_tokens':1000000,'output_tokens':0,"
+         "'cache_creation_input_tokens':0,'cache_read_input_tokens':0}, 'claude-opus-5'))"],
+        capture_output=True, text=True, cwd=str(REPO_ROOT), timeout=60,
+    )
+    assert proc.stdout.strip() == "5.0", f"pricing broke outside an import: {proc.stdout!r} {proc.stderr[-300:]!r}"
+
+
+def test_a_live_model_id_with_suffixes_is_priced():
+    """The IDs transcripts actually carry: a context marker and a release date. Neither
+    changes the rate, and neither matched the table before this."""
+    wt = _load("workflow_trace")
+    usage = {"input_tokens": 1_000_000, "output_tokens": 0,
+             "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
+    assert wt.cost_of(usage, "claude-opus-5[1m]") == 5.0
+    assert wt.cost_of(usage, "claude-haiku-4-5-20251001") == 1.0

@@ -8,10 +8,17 @@ accept anywhere else. Every figure here is read from the transcript Claude Code 
 writes, so the account is evidenced rather than recalled.
 
 WHAT IS MEASURED AND WHAT IS NOT. Token counts, models, durations, tool stats and outcomes
-are 📊 OBSERVED - read from the file. Money is 🧠 INFERRED: tokens multiplied by a rate table
-(config/model-pricing.json) that ships as an example default. The distinction is carried
-through every field name and every renderer, because a number that looks like a bill invites
-being treated as one.
+are 📊 OBSERVED - read from the file. Money is 🧠 INFERRED: tokens priced through
+scripts/dashboard.py's rate table - the SAME one `budget-status` measures an unattended run
+against, deliberately, so the workflow view and the spend ceiling can never report different
+costs for the same run. The distinction is carried through every field name and every
+renderer, because a number that looks like a bill invites being treated as one.
+
+FOR THE SESSION TOTAL, `/cost` IN CLAUDE CODE IS THE AUTHORITY and is not restated here.
+Claude Code records cost nowhere on disk (verified 2026-08-25), so per-stage figures cannot
+borrow it - and a session total is not the question anyway: `/cost` cannot say what the
+second review pass cost, and raw tokens cannot either, since an opus output token is several
+times a haiku one. Apportioning across stages is the only reason prices appear here.
 
 THE LIMIT THAT SHAPED THE DESIGN. A subagent's internal turns are NOT in the parent
 transcript - verified 2026-08-25 across all 465 transcripts on the author's machine, zero
@@ -36,7 +43,13 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PRICING = _REPO_ROOT / "config" / "model-pricing.json"
+# Run as `python -m scripts.workflow_trace`, the repo ROOT is on sys.path and scripts/ is
+# not - so a bare `import dashboard` fails and pricing silently returns None for everything
+# (found 2026-08-25: the CLI reported every stage unpriced while a direct import priced them
+# fine, because the test had put scripts/ on the path by hand). Make the sibling importable
+# here rather than leaving it to whoever imports this module.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Anything below this many tokens between two agent calls is not worth a row of its own: the
 # orchestrator reading one file is noise, not a stage. Chosen to be visible in the trace
@@ -81,37 +94,43 @@ def _safe_mtime(path: Path) -> float:
 
 
 def load_rates(path: Path | None = None) -> dict:
-    """The rate table, or an empty one. An unreadable table costs nothing but the money
-    column - the trace itself is still entirely valid without it."""
+    """Rate metadata, for anything that wants to state how stale the prices are.
+
+    There is no table here to load. Pricing lives in scripts/dashboard.py and this module
+    prices THROUGH it - see `cost_of`. The signature is kept because callers pass rates
+    around; the content is provenance, not prices."""
     try:
-        data = json.loads((path or _PRICING).read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
+        import dashboard
+
+        return {"rates_as_of": getattr(dashboard, "PRICING_AS_OF", ""), "currency": "USD"}
+    except Exception:
+        return {"rates_as_of": "", "currency": "USD"}
 
 
-def cost_of(usage: dict, model: str, rates: dict) -> float | None:
-    """Estimated cost of one usage block, or None when the model is not in the table.
+def cost_of(usage: dict, model: str, rates: dict | None = None) -> float | None:
+    """Estimated cost of one usage block, or None when the model has no price.
+
+    Prices through scripts/dashboard.py's table, which is the SAME one `budget-status` uses
+    to measure an unattended run against its ceiling. That matters more than convenience:
+    this view shipped on 2026-08-25 with a second, hand-written table that disagreed with it
+    (opus at 15/75 against 5/25), which would have had the workflow view and the spend
+    ceiling reporting different costs for the same run. One table, or the numbers argue.
 
     None is a first-class answer, not a failure: an unpriced model shows its tokens and says
-    the cost is unknown. Pricing it from a neighbouring model's rate would produce a figure
-    that looks authoritative and is wrong."""
-    models = rates.get("models") or {}
-    resolved = (rates.get("aliases") or {}).get(model, model)
-    rate = models.get(resolved)
-    if not isinstance(rate, dict) or not isinstance(usage, dict):
+    so. Pricing it from a neighbouring model's rate would look authoritative and be wrong."""
+    if not isinstance(usage, dict):
         return None
-    per = 1_000_000.0
     try:
-        return round(
-            (usage.get("input_tokens", 0) or 0) * rate.get("input", 0) / per
-            + (usage.get("output_tokens", 0) or 0) * rate.get("output", 0) / per
-            + (usage.get("cache_creation_input_tokens", 0) or 0) * rate.get("cache_write", 0) / per
-            + (usage.get("cache_read_input_tokens", 0) or 0) * rate.get("cache_read", 0) / per,
-            4,
-        )
-    except (TypeError, ValueError):
+        import dashboard
+    except ImportError:
+        # Not "this model has no rate" - "pricing is unavailable at all". Different fault,
+        # and a caller showing "unpriced" for both would be hiding a broken install.
         return None
+    try:
+        priced = dashboard.price_usage(model or "", usage)
+    except Exception:
+        return None
+    return None if priced is None else round(priced, 4)
 
 
 # Cache reads are billed on EVERY request, so they belong in the cost - but they are the same

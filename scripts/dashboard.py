@@ -77,6 +77,7 @@ import html
 import json
 import re
 import sys
+import re as _re
 from pathlib import Path
 
 try:  # repo-relative import (python -m scripts.dashboard) with a fallback for direct runs
@@ -395,15 +396,56 @@ _MODEL_PRICING_PER_MTOK: dict[str, tuple[float, float, float, float, float]] = {
 }
 
 
+_CONTEXT_SUFFIX = _re.compile(r"\[[^\]]*\]$")     # claude-opus-5[1m]
+_DATE_SUFFIX = _re.compile(r"-\d{8}$")            # claude-haiku-4-5-20251001
+
+
+def normalise_model(model: str | None) -> str:
+    """The pricing key for a model id as transcripts actually spell it.
+
+    Live IDs carry two suffixes the table above does not: a context-window marker
+    (`claude-opus-5[1m]`) and a release date (`claude-haiku-4-5-20251001`). Neither changes
+    the rate, and neither matched - so every message from the models this machine actually
+    runs priced as None and was quietly counted as "partially priced" (found 2026-08-25
+    while removing a duplicate rate table). That is not cosmetic: `budget-status` measures an
+    unattended run against its ceiling using this function, so an unpriceable model means the
+    ceiling was being compared against an under-counted spend.
+
+    Deliberately strips only these two suffixes. Anything else unknown still returns
+    unpriced, which is the honest answer for a model nobody has set a rate for."""
+    if not model:
+        return ""
+    key = _CONTEXT_SUFFIX.sub("", str(model).strip())
+    return _DATE_SUFFIX.sub("", key)
+
+
+# The date the table above was last refreshed. Exposed so anything that SHOWS a cost can
+# say how stale its rates are, rather than presenting a figure with no provenance.
+PRICING_AS_OF = "2026-08-08"
+
+
+def price_usage(model: str | None, usage: dict) -> float | None:
+    """Public entry point for pricing one usage block - see `_price_usage`.
+
+    Exists so other tools price through THIS table instead of carrying their own. On
+    2026-08-25 the workflow view shipped with a second, hand-written table that disagreed
+    with this one (opus at 15/75 against 5/25, fable at 3/15 against 10/50) - two tables
+    that disagree are worse than one that is stale, because the ceiling in an unattended run
+    is measured against this one and the two would have reported different costs for the
+    same run."""
+    return _price_usage(model, usage)
+
+
 def _price_usage(model: str | None, usage: dict) -> float | None:
     """Dollar cost of one message's usage at current list pricing. Returns None - never a
     guess - when the model isn't in the pricing table: synthetic/internal messages (model
     `<synthetic>`), a missing model field on older transcripts, or a model released after
     this table was last refreshed. Callers surface that as "estimate, partially priced"
     rather than silently underselling the total."""
-    if not model or model not in _MODEL_PRICING_PER_MTOK:
+    key = normalise_model(model)
+    if not key or key not in _MODEL_PRICING_PER_MTOK:
         return None
-    price_in, price_out, price_cw5, price_cw1, price_cr = _MODEL_PRICING_PER_MTOK[model]
+    price_in, price_out, price_cw5, price_cw1, price_cr = _MODEL_PRICING_PER_MTOK[key]
     cache_creation = usage.get("cache_creation") or {}
     cw_5m = int(cache_creation.get("ephemeral_5m_input_tokens") or 0)
     cw_1h = int(cache_creation.get("ephemeral_1h_input_tokens") or 0)

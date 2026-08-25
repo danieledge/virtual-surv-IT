@@ -63,9 +63,16 @@ Tokens are **📊 observed**. Money is **🧠 inferred** from a rate table, and 
 not pedantry here: rates change, tiers differ, and a number that looks like a bill invites
 being treated as one.
 
-- `config/model-pricing.json`: per-model input / output / cache-write / cache-read rates,
-  each with a `rates_as_of` date and a source note. Two-tier overridable like every other
-  setting, so a team on custom pricing is not stuck with ours.
+- **One rate table, and it already existed.** The build shipped a second table before this
+  was caught: `scripts/dashboard.py` has priced models since the spend work, and the new one
+  DISAGREED with it (opus 15/75 against 5/25, fable 3/15 against 10/50). Two tables that
+  disagree are worse than one that is stale, because `budget-status` measures an unattended
+  run's ceiling against dashboard's - the workflow view and the spend gate would have
+  reported different costs for the same run. Pricing now goes through
+  `dashboard.price_usage`, and removing the duplicate exposed a live bug in the survivor:
+  it matched no model id carrying a context suffix (`claude-opus-5[1m]`) or a release date
+  (`claude-haiku-4-5-20251001`), so every message from the models actually in use priced as
+  unknown and the ceiling was being compared against an under-counted spend.
 - An **unknown model is never guessed** - it shows tokens and `cost: unknown`, because a
   silently wrong figure is worse than a visibly missing one. New model IDs will appear.
 - Cache reads are priced separately and shown separately. They dominate long sessions and
@@ -140,7 +147,8 @@ need was loudest.
 ## 8. Build order
 
 1. `workflow_trace.py` + a captured-transcript test corpus. No UI. **This is most of it.**
-2. `config/model-pricing.json` + costing, with the unknown-model path tested first.
+2. Costing through the EXISTING `dashboard.py` table, with the unknown-model path tested
+   first. (No new table - see above.)
 3. Loop detection over the ordered stages.
 4. `render_workflow.py` export (`.md`/`.html`/`.json`/`.csv`).
 5. `workflow_screen` in the launcher, pty-rendered before it is believed.
