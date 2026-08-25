@@ -4979,6 +4979,19 @@ def run_setup_alias(
                 "before Claude Code even starts."
             )
         )
+    elif not had_error:
+        # Nothing was WRITTEN, because the alias is already there - and the reload notice
+        # above is skipped, which leaves the one person who most needs it with silence.
+        # A shell only reads its rc file at startup, so a terminal opened BEFORE the alias
+        # landed does not have it however correct the file is (live report 2026-08-25:
+        # "virt-surv isn't added to path after I ran the installer ... command not found").
+        # Say it whenever the alias exists, not only when we just wrote it.
+        print(
+            f"\n{style.dim('The alias is already installed.')} If "
+            f"{style.yellow('virt-surv')} is not found in THIS terminal, it started before "
+            f"the alias did - run {style.yellow('source ~/.bashrc')} "
+            f"({style.yellow('. $PROFILE')} in PowerShell), or open a new terminal."
+        )
     return 1 if had_error else 0
 
 

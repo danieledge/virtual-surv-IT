@@ -7993,3 +7993,36 @@ def test_the_update_notice_points_at_the_real_diagnostics_option():
     assert "MENU_ACTIONS" in code, "the option number must be derived, not typed"
     key = next(k for k, v in install_helper.MENU_ACTIONS.items() if v == "diagnostics")
     assert key == "3", "if this moves, the notice follows it automatically"
+
+
+def test_an_already_installed_alias_still_explains_a_stale_terminal(monkeypatch, tmp_path, capsys):
+    """Live report, 2026-08-25: "virt-surv isn't added to path after I ran the installer ...
+    command not found". The alias WAS installed and a new shell found it fine - the reporter's
+    terminal had simply started before the alias landed, and a shell only reads its rc file at
+    startup.
+
+    The reload notice existed but was guarded by "did we write anything", so the person who
+    most needed it - the one for whom nothing needed writing - got silence."""
+    import install_helper as ih
+
+    rc = tmp_path / ".bashrc"
+    interpreter = "python3"
+    # Pin the line the installer would generate, so "already current" is deterministic. Built
+    # from the real generator, then made the ONLY answer - otherwise the computed paths
+    # differ from whatever the fixture wrote and it takes the rewrite branch instead, which
+    # is the branch that already worked.
+    line = ih._alias_line_for(rc, interpreter, tmp_path / "launcher.py", tmp_path / "ih.py")
+    monkeypatch.setattr(ih, "_alias_line_for", lambda *a, **k: line)
+    rc.write_text(f"# existing\n{line}\n", encoding="utf-8")
+    monkeypatch.setattr(ih, "_posix_shell_rc_candidates", lambda: [("bash", rc)])
+    monkeypatch.setattr(ih, "_powershell_profile_candidates", lambda: [])
+    monkeypatch.setattr(ih, "_check_interpreters", lambda order: ([], interpreter))
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda arg: tmp_path)
+    monkeypatch.setattr(ih, "confirm", lambda *a, **k: True)
+    monkeypatch.setattr(ih, "ask", lambda *a, **k: "")
+
+    ih.run_setup_alias(ih.Style(False), ih.marks(), assume_yes=True, repo_hint=str(tmp_path))
+    out = capsys.readouterr().out
+    assert "already installed" in out
+    assert "source ~/.bashrc" in out
+    assert "started before the alias" in out, "it must name the actual cause"
