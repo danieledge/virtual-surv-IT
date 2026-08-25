@@ -725,6 +725,16 @@ def resolve_preferences(project_dir: Path) -> dict:
     # orientation and the alternative is opening documents at random, which is unbounded and
     # pulls content into context that may never be needed. Anthropic's own retrieval guidance
     # points the same way: under ~200k tokens, orientation beats retrieval infrastructure.
+    # guard_daemon (2026-08-25): the persistent guard process. ON by default at both tiers -
+    # it runs the SAME guard code, just without paying an interpreter cold start per hook
+    # invocation (~625ms vs ~211ms per call on Windows), so the old opt-in default was
+    # costing every user that difference to guard against a risk that never materialised.
+    # run-guard.sh reads the same two files directly in shell; this mirrors it so the
+    # setting is visible and toggleable rather than being an invisible shell behaviour.
+    if "guard_daemon" in prefs:
+        guard_daemon_on = bool(prefs["guard_daemon"])
+    else:
+        guard_daemon_on = bool(machine_defaults.get("default_guard_daemon", True))
     if "document_map" in prefs:
         document_map_on = bool(prefs["document_map"])
     else:
@@ -769,6 +779,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "probe_cache": probe_cache_on,
         "data_profiling": data_profiling_on,
         "document_map": document_map_on,
+        "guard_daemon": guard_daemon_on,
         "evidence_room": evidence_room_on,
         "autonomous_mode": autonomous_mode_on,
         "qa_depth": qa_depth,

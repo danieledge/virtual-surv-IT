@@ -3,7 +3,7 @@
 # Virtual Surv-IT
 
 ![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Version 0.36.0](https://img.shields.io/badge/version-0.36.0-blue)
+![Version 0.37.0](https://img.shields.io/badge/version-0.37.0-blue)
 ![Tests 1900+ passing](https://img.shields.io/badge/tests-1900%2B%20passing-brightgreen)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2)
 ![Status: proof of concept](https://img.shields.io/badge/status-proof%20of%20concept-orange)
@@ -12,7 +12,7 @@
 <table>
 <tr><td>
 
-🏷️ **Current version: 0.36.0** (2026-08-20) · 📖 [0.33-cycle overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
+🏷️ **Current version: 0.37.0** (2026-08-25) · 📖 [0.33-cycle overview](docs/releases/0.33.md) · 📜 [Full changelog](CHANGELOG.md)
 
 **Biggest features this cycle: the front door became a launcher, and the token bill got engineered.**
 - 🚪 **`virt-surv go` is the front door** (0.34.0). The resume-or-new decision, environment
@@ -23,6 +23,23 @@
   response from ~307ms cold start to ~12.6ms; one dispatcher process replaces five per Bash
   call; a Git Bash fix cut shell-snapshot startup ~15x. Built against live reports from
   locked-down Windows estates.
+- 📊 **The team can now interrogate data and documents, not just code** (0.37.0). Three
+  deterministic tools: temporal profiling of alert data (**calendar-aware** gaps, freshness,
+  cadence - a naive gap check flags every weekend and buries the real outage), FIBO-grounded
+  column meanings, and a token-budgeted documentation inventory. The first two emit
+  **aggregates only, never a record**, which makes them *safer* than the alternative of an
+  agent reading rows into context. `.eml` and `.msg` mail finally convert too - comms
+  surveillance is a pillar of this team, and `.msg` was being skipped silently.
+- ⏱️ **A performance pass that began by finding a hang** (0.37.0). The suite was not slow, it
+  was stuck - on an interactive screen waiting for keys a test harness never sends. Then the
+  measured wins: state mutations 0.38s → 0.10s, date parsing 29x, the codebase skeleton 15s →
+  6.5s, and both every-prompt hooks now share the persistent guard daemon, which is on by
+  default. Every figure here was measured before and after, not estimated.
+- 🤖 **Autonomy grew up** (0.36-0.37). Unattended runs are decided **per ticket, not per
+  project**, reachable from a typed request as well as a Jira, bounded by a spend ceiling
+  whose degrade ladder is answered up front - because an unattended run has nobody to ask.
+  Its Definition-of-Done gates turned out to be **dead code**, caught by an adversarial audit
+  and by writing the first test that drove the real entry point rather than the gate.
 - ⚡ **The probe prefetch actually fires now** (0.35.1). The hook that serves a pre-computed
   engage probe read the submitted prompt from a field name Claude Code has never sent, so it
   had never once fired: every `/engage` silently paid the full in-session probe, which is

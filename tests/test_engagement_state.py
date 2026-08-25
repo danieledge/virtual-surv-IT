@@ -601,6 +601,7 @@ def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeyp
         "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
         "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
         "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)
+        "guard_daemon": True,  # persistent guard process, on by default both tiers (2026-08-25)
         "qa_depth": "auto",  # derived from work shape unless set (2026-08-20)
     }
     assert validate_state(state) == []
@@ -621,6 +622,7 @@ def test_init_settings_snapshot_builtin_defaults_when_no_preferences_file(tmp_pa
         "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
         "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
         "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)
+        "guard_daemon": True,  # persistent guard process, on by default both tiers (2026-08-25)
         "qa_depth": "auto",  # derived from work shape unless set (2026-08-20)
     }
 

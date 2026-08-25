@@ -253,6 +253,7 @@ _TOGGLE_PREFS = (
     ("autonomous jira mode", "autonomous_mode"),
     ("data profiling tools", "data_profiling"),
     ("document map", "document_map"),
+    ("guard daemon", "guard_daemon"),
 )
 
 
@@ -362,6 +363,13 @@ _SETTING_HELP = {
         "Writes tuned timeouts and a 1-hour prompt-cache TTL into this project's "
         ".claude/settings.json - fewer timeouts, and cache that survives a thinking pause.",
         "Not applied: Claude Code's own defaults are used.",
+    ),
+    "guard daemon": (
+        "Runs the safety guards in one persistent process instead of starting a fresh "
+        "interpreter for every hook. Same guard code, same decisions - only the startup "
+        "cost differs (~625ms vs ~211ms per call on Windows).",
+        "On by default at machine and project level. Off falls back to a process per call: "
+        "slower, never less safe.",
     ),
     "document map": (
         "Lets the team inventory a documentation tree first - filenames, dates and heading "

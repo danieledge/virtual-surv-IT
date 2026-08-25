@@ -302,3 +302,55 @@ def test_the_evidence_sidecar_is_named_for_what_it_is(tmp_path):
     _run("convert_file", str(path))
     assert (tmp_path / "t.converted.csv.evidence.json").is_file()
     assert not (tmp_path / "t.converted.csv.report.json").exists()
+
+
+# --- the guard daemon is on by default now (2026-08-25) ---------------------------------------
+
+
+def _resolve(tmp_path, prefs=None, machine=None, monkeypatch=None):
+    import importlib
+
+    (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".claude" / "team-preferences.json").write_text(
+        json.dumps(prefs or {}), encoding="utf-8"
+    )
+    cfg = tmp_path / "cfg" / "virt-surv-it"
+    cfg.mkdir(parents=True, exist_ok=True)
+    (cfg / "installer.json").write_text(json.dumps(machine or {}), encoding="utf-8")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import engage_probe
+
+    importlib.reload(engage_probe)
+    return engage_probe.resolve_preferences(tmp_path)
+
+
+def test_the_daemon_is_on_by_default(tmp_path, monkeypatch):
+    """It runs the SAME guard code in a persistent process, so the only difference is an
+    interpreter cold start per hook - ~625ms against ~211ms per call on Windows. The old
+    opt-in default charged every user that difference to guard a risk that never appeared."""
+    assert _resolve(tmp_path, monkeypatch=monkeypatch)["guard_daemon"] is True
+
+
+def test_either_tier_can_turn_the_daemon_off_and_the_project_wins(tmp_path, monkeypatch):
+    assert _resolve(tmp_path, machine={"default_guard_daemon": False},
+                    monkeypatch=monkeypatch)["guard_daemon"] is False
+    assert _resolve(tmp_path, prefs={"guard_daemon": False},
+                    monkeypatch=monkeypatch)["guard_daemon"] is False
+    # Project beats machine in BOTH directions - that is what "project wins" has to mean.
+    assert _resolve(tmp_path, prefs={"guard_daemon": True},
+                    machine={"default_guard_daemon": False},
+                    monkeypatch=monkeypatch)["guard_daemon"] is True
+
+
+def test_the_shell_and_python_tiers_agree_on_the_default():
+    """run-guard.sh decides this in shell, independently of resolve_preferences. Two
+    implementations of one rule can drift, so pin that both default to ON and that only an
+    explicit false turns it off."""
+    # Asserts the STAGED copy, which is the source of truth for the intended rule. Whether
+    # it has reached the live file is a different question, and test_hooks_in_sync owns it -
+    # duplicating that here would just mean two tests failing for one pending apply.
+    shell = (REPO_ROOT / "scripts" / "staged_hooks" / "run-guard.sh").read_text(encoding="utf-8")
+    assert "_use_daemon=1" in shell
+    assert '"default_guard_daemon" *: *false' in shell, "machine tier missing from the shell"
+    assert '"guard_daemon" *: *false' in shell, "project-off missing from the shell"
