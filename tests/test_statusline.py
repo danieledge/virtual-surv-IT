@@ -104,7 +104,7 @@ def test_writes_the_cache_after_a_fresh_probe(tmp_path):
     assert cache.is_file()
     cached = cache.read_text(encoding="utf-8").strip()
     assert cached  # a real interpreter name was recorded
-    assert shutil.which(cached, path="/usr/bin:/bin") is not None
+    assert shutil.which(cached, path=_default_path()) is not None
 
 
 def test_existing_cache_is_reused_and_left_unchanged(tmp_path):
@@ -250,4 +250,4 @@ def test_invalid_cached_entry_falls_back_to_the_probe_loop(tmp_path):
     # the fallback probe ran and overwrote the bogus entry with a real one
     cached = (cache_dir / ".guard-interpreter").read_text(encoding="utf-8").strip()
     assert cached != "nonexistent-interpreter-xyz"
-    assert shutil.which(cached, path="/usr/bin:/bin") is not None
+    assert shutil.which(cached, path=_default_path()) is not None
