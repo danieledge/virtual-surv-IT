@@ -43,11 +43,15 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
-import subprocess
 import sys
-import time
 from pathlib import Path
+
+# shutil, subprocess and time are imported INSIDE the branches that use them, not here.
+# This hook fires on EVERY UserPromptSubmit - it must, because its job is to put the probe
+# in context before the turn starts, so it cannot be lazy or deferred - and on the great
+# majority of prompts it reads one regex and exits. Paying `import subprocess` (a measured
+# ~11ms, pulling selectors and signal with it) to decide it has nothing to do is exactly
+# the cost its dormancy gate exists to avoid (2026-08-25 performance review).
 
 # \b alone is too loose here: a hyphen counts as a word boundary, so "/engage-lighter"
 # would match via the bare "engage" branch (live test caught this). Command arguments
@@ -88,6 +92,8 @@ def _read_cache(project_dir: Path) -> str:
     interp = raw.strip()
     if not interp or "\n" in raw.strip("\n"):
         return ""  # empty, or a multi-line file - not a single interpreter token/path
+    import shutil
+
     return interp if shutil.which(interp) else ""
 
 
@@ -217,6 +223,8 @@ def _git_identity(project_dir: Path) -> tuple[str, str]:
     name twice - the HEAD half of the fingerprint was a no-op and a new commit on the same
     branch never invalidated the cache (found 2026-08-20)."""
     try:
+        import subprocess
+
         proc = subprocess.run(
             ["git", "-C", str(project_dir), "rev-parse", "HEAD", "--abbrev-ref", "HEAD"],
             capture_output=True,
@@ -260,6 +268,8 @@ def _cached_block(project_dir: Path, data: dict, prompt: str) -> str | None:
         raw = json.loads(
             (project_dir / ".claude" / "engage-probe.json").read_text(encoding="utf-8")
         )
+        import time
+
         age = time.time() - float(raw.get("computed_at_epoch") or 0)
         if age < 0 or age > _PROBE_CACHE_TTL_S:
             return None
