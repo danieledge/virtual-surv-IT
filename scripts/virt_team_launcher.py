@@ -3698,6 +3698,7 @@ def main() -> int:
     # nothing is the defect class this repo has met five times in a week; the fix each time
     # is to make it speak.
     pending = _pending_auto(project_dir)
+    unattended = bool(pending.get("auto")) and "--auto" in (decision or "").split()
     if pending.get("run_mode") == "headless" and decision:
         # A headless run is STARTED here, not handed to the shell: there is no terminal for
         # the shell to launch into, and the launcher is the thing that will watch it.
@@ -3706,6 +3707,27 @@ def main() -> int:
     if _new_window_wanted(project_dir):
         if _launch_in_window(project_dir, decision, pending.get("slug", "")):
             return _ABORT_EXIT_CODE
+        if unattended and decision:
+            # No window, and this run is UNATTENDED. Falling back in place would hand the
+            # terminal to Claude Code and take the launcher - and therefore the monitor -
+            # with it, leaving a run nobody can watch or stop (live report 2026-08-25: "it
+            # launched claude code in unattended mode and because no window manager it sat
+            # there ... how can I monitor it if I can't go to the TUI").
+            #
+            # Headless is CLOSER to what was asked for than in-place is. The human chose a
+            # separate window so the launcher would survive to show them the run; if there
+            # is no window, keeping the launcher is the part worth keeping. Nothing is lost:
+            # an unattended run answers no questions by definition, which is the only thing
+            # in-place would have given it.
+            print(
+                _Ink().warn(
+                    "    no window available - running headless instead so you can still "
+                    "watch it here"
+                ),
+                file=sys.stderr,
+            )
+            if _start_headless(project_dir, decision, pending):
+                return _ABORT_EXIT_CODE
     else:
         print(
             _Ink().dim(

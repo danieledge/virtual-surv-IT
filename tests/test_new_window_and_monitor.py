@@ -61,6 +61,10 @@ def test_no_graphical_session_means_no_window(monkeypatch):
     monkeypatch.setattr(lt.sys, "platform", "linux")
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    # TMUX too, since tmux became a legitimate answer that needs no display (2026-08-25).
+    # Without this the test inherits the developer's own tmux session and fails - which is
+    # itself the point of the feature, so it is cleared rather than worked around.
+    monkeypatch.delenv("TMUX", raising=False)
     monkeypatch.setattr(lt, "_which", lambda name: "/usr/bin/xterm")
     assert lt.available() == ""
     assert lt.open_in_new_window(["claude"], Path(".")) is False
@@ -150,8 +154,13 @@ def test_the_wrapper_is_told_to_stand_down_only_when_a_window_opened(tmp_path, m
     monkeypatch.setattr(mod, "_launch_in_window", lambda *a: True)
     assert mod.main() == mod._ABORT_EXIT_CODE
 
+    # Both routes unavailable. Since 2026-08-25 an unattended run whose window fails
+    # degrades to HEADLESS rather than in place, so this pins the property it always meant:
+    # the wrapper stands down only when something actually started - not merely when a
+    # launch was attempted.
     monkeypatch.setattr(mod, "_launch_in_window", lambda *a: False)
-    assert mod.main() == 0, "a failed window must let the wrapper launch in place"
+    monkeypatch.setattr(mod, "_start_headless", lambda *a: False)
+    assert mod.main() == 0, "nothing started, so the wrapper must launch in place"
 
 
 def test_an_attended_run_gets_a_window_too(tmp_path, monkeypatch):
@@ -576,3 +585,123 @@ def test_the_transcript_reader_is_gone_not_dormant():
     app = (scripts / "launcher_app.py").read_text(encoding="utf-8")
     assert "def workflow_screen" not in app
     assert "import workflow_trace" not in app
+
+
+# --- tmux is a window manager too (2026-08-25) ----------------------------------------------
+#
+# "If running tmux why not open in a tmux window" - asked after seeing "no windowed terminal
+# found" on a box that was running tmux at the time. Exactly right: tmux needs no X display,
+# works over ssh and mosh, and works in a container, which is every place the graphical tiers
+# cannot go. Someone already in tmux wants the session in their tmux, not in a separate
+# desktop window they then have to go and find.
+
+
+def test_tmux_is_preferred_and_needs_no_display(monkeypatch):
+    """It is checked BEFORE the display test, or a headless box inside tmux reports "no
+    windowed terminal" while a perfectly good window manager runs in the same terminal."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt.sys, "platform", "linux")
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.setenv("TMUX", "/tmp/tmux-1000/default,123,0")
+    monkeypatch.setattr(lt, "_which", lambda name: f"/usr/bin/{name}")
+    assert lt.available() == "tmux"
+
+
+def test_tmux_wins_over_a_graphical_terminal(monkeypatch):
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt.sys, "platform", "linux")
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setenv("TMUX", "/tmp/tmux-1000/default,123,0")
+    monkeypatch.setattr(lt, "_which", lambda name: f"/usr/bin/{name}")
+    assert lt.available() == "tmux", "already in tmux: put it where they are looking"
+
+
+def test_outside_tmux_the_variable_is_absent_so_the_tier_is_skipped(monkeypatch):
+    """$TMUX is set by tmux in every pane and by nothing else, so its presence IS the test.
+    Having the binary installed is not the same as running inside it."""
+    lt = _load("launch_terminal")
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.setattr(lt, "_which", lambda name: f"/usr/bin/{name}")
+    assert lt._in_tmux() is False
+
+
+def test_tmux_opens_a_window_in_the_existing_session(monkeypatch):
+    """A new WINDOW, not a new session: the point is that it appears alongside what they are
+    already looking at. The command follows as separate arguments, which tmux runs directly
+    rather than through a shell - so nothing needs quoting."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "_which", lambda name: f"/usr/bin/{name}")
+    argv = lt._posix_argv("tmux", ["claude", "/engage --new --auto"], Path("/tmp/proj"))
+    assert argv[1] == "new-window"
+    assert "-c" in argv and "/tmp/proj" in argv
+    assert argv[-2:] == ["claude", "/engage --new --auto"], "one argument, unquoted, intact"
+    assert "new-session" not in argv
+
+
+def test_a_failing_tmux_call_is_reported_as_not_launched(monkeypatch, tmp_path):
+    """tmux talks to its own server; if it cannot reach the session it must not be reported
+    as a launch, or the caller stands down while nothing runs."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "available", lambda: "tmux")
+    monkeypatch.setattr(lt, "_resolvable", lambda program, terminal="": True)
+
+    class _Failed:
+        returncode = 1
+
+    monkeypatch.setattr(lt.subprocess, "run", lambda *a, **k: _Failed())
+    assert lt.open_in_new_window(["claude", "/engage"], tmp_path) is False
+
+
+# --- an unattended run must never become unwatchable (2026-08-25) ---------------------------
+#
+# "It launched claude code in unattended mode and because no window manager it sat there in
+# claude code - how can I monitor it if I can't go to the TUI, control it?" The window could
+# not open, so it fell back IN PLACE: Claude Code took the terminal and the launcher went with
+# it, taking the monitor. For an unattended run the monitor is the entire point.
+
+
+def test_an_unattended_run_with_no_window_goes_headless_not_in_place(tmp_path, monkeypatch, capsys):
+    """Headless is CLOSER to what was asked for than in-place. The human chose a separate
+    window so the launcher would survive to show them the run; with no window, keeping the
+    launcher is the part worth keeping. Nothing is lost - an unattended run answers no
+    questions by definition, which is the only thing in-place would have offered."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path, new_window=True)
+    (project / ".claude" / ".auto-pending.json").write_text(
+        json.dumps({"slug": "alpha", "auto": True, "run_mode": "window"}), encoding="utf-8"
+    )
+    monkeypatch.chdir(project)
+    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
+                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
+                 "_heal_stale_alias_once", "_clear_request_handoff"):
+        if hasattr(mod, name):
+            monkeypatch.setattr(mod, name, lambda *a, **k: None)
+    monkeypatch.setattr(mod, "_resume_decision", lambda _d: "/engage --new --auto")
+    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: False)   # no window anywhere
+    started = []
+    monkeypatch.setattr(mod, "_start_headless", lambda p, d, pend: started.append(d) or True)
+
+    assert mod.main() == mod._ABORT_EXIT_CODE
+    assert started == ["/engage --new --auto"], "it must start headless rather than in place"
+    assert "watch it here" in capsys.readouterr().err
+
+
+def test_an_attended_run_with_no_window_still_falls_back_in_place(tmp_path, monkeypatch):
+    """The degrade is for UNATTENDED runs only. An attended session in place is exactly
+    right - there is a human in it, and nothing to monitor from outside."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path, new_window=True)
+    monkeypatch.chdir(project)
+    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
+                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
+                 "_heal_stale_alias_once", "_clear_request_handoff"):
+        if hasattr(mod, name):
+            monkeypatch.setattr(mod, name, lambda *a, **k: None)
+    monkeypatch.setattr(mod, "_resume_decision", lambda _d: "/engage --new --request-pending")
+    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: False)
+    started = []
+    monkeypatch.setattr(mod, "_start_headless", lambda p, d, pend: started.append(d) or True)
+
+    assert mod.main() == 0, "the wrapper launches it in place"
+    assert started == [], "an attended run must not be forced headless"

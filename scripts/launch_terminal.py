@@ -51,6 +51,20 @@ _POSIX_TIERS = (
 )
 
 
+def _in_tmux() -> bool:
+    """Are we inside a tmux session, with tmux available to talk to?
+
+    If so it is the right answer and the FIRST answer (2026-08-25, owner: "if running tmux
+    why not open in a tmux window"). Exactly so: tmux is a window manager that needs no X
+    display, works over ssh and mosh, and works in a container - all the places the
+    graphical tiers below cannot go. Someone already in tmux almost certainly wants the new
+    session in their tmux, not in a separate desktop window they then have to find.
+
+    $TMUX is set by tmux inside every pane and by nothing else, so its presence is the test.
+    """
+    return bool(os.environ.get("TMUX")) and _which("tmux") is not None
+
+
 def _display_present() -> bool:
     """A graphical session to open a window INTO. Without one, every emulator below exists
     and fails at runtime - the worst shape of failure, since the caller has already decided
@@ -66,6 +80,11 @@ def _which(name: str) -> str | None:
 
 def available() -> str:
     """The terminal this machine would use, or "" if none. Launches nothing."""
+    # BEFORE the display check, deliberately: tmux needs no display, and a headless box
+    # inside tmux would otherwise report "no windowed terminal" while a perfectly good
+    # window manager was running in the same terminal.
+    if _in_tmux():
+        return "tmux"
     if not _display_present():
         return ""
     if sys.platform == "win32":
@@ -83,6 +102,12 @@ def available() -> str:
 
 def _posix_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
     exe = _which(terminal) or terminal
+    if terminal == "tmux":
+        # A new WINDOW in the caller's own session, not a new session: the point is that it
+        # appears alongside what they are already looking at, one Ctrl-B n away. -c sets the
+        # working directory; the command follows as separate arguments, which tmux runs
+        # directly rather than through a shell - so nothing here needs quoting.
+        return [exe, "new-window", "-c", str(cwd), "--"] + command
     # gnome-terminal and its relatives take `--` before the command; the others use -e.
     if terminal in ("gnome-terminal", "mate-terminal"):
         return [exe, f"--working-directory={cwd}", "--"] + command
@@ -206,6 +231,14 @@ def open_in_new_window(command: list[str], cwd: Path) -> bool:
     if command and not _resolvable(command[0], terminal):
         return False
     try:
+        if terminal == "tmux":
+            # tmux talks to its own server; it must NOT be detached from this process group
+            # or it cannot find the session it is being asked to add a window to.
+            argv = _posix_argv(terminal, command, cwd)
+            proc = subprocess.run(argv, capture_output=True, timeout=_START_GRACE + 10)  # noqa: S603
+            if proc.returncode != 0:
+                return False
+            return True
         if sys.platform == "darwin":
             joined = " ".join(_quote(part) for part in command)
             script = (
