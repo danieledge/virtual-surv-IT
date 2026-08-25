@@ -2241,25 +2241,25 @@ class Installer:
         if self.subset in ("full", "setup"):
             self.say("")
             self.say(s.bold("Over to you:"))
-            # 2026-08-07 user request: project-level setup is no longer part of this
-            # default run - point at `virt-surv configure`, run FROM the project's own
-            # root folder (the same folder you'll run `claude` from), instead.
+            # ONE instruction, and it is `go` (2026-08-25 user request: "the over to you
+            # instructions are too long and it should signpost users to virt-surv go, not
+            # virt-surv configure"). Both were true. `go` offers first-time setup itself
+            # (virt_team_launcher._offer_first_time_setup), so telling people to configure
+            # first added a step that does not exist - and the old block spent ten lines
+            # listing four commands for what is really one.
             fallback = (
                 f"python {self.repo / 'install_helper.py'} --configure ."
                 if self.repo
                 else "install_helper.py --configure ."
             )
             self.say(
-                "  1. Set up a project (first time only): cd into its root folder and run "
-                f"'virt-surv configure' (or '{fallback}' if you skipped the alias above) "
-                "to review the defaults - or 'virt-surv engage' / 'virt-surv onboard' to "
-                "apply every default with zero prompts."
+                f"  cd into your project and run {s.yellow('virt-surv go')} - it sets up a "
+                "new project on first use, then launches Claude Code with resume-or-new "
+                "already decided."
             )
+            self.say(s.dim(f"  No alias yet? Use: {fallback}"))
             self.say(
-                "  2. Then just: cd into the project and type 'virt-surv go' - it shows "
-                "your team settings, asks resume-or-new, and launches Claude Code with "
-                "the choice pre-seeded. (A Claude Code session already open elsewhere "
-                "needs a restart to load the new version.)"
+                s.dim("  A Claude Code session already open elsewhere needs a restart.")
             )
         self.say("")
         # The celebratory "summon the team" close is only accurate for a full/setup run
@@ -2270,11 +2270,11 @@ class Installer:
         # a plain close instead - they were never "installing the team" to begin with.
         any_failed = any(status == "fail" for _name, status, _detail in self.tracker.steps)
         if self.subset in ("full", "setup") and not any_failed:
+            # The instruction is above; this said the same thing again three lines later.
             self.say(
                 s.green(
-                    "Done. cd into your project and type 'virt-surv go' to start "
-                    "(or launch claude yourself and summon the team with "
-                    "/compliance-surveillance-team:engage)."
+                    "Done. (Or launch claude yourself and summon the team with "
+                    "/compliance-surveillance-team:engage.)"
                 )
             )
             hat = "🎩 " if _can_encode("🎩") else ""

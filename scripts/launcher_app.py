@@ -868,7 +868,7 @@ def jira_screen(project_dir: Path, mod, output=None):
             out.append(("", "\n"))
             mark = g["on"] if auto[0] else g["off"]
             out.append(("class:on" if auto[0] else "class:off", f"  {mark} "))
-            out.append(("class:warn" if auto[0] else "class:dim", "Ctrl-A  run unattended"))
+            out.append(("class:warn" if auto[0] else "class:dim", "Ctrl-T  run unattended"))
             out.append(("class:dim", "  (no further questions)\n"))
         return out
 
@@ -893,18 +893,22 @@ def jira_screen(project_dir: Path, mod, output=None):
             )
         out.append(("class:dim", "  Enter   start\n  Esc     back\n"))
         if auto_offered:
-            out.append(("class:dim", "  Ctrl-A  unattended run\n"))
+            out.append(("class:dim", "  Ctrl-T  unattended run\n"))
         return out
 
     def _footer():
-        tail = " · Ctrl-A unattended run" if auto_offered else ""
+        tail = " · Ctrl-T unattended run" if auto_offered else ""
         return [("class:hint", f"  Enter start · Esc back · Ctrl-U clear{tail}")]
 
     kb = KeyBindings()
 
-    @kb.add("c-a")
+    @kb.add("c-t")
     def _auto(event):
-        # Ctrl-A, not a bare "a": every printable key is text for the ticket field, and a
+        # Ctrl-T, not Ctrl-A and not a bare "a". Ctrl-A is the tmux prefix on a great many
+        # setups - it is the standard remap, and Ctrl-B is tmux's own default - so both are
+        # swallowed before this app ever sees them (live report 2026-08-25: "ctrl A opens a
+        # new tmux session so isn't a combination we can use"). A bare letter is no good
+        # either: every printable key is text for the ticket field, and a
         # letter that sometimes types and sometimes toggles is how you paste a key and
         # silently authorise an unattended run.
         if auto_offered:
@@ -1754,7 +1758,7 @@ def request_screen(project_dir: Path, mod, output=None):
         if auto_offered:
             mark = g["on"] if auto[0] else g["off"]
             out.append(("class:on" if auto[0] else "class:off", f"  {mark} "))
-            out.append(("class:warn" if auto[0] else "class:dim", "Ctrl-A  run unattended"))
+            out.append(("class:warn" if auto[0] else "class:dim", "Ctrl-T  run unattended"))
             # Kept SHORT on purpose: the left pane is ~47 columns and this row already
             # spends 26 on the label, so anything longer is clipped mid-word at the border
             # (caught under a real pty 2026-08-25 - "(you authorise it o"). The full
@@ -1782,16 +1786,18 @@ def request_screen(project_dir: Path, mod, output=None):
         return out
 
     def _footer():
-        tail = " · Ctrl-A unattended" if auto_offered else ""
+        tail = " · Ctrl-T unattended" if auto_offered else ""
         return [
             ("class:hint", f"  Ctrl-D send · Enter new line · Esc back · Ctrl-U clear{tail}")
         ]
 
     kb = KeyBindings()
 
-    @kb.add("c-a")
+    @kb.add("c-t")
     def _auto(event):
-        # Ctrl-A, not a bare letter: every printable key is text for the request field.
+        # Ctrl-T, not Ctrl-A: Ctrl-A is the tmux prefix on a great many setups and never
+        # reaches this app (2026-08-25). Not a bare letter either - every printable key is
+        # text for the request field.
         # Toggles whether or not there is text yet (2026-08-25): arming first and then
         # writing the brief is a natural order, and the old guard made that keypress a
         # SILENT no-op - the worst possible answer, since the screen then looked as though

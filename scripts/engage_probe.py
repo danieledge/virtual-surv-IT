@@ -766,7 +766,7 @@ def resolve_preferences(project_dir: Path) -> dict:
     # option is a genuinely confusing shape, and this is the enabler it implied.
     #
     # It ARMS the unattended toggle for new work, so the run you were going to start
-    # unattended starts that way without reaching for Ctrl-A every time. It does NOT skip
+    # unattended starts that way without reaching for Ctrl-T every time. It does NOT skip
     # the pre-flight: that screen is the authorisation, it is where data attestation,
     # execution consent and the spend ceiling are answered, and an unattended run must
     # never begin without a human passing through it. Arming changes the DEFAULT ANSWER to

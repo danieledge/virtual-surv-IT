@@ -471,7 +471,7 @@ _SETTING_HELP = {
     ),
     "start work unattended": (
         "Arms the unattended toggle for new work, so a run you were going to start "
-        "unattended starts that way without reaching for Ctrl-A each time.",
+        "unattended starts that way without reaching for Ctrl-T each time.",
         "It changes the default ANSWER, never removes the question: an armed run still "
         "stops at the pre-flight, where you attest the data, allow code and set the "
         "ceiling. Off by default - unattended stays opt-in, per project.",

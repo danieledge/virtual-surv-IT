@@ -827,14 +827,14 @@ def test_sending_an_empty_composer_is_a_skip(ptk, tmp_path):
 def test_ctrl_a_arms_unattended_before_any_text_is_typed(ptk, tmp_path):
     """Arming first and then writing the brief is a natural order. The old guard made that
     keypress a silent no-op, so the screen looked as though unattended had been declined."""
-    res, _ = _compose(ptk, "\x01run the tuning analysis\x04", tmp_path)
+    res, _ = _compose(ptk, "\x14run the tuning analysis\x04", tmp_path)
     assert isinstance(res, tuple)
     assert res == ("run the tuning analysis", True)
 
 
 def test_unattended_is_not_offered_when_the_project_turned_it_off(ptk, tmp_path):
-    res, _ = _compose(ptk, "\x01do the thing\x04", tmp_path, auto_on=False)
-    assert res == ("do the thing", False), "Ctrl-A must do nothing where auto is not offered"
+    res, _ = _compose(ptk, "\x14do the thing\x04", tmp_path, auto_on=False)
+    assert res == ("do the thing", False), "Ctrl-T must do nothing where auto is not offered"
 
 
 def test_the_footer_teaches_the_send_key(ptk, tmp_path):
