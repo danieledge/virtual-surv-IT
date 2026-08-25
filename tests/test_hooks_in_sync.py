@@ -176,3 +176,58 @@ def test_guards_use_portable_python_launcher():
             cmd = h["command"]
             assert "run-guard.sh" in cmd, f"hook bypasses the portable launcher: {cmd}"
             assert "python3 " not in cmd, f"hook hardcodes python3 (breaks on Windows): {cmd}"
+
+
+# --- apply-all-staged.sh must be able to SEE and ROUTE every staged file -------------------
+#
+# 2026-08-25. apply-all-staged.sh is the one control a human is told to trust for "is anything
+# pending?", and it globbed scripts/staged_hooks/*.py - so run-guard.sh, the single shell file
+# there, was invisible to it and it reported "nothing pending" while that file waited to be
+# applied. It had never bitten because run-guard.sh had always changed alongside a .py file
+# whose apply script installs both. These two tests pin the discovery and the routing, because
+# the failure mode is silence: the script cannot tell you about a file it never looked at.
+
+_APPLY_ALL = REPO / "scripts" / "apply-all-staged.sh"
+
+
+def _staged_files():
+    return sorted(
+        p for p in _STAGED_DIR.iterdir()
+        if p.is_file() and p.suffix != ".pyc" and not p.name.startswith(".")
+    )
+
+
+def test_apply_all_staged_globs_every_file_not_just_python():
+    """The discovery glob must not filter by extension."""
+    body = _APPLY_ALL.read_text(encoding="utf-8")
+    assert "staged_hooks/*.py;" not in body and "staged_hooks/*.py " not in body, (
+        "apply-all-staged.sh is globbing *.py again - a staged shell file would be invisible "
+        "to it and it would report 'nothing pending' while that file waits to be applied"
+    )
+    assert "for staged in scripts/staged_hooks/*;" in body, (
+        "expected the loop to iterate every entry in scripts/staged_hooks/"
+    )
+    # Non-files must still be skipped, or __pycache__ becomes a phantom pending fix.
+    assert '[ -f "$staged" ] || continue' in body, (
+        "apply-all-staged.sh must skip directories such as __pycache__"
+    )
+
+
+def test_every_staged_file_is_mapped_to_an_apply_script():
+    """Each staged file routes to an apply script that exists.
+
+    The map is only consulted for a file that DIFFERS from live, so a missing entry stays
+    latent until the day that file changes on its own - exactly how run-guard.sh, and then
+    guard_daemon_client.py and module_form_redirect.py, went unnoticed.
+    """
+    body = _APPLY_ALL.read_text(encoding="utf-8")
+    case_block = body.split("apply_for() {", 1)[1].split("}", 1)[0]
+    missing, dangling = [], []
+    for staged in _staged_files():
+        if staged.name not in case_block:
+            missing.append(staged.name)
+    for match in re.findall(r'echo "(scripts/apply-[a-z0-9-]+\.sh)"', case_block):
+        if not (REPO / match).is_file():
+            dangling.append(match)
+    assert not missing, f"staged file(s) with no apply_for() mapping: {missing}"
+    assert not dangling, f"apply_for() points at non-existent script(s): {dangling}"

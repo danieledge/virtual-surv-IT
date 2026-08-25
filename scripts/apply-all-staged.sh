@@ -13,6 +13,15 @@
 # a silent skip (2026-08-01 lesson: a silently inert control looks healthy). Idempotent:
 # nothing pending means nothing runs. Finishes by running the sync tests so "applied"
 # is verified, not assumed.
+#
+# 2026-08-25: this script was itself an instance of the failure it was written to prevent.
+# It globbed scripts/staged_hooks/*.py, so run-guard.sh - the one shell file in there - was
+# invisible to it, and it printed "nothing pending" while that file sat waiting to be
+# applied. It had never bitten because run-guard.sh had always changed alongside a .py file
+# whose apply script installs both; the day it changed alone, the control reported healthy.
+# Two staged files (guard_daemon_client.py, module_form_redirect.py) were also missing from
+# apply_for() - latent for the same reason, since the map is only consulted for a file that
+# DIFFERS from live. Now globs every regular file and maps all of them.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,7 +44,9 @@ apply_for() {
     session_resume_brief.py)            echo "scripts/apply-session-brief.sh" ;;
     engage_probe_prefetch.py)           echo "scripts/apply-engage-probe-prefetch.sh" ;;
     subagent_return_budget.py)          echo "scripts/apply-subagent-budget.sh" ;;
-    guard_daemon.py)                    echo "scripts/apply-guard-daemon.sh" ;;
+    guard_daemon.py|guard_daemon_client.py|run-guard.sh)
+                                        echo "scripts/apply-guard-daemon.sh" ;;
+    module_form_redirect.py)            echo "scripts/apply-module-redirect.sh" ;;
     *)                                  echo "" ;;
   esac
 }
@@ -49,8 +60,10 @@ live_for() {
 
 pending_scripts=""
 unknown=0
-for staged in scripts/staged_hooks/*.py; do
+for staged in scripts/staged_hooks/*; do
+  [ -f "$staged" ] || continue          # __pycache__ and any future subdirectory
   name="$(basename "$staged")"
+  case "$name" in *.pyc|.*) continue ;; esac
   live="$(live_for "$name")"
   if [ -z "$live" ]; then
     echo "!! $name is staged but has NO live counterpart - install it via its apply script manually"
@@ -92,7 +105,8 @@ done
 echo
 echo "== verifying: staged/live sync tests"
 if command -v pytest >/dev/null 2>&1; then
-  pytest -q tests/test_hooks_in_sync.py tests/test_todo_panel_nudge.py -k "sync or match" || {
+  pytest -q tests/test_hooks_in_sync.py tests/test_todo_panel_nudge.py \
+         tests/test_run_guard_interpreter_cache.py -k "sync or match" || {
     echo "!! sync verification FAILED - a fix did not install cleanly; see above."
     exit 1
   }
