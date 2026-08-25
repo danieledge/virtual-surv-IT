@@ -135,6 +135,25 @@ _KNOWN_ABSENT = {
     "evil.py": "hypothetical attacker file in the ADR-002 threat-model proof-of-concepts",
     "scripts/evil.py": "hypothetical attacker file in the ADR-002 threat-model proof-of-concepts",
     "scripts/profile_schema.py": "proposed in docs/internal/prepare-data-design.md, not built",
+    # Proposed in the workflow-visualisation plan (2026-08-25), not built. Listed here
+    # rather than left unresolved so the checker keeps meaning something: a plan naming the
+    # modules it intends to add is not the same defect as a doc pointing at a file that
+    # was deleted, and lumping the two together is how a checker stops being read.
+    "scripts/workflow_trace.py": (
+        "proposed in docs/internal/plan-workflow-visualisation-2026-08-25.md, not built"
+    ),
+    "render_workflow.py": (
+        "proposed in docs/internal/plan-workflow-visualisation-2026-08-25.md, not built"
+    ),
+    "workflow_trace.py": (
+        "proposed in docs/internal/plan-workflow-visualisation-2026-08-25.md, not built"
+    ),
+    "scripts/render_workflow.py": (
+        "proposed in docs/internal/plan-workflow-visualisation-2026-08-25.md, not built"
+    ),
+    "config/model-pricing.json": (
+        "proposed in docs/internal/plan-workflow-visualisation-2026-08-25.md, not built"
+    ),
     "ts002_layering.py": "illustrative deliverable name inside an example QA handover",
     "driver.md": "the `driver-<name>.md` naming pattern, not a file",
     "docs/persona-anchor.md": "ADR-005 offers it as an alternative source; the guide is used",
