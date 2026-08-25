@@ -137,6 +137,9 @@ _KNOWN_ABSENT = {
     "scripts/profile_schema.py": "proposed in docs/internal/prepare-data-design.md, not built",
     # Proposed in the test-container plan (2026-08-25), not built. A plan naming what it
     # intends to add is not the same defect as a doc pointing at something deleted.
+    "scripts/installer_app.py": (
+        "proposed in docs/internal/plan-installer-tui-2026-08-25.md, not built"
+    ),
     "compose.yml": "proposed in docs/internal/plan-test-container-2026-08-25.md, not built",
     "armed.sh": "proposed in docs/internal/plan-test-container-2026-08-25.md, not built",
     "Dockerfile.suite": "proposed in docs/internal/plan-test-container-2026-08-25.md, not built",
