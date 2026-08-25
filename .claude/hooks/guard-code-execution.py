@@ -149,7 +149,11 @@ _TEAM_SCRIPT_NAMES = (
     r"(?:render_html|render_findings|render_docx|convert_file|ingest|gen_synthetic|synthesise"
     r"|validate_masking|validate_manifest|validate_rtm|validate_references|check_citations|eval_score"
     r"|calibrate_spoofing|check_artifacts|engagement_state|extensions|convert_sarif"
-    r"|engage_probe|repo_skeleton|explain_rule|render_evidence_room)\.py"
+    r"|engage_probe|repo_skeleton|explain_rule|render_evidence_room"
+    # 2026-08-25: the workflow view's three tools. Without these a plugin-mode user gets a
+    # consent prompt for the team's OWN tooling, which is the exact live defect found on
+    # 2026-08-01 when engage_probe was missing from this list.
+    r"|workflow_trace|render_workflow|launch_terminal)\.py"
 )
 
 # 0.32 (ADR-009): the COMPANY tool allowlist - literal command PREFIXES the human curates in
