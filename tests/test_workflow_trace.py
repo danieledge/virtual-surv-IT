@@ -268,3 +268,19 @@ def test_export_of_a_failed_trace_writes_nothing(tmp_path):
     out = tmp_path / "out"
     assert rw.export({"ok": False, "stages": []}, out, ("md", "json", "csv")) == []
     assert not out.exists(), "a failed export must not even leave the directory behind"
+
+
+def test_the_export_defers_to_cost_for_the_session_total(tmp_path):
+    """2026-08-25, owner: "why do we need a rate table, we show the cost of the engagement in
+    the status bar and /cost". Correct about the TOTAL, and the product has to say so rather
+    than quietly competing with an authoritative number. Verified the same day that Claude
+    Code records no cost anywhere - no cost/usd/price key in 4,000 transcript records, no
+    usage store under ~/.claude - so per-stage apportionment cannot borrow it and needs
+    rates of its own."""
+    rw = _load("render_workflow")
+    wt = _load("workflow_trace")
+    path = _write(tmp_path, [_agent("qa-engineer", "claude-sonnet-5")])
+    text = rw.to_markdown(wt.parse(path))
+    assert "/cost" in text, "the authoritative session total must be named"
+    assert "authority" in text
+    assert "apportion" in text, "and this table's actual job must be stated"

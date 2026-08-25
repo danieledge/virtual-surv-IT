@@ -6,7 +6,16 @@
     "file is marked inferred in every view that shows it, and no view ever presents it as a",
     "bill. A model that is not listed here shows its tokens with a cost of 'unknown' rather",
     "than being priced from a guess: a silently wrong currency figure is worse than a visibly",
-    "missing one, and new model IDs will keep appearing."
+    "missing one, and new model IDs will keep appearing.",
+    "",
+    "WHY THIS EXISTS WHEN /cost ALREADY DOES. It does not duplicate /cost. Claude Code",
+    "computes a session total in memory and shows it in the status line - it records it",
+    "nowhere (verified 2026-08-25: no cost/usd/price key in 4,000 transcript records, no",
+    "usage store under ~/.claude), so no other process can read it. And a session total is",
+    "not the question this feature answers: /cost cannot say what the SECOND code-review",
+    "pass cost, and raw token counts cannot either, because an opus output token is roughly",
+    "15x a haiku one. Apportioning cost across stages is the only reason these rates exist.",
+    "For the session total, trust /cost."
   ],
   "rates_as_of": "2026-08-01",
   "currency": "USD",

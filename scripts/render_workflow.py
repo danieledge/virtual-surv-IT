@@ -83,6 +83,11 @@ def to_markdown(trace: dict) -> str:
         "",
         "> **Tokens are 📊 observed** - read from the session transcript. **Cost is 🧠 "
         "inferred** by multiplying them by a rate table, and is an estimate, never a bill.",
+        "> For the SESSION total, `/cost` in Claude Code is the authority and this is not - "
+        "it computes from its own rates and is not restated here. These figures exist to "
+        "apportion cost ACROSS STAGES, which `/cost` does not do and which token counts "
+        "alone cannot: an opus output token and a haiku one differ by roughly 15x, so a "
+        "stage comparison without rates would be meaningless.",
         "> This export carries stage names, models, counts, durations and outcomes only - "
         "never prompts, message content or file contents.",
     ]

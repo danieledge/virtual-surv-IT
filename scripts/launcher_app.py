@@ -2094,7 +2094,10 @@ def workflow_screen(project_dir: Path, mod, output=None, session: str = ""):
                 "  x2 marks a repeat - the\n  same specialist called\n  again. That is a loop,\n"
                 "  and its cost is the one\n  nobody can see today.\n\n"
                 "  Tokens are measured.\n  Cost is INFERRED from a\n  rate table and is an\n"
-                "  estimate, never a bill.\n\n",
+                "  estimate, never a bill.\n\n"
+                "  For the SESSION total,\n  trust /cost in Claude -\n  that is the authority.\n"
+                "  These figures exist to\n  apportion it across the\n  stages, which /cost\n"
+                "  cannot do.\n\n",
             )
         )
         if trace.get("rates_as_of"):
