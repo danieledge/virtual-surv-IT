@@ -173,6 +173,7 @@ case "${1##*/}" in
 	subagent_return_budget.py) _daemon_target="subagent_return_budget" ;;
 	stop_hook_dispatcher.py) _daemon_target="stop_hook_dispatcher" ;;
 	persona_anchor.py) _daemon_target="persona_anchor" ;;
+	engage_probe_prefetch.py) _daemon_target="engage_probe_prefetch" ;;
 esac
 if [ -n "$_daemon_target" ]; then
 	_prefs="$_project_root/.claude/team-preferences.json"

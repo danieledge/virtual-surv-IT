@@ -135,6 +135,15 @@ PORT_FILE_NAME = ".guard-daemon-port"
 # both fixed (the sys.path insert is deduped now; check_artifacts.py is in the watch
 # list below) and it's included as of the same day. Fires on every user message, the
 # highest-frequency point in this set besides Bash calls.
+#
+# engage_probe_prefetch.py joined on 2026-08-25 after the same audit, and it is the OTHER
+# hook on every user message - so until now every prompt on a corporate box paid two hook
+# spawns, only one of them daemon-served. It passes the checks that kept persona_anchor out
+# initially: both sys.path inserts are already guarded by an `in sys.path` test (no unbounded
+# growth), it holds no module-level mutable state, and it caches no other module itself. What
+# it DOES do is import engage_probe, engagement_state and find_plugin_root in-function, which
+# sys.modules then caches for the daemon's lifetime - so all three are in the watch list
+# below, exactly as check_artifacts.py is for persona_anchor.
 _TARGET_MODULE_NAMES = (
     "bash_hook_dispatcher",
     "locked_menu_guard",
@@ -142,6 +151,7 @@ _TARGET_MODULE_NAMES = (
     "subagent_return_budget",
     "stop_hook_dispatcher",
     "persona_anchor",
+    "engage_probe_prefetch",
 )
 
 
@@ -165,6 +175,12 @@ def _guard_module_paths(repo_root: Path) -> list:
     return [
         *(repo_root / "scripts" / f"{name}.py" for name in _TARGET_MODULE_NAMES),
         repo_root / "scripts" / "check_artifacts.py",
+        # engage_probe_prefetch.py imports these three in-function, so a long-lived daemon
+        # would serve a stale copy after a live edit - the same trap persona_anchor.py set
+        # with check_artifacts.py (2026-08-25 audit).
+        repo_root / "scripts" / "engage_probe.py",
+        repo_root / "scripts" / "engagement_state.py",
+        repo_root / "scripts" / "find_plugin_root.py",
         hooks / "guard-raw-data.py",
         hooks / "guard-code-execution.py",
         hooks / "guard-consent-writes.py",
