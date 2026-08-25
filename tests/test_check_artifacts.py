@@ -637,18 +637,13 @@ def _map_repo(tmp_path):
     repo = tmp_path / "proj"
     repo.mkdir()
     _git(repo, "init", "-q")
-    _git(
-        repo,
-        "-c",
-        "user.email=t@t",
-        "-c",
-        "user.name=t",
-        "commit",
-        "-q",
-        "--allow-empty",
-        "-m",
-        "x",
-    )
+    # Set the identity ON THE REPO, not inline on one commit. It was passed with -c to the
+    # first commit only, so any LATER commit in a test fell back to the ambient global
+    # config - which exists on a developer's machine and does not in a container, where git
+    # exits 128 and the test fails for a reason unrelated to what it checks (2026-08-25).
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "x")
     sha = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
     ).stdout.strip()

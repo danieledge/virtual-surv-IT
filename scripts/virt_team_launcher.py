@@ -1658,7 +1658,22 @@ def _signer_name() -> str:
             return name
     except Exception:
         pass
-    return os.environ.get("USER") or os.environ.get("USERNAME") or ""
+    name = os.environ.get("USER") or os.environ.get("USERNAME")
+    if name:
+        return name
+    # The environment is not the only place the OS knows who you are, and in a container it
+    # knows nothing: docker sets neither USER nor USERNAME, so sign-off was impossible on a
+    # machine that could name its user perfectly well (found in a clean container,
+    # 2026-08-25). getpass consults LOGNAME/USER/LNAME/USERNAME and then the password
+    # database, which is the answer wherever a real account exists.
+    try:
+        import getpass
+
+        return getpass.getuser() or ""
+    except Exception:
+        # Still never a placeholder. An unattributed signature is worse than none, and the
+        # caller already says plainly what to set.
+        return ""
 
 
 def _record_sign_off(project_dir: Path, slug: str) -> str:

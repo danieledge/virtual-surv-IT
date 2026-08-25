@@ -12,6 +12,8 @@ stale table across tests sharing a tmp_path lineage."""
 from __future__ import annotations
 
 import json
+import pathlib
+import os
 import shutil
 import subprocess
 import sys
@@ -43,6 +45,30 @@ def _run(cwd: Path, env: dict | None = None) -> str:
     return proc.stdout
 
 
+def _minimal_path() -> str:
+    """A minimal but PORTABLE PATH: enough to run the script, not enough to find the tools.
+
+    This was hardcoded to "/usr/bin:/bin", which is where Debian and Ubuntu keep python3 and
+    not where the official python images keep it (/usr/local/bin). In a container the script
+    could not run its own python step, so the output differed and the assertion failed for a
+    reason unrelated to tool detection (2026-08-25). The intent - stated in the comments here
+    - was always "enough for bash and python3", so derive it from where they actually are.
+    """
+    import shutil
+
+    dirs = []
+    for tool in ("bash", "python3"):
+        found = shutil.which(tool)
+        if found:
+            parent = str(pathlib.Path(found).resolve().parent)
+            if parent not in dirs:
+                dirs.append(parent)
+    for fallback in ("/usr/bin", "/bin"):
+        if fallback not in dirs:
+            dirs.append(fallback)
+    return os.pathsep.join(dirs)
+
+
 def _write_project_config(cwd: Path, review_tools: dict) -> None:
     claude = cwd / ".claude"
     claude.mkdir(parents=True, exist_ok=True)
@@ -67,7 +93,7 @@ def test_on_tool_missing_is_reported_as_required_missing(tmp_path):
     # to be pip-installed on the machine running these tests, unlike relying on "sqlfluff
     # just isn't installed here" which could silently stop testing anything.
     _write_project_config(tmp_path, {"sqlfluff": "on"})
-    out = _run(tmp_path, env={"PATH": "/usr/bin:/bin"})
+    out = _run(tmp_path, env={"PATH": _minimal_path()})
     assert "Required by config but not installed" in out
     assert "sqlfluff" in out
     assert "config requires this tool 'on'" in out

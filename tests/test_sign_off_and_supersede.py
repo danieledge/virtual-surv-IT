@@ -135,3 +135,42 @@ def test_the_skill_forbids_reopening_and_places_the_link_on_the_new_pack():
     assert "--supersedes" in skill
     assert "Never reopen or edit the" in skill and "superseded pack" in skill
     assert "not yours to give" in skill, "the skill must say sign-off is not the agent's"
+
+
+def test_the_signer_falls_back_to_the_os_account_not_just_the_environment(monkeypatch):
+    """2026-08-25, found in a clean container: docker sets neither USER nor USERNAME, so a
+    machine that could name its user perfectly well produced "no signer identity" and could
+    not sign anything off. The environment is not the only place the OS knows who you are."""
+    mod = _load("virt_team_launcher")
+    monkeypatch.delenv("USER", raising=False)
+    monkeypatch.delenv("USERNAME", raising=False)
+    monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: _NoName(), raising=False)
+
+    import getpass
+
+    monkeypatch.setattr(getpass, "getuser", lambda: "tester")
+    assert mod._signer_name() == "tester"
+
+
+def test_the_signer_never_invents_a_placeholder(monkeypatch):
+    """An unattributed signature is worse than none - and worse still is a signature that
+    names nobody while looking like it names someone."""
+    mod = _load("virt_team_launcher")
+    monkeypatch.delenv("USER", raising=False)
+    monkeypatch.delenv("USERNAME", raising=False)
+    monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: _NoName(), raising=False)
+
+    import getpass
+
+    def _boom():
+        raise OSError("no account here")
+
+    monkeypatch.setattr(getpass, "getuser", _boom)
+    assert mod._signer_name() == ""
+
+
+class _NoName:
+    """git config returning nothing, as it does on a machine with no identity set."""
+
+    stdout = ""
+    returncode = 1
