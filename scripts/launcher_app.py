@@ -203,6 +203,18 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
     if shown:
         actions.append((("archive",), f"{g['archive']}archive engagement(s)", "a"))
     actions.append((("finished",), f"{g['browse']}browse done & archived", "b"))
+    # Watching in-flight work and the workflow trace belong in THIS tier too. They were added
+    # to the picker and plain tiers first and missed here (caught 2026-08-25 by rendering the
+    # menu under a real pty, which is the only place the omission was visible) - the app tier
+    # builds its own action list, and that is precisely how the launcher's two renderers
+    # drifted apart the first time.
+    try:
+        if mod._running_slug(project_dir):
+            actions.append((("watch",), f"{g['launch']}watch the engagement running", "t"))
+        if mod._workflow_view_on(project_dir):
+            actions.append((("workflow",), f"{g['browse']}workflow: stages, cost", "w"))
+    except Exception:
+        pass  # a missing option must never cost the menu
     actions.append(
         (
             ("launch",),
@@ -339,6 +351,8 @@ def run_app(project_dir: Path, mod, menu: dict, shown: list, jira_on: bool = Fal
         ("v", ("artifacts",)),
         ("a", ("archive",)),
         ("b", ("finished",)),
+        ("t", ("watch",)),
+        ("w", ("workflow",)),
     ):
         if any(r == ret for r, _label, _k in actions):
             kb.add(key)(lambda event, _r=ret: _exit(event, _r))
@@ -1897,12 +1911,20 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
     g = glyphs(mod)
     started = _clock()
     result = {"v": MONITOR_CLOSED}
-    # How long a workspace may take to appear before the monitor stops saying "waiting" and
-    # starts saying something useful. A session that has started creates its pack within
-    # seconds; if nothing exists after this, the far more likely explanation is that no
-    # session started at all - which is exactly what happened on Windows (2026-08-25: several
-    # minutes of a patient "waiting" line while nothing whatsoever was running).
-    _PATIENCE = 45.0
+    # How long a workspace may take to appear before the monitor suggests something is wrong.
+    #
+    # FIVE MINUTES, not the 45 seconds this first shipped with (owner, 2026-08-25: "it can
+    # take a few mins for a workspace to be created in corp environment, don't prompt
+    # something may be wrong for 5 mins"). On a locked-down corporate machine - the estate
+    # this whole project is built for - a cold session start pays interpreter startup, a
+    # scanner on every file it touches, and a network round trip before it writes anything.
+    # Forty-five seconds is normal there.
+    #
+    # A warning that fires during normal operation is worse than no warning: the first false
+    # alarm teaches the reader to ignore the line, and the real one then goes unread. The
+    # elapsed counter below carries the interim - it shows the screen is alive and waiting,
+    # which is the honest state, without asserting a fault nobody has evidence of.
+    _PATIENCE = 300.0
 
     def _rows(snap: dict) -> list:
         state = snap.get("state") or {}
@@ -1934,16 +1956,20 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
         if snap.get("error"):
             waited = _clock() - started
             if not snap.get("exists") and waited > _PATIENCE:
-                # Say the quiet part: a monitor that only ever reports patience is
-                # indistinguishable from a monitor watching nothing.
+                # Say the quiet part, but only once it is actually worth saying: a monitor
+                # that ONLY ever reports patience is indistinguishable from one watching
+                # nothing, and a monitor that cries wolf at 45 seconds trains you to ignore
+                # it. Hedged deliberately - this is still a suggestion, not a diagnosis.
                 out.append(("class:warn",
-                            f"  No workspace after {_elapsed(started)} - the session may not "
-                            "have started.\n"))
+                            f"  Still no workspace after {_elapsed(started)}.\n"))
                 out.append(("class:dim",
-                            "  Check the other window for an error, or press Esc and launch\n"
-                            "  in this one instead.\n\n"))
+                            "  That is longer than a cold start usually takes, even on a\n"
+                            "  slow machine. Worth checking the other window for an error.\n\n"))
             else:
-                out.append(("class:dim", f"  {snap['error']}\n\n"))
+                out.append(("class:dim", f"  {snap['error']}\n"))
+                out.append(("class:dim",
+                            "  A cold start can take a few minutes on a locked-down\n"
+                            "  machine - this is normal.\n\n"))
         width = 13
         for label, value in _rows(snap):
             out.append(("class:dim", f"  {label:<{width}}"))

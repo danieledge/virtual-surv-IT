@@ -1919,6 +1919,8 @@ def _pt_menu_round(
     if shown:
         entries.append((("archive",), "archive engagement(s)", "a"))
     entries.append((("finished",), "browse done & archived engagements", "b"))
+    if _running_slug(project_dir):
+        entries.append((("watch",), "watch the engagement already running", "t"))
     if _workflow_view_on(project_dir):
         entries.append((("workflow",), "workflow: stages, models, cost", "w"))
     launch_label = "decide inside the session instead" if shown else "just launch"
@@ -1997,6 +1999,14 @@ def _decision_from_pick(
             help_screen(project_dir, sys.modules[__name__])
         except Exception:
             pass  # cosmetic tier
+        return "__again__"
+    if pick[0] == "watch":
+        # Watching starts NOTHING. Returning "__again__" puts the human back on the menu
+        # afterwards rather than launching a session they never asked for.
+        try:
+            _watch_running_engagement(project_dir)
+        except Exception:
+            print(ink.dim("    could not open the watch view here"), file=sys.stderr)
         return "__again__"
     if pick[0] == "workflow":
         # Attended runs get the trace too. The need was loudest for unattended work, but
@@ -2201,6 +2211,8 @@ def _menu_round(
     if shown:
         settings_opt += f"   {ink.bold('[a]')} archive engagement(s)"
     settings_opt += f"   {ink.bold('[b]')} browse done & archived"
+    if _running_slug(project_dir):
+        settings_opt += f"   {ink.bold('[t]')} watch the running engagement"
     if _workflow_view_on(project_dir):
         settings_opt += f"   {ink.bold('[w]')} workflow"
     print(settings_opt, file=err)
@@ -2265,6 +2277,8 @@ def _menu_round(
         # Same mapping as the app and picker tiers, so [b] cannot mean one thing
         # there and another here.
         return _decision_from_pick(("finished",), project_dir, engagement_state, menu, shown)
+    if choice.lower() == "t" and _running_slug(project_dir):
+        return _decision_from_pick(("watch",), project_dir, engagement_state, menu, shown)
     if choice.lower() == "w" and _workflow_view_on(project_dir):
         # Same reason: a key that works in the full-screen tier and silently does nothing in
         # the plain one is how the two menus drifted apart the first time.
@@ -3360,6 +3374,38 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
     except OSError:
         return False
     return proc.returncode == 0 and _plugin_enabled(project_dir)
+
+
+def _running_slug(project_dir: Path) -> str:
+    """The engagement currently marked ACTIVE, or "".
+
+    Read-only, and it deliberately does NOT check whether a session is still attached: the
+    marker is what the team itself keys on, and inventing a second notion of "running" here
+    would be a second thing to disagree with the first."""
+    try:
+        import engagement_state
+
+        return engagement_state.read_active(project_dir) or ""
+    except Exception:
+        return ""
+
+
+def _watch_running_engagement(project_dir: Path) -> None:
+    """Watch work that is ALREADY running, launching nothing.
+
+    2026-08-25, owner: "if an engagement is running but I accidentally exit the TUI there is
+    no way to get back to the workflow display ... I can't open an engagement in flight."
+    Both halves were true. The menu's only offer for an open engagement was `--resume`, which
+    starts a session - the wrong move entirely when one is already going, and the sort of
+    thing that ends with two sessions in one workspace. Watching had existed for exactly one
+    moment: the seconds after the launcher itself started a run.
+
+    Same flat monitor/workflow loop the post-launch path uses, for the same reason: a screen
+    cannot open another screen from inside itself."""
+    slug = _running_slug(project_dir)
+    if not slug:
+        return
+    _watch_after_launch(project_dir, slug)
 
 
 def _workflow_view_on(project_dir: Path) -> bool:

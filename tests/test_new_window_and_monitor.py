@@ -377,8 +377,24 @@ def test_the_monitor_stops_saying_waiting_and_reports_a_no_show(tmp_path):
     source = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
     body = source.split("def monitor_screen", 1)[1].split("\ndef ", 1)[0]
     assert "_PATIENCE" in body
-    assert "may not" in body and "started" in body, "it must name the likely cause"
-    assert "launch" in body, "and offer the way out"
+    assert "Still no workspace after" in body, "it must eventually say so"
+    assert "checking the other window" in body, "and offer the way out"
+
+
+def test_the_monitor_waits_five_minutes_before_suggesting_a_fault(tmp_path):
+    """2026-08-25, owner: "it can take a few mins for a workspace to be created in corp
+    environment, don't prompt something may be wrong for 5 mins". On a locked-down corporate
+    machine a cold start pays interpreter startup, a scanner on every file touched, and a
+    network round trip before anything is written - 45 seconds is normal there.
+
+    A warning that fires during normal operation is worse than none: the first false alarm
+    teaches the reader to ignore the line, and the real one then goes unread."""
+    source = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+    body = source.split("def monitor_screen", 1)[1].split("\ndef ", 1)[0]
+    patience = float(body.split("_PATIENCE = ", 1)[1].split("\n", 1)[0])
+    assert patience >= 300.0, f"too impatient for a corporate machine: {patience}s"
+    # And the interim must say the wait is expected rather than sitting mute.
+    assert "normal" in body and "few minutes" in body
 
 
 def test_an_unresolvable_command_is_never_reported_as_launched(tmp_path, monkeypatch):
@@ -503,3 +519,89 @@ def test_the_caller_drives_the_monitor_and_workflow_as_a_flat_sequence(tmp_path)
     body = launcher.split("def _watch_after_launch", 1)[1].split("\ndef ", 1)[0]
     assert "MONITOR_WANTS_WORKFLOW" in body, "the caller must act on the intent"
     assert "_MAX_SCREEN_HOPS" in body, "and the loop must be bounded"
+
+
+# --- watching an engagement that is already running (2026-08-25) ----------------------------
+#
+# "if an engagement is running but i accidentally exit the TUI there is no way to get back to
+# the workflow display" and "i can't open an engagement in flight". Both were true, and the
+# second is the worse one: the menu's only offer for an open engagement was --resume, which
+# STARTS a session - the wrong move when one is already going, and a route to two sessions in
+# one workspace. Watching had existed for exactly one moment: the seconds after the launcher
+# itself started a run.
+
+
+def test_the_running_engagement_is_found_from_the_active_marker(tmp_path):
+    mod = _load("virt_team_launcher")
+    state = _load("engagement_state")
+    project = _project(tmp_path)
+    assert mod._running_slug(project) == ""
+    state.write_active(project, "alpha-run")
+    assert mod._running_slug(project) == "alpha-run"
+
+
+def test_an_unreadable_marker_is_treated_as_nothing_running(tmp_path):
+    """Fail-open: the option simply is not offered, rather than the menu erroring."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    (project / ".active-engagement.json").write_text("{not json", encoding="utf-8")
+    assert mod._running_slug(project) == ""
+
+
+def test_watching_launches_nothing(tmp_path, monkeypatch):
+    """The property that makes this safe to offer while work is in flight. A second session
+    in one workspace is exactly what the resume path would have caused."""
+    mod = _load("virt_team_launcher")
+    state = _load("engagement_state")
+    project = _project(tmp_path)
+    state.write_active(project, "alpha-run")
+    watched = []
+    monkeypatch.setattr(mod, "_watch_after_launch", lambda p, s: watched.append(s))
+    launched = []
+    monkeypatch.setattr(mod, "_launch_in_window", lambda *a: launched.append(a) or True)
+    mod._watch_running_engagement(project)
+    assert watched == ["alpha-run"]
+    assert launched == [], "watching must never start a session"
+
+
+def test_watching_with_nothing_running_does_nothing(tmp_path, monkeypatch):
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    watched = []
+    monkeypatch.setattr(mod, "_watch_after_launch", lambda p, s: watched.append(s))
+    mod._watch_running_engagement(project)
+    assert watched == []
+
+
+def test_the_watch_option_returns_to_the_menu_rather_than_launching(tmp_path, monkeypatch):
+    """Returning "__again__" is the whole point: the human came to look, not to start work."""
+    mod = _load("virt_team_launcher")
+    state = _load("engagement_state")
+    project = _project(tmp_path)
+    state.write_active(project, "alpha-run")
+    monkeypatch.setattr(mod, "_watch_running_engagement", lambda p: None)
+    decision = mod._decision_from_pick(("watch",), project, None, {}, [])
+    assert decision == "__again__"
+
+
+def test_every_tier_offers_the_watch_option():
+    """The launcher's menu renderers drifted apart once before; a key that works in one tier
+    and silently does nothing in another is how that started - and it happened AGAIN here.
+    This was first written checking only virt_team_launcher.py, passed, and missed that the
+    full-screen tier builds its own action list in launcher_app.py. A pty render caught it;
+    the test could not, because it was looking in one file for a thing that lives in two.
+    So: check BOTH files, and check the key bindings too, not just the labels."""
+    launcher = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    app = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+
+    # picker tier + plain tier (label, and the key that maps to it)
+    assert '(("watch",), "watch the engagement already running", "t")' in launcher
+    assert "[t]')} watch the running engagement" in launcher
+    assert 'choice.lower() == "t"' in launcher
+
+    # full-screen tier: the action AND the keypress that reaches it
+    assert '(("watch",)' in app, "the app tier must offer watch"
+    assert '(("workflow",)' in app, "the app tier must offer the workflow"
+    keys = app.split("for key, ret in (", 1)[1].split("):", 1)[0]
+    assert '("t", ("watch",))' in keys, "t must be bound in the app tier"
+    assert '("w", ("workflow",))' in keys, "w must be bound in the app tier"
