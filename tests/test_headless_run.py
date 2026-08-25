@@ -402,3 +402,128 @@ def test_a_stop_waits_for_the_process_to_actually_go(tmp_path, monkeypatch):
     assert "hard=True" in body, "it must escalate to SIGTERM"
     assert "is_alive" in body, "and confirm the process actually went"
 
+
+
+# --- the launcher's headless path (2026-08-25) ----------------------------------------------
+
+
+def _launcher():
+    if str(REPO_ROOT / "scripts") not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location(
+        "virt_team_launcher", REPO_ROOT / "scripts" / "virt_team_launcher.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["virt_team_launcher"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _pending(tmp_path: Path, **over) -> dict:
+    payload = {"ref": "x", "slug": "alpha", "auto": True, "run_mode": "headless",
+               "engagement_usd": 35, "on_budget": "stop", "hard_cap_usd": 35,
+               "session_id": SESSION}
+    payload.update(over)
+    (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".claude" / ".auto-pending.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+    return payload
+
+
+def test_a_headless_run_uses_the_session_id_chosen_before_it_started(tmp_path, monkeypatch):
+    """The correlation problem solved by construction. The launcher picks the UUID, the pack
+    records it, and the CLI is told to use it - nothing is matched afterwards by date or by
+    whichever transcript was touched last."""
+    hr = _load()
+    launcher = _launcher()
+    project = _project(tmp_path)
+    seen = {}
+    monkeypatch.setattr(
+        launcher, "_configured_launch_command", lambda: "claude", raising=False
+    )
+    monkeypatch.setattr(launcher, "_watch_after_launch", lambda p, s: None)
+    monkeypatch.setattr(hr, "start", lambda *a, **k: seen.update(k) or {
+        "session_id": k.get("session_id") or "generated"})
+    monkeypatch.setitem(sys.modules, "headless_run", hr)
+    assert launcher._start_headless(project, "/engage --new --auto", _pending(tmp_path)) is True
+    assert seen["session_id"] == SESSION
+    assert seen["budget_usd"] == 35.0, "the ENFORCED cap is what reaches --max-budget-usd"
+    assert seen["slug"] == "alpha"
+
+
+def test_only_the_enforced_cap_becomes_a_budget_flag(tmp_path, monkeypatch):
+    """An advisory ceiling must NOT be passed as --max-budget-usd: that would silently turn
+    a threshold into a wall, which is the opposite of what the human chose."""
+    hr = _load()
+    launcher = _launcher()
+    project = _project(tmp_path)
+    seen = {}
+    monkeypatch.setattr(launcher, "_configured_launch_command", lambda: "claude", raising=False)
+    monkeypatch.setattr(launcher, "_watch_after_launch", lambda p, s: None)
+    monkeypatch.setattr(hr, "start", lambda *a, **k: seen.update(k) or {"session_id": "s"})
+    monkeypatch.setitem(sys.modules, "headless_run", hr)
+    advisory = _pending(tmp_path, on_budget="continue", hard_cap_usd=None)
+    launcher._start_headless(project, "/engage --new --auto", advisory)
+    assert seen["budget_usd"] is None
+
+
+def test_a_headless_start_that_fails_falls_back_rather_than_losing_the_run(
+    tmp_path, monkeypatch, capsys
+):
+    """The human authorised this run at the pre-flight. A launcher that quietly declined to
+    start it is the worst outcome available, and one this repo has already shipped once."""
+    hr = _load()
+    launcher = _launcher()
+    project = _project(tmp_path)
+
+    def _boom(*a, **k):
+        raise OSError("no claude here")
+
+    monkeypatch.setattr(launcher, "_configured_launch_command", lambda: "claude", raising=False)
+    monkeypatch.setattr(hr, "start", _boom)
+    monkeypatch.setitem(sys.modules, "headless_run", hr)
+    assert launcher._start_headless(project, "/engage --new --auto", _pending(tmp_path)) is False
+    assert "opening a session instead" in capsys.readouterr().err
+
+
+def test_a_windowed_run_never_takes_the_headless_path(tmp_path, monkeypatch):
+    launcher = _launcher()
+    project = _project(tmp_path)
+    called = []
+    monkeypatch.setattr(launcher, "_start_headless", lambda *a: called.append(a) or True)
+    monkeypatch.setattr(launcher, "_launch_in_window", lambda *a: False)
+    monkeypatch.setattr(launcher, "_new_window_wanted", lambda p: False)
+    monkeypatch.setattr(launcher, "_resume_decision", lambda d: "/engage --new --auto")
+    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
+                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
+                 "_heal_stale_alias_once", "_clear_request_handoff"):
+        if hasattr(launcher, name):
+            monkeypatch.setattr(launcher, name, lambda *a, **k: None)
+    _pending(tmp_path, run_mode="window")
+    monkeypatch.chdir(project)
+    assert launcher.main() == 0
+    assert called == [], "window mode must not start a headless process"
+
+
+def test_the_pack_records_the_session_and_the_two_budget_promises(tmp_path):
+    """Verified end to end against the real init command: session id, run mode, the advisory
+    ceiling and the enforced cap all land on the pack, and the one-shot handoff is consumed."""
+    state = _load_state()
+    project = _project(tmp_path)
+    _pending(tmp_path)
+    handoff = state._consume_auto_handoff(project)
+    assert handoff["session_id"] == SESSION
+    assert handoff["run_mode"] == "headless"
+    assert handoff["hard_cap_usd"] == 35
+    assert not (project / ".claude" / ".auto-pending.json").exists()
+
+
+def _load_state():
+    spec = importlib.util.spec_from_file_location(
+        "engagement_state", REPO_ROOT / "scripts" / "engagement_state.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["engagement_state"] = mod
+    spec.loader.exec_module(mod)
+    return mod

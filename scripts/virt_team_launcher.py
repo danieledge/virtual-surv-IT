@@ -1561,6 +1561,17 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
     # to be relied on to run `mark-auto`, which nothing ever told it to do, so `auto`
     # stayed False and the AUTO-* DoD gates skipped every real unattended engagement.
     # engagement_state init consumes this file one-shot when it creates the pack.
+    session_id = ""
+    if answers.get("run_mode") == "headless":
+        try:
+            import headless_run
+
+            # Generated before the run starts, so the pack records the SAME id the session
+            # will carry. That is the correlation problem solved by construction rather than
+            # matched afterwards by date or by whichever transcript was touched last.
+            session_id = headless_run.new_session_id()
+        except Exception:
+            session_id = ""
     try:
         handoff = project_dir / ".claude" / ".auto-pending.json"
         handoff.parent.mkdir(parents=True, exist_ok=True)
@@ -1577,6 +1588,7 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
                     "engagement_usd": answers.get("engagement_usd"),
                     "hard_cap_usd": answers.get("hard_cap_usd"),
                     "run_mode": answers.get("run_mode") or "window",
+                    "session_id": session_id,
                     # Deliberately "park" and NOT the screen's default rung: this fires
                     # only if the pre-flight handed back a dict with no answer in it, which
                     # it never does normally. A missing answer is not the same as a chosen
@@ -3387,8 +3399,8 @@ def _watch_running_engagement(project_dir: Path) -> None:
     _watch_after_launch(project_dir, slug)
 
 
-def _pending_auto_slug(project_dir: Path) -> str:
-    """The slug the pre-flight just recorded, for the monitor to watch.
+def _pending_auto(project_dir: Path) -> dict:
+    """What the pre-flight just recorded, for the launcher to act on.
 
     Read-only on purpose: `.auto-pending.json` is a ONE-SHOT handoff consumed by
     `engagement_state init`, and consuming it here would take the unattended flag away from
@@ -3398,9 +3410,49 @@ def _pending_auto_slug(project_dir: Path) -> str:
         payload = json.loads(
             (project_dir / ".claude" / ".auto-pending.json").read_text(encoding="utf-8")
         )
-        return str(payload.get("slug") or "")
+        return payload if isinstance(payload, dict) else {}
     except (OSError, ValueError, AttributeError):
-        return ""
+        return {}
+
+
+def _pending_auto_slug(project_dir: Path) -> str:
+    return str(_pending_auto(project_dir).get("slug") or "")
+
+
+def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
+    """Start the run with no terminal at all, and watch it. True if it started.
+
+    False means nothing started and the caller must fall back to a normal launch. The human
+    authorised this run at the pre-flight; a launcher that quietly declined to start it is
+    the worst outcome available here, and one this repo has already shipped once."""
+    ink, err = _Ink(), sys.stderr
+    try:
+        import headless_run
+    except Exception:
+        print(ink.warn("    headless unavailable - opening a session instead"), file=err)
+        return False
+    cap = pending.get("hard_cap_usd")
+    try:
+        record = headless_run.start(
+            project_dir,
+            decision,
+            session_id=str(pending.get("session_id") or ""),
+            budget_usd=float(cap) if cap else None,
+            slug=str(pending.get("slug") or ""),
+            claude=(_configured_launch_command().split() or ["claude"])[0],
+        )
+    except (OSError, ValueError) as exc:
+        print(
+            ink.warn(f"    could not start headless ({exc.__class__.__name__}) - "
+                     "opening a session instead"),
+            file=err,
+        )
+        return False
+    print(ink.good(f"    -> headless run started, session {record['session_id'][:8]}"), file=err)
+    if cap:
+        print(ink.warn(f"    hard cap ${cap} - the run STOPS there, enforced"), file=err)
+    _watch_after_launch(project_dir, str(pending.get("slug") or ""))
+    return True
 
 
 def _new_window_wanted(project_dir: Path) -> bool:
@@ -3630,8 +3682,14 @@ def main() -> int:
     # window", with no way to tell which condition declined). A control that quietly does
     # nothing is the defect class this repo has met five times in a week; the fix each time
     # is to make it speak.
+    pending = _pending_auto(project_dir)
+    if pending.get("run_mode") == "headless" and decision:
+        # A headless run is STARTED here, not handed to the shell: there is no terminal for
+        # the shell to launch into, and the launcher is the thing that will watch it.
+        if _start_headless(project_dir, decision, pending):
+            return _ABORT_EXIT_CODE
     if _new_window_wanted(project_dir):
-        if _launch_in_window(project_dir, decision, _pending_auto_slug(project_dir)):
+        if _launch_in_window(project_dir, decision, pending.get("slug", "")):
             return _ABORT_EXIT_CODE
     else:
         print(

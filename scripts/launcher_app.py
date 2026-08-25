@@ -1910,6 +1910,7 @@ def _monitor_read(project_dir: Path, slug: str) -> dict:
         pass
     try:
         snap["state"] = _json.loads(state_path.read_text(encoding="utf-8"))
+        snap["headless"] = _headless_status(project_dir, slug)
     except FileNotFoundError:
         snap["error"] = "waiting for the session to create the workspace"
     except ValueError:
@@ -1919,6 +1920,20 @@ def _monitor_read(project_dir: Path, slug: str) -> dict:
     except OSError as exc:
         snap["error"] = f"cannot read state ({exc.__class__.__name__})"
     return snap
+
+
+def _headless_status(project_dir: Path, slug: str) -> dict:
+    """Live state of the headless process behind this engagement, if there is one.
+
+    Read from the run's own stream file, which nobody owns - so this works whether or not
+    the launcher that started it is still alive, and whichever launcher is asking."""
+    try:
+        import headless_run
+
+        record = headless_run.latest(project_dir, slug=slug)
+        return headless_run.status(record) if record else {}
+    except Exception:
+        return {}
 
 
 def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None):
@@ -1977,10 +1992,24 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
             # Two short rows, not one long one: the left pane is ~47 columns and a value
             # that runs past it is clipped mid-word at the border - caught under a pty
             # twice now (2026-08-25), because a headless harness cannot see it.
-            rows.append(("unattended", "yes"))
+            rows.append(("unattended", state.get("run_mode") or "yes"))
             rung = state.get("auto_on_budget") or "-"
             cap = budget.get("engagement_usd") or state.get("engagement_usd")
-            rows.append(("ceiling", f"${cap}, then {rung}" if cap else f"none, {rung}"))
+            hard = budget.get("hard_cap_usd")
+            if hard:
+                # An enforced cap is a different promise from an advisory one and must read
+                # that way at a glance, not on inspection.
+                rows.append(("ceiling", f"${hard} HARD"))
+            elif cap:
+                rows.append(("ceiling", f"${cap}, then {rung}"))
+        head = snap.get("headless") or {}
+        if head:
+            rows.append(("run", "live" if head.get("live") else (
+                "finished" if head.get("finished") else "gone")))
+            if head.get("cost_usd"):
+                rows.append(("spent", f"${head['cost_usd']:.2f}"))
+            if head.get("retries"):
+                rows.append(("retries", str(len(head["retries"]))))
         return rows
 
     def _body():

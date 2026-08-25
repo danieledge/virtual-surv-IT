@@ -447,7 +447,13 @@ def stop(record: dict, *, hard: bool = False) -> bool:
     import signal
 
     if os.name == "nt":
-        sig = signal.SIGTERM if hard else getattr(signal, "CTRL_BREAK_EVENT", signal.SIGTERM)
+        # SIGTERM (TerminateProcess) on Windows, both ways. CTRL_BREAK_EVENT is delivered
+        # through a shared console, and a DETACHED_PROCESS has none to share - so the polite
+        # variant reaches nothing at all (WINTEST, 2026-08-25: the run carried on to normal
+        # completion). Being blunt and effective beats being graceful and inert, and the
+        # honest consequence is stated here: on Windows a stopped run has its turn cut off
+        # rather than closed, and records no result for it.
+        sig = signal.SIGTERM
     else:
         sig = signal.SIGTERM if hard else signal.SIGINT
     try:
@@ -458,20 +464,50 @@ def stop(record: dict, *, hard: bool = False) -> bool:
 
 
 def is_alive(pid) -> bool:
-    """Best-effort liveness for a pid we do not own. Unknown counts as alive.
+    """Best-effort liveness for a pid we do not own.
 
     Only used to decide whether to ESCALATE a stop - never to decide whether a run finished,
     which is read from the stream. A pid check lies after reuse and behaves differently on
-    every platform; the stream does not."""
+    every platform; the stream does not.
+
+    Windows needs its own path. `os.kill(pid, 0)` there does not mean "does this exist" the
+    way it does on POSIX, so the generic fallback of "unknown counts as alive" was taken on
+    EVERY call - which made stop_and_wait sit out its whole timeout and then report failure
+    against a process that had already finished (measured on WINTEST, 2026-08-25). OpenProcess
+    plus GetExitCodeProcess answers it properly."""
     if not isinstance(pid, int):
         return False
+    if os.name == "nt":
+        return _windows_alive(pid)
     try:
         os.kill(pid, 0)
         return True
     except ProcessLookupError:
         return False
     except (OSError, ValueError, AttributeError):
-        return True  # cannot tell (Windows, permissions) - assume it is still there
+        return True  # cannot tell (permissions) - assume it is still there
+
+
+_STILL_ACTIVE = 259  # STILL_ACTIVE, the exit code Windows reports for a running process
+
+
+def _windows_alive(pid: int) -> bool:
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False  # gone, or not ours to ask about
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == _STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return True  # genuinely cannot tell - never report a live process as gone
 
 
 def stop_and_wait(record: dict, timeout: float = 45.0, poll: float = 1.0) -> bool:

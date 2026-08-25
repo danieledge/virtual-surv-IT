@@ -127,10 +127,22 @@ rather than accepting a setting that reads as a guarantee and behaves as a prefe
    launcher cannot lose a run. Proven live - a run started by one process was re-attached to
    in full by a different process after the first had exited. Liveness is judged from the
    stream rather than a pid, because a pid lies after reuse and differs per platform.
-3. ~~The pre-flight row~~ **BUILT 2026-08-25** - "How it runs: in its own window / headless",
-   plus the fourth budget rung. Still to do: recording `--session-id` on the pack at init.
-4. Monitor reads the live state.
-5. Windows verification on WINTEST.
+3. ~~The pre-flight row, and `--session-id` recorded on the pack at init.~~ **BUILT
+   2026-08-25.** The launcher chooses the UUID before anything starts, passes it to the CLI
+   and records it on the pack, so a run and its engagement are the same thing by
+   construction. Verified end to end against the real `init`.
+4. ~~Monitor reads the live state.~~ **BUILT 2026-08-25** - run/spent/retries rows, read
+   from the run's own stream file, so it works whichever launcher is asking and whether or
+   not the one that started it still exists.
+5. ~~Windows verification on WINTEST.~~ **DONE 2026-08-25, and it found two bugs.**
+   `os.kill(pid, 0)` does not mean "does this exist" on Windows, so the "unknown counts as
+   alive" fallback was taken on every call - `stop_and_wait` sat out its whole timeout and
+   reported failure against a process that had already finished. And CTRL_BREAK_EVENT is
+   delivered through a shared console, which a DETACHED_PROCESS does not have, so the polite
+   stop reached nothing and the run carried on to normal completion. Fixed with OpenProcess/
+   GetExitCodeProcess and an unconditional TerminateProcess, then re-verified on the box.
+   The honest consequence: on Windows a stopped run has its turn cut off rather than closed,
+   and records no result for it.
 
 Steps 1-3 are useful before any UI exists: a run that is correlated by session id and capped
 by a hard budget is already better than what ships today.

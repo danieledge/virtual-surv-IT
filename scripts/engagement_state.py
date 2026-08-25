@@ -1481,10 +1481,28 @@ def _cmd_init(args: argparse.Namespace) -> int:
             else ("park" if _handoff else None)
         ),
         "budget": (
-            {"engagement_usd": _handoff["engagement_usd"], "set": _dt.date.today().isoformat()}
+            {
+                "engagement_usd": _handoff["engagement_usd"],
+                "set": _dt.date.today().isoformat(),
+                # The ENFORCED cap, kept apart from the advisory ceiling above it. They are
+                # two different promises (2026-08-25) and a reader must never have to infer
+                # which one this engagement was given.
+                **(
+                    {"hard_cap_usd": _handoff["hard_cap_usd"]}
+                    if isinstance(_handoff.get("hard_cap_usd"), (int, float))
+                    else {}
+                ),
+            }
             if isinstance(_handoff.get("engagement_usd"), (int, float))
             else {}
         ),
+        # How the run was started, and WHICH session is doing it. The session id is chosen by
+        # the launcher before anything starts and passed to the CLI as --session-id, so the
+        # run and this pack are the same thing by construction - not matched afterwards by
+        # date or by whichever transcript was touched last, which is what the deleted
+        # transcript reader had to do and could never do reliably.
+        "run_mode": _handoff.get("run_mode") or None,
+        "session_id": _handoff.get("session_id") or None,
         "phase": args.phase,
         "team": [],
         "verdict": None,
