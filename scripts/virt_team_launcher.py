@@ -3418,7 +3418,10 @@ def _launch_unattended_in_window(project_dir: Path, decision: str, slug: str) ->
     terminal = launch_terminal.available()
     if not terminal:
         print(
-            ink.dim("    no windowed terminal here - opening in this one instead"),
+            ink.warn(
+                "    no windowed terminal found - opening in this one instead. Check with: "
+                "python -m scripts.launch_terminal"
+            ),
             file=err,
         )
         return False
@@ -3429,7 +3432,13 @@ def _launch_unattended_in_window(project_dir: Path, decision: str, slug: str) ->
     # second way to get it wrong.
     command = _configured_launch_command().split() or ["claude"]
     if not launch_terminal.open_in_new_window(command + [decision], project_dir):
-        print(ink.warn("    could not open a new window - opening in this one instead"), file=err)
+        print(
+            ink.warn(
+                f"    {terminal} could not start '{command[0]}' - opening in this one "
+                "instead. Check with: python -m scripts.launch_terminal --open"
+            ),
+            file=err,
+        )
         return False
     print(ink.good(f"    -> session opened in a new {terminal} window"), file=err)
     try:
@@ -3581,10 +3590,31 @@ def main() -> int:
         # status (2026-08-25). Returning the abort code afterwards is not an abort: it
         # tells the wrapper the session has already been started, so it must not start a
         # second one. Any failure falls through to the ordinary in-place launch below.
-        if "--auto" in decision.split() and _new_window_wanted(project_dir):
-            slug = _pending_auto_slug(project_dir)
-            if slug and _launch_unattended_in_window(project_dir, decision, slug):
-                return _ABORT_EXIT_CODE
+        # Every reason NOT to open a window is said out loud (2026-08-25: "it opens in the
+        # same window" - and there was no way to tell WHICH of three silent conditions
+        # declined). A control that quietly does nothing is the defect class this repo has
+        # hit five times in a week; the fix each time is to make it speak.
+        if "--auto" in decision.split():
+            if not _new_window_wanted(project_dir):
+                print(
+                    _Ink().dim(
+                        "    new window off for this project - opening here "
+                        "(turn on: [c] -> unattended in a new window)"
+                    ),
+                    file=sys.stderr,
+                )
+            else:
+                slug = _pending_auto_slug(project_dir)
+                if not slug:
+                    print(
+                        _Ink().warn(
+                            "    no unattended handoff recorded - opening here. The "
+                            "pre-flight did not complete, so this run is NOT unattended."
+                        ),
+                        file=sys.stderr,
+                    )
+                elif _launch_unattended_in_window(project_dir, decision, slug):
+                    return _ABORT_EXIT_CODE
         print(decision)  # the ONLY thing that goes to stdout
     return 0
 

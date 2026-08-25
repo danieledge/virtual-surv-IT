@@ -120,7 +120,11 @@ def test_a_terminal_that_exists_but_will_not_start_also_falls_back(tmp_path, mon
     monkeypatch.setattr(lt, "available", lambda: "xterm")
     monkeypatch.setattr(lt, "open_in_new_window", lambda *a, **k: False)
     assert mod._launch_unattended_in_window(project, "/engage --new --auto", "slug") is False
-    assert "could not open a new window" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    # The message names the terminal AND the command it could not start, because "could not
+    # open a new window" told the reader nothing they could act on.
+    assert "xterm could not start" in err and "claude" in err
+    assert "launch_terminal --open" in err, "and points at the way to test it directly"
 
 
 def test_the_wrapper_is_told_to_stand_down_only_when_a_window_opened(tmp_path, monkeypatch):
@@ -390,3 +394,50 @@ def test_the_new_window_default_is_on_now_it_is_verified(tmp_path):
     mod = _load("virt_team_launcher")
     assert mod._new_window_wanted(_project(tmp_path)) is True
     assert mod._new_window_wanted(_project(tmp_path, new_window=False)) is False
+
+
+def _drive_main(mod, monkeypatch, project, decision):
+    monkeypatch.chdir(project)
+    for name in ("_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
+                 "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
+                 "_heal_stale_alias_once", "_clear_request_handoff"):
+        if hasattr(mod, name):
+            monkeypatch.setattr(mod, name, lambda *a, **k: None)
+    monkeypatch.setattr(mod, "_resume_decision", lambda _d: decision)
+    return mod.main()
+
+
+def test_every_reason_not_to_open_a_window_is_said_out_loud(tmp_path, monkeypatch, capsys):
+    """2026-08-25: "it opens in the same window", and there was no way to tell which of three
+    silent conditions declined. A control that quietly does nothing is the defect class this
+    repo keeps meeting; the fix each time is to make it speak."""
+    mod = _load("virt_team_launcher")
+
+    # 1. the preference is off
+    off = _project(tmp_path / "a", new_window=False)
+    (off / ".claude" / ".auto-pending.json").write_text(json.dumps({"slug": "x"}), encoding="utf-8")
+    assert _drive_main(mod, monkeypatch, off, "/engage --new --auto") == 0
+    assert "new window off for this project" in capsys.readouterr().err
+
+    # 2. no handoff, so the run is not actually unattended
+    nohand = _project(tmp_path / "b", new_window=True)
+    assert _drive_main(mod, monkeypatch, nohand, "/engage --new --auto") == 0
+    err = capsys.readouterr().err
+    assert "no unattended handoff" in err and "NOT unattended" in err
+
+    # 3. no terminal available
+    ok = _project(tmp_path / "c", new_window=True)
+    (ok / ".claude" / ".auto-pending.json").write_text(json.dumps({"slug": "x"}), encoding="utf-8")
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "available", lambda: "")
+    assert _drive_main(mod, monkeypatch, ok, "/engage --new --auto") == 0
+    assert "no windowed terminal found" in capsys.readouterr().err
+
+
+def test_an_attended_run_says_nothing_about_windows(tmp_path, monkeypatch, capsys):
+    """The one case that must stay quiet: no --auto, no window, nothing to explain."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path, new_window=True)
+    assert _drive_main(mod, monkeypatch, project, "/engage --new --request-pending") == 0
+    err = capsys.readouterr().err
+    assert "window" not in err.lower()
