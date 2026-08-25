@@ -538,6 +538,13 @@ def test_run_tool_cache_refresh_success(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(ih, "run_cmd", fake_run_cmd)
     monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+    # Runtime dependencies are probed for REAL unless stubbed, so these tests inherited
+    # whatever the machine happened to have installed. A container with no `claude` - which
+    # is correct for a test image - added an issue the assertion never allowed for
+    # (2026-08-25). A test that counts issues has to control every source of them.
+    monkeypatch.setattr(
+        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+    )
     rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks())
     assert rc == 0
     assert "refreshed" in capsys.readouterr().out
@@ -566,6 +573,13 @@ def test_run_tool_cache_refresh_nonzero_exit_reported(tmp_path, monkeypatch, cap
 
     monkeypatch.setattr(ih, "run_cmd", lambda *a, **k: _FakeProc(3))
     monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+    # Runtime dependencies are probed for REAL unless stubbed, so these tests inherited
+    # whatever the machine happened to have installed. A container with no `claude` - which
+    # is correct for a test image - added an issue the assertion never allowed for
+    # (2026-08-25). A test that counts issues has to control every source of them.
+    monkeypatch.setattr(
+        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+    )
     rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks())
     assert rc == 1
     assert "exited 3" in capsys.readouterr().out
@@ -579,6 +593,13 @@ def test_run_tool_cache_refresh_demo_writes_nothing(tmp_path, monkeypatch, capsy
 
     monkeypatch.setattr(ih, "run_cmd", boom)
     monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+    # Runtime dependencies are probed for REAL unless stubbed, so these tests inherited
+    # whatever the machine happened to have installed. A container with no `claude` - which
+    # is correct for a test image - added an issue the assertion never allowed for
+    # (2026-08-25). A test that counts issues has to control every source of them.
+    monkeypatch.setattr(
+        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+    )
     rc = ih.run_tool_cache_refresh(tmp_path, ih.Style(False), ih.marks(), demo=True)
     assert rc == 0
     assert "would run" in capsys.readouterr().out
@@ -2442,6 +2463,13 @@ def test_statusline_step_auto_enabled_when_quick_defaults_chosen(monkeypatch, tm
 
     _isolate_home(monkeypatch, tmp_path)
     monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+    # Runtime dependencies are probed for REAL unless stubbed, so these tests inherited
+    # whatever the machine happened to have installed. A container with no `claude` - which
+    # is correct for a test image - added an issue the assertion never allowed for
+    # (2026-08-25). A test that counts issues has to control every source of them.
+    monkeypatch.setattr(
+        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+    )
 
     def boom(*a, **k):
         raise AssertionError("must not ask - quick_defaults skips the outer gate")
@@ -4662,6 +4690,13 @@ def test_run_env_check_aggregates_and_reports_clean(capsys, monkeypatch):
         ih, "_check_interpreters", lambda order: ([("python3", "OK", "Python 3.12")], "python3")
     )
     monkeypatch.setattr(ih, "find_bash", lambda: "/usr/bin/bash")
+    # Runtime dependencies are probed for REAL unless stubbed, so these tests inherited
+    # whatever the machine happened to have installed. A container with no `claude` - which
+    # is correct for a test image - added an issue the assertion never allowed for
+    # (2026-08-25). A test that counts issues has to control every source of them.
+    monkeypatch.setattr(
+        ih, "_check_runtime_dependencies", lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")]
+    )
     monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("OK", "clean"))
     monkeypatch.setattr(ih, "_check_plugin_root_bootstrap", lambda root: ("OK", "resolves"))
     monkeypatch.setattr(
