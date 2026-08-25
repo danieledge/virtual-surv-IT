@@ -611,7 +611,9 @@ def _load_render_html_module():
         return None
 
 
-def render_registry(root: Path, known: tuple[Path, dict] | None = None) -> list[Path]:
+def render_registry(
+    root: Path, known: tuple[Path, dict] | None = None, force: bool = False
+) -> list[Path]:
     """(Re)generate the derived root registry. Removes it when no packs remain.
 
     `known` is threaded straight through to scan_engagements() - see its docstring."""
@@ -654,8 +656,21 @@ def render_registry(root: Path, known: tuple[Path, dict] | None = None) -> list[
             + ", ".join(f"`{s}/`" for s in archived),
         ]
     lines.append("")
-    md_path.write_text("\n".join(lines), encoding="utf-8")
+    registry_md = "\n".join(lines)
+    try:
+        previous_registry = md_path.read_text(encoding="utf-8")
+    except OSError:
+        previous_registry = None
+    md_path.write_text(registry_md, encoding="utf-8")
     written = [json_path, md_path]
+    # Same skip as render_files, and the one that actually pays here: the registry changes
+    # only when an engagement's status, title or dates change, so on the great majority of
+    # mutations (a decision, a note, an artifact row) it is byte-identical and re-rendering
+    # it buys nothing but the Markdown+bleach import (2026-08-25 performance review).
+    registry_html = md_path.with_suffix(".html")
+    if not force and previous_registry == registry_md and registry_html.is_file():
+        written.append(registry_html)  # up to date, not skipped - see render_files above
+        return written
     render_html = _load_render_html_module()
     if render_html is not None:
         try:
@@ -1171,7 +1186,9 @@ def embedded_content_hash(index_text: str) -> str | None:
     return None
 
 
-def render_files(artifacts_dir: Path, known_state: dict | None = None) -> list[Path]:
+def render_files(
+    artifacts_dir: Path, known_state: dict | None = None, force: bool = False
+) -> list[Path]:
     """Write START-HERE.md (+ .html when the renderer's deps exist) from the state file.
 
     `known_state`, if given, is used instead of re-reading `artifacts_dir`'s state off
@@ -1184,8 +1201,31 @@ def render_files(artifacts_dir: Path, known_state: dict | None = None) -> list[P
         raise ValueError("state invalid: " + "; ".join(problems))
     md_text = render_markdown(state)
     md_path = index_path(artifacts_dir)
+    try:
+        previous = md_path.read_text(encoding="utf-8")
+    except OSError:
+        previous = None
     md_path.write_text(md_text, encoding="utf-8")
     written = [md_path]
+    # Skip the HTML when the markdown did not change AND the sibling already exists
+    # (2026-08-25 performance review). Measured: one set-decision cost 0.38s against a 0.03s
+    # interpreter floor, of which ~173ms was importing Markdown+bleach and ~90-150ms the
+    # render itself - paid by EVERY mutator in the engage flow, and ~40% of the test suite.
+    #
+    # Safe for the freshness gates rather than merely faster: the .md is still written every
+    # time, so STATE-STALE-RENDER is unaffected; the .html still exists, so MISSING-HTML is
+    # unaffected; and identical markdown renders to identical HTML, so skipping cannot make
+    # the sibling wrong. The only thing lost is a refreshed `generated` date on a file whose
+    # content did not change, which is churn, not information.
+    html_path = md_path.with_suffix(".html")
+    if not force and previous == md_text and html_path.is_file():
+        # Report the sibling as up to date, not as skipped. Callers use this list to decide
+        # whether the HTML exists and is current - the `render` command exits non-zero when
+        # it is missing - and an unchanged file that was already correct satisfies that. A
+        # bare early return made a current sibling look absent (caught by
+        # test_render_exits_nonzero_when_html_sibling_skipped, which is exactly its job).
+        written.append(html_path)
+        return written
     render_html = _load_render_html_module()
     if render_html is None:
         print(
@@ -1194,7 +1234,6 @@ def render_files(artifacts_dir: Path, known_state: dict | None = None) -> list[P
         )
         return written
     try:
-        html_path = md_path.with_suffix(".html")
         html_path.write_text(
             render_html.render(
                 md_text,
@@ -1465,7 +1504,7 @@ def _cmd_show(args: argparse.Namespace) -> int:
 
 
 def _cmd_render(args: argparse.Namespace) -> int:
-    written = render_files(args.dir)
+    written = render_files(args.dir, force=True)
     for path in written:
         print(f"wrote {path}")
     # render_files degrades .html failures to a stderr note rather than raising (every
