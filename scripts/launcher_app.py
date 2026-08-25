@@ -2064,7 +2064,7 @@ _WORKFLOW_REFRESH = 6.0  # seconds - a transcript is large and grows; the state 
 _FRAME_WINDOW = 0.5
 
 
-def workflow_screen(project_dir: Path, mod, output=None, session: str = ""):
+def workflow_screen(project_dir: Path, mod, output=None, session: str = "", slug: str = ""):
     """The workflow the team is following: stage, model, cost, and where it looped.
 
     Reads scripts/workflow_trace - it does no parsing of its own, so this screen and the
@@ -2103,7 +2103,7 @@ def workflow_screen(project_dir: Path, mod, output=None, session: str = ""):
 
             trace = (
                 workflow_trace.parse(Path(session)) if session
-                else workflow_trace.trace_for(project_dir)
+                else workflow_trace.trace_for(project_dir, slug=slug)
             )
         except MemoryError:
             # Named separately because it is the one failure the reader can act on, and
@@ -2124,6 +2124,11 @@ def workflow_screen(project_dir: Path, mod, output=None, session: str = ""):
             return out
         totals = trace.get("totals") or {}
         stages = trace.get("stages") or []
+        scope = trace.get("scope") or ""
+        if scope:
+            # Which run these numbers describe. Without it a session-wide total reads as one
+            # engagement's cost, which is a wrong number presented confidently.
+            out.append(("class:dim", f"  {scope[:44]}\n"))
         out.append(("class:dim", "  "))
         out.append(("", f"{totals.get('agent_stages', 0)} stages"))
         out.append(("class:dim", "  ·  "))
@@ -2195,7 +2200,7 @@ def workflow_screen(project_dir: Path, mod, output=None, session: str = ""):
 
     @kb.add("e")
     def _export(event):
-        note[0] = _export_trace(project_dir, _trace())
+        note[0] = _export_trace(project_dir, _trace(), slug)
 
     @kb.add("escape", eager=True)
     @kb.add("c-c")
@@ -2223,8 +2228,13 @@ def workflow_screen(project_dir: Path, mod, output=None, session: str = ""):
     return WORKFLOW_CLOSED
 
 
-def _export_trace(project_dir: Path, trace: dict) -> str:
-    """Write the trace out and report where, in one short line for the screen."""
+def _export_trace(project_dir: Path, trace: dict, slug: str = "") -> str:
+    """Write the trace out and report where, in one short line for the screen.
+
+    Into the ENGAGEMENT's workspace when we know which engagement it is (ADR-010: an
+    artifact belongs with the work it describes). `artifacts/workflow/` is the fallback for
+    a session-scoped trace that belongs to no single engagement - not the default, which is
+    what it was until 2026-08-25."""
     if not trace.get("ok"):
         return "nothing to export yet"
     try:
@@ -2234,7 +2244,9 @@ def _export_trace(project_dir: Path, trace: dict) -> str:
 
         import render_workflow
 
-        out_dir = project_dir / "artifacts" / "workflow"
+        out_dir = (
+            project_dir / "artifacts" / slug if slug else project_dir / "artifacts" / "workflow"
+        )
         # stderr is the TUI's DRAWING channel. The HTML renderer pulls in bleach, which emits
         # a warning on import, and that warning lands in the middle of the frame - caught
         # under a pty, 2026-08-25, garbling the screen the moment anyone pressed e. Anything
@@ -2244,7 +2256,8 @@ def _export_trace(project_dir: Path, trace: dict) -> str:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 written = render_workflow.export(trace, out_dir, ("md", "html", "json", "csv"))
-        return f"exported {len(written)} file(s) to artifacts/workflow/" if written else (
+        where = f"artifacts/{slug}/" if slug else "artifacts/workflow/"
+        return f"exported {len(written)} file(s) to {where}" if written else (
             "export produced nothing"
         )
     except Exception as exc:

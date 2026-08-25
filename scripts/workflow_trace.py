@@ -239,6 +239,7 @@ def _parse_uncached(path: Path, rates: dict | None = None) -> dict:
             stages.append(
                 {
                     "kind": "orchestration",
+                    "at": ended,
                     "agent": "orchestrator",
                     "model": model,
                     "usage": dict(pending),
@@ -273,7 +274,7 @@ def _parse_uncached(path: Path, rates: dict | None = None) -> dict:
                 result = record.get("toolUseResult")
                 if isinstance(result, dict) and result.get("agentType"):
                     _flush_orchestration()
-                    stages.append(_stage_from_result(result, rates))
+                    stages.append(_stage_from_result(result, rates, stamp))
                     continue
                 if record.get("type") == "assistant":
                     message = record.get("message") or {}
@@ -320,12 +321,13 @@ def _blended_cost(per_model: dict, rates: dict) -> float | None:
     return round(running, 4)
 
 
-def _stage_from_result(result: dict, rates: dict) -> dict:
+def _stage_from_result(result: dict, rates: dict, at: str = "") -> dict:
     usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
     model = result.get("resolvedModel") or ""
     tokens = result.get("totalTokens")
     return {
         "kind": "agent",
+        "at": at,
         "agent": str(result.get("agentType") or "agent"),
         "model": str(model),
         "usage": usage,
@@ -394,8 +396,28 @@ def _totals(stages: list[dict]) -> dict:
     }
 
 
-def trace_for(project_dir: Path, after: float = 0.0) -> dict:
-    """The trace for a project's most recent session, or a displayable reason there is none."""
+def opened_date(project_dir: Path, slug: str) -> str:
+    """When an engagement was opened, as recorded on its own pack. "" if unknown."""
+    try:
+        state = json.loads(
+            (project_dir / "artifacts" / slug / "engagement-state.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        return str((state.get("engagement") or {}).get("opened") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def trace_for(project_dir: Path, after: float = 0.0, slug: str = "") -> dict:
+    """The trace for a project's most recent session, scoped to an engagement if named.
+
+    SCOPE, because the honest answer to "project or engagement level?" was neither
+    (2026-08-25). The transcript is per SESSION: one session can cover several engagements,
+    and an engagement resumed next week spans several sessions. Naming a slug narrows the
+    stages to those recorded on or after that engagement was opened, which is as close to
+    engagement-scoped as the transcript's own data allows - and the result SAYS which scope
+    it used, so a session-wide figure is never mistaken for one engagement's cost."""
     path = newest_transcript(project_dir, after=after)
     if path is None:
         return {
@@ -403,8 +425,23 @@ def trace_for(project_dir: Path, after: float = 0.0) -> dict:
             "error": "no session transcript found for this project yet",
             "stages": [],
             "path": "",
+            "scope": "",
         }
-    return parse(path)
+    since = opened_date(project_dir, slug) if slug else ""
+    trace = parse(path)
+    if not (slug and since and trace.get("ok")):
+        trace = dict(trace)
+        trace["scope"] = f"session {Path(trace.get('path', '')).stem[:8]}" if trace.get(
+            "ok"
+        ) else ""
+        return trace
+    kept = [s for s in trace["stages"] if not s.get("at") or s["at"][:10] >= since[:10]]
+    scoped = dict(trace)
+    scoped["stages"] = kept
+    scoped["totals"] = _totals(kept)
+    scoped["scope"] = f"{slug}, opened {since}"
+    scoped["dropped_before_open"] = len(trace["stages"]) - len(kept)
+    return scoped
 
 
 def main(argv: list[str] | None = None) -> int:

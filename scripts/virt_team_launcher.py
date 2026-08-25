@@ -2014,7 +2014,9 @@ def _decision_from_pick(
         try:
             from launcher_app import workflow_screen
 
-            workflow_screen(project_dir, sys.modules[__name__])
+            # Scoped to the running engagement when there is one, session-wide otherwise -
+            # and the screen says which, so the two are never confused.
+            workflow_screen(project_dir, sys.modules[__name__], slug=_running_slug(project_dir))
         except Exception:
             print(ink.dim("    workflow view unavailable here"), file=sys.stderr)
         return "__again__"
@@ -3525,7 +3527,7 @@ def _watch_after_launch(project_dir: Path, slug: str) -> None:
                     MONITOR_WANTS_WORKFLOW
                 ):
                     return
-                workflow_screen(project_dir, sys.modules[__name__])
+                workflow_screen(project_dir, sys.modules[__name__], slug=slug)
             return
         if _workflow_view_on(project_dir):
             from launcher_app import workflow_screen

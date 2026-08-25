@@ -370,3 +370,97 @@ def test_the_cache_holds_one_entry_not_a_growing_dict(tmp_path):
         p.write_text(json.dumps(_agent("qa-engineer", "claude-sonnet-5")) + "\n", encoding="utf-8")
         wt.parse(p)
     assert set(wt._CACHE) == {"key", "trace"}, "one entry, keyed on the file being watched"
+
+
+# --- what a trace is actually SCOPED to (2026-08-25) ----------------------------------------
+#
+# Asked: "workflow - is it at a project level or engagement level?" The honest answer was
+# neither. The transcript is per SESSION: one session can cover several engagements, and an
+# engagement resumed next week spans several sessions. Naming a slug narrows it as far as the
+# transcript's own data allows, and the result says which scope it used - because a
+# session-wide total presented as one engagement's cost is a wrong number stated confidently.
+
+
+def _pack(project: Path, slug: str, opened: str):
+    art = project / "artifacts" / slug
+    art.mkdir(parents=True, exist_ok=True)
+    (art / "engagement-state.json").write_text(
+        json.dumps({"schema": 2, "status": "in_progress",
+                    "engagement": {"slug": slug, "opened": opened}}),
+        encoding="utf-8",
+    )
+    return art
+
+
+def _at(agent: str, stamp: str):
+    rec = _agent(agent, "claude-sonnet-5")
+    rec["timestamp"] = stamp
+    return rec
+
+
+def _transcript_dir(monkeypatch, wt, project: Path, records: list) -> Path:
+    folder = project / "_transcripts"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "abcd1234.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
+    monkeypatch.setattr(wt, "transcript_dir_for", lambda _p: folder)
+    return path
+
+
+def test_a_named_engagement_scopes_out_earlier_work(tmp_path, monkeypatch):
+    """Stages recorded before the engagement was opened belong to whatever came before it."""
+    wt = _load("workflow_trace")
+    project = tmp_path
+    _pack(project, "beta", opened="2026-08-20")
+    _transcript_dir(monkeypatch, wt, project, [
+        _at("business-analyst", "2026-08-18T10:00:00Z"),   # earlier engagement
+        _at("rules-developer", "2026-08-21T10:00:00Z"),    # this one
+        _at("qa-engineer", "2026-08-22T10:00:00Z"),        # this one
+    ])
+    scoped = wt.trace_for(project, slug="beta")
+    agents = [s["agent"] for s in scoped["stages"] if s["kind"] == "agent"]
+    assert agents == ["rules-developer", "qa-engineer"]
+    assert scoped["dropped_before_open"] == 1
+    assert "beta" in scoped["scope"] and "2026-08-20" in scoped["scope"]
+
+
+def test_totals_are_recomputed_for_the_scope_not_inherited(tmp_path, monkeypatch):
+    """The bug this would hide: scoped rows with a session-wide total underneath them."""
+    wt = _load("workflow_trace")
+    project = tmp_path
+    _pack(project, "beta", opened="2026-08-20")
+    _transcript_dir(monkeypatch, wt, project, [
+        _at("business-analyst", "2026-08-18T10:00:00Z"),
+        _at("rules-developer", "2026-08-21T10:00:00Z"),
+    ])
+    whole = wt.trace_for(project)
+    scoped = wt.trace_for(project, slug="beta")
+    assert whole["totals"]["agent_stages"] == 2
+    assert scoped["totals"]["agent_stages"] == 1
+    assert scoped["totals"]["tokens"] < whole["totals"]["tokens"]
+
+
+def test_an_unscoped_trace_says_it_is_a_session(tmp_path, monkeypatch):
+    wt = _load("workflow_trace")
+    _transcript_dir(monkeypatch, wt, tmp_path, [_at("qa-engineer", "2026-08-21T10:00:00Z")])
+    assert wt.trace_for(tmp_path)["scope"].startswith("session ")
+
+
+def test_an_unknown_slug_falls_back_to_the_whole_session(tmp_path, monkeypatch):
+    """Never silently empty: a pack with no opened date must not scope everything away."""
+    wt = _load("workflow_trace")
+    _pack(tmp_path, "nodate", opened="")
+    _transcript_dir(monkeypatch, wt, tmp_path, [_at("qa-engineer", "2026-08-21T10:00:00Z")])
+    scoped = wt.trace_for(tmp_path, slug="nodate")
+    assert len([s for s in scoped["stages"] if s["kind"] == "agent"]) == 1
+    assert scoped["scope"].startswith("session ")
+
+
+def test_the_export_lands_in_the_engagements_workspace(tmp_path):
+    """ADR-010: an artifact belongs with the work it describes. artifacts/workflow/ is the
+    fallback for a session-scoped trace belonging to no single engagement - it was the
+    default until 2026-08-25."""
+    app_src = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+    body = app_src.split("def _export_trace", 1)[1].split("\ndef ", 1)[0]
+    assert 'project_dir / "artifacts" / slug if slug' in body
+    assert '"artifacts" / "workflow"' in body, "the unscoped fallback must remain"
