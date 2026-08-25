@@ -297,7 +297,12 @@ class GuardDaemon(socketserver.ThreadingTCPServer):
 
     def idle_watchdog(self) -> None:
         while True:
-            time.sleep(5)
+            # Sleep no longer than the timeout it is policing (2026-08-25 performance
+            # review). A fixed 5s meant an idle_timeout below that could never fire on the
+            # first pass - harmless in production, where the timeout is 30 minutes, but two
+            # tests using a 1s timeout each paid the full 5s waiting for a watchdog that had
+            # already decided. Measured: 10s off the suite, production behaviour unchanged.
+            time.sleep(min(5, max(0.1, self.idle_timeout)))
             if self.stale:
                 break
             if time.monotonic() - self.last_activity > self.idle_timeout:
