@@ -128,7 +128,10 @@ def test_the_wrapper_is_told_to_stand_down_only_when_a_window_opened(tmp_path, m
     direction is bad: too eager and the session starts twice, too shy and it starts in a
     window the human cannot see AND in this shell."""
     mod = _load("virt_team_launcher")
-    project = _project(tmp_path)
+    # Explicit, because new_window is OFF by default since the Windows no-show (2026-08-25).
+    # A test that relied on the default would have gone green for the wrong reason the day
+    # the default changed - it went red instead, which is the behaviour worth keeping.
+    project = _project(tmp_path, new_window=True)
     monkeypatch.chdir(project)
     (project / ".claude" / ".auto-pending.json").write_text(
         json.dumps({"slug": "alpha", "auto": True}), encoding="utf-8"
@@ -248,3 +251,142 @@ def test_elapsed_reads_as_time_not_a_number():
     assert app._elapsed(now - 75) == "1m 15s"
     assert app._elapsed(now - 3725) == "1h 02m"
     assert app._elapsed(now + 10) == "0s", "a clock change must not show negative time"
+
+
+# --- the Windows failure that started nothing (live report 2026-08-25) ----------------------
+#
+# "the claude code session didnt start; on windows it was launched in powershell (virt-surv
+# go) and with the workflow feature turned on it ran for several min with no new powershell
+# launched or claude". Three separate defects, each tested below, and the third is the one
+# that made the other two catastrophic instead of merely annoying.
+
+
+def test_powershell_is_given_a_command_not_a_string(monkeypatch):
+    """Without the call operator, "'claude' '/engage ...'" is a STRING EXPRESSION: PowerShell
+    evaluates it, prints it, and runs nothing. Same invocation shape the virt-surv alias
+    itself uses, because that is the one known to work."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt.sys, "platform", "win32")
+    monkeypatch.setattr(lt, "_which", lambda n: f"C:/{n}")
+    argv = lt._windows_argv("powershell.exe", ["claude", "/engage --new --auto"], Path("C:/proj"))
+    script = argv[-1]
+    assert "& " in script, f"no call operator - PowerShell would print, not run: {script}"
+    assert script.index("&") > script.index("Set-Location"), "cd first, then run"
+    assert "'/engage --new --auto'" in script, "the decision must survive as one argument"
+    assert "-NoExit" in argv, "a failing session must leave its error on screen, not flash shut"
+
+
+def test_windows_gets_a_new_console_never_a_detached_process(monkeypatch, tmp_path):
+    """DETACHED_PROCESS gives the child NO console, so powershell.exe starts with nowhere to
+    draw and the user sees nothing at all. That is the invisible half of the live report."""
+    source = (REPO_ROOT / "scripts" / "launch_terminal.py").read_text(encoding="utf-8")
+    # Check what is USED, not what is mentioned - the reasoning above the code names the
+    # flag it rejects, and a naive substring test flags its own explanation.
+    used = [line for line in source.splitlines()
+            if "creationflags" in line or "getattr(subprocess" in line]
+    assert any("CREATE_NEW_CONSOLE" in line for line in used), used
+    assert not any("DETACHED_PROCESS" in line for line in used), (
+        "a detached child has no window; that is not what 'another window' means on Windows"
+    )
+
+
+def test_a_spawner_that_dies_on_its_argv_is_not_reported_as_launched(monkeypatch, tmp_path):
+    """The defect that made the others catastrophic. Popen succeeding proves only that the
+    SPAWNER was found - not that a session started. Reporting success let the launcher tell
+    the shell to stand down while nothing ran, so the user got neither window nor session."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "available", lambda: "xterm")
+
+    class _Dead:
+        returncode = 1
+
+        def wait(self, timeout=None):
+            return 1
+
+    monkeypatch.setattr(lt.subprocess, "Popen", lambda *a, **k: _Dead())
+    assert lt.open_in_new_window(["claude", "/engage --new"], tmp_path) is False
+
+
+def test_a_terminal_that_forks_and_exits_zero_still_counts_as_launched(monkeypatch, tmp_path):
+    """wt.exe and `cmd start` hand off to their own window and exit 0 immediately. Treating
+    that as failure would double-launch every session on Windows."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "available", lambda: "wt.exe")
+
+    class _Forked:
+        returncode = 0
+
+        def wait(self, timeout=None):
+            return 0
+
+    monkeypatch.setattr(lt.subprocess, "Popen", lambda *a, **k: _Forked())
+    assert lt.open_in_new_window(["claude", "/engage --new"], tmp_path) is True
+
+
+def test_a_session_still_running_counts_as_launched(monkeypatch, tmp_path):
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "available", lambda: "xterm")
+
+    class _Alive:
+        returncode = None
+
+        def wait(self, timeout=None):
+            raise lt.subprocess.TimeoutExpired("x", timeout)
+
+    monkeypatch.setattr(lt.subprocess, "Popen", lambda *a, **k: _Alive())
+    assert lt.open_in_new_window(["claude", "/engage --new"], tmp_path) is True
+
+
+def test_the_windowed_launch_uses_the_same_command_the_wrapper_would(tmp_path, monkeypatch):
+    """Owner, 2026-08-25: "claude should be launched using the same method as virt surv go
+    does". Anything else is a second way to start a session and a second way to get it
+    wrong."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "available", lambda: "xterm")
+    seen = {}
+    monkeypatch.setattr(lt, "open_in_new_window",
+                        lambda cmd, cwd: seen.update(cmd=cmd, cwd=cwd) or True)
+    monkeypatch.setattr(mod, "_configured_launch_command", lambda: "cc --resume")
+    try:
+        import launcher_app
+        monkeypatch.setattr(launcher_app, "monitor_screen", lambda *a, **k: None)
+    except Exception:
+        pass
+    mod._launch_unattended_in_window(project, "/engage --new --auto", "alpha")
+    assert seen["cmd"] == ["cc", "--resume", "/engage --new --auto"], (
+        "the configured launch command must be word-split and used verbatim, as the wrapper "
+        f"does - got {seen.get('cmd')}"
+    )
+
+
+def test_the_monitor_stops_saying_waiting_and_reports_a_no_show(tmp_path):
+    """Several minutes of a patient "waiting" line while nothing ran is the report. A monitor
+    that only ever reports patience is indistinguishable from one watching nothing."""
+    source = (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+    body = source.split("def monitor_screen", 1)[1].split("\ndef ", 1)[0]
+    assert "_PATIENCE" in body
+    assert "may not" in body and "started" in body, "it must name the likely cause"
+    assert "launch" in body, "and offer the way out"
+
+
+def test_an_unresolvable_command_is_never_reported_as_launched(tmp_path, monkeypatch):
+    """Proven on WINTEST (PowerShell 5.1, 2026-08-25): waiting on the spawned process cannot
+    answer this, because the terminal wrapper starts fine and -NoExit means it never exits -
+    so a bogus executable reported success. The target is resolved BEFORE spawning now."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt, "available", lambda: "xterm")
+    called = []
+    monkeypatch.setattr(lt.subprocess, "Popen", lambda *a, **k: called.append(a) or None)
+    assert lt.open_in_new_window(["definitely-not-a-real-program-xyz"], tmp_path) is False
+    assert called == [], "nothing should even be spawned for an unresolvable command"
+
+
+def test_the_new_window_default_is_on_now_it_is_verified(tmp_path):
+    """On, off, and on again - the last move only after being proven on the platform that
+    broke it: powershell.exe found, the spawned command executes, and `claude --version`
+    runs inside the new console and exits 0."""
+    mod = _load("virt_team_launcher")
+    assert mod._new_window_wanted(_project(tmp_path)) is True
+    assert mod._new_window_wanted(_project(tmp_path, new_window=False)) is False

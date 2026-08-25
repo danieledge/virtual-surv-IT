@@ -600,7 +600,7 @@ def test_init_captures_settings_snapshot_from_team_preferences(tmp_path, monkeyp
         "evidence_room": False,  # opt-in, off by default (2026-08-19)
         "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
         "autonomous_default": False,
-        "new_window": True,  # unattended opens beside the launcher; falls back in place  # the enabler it implied; opt-in per project (2026-08-25)
+        "new_window": True,  # verified on WINTEST/PowerShell 5.1 (2026-08-25)
         "workflow_view": False,  # reads an internal transcript format - opt-in
         "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
         "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)
@@ -624,7 +624,7 @@ def test_init_settings_snapshot_builtin_defaults_when_no_preferences_file(tmp_pa
         "evidence_room": False,  # opt-in, off by default (2026-08-19)
         "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
         "autonomous_default": False,
-        "new_window": True,  # unattended opens beside the launcher; falls back in place  # the enabler it implied; opt-in per project (2026-08-25)
+        "new_window": True,  # verified on WINTEST/PowerShell 5.1 (2026-08-25)
         "workflow_view": False,  # reads an internal transcript format - opt-in
         "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
         "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)

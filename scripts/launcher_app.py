@@ -1893,6 +1893,12 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
 
     g = glyphs(mod)
     started = _clock()
+    # How long a workspace may take to appear before the monitor stops saying "waiting" and
+    # starts saying something useful. A session that has started creates its pack within
+    # seconds; if nothing exists after this, the far more likely explanation is that no
+    # session started at all - which is exactly what happened on Windows (2026-08-25: several
+    # minutes of a patient "waiting" line while nothing whatsoever was running).
+    _PATIENCE = 45.0
 
     def _rows(snap: dict) -> list:
         state = snap.get("state") or {}
@@ -1922,7 +1928,18 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
         state = snap.get("state") or {}
         out = [("class:group", f"  {g['new']}Watching this run\n\n")]
         if snap.get("error"):
-            out.append(("class:dim", f"  {snap['error']}\n\n"))
+            waited = _clock() - started
+            if not snap.get("exists") and waited > _PATIENCE:
+                # Say the quiet part: a monitor that only ever reports patience is
+                # indistinguishable from a monitor watching nothing.
+                out.append(("class:warn",
+                            f"  No workspace after {_elapsed(started)} - the session may not "
+                            "have started.\n"))
+                out.append(("class:dim",
+                            "  Check the other window for an error, or press Esc and launch\n"
+                            "  in this one instead.\n\n"))
+            else:
+                out.append(("class:dim", f"  {snap['error']}\n\n"))
         width = 13
         for label, value in _rows(snap):
             out.append(("class:dim", f"  {label:<{width}}"))

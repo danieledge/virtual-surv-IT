@@ -791,9 +791,22 @@ def resolve_preferences(project_dir: Path) -> dict:
     # than replacing the launcher. Only consulted for unattended runs - see
     # virt_team_launcher._new_window_wanted for why that is not a preference but a
     # consequence: the launcher's live status view can only exist if the launcher is still
-    # alive, and it can only still be alive if the session did not replace it. ON by
-    # default, with a real fallback: no windowed terminal (a headless box, no DISPLAY)
-    # launches in place exactly as before.
+    # alive, and it can only still be alive if the session did not replace it.
+    #
+    # It shipped ON, broke on Windows (no window, no session, and the launcher had already
+    # told the shell to stand down), went OFF, and is ON again - but only after being proven
+    # on the platform that broke it, not after being reasoned about. Verified on WINTEST,
+    # Windows Server 2025 / PowerShell 5.1, 2026-08-25: powershell.exe found, the spawned
+    # command executes, `claude --version` runs INSIDE the new console and exits 0, and a
+    # command that cannot be resolved reports failure so the caller falls back to launching
+    # in place. Three causes were fixed to get there - the call operator (without it
+    # PowerShell prints the command instead of running it), CREATE_NEW_CONSOLE rather than
+    # DETACHED_PROCESS (a detached child has no console to draw in), and resolving the
+    # target before claiming a launch.
+    #
+    # Not verified: that a window is VISIBLE. WINTEST is Server Core with no desktop, so the
+    # process was proven to run, not to be seen. On a desktop Windows CREATE_NEW_CONSOLE is
+    # what produces a window, and -NoExit keeps it open carrying any error.
     if "new_window" in prefs:
         new_window_on = bool(prefs["new_window"])
     else:

@@ -474,8 +474,8 @@ _SETTING_HELP = {
     "unattended in a new window": (
         "Opens an UNATTENDED session in its own terminal window, so this launcher survives "
         "to show you the run's live status instead of being replaced by it.",
-        "Attended runs are unaffected - you are already in that session. A machine with no "
-        "windowed terminal (a headless box) opens in place exactly as before.",
+        "Attended runs are unaffected - you are already in that session. Verified on real "
+        "PowerShell; a machine with no windowed terminal opens in place exactly as before.",
     ),
     "start work unattended": (
         "Arms the unattended toggle for new work, so a run you were going to start "
@@ -3422,6 +3422,11 @@ def _launch_unattended_in_window(project_dir: Path, decision: str, slug: str) ->
             file=err,
         )
         return False
+    # The SAME command the wrapper would have run - _configured_launch_command is what
+    # `--launch-command` hands the shell, so the windowed path and the in-place path start a
+    # session identically (owner, 2026-08-25: "claude should be launched using the same
+    # method as virt surv go does"). Anything else is a second way to start a session, and a
+    # second way to get it wrong.
     command = _configured_launch_command().split() or ["claude"]
     if not launch_terminal.open_in_new_window(command + [decision], project_dir):
         print(ink.warn("    could not open a new window - opening in this one instead"), file=err)

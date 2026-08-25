@@ -32,6 +32,10 @@ from pathlib import Path
 _WINDOWS_TIERS = ("wt.exe", "pwsh.exe", "powershell.exe", "cmd.exe")
 # Linux/BSD: the Debian alternatives symlink first (respects the user's own choice), then
 # the desktop-native emulators, then the universal fallback.
+# How long to wait for a spawned terminal to prove it did not die on its argv. Short enough
+# not to be felt, long enough for a bad command line to fail.
+_START_GRACE = 1.5
+
 _POSIX_TIERS = (
     "x-terminal-emulator",
     "gnome-terminal",
@@ -91,6 +95,19 @@ def _posix_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
     return [exe, "-e", "sh", "-c", f"cd {_quote(str(cwd))} && {joined}"]
 
 
+def _resolvable(program: str) -> bool:
+    """Can this actually be started? An absolute path that exists, or something on PATH."""
+    if not program:
+        return False
+    try:
+        candidate = Path(program)
+        if candidate.is_absolute():
+            return candidate.is_file()
+    except (OSError, ValueError):
+        return False
+    return _which(program) is not None
+
+
 def _quote(text: str) -> str:
     """POSIX single-quoting. Only used for the sh -c tiers above."""
     return "'" + str(text).replace("'", "'\\''") + "'"
@@ -101,10 +118,20 @@ def _windows_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
     if terminal == "wt.exe":
         return [exe, "-d", str(cwd)] + command
     if terminal in ("pwsh.exe", "powershell.exe"):
-        # -NoExit would leave a dead shell if the command fails; the caller wants the
-        # window to close with the session, same as any other tier here.
-        return [exe, "-NoLogo", "-Command", f"Set-Location -LiteralPath {_ps_quote(str(cwd))}; "
-                + " ".join(_ps_quote(part) for part in command)]
+        # The CALL OPERATOR is not optional (live report 2026-08-25: PowerShell on Windows,
+        # nothing launched, several minutes of nothing). Without `&`, "'claude' '/engage ...'"
+        # is a STRING EXPRESSION - PowerShell evaluates it, prints it, and never runs a thing.
+        # This is the same invocation shape the virt-surv alias itself uses to start a
+        # session (`& $__vtCmd[0] @__vtCmdArgs "$__vtDecision"`), which is the method that is
+        # known to work and therefore the one to copy.
+        #
+        # -NoExit deliberately: if the session fails to start, the window must stay open
+        # carrying the error. It flashing shut is how this bug stayed invisible.
+        call = "& " + " ".join(_ps_quote(part) for part in command)
+        return [
+            exe, "-NoLogo", "-NoExit", "-Command",
+            f"Set-Location -LiteralPath {_ps_quote(str(cwd))}; {call}",
+        ]
     return [exe, "/c", "start", "", "/D", str(cwd)] + command
 
 
@@ -123,6 +150,14 @@ def open_in_new_window(command: list[str], cwd: Path) -> bool:
     terminal = available()
     if not terminal:
         return False
+    # Resolve the TARGET before spawning anything. Waiting on the spawned process cannot
+    # answer this: the terminal wrapper starts fine and, with -NoExit, never exits at all -
+    # so a command that does not exist still looked like a successful launch (proven on
+    # WINTEST, PowerShell 5.1, 2026-08-25: a bogus executable reported True). The realistic
+    # failure is `claude` not being on PATH for the spawned window, and this catches exactly
+    # that, before the caller has been told to stand down.
+    if command and not _resolvable(command[0]):
+        return False
     try:
         if sys.platform == "darwin":
             joined = " ".join(_quote(part) for part in command)
@@ -138,13 +173,94 @@ def open_in_new_window(command: list[str], cwd: Path) -> bool:
             argv = _posix_argv(terminal, command, cwd)
         kwargs = {"cwd": str(cwd)}
         if sys.platform == "win32":
-            # Detach so the launcher's own console is not the parent of the new window.
-            kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
-                subprocess, "CREATE_NEW_PROCESS_GROUP", 0
-            )
+            # CREATE_NEW_CONSOLE, never DETACHED_PROCESS. Detached means the child gets NO
+            # console at all - so powershell.exe starts, has nowhere to draw, and the user
+            # sees nothing whatsoever (live report 2026-08-25). A new console is what
+            # "another window" actually means on Windows.
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
         else:
             kwargs["start_new_session"] = True
-        subprocess.Popen(argv, **kwargs)  # noqa: S603 - argv is built here, never shell
-        return True
+        proc = subprocess.Popen(argv, **kwargs)  # noqa: S603 - argv is built here, never shell
     except (OSError, ValueError):
         return False
+    # Popen succeeding proves only that the SPAWNER was found - not that a session started.
+    # Treating it as proof is what let the launcher tell the shell to stand down while
+    # nothing ran (2026-08-25). Give it a moment and reject an immediate non-zero exit, which
+    # is what a bad argv looks like.
+    try:
+        proc.wait(timeout=_START_GRACE)
+    except subprocess.TimeoutExpired:
+        return True  # still running: the window is up
+    except Exception:
+        return True  # cannot tell; the terminal itself was found, so do not double-launch
+    if proc.returncode not in (0, None):
+        return False
+    # A terminal that forks its own window (wt.exe, cmd start) exits 0 immediately and that
+    # is normal, so 0 is not failure here.
+    return True
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Diagnose the windowed launch WITHOUT starting an engagement.
+
+    Added 2026-08-25 after a live Windows report where an unattended run produced no window
+    and no session: the only way to test the spawn was to start real work, which is a
+    terrible way to debug and a worse way to find out it is broken. This reports what was
+    found, prints the exact argv it would use, and with --open actually launches a harmless
+    command so the window can be seen (or not) in isolation.
+
+        python -m scripts.launch_terminal            # what would be used, and how
+        python -m scripts.launch_terminal --open     # actually open one, harmlessly
+    """
+    import argparse
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+    ap = argparse.ArgumentParser(description="Check the windowed-launch path.")
+    ap.add_argument("--open", action="store_true", help="really open a test window")
+    ap.add_argument("--command", default="", help="command to run (default: a harmless echo)")
+    args = ap.parse_args(argv)
+
+    print(f"platform          : {sys.platform}")
+    print(f"graphical session : {_display_present()}")
+    terminal = available()
+    print(f"terminal found    : {terminal or 'NONE - a run would open in this window instead'}")
+    if not terminal:
+        return 1
+    command = args.command.split() if args.command else _probe_command()
+    cwd = Path.cwd()
+    argv_built = (
+        _windows_argv(terminal, command, cwd) if sys.platform == "win32"
+        else _posix_argv(terminal, command, cwd)
+    )
+    print("argv it would run :")
+    for part in argv_built:
+        print(f"    {part}")
+    if not args.open:
+        print("\n(dry run - add --open to actually launch a window)")
+        return 0
+    ok = open_in_new_window(command, cwd)
+    print(f"\nlaunched          : {ok}")
+    print(
+        "A window should now be visible. If this says True and you see nothing, the spawn "
+        "is reporting success it cannot back up - say so, because that is the bug that "
+        "stopped a session starting at all on 2026-08-25."
+        if ok else
+        "Nothing launched - an unattended run would fall back to this window, which is the "
+        "correct behaviour."
+    )
+    return 0 if ok else 1
+
+
+def _probe_command() -> list[str]:
+    """Something harmless that proves a window appeared and stayed long enough to read."""
+    if sys.platform == "win32":
+        return ["cmd.exe", "/c", "echo virt-surv window test && pause"]
+    return ["sh", "-c", "echo 'virt-surv window test'; sleep 20"]
+
+
+if __name__ == "__main__":
+    sys.exit(main())
