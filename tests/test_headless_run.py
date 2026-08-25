@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -239,3 +240,165 @@ def test_the_summary_says_something_useful_at_each_phase():
     assert "completed" in hr.summary(done) and "$0.10" in hr.summary(done)
     failed = hr.read_stream(_lines(_init(), _result_failed()))
     assert "FAILED" in hr.summary(failed)
+
+
+# --- supervision ---------------------------------------------------------------------------
+#
+# The child writes its stream to a FILE rather than a pipe we hold. That one choice is what
+# makes an unattended run survivable: nobody owns the process, so the launcher can be closed,
+# crash, or catch a stray Esc, and the run continues and stays readable. Verified live
+# 2026-08-25 with a real `claude -p`: a run started by one process was re-attached to, in
+# full, by a completely different process after the first had exited.
+#
+# These tests use a stand-in child so the suite never spends API credit.
+
+
+def _project(tmp_path: Path) -> Path:
+    (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
+    return tmp_path
+
+
+def _fake_claude(tmp_path: Path, lines: list, sleep: float = 0.0) -> Path:
+    """A script that behaves like `claude -p --output-format stream-json` enough to supervise."""
+    body = [
+        "import sys, time, json",
+        f"time.sleep({sleep})",
+    ]
+    for line in lines:
+        body.append(f"print({json.dumps(json.dumps(line))}, flush=True)")
+    path = tmp_path / "fake_claude.py"
+    path.write_text("\n".join(body) + "\n", encoding="utf-8")
+    return path
+
+
+def _fake_argv(hr, monkeypatch, script: Path):
+    """Point build_argv's executable at the stand-in, keeping every other flag real."""
+    real = hr.build_argv
+
+    def patched(prompt, **kw):
+        kw["claude"] = sys.executable
+        argv = real(prompt, **kw)
+        return [argv[0], str(script)] + argv[1:]
+
+    monkeypatch.setattr(hr, "build_argv", patched)
+
+
+def test_a_started_run_records_where_to_find_it(tmp_path, monkeypatch):
+    hr = _load()
+    project = _project(tmp_path)
+    _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init(), _result_ok()]))
+    record = hr.start(project, "do the thing", slug="alpha", budget_usd=35)
+    assert record["session_id"] and record["slug"] == "alpha"
+    assert Path(record["stream"]).exists()
+    assert (hr.run_dir(project) / f"{record['session_id']}.run.json").is_file()
+
+
+def test_the_prompt_is_never_written_to_the_run_record(tmp_path, monkeypatch):
+    """It is the human's request, it can carry anything, and this file sits in the project.
+    The engagement pack is where a request belongs."""
+    hr = _load()
+    project = _project(tmp_path)
+    _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init()]))
+    secret = "CLIENT-CONFIDENTIAL-REQUEST-TEXT"
+    record = hr.start(project, secret)
+    written = (hr.run_dir(project) / f"{record['session_id']}.run.json").read_text("utf-8")
+    assert secret not in written
+    assert secret not in json.dumps(record)
+
+
+def test_a_run_is_readable_by_a_process_that_did_not_start_it(tmp_path, monkeypatch):
+    """The whole point. Reading goes through the recorded path, not through a handle - so
+    "I accidentally closed the launcher" stops being a way to lose a run."""
+    hr = _load()
+    project = _project(tmp_path)
+    _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init(), _result_ok()]))
+    started = hr.start(project, "x", slug="alpha")
+    _wait_finished(hr, started)
+
+    # A fresh module instance, holding nothing from the start.
+    other = _load()
+    found = other.latest(project, slug="alpha")
+    assert found is not None and found["session_id"] == started["session_id"]
+    state = other.status(found)
+    assert state["finished"] is True and state["ok"] is True
+    assert state["cost_usd"] == 0.108862
+
+
+def _wait_finished(hr, record, timeout=20.0):
+    import time as _t
+
+    deadline = _t.time() + timeout
+    while _t.time() < deadline:
+        state = hr.status(record)
+        if state["finished"]:
+            return state
+        _t.sleep(0.2)
+    raise AssertionError(f"run did not finish: {hr.summary(hr.status(record))}")
+
+
+def test_liveness_is_judged_from_the_stream_not_the_pid(tmp_path, monkeypatch):
+    """A pid check lies after reuse and behaves differently on every platform. A result event
+    means finished; that is true whoever is asking and whenever."""
+    hr = _load()
+    project = _project(tmp_path)
+    _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init(), _result_ok()]))
+    record = hr.start(project, "x")
+    state = _wait_finished(hr, record)
+    assert state["live"] is False
+    record_with_dead_pid = dict(record, pid=999999)
+    assert hr.status(record_with_dead_pid)["finished"] is True
+
+
+def test_a_silent_run_is_eventually_reported_as_gone(tmp_path, monkeypatch):
+    """Killed, or the machine slept: no result and nothing written for a long time."""
+    hr = _load()
+    project = _project(tmp_path)
+    _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init()]))
+    record = hr.start(project, "x")
+    import time as _t
+    _t.sleep(0.6)
+    assert hr.status(record)["live"] is True
+    monkeypatch.setattr(hr, "_STALE_AFTER", 0.0)
+    state = hr.status(record)
+    assert state["live"] is False
+    assert "gone" in state["outcome"]
+
+
+def test_runs_are_listed_newest_first_and_filtered_by_engagement(tmp_path, monkeypatch):
+    hr = _load()
+    project = _project(tmp_path)
+    _fake_argv(hr, monkeypatch, _fake_claude(tmp_path, [_init()]))
+    first = hr.start(project, "x", slug="alpha")
+    import time as _t
+    _t.sleep(0.05)
+    second = hr.start(project, "y", slug="beta")
+    assert hr.latest(project)["session_id"] == second["session_id"]
+    assert hr.latest(project, slug="alpha")["session_id"] == first["session_id"]
+    assert hr.latest(project, slug="nothing-here") is None
+
+
+def test_stopping_something_already_gone_is_not_an_error(tmp_path):
+    hr = _load()
+    assert hr.stop({"pid": None}) is False
+    assert hr.stop_and_wait({"pid": None}, timeout=0.1) is True
+
+
+def test_is_alive_treats_unknown_as_alive():
+    """Only ever used to decide whether to ESCALATE a stop. Guessing "dead" there would leave
+    a real process running while reporting it handled."""
+    hr = _load()
+    assert hr.is_alive(999999) is False
+    assert hr.is_alive(os.getpid()) is True
+    assert hr.is_alive("not a pid") is False
+
+
+def test_a_stop_waits_for_the_process_to_actually_go(tmp_path, monkeypatch):
+    """Measured live: the CLI ends its turn and writes a result promptly, then takes
+    appreciably longer to exit - about a minute in one case. Checking at six seconds said
+    "still alive", which would lead someone to escalate needlessly or to conclude that
+    stopping does not work at all."""
+    source = (REPO_ROOT / "scripts" / "headless_run.py").read_text(encoding="utf-8")
+    body = source.split("def stop_and_wait", 1)[1].split("\ndef ", 1)[0]
+    assert "hard=True" in body, "it must escalate to SIGTERM"
+    assert "is_alive" in body, "and confirm the process actually went"
+

@@ -287,3 +287,212 @@ def summary(state: dict) -> str:
         f"{verdict} - {state.get('outcome') or 'no reason given'}, "
         f"{state['turns']} turn(s), ${state['cost_usd']:.4f}"
     )
+
+
+# --- supervision --------------------------------------------------------------------------
+#
+# The child writes its stream to a FILE rather than to a pipe we hold. That single choice is
+# what makes an unattended run survivable: nobody owns the process, so the launcher can be
+# closed, crash, or be on the wrong side of an accidental Esc, and the run continues and
+# stays readable. A pipe would have made the launcher a single point of failure for work it
+# is only supposed to be watching.
+
+import os          # noqa: E402 - grouped with the supervision half, not the decoding half
+import subprocess  # noqa: E402
+import time        # noqa: E402
+import uuid        # noqa: E402
+
+_RUN_DIR = ".headless"
+# A run whose stream file has not been touched in this long, with no result event, is not
+# running any more - it was killed, the machine slept, or the process died without a word.
+# Generous, because a long tool call writes nothing while it works, and a corporate machine
+# is slow (the same reason the monitor waits five minutes before suggesting a fault).
+_STALE_AFTER = 600.0
+
+
+def run_dir(project_dir: Path) -> Path:
+    return Path(project_dir) / ".claude" / _RUN_DIR
+
+
+def new_session_id() -> str:
+    """A UUID we choose, so the run and the engagement are the same thing by construction."""
+    return str(uuid.uuid4())
+
+
+def start(
+    project_dir: Path,
+    prompt: str,
+    *,
+    session_id: str = "",
+    budget_usd: float | None = None,
+    max_turns: int | None = None,
+    permission_mode: str = "dontAsk",
+    allowed_tools: tuple[str, ...] = (),
+    claude: str = "claude",
+    slug: str = "",
+) -> dict:
+    """Start a headless run detached, streaming to a file. Returns its record.
+
+    Raises OSError if the process cannot be started - the caller must fall back to an
+    attended launch rather than report an unattended run that never began. That failure has
+    already happened once here, in the windowed launcher, and it is the worst one available:
+    a human authorised work that then silently did not happen."""
+    project_dir = Path(project_dir)
+    session_id = session_id or new_session_id()
+    folder = run_dir(project_dir)
+    folder.mkdir(parents=True, exist_ok=True)
+    stream_path = folder / f"{session_id}.jsonl"
+    error_path = folder / f"{session_id}.err"
+    argv = build_argv(
+        prompt,
+        claude=claude,
+        session_id=session_id,
+        budget_usd=budget_usd,
+        max_turns=max_turns,
+        permission_mode=permission_mode,
+        allowed_tools=allowed_tools,
+    )
+    kwargs: dict = {"cwd": str(project_dir), "stdin": subprocess.DEVNULL}
+    if os.name == "nt":
+        # DETACHED_PROCESS is right HERE, unlike the windowed launcher where it was the bug:
+        # a headless run wants no console at all, and its output is going to a file anyway.
+        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+        )
+    else:
+        kwargs["start_new_session"] = True
+    with stream_path.open("w", encoding="utf-8") as out, error_path.open(
+        "w", encoding="utf-8"
+    ) as err:
+        proc = subprocess.Popen(argv, stdout=out, stderr=err, **kwargs)  # noqa: S603
+    record = {
+        "session_id": session_id,
+        "slug": slug,
+        "pid": proc.pid,
+        "started_at": time.time(),
+        "stream": str(stream_path),
+        "errors": str(error_path),
+        # The prompt is NOT recorded here. It is the human's request, it can carry anything,
+        # and this file sits in the project - the engagement pack is where the request lives.
+        "argv_summary": [a for a in argv if a != prompt],
+        "cwd": str(project_dir),
+    }
+    (folder / f"{session_id}.run.json").write_text(
+        json.dumps(record, indent=2), encoding="utf-8"
+    )
+    return record
+
+
+def records(project_dir: Path) -> list[dict]:
+    """Every headless run recorded for this project, newest first."""
+    folder = run_dir(project_dir)
+    found = []
+    try:
+        paths = sorted(folder.glob("*.run.json"))
+    except OSError:
+        return []
+    for path in paths:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict) and data.get("session_id"):
+            found.append(data)
+    return sorted(found, key=lambda r: r.get("started_at") or 0, reverse=True)
+
+
+def latest(project_dir: Path, slug: str = "") -> dict | None:
+    """The newest run, optionally for one engagement. None if there is none."""
+    for record in records(project_dir):
+        if not slug or record.get("slug") == slug:
+            return record
+    return None
+
+
+def status(record: dict) -> dict:
+    """Run state plus whether it is still going.
+
+    Liveness is judged from the STREAM, not from the operating system. A pid check is
+    unreliable across platforms and lies after reuse; the stream cannot: a result event means
+    finished, and a file nobody has written to for a long time with no result means the
+    process is gone. That also means a run started by a launcher that has since closed is
+    still readable, which is the entire point of writing to a file."""
+    state = read_file(Path(record.get("stream", "")))
+    state["session_id"] = state["session_id"] or str(record.get("session_id") or "")
+    state["slug"] = record.get("slug", "")
+    state["pid"] = record.get("pid")
+    if state["finished"]:
+        state["live"] = False
+        return state
+    try:
+        idle = time.time() - Path(record["stream"]).stat().st_mtime
+    except (OSError, KeyError, TypeError):
+        idle = 0.0
+    state["idle_seconds"] = round(idle, 1)
+    state["live"] = idle < _STALE_AFTER
+    if not state["live"]:
+        state["outcome"] = state["outcome"] or "no output for a long time - the run is gone"
+    return state
+
+
+def stop(record: dict, *, hard: bool = False) -> bool:
+    """Ask a run to stop. True if a signal was delivered.
+
+    SIGINT by default, because the documented difference matters: SIGINT ENDS THE TURN, while
+    SIGTERM leaves it unfinished and records no result for it. An unattended run that is
+    stopped should still close its books where it can."""
+    pid = record.get("pid")
+    if not isinstance(pid, int):
+        return False
+    import signal
+
+    if os.name == "nt":
+        sig = signal.SIGTERM if hard else getattr(signal, "CTRL_BREAK_EVENT", signal.SIGTERM)
+    else:
+        sig = signal.SIGTERM if hard else signal.SIGINT
+    try:
+        os.kill(pid, sig)
+        return True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def is_alive(pid) -> bool:
+    """Best-effort liveness for a pid we do not own. Unknown counts as alive.
+
+    Only used to decide whether to ESCALATE a stop - never to decide whether a run finished,
+    which is read from the stream. A pid check lies after reuse and behaves differently on
+    every platform; the stream does not."""
+    if not isinstance(pid, int):
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except (OSError, ValueError, AttributeError):
+        return True  # cannot tell (Windows, permissions) - assume it is still there
+
+
+def stop_and_wait(record: dict, timeout: float = 45.0, poll: float = 1.0) -> bool:
+    """Stop a run and make sure it is actually gone. True if it exited.
+
+    SIGINT first, then SIGTERM if it outstays the timeout. The wait is not optional and the
+    default is generous, because measured live (2026-08-25) the CLI ends the turn and writes
+    its result promptly but takes appreciably longer to exit - about a minute in one case.
+    Checking at six seconds said "still alive" and would have led someone to escalate, or
+    worse, to conclude that stopping does not work."""
+    if not stop(record):
+        return not is_alive(record.get("pid"))
+    deadline = time.time() + max(0.0, timeout)
+    while time.time() < deadline:
+        if not is_alive(record.get("pid")):
+            return True
+        time.sleep(poll)
+    stop(record, hard=True)
+    deadline = time.time() + 10.0
+    while time.time() < deadline:
+        if not is_alive(record.get("pid")):
+            return True
+        time.sleep(poll)
+    return False

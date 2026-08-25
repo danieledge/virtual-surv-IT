@@ -110,7 +110,12 @@ have one.
    the truth); `modelUsage` publishes per-model `costUSD` *and* `canonicalModel`, so nothing
    needs a rate table; and `rate_limit_event` is a status report carrying window utilisation,
    not a block - treating its presence as "rate limited" flagged every healthy run.
-2. Process supervision: start, monitor, terminate cleanly, survive the launcher exiting.
+2. ~~Process supervision: start, monitor, terminate cleanly, survive the launcher exiting.~~
+   **BUILT 2026-08-25.** The design call that made it work: the child writes its stream to a
+   FILE rather than a pipe the launcher holds, so nobody owns the process and closing the
+   launcher cannot lose a run. Proven live - a run started by one process was re-attached to
+   in full by a different process after the first had exited. Liveness is judged from the
+   stream rather than a pid, because a pid lies after reuse and differs per platform.
 3. The pre-flight row, and `--session-id` recorded on the pack at init.
 4. Monitor reads the live state.
 5. Windows verification on WINTEST.
