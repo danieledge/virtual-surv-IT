@@ -13,6 +13,7 @@ succeed, while the cache holds an absolute path that still resolves.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -37,11 +38,36 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _default_path() -> str:
+    """A RESTRICTED but portable PATH for the statusline subprocess.
+
+    This was hardcoded to "/usr/bin:/bin", which assumes a distro that puts python3 in
+    /usr/bin. The official python images put it in /usr/local/bin, so the script's probe loop
+    found no interpreter and every one of these tests saw "Morgan dormant" - seven failures
+    that said nothing about the statusline and everything about where this box keeps Python
+    (found by running the suite in a clean container, 2026-08-25).
+
+    The point of restricting PATH is to stop the bare-name probe succeeding by some
+    unintended route, not to assert a filesystem layout. So it is derived: the directories
+    that actually hold python3 and bash, and nothing else."""
+    wanted = []
+    for tool in ("python3", "bash"):
+        found = shutil.which(tool)
+        if found:
+            parent = str(Path(found).resolve().parent)
+            if parent not in wanted:
+                wanted.append(parent)
+    for fallback in ("/usr/bin", "/bin"):
+        if fallback not in wanted:
+            wanted.append(fallback)
+    return os.pathsep.join(wanted)
+
+
 def _run(
     project_dir: Path, payload: dict, path_env: str | None = None
 ) -> subprocess.CompletedProcess:
     env = {"HOME": str(project_dir), "CLAUDE_PROJECT_DIR": str(project_dir)}
-    env["PATH"] = path_env if path_env is not None else "/usr/bin:/bin"
+    env["PATH"] = path_env if path_env is not None else _default_path()
     # Absolute path to bash itself (not a bare "bash" lookup): a test that restricts PATH
     # to prove the interpreter cache bypasses the probe loop would otherwise also fail to
     # find bash to RUN the script in the first place.
