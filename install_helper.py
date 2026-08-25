@@ -495,17 +495,50 @@ def changelog_headline(changelog: Path, version: str) -> Optional[str]:
     return None
 
 
+# A changelog section holding nothing but a placeholder. Matched on the BODY, so it works
+# whatever wording the placeholder uses, rather than pattern-matching one phrase.
+_PLACEHOLDER_BODY = {"", "_nothing yet._", "nothing yet.", "_none._", "none.", "-", "n/a"}
+
+
 def list_headlines_between(changelog_text, local_version: Optional[str]) -> list:
-    """`## [x.y.z] ...` headline lines from the top of a changelog BODY down to (not
-    including) the entry for local_version. A local version that never appears (or
-    None) yields every headline - the caller caps the display. Pure and total: any
-    input coerces via str() and the worst case is an empty list."""
+    """What an update would actually bring: `## [x.y.z] - date - description` headlines from
+    the top of a changelog BODY down to (not including) the entry for local_version.
+
+    Two things this does beyond slicing the lines, both from a live report (2026-08-25:
+    "why does it say 2 commits and then [unreleased] rather than what changed"):
+
+    - a section with NEITHER a description NOR content is skipped. `## [Unreleased]` is a
+      standing placeholder in this repo, so it was always the first headline, and the
+      reader was told the name of an empty section instead of the release underneath. The
+      test is deliberately "neither", not "empty body": a released heading carries its
+      summary on the headline itself and stays news even with nothing beneath it;
+    - a headline with NO DESCRIPTION borrows the first `### ` sub-heading beneath it.
+      Release headlines carry their own summary after the date; `[Unreleased]` never does,
+      so on a dev-branch update - where unreleased commits are exactly what you get - the
+      one line that said what changed was the sub-heading, and it was thrown away.
+
+    A local version that never appears (or None) yields every headline - the caller caps
+    the display. Pure and total: any input coerces via str(), worst case an empty list."""
+    lines = str(changelog_text).splitlines()
+    marks = [i for i, line in enumerate(lines) if line.startswith("## [")]
     headlines = []
-    for line in str(changelog_text).splitlines():
-        if line.startswith("## ["):
-            if local_version and line.startswith(f"## [{local_version}]"):
-                break
-            headlines.append(line[3:].strip())
+    for position, index in enumerate(marks):
+        line = lines[index]
+        if local_version and line.startswith(f"## [{local_version}]"):
+            break
+        end = marks[position + 1] if position + 1 < len(marks) else len(lines)
+        body = [row for row in lines[index + 1 : end] if row.strip()]
+        empty = not body or (len(body) == 1 and body[0].strip().lower() in _PLACEHOLDER_BODY)
+        headline = line[3:].strip()
+        # "[1.2.3] - date - what changed" already explains itself; "[Unreleased]" does not.
+        described = headline.count(" - ") >= 2
+        if empty and not described:
+            continue  # nothing to say and nothing beneath it - not news
+        if not described:
+            sub = next((row[4:].strip() for row in body if row.startswith("### ")), "")
+            if sub:
+                headline = f"{headline} - {sub}"
+        headlines.append(headline)
     return headlines
 
 

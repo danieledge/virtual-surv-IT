@@ -93,6 +93,10 @@ _RUNTIME_PARTS = (
     "team-preferences.json",
     "team-extensions.md",
     "engage-probe.json",  # the go-written probe cache (2026-08-18) - runtime, per project
+    # The launcher hands a typed request to the session in a file rather than inside the
+    # command string (2026-08-25): a quoted value does not survive PowerShell. Written at
+    # `go`, read and deleted by the opening session - never present in this repo.
+    ".request-pending.txt",
     _MARKER,
     "dashboard.html",
     "scst-dashboard.html",

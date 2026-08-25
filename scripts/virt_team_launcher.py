@@ -1568,6 +1568,10 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
                     # flag: engagement_state consumes all of it when it creates the pack, so
                     # the run never has to be told any of it.
                     "engagement_usd": answers.get("engagement_usd"),
+                    # Deliberately "park" and NOT the screen's default rung: this fires
+                    # only if the pre-flight handed back a dict with no answer in it, which
+                    # it never does normally. A missing answer is not the same as a chosen
+                    # one, so the fallback stays the cautious rung.
                     "on_budget": answers.get("on_budget") or "park",
                 },
                 indent=2,
@@ -1724,15 +1728,51 @@ def _sanitise_request(text: str) -> str:
     return cleaned.rstrip("\\").strip()
 
 
+_REQUEST_HANDOFF = ".request-pending.txt"
+
+
+def _write_request_handoff(project_dir: Path, text: str) -> bool:
+    """Put the typed request in a file for the session to read. True if it landed."""
+    try:
+        path = project_dir / ".claude" / _REQUEST_HANDOFF
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + "\n", encoding="utf-8")
+        return True
+    except OSError:
+        return False
+
+
 def _new_command(project_dir: Path, request: str = "", auto: bool = False) -> str:
     """The one place the new-engagement opening command is spelled. An empty request gives
-    exactly the old `--new`, which is the point: typing is an offer, not a toll gate."""
+    exactly the old `--new`, which is the point: typing is an offer, not a toll gate.
+
+    The request travels in a FILE, never inside the command string (2026-08-25). It used to
+    be `--request "<text>"`, which works in bash - verified - and fails on PowerShell: 5.1
+    hands embedded double quotes to a native .exe unescaped, so claude.exe re-splits the
+    line on its own and keeps the first token. Two users saw the same symptom on the same
+    day, and the tell was that `--jira SURV-9` worked while a typed request did not - the
+    difference between them being spaces and quotes, not anything about Jira.
+
+    So the decision now carries a single bare token, `--request-pending`, with no spaces and
+    no quotes anywhere in it. Nothing is left for a shell to re-interpret, on any platform,
+    which is a better property than escaping correctly for each one."""
     command = f"{_engage_command(project_dir)} --new"
     clean = _sanitise_request(request)
     if clean:
-        command += f' --request "{clean}"'
-    if auto and clean:
-        command += " --auto"
+        if _write_request_handoff(project_dir, clean):
+            command += " --request-pending"
+            if auto:
+                command += " --auto"
+        else:
+            # Never silently drop what someone typed: say it, and let them repeat it in
+            # session rather than opening as though they had asked for nothing.
+            print(
+                _Ink().warn(
+                    "    could not hand your request to the session - please repeat it "
+                    "once Claude opens"
+                ),
+                file=sys.stderr,
+            )
     return command
 
 

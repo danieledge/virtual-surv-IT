@@ -527,18 +527,24 @@ def test_typing_is_an_offer_not_a_toll_gate(tmp_path):
 def test_a_typed_request_reaches_the_session(tmp_path):
     mod = _load("virt_team_launcher")
     command = mod._new_command(tmp_path, "review the spoofing rule")
-    assert '--request "review the spoofing rule"' in command
+    assert "--request-pending" in command
+    assert (tmp_path / ".claude" / ".request-pending.txt").read_text(
+        encoding="utf-8"
+    ).strip() == "review the spoofing rule"
 
 
 def test_the_request_is_sanitised_for_the_decision_channel(tmp_path):
-    """The decision travels to the shell as ONE argument and reaches the skill as
-    --request "<text>". A newline truncates the capture; a double quote ends the argument
-    early and hands the remainder to the skill as flags."""
+    """The text is still sanitised even though it no longer rides in the command: it becomes
+    one line with no quote characters, so a session reading it back gets something
+    predictable, and so does anything that later echoes it into a prompt."""
     mod = _load("virt_team_launcher")
     command = mod._new_command(tmp_path, 'check "the" rule\nand   the other')
     assert "\n" not in command
-    assert command.count('"') == 2, "unbalanced quoting would split the argument"
-    assert "check 'the' rule and the other" in command
+    # No quotes left to balance: the decision carries a bare token and the text lives in a
+    # file (2026-08-25). Unbalanced quoting cannot split what has no quotes in it.
+    assert '"' not in command
+    body = (tmp_path / ".claude" / ".request-pending.txt").read_text(encoding="utf-8").strip()
+    assert body == "check 'the' rule and the other"
 
 
 def test_unattended_is_reachable_from_a_typed_request_not_only_a_ticket(tmp_path):
@@ -614,20 +620,26 @@ def test_an_auto_run_is_told_not_to_ask_what_the_work_is():
     )
 
 
-def test_a_typed_request_reaches_the_skill_as_one_quoted_argument(tmp_path):
-    """The decision crosses a shell. Verified in real bash 2026-08-25: the wrapper's
-    ${__vt_d:+"$__vt_d"} keeps it a single argument with quotes intact, so the failure was
-    never word-splitting - but a newline or an embedded double quote WOULD break it, which
-    is what _sanitise_request exists to prevent."""
+def test_the_decision_hands_a_shell_nothing_to_reinterpret(tmp_path):
+    """The reported bug, from the other end. In bash the old quoted form survived - verified
+    - but PowerShell 5.1 hands embedded quotes to a native .exe unescaped, so claude.exe
+    re-split the line and kept the first token. Two users, same day, same symptom; the tell
+    was that `--jira SURV-9` worked while a typed request did not, the difference being
+    spaces and quotes rather than anything about Jira.
+
+    So the property to hold is not "quoted correctly" but "nothing to quote": every token in
+    the decision is bare, and the text travels in a file where no shell touches it."""
     mod = _load("virt_team_launcher")
     project = _project(tmp_path)
     messy = 'run the "Q3"\n tuning   analysis'
     command = mod._new_command(project, messy, auto=True)
     assert "\n" not in command
-    body = command.split('--request "', 1)[1].rsplit('"', 1)[0]
-    assert '"' not in body, "an embedded quote would end the argument early"
-    assert body == "run the 'Q3' tuning analysis"
-    assert command.endswith("--auto")
+    assert '"' not in command and "'" not in command
+    assert command.split() == [
+        mod._engage_command(project), "--new", "--request-pending", "--auto"
+    ]
+    body = (project / ".claude" / ".request-pending.txt").read_text(encoding="utf-8").strip()
+    assert body == "run the 'Q3' tuning analysis", "the text itself keeps its spaces"
 
 
 # --- what a typed request may safely contain (2026-08-25) ----------------------------------
@@ -639,8 +651,13 @@ def test_a_typed_request_reaches_the_skill_as_one_quoted_argument(tmp_path):
 BACKSLASH = chr(92)
 
 
-def _request_body(command: str) -> str:
-    return command.split('--request "', 1)[1].rsplit('"', 1)[0]
+def _request_body(command: str, project=None) -> str:
+    """What the SESSION will actually read. The decision carries a bare `--request-pending`
+    token; the text lives in a file, verbatim, spaces and all."""
+    assert "--request-pending" in command, command
+    assert '"' not in command, f"the decision must carry no quotes at all: {command}"
+    assert not any(" " in tok for tok in command.split()), "every token must be space-free"
+    return (project / ".claude" / ".request-pending.txt").read_text(encoding="utf-8").rstrip("\n")
 
 
 def test_speech_marks_of_every_shape_cannot_close_the_span(tmp_path):
@@ -652,7 +669,7 @@ def test_speech_marks_of_every_shape_cannot_close_the_span(tmp_path):
         "check the «Q3» figures",     # guillemets
         "check the ″Q3″ figures",     # double prime
     ):
-        body = _request_body(mod._new_command(project, text))
+        body = _request_body(mod._new_command(project, text), project)
         assert '"' not in body, f"{text!r} left a terminator in {body!r}"
         assert "Q3" in body and "figures" in body, "folding a quote must not lose words"
 
@@ -661,7 +678,7 @@ def test_an_interior_backslash_is_kept_because_a_windows_path_is_a_real_request(
     mod = _load("virt_team_launcher")
     project = _project(tmp_path)
     text = f"profile C:{BACKSLASH}extracts{BACKSLASH}q3 for gaps"
-    body = _request_body(mod._new_command(project, text))
+    body = _request_body(mod._new_command(project, text), project)
     assert body == text, "mangling a path would be its own bug"
 
 
@@ -672,15 +689,15 @@ def test_a_trailing_backslash_never_escapes_the_closing_quote(tmp_path):
     mod = _load("virt_team_launcher")
     project = _project(tmp_path)
     command = mod._new_command(project, f"read C:{BACKSLASH}data{BACKSLASH}alerts{BACKSLASH}")
-    assert not _request_body(command).endswith(BACKSLASH)
-    assert command.endswith('"'), "the span must still close"
-    assert f"C:{BACKSLASH}data{BACKSLASH}alerts" in command, "the path itself must survive"
+    body = _request_body(command, project)
+    assert not body.endswith(BACKSLASH)
+    assert f"C:{BACKSLASH}data{BACKSLASH}alerts" in body, "the path itself must survive"
 
 
 def test_control_characters_do_not_reach_the_prompt(tmp_path):
     mod = _load("virt_team_launcher")
     project = _project(tmp_path)
-    body = _request_body(mod._new_command(project, "review\x07 the\x1b extract\x00 now"))
+    body = _request_body(mod._new_command(project, "review\x07 the\x1b extract\x00 now"), project)
     assert all(ch.isprintable() for ch in body)
     assert "review" in body and "extract" in body
 
@@ -690,7 +707,7 @@ def test_a_long_request_is_never_truncated(tmp_path):
     mod = _load("virt_team_launcher")
     project = _project(tmp_path)
     text = " ".join(f"sentence number {i} about the extract." for i in range(60))
-    body = _request_body(mod._new_command(project, text))
+    body = _request_body(mod._new_command(project, text), project)
     assert body == text
     assert "sentence number 59" in body
 
@@ -756,3 +773,52 @@ def test_arming_never_skips_the_preflight(tmp_path):
         sys.modules.pop("launcher_app", None)
     assert calls == ["tune thresholds"], "the pre-flight must be consulted every time"
     assert decision == "", "a pre-flight that cannot run must NOT start an unattended run"
+
+
+# --- pre-flight defaults and the commit key (owner, 2026-08-25) -----------------------------
+
+
+def _preflight_source():
+    return (REPO_ROOT / "scripts" / "launcher_app.py").read_text(encoding="utf-8")
+
+
+def test_the_spend_ceiling_defaults_to_35():
+    src = _preflight_source()
+    assert "CAPS = (0, 10, 25, 35, 50, 100)" in src, "$35 must be an offered rung"
+    body = src.split("def auto_preflight_screen", 1)[1]
+    state = body.split('state = {', 1)[1].split("}", 1)[0]
+    assert '"cap": 3' in state, "index 3 of CAPS is $35"
+
+
+def test_at_the_ceiling_it_defaults_to_carrying_on_and_reporting():
+    """The owner's choice, and worth naming: this is the LESS cautious rung. An unattended
+    run that parks at the cap has produced nothing usable, and the ceiling is advisory
+    pacing rather than a hard stop - but it is still reported, and still closes PARTIAL."""
+    src = _preflight_source()
+    body = src.split("def auto_preflight_screen", 1)[1]
+    assert 'ON_BUDGET = ("park", "light", "continue")' in body
+    state = body.split('state = {', 1)[1].split("}", 1)[0]
+    assert '"on_budget": 2' in state, "index 2 of ON_BUDGET is continue"
+    assert '"continue": "carry on, report it"' in body
+
+
+def test_enter_cannot_start_an_unattended_run():
+    """2026-08-25: "enter is too easy to press ... user may press enter thinking it toggles
+    options". On the single authorisation gate for an unattended run, the most reflexive key
+    on the keyboard must not be the one that arms it."""
+    body = _preflight_source().split("def auto_preflight_screen", 1)[1]
+    commit = body.split("def _start(event):", 1)[0]
+    tail = commit.rsplit("@kb.add(", 1)[1]
+    assert tail.startswith('"c-d"'), f"the commit key must be Ctrl-D, found {tail[:20]!r}"
+    toggle = body.split("def _toggle(event):", 1)[0]
+    assert '@kb.add("enter")' in toggle, "Enter must be bound to the harmless toggle"
+    assert "Ctrl-D START unattended" in body, "the footer must teach the real commit key"
+
+
+def test_the_two_screens_in_the_flow_agree_on_their_send_key():
+    """The composer sends on Ctrl-D; the pre-flight now commits on Ctrl-D. One flow, one key -
+    a different commit key per screen is how a reflex lands on the wrong one."""
+    src = _preflight_source()
+    for func in ("def request_screen", "def auto_preflight_screen"):
+        body = src.split(func, 1)[1].split("\ndef ", 1)[0]
+        assert '@kb.add("c-d")' in body, f"{func} does not commit on Ctrl-D"

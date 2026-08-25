@@ -5,23 +5,19 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
-### Browse done & archived engagements from the launcher, and open them in Claude
-
-`virt-surv go` gains `[b] browse done & archived` in all three tiers (full-screen app,
-picker, numbered). The app screen lists every closed and/or archived pack - including
-ARCHIVED-OPEN ones, which were previously findable nowhere - with a detail pane, and
-Enter opens the selection in a Claude session via a new decision string:
-`<engage-cmd> --review <slug>`. The engage skill validates the slug against the new
-`engagement_state list --finished` JSON (closed/archived rows; `--resume`'s `open` list
-never contains these by design) and treats the session as **read-only review**: no state
-transitions, no ACTIVE marker, no writes into the pack; change requests become new
-engagements referencing the old pack. Data layer: `finished_engagements()` - a separate
-function rather than a widening of `scan_engagements`, whose archived-exclusion the DoD
-checker, stop gate, registry and statusline all depend on.
+_Nothing yet._
 
 ## [0.37.0] - 2026-08-25 - Data tools, mail formats, and a performance pass that started by finding a hang
 
 ### Added
+- **`[b]` browse done & archived engagements** in all three launcher tiers, opened
+  read-only via `<engage-cmd> --review <slug>`. ARCHIVED-OPEN packs were previously
+  findable nowhere. The engage skill validates the slug against
+  `engagement_state list --finished` and treats the session as review: no state
+  transitions, no ACTIVE marker, no writes into the pack. Data layer:
+  `finished_engagements()` - a separate function rather than a widening of
+  `scan_engagements`, whose archived-exclusion the DoD checker, stop gate, registry
+  and statusline all depend on.
 
 - **`profile_temporal`** - time as a dimension for alert data and similar sets: range,
   **calendar-aware** gaps, freshness, cadence, per-period volumes and peer-subgroup

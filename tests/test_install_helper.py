@@ -7874,3 +7874,45 @@ def test_evidence_subcommand_does_not_tick_a_disabled_project(tmp_path, monkeypa
     )
     assert ih._run_evidence_room(ws, Style(False), marks()) == 0
     assert "✓" not in capsys.readouterr().out
+
+
+def test_list_headlines_skips_a_placeholder_section_but_keeps_a_bare_release():
+    """2026-08-25 live report: "why does it say 2 commits and then [unreleased] rather than
+    what changed". `## [Unreleased]` is a standing placeholder here, so it was always the
+    first headline and the reader got the name of an empty section instead of the release
+    under it. The skip test is "neither a description NOR content", not "empty body": a
+    released heading carries its summary on the headline and stays news with nothing beneath.
+    """
+    from install_helper import list_headlines_between
+
+    text = (
+        "# Changelog\n\n"
+        "## [Unreleased]\n\n_Nothing yet._\n\n"
+        "## [0.37.0] - d - Real release\n\n"
+        "## [0.36.0] - d - Local\n"
+    )
+    assert list_headlines_between(text, "0.36.0") == ["[0.37.0] - d - Real release"]
+    # A release heading with no body at all is still news - it says what it is.
+    bare = "## [0.37.0] - d - Real release\n\n## [0.36.0] - d - Local\n"
+    assert list_headlines_between(bare, "0.36.0") == ["[0.37.0] - d - Real release"]
+    # A truly empty, undescribed section is not.
+    assert list_headlines_between("## [Unreleased]\n\n## [0.1.0] - d - x\n", None) == [
+        "[0.1.0] - d - x"
+    ]
+
+
+def test_an_unreleased_section_with_content_says_what_changed():
+    """On a dev-branch update the unreleased commits ARE what you get, so the section is
+    legitimate - it just never carries a description. Borrow its first sub-heading, which is
+    the one line that actually answers "what changed"."""
+    from install_helper import list_headlines_between
+
+    text = (
+        "## [Unreleased]\n\n"
+        "### Composer takes a multi-line brief\n\n"
+        "The request field no longer sends on Enter.\n\n"
+        "## [0.37.0] - d - Local\n"
+    )
+    assert list_headlines_between(text, "0.37.0") == [
+        "[Unreleased] - Composer takes a multi-line brief"
+    ]

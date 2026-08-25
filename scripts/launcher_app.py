@@ -1514,9 +1514,14 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     # nobody is watching the spend, and the attended degrade ladder is a QUESTION - which an
     # unattended run has nobody to ask, and which `--permission-mode dontAsk` denies outright.
     # Both are therefore answered here, once, while a human is present.
-    CAPS = (0, 10, 25, 50, 100)
+    CAPS = (0, 10, 25, 35, 50, 100)
     ON_BUDGET = ("park", "light", "continue")
-    state = {"data": False, "exec": False, "cap": 1, "on_budget": 0, "confirmed": False}
+    # Defaults set by the owner, 2026-08-25: a $35 ceiling, and "carry on, report it" when
+    # it is reached. Note which way that leans - continuing past the ceiling is the LESS
+    # cautious rung, chosen deliberately because an unattended run that parks at the cap
+    # has produced nothing anyone can use, and the ceiling is advisory pacing rather than a
+    # hard stop. It is still reported, and the run still closes PARTIAL for sign-off.
+    state = {"data": False, "exec": False, "cap": 3, "on_budget": 2, "confirmed": False}
     idx = [0]
     rows = [
         ("data", "toggle", "Data is synthetic or masked",
@@ -1579,7 +1584,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         return out
 
     def _footer():
-        return [("class:hint", "  Space toggle · Enter start unattended run · Esc cancel")]
+        return [("class:hint", "  Space/Enter toggle · Ctrl-D START unattended · Esc cancel")]
 
     kb = KeyBindings()
 
@@ -1592,7 +1597,15 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         idx[0] = (idx[0] + 1) % len(rows)
 
     @kb.add(" ")
+    @kb.add("enter")
     def _toggle(event):
+        # Enter TOGGLES here, it does not commit (owner, 2026-08-25: "enter is too easy to
+        # press ... user may press enter thinking it toggles options"). That was exactly
+        # right, and on this screen of all screens: it is the single authorisation gate for
+        # an unattended run, so the most reflexive key on the keyboard must not be the one
+        # that arms it. Enter now does the harmless thing people expect - it acts on the
+        # highlighted row - and committing moved to Ctrl-D, the same send key the request
+        # composer uses, so the two screens in this flow agree.
         key, kind = rows[idx[0]][0], rows[idx[0]][1]
         if kind == "toggle":
             state[key] = not state[key]
@@ -1601,7 +1614,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         else:
             state["on_budget"] = (state["on_budget"] + 1) % len(ON_BUDGET)
 
-    @kb.add("enter")
+    @kb.add("c-d")
     def _start(event):
         state["confirmed"] = True
         event.app.exit()

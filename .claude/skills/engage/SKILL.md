@@ -132,19 +132,19 @@ first prompt. When present, this is the answer - **do not ask the question at al
   artifacts attached where the tools allow, markdown-in-comment fallback when they
   don't - exact rules in `references/integrations.md`, inbound section). Attachments the
   work needs are read via `convert_file`, same as any document input.
-- **`--auto` (rides with EITHER `--jira <key>` OR `--request "<text>"`) - UNATTENDED.**
+- **`--auto` (rides with EITHER `--jira <key>` OR `--request-pending`) - UNATTENDED.**
   The human authorised this run at the launcher; **ask nothing at all** and **read
   `references/auto-mode.md` now** - it carries the assumption ledger, the park-don't-guess
   rule and the always-PARTIAL close, and is the only place they are written. Unattended
   changes who is asked, never what is required.
   **Autonomy is source-agnostic** (2026-08-24): it was reachable only from a ticket at
   first, which was an accident of where it was built - the pre-flight, the ledger and the
-  PARTIAL close never cared where the work came from. So `--new --request "..." --auto` is
+  PARTIAL close never cared where the work came from. So `--new --request-pending --auto` is
   every bit as valid as `--new --jira KEY --auto`, and the request text IS the brief. If
   you find yourself about to ask an `--auto` run what the work is, re-read the flags on
   this line: the answer already arrived with them (2026-08-25 live report - a run started
-  with `--new --request "..." --auto` asked anyway, because this bullet still said `--auto`
-  rode with `--jira` alone).
+  with `--new --request-pending --auto` asked anyway, because this bullet still said
+  `--auto` rode with `--jira` alone).
 - **`--resume <slug>` → validate the slug first** (`RESUME_MENU`/`list --menu`, same as
   below) rather than trusting it blindly: the wrapper's view could be stale (another session
   closed or archived it in the seconds between the wrapper computing the menu and this
@@ -152,11 +152,18 @@ first prompt. When present, this is the answer - **do not ask the question at al
   engagement" and "state file is the record" rules below. Not in `open` (or `open` empty) →
   fall back to the normal flow below and ask, same as if no flag had been given - **never
   silently proceed on stale data, and never error out unhelpfully either.**
-- **`--request "<text>"` (rides with `--new`)** - the human typed the request at the
-  launcher instead of waiting to be asked. **This IS the request**: treat it exactly as if
-  they had typed it in-session, classify from it, and do not re-ask what the work is. It is
-  one sanitised line (quotes flattened, newlines removed), so expect terseness, not a brief -
-  ask about detail if you need it, never about the ask itself.
+- **`--request-pending` (rides with `--new`)** - the human typed the request at the
+  launcher instead of waiting to be asked. **Read `.claude/.request-pending.txt` now**
+  (relative to the project directory): its contents ARE the request. Treat it exactly as if
+  they had typed it in-session, classify from it, and **do not re-ask what the work is**.
+  It is one sanitised line, so expect terseness rather than a brief - ask about detail if
+  you need it, never about the ask itself. **Delete the file once you have read it**, so a
+  later session cannot pick up a stale request.
+  The text travels in a file rather than in the flag because a quoted value does not
+  survive PowerShell (2026-08-25: two users, same day, got only the first word - 5.1 hands
+  embedded quotes to a native .exe unescaped and claude.exe re-splits the line). If the
+  file is missing or empty, fall back to asking, exactly as if no flag had been given -
+  never invent the request.
 - **`--supersedes <slug>` (rides with `--new`)** - this engagement REPLACES a finished one
   (the human chose "redo" against it in the go menu). Record the link on THIS pack the
   moment the workspace exists (`set-decision supersedes "<slug>"`), read the old pack for
