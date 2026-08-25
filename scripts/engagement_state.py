@@ -1367,9 +1367,44 @@ def _consume_auto_handoff(project_root: pathlib.Path) -> dict:
         return {"auto": True}
 
 
+REQUEST_HANDOFF = ".request-pending.txt"
+
+
+def consume_request_handoff(project_root: pathlib.Path) -> str:
+    """The typed request the launcher left for this session, consuming the file.
+
+    ONE-SHOT, for the same reason the auto handoff is: the skill is TOLD to delete it after
+    reading, and "told to" is not a control that engages - the AUTO-* gates were dead code
+    for exactly that reason (2026-08-21 audit C1). Creating the workspace deletes it
+    whatever the session did or forgot to do, so a stale request cannot be picked up by a
+    later engagement that never asked for one.
+
+    Returns the text, or "" when there is nothing pending."""
+    handoff = pathlib.Path(project_root) / ".claude" / REQUEST_HANDOFF
+    try:
+        if not handoff.is_file():
+            return ""
+        text = handoff.read_text(encoding="utf-8").strip()
+    except OSError:
+        text = ""
+    try:
+        handoff.unlink()
+    except OSError:
+        pass  # unreadable or gone; either way it must not survive as a live request
+    return text
+
+
 def _cmd_init(args: argparse.Namespace) -> int:
     # New engagements are WORKSPACED by default (artifacts/<slug>/); an explicit --dir
     # keeps flat semantics (tests, custom layouts, pre-0.31 behaviour).
+    # The typed request is consumed here too - see consume_request_handoff for why the
+    # skill being told to delete it is not enough on its own. Its VALUE is not needed here
+    # (the session read it to classify the work); what matters is that it cannot outlive
+    # the engagement it was typed for.
+    try:
+        consume_request_handoff(project_root_for(getattr(args, "dir", None)))
+    except Exception:
+        pass  # never let handoff cleanup break workspace creation
     # Read the launcher's handoff ONCE, before the state dict is built: it carries the
     # unattended flag AND the pre-answered budget/degrade choice, and consuming it twice
     # would lose whichever half read second.

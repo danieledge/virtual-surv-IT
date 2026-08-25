@@ -822,3 +822,57 @@ def test_the_two_screens_in_the_flow_agree_on_their_send_key():
     for func in ("def request_screen", "def auto_preflight_screen"):
         body = src.split(func, 1)[1].split("\ndef ", 1)[0]
         assert '@kb.add("c-d")' in body, f"{func} does not commit on Ctrl-D"
+
+
+# --- the request handoff must never outlive the engagement it was typed for -----------------
+#
+# 2026-08-25, owner: "will it delete the file on read so something stale not lying around".
+# The skill IS told to delete it, and "told to" is not a control that engages - the AUTO-*
+# gates were dead code for exactly that reason. So two mechanical nets, neither relying on
+# the session doing anything.
+
+
+def test_creating_the_workspace_consumes_the_request(tmp_path):
+    """Net one: whatever the session did or forgot, init deletes it."""
+    state = _load("engagement_state")
+    handoff = tmp_path / ".claude" / state.REQUEST_HANDOFF
+    handoff.parent.mkdir(parents=True)
+    handoff.write_text("review the spoofing rule\n", encoding="utf-8")
+    assert state.consume_request_handoff(tmp_path) == "review the spoofing rule"
+    assert not handoff.exists(), "the handoff must not survive being read"
+    assert state.consume_request_handoff(tmp_path) == "", "and a second read finds nothing"
+
+
+def test_consuming_a_missing_or_unreadable_handoff_is_quiet(tmp_path):
+    state = _load("engagement_state")
+    assert state.consume_request_handoff(tmp_path) == ""
+    (tmp_path / ".claude").mkdir(parents=True)
+    directory = tmp_path / ".claude" / state.REQUEST_HANDOFF
+    directory.mkdir()  # a directory where a file is expected: must not raise
+    assert state.consume_request_handoff(tmp_path) == ""
+
+
+def test_every_go_clears_a_request_stranded_by_a_previous_one(tmp_path):
+    """Net two, and the one that covers the case init cannot: a request typed and then
+    ABANDONED with Esc leaves a file behind, and no workspace is ever created to consume it.
+    Clearing at the start of every go means the file is this run's request or nothing."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    stranded = project / ".claude" / mod._REQUEST_HANDOFF
+    stranded.write_text("a request nobody went through with\n", encoding="utf-8")
+    mod._clear_request_handoff(project)
+    assert not stranded.exists()
+    mod._clear_request_handoff(project)  # idempotent - absent is the normal case
+
+
+def test_a_plain_new_engagement_leaves_no_request_behind(tmp_path):
+    """The precise stale-pickup risk: type a request, back out, start a plain [n]. The
+    second engagement must not inherit the first one's instruction."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    mod._new_command(project, "tune the Q3 thresholds")
+    assert (project / ".claude" / mod._REQUEST_HANDOFF).is_file()
+    mod._clear_request_handoff(project)
+    command = mod._new_command(project)  # plain [n], nothing typed
+    assert command.endswith("--new") and "--request-pending" not in command
+    assert not (project / ".claude" / mod._REQUEST_HANDOFF).exists()

@@ -1731,6 +1731,20 @@ def _sanitise_request(text: str) -> str:
 _REQUEST_HANDOFF = ".request-pending.txt"
 
 
+def _clear_request_handoff(project_dir: Path) -> None:
+    """Remove any request left over from a previous `go`.
+
+    Three things can strand one: backing out with Esc after typing, a session that never
+    opened, and a session that opened but did not delete it. Clearing at the START of every
+    go means the file is only ever this run's request or absent - so a stale instruction
+    cannot be handed to an engagement nobody typed it for. Cheap, and it runs whether or
+    not a request is typed this time."""
+    try:
+        (project_dir / ".claude" / _REQUEST_HANDOFF).unlink()
+    except OSError:
+        pass  # absent is the normal case
+
+
 def _write_request_handoff(project_dir: Path, text: str) -> bool:
     """Put the typed request in a file for the session to read. True if it landed."""
     try:
@@ -3416,6 +3430,10 @@ def main() -> int:
         pass  # machine config is advisory - never costs a launch
     try:
         _prewarm_guard_interpreter(project_dir)
+    except Exception:
+        pass
+    try:
+        _clear_request_handoff(project_dir)  # never carry a previous go's request forward
     except Exception:
         pass
     try:
