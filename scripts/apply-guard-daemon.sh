@@ -17,14 +17,17 @@
 #   Undo:   git checkout .claude/hooks/run-guard.sh scripts/guard_daemon.py \
 #             scripts/guard_daemon_client.py
 #
-# OFF BY DEFAULT - THIS SCRIPT ALONE CHANGES NOTHING LIVE.
-#   Applying these files does not turn the daemon on. run-guard.sh's new daemon branch only
-#   engages when BOTH hold: the target script is bash_hook_dispatcher.py (never
-#   locked_menu_guard.py or anything else this launcher is used for), AND
-#   .claude/team-preferences.json has "guard_daemon": true. A project that applies this
-#   script but never sets that preference sees run-guard.sh behave byte-for-byte as it did
-#   before - turn it on via `/preferences` or the installer, same mechanism as
-#   `standards_critique`/`large_context_review_split`.
+# ON BY DEFAULT since 2026-08-25 - APPLYING THIS DOES CHANGE LIVE BEHAVIOUR.
+#   It was opt-in until then, and the flip is deliberate: the daemon runs the SAME guard
+#   code, so the only difference is one interpreter cold start per hook, and the opt-in
+#   default was charging every user that cost to guard a risk that never materialised.
+#   The daemon branch engages when the target is bash_hook_dispatcher.py (never
+#   locked_menu_guard.py or anything else this launcher is used for) AND the two-tier
+#   preference resolves on: project .claude/team-preferences.json "guard_daemon" wins over
+#   the machine installer.json "default_guard_daemon", and absent config means ON.
+#   Turn it off per project via `/preferences`, or machine-wide in installer.json.
+#   Fail-safe direction: unreadable, absent or malformed config leaves it ON, because the
+#   path it falls back to is slower, never less safe.
 #
 # WHAT THIS CLOSES
 #   Every hook invocation was a fresh OS process paying a full interpreter cold start PLUS
@@ -80,15 +83,23 @@ apply_one() {
   fi
   if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
     echo "already installed: $dst"
-    return 0
+    return 0   # 0 = unchanged; a copy returns 1. Callers read this, so do not "tidy" it.
   fi
   cp "$src" "$dst"
   echo "installed: $dst updated from staged copy."
+  return 1
 }
 
-apply_one "$here/scripts/staged_hooks/run-guard.sh" "$here/.claude/hooks/run-guard.sh"
-apply_one "$here/scripts/staged_hooks/guard_daemon.py" "$here/scripts/guard_daemon.py"
-apply_one "$here/scripts/staged_hooks/guard_daemon_client.py" "$here/scripts/guard_daemon_client.py"
+changed=0
+apply_one "$here/scripts/staged_hooks/run-guard.sh" "$here/.claude/hooks/run-guard.sh" || changed=1
+apply_one "$here/scripts/staged_hooks/guard_daemon.py" "$here/scripts/guard_daemon.py" || changed=1
+apply_one "$here/scripts/staged_hooks/guard_daemon_client.py" "$here/scripts/guard_daemon_client.py" || changed=1
+
+if [ "$changed" -eq 0 ]; then
+  echo ""
+  echo "Nothing to do - live already matches staged, so there is nothing to commit either."
+  exit 0
+fi
 
 echo ""
 echo "Now commit the change (all three ship together, plus their staged copies):"
