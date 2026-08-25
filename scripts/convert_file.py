@@ -17,6 +17,10 @@ Formats in:
                                               inherently unreliable; flagged, not guessed)
   .docx        via stdlib zipfile+ElementTree - paragraphs and tables (python-docx needs
                                               compiled lxml, so it cannot be vendored)
+  .eml         via the stdlib `email` package - headers, body, attachment names
+  .msg         via olefile (vendored)         - Outlook OLE2; prefers the original RFC822
+                                              transport headers so .eml and .msg parse
+                                              identically, falls back to property streams
 
 Formats out: csv (default) / jsonl for tabular; md / txt for documents.
 
@@ -27,9 +31,13 @@ Design rules (the reliability contract):
   2. SCHEMA MODE - --schema <feed>.yaml|.json declares column names/types/patterns and
      expectations (row counts, control totals). Violations are ERRORS: non-zero exit, no
      output row is trusted. This is a gate, not a warning log.
-  3. EVIDENCE ALWAYS - every run writes a JSON report (counts, hashes, encoding decisions,
-     warnings) next to the output and prints a one-screen summary. "It converted" is never
-     the evidence; the report is.
+  3. EVIDENCE ALWAYS - every run writes `<output>.evidence.json` (counts, hashes, encoding
+     decisions, warnings) next to the output and prints a one-screen summary. "It converted"
+     is never the evidence; this file is. Named `.evidence.json` rather than `.report.json`
+     since 2026-08-25: in a folder listing the sidecar sorted next to the data and read as
+     just another output, which is exactly the confusion it must not cause. The DATA's format
+     follows the input (csv/jsonl for tabular, md/txt for documents); the evidence is always
+     JSON.
   4. RECONCILIATION - rows read vs rows written, declared sheet dimensions vs streamed
      counts, ragged-row detection, unterminated-final-line detection (the truncation
      defences; see docs/house-rules.md on reconciling extracts).
@@ -151,6 +159,167 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Email: .eml (stdlib) and .msg (vendored olefile). Comms surveillance is one of the three
+# pillars this team exists for, so an unreadable mail format is not an edge case - it was a
+# silent skip until 2026-08-25.
+# ---------------------------------------------------------------------------
+_MAIL_HEADERS = ("From", "To", "Cc", "Bcc", "Subject", "Date", "Message-ID")
+
+
+def _mail_blocks(message, report: "Report", attachments: list[str]) -> dict:
+    """One shared shape for both formats, so .eml and .msg cannot render differently.
+
+    Body preference is plain text, then HTML with tags stripped - and when only HTML exists
+    that is SAID, because a stripped body loses structure a reader may need."""
+    blocks = [{"kind": "para", "text": f"**{name}:** {message.get(name)}"}
+              for name in _MAIL_HEADERS if message.get(name)]
+    body, note = "", ""
+    if message.is_multipart():
+        parts = list(message.walk())
+    else:
+        parts = [message]
+    def _content(part) -> str:
+        """`get_content()` raises on a message with no payload at all - which is exactly the
+        .msg-rebuilt-from-property-streams case when the body stream is missing. Found by
+        running the reader against a real OLE2 file rather than a fixture that flattered it."""
+        try:
+            value = part.get_content()
+        except (AttributeError, LookupError, KeyError, TypeError, ValueError):
+            return ""
+        return value if isinstance(value, str) else ""
+
+    for part in parts:
+        if part.get_content_type() == "text/plain" and not body:
+            body = _content(part)
+    if not body:
+        for part in parts:
+            if part.get_content_type() == "text/html":
+                raw = _content(part)
+                body = re.sub(r"<[^>]+>", " ", raw)
+                body = re.sub(r"\s+", " ", body).strip()
+                note = "body was HTML-only; tags stripped, structure lost"
+                break
+    if note:
+        report.warn(note)
+    if not body:
+        report.warn("no readable text or HTML body found")
+    blocks.append({"kind": "para", "text": ""})
+    blocks.append({"kind": "para", "text": body or "(no readable body)"})
+    if attachments:
+        blocks.append({"kind": "para", "text": ""})
+        blocks.append({"kind": "para", "text": "**Attachments (names only, not extracted):**"})
+        blocks += [{"kind": "para", "text": f"- {name}"} for name in attachments]
+        report.warn(
+            f"{len(attachments)} attachment(s) listed but NOT extracted - convert each "
+            "separately once saved out"
+        )
+    report.data["headers"] = sum(1 for b in blocks if b["text"].startswith("**"))
+    report.data["attachments"] = len(attachments)
+    return {"blocks": blocks}
+
+
+def read_eml(source: Path, report: "Report") -> dict:
+    """RFC822 mail via the stdlib `email` package - no dependency at all."""
+    import email
+    from email import policy
+
+    try:
+        message = email.message_from_bytes(source.read_bytes(), policy=policy.default)
+    except Exception as exc:  # noqa: BLE001 - any parse failure is one ConversionError
+        raise ConversionError(f"not a readable .eml: {exc.__class__.__name__}")
+    names = [
+        part.get_filename()
+        for part in message.walk()
+        if part.get_content_disposition() == "attachment" and part.get_filename()
+    ]
+    report.data["format"] = "eml"
+    return _mail_blocks(message, report, names)
+
+
+def read_msg(source: Path, report: "Report") -> dict:
+    """Outlook .msg via vendored olefile (pure Python, BSD).
+
+    .msg is an OLE2 compound file - a small filesystem of named streams. The trick that keeps
+    this short and consistent with .eml: stream `__substg1.0_007D001F` holds the ORIGINAL
+    RFC822 transport headers, so when it exists the same stdlib parser handles both formats.
+    Only when it is absent (common on drafts and internally-generated mail) do we fall back to
+    reading individual property streams."""
+    import email
+    from email import policy
+    from email.message import EmailMessage
+
+    try:
+        import olefile
+    except ImportError:
+        raise ConversionError(
+            "olefile is unavailable - it ships in vendor/, so this means the vendor tree is "
+            "missing or sys.path was rewritten"
+        )
+    if not olefile.isOleFile(str(source)):
+        raise ConversionError("not an OLE2 file - a .msg saved as something else?")
+    try:
+        ole = olefile.OleFileIO(str(source))
+    except Exception as exc:  # noqa: BLE001
+        raise ConversionError(f"not a readable .msg: {exc.__class__.__name__}")
+    try:
+        streams = {"/".join(entry) for entry in ole.listdir()}
+
+        def _text(tag: str) -> str:
+            """A property stream as text. 001F is UTF-16LE, 001E is 8-bit."""
+            for suffix, encoding in (("001F", "utf-16-le"), ("001E", "utf-8")):
+                name = f"__substg1.0_{tag}{suffix}"
+                if name in streams:
+                    try:
+                        return ole.openstream(name).read().decode(encoding, "replace").strip()
+                    except Exception:  # noqa: BLE001 - a bad stream is not a fatal file
+                        return ""
+            return ""
+
+        headers = _text("007D")
+        if headers:
+            message = email.message_from_string(headers, policy=policy.default)
+            report.data["headers_source"] = "transport headers"
+        else:
+            # Rebuild the minimum from individual properties - honest about being partial.
+            message = EmailMessage()
+            for tag, name in (("0037", "Subject"), ("0C1A", "From"), ("0E04", "To"),
+                              ("0E03", "Cc")):
+                value = _text(tag)
+                if value:
+                    message[name] = value
+            report.data["headers_source"] = "property streams (no transport headers)"
+            report.warn(
+                "no RFC822 transport headers in this .msg - headers rebuilt from properties, "
+                "so Date and Message-ID may be absent"
+            )
+        body = _text("1000")
+        if body:
+            message.set_content(body)
+        names = sorted(
+            {
+                entry[0]
+                for entry in ole.listdir()
+                if entry and entry[0].startswith("__attach_version1.0")
+            }
+        )
+        attachments = []
+        for holder in names:
+            for suffix, encoding in (("001F", "utf-16-le"), ("001E", "utf-8")):
+                stream = f"{holder}/__substg1.0_3707{suffix}"
+                if stream in streams:
+                    attachments.append(
+                        ole.openstream(stream).read().decode(encoding, "replace").strip()
+                    )
+                    break
+            else:
+                attachments.append(f"({holder}, name not recorded)")
+        report.data["format"] = "msg"
+        return _mail_blocks(message, report, attachments)
+    finally:
+        ole.close()
 
 
 # ---------------------------------------------------------------------------
@@ -754,7 +923,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--schema", help="feed schema (.yaml/.json) to validate against")
     parser.add_argument("--delimiter", help="csv only: field delimiter (default: sniffed)")
     parser.add_argument("--encoding", help="csv only: source encoding (default: detected)")
-    parser.add_argument("--report", help="evidence report path (default: <out>.report.json)")
+    parser.add_argument(
+        "--report", help="evidence report path (default: <out>.evidence.json)"
+    )
     parser.add_argument(
         "--layout",
         action="store_true",
@@ -818,6 +989,13 @@ def main(argv: list[str] | None = None) -> int:
                 kind = "tabular"
             else:
                 kind = "docx"
+        elif suffix in (".eml", ".msg"):
+            doc = read_eml(source, report) if suffix == ".eml" else read_msg(source, report)
+            if args.list:
+                print(f"headers: {report.data.get('headers', 0)}")
+                print(f"attachments: {report.data.get('attachments', 0)}")
+                return 0
+            kind = "docx"  # same block shape, so the document writer needs no new branch
         elif suffix == ".pdf":
             pages = read_pdf(source, report, layout=args.layout)
             if args.list:
@@ -843,7 +1021,8 @@ def main(argv: list[str] | None = None) -> int:
                 hint = " - .html is already rendered output; read it directly."
             raise ConversionError(
                 f"unsupported format {suffix!r}. Tabular: .xlsx .xlsm .xls .csv .tsv .txt; "
-                "documents: .pdf .docx. (.xlsb is not supported - re-save as .xlsx.)" + hint
+                "documents: .pdf .docx .eml .msg. (.xlsb is not supported - re-save as "
+                ".xlsx.)" + hint
             )
 
         if kind == "tabular":
@@ -870,7 +1049,7 @@ def main(argv: list[str] | None = None) -> int:
             report.data["output"] = str(out)
 
         report_path = (
-            Path(args.report) if args.report else out.with_suffix(out.suffix + ".report.json")
+            Path(args.report) if args.report else out.with_suffix(out.suffix + ".evidence.json")
         )
         report.write(report_path)
         report.data["report"] = str(report_path)
@@ -885,7 +1064,7 @@ def main(argv: list[str] | None = None) -> int:
             report_path = (
                 Path(args.report)
                 if args.report
-                else source.with_suffix(source.suffix + ".report.json")
+                else source.with_suffix(source.suffix + ".evidence.json")
             )
             report.write(report_path)
             print(f"report   {report_path}", file=sys.stderr)

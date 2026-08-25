@@ -227,3 +227,78 @@ def test_it_warns_that_headings_are_content(tmp_path):
     (tmp_path / "a.md").write_text("# A\n", encoding="utf-8")
     out = _run("doc_skeleton", str(tmp_path))
     assert "Headings are CONTENT" in out
+
+
+# --- email formats (2026-08-25) ---------------------------------------------------------------
+
+
+def test_eml_converts_with_headers_body_and_attachment_names(tmp_path):
+    """Comms surveillance is one of the three pillars this team exists for, so mail was not
+    an edge case - it was a silent skip. .eml needs no dependency at all: the stdlib email
+    package parses it completely."""
+    from email.message import EmailMessage
+
+    message = EmailMessage()
+    message["From"] = "trader@bank.example"
+    message["To"] = "desk@bank.example"
+    message["Subject"] = "Re: order 12345"
+    message["Date"] = "Mon, 24 Aug 2026 10:00:00 +0100"
+    message.set_content("Please review the fill.")
+    message.add_attachment(b"x", maintype="application", subtype="octet-stream",
+                           filename="blotter.csv")
+    path = tmp_path / ("note." + "eml")
+    path.write_bytes(message.as_bytes())
+    out = _run("convert_file", str(path))
+    assert "format" in out and "eml" in out
+    rendered = (tmp_path / "note.converted.md").read_text(encoding="utf-8")
+    assert "trader@bank.example" in rendered
+    assert "Re: order 12345" in rendered
+    assert "Please review the fill." in rendered
+    assert "blotter.csv" in rendered, "attachment names must be listed"
+
+
+def test_attachments_are_named_but_never_silently_treated_as_extracted(tmp_path):
+    """Listing a name is not extracting a file. Saying so is the difference between a
+    reviewer knowing to go and get it and assuming it was already read."""
+    from email.message import EmailMessage
+
+    message = EmailMessage()
+    message["Subject"] = "with attachment"
+    message.set_content("body")
+    message.add_attachment(b"x", maintype="application", subtype="pdf", filename="evidence.pdf")
+    path = tmp_path / ("a." + "eml")
+    path.write_bytes(message.as_bytes())
+    _run("convert_file", str(path))
+    evidence = json.loads(
+        (tmp_path / "a.converted.md.evidence.json").read_text(encoding="utf-8")
+    )
+    assert evidence["attachments"] == 1
+    assert any("NOT extracted" in w for w in evidence["warnings"])
+
+
+def test_a_non_ole_file_is_refused_as_a_msg(tmp_path):
+    """A .msg that is really something else must fail loudly, not produce empty output."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("cf", REPO_ROOT / "scripts" / "convert_file.py")
+    cf = importlib.util.module_from_spec(spec)
+    sys.modules["cf"] = cf
+    spec.loader.exec_module(cf)
+    path = tmp_path / ("fake." + "msg")
+    path.write_text("this is not OLE2", encoding="utf-8")
+    try:
+        cf.read_msg(path, cf.Report(path))
+    except cf.ConversionError as exc:
+        assert "OLE2" in str(exc)
+    else:
+        raise AssertionError("a non-OLE file was accepted as a .msg")
+
+
+def test_the_evidence_sidecar_is_named_for_what_it_is(tmp_path):
+    """`.report.json` sorted next to the data and read as just another output. The data's
+    format follows the input; the evidence is always JSON, and now says so."""
+    path = tmp_path / "t.csv"
+    path.write_text("a,b\n1,2\n", encoding="utf-8")
+    _run("convert_file", str(path))
+    assert (tmp_path / "t.converted.csv.evidence.json").is_file()
+    assert not (tmp_path / "t.converted.csv.report.json").exists()

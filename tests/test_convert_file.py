@@ -85,7 +85,7 @@ def run(*argv: str) -> int:
 
 
 def read_report(out: Path) -> dict:
-    return json.loads((out.parent / (out.name + ".report.json")).read_text(encoding="utf-8"))
+    return json.loads((out.parent / (out.name + ".evidence.json")).read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -407,7 +407,7 @@ def test_report_written_even_on_failure(tmp_path):
     src = tmp_path / "ragged.csv"
     src.write_text("a,b\n1\n", encoding="utf-8")
     assert run(str(src), "--out", str(tmp_path / "out.csv")) == 1
-    report = json.loads((tmp_path / "ragged.csv.report.json").read_text(encoding="utf-8"))
+    report = json.loads((tmp_path / "ragged.csv.evidence.json").read_text(encoding="utf-8"))
     assert report["errors"]
     assert report["source_sha256"]
 

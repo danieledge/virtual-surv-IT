@@ -143,6 +143,11 @@ _TIER_AST = "ast"
 _TIER_FLOOR = "floor"
 
 
+# Answered once per process. Neither answer can change mid-run, and asking per file cost a
+# measured 335ms over this repo's 1,294 files (2026-08-25 performance review).
+_probe_cache: dict[str, bool] = {}
+
+
 def _symbols_tree_sitter(_path: Path) -> list[str] | None:
     """Soft probe only - tree-sitter is never vendored (compiled wheel), so this tier is
     live only when the host environment happens to already have it installed. Not
@@ -150,9 +155,14 @@ def _symbols_tree_sitter(_path: Path) -> list[str] | None:
     extraction still means "unavailable for now", so callers fall through to the next tier.
     Kept as a real tier (not deleted) so a future version can add real extraction here
     without touching the tiering logic anywhere else."""
-    try:
-        import tree_sitter  # noqa: F401
-    except ImportError:
+    if _probe_cache.get("tree_sitter") is None:
+        try:
+            import tree_sitter  # noqa: F401
+
+            _probe_cache["tree_sitter"] = True
+        except ImportError:
+            _probe_cache["tree_sitter"] = False
+    if not _probe_cache["tree_sitter"]:
         return None
     return None  # probed present, but extraction isn't implemented yet - fall through
 
@@ -161,7 +171,9 @@ def _symbols_ctags(path: Path) -> list[str] | None:
     """Soft probe via `ctags` on PATH (never vendored - a compiled binary, not a Python
     package). None if ctags isn't installed OR the call fails/times out for any reason -
     this tier degrading never blocks the always-available floor below it."""
-    if shutil.which("ctags") is None:
+    if _probe_cache.get("ctags") is None:
+        _probe_cache["ctags"] = shutil.which("ctags") is not None
+    if not _probe_cache["ctags"]:
         return None
     try:
         result = subprocess.run(  # nosec B603 B607 - fixed argv, path arg only
@@ -186,18 +198,42 @@ def _symbols_ctags(path: Path) -> list[str] | None:
     return names or None
 
 
-def _symbols_ast_python(path: Path) -> list[str] | None:
-    """Stdlib ast - the always-available floor for Python specifically. Top-level (and
-    one-level-nested, e.g. class methods) def/class names, never executes the file."""
-    try:
-        source = path.read_text(encoding="utf-8", errors="replace")
-        tree = ast.parse(source, filename=str(path))
-    except (OSError, SyntaxError, ValueError):
-        return None
+# Every Python file was read and ast.parsed TWICE - once for symbols, once for the import
+# graph - which measured 1,472 parses over 736 files and dominated the profile (2026-08-25
+# performance review). One parse, one walk, both answers cached. Results are cached, not the
+# trees: an AST for every file in a large repo is a lot of memory to hold for no benefit.
+_python_facts_cache: dict[str, tuple[list[str], set[str]]] = {}
+
+
+def _python_facts(path: Path) -> tuple[list[str], set[str]]:
+    """(def/class names, imported top-level modules) from ONE parse. Never executes."""
+    key = str(path)
+    cached = _python_facts_cache.get(key)
+    if cached is not None:
+        return cached
     names: list[str] = []
+    modules: set[str] = set()
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"), filename=key)
+    except (OSError, SyntaxError, ValueError):
+        _python_facts_cache[key] = ([], set())
+        return [], set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             names.append(node.name)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                modules.add(alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            modules.add(node.module)
+    _python_facts_cache[key] = (names, modules)
+    return names, modules
+
+
+def _symbols_ast_python(path: Path) -> list[str] | None:
+    """Stdlib ast - the always-available floor for Python specifically. Top-level (and
+    one-level-nested, e.g. class methods) def/class names, never executes the file."""
+    names, _modules = _python_facts(path)
     return names or None
 
 
@@ -383,18 +419,7 @@ def _python_import_modules(path: Path) -> set[str]:
     the importing file's own package position, which is a real feature but not needed for a
     first version whose absolute-import coverage already gives PageRank a real graph to rank
     with on typical Python projects."""
-    try:
-        source = path.read_text(encoding="utf-8", errors="replace")
-        tree = ast.parse(source, filename=str(path))
-    except (OSError, SyntaxError, ValueError):
-        return set()
-    modules: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                modules.add(alias.name)
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            modules.add(node.module)
+    _names, modules = _python_facts(path)
     return modules
 
 
