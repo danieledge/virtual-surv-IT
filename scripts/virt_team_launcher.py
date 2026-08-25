@@ -1681,12 +1681,39 @@ def _jira_command(project_dir: Path, ref: str, auto: bool = False) -> str:
     return f"{_engage_command(project_dir)} --new --jira {ref}" + (" --auto" if auto else "")
 
 
+# Every character that reads as a closing speech mark. The request is delivered inside
+# `--request "<text>"`, so any of these ends the span early and hands the remainder to the
+# skill as flags. Folded to a plain apostrophe, which carries the same meaning to a reader
+# and cannot terminate anything. The curly forms matter for a second reason: they are not
+# encodable on a cp1252 console, and this string is printed on the way out.
+_QUOTE_CHARS = '"\u201c\u201d\u201e\u201f\u00ab\u00bb\u2033\u02ba'
+
+
 def _sanitise_request(text: str) -> str:
-    """One line, no double quotes - the decision travels to the shell as a SINGLE argument
-    and reaches the skill as `--request "<text>"`. A newline would truncate the capture; a
-    double quote would end the argument early and hand the rest to the skill as flags."""
+    """Make a typed request safe to carry inside `--request "<text>"`, losing no words.
+
+    The decision travels to the shell as a SINGLE argument and reaches the skill as
+    `--request "<text>"`. Four things would break that, and all four are real rather than
+    theoretical (2026-08-25):
+
+    - a NEWLINE truncates the capture, so whitespace of every kind collapses to one space;
+    - a DOUBLE QUOTE, straight or curly, closes the span early and turns the rest of the
+      sentence into flags;
+    - a CONTROL character (a bell from a bad paste, a stray escape) reaches the terminal
+      and the prompt as noise;
+    - a TRAILING BACKSLASH lands immediately before the closing quote as a backslash-quote
+      pair, which any escape-aware reader takes as an escaped quote rather than a
+      terminator - so the request appears to swallow the rest of the line. Interior
+      backslashes are KEPT: a Windows path is a legitimate thing to put in a request, and
+      mangling it would be its own bug.
+
+    Deliberately does NOT truncate. Losing the end of someone's brief is the failure this
+    whole path was just fixed for; a long request is merely long."""
     flat = " ".join(str(text).split())
-    return flat.replace('"', "'").strip()
+    cleaned = "".join(ch for ch in flat if ch.isprintable())
+    for quote in _QUOTE_CHARS:
+        cleaned = cleaned.replace(quote, "'")
+    return cleaned.rstrip("\\").strip()
 
 
 def _new_command(project_dir: Path, request: str = "", auto: bool = False) -> str:

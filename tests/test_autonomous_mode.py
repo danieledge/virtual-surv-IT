@@ -562,3 +562,134 @@ def test_the_skill_treats_the_typed_request_as_the_request():
     skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
     assert "--request" in skill
     assert "do not re-ask what the work is" in skill
+
+
+# --- the launcher and the skill must agree on what --auto can ride with ---------------------
+#
+# 2026-08-25 live report: auto mode on, [n] pressed, the request typed at the TUI - and the
+# session still asked what to run. The launcher was right (it emitted
+# `--new --request "..." --auto`) and the shell was right (one argument, quotes intact). The
+# skill's flag contract was stale: it still said `--auto` rides with `--jira`, from when
+# autonomy was Jira-only, so the model had no documented reason to treat `--auto` beside
+# `--request` as authorisation. A capability grew on one side of an interface and the other
+# side was never told - so pin the agreement rather than the wording.
+
+
+def _auto_bullet(text: str) -> str:
+    """The `--auto` bullet from SKILL.md, up to the next top-level bullet."""
+    start = text.index("- **`--auto`")
+    rest = text[start + 1 :]
+    end = rest.find("\n- **`")
+    return rest[: end if end != -1 else len(rest)]
+
+
+def test_the_skill_documents_every_source_the_launcher_can_start_an_auto_run_from(tmp_path):
+    """Both sources, checked against what the launcher actually emits - not against a list
+    of flag names someone remembered to keep current."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    from_ticket = mod._jira_command(project, "SURV-9", auto=True)
+    from_request = mod._new_command(project, "tune the Q3 thresholds", auto=True)
+    assert from_ticket.endswith("--auto") and "--jira" in from_ticket
+    assert from_request.endswith("--auto") and "--request" in from_request
+
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    bullet = _auto_bullet(skill)
+    assert "--jira" in bullet, "the ticket source must stay documented"
+    assert "--request" in bullet, (
+        "the launcher can start an unattended run from a typed request "
+        f"({from_request!r}), but the --auto bullet does not mention --request - the exact "
+        "drift that made a live auto run ask what the work was"
+    )
+
+
+def test_an_auto_run_is_told_not_to_ask_what_the_work_is():
+    """The reported symptom, pinned directly: the brief arrived with the flags."""
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    bullet = _auto_bullet(skill)
+    assert "ask nothing at all" in bullet
+    lowered = bullet.lower()
+    assert "source-agnostic" in lowered or "either" in lowered, (
+        "the bullet must say autonomy is not tied to one source, or it reads as Jira-only again"
+    )
+
+
+def test_a_typed_request_reaches_the_skill_as_one_quoted_argument(tmp_path):
+    """The decision crosses a shell. Verified in real bash 2026-08-25: the wrapper's
+    ${__vt_d:+"$__vt_d"} keeps it a single argument with quotes intact, so the failure was
+    never word-splitting - but a newline or an embedded double quote WOULD break it, which
+    is what _sanitise_request exists to prevent."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    messy = 'run the "Q3"\n tuning   analysis'
+    command = mod._new_command(project, messy, auto=True)
+    assert "\n" not in command
+    body = command.split('--request "', 1)[1].rsplit('"', 1)[0]
+    assert '"' not in body, "an embedded quote would end the argument early"
+    assert body == "run the 'Q3' tuning analysis"
+    assert command.endswith("--auto")
+
+
+# --- what a typed request may safely contain (2026-08-25) ----------------------------------
+#
+# The request is delivered inside `--request "<text>"`. Anything that closes that span early
+# hands the rest of the sentence to the skill as flags, which is silent corruption rather than
+# an error - so the characters people actually type are pinned here.
+
+BACKSLASH = chr(92)
+
+
+def _request_body(command: str) -> str:
+    return command.split('--request "', 1)[1].rsplit('"', 1)[0]
+
+
+def test_speech_marks_of_every_shape_cannot_close_the_span(tmp_path):
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    for text in (
+        'check the "Q3" figures',
+        "check the “Q3” figures",     # curly
+        "check the «Q3» figures",     # guillemets
+        "check the ″Q3″ figures",     # double prime
+    ):
+        body = _request_body(mod._new_command(project, text))
+        assert '"' not in body, f"{text!r} left a terminator in {body!r}"
+        assert "Q3" in body and "figures" in body, "folding a quote must not lose words"
+
+
+def test_an_interior_backslash_is_kept_because_a_windows_path_is_a_real_request(tmp_path):
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    text = f"profile C:{BACKSLASH}extracts{BACKSLASH}q3 for gaps"
+    body = _request_body(mod._new_command(project, text))
+    assert body == text, "mangling a path would be its own bug"
+
+
+def test_a_trailing_backslash_never_escapes_the_closing_quote(tmp_path):
+    """The subtle one: a path typed with a trailing separator puts a backslash immediately
+    before the closing quote, which an escape-aware reader takes as an escaped quote - so the
+    request appears to swallow the rest of the line rather than ending."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    command = mod._new_command(project, f"read C:{BACKSLASH}data{BACKSLASH}alerts{BACKSLASH}")
+    assert not _request_body(command).endswith(BACKSLASH)
+    assert command.endswith('"'), "the span must still close"
+    assert f"C:{BACKSLASH}data{BACKSLASH}alerts" in command, "the path itself must survive"
+
+
+def test_control_characters_do_not_reach_the_prompt(tmp_path):
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    body = _request_body(mod._new_command(project, "review\x07 the\x1b extract\x00 now"))
+    assert all(ch.isprintable() for ch in body)
+    assert "review" in body and "extract" in body
+
+
+def test_a_long_request_is_never_truncated(tmp_path):
+    """Losing the end of a brief is the failure this path was fixed for. Long is just long."""
+    mod = _load("virt_team_launcher")
+    project = _project(tmp_path)
+    text = " ".join(f"sentence number {i} about the extract." for i in range(60))
+    body = _request_body(mod._new_command(project, text))
+    assert body == text
+    assert "sentence number 59" in body

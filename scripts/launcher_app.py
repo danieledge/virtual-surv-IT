@@ -766,6 +766,32 @@ JIRA_CANCELLED = "__jira_cancelled__"
 # is harmless (the detected key is on its own line) while over-showing collides with the
 # divider.
 _INPUT_WINDOW = 38
+_COMPOSER_LINES = 9  # visible lines in the request composer; the buffer itself is unbounded.
+# Sized against a real pty (2026-08-25): a two-sentence brief - the case that prompted the
+# composer - now fits without scrolling its own opening away, and the pane still has room
+# beneath for the unattended row. Longer briefs scroll, with a leading marker saying so.
+
+
+def _wrapped(text: str, width: int) -> list:
+    """Word-wrap for DISPLAY only, honouring the newlines the human typed.
+
+    Never used to decide what is sent - the request is flattened to one line on the way
+    out (_sanitise_request), so wrapping here can be purely cosmetic and lossless."""
+    lines = []
+    for paragraph in (text or "").split("\n"):
+        if not paragraph:
+            lines.append("")
+            continue
+        current = ""
+        for word in paragraph.split(" "):
+            candidate = f"{current} {word}".strip() if current else word
+            if len(candidate) <= width or not current:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+    return lines or [""]
 
 
 def jira_screen(project_dir: Path, mod, output=None):
@@ -1642,21 +1668,36 @@ def request_screen(project_dir: Path, mod, output=None):
 
     def _body():
         out = [("class:group", f"  {g['new']}What would you like the team to do?\n\n")]
-        out.append(("class:dim", "  Type it, or press Enter to decide in session.\n\n"))
+        out.append(("class:dim", "  Type it. Esc to decide in session instead.\n\n"))
         cursor = "_" if mod._can_encode("_") else " "
-        shown = buf[0]
-        if len(shown) > _INPUT_WINDOW:
-            lead = "..." if mod._can_encode("...") else ".."
-            shown = lead + shown[-(_INPUT_WINDOW - len(lead)) :]
-        out.append(("class:title", "  > "))
-        out.append(("", shown))
-        out.append(("class:hint", cursor))
-        out.append(("", "\n\n"))
+        # Wrap for DISPLAY across the pane, and show the LAST few lines - a composer that
+        # scrolls off the top is normal; one that hides what you are currently typing is
+        # not. The full value is always what gets returned.
+        lines = _wrapped(buf[0], _INPUT_WINDOW)
+        if len(lines) > _COMPOSER_LINES:
+            lines = lines[-_COMPOSER_LINES:]
+            lines[0] = ("..." if mod._can_encode("...") else "..") + lines[0]
+        for i, line in enumerate(lines):
+            out.append(("class:title", "  > " if i == 0 else "    "))
+            out.append(("", line))
+            if i == len(lines) - 1:
+                out.append(("class:hint", cursor))
+            out.append(("", "\n"))
+        out.append(("", "\n"))
         if auto_offered:
             mark = g["on"] if auto[0] else g["off"]
             out.append(("class:on" if auto[0] else "class:off", f"  {mark} "))
             out.append(("class:warn" if auto[0] else "class:dim", "Ctrl-A  run unattended"))
-            out.append(("class:dim", "  (needs a request)\n"))
+            # Kept SHORT on purpose: the left pane is ~47 columns and this row already
+            # spends 26 on the label, so anything longer is clipped mid-word at the border
+            # (caught under a real pty 2026-08-25 - "(you authorise it o"). The full
+            # explanation lives in the right-hand pane, which has the room for it.
+            if auto[0] and not buf[0].strip():
+                out.append(("class:warn", "  (needs a request)\n"))
+            elif auto[0]:
+                out.append(("class:dim", "  (confirm next)\n"))
+            else:
+                out.append(("class:dim", "  (off - it asks)\n"))
         return out
 
     def _right():
@@ -1675,14 +1716,22 @@ def request_screen(project_dir: Path, mod, output=None):
 
     def _footer():
         tail = " · Ctrl-A unattended" if auto_offered else ""
-        return [("class:hint", f"  Enter start · Esc back · Ctrl-U clear{tail}")]
+        return [
+            ("class:hint", f"  Ctrl-D send · Enter new line · Esc back · Ctrl-U clear{tail}")
+        ]
 
     kb = KeyBindings()
 
     @kb.add("c-a")
     def _auto(event):
         # Ctrl-A, not a bare letter: every printable key is text for the request field.
-        if auto_offered and buf[0].strip():
+        # Toggles whether or not there is text yet (2026-08-25): arming first and then
+        # writing the brief is a natural order, and the old guard made that keypress a
+        # SILENT no-op - the worst possible answer, since the screen then looked as though
+        # unattended had been declined. An armed toggle with an empty field still cannot
+        # start anything: sending with no text is a skip, and _new_command drops --auto
+        # without a request. The row below says what it needs.
+        if auto_offered:
             auto[0] = not auto[0]
 
     @kb.add(Keys.Any)
@@ -1693,11 +1742,18 @@ def request_screen(project_dir: Path, mod, output=None):
 
     @kb.add(Keys.BracketedPaste)
     def _paste(event):
-        buf[0] += "".join(ch for ch in (event.data or "") if ch.isprintable())
+        # A newline is a WORD BREAK, never nothing (2026-08-25 report: a multi-sentence
+        # request arrived incomplete). Dropping unprintables welded the sentences either
+        # side of a line break into "extract.Then", which is worse than truncation because
+        # it looks like text the human wrote. The request travels as one line anyway
+        # (_sanitise_request flattens it), so collapse here and keep every word.
+        buf[0] += " ".join((event.data or "").split())
+        if buf[0] and (event.data or "").endswith(("\n", " ", "\t")):
+            buf[0] += " "  # a trailing break is still a word boundary for whatever follows
 
     @kb.add("backspace")
     def _back(event):
-        buf[0] = buf[0][:-1]
+        buf[0] = buf[0][:-1]  # deletes a newline like any other character
 
     @kb.add("c-u")
     def _clear(event):
@@ -1705,8 +1761,22 @@ def request_screen(project_dir: Path, mod, output=None):
         auto[0] = False
 
     @kb.add("enter")
+    def _newline(event):
+        # 2026-08-25 live report: "claude never got the full instruction i typed which was
+        # a couple of sentences". Enter used to SEND, so composing across lines - the
+        # natural way to write a brief, and what a paste does in any terminal without
+        # bracketed paste - submitted the first line and discarded the rest silently.
+        # A key that can destroy what you just typed has no place on a composer, so Enter
+        # is a line break here and sending moved to a key you cannot hit by accident.
+        buf[0] += "\n"
+
+    @kb.add("c-d")
+    # No Alt-Enter: Esc is bound eager (it has to be, or every arrow key waits on a
+    # disambiguation timeout), and an eager Esc fires before the two-key escape+enter
+    # sequence can ever resolve. Verified 2026-08-25 - the binding existed and silently
+    # backed out instead of sending. Esc-to-back is worth more than a second send key.
     def _accept(event):
-        text = buf[0].strip()
+        text = " ".join(buf[0].split())
         result["v"] = (text, auto[0]) if text else REQUEST_SKIPPED
         event.app.exit()
 

@@ -132,10 +132,19 @@ first prompt. When present, this is the answer - **do not ask the question at al
   artifacts attached where the tools allow, markdown-in-comment fallback when they
   don't - exact rules in `references/integrations.md`, inbound section). Attachments the
   work needs are read via `convert_file`, same as any document input.
-- **`--auto` (rides with `--jira`) - UNATTENDED.** The human authorised this run at the
-  launcher; **ask nothing at all** and **read `references/auto-mode.md` now** - it carries
-  the assumption ledger, the park-don't-guess rule and the always-PARTIAL close, and is the
-  only place they are written. Unattended changes who is asked, never what is required.
+- **`--auto` (rides with EITHER `--jira <key>` OR `--request "<text>"`) - UNATTENDED.**
+  The human authorised this run at the launcher; **ask nothing at all** and **read
+  `references/auto-mode.md` now** - it carries the assumption ledger, the park-don't-guess
+  rule and the always-PARTIAL close, and is the only place they are written. Unattended
+  changes who is asked, never what is required.
+  **Autonomy is source-agnostic** (2026-08-24): it was reachable only from a ticket at
+  first, which was an accident of where it was built - the pre-flight, the ledger and the
+  PARTIAL close never cared where the work came from. So `--new --request "..." --auto` is
+  every bit as valid as `--new --jira KEY --auto`, and the request text IS the brief. If
+  you find yourself about to ask an `--auto` run what the work is, re-read the flags on
+  this line: the answer already arrived with them (2026-08-25 live report - a run started
+  with `--new --request "..." --auto` asked anyway, because this bullet still said `--auto`
+  rode with `--jira` alone).
 - **`--resume <slug>` → validate the slug first** (`RESUME_MENU`/`list --menu`, same as
   below) rather than trusting it blindly: the wrapper's view could be stale (another session
   closed or archived it in the seconds between the wrapper computing the menu and this

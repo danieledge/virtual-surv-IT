@@ -759,3 +759,92 @@ def test_escape_drives_main_to_the_abort_exit_code(ptk, tmp_path, monkeypatch, c
             rc = mod.main()
     assert rc == mod._ABORT_EXIT_CODE == 97, "Esc must abort, never fall through to a launch"
     assert capsys.readouterr().out == "", "stdout is the decision channel - it must be empty"
+
+
+# --- the request composer (2026-08-25 live report) -----------------------------------------
+#
+# "claude never got the full instruction i typed which was a couple of sentences". Enter used
+# to SEND, so composing across lines - the natural way to write a brief, and what a paste does
+# in any terminal without bracketed paste - submitted the first line and silently discarded the
+# rest. Enter is a line break now; sending is Ctrl-D (or Alt-Enter).
+
+
+def _compose(ptk, keys: str, project, auto_on=True):
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    launcher = _load("virt_team_launcher")
+    app = _load("launcher_app")
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    import unittest.mock as m
+    with m.patch.object(launcher, "_auto_offered", lambda _p: auto_on):
+        with create_pipe_input() as pipe:
+            pipe.send_text(keys)
+            with create_app_session(input=pipe, output=out):
+                res = app.request_screen(project, launcher, output=out)
+    return res, buf.getvalue()
+
+
+def test_enter_adds_a_line_instead_of_sending_the_first_one(ptk, tmp_path):
+    """The reported bug, pinned. Two sentences typed across a line break must arrive whole."""
+    res, _ = _compose(ptk, "Review the Q3 extract.\rThen propose thresholds.\x04", tmp_path)
+    assert isinstance(res, tuple), f"expected a request, got {res!r}"
+    assert res[0] == "Review the Q3 extract. Then propose thresholds."
+
+
+def test_escape_is_never_shadowed_by_a_second_send_key(ptk, tmp_path):
+    """Alt-Enter was tried as a second send key and cannot work: Esc is bound eager (it must
+    be, or every arrow key waits on a disambiguation timeout), so it fires before escape+enter
+    can resolve. Pinned so nobody re-adds it and quietly turns Esc into a send."""
+    app = _load("launcher_app")
+    res, _ = _compose(ptk, "tune the thresholds\x1b\r", tmp_path)
+    assert res == app.REQUEST_SKIPPED
+
+
+def test_a_long_brief_survives_whole(ptk, tmp_path):
+    """Longer than the visible window, across several lines - display wrapping must never
+    reach the value."""
+    typed = ("Review the Q3 alert extract for temporal gaps and stability.\r"
+             "Then propose threshold changes with evidence.\r"
+             "Flag anything that looks like a feed outage rather than real behaviour.")
+    res, _ = _compose(ptk, typed + "\x04", tmp_path)
+    assert isinstance(res, tuple)
+    assert res[0] == " ".join(typed.replace("\r", " ").split())
+    assert len(res[0]) > 150, "a multi-sentence brief must not be truncated"
+
+
+def test_escape_still_skips_to_a_plain_launch(ptk, tmp_path):
+    app = _load("launcher_app")
+    res, _ = _compose(ptk, "half a thought\x1b", tmp_path)
+    assert res == app.REQUEST_SKIPPED
+
+
+def test_sending_an_empty_composer_is_a_skip(ptk, tmp_path):
+    app = _load("launcher_app")
+    res, _ = _compose(ptk, "\r\r\x04", tmp_path)
+    assert res == app.REQUEST_SKIPPED, "whitespace-only must not become a request"
+
+
+def test_ctrl_a_arms_unattended_before_any_text_is_typed(ptk, tmp_path):
+    """Arming first and then writing the brief is a natural order. The old guard made that
+    keypress a silent no-op, so the screen looked as though unattended had been declined."""
+    res, _ = _compose(ptk, "\x01run the tuning analysis\x04", tmp_path)
+    assert isinstance(res, tuple)
+    assert res == ("run the tuning analysis", True)
+
+
+def test_unattended_is_not_offered_when_the_project_turned_it_off(ptk, tmp_path):
+    res, _ = _compose(ptk, "\x01do the thing\x04", tmp_path, auto_on=False)
+    assert res == ("do the thing", False), "Ctrl-A must do nothing where auto is not offered"
+
+
+def test_the_footer_teaches_the_send_key(ptk, tmp_path):
+    _res, text = _compose(ptk, "\x1b", tmp_path)
+    assert "Ctrl-D send" in text and "Enter new line" in text
+
+
+def test_wrapping_is_display_only(ptk):
+    app = _load("launcher_app")
+    lines = app._wrapped("a b c d e f g h i j k l m n o p", 5)
+    assert len(lines) > 1
+    assert " ".join(" ".join(lines).split()) == "a b c d e f g h i j k l m n o p"
+    assert app._wrapped("first\rsecond".replace("\r", "\n"), 40) == ["first", "second"]
