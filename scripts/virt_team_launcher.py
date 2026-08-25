@@ -251,6 +251,8 @@ _TOGGLE_PREFS = (
     ("probe pre-cache at go", "probe_cache"),
     ("evidence room at close", "evidence_room"),
     ("autonomous jira mode", "autonomous_mode"),
+    ("data profiling tools", "data_profiling"),
+    ("document map", "document_map"),
 )
 
 
@@ -360,6 +362,19 @@ _SETTING_HELP = {
         "Writes tuned timeouts and a 1-hour prompt-cache TTL into this project's "
         ".claude/settings.json - fewer timeouts, and cache that survives a thinking pause.",
         "Not applied: Claude Code's own defaults are used.",
+    ),
+    "document map": (
+        "Lets the team inventory a documentation tree first - filenames, dates and heading "
+        "outlines - so it knows what exists before opening anything.",
+        "On by default at machine and project level. Off means documents get opened at "
+        "random instead, which costs more and misses things.",
+    ),
+    "data profiling tools": (
+        "Lets the team run profile_temporal (gaps, freshness, cadence over time) and "
+        "tag_columns (what each column means) on a dataset. Both emit counts and dates "
+        "only - never a record.",
+        "On by default: it is SAFER than the alternative, which is an agent reading rows "
+        "into context. Off only where no tool may touch client data at all.",
     ),
     "autonomous jira mode": (
         "Whether [j] may OFFER an unattended run. Autonomy is chosen per ticket: the "
@@ -1401,11 +1416,17 @@ def _expire_stale_auto_consent(project_dir: Path) -> bool:
     return True
 
 
-def _auto_run_decision(project_dir: Path, ref: str) -> str:
-    """Authorise and start an unattended run. Returns the decision string, "__again__" if
-    the human cancelled, or "" when the pre-flight screen could not run at all (the caller
-    then starts an ORDINARY run - an unattended one must never begin by default because a
-    screen failed to render)."""
+def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> str:
+    """Authorise and start an unattended run, from a TICKET or a typed request.
+
+    Source-agnostic on purpose (2026-08-24): autonomy was reachable only from a Jira ticket,
+    which was an accident of where it was built rather than anything about autonomy - the
+    pre-flight, the ledger, park-don't-guess and the always-PARTIAL close never cared where
+    the work came from. `request_text` set means a typed request; otherwise `ref` is a ticket.
+
+    Returns the decision string, "__again__" if the human cancelled, or "" when the pre-flight
+    screen could not run at all (the caller then starts an ORDINARY run - an unattended one
+    must never begin by default because a screen failed to render)."""
     ink = _Ink()
     err = sys.stderr
     try:
@@ -1418,8 +1439,13 @@ def _auto_run_decision(project_dir: Path, ref: str) -> str:
         return ""
     if answers == AUTO_CANCELLED:
         return "__again__"
-    slug = _JIRA_KEY_RE.search(ref)
-    slug = slug.group(1).upper() if slug else "auto"
+    match = _JIRA_KEY_RE.search(ref) if not request_text else None
+    if match:
+        slug = match.group(1).upper()
+    else:
+        # No ticket to name it after: a few words of the request, so the consent grant's
+        # provenance says what it was granted FOR rather than a bare "auto".
+        slug = "-".join(_sanitise_request(request_text or ref).lower().split()[:4])[:40] or "auto"
     if answers.get("allow_exec"):
         ok, problem = grant_execution_consent(project_dir, slug)
         if ok:
@@ -1470,6 +1496,8 @@ def _auto_run_decision(project_dir: Path, ref: str) -> str:
             file=err,
         )
     print(ink.good(f"    -> unattended run on {slug}; it will close PARTIAL for sign-off"), file=err)
+    if request_text:
+        return _new_command(project_dir, request_text, auto=True)
     return _jira_command(project_dir, ref, auto=True)
 
 
@@ -1502,7 +1530,11 @@ def _signer_name() -> str:
 
     try:
         proc = subprocess.run(
-            ["git", "config", "user.name"], capture_output=True, text=True, timeout=5
+            ["git", "config", "user.name"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            stdin=subprocess.DEVNULL,
         )
         name = (proc.stdout or "").strip()
         if name:
@@ -1542,6 +1574,11 @@ def _record_sign_off(project_dir: Path, slug: str) -> str:
             text=True,
             timeout=30,
             cwd=str(_scripts_dir().parent),
+            # DEVNULL, never inherited: a child that keeps the parent's stdin open blocks
+            # forever when nothing writes to it. This exact failure has bitten this repo
+            # before (the CLI adapter, 2026-08-20), and it is what made a 6-second test file
+            # hang the whole suite once enough prior subprocesses had run.
+            stdin=subprocess.DEVNULL,
         )
     except Exception as exc:
         return f"could not sign off ({exc.__class__.__name__})"
@@ -1561,6 +1598,65 @@ def _jira_command(project_dir: Path, ref: str, auto: bool = False) -> str:
     full-screen jira_screen and the plain input() flow above) end here, so they cannot
     drift the way the two menu renderers did."""
     return f"{_engage_command(project_dir)} --new --jira {ref}" + (" --auto" if auto else "")
+
+
+def _sanitise_request(text: str) -> str:
+    """One line, no double quotes - the decision travels to the shell as a SINGLE argument
+    and reaches the skill as `--request "<text>"`. A newline would truncate the capture; a
+    double quote would end the argument early and hand the rest to the skill as flags."""
+    flat = " ".join(str(text).split())
+    return flat.replace('"', "'").strip()
+
+
+def _new_command(project_dir: Path, request: str = "", auto: bool = False) -> str:
+    """The one place the new-engagement opening command is spelled. An empty request gives
+    exactly the old `--new`, which is the point: typing is an offer, not a toll gate."""
+    command = f"{_engage_command(project_dir)} --new"
+    clean = _sanitise_request(request)
+    if clean:
+        command += f' --request "{clean}"'
+    if auto and clean:
+        command += " --auto"
+    return command
+
+
+def _new_decision(project_dir: Path, engagement_state=None, menu=None, shown=None) -> str:
+    """Collect the request for a new engagement, and optionally start it unattended.
+
+    Returns the decision string. Every failure path returns the plain `--new` this replaced,
+    because a screen that cannot render must never cost someone a launch."""
+    ink = _Ink()
+    # A request prompt with no human at the keyboard is meaningless, and worse than
+    # meaningless in a harness: prompt_toolkit blocks in its event loop waiting for keys that
+    # never arrive, which hung the whole test suite for hours (found 2026-08-25 by aborting
+    # the stuck process for its stack). VIRT_SURV_FORCE_PTK deliberately fakes the tty gate
+    # so screens can be driven headlessly, so this checks stdin DIRECTLY - the same guard
+    # _write_probe_cache uses. No tty means the plain `--new` this replaced.
+    try:
+        interactive = sys.stdin.isatty()
+    except Exception:
+        interactive = False
+    if not interactive:
+        print(ink.dim("    -> starting new"), file=sys.stderr)
+        return _new_command(project_dir)
+    try:
+        from launcher_app import REQUEST_SKIPPED, request_screen
+
+        answer = request_screen(project_dir, sys.modules[__name__])
+    except Exception:
+        answer = None
+    if answer is None or answer == REQUEST_SKIPPED:
+        print(ink.dim("    -> starting new"), file=sys.stderr)
+        return _new_command(project_dir)
+    request, auto = answer
+    if auto:
+        decision = _auto_run_decision(project_dir, request, request_text=request)
+        if decision == "__again__":
+            return "__again__"
+        if decision:
+            return decision
+    print(ink.dim("    -> starting new with your request"), file=sys.stderr)
+    return _new_command(project_dir, request)
 
 
 def _auto_offered(project_dir: Path) -> bool:
@@ -1643,7 +1739,9 @@ def _pt_menu_round(
     return _decision_from_pick(pick, project_dir, engagement_state, menu, shown)
 
 
-def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, shown: list) -> str:
+def _decision_from_pick(
+    pick, project_dir: Path, engagement_state, menu: dict, shown: list, rich: bool = False
+) -> str:
     """Map a picked entry to the decision string. Shared by the full-screen app tier and
     the picker tier (2026-08-20) - both produce the SAME pick tuples, and a second copy of
     this mapping is exactly the drift this work exists to remove."""
@@ -1779,8 +1877,15 @@ def _decision_from_pick(pick, project_dir: Path, engagement_state, menu: dict, s
         return "__again__"
     engage_cmd = _engage_command(project_dir)
     if pick[0] == "new":
+        # The request screen belongs to the APP tier only. The picker and numbered tiers are
+        # the fallbacks for consoles that cannot run a full-screen app, so opening one from
+        # them is both wrong in principle and, on a pipe-driven input, a hang: prompt_toolkit
+        # blocks forever waiting for keys that will never arrive (found 2026-08-25 by a
+        # performance review, after three of my own test runs sat stuck for hours).
+        if rich:
+            return _new_decision(project_dir, engagement_state, menu, shown)
         print(ink.dim("    -> starting new"), file=sys.stderr)
-        return f"{engage_cmd} --new"
+        return _new_command(project_dir)
     slug = _row_resume_token(shown[pick[1]])
     if slug:
         print(ink.dim(f"    -> resuming {slug}"), file=sys.stderr)
@@ -1811,7 +1916,9 @@ def _menu_round(
                 project_dir, sys.modules[__name__], menu, shown, jira_on=_jira_offered(project_dir)
             )
             if pick != APP_FALLBACK:
-                return _decision_from_pick(pick, project_dir, engagement_state, menu, shown)
+                return _decision_from_pick(
+                    pick, project_dir, engagement_state, menu, shown, rich=True
+                )
         except Exception:
             pass  # any app failure degrades to the tiers below, never breaks the launch
     p = _ptk_ui()

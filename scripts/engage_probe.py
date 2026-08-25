@@ -672,6 +672,7 @@ def resolve_preferences(project_dir: Path) -> dict:
     Returns {"extra_formats": list[str], "regulatory_citations": bool,
     "large_context_review_split": bool, "parallel_dispatch_via_workflow": bool,
     "standards_critique": bool, "map_skeleton": bool, "probe_cache": bool,
+    "data_profiling": bool,
     "autonomous_mode": bool}."""
     prefs = read_team_preferences(project_dir)
     # Project setting wins if this project has ever explicitly set it (even to "off" -
@@ -710,6 +711,28 @@ def resolve_preferences(project_dir: Path) -> dict:
     # as before, so a plain `claude` + manual /engage is never broken by it); an
     # explicit false disables both the go-time write and the serving side.
     probe_cache_on = prefs.get("probe_cache", True)
+    # data_profiling (2026-08-24): whether the team may run the deterministic data tools -
+    # profile_temporal (time as a dimension: range, gaps, freshness, cadence) and tag_columns
+    # (FIBO-grounded column meanings). ON by default, because both emit AGGREGATES ONLY and
+    # are therefore the SAFER way to characterise client data: the alternative is an agent
+    # reading records into context, and anything an agent reads goes to the model provider.
+    # Two tiers with key-presence precedence, same as map_skeleton/docx: a project's explicit
+    # choice wins, else this machine's installer default, else on. Off is for an environment
+    # that forbids reading client data with any tool at all - a governance decision, so it
+    # must be expressible at both levels.
+    # document_map (2026-08-25): whether the team may inventory a documentation tree with
+    # doc_skeleton before deciding what to read. ON by default at BOTH tiers - it is pure
+    # orientation and the alternative is opening documents at random, which is unbounded and
+    # pulls content into context that may never be needed. Anthropic's own retrieval guidance
+    # points the same way: under ~200k tokens, orientation beats retrieval infrastructure.
+    if "document_map" in prefs:
+        document_map_on = bool(prefs["document_map"])
+    else:
+        document_map_on = bool(machine_defaults.get("default_document_map", True))
+    if "data_profiling" in prefs:
+        data_profiling_on = bool(prefs["data_profiling"])
+    else:
+        data_profiling_on = bool(machine_defaults.get("default_data_profiling", True))
     # evidence_room (2026-08-19): a single self-contained HTML pack assembled at close
     # from evidence the engagement already produced. OFF by default and project-scoped
     # with no machine tier - whether a project wants an auditor-facing pack is a fact
@@ -744,6 +767,8 @@ def resolve_preferences(project_dir: Path) -> dict:
         "standards_critique": standards_critique_on,
         "map_skeleton": map_skeleton_on,
         "probe_cache": probe_cache_on,
+        "data_profiling": data_profiling_on,
+        "document_map": document_map_on,
         "evidence_room": evidence_room_on,
         "autonomous_mode": autonomous_mode_on,
         "qa_depth": qa_depth,

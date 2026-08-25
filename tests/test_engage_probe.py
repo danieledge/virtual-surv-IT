@@ -355,6 +355,8 @@ def test_resolve_preferences_returns_dict_matching_build_report(tmp_path, monkey
         "probe_cache": True,  # built-in default (2026-08-18)
         "evidence_room": False,  # opt-in, off by default (2026-08-19)
         "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
+        "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
+        "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)
         "qa_depth": "auto",  # derived from work shape unless set (2026-08-20)
     }
 
@@ -372,6 +374,8 @@ def test_resolve_preferences_all_builtin_defaults_when_nothing_set(tmp_path, mon
         "probe_cache": True,  # 2026-08-18: on by default - a pure accelerator
         "evidence_room": False,  # 2026-08-19: opt-in evidence pack, off by default
         "autonomous_mode": True,  # kill switch, not an enabler - per-ticket decision (2026-08-21)
+        "data_profiling": True,  # aggregates-only data tools, on by default (2026-08-24)
+        "document_map": True,  # doc-tree orientation, on by default both tiers (2026-08-25)
         "qa_depth": "auto",  # 2026-08-20: QA breadth, derived unless set
     }
 

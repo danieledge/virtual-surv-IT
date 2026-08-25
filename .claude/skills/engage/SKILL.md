@@ -143,6 +143,11 @@ first prompt. When present, this is the answer - **do not ask the question at al
   engagement" and "state file is the record" rules below. Not in `open` (or `open` empty) →
   fall back to the normal flow below and ask, same as if no flag had been given - **never
   silently proceed on stale data, and never error out unhelpfully either.**
+- **`--request "<text>"` (rides with `--new`)** - the human typed the request at the
+  launcher instead of waiting to be asked. **This IS the request**: treat it exactly as if
+  they had typed it in-session, classify from it, and do not re-ask what the work is. It is
+  one sanitised line (quotes flattened, newlines removed), so expect terseness, not a brief -
+  ask about detail if you need it, never about the ask itself.
 - **`--supersedes <slug>` (rides with `--new`)** - this engagement REPLACES a finished one
   (the human chose "redo" against it in the go menu). Record the link on THIS pack the
   moment the workspace exists (`set-decision supersedes "<slug>"`), read the old pack for
@@ -360,7 +365,9 @@ on input the team cannot proceed without (a clarification, a go-ahead, missing i
 -m scripts.engagement_state set-status blocked`, then `add-outstanding` for the unanswered
 question(s) **and every gate not yet run** ("independent QA (Linh): not yet run" · "DoD check: not
 yet run") - each command re-renders - and **end the turn stating plainly: "this engagement is NOT
-closed - outstanding: …"**. Do **not** write the summary email or `delivery-report.md` (close-only
+closed - outstanding: …"**. When the close DOES come, write it from
+`docs/templates/delivery-report.md` - not from memory, whoever is holding the pen.
+Do **not** write the summary email or `delivery-report.md` (close-only
 - the mechanical gate flags them as `SUMMARY-BEFORE-CLOSE` / `FINAL-BEFORE-CLOSE`); interim output
 takes pass-scoped names (`review-pass-1`, `qa-cycle-2`, `interim-*`) and opens with the one-line
 interim banner (`> ⏳ INTERIM - engagement not closed; DoD checks have not run.`). When the user

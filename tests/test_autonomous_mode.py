@@ -509,3 +509,56 @@ def test_a_light_downgrade_still_cannot_close_as_complete(tmp_path):
         )
     )
     assert any("AUTO-NOT-PARTIAL" in f for f in findings)
+
+
+# --- [n] takes the request at the launcher (2026-08-24 user report) ---------------------------
+
+
+def test_typing_is_an_offer_not_a_toll_gate(tmp_path):
+    """User report: "I clicked new engagement but no option to pre-seed a prompt, it just
+    opened cc". The fix must not swing the other way - an empty field gives exactly the plain
+    launch it replaced, so nobody is forced to compose a brief at a prompt."""
+    mod = _load("virt_team_launcher")
+    assert mod._new_command(tmp_path) == mod._new_command(tmp_path, "")
+    assert mod._new_command(tmp_path).endswith("--new")
+    assert "--request" not in mod._new_command(tmp_path, "   ")
+
+
+def test_a_typed_request_reaches_the_session(tmp_path):
+    mod = _load("virt_team_launcher")
+    command = mod._new_command(tmp_path, "review the spoofing rule")
+    assert '--request "review the spoofing rule"' in command
+
+
+def test_the_request_is_sanitised_for_the_decision_channel(tmp_path):
+    """The decision travels to the shell as ONE argument and reaches the skill as
+    --request "<text>". A newline truncates the capture; a double quote ends the argument
+    early and hands the remainder to the skill as flags."""
+    mod = _load("virt_team_launcher")
+    command = mod._new_command(tmp_path, 'check "the" rule\nand   the other')
+    assert "\n" not in command
+    assert command.count('"') == 2, "unbalanced quoting would split the argument"
+    assert "check 'the' rule and the other" in command
+
+
+def test_unattended_is_reachable_from_a_typed_request_not_only_a_ticket(tmp_path):
+    """Autonomy being Jira-only was an accident of where it was built. Everything downstream
+    - the pre-flight, the ledger, park-don't-guess, the always-PARTIAL close - never cared
+    where the work came from."""
+    mod = _load("virt_team_launcher")
+    command = mod._new_command(tmp_path, "review the spoofing rule", auto=True)
+    assert command.endswith("--auto")
+    assert "--jira" not in command
+
+
+def test_auto_needs_an_actual_request(tmp_path):
+    """An unattended run with no statement of the work is the one thing this mode must never
+    start: it would have nothing to park against and nothing to assume from."""
+    mod = _load("virt_team_launcher")
+    assert "--auto" not in mod._new_command(tmp_path, "", auto=True)
+
+
+def test_the_skill_treats_the_typed_request_as_the_request():
+    skill = (REPO_ROOT / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    assert "--request" in skill
+    assert "do not re-ask what the work is" in skill

@@ -828,7 +828,7 @@ def jira_screen(project_dir: Path, mod, output=None):
             out.append(("", "\n"))
             mark = g["on"] if auto[0] else g["off"]
             out.append(("class:on" if auto[0] else "class:off", f"  {mark} "))
-            out.append(("class:warn" if auto[0] else "class:dim", "[a] run unattended"))
+            out.append(("class:warn" if auto[0] else "class:dim", "Ctrl-A  run unattended"))
             out.append(("class:dim", "  (no further questions)\n"))
         return out
 
@@ -851,11 +851,13 @@ def jira_screen(project_dir: Path, mod, output=None):
                     "  already exists. See\n  docs/INTEGRATIONS.md\n\n",
                 )
             )
-        out.append(("class:dim", "  Enter  start   Esc  back\n"))
+        out.append(("class:dim", "  Enter   start\n  Esc     back\n"))
+        if auto_offered:
+            out.append(("class:dim", "  Ctrl-A  unattended run\n"))
         return out
 
     def _footer():
-        tail = " · Ctrl-A unattended" if auto_offered else ""
+        tail = " · Ctrl-A unattended run" if auto_offered else ""
         return [("class:hint", f"  Enter start · Esc back · Ctrl-U clear{tail}")]
 
     kb = KeyBindings()
@@ -1604,3 +1606,127 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         "engagement_usd": CAPS[state["cap"]] or None,
         "on_budget": ON_BUDGET[state["on_budget"]],
     }
+
+
+REQUEST_SKIPPED = "__request_skipped__"
+
+
+def request_screen(project_dir: Path, mod, output=None):
+    """Take the request for a NEW engagement at the launcher (2026-08-24 user report: "I
+    clicked new engagement but there was no option to pre-seed a prompt, it just opened cc").
+
+    `[n]` launched with `--new` and nothing else, so the first thing that happened in-session
+    was Morgan asking what the work is - a question the human could have answered here, with a
+    keyboard already under their hands. The Jira route has collected its input at the launcher
+    since it was built; the route people actually use most could not.
+
+    Typing is an OFFER, never a toll gate: Enter on an empty field gives exactly today's plain
+    `--new`, so nobody is forced to compose a brief at a prompt.
+
+    Returns (request, auto) when text was typed, REQUEST_SKIPPED for the plain launch, or
+    None when the screen cannot run (the caller then does what it did before)."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+        from prompt_toolkit.keys import Keys
+    except Exception:
+        return None
+
+    g = glyphs(mod)
+    buf = [""]
+    auto = [False]
+    result = {"v": REQUEST_SKIPPED}
+    auto_offered = mod._auto_offered(project_dir)
+
+    def _body():
+        out = [("class:group", f"  {g['new']}What would you like the team to do?\n\n")]
+        out.append(("class:dim", "  Type it, or press Enter to decide in session.\n\n"))
+        cursor = "_" if mod._can_encode("_") else " "
+        shown = buf[0]
+        if len(shown) > _INPUT_WINDOW:
+            lead = "..." if mod._can_encode("...") else ".."
+            shown = lead + shown[-(_INPUT_WINDOW - len(lead)) :]
+        out.append(("class:title", "  > "))
+        out.append(("", shown))
+        out.append(("class:hint", cursor))
+        out.append(("", "\n\n"))
+        if auto_offered:
+            mark = g["on"] if auto[0] else g["off"]
+            out.append(("class:on" if auto[0] else "class:off", f"  {mark} "))
+            out.append(("class:warn" if auto[0] else "class:dim", "Ctrl-A  run unattended"))
+            out.append(("class:dim", "  (needs a request)\n"))
+        return out
+
+    def _right():
+        out = [("class:title", "\n  Starting new work\n\n")]
+        out.append(
+            (
+                "class:dim",
+                "  Whatever you type is handed\n  to Morgan as the request, so\n"
+                "  the session starts on the\n  work instead of asking what\n  it is.\n\n"
+                "  Leave it empty and nothing\n  changes - you get today's\n  plain launch.\n\n",
+            )
+        )
+        if auto_offered and auto[0]:
+            out.append(("class:warn", "  Unattended: you authorise\n  it on the next screen.\n"))
+        return out
+
+    def _footer():
+        tail = " · Ctrl-A unattended" if auto_offered else ""
+        return [("class:hint", f"  Enter start · Esc back · Ctrl-U clear{tail}")]
+
+    kb = KeyBindings()
+
+    @kb.add("c-a")
+    def _auto(event):
+        # Ctrl-A, not a bare letter: every printable key is text for the request field.
+        if auto_offered and buf[0].strip():
+            auto[0] = not auto[0]
+
+    @kb.add(Keys.Any)
+    def _type(event):
+        data = event.data or ""
+        if data.isprintable():
+            buf[0] += data
+
+    @kb.add(Keys.BracketedPaste)
+    def _paste(event):
+        buf[0] += "".join(ch for ch in (event.data or "") if ch.isprintable())
+
+    @kb.add("backspace")
+    def _back(event):
+        buf[0] = buf[0][:-1]
+
+    @kb.add("c-u")
+    def _clear(event):
+        buf[0] = ""
+        auto[0] = False
+
+    @kb.add("enter")
+    def _accept(event):
+        text = buf[0].strip()
+        result["v"] = (text, auto[0]) if text else REQUEST_SKIPPED
+        event.app.exit()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    def _esc(event):
+        result["v"] = REQUEST_SKIPPED
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title=f"{g['new']}New engagement",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=project_dir,
+        )
+    except Exception:
+        return None
+    return result["v"]

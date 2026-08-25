@@ -117,6 +117,34 @@
     tool-uses**. (Live failure, reproduced twice: 2026-08-07 and 2026-08-08, exactly that shape
     of fan-out went out as lone calls across separate turns both times, and the serialised
     waiting dominated each run's wall-clock time.)
+- **Do not pre-empt a HEALTHY agent - do take over from a FAILED one, and say so.** The test
+  is not "is it still running", it is **has the delegated work actually been produced**.
+  (Live 2026-08-24: a synthesis step stalled - six attempts, no progress for 3 minutes each,
+  43 minutes total, then a hard failure - while the five analysis agents beneath it had all
+  completed and written their outputs. Morgan read those completed outputs and wrote the
+  Delivery Report herself. That was correct: the analysis was done, only the aggregation was
+  hung, and waiting longer would have bought nothing.)
+    1. **While an agent is working normally, leave it.** Do not read the raw inputs it was
+       dispatched to summarise - the fan-out exists to keep them OUT of your context, and
+       pulling them in pays the whole cost the delegation avoided, on top of the agent's.
+       Do not write the artifact it was told to write: you get two versions and a race.
+    2. **Once it has failed or stalled, taking over is right, not a violation.** A stalled
+       agent is not going to finish, and an engagement blocked behind one is worse than a PM
+       doing the last step.
+    3. **Distinguish the two cases by what exists on disk.** Completed upstream outputs mean
+       the expensive work is done and you are finishing it. Missing outputs mean you would be
+       REDOING it - park or re-dispatch instead.
+    4. **Record it either way.** If you produced an artifact an agent was briefed to produce,
+       say so in the artifact and in the state: who actually wrote it and why. An evidence
+       trail that implies an independent pass which never happened is the real failure here -
+       far worse than the takeover itself.
+    5. **Author it FROM ITS TEMPLATE, not from memory.** A taken-over artifact is the one most
+       likely to drift from house format, because the agent that would have reached for the
+       template is the one that failed. (Live 2026-08-24: a taken-over Delivery Report came
+       out with an improvised document-control block that rendered as three ragged lines
+       instead of one - the template and renderer were both fine, the authoring skipped
+       them.) Open `docs/templates/delivery-report.md` and fill it in; a report nobody can
+       skim is a report nobody reads.
 - **Split a large, multi-component review instead of one whole-diff call.** A single review
   spanning multiple components (frontend + backend + infra in one pass) both loses focus and
   risks a request timeout on a corporate proxy between Claude Code and Anthropic (live report,

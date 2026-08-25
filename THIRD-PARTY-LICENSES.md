@@ -28,6 +28,22 @@ The vendored code is unmodified. Update procedure and pinned-version rationale:
 
 ---
 
+## DataK9 (finance semantic taxonomy)
+
+- **Project:** DataK9 - https://github.com/danieledge/DataK9
+- **License:** MIT
+- **What was taken:** `validation_framework/profiler/taxonomies/finance_taxonomy.json`, carried
+  across unchanged as `config/finance-taxonomy.json` (29 column-meaning tags grounded in FIBO,
+  the Financial Industry Business Ontology). The taxonomy itself credits FIBO
+  (https://spec.edmcouncil.org/fibo/, MIT) as its source.
+- **What was NOT taken:** the tagger around it. DataK9's `semantic_tagger.py` depends on its
+  reference-data loader and config layer, and its profiler stack needs pandas, polars, numpy
+  and pyarrow - none of which can be vendored here. `scripts/tag_columns.py` is a stdlib
+  reimplementation of the matching approach, so this plugin gains no dependency.
+- **Also lifted as method, not code:** the temporal profiling approach (range, gaps,
+  freshness, future dates, cadence, distribution, peer-subgroup comparison) behind
+  `scripts/profile_temporal.py`.
+
 ## turingmind-code-review
 
 - **Project:** turingmind-code-review

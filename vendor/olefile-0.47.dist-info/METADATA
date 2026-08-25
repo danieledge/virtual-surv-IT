@@ -1,0 +1,6 @@
+Metadata-Version: 2.1
+Name: olefile
+Version: 0.47
+License: BSD-2-Clause
+Summary: Python package to parse, read and write Microsoft OLE2 files
+Home-page: https://www.decalage.info/python/olefileio

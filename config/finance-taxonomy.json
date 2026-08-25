@@ -1,0 +1,596 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Financial semantic taxonomy - column-meaning tags grounded in FIBO. Ported into the virtual surveillance team plugin 2026-08-24 from the owner's DataK9 project (MIT); the data is carried across unchanged, the matcher around it is a stdlib reimplementation.",
+    "source": "Derived from FIBO (Financial Industry Business Ontology)",
+    "fibo_version": "2024-Q4",
+    "fibo_license": "MIT License",
+    "fibo_url": "https://spec.edmcouncil.org/fibo/",
+    "created": "2025-11-23",
+    "note": "This taxonomy extracts and adapts terms from FIBO for DataK9's semantic tagging system. FIBO is an industry-standard ontology maintained by the EDM Council.",
+    "ported_from": "danieledge/DataK9 validation_framework/profiler/taxonomies"
+  },
+  "taxonomy": {
+    "money": {
+      "description": "Monetary amounts, currencies, and financial values",
+      "fibo_module": "FND/Accounting/CurrencyAmount",
+      "tags": {
+        "money.amount": {
+          "fibo_class": "fibo-fnd-acc-cur:MonetaryAmount",
+          "definition": "A monetary measure, expressed in some currency",
+          "patterns": [
+            "(?i).*(amount|amt).*",
+            "(?i).*(price|cost|charge|fee).*",
+            "(?i).*(revenue|sales|income).*",
+            "(?i).*(balance|principal|interest).*",
+            "(?i).*(total_cost|total_price|total_amount|total_payment|total_fee|sum_amount).*"
+          ],
+          "_notes": "Removed 'total', 'sum', 'value' which caused false positives on scientific columns like 'total_phenols'. Generic 'total_*' now requires explicit money context.",
+          "data_properties": {
+            "type": [
+              "float",
+              "decimal",
+              "integer"
+            ],
+            "min_value": 0,
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [
+            "NonNegativeCheck",
+            "OutlierDetectionCheck"
+          ],
+          "skip_validations": [
+            "RangeCheck_with_max"
+          ]
+        },
+        "money.currency": {
+          "fibo_class": "fibo-fnd-acc-cur:Currency",
+          "definition": "A medium of exchange value; currency is a medium of exchange defined by reference to the geographical location of the authorities responsible for it",
+          "patterns": [
+            "(?i).*(currency|curr|ccy).*",
+            "(?i)^(iso.*currency|currency.*code)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string"
+            ],
+            "string_length": [
+              3,
+              3
+            ],
+            "cardinality_max": 0.01
+          },
+          "validation_rules": [
+            "StringLengthCheck",
+            "ValidValuesCheck"
+          ],
+          "reference_source": {
+            "loader": "ReferenceDataLoader",
+            "method": "get_currency_codes_only",
+            "standard": "ISO 4217"
+          },
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Only flag currencies not matching valid ISO 4217 codes from pycountry - rare but valid currencies are legitimate"
+        },
+        "money.price": {
+          "fibo_class": "fibo-fnd-acc-cur:Price",
+          "definition": "The amount of money expected, required, or given in payment for something",
+          "patterns": [
+            "(?i).*(price|unit.*price|item.*cost).*",
+            "(?i).*(rate|premium).*"
+          ],
+          "data_properties": {
+            "type": [
+              "float",
+              "decimal"
+            ],
+            "min_value": 0,
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [
+            "NonNegativeCheck",
+            "OutlierDetectionCheck"
+          ]
+        },
+        "money.interest_rate": {
+          "fibo_class": "fibo-ln-ln-ln:InterestRate",
+          "definition": "A rate charged or paid for the use of money",
+          "patterns": [
+            "(?i).*(interest.*rate|rate.*interest|apr|apy).*",
+            "(?i).*(yield|coupon.*rate).*"
+          ],
+          "data_properties": {
+            "type": [
+              "float",
+              "decimal"
+            ],
+            "min_value": 0,
+            "max_value": 100
+          },
+          "validation_rules": [
+            "RangeCheck",
+            "NonNegativeCheck"
+          ]
+        }
+      }
+    },
+    "banking": {
+      "description": "Banking operations, accounts, and transactions",
+      "fibo_module": "FBC/ProductsAndServices/ClientsAndAccounts",
+      "tags": {
+        "banking.account": {
+          "fibo_class": "fibo-fbc-pas-caa:Account",
+          "definition": "A container for records associated with a business arrangement for regular transactions and services",
+          "patterns": [
+            "(?i).*(account|acct)(?!.*name).*",
+            "(?i)^(account.*number|account.*id|acct.*num)$"
+          ],
+          "data_properties": {
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [
+            "MandatoryFieldCheck"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Account identifiers have high cardinality by design"
+        },
+        "banking.account.checking": {
+          "fibo_class": "fibo-fbc-pas-caa:CheckingAccount",
+          "definition": "A deposit account held at a financial institution that allows withdrawals and deposits",
+          "patterns": [
+            "(?i).*(checking.*account|current.*account).*"
+          ],
+          "validation_rules": [
+            "UniqueKeyCheck",
+            "MandatoryFieldCheck"
+          ]
+        },
+        "banking.account.savings": {
+          "fibo_class": "fibo-fbc-pas-caa:SavingsAccount",
+          "definition": "A deposit account that earns interest and has limited transaction frequency",
+          "patterns": [
+            "(?i).*(savings.*account|deposit.*account).*"
+          ],
+          "validation_rules": [
+            "UniqueKeyCheck",
+            "MandatoryFieldCheck"
+          ]
+        },
+        "banking.transaction": {
+          "fibo_class": "fibo-fbc-pas-caa:Transaction",
+          "definition": "An agreement between a buyer and seller to exchange goods, services or financial instruments",
+          "patterns": [
+            "(?i).*(transaction|trans|txn)(?!.*name).*",
+            "(?i)^(transaction.*id|trans.*id|txn.*id)$"
+          ],
+          "data_properties": {
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [
+            "UniqueKeyCheck",
+            "MandatoryFieldCheck"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Transaction identifiers are expected to be unique"
+        },
+        "banking.payment": {
+          "fibo_class": "fibo-fbc-pay-pmt:Payment",
+          "definition": "A transfer of funds which discharges an obligation on the part of a payer vis-a-vis a payee",
+          "patterns": [
+            "(?i).*(payment|pmt).*"
+          ],
+          "validation_rules": [
+            "MandatoryFieldCheck"
+          ]
+        },
+        "banking.payment.wire": {
+          "fibo_class": "fibo-fbc-pay-pmt:WireTransfer",
+          "definition": "An electronic transfer of funds across a network administered by banks and transfer service agencies around the world",
+          "patterns": [
+            "(?i).*(wire.*transfer|wire.*amount|wire.*payment).*"
+          ],
+          "validation_rules": [
+            "NonNegativeCheck",
+            "MandatoryFieldCheck"
+          ]
+        },
+        "banking.payment.ach": {
+          "fibo_class": "fibo-fbc-pay-pmt:ACHTransfer",
+          "definition": "Automated Clearing House transfer - an electronic network for financial transactions",
+          "patterns": [
+            "(?i).*(ach.*transfer|ach.*payment).*"
+          ],
+          "validation_rules": [
+            "MandatoryFieldCheck"
+          ]
+        },
+        "banking.routing_number": {
+          "fibo_class": "fibo-fbc-fct-bfsvcind:BankIdentificationCode",
+          "definition": "A code that identifies a financial institution",
+          "patterns": [
+            "(?i).*(routing.*number|routing.*code|aba.*number).*",
+            "(?i).*(swift|bic|iban).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "integer"
+            ],
+            "string_length": [
+              8,
+              11
+            ]
+          },
+          "validation_rules": [
+            "StringLengthCheck",
+            "MandatoryFieldCheck"
+          ]
+        }
+      }
+    },
+    "loan": {
+      "description": "Loans, mortgages, and credit facilities",
+      "fibo_module": "LN/Loans",
+      "tags": {
+        "loan.identifier": {
+          "fibo_class": "fibo-ln-ln-ln:LoanIdentifier",
+          "definition": "An identifier for a loan or credit facility",
+          "patterns": [
+            "(?i).*(loan.*id|loan.*number|loan.*account).*",
+            "(?i).*(mortgage.*id|mortgage.*number).*"
+          ],
+          "data_properties": {
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [
+            "UniqueKeyCheck",
+            "MandatoryFieldCheck"
+          ]
+        },
+        "loan.amount": {
+          "fibo_class": "fibo-ln-ln-ln:LoanPrincipalAmount",
+          "definition": "The face value of the loan at origination or current outstanding balance",
+          "patterns": [
+            "(?i).*(loan.*amount|principal.*amount).*",
+            "(?i).*(outstanding.*balance|loan.*balance).*"
+          ],
+          "data_properties": {
+            "type": [
+              "float",
+              "decimal"
+            ],
+            "min_value": 0
+          },
+          "validation_rules": [
+            "NonNegativeCheck",
+            "MandatoryFieldCheck"
+          ]
+        }
+      }
+    },
+    "security": {
+      "description": "Securities, stocks, bonds, and financial instruments",
+      "fibo_module": "SEC/Securities",
+      "tags": {
+        "security.identifier": {
+          "fibo_class": "fibo-sec-sec-id:SecurityIdentifier",
+          "definition": "An identifier that denotes the security being identified",
+          "patterns": [
+            "(?i).*(security.*id|sec.*id).*",
+            "(?i).*(isin|cusip|sedol).*"
+          ],
+          "data_properties": {
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [
+            "MandatoryFieldCheck"
+          ]
+        },
+        "security.ticker": {
+          "fibo_class": "fibo-sec-sec-id:TickerSymbol",
+          "definition": "A short code used to uniquely identify publicly traded shares of a particular stock on a particular stock market",
+          "patterns": [
+            "(?i).*(ticker|symbol|stock.*symbol).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string"
+            ],
+            "string_length": [
+              1,
+              5
+            ],
+            "cardinality_max": 0.5
+          },
+          "validation_rules": [
+            "StringLengthCheck",
+            "MandatoryFieldCheck"
+          ]
+        },
+        "security.price": {
+          "fibo_class": "fibo-sec-sec-prc:SecurityPrice",
+          "definition": "The price of a security at a specific point in time",
+          "patterns": [
+            "(?i).*(stock.*price|share.*price|security.*price).*",
+            "(?i).*(close.*price|open.*price|last.*price).*"
+          ],
+          "data_properties": {
+            "type": [
+              "float",
+              "decimal"
+            ],
+            "min_value": 0
+          },
+          "validation_rules": [
+            "NonNegativeCheck"
+          ]
+        }
+      }
+    },
+    "party": {
+      "description": "Business entities, customers, and counterparties",
+      "fibo_module": "FND/Parties",
+      "tags": {
+        "party.customer_id": {
+          "fibo_class": "fibo-fnd-pty-pty:PartyIdentifier",
+          "definition": "An identifier for a party to a contract or transaction",
+          "patterns": [
+            "(?i).*(customer.*id|client.*id|party.*id).*",
+            "(?i).*(user.*id|member.*id).*",
+            "(?i)^entity.*id$"
+          ],
+          "data_properties": {
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [
+            "MandatoryFieldCheck"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Party identifiers have high cardinality by design"
+        },
+        "party.counterparty": {
+          "fibo_class": "fibo-fnd-pty-pty:Counterparty",
+          "definition": "A party to a contract or transaction",
+          "patterns": [
+            "(?i).*(counterparty|counter.*party).*",
+            "(?i).*(from.*bank|to.*bank).*",
+            "(?i)^bank.*id$",
+            "(?i)^(source|dest|sender|receiver).*bank.*$"
+          ],
+          "validation_rules": [
+            "MandatoryFieldCheck"
+          ],
+          "ml_rare_behavior": "strict_threshold",
+          "ml_rare_reason": "Counterparties are expected to be diverse - only flag extremely rare values"
+        }
+      }
+    },
+    "identifier": {
+      "description": "Generic identifiers and codes",
+      "fibo_module": "FND/Identifiers",
+      "tags": {
+        "identifier.uuid": {
+          "fibo_class": "fibo-fnd-id-id:UniversallyUniqueIdentifier",
+          "definition": "A 128-bit identifier that is unique across space and time",
+          "patterns": [
+            "(?i).*(uuid|guid).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string"
+            ],
+            "string_length": [
+              36,
+              36
+            ],
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [
+            "UniqueKeyCheck",
+            "RegexPatternCheck"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "UUIDs are unique by design"
+        },
+        "identifier.code": {
+          "fibo_class": "fibo-fnd-id-id:Code",
+          "definition": "A sequence of characters denoting something for the purposes of identification",
+          "patterns": [
+            "(?i).*(_code|code_).*",
+            "(?i).*(product.*code|item.*code).*"
+          ],
+          "validation_rules": [
+            "MandatoryFieldCheck"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Code fields typically have high cardinality"
+        }
+      }
+    },
+    "temporal": {
+      "description": "Time-related financial concepts",
+      "fibo_module": "FND/Temporal",
+      "tags": {
+        "temporal.transaction_date": {
+          "fibo_class": "fibo-fnd-dt-fd:TransactionDate",
+          "definition": "The date on which a transaction takes place",
+          "patterns": [
+            "(?i).*(transaction.*date|trans.*date|txn.*date).*",
+            "(?i).*(trade.*date|settlement.*date).*"
+          ],
+          "data_properties": {
+            "type": [
+              "datetime",
+              "date"
+            ]
+          },
+          "validation_rules": [
+            "DateFormatCheck",
+            "MandatoryFieldCheck",
+            "PastDateCheck"
+          ]
+        },
+        "temporal.maturity_date": {
+          "fibo_class": "fibo-fnd-dt-fd:MaturityDate",
+          "definition": "The date on which a financial instrument becomes due and payable",
+          "patterns": [
+            "(?i).*(maturity.*date|expiry.*date|expiration.*date).*",
+            "(?i).*(due.*date|payoff.*date).*"
+          ],
+          "data_properties": {
+            "type": [
+              "datetime",
+              "date"
+            ]
+          },
+          "validation_rules": [
+            "DateFormatCheck",
+            "MandatoryFieldCheck"
+          ]
+        },
+        "temporal.timestamp": {
+          "fibo_class": "fibo-fnd-dt-fd:DateTime",
+          "definition": "A timestamp recording when an event or transaction occurred",
+          "patterns": [
+            "(?i)^timestamp$",
+            "(?i)^(created|updated|modified|event|record)_?(at|time|timestamp|ts)$",
+            "(?i).*_timestamp$",
+            "(?i).*_ts$",
+            "(?i)^ts$",
+            "(?i)^(created|updated|modified)_(at|on|date)$",
+            "(?i).*datetime.*"
+          ],
+          "data_properties": {
+            "type": [
+              "datetime",
+              "date",
+              "string"
+            ]
+          },
+          "validation_rules": [
+            "DateFormatCheck",
+            "MandatoryFieldCheck"
+          ]
+        }
+      }
+    },
+    "category": {
+      "description": "Classification and categorization fields",
+      "fibo_module": "FND/Classification",
+      "tags": {
+        "category.transaction_type": {
+          "fibo_class": "fibo-fbc-pas-caa:TransactionType",
+          "definition": "A classification of transactions based on their purpose or nature",
+          "patterns": [
+            "(?i).*(transaction.*type|trans.*type|txn.*type).*",
+            "(?i).*(payment.*type|transfer.*type).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string"
+            ],
+            "cardinality_max": 0.05
+          },
+          "validation_rules": [
+            "ValidValuesCheck",
+            "MandatoryFieldCheck"
+          ],
+          "ml_rare_behavior": "default",
+          "ml_rare_reason": "Transaction types should be validated - rare types may indicate data issues"
+        },
+        "category.account_type": {
+          "fibo_class": "fibo-fbc-pas-caa:AccountType",
+          "definition": "A classification of account based on its purpose or features",
+          "patterns": [
+            "(?i).*(account.*type|acct.*type).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string"
+            ],
+            "cardinality_max": 0.01
+          },
+          "validation_rules": [
+            "ValidValuesCheck",
+            "MandatoryFieldCheck"
+          ],
+          "ml_rare_behavior": "default",
+          "ml_rare_reason": "Account types should be validated - rare types may indicate data issues"
+        },
+        "category.payment_method": {
+          "fibo_class": "fibo-fbc-pay-pmt:PaymentMethod",
+          "definition": "The means by which payment is made",
+          "patterns": [
+            "(?i).*(payment.*method|pay.*method|payment.*type).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string"
+            ],
+            "cardinality_max": 0.05
+          },
+          "validation_rules": [
+            "ValidValuesCheck"
+          ],
+          "expected_values": [
+            "wire",
+            "ach",
+            "check",
+            "card",
+            "cash",
+            "transfer",
+            "debit",
+            "credit",
+            "direct_debit",
+            "standing_order",
+            "crypto",
+            "bank_transfer"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Only flag payment methods not in standard list - rare but valid methods are legitimate"
+        }
+      }
+    },
+    "risk": {
+      "description": "Risk-related financial concepts",
+      "fibo_module": "IND/Risk",
+      "tags": {
+        "risk.credit_score": {
+          "fibo_class": "fibo-ind-ir-ir:CreditScore",
+          "definition": "A numerical expression based on analysis of a person's credit files",
+          "patterns": [
+            "(?i).*(credit.*score|fico.*score).*",
+            "(?i).*(risk.*score|score).*"
+          ],
+          "data_properties": {
+            "type": [
+              "integer"
+            ],
+            "min_value": 300,
+            "max_value": 850
+          },
+          "validation_rules": [
+            "RangeCheck"
+          ]
+        },
+        "risk.exposure": {
+          "fibo_class": "fibo-fbc-dae-dbt:Exposure",
+          "definition": "The amount at risk in a financial transaction or portfolio",
+          "patterns": [
+            "(?i).*(exposure|amount.*at.*risk).*"
+          ],
+          "data_properties": {
+            "type": [
+              "float",
+              "decimal"
+            ],
+            "min_value": 0
+          },
+          "validation_rules": [
+            "NonNegativeCheck"
+          ]
+        }
+      }
+    }
+  }
+}

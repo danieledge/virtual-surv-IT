@@ -28,7 +28,7 @@
   ],
   "tier_budgets": {
     "ALWAYS_LOADED": 3300,
-    "OPEN_TIME": 19800,
+    "OPEN_TIME": 19900,
     "ROUTE_TIME": 48400,
     "AGENT_TIME": 23700,
     "DEFERRED": null
@@ -187,7 +187,7 @@
     ".claude/skills/engage/SKILL.md": {
       "tier": "OPEN_TIME",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 8041
+      "baseline_tokens": 8178
     },
     ".claude/skills/engage/references/artifact-menu.md": {
       "tier": "DEFERRED",
@@ -197,7 +197,7 @@
     ".claude/skills/engage/references/auto-mode.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 1135
+      "baseline_tokens": 1284
     },
     ".claude/skills/engage/references/close-checklist.md": {
       "tier": "DEFERRED",
@@ -467,7 +467,7 @@
     "docs/team-operating-guide-orchestration.md": {
       "tier": "DEFERRED",
       "loads_per_engagement": 1.0,
-      "baseline_tokens": 5247
+      "baseline_tokens": 5826
     },
     "docs/team-operating-guide.md": {
       "tier": "OPEN_TIME",
