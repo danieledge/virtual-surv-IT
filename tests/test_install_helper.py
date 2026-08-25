@@ -1243,6 +1243,12 @@ def _menu_session(monkeypatch, tmp_path, answers):
 def test_menu_setup_only_skips_sync_and_uses_clone_asis(monkeypatch, tmp_path, capsys):
     import install_helper as ih
 
+    # The installer correctly ABORTS when the claude CLI is absent, so these tests were
+    # really asserting "this machine has claude installed" (2026-08-25, found in a test
+    # container that deliberately has none). Stub the lookup so they test what they mean to:
+    # the setup subset's step numbering and its refusal to sync.
+    monkeypatch.setattr(ih, "find_claude", lambda refresh=False: ("/usr/bin/claude", "path"))
+
     clone = _fake_clone(tmp_path)
     # Advanced submenu (6) -> Environment setup only (1), then prompt defaults
     _menu_session(monkeypatch, tmp_path, ["4", "1", "", ""])
@@ -1353,6 +1359,12 @@ def test_upfront_update_check_fails_soft_on_timeout(monkeypatch, tmp_path, capsy
 
 def test_menu_setup_only_without_clone_fails_cleanly(monkeypatch, tmp_path, capsys):
     import install_helper as ih
+
+    # The installer correctly ABORTS when the claude CLI is absent, so these tests were
+    # really asserting "this machine has claude installed" (2026-08-25, found in a test
+    # container that deliberately has none). Stub the lookup so they test what they mean to:
+    # the setup subset's step numbering and its refusal to sync.
+    monkeypatch.setattr(ih, "find_claude", lambda refresh=False: ("/usr/bin/claude", "path"))
 
     # "6","1" runs the failing action, then the scripted answers are exhausted -
     # _menu_session feeds "q" from there (2026-08-04: the menu now loops back after
@@ -4719,6 +4731,15 @@ def test_run_env_check_aggregates_and_reports_issues(capsys, monkeypatch):
         ih, "_check_interpreters", lambda order: ([("python3", "ERROR", "broken")], "")
     )
     monkeypatch.setattr(ih, "find_bash", lambda: None)
+    # Runtime dependencies are probed for REAL unless stubbed. This test asserts exactly ONE
+    # issue, so an absent claude CLI - correct for a test image that never runs a session -
+    # made it two (2026-08-25). The deliberately-broken thing here is the interpreter; every
+    # other input has to be pinned, or the count is the machine's, not the test's.
+    monkeypatch.setattr(
+        ih,
+        "_check_runtime_dependencies",
+        lambda: [("git", "OK", "found"), ("claude CLI", "OK", "found")],
+    )
     monkeypatch.setattr(ih, "_check_encoding_roundtrip", lambda interp: ("SKIP", "no interpreter"))
     monkeypatch.setattr(ih, "_check_plugin_root_bootstrap", lambda root: ("WARN", "nothing found"))
     monkeypatch.setattr(
