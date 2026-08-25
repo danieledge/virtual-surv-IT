@@ -777,6 +777,17 @@ def resolve_preferences(project_dir: Path) -> dict:
     # pre-flight being a real gate is not a reason to make the cautious answer harder to
     # keep. Turning it on is one setting, per project, chosen deliberately.
     # The kill switch above still wins: a project that removed the option cannot be armed.
+    # new_window (2026-08-25): open an UNATTENDED session in its own terminal window rather
+    # than replacing the launcher. Only consulted for unattended runs - see
+    # virt_team_launcher._new_window_wanted for why that is not a preference but a
+    # consequence: the launcher's live status view can only exist if the launcher is still
+    # alive, and it can only still be alive if the session did not replace it. ON by
+    # default, with a real fallback: no windowed terminal (a headless box, no DISPLAY)
+    # launches in place exactly as before.
+    if "new_window" in prefs:
+        new_window_on = bool(prefs["new_window"])
+    else:
+        new_window_on = bool(machine_defaults.get("default_new_window", True))
     if "autonomous_default" in prefs:
         autonomous_default_on = bool(prefs["autonomous_default"])
     else:
@@ -805,6 +816,7 @@ def resolve_preferences(project_dir: Path) -> dict:
         "evidence_room": evidence_room_on,
         "autonomous_mode": autonomous_mode_on,
         "autonomous_default": autonomous_default_on,
+        "new_window": new_window_on,
         "qa_depth": qa_depth,
     }
 

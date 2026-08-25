@@ -323,6 +323,7 @@ _TOGGLE_PREFS = (
     ("evidence room at close", "evidence_room"),
     ("autonomous mode offered", "autonomous_mode"),
     ("start work unattended", "autonomous_default"),
+    ("unattended in a new window", "new_window"),
     ("data profiling tools", "data_profiling"),
     ("document map", "document_map"),
     ("guard daemon", "guard_daemon"),
@@ -461,6 +462,12 @@ _SETTING_HELP = {
         "typed request [n]. This is a kill switch, not an enabler: it is already on.",
         "Off removes the option from this project entirely. On does not start anything "
         "unattended by itself - see 'start work unattended' for that.",
+    ),
+    "unattended in a new window": (
+        "Opens an UNATTENDED session in its own terminal window, so this launcher survives "
+        "to show you the run's live status instead of being replaced by it.",
+        "Attended runs are unaffected - you are already in that session. A machine with no "
+        "windowed terminal (a headless box) opens in place exactly as before.",
     ),
     "start work unattended": (
         "Arms the unattended toggle for new work, so a run you were going to start "
@@ -3329,6 +3336,75 @@ def _offer_first_time_setup(project_dir: Path) -> bool:
     return proc.returncode == 0 and _plugin_enabled(project_dir)
 
 
+def _pending_auto_slug(project_dir: Path) -> str:
+    """The slug the pre-flight just recorded, for the monitor to watch.
+
+    Read-only on purpose: `.auto-pending.json` is a ONE-SHOT handoff consumed by
+    `engagement_state init`, and consuming it here would take the unattended flag away from
+    the run before it ever started - which is precisely the bug (2026-08-21 audit C1) that
+    left the AUTO-* gates dead."""
+    try:
+        payload = json.loads(
+            (project_dir / ".claude" / ".auto-pending.json").read_text(encoding="utf-8")
+        )
+        return str(payload.get("slug") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def _new_window_wanted(project_dir: Path) -> bool:
+    """Whether to open the session in its own window rather than in this shell.
+
+    On for an unattended run by default and for nothing else. The reason is not preference:
+    an unattended run has nobody to ask anything, so the launcher's live view is the only
+    place its progress can be seen - and that view can only exist if the launcher is still
+    alive, which means the session cannot have replaced it. An attended run has a human in
+    the session already, so a second window would just be a second window."""
+    try:
+        import engage_probe
+
+        return bool(engage_probe.resolve_preferences(project_dir).get("new_window"))
+    except Exception:
+        return False
+
+
+def _launch_unattended_in_window(project_dir: Path, decision: str, slug: str) -> bool:
+    """Open the session beside the launcher and watch it. True if the window opened.
+
+    False means nothing was launched and the caller must fall back to launching in-place -
+    never a silent no-op, because the human has already authorised the run by this point
+    and a launcher that quietly declined to start it would be the worst possible outcome."""
+    ink, err = _Ink(), sys.stderr
+    try:
+        import launch_terminal
+    except Exception:
+        return False
+    terminal = launch_terminal.available()
+    if not terminal:
+        print(
+            ink.dim("    no windowed terminal here - opening in this one instead"),
+            file=err,
+        )
+        return False
+    command = _configured_launch_command().split() or ["claude"]
+    if not launch_terminal.open_in_new_window(command + [decision], project_dir):
+        print(ink.warn("    could not open a new window - opening in this one instead"), file=err)
+        return False
+    print(ink.good(f"    -> session opened in a new {terminal} window"), file=err)
+    try:
+        from launcher_app import monitor_screen
+
+        monitor_screen(project_dir, sys.modules[__name__], slug)
+    except Exception:
+        # The run is already going; a monitor that cannot render must not look like a
+        # failed launch. Say where to look instead.
+        print(
+            ink.dim(f"    watching unavailable - the run is in artifacts/{slug}/"),
+            file=err,
+        )
+    return True
+
+
 def main() -> int:
     if "--launch-command" in sys.argv[1:]:
         # Alias v5 support channel: print ONLY the configured launch command on stdout
@@ -3460,6 +3536,14 @@ def main() -> int:
             pass  # the exit code is the contract; the explanation is best-effort
         return _ABORT_EXIT_CODE
     if decision:
+        # An unattended run opens in its OWN window so the launcher survives to show its
+        # status (2026-08-25). Returning the abort code afterwards is not an abort: it
+        # tells the wrapper the session has already been started, so it must not start a
+        # second one. Any failure falls through to the ordinary in-place launch below.
+        if "--auto" in decision.split() and _new_window_wanted(project_dir):
+            slug = _pending_auto_slug(project_dir)
+            if slug and _launch_unattended_in_window(project_dir, decision, slug):
+                return _ABORT_EXIT_CODE
         print(decision)  # the ONLY thing that goes to stdout
     return 0
 

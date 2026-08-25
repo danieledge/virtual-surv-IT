@@ -117,7 +117,7 @@ def project_line(project_dir: Path, mod, width=72):
 
 
 def screen(mod, *, title, body_fn, footer_fn, key_bindings, output=None, right_fn=None,
-           project_dir=None):
+           project_dir=None, refresh_interval=None):
     """One framed full-screen round, shared by EVERY launcher screen (menu, settings,
     archive). Written once so the screens cannot drift apart the way the two menu tiers
     did - the thing this whole effort exists to prevent."""
@@ -170,6 +170,9 @@ def screen(mod, *, title, body_fn, footer_fn, key_bindings, output=None, right_f
         full_screen=True,
         mouse_support=True,
         output=output or create_output(stdout=sys.stderr),
+        # Only the live monitor passes this; every other screen redraws on a keypress, and
+        # a timer on those would burn CPU redrawing something that cannot have changed.
+        refresh_interval=refresh_interval,
     )
     app.run()
 
@@ -1813,3 +1816,174 @@ def request_screen(project_dir: Path, mod, output=None):
     except Exception:
         return None
     return result["v"]
+
+
+MONITOR_CLOSED = "__monitor_closed__"
+_MONITOR_REFRESH = 2.0  # seconds; the state file changes at human pace, not machine pace
+
+
+def _clock() -> float:
+    """Monotonic, so the elapsed line cannot go backwards when the system clock is set."""
+    import time
+
+    return time.monotonic()
+
+
+def _elapsed(since: float) -> str:
+    seconds = max(0, int(_clock() - since))
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {seconds:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m"
+
+
+def _monitor_read(project_dir: Path, slug: str) -> dict:
+    """One snapshot of an engagement, read fresh from disk every tick.
+
+    Deliberately re-reads rather than caching: the whole point is that another PROCESS is
+    writing this file, so anything held in memory here is stale by definition. Failure is
+    normal, not exceptional - the pack does not exist until the session creates it, and a
+    read can land mid-write - so every problem resolves to a displayable state instead of
+    an exception."""
+    import json as _json
+
+    pack = project_dir / "artifacts" / slug
+    state_path = pack / "engagement-state.json"
+    snap = {"slug": slug, "exists": pack.is_dir(), "state": None, "artifacts": 0, "error": ""}
+    try:
+        snap["artifacts"] = sum(1 for p in pack.rglob("*") if p.is_file()) if pack.is_dir() else 0
+    except OSError:
+        pass
+    try:
+        snap["state"] = _json.loads(state_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        snap["error"] = "waiting for the session to create the workspace"
+    except ValueError:
+        # A partial read of a file being rewritten. Says so rather than showing "invalid",
+        # which would read as a broken engagement rather than a two-millisecond race.
+        snap["error"] = "state file is being written"
+    except OSError as exc:
+        snap["error"] = f"cannot read state ({exc.__class__.__name__})"
+    return snap
+
+
+def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None):
+    """Live status of an unattended engagement, shown in the launcher after the session
+    has been opened in its own window (2026-08-25).
+
+    This is the half of "run it unattended" that was missing. Nobody is being asked
+    anything, so without a view here the human has a terminal that closed and no idea
+    whether the run is working, parked or finished. It is also the precursor to headless:
+    once the launcher can WATCH an engagement it did not host, hosting it elsewhere - a
+    detached process, another machine - becomes a change of where, not of what.
+
+    Read-only by construction. It opens no files for writing and sends the session nothing;
+    closing it stops the watching, never the work. That property is what makes it safe to
+    leave running, and it is why Esc says "stop watching" rather than "stop"."""
+    try:
+        p = mod._ptk_ui()
+        if not p:
+            return None
+        from prompt_toolkit.key_binding import KeyBindings
+    except Exception:
+        return None
+
+    g = glyphs(mod)
+    started = _clock()
+
+    def _rows(snap: dict) -> list:
+        state = snap.get("state") or {}
+        eng = state.get("engagement") or {}
+        outstanding = state.get("outstanding") or []
+        budget = state.get("budget") or {}
+        rows = [
+            ("engagement", eng.get("title") or slug),
+            ("slug", slug),
+            ("status", state.get("status") or "-"),
+            ("phase", state.get("phase") or "-"),
+            ("outstanding", str(len(outstanding)) if isinstance(outstanding, list) else "-"),
+            ("artifacts", str(snap.get("artifacts", 0))),
+        ]
+        if state.get("auto"):
+            # Two short rows, not one long one: the left pane is ~47 columns and a value
+            # that runs past it is clipped mid-word at the border - caught under a pty
+            # twice now (2026-08-25), because a headless harness cannot see it.
+            rows.append(("unattended", "yes"))
+            rung = state.get("auto_on_budget") or "-"
+            cap = budget.get("engagement_usd") or state.get("engagement_usd")
+            rows.append(("ceiling", f"${cap}, then {rung}" if cap else f"none, {rung}"))
+        return rows
+
+    def _body():
+        snap = _monitor_read(project_dir, slug)
+        state = snap.get("state") or {}
+        out = [("class:group", f"  {g['new']}Watching this run\n\n")]
+        if snap.get("error"):
+            out.append(("class:dim", f"  {snap['error']}\n\n"))
+        width = 13
+        for label, value in _rows(snap):
+            out.append(("class:dim", f"  {label:<{width}}"))
+            style = ""
+            if label == "status" and value in ("blocked", "parked"):
+                style = "class:warn"
+            elif label == "status" and value in ("closed", "done"):
+                style = "class:on"
+            out.append((style, f"{value}\n"))
+        outstanding = state.get("outstanding") or []
+        if isinstance(outstanding, list) and outstanding:
+            out.append(("class:dim", "\n  outstanding\n"))
+            for item in outstanding[:6]:
+                text = item.get("text", "") if isinstance(item, dict) else str(item)
+                out.append(("", f"    - {text[:52]}\n"))
+            if len(outstanding) > 6:
+                out.append(("class:dim", f"    +{len(outstanding) - 6} more\n"))
+        out.append(("class:dim", f"\n  watching for {_elapsed(started)}\n"))
+        return out
+
+    def _right():
+        out = [("class:title", "\n  Unattended run\n\n")]
+        out.append(
+            (
+                "class:dim",
+                "  The session is running in\n  its own window. This pane\n"
+                "  reads its state file every\n  couple of seconds.\n\n"
+                "  Nothing here talks to the\n  session: closing this stops\n"
+                "  the watching, never the\n  work.\n\n"
+                "  It closes PARTIAL for your\n  sign-off, whatever it\n  finds.\n",
+            )
+        )
+        return out
+
+    def _footer():
+        return [("class:hint", "  Esc stop watching (the run continues) · r refresh now")]
+
+    kb = KeyBindings()
+
+    @kb.add("r")
+    def _refresh(event):
+        event.app.invalidate()
+
+    @kb.add("escape", eager=True)
+    @kb.add("c-c")
+    @kb.add("q")
+    def _close(event):
+        event.app.exit()
+
+    try:
+        screen(
+            mod,
+            title=f"{g['new']}Unattended - {slug}",
+            body_fn=_body,
+            right_fn=_right,
+            footer_fn=_footer,
+            key_bindings=kb,
+            output=output,
+            project_dir=project_dir,
+            refresh_interval=_MONITOR_REFRESH,
+        )
+    except Exception:
+        return None
+    return MONITOR_CLOSED
