@@ -109,6 +109,44 @@ RECOMMENDED_ALLOW = (
 )
 
 
+def team_read_entries(home: Optional[Path] = None, repo_hint: Optional[str] = None) -> tuple:
+    """`Read(...)` rules for the team's OWN files, resolved for this machine.
+
+    Without these, the very first thing `/engage` does - read docs/team-operating-guide.md -
+    raises a permission prompt, because in plugin mode that file lives outside the project
+    (live report 2026-08-25, in a clean container: prompted on the operating guide before
+    the engagement had begun). RECOMMENDED_ALLOW covered Bash commands only and had no Read
+    rule at all, so this was every engagement on every new project.
+
+    Reads of the team's own directory, and nothing else: the user installed this plugin, the
+    files are its own code and documentation, and reading them changes nothing. It stays
+    narrow deliberately - the project's own data is untouched by these rules, and the
+    protected-directory deny rule still applies on top.
+
+    Paths are machine-specific, so they cannot live in a static constant. Returns whatever
+    resolves - a clone, an installed plugin copy, or both."""
+    roots: list = []
+    try:
+        clone = _resolve_repo_root(repo_hint)
+        if clone:
+            roots.append(Path(clone).resolve())
+    except Exception:
+        pass
+    try:
+        for candidate in _registry_install_paths(home or Path.home()):
+            resolved = Path(candidate).expanduser()
+            # THIS plugin only. The registry names every installed plugin, and a first pass
+            # here granted read access to four other vendors' directories - not ours to
+            # give, and nothing to do with the prompt this exists to remove.
+            if not resolved.is_dir() or not _looks_like_this_plugin(resolved):
+                continue
+            if resolved.resolve() not in roots:
+                roots.append(resolved.resolve())
+    except Exception:
+        pass
+    return tuple(f"Read({root}/**)" for root in roots)
+
+
 def merge_allow(settings: dict, entries=RECOMMENDED_ALLOW):
     """Add-only merge of allow entries into a settings dict. Returns (settings, added).
 
@@ -3276,13 +3314,17 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
         except (OSError, ValueError) as exc:
             print(f"{fail} {target} is not readable JSON ({exc}) - refusing to touch it")
             return 1
+    # The team's own files get Read rules too, resolved for this machine. Without them the
+    # first action of every engagement prompts (2026-08-25).
+    reads = team_read_entries()
     try:
-        settings, added = merge_allow(settings)
+        settings, added = merge_allow(settings, RECOMMENDED_ALLOW + reads)
     except InstallAbort as exc:
         print(f"{fail} {exc}")
         return 1
     if not added:
-        print(f"{ok} {target}: all {len(RECOMMENDED_ALLOW)} recommended entries already present")
+        total = len(RECOMMENDED_ALLOW) + len(reads)
+        print(f"{ok} {target}: all {total} recommended entries already present")
         return 0
     if target.is_file():
         today = datetime.now().strftime("%Y-%m-%d")

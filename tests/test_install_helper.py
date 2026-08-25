@@ -8026,3 +8026,69 @@ def test_an_already_installed_alias_still_explains_a_stale_terminal(monkeypatch,
     assert "already installed" in out
     assert "source ~/.bashrc" in out
     assert "started before the alias" in out, "it must name the actual cause"
+
+
+def test_the_team_read_rules_cover_its_own_files(tmp_path, monkeypatch):
+    """2026-08-25, from a clean container: /engage's FIRST action is to read
+    docs/team-operating-guide.md, which in plugin mode lives outside the project - so Claude
+    Code asked permission before the engagement had begun. RECOMMENDED_ALLOW covered Bash
+    commands only and carried no Read rule at all, making that prompt universal: every
+    engagement, on every new project."""
+    import install_helper as ih
+
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: clone)
+    monkeypatch.setattr(ih, "_registry_install_paths", lambda home: [])
+    rules = ih.team_read_entries(home=tmp_path)
+    assert rules == (f"Read({clone.resolve()}/**)",)
+
+
+def test_read_rules_never_grant_access_to_another_vendors_plugin(tmp_path, monkeypatch):
+    """The first version of this walked the registry and handed out Read access to four
+    unrelated plugins. Not ours to give, and nothing to do with the prompt it exists to
+    remove."""
+    import install_helper as ih
+
+    ours = tmp_path / "ours"
+    (ours / ".claude-plugin").mkdir(parents=True)
+    (ours / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": ih._PLUGIN_CACHE_MARKER}), encoding="utf-8"
+    )
+    theirs = tmp_path / "someone-else"
+    (theirs / ".claude-plugin").mkdir(parents=True)
+    (theirs / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "unrelated-plugin"}), encoding="utf-8"
+    )
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: None)
+    monkeypatch.setattr(ih, "_registry_install_paths", lambda home: [str(ours), str(theirs)])
+    rules = ih.team_read_entries(home=tmp_path)
+    assert any(str(ours.resolve()) in r for r in rules)
+    assert not any("someone-else" in r for r in rules), "another vendor's plugin leaked in"
+
+
+def test_a_machine_with_nothing_resolvable_yields_no_read_rules(tmp_path, monkeypatch):
+    """Never invent a path. A rule naming a directory that is not the team's would be a
+    permission granted for nothing."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: None)
+    monkeypatch.setattr(ih, "_registry_install_paths", lambda home: [])
+    assert ih.team_read_entries(home=tmp_path) == ()
+
+
+def test_the_permissions_step_writes_the_read_rules(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: clone)
+    monkeypatch.setattr(ih, "_registry_install_paths", lambda home: [])
+    rc = ih.run_permissions(project, ih.Style(False), ih.marks())
+    assert rc == 0
+    written = json.loads((project / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    allow = written["permissions"]["allow"]
+    assert f"Read({clone.resolve()}/**)" in allow
+    assert "Bash(ruff *)" in allow, "the existing Bash entries must survive"
