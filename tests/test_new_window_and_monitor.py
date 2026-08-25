@@ -306,6 +306,10 @@ def test_a_spawner_that_dies_on_its_argv_is_not_reported_as_launched(monkeypatch
     the shell to stand down while nothing ran, so the user got neither window nor session."""
     lt = _load("launch_terminal")
     monkeypatch.setattr(lt, "available", lambda: "xterm")
+    # The command must RESOLVE, or _shell_knows runs subprocess.run - which uses Popen as a
+    # context manager and trips over the fake below. Found by running the suite in a clean
+    # container, where `claude` is not on PATH; it passed here only because this box has it.
+    monkeypatch.setattr(lt, "_resolvable", lambda program, terminal="": True)
 
     class _Dead:
         returncode = 1
@@ -322,6 +326,7 @@ def test_a_terminal_that_forks_and_exits_zero_still_counts_as_launched(monkeypat
     that as failure would double-launch every session on Windows."""
     lt = _load("launch_terminal")
     monkeypatch.setattr(lt, "available", lambda: "wt.exe")
+    monkeypatch.setattr(lt, "_resolvable", lambda program, terminal="": True)
 
     class _Forked:
         returncode = 0
@@ -336,6 +341,7 @@ def test_a_terminal_that_forks_and_exits_zero_still_counts_as_launched(monkeypat
 def test_a_session_still_running_counts_as_launched(monkeypatch, tmp_path):
     lt = _load("launch_terminal")
     monkeypatch.setattr(lt, "available", lambda: "xterm")
+    monkeypatch.setattr(lt, "_resolvable", lambda program, terminal="": True)
 
     class _Alive:
         returncode = None

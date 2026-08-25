@@ -1176,7 +1176,11 @@ def check_for_update_upfront(cfg: dict, style: Style, args) -> None:
     headline = (preview.get("headlines") or [None])[0]
     if headline:
         print(f"   {headline}")
-    print(style.dim("   Pick option 1 to update, or Diagnostics (5) -> 1 to preview first."))
+    # Derived from MENU_ACTIONS, not typed out. It read "Diagnostics (5)" while Diagnostics
+    # was option 3 (found 2026-08-25) - a number in prose is a number that goes stale the
+    # first time the menu is reordered, and nothing tells you.
+    _diag = next((k for k, v in MENU_ACTIONS.items() if v == "diagnostics"), "3")
+    print(style.dim(f"   Pick option 1 to update, or Diagnostics ({_diag}) -> 1 to preview first."))
     print("")
 
 

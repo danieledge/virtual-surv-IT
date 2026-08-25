@@ -113,3 +113,9 @@ docs/internal/ai-runtime-economics-audit-2026-08.md
 docs/internal/prompt-inventory-baseline-2026-08.md
 docs/internal/plan-autonomous-jira-mode-2026-08-20.md
 docs/internal/plan-temporal-data-lens-2026-08-24.md
+
+# Local test containers (2026-08-25, owner: "should not be put on git").
+# Host-specific infra: it names this machine's paths and mounts this machine's credentials.
+# Deliberately not shipped - a container definition that assumes one developer's box is worse
+# than none, because it looks portable and is not.
+docker/

@@ -7916,3 +7916,24 @@ def test_an_unreleased_section_with_content_says_what_changed():
     assert list_headlines_between(text, "0.37.0") == [
         "[Unreleased] - Composer takes a multi-line brief"
     ]
+
+
+def test_the_update_notice_points_at_the_real_diagnostics_option():
+    """It said "Diagnostics (5)" while Diagnostics was option 3 (found 2026-08-25 by an audit
+    of the installer menu). A number written into prose goes stale the first time the menu is
+    reordered and nothing tells you - so it is derived from MENU_ACTIONS now, and this pins
+    that it stays derived rather than being retyped correctly once."""
+    import install_helper
+
+    source = Path(install_helper.__file__).read_text(encoding="utf-8")
+    chunk = source.split("A newer version is available", 1)[1].split("\ndef ", 1)[0]
+    # CODE only. The comment above the fix quotes the old wrong string to explain itself, and
+    # a naive substring check flags that explanation as the defect - the same trap that
+    # produced a false "security hole" earlier today.
+    code = "\n".join(
+        line for line in chunk.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "Diagnostics (5)" not in code
+    assert "MENU_ACTIONS" in code, "the option number must be derived, not typed"
+    key = next(k for k, v in install_helper.MENU_ACTIONS.items() if v == "diagnostics")
+    assert key == "3", "if this moves, the notice follows it automatically"
