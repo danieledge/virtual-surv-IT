@@ -712,3 +712,50 @@ def test_finished_screen_enter_returns_the_selected_token(ptk):
 def test_finished_screen_returns_none_when_nothing_finished(ptk):
     token, _ = _drive_finished(ptk, "\x1b", [])
     assert token is None  # caller falls back, and the fallback owns the message
+
+
+# --- Esc, end to end (2026-08-25) ----------------------------------------------------------
+#
+# The abort tests in test_virt_team_launcher.py stub _resume_decision, so they prove the
+# mapping and never the chain. This drives a REAL Escape keypress through the real app, the
+# real menu round and main(), and asserts the two things the shell wrapper depends on: exit
+# code 97, and a stdout with nothing on it (a stray character there becomes the session's
+# opening prompt). Written after a user reported Esc launching a session anyway - the cause
+# was an out-of-date shell wrapper rather than this chain, but nothing had ever tested the
+# chain itself, so the report could not be narrowed without adding this first.
+
+
+def test_escape_drives_main_to_the_abort_exit_code(ptk, tmp_path, monkeypatch, capsys):
+    create_app_session, create_pipe_input, PlainTextOutput = ptk
+    project = tmp_path / "proj"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "team-preferences.json").write_text("{}", encoding="utf-8")
+    art = project / "artifacts" / "alpha"
+    art.mkdir(parents=True)
+    (art / "engagement-state.json").write_text(
+        json.dumps(
+            {"schema": 2, "status": "in_progress", "engagement": {"slug": "alpha", "title": "A"}}
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(project)
+    # A v7 wrapper is present, so the abort is honoured and nothing is warned about.
+    monkeypatch.setenv("VIRT_SURV_CD_FILE", str(tmp_path / "cd"))
+
+    mod = _load("virt_team_launcher")
+    for name in (
+        "_print_banner", "_check_plugin_cache_lag", "_print_project_defaults",
+        "_prewarm_guard_interpreter", "_write_probe_cache", "_refresh_tool_cache",
+        "_heal_stale_alias_once",
+    ):
+        if hasattr(mod, name):
+            monkeypatch.setattr(mod, name, lambda *a, **k: None)
+
+    buf = io.StringIO()
+    out = PlainTextOutput(buf)
+    with create_pipe_input() as pipe:
+        pipe.send_text("\x1b")  # Escape
+        with create_app_session(input=pipe, output=out):
+            rc = mod.main()
+    assert rc == mod._ABORT_EXIT_CODE == 97, "Esc must abort, never fall through to a launch"
+    assert capsys.readouterr().out == "", "stdout is the decision channel - it must be empty"

@@ -114,7 +114,7 @@ _ABORT_EXIT_CODE = 97
 _ABORT = "__abort__"
 
 
-def _heal_stale_alias_once() -> None:
+def _heal_stale_alias_once(force: bool = False) -> None:
     """Self-resolution for stale installed aliases (2026-08-17 user requirement: "it
     should self-resolve" - the config said 'cc' but the loaded v4 function still fired
     its baked 'cc --debug'; a plugin update must not wait on a manual re-register).
@@ -133,7 +133,7 @@ def _heal_stale_alias_once() -> None:
                 cfg = {}
         except (OSError, ValueError):
             cfg = {}
-        if cfg.get("alias_heal_checked") == _EXPECTED_ALIAS_VERSION:
+        if not force and cfg.get("alias_heal_checked") == _EXPECTED_ALIAS_VERSION:
             return
         import contextlib
         import importlib.util as _ilu
@@ -173,6 +173,77 @@ def _heal_stale_alias_once() -> None:
             )
     except Exception:
         pass  # never cost the launch
+
+
+def _alias_installed_anywhere() -> bool:
+    """Does an rc/profile on this machine carry a virt-surv wrapper at all?
+
+    Used only on the abort path, to tell two very different situations apart: an OLD
+    wrapper that is about to ignore the abort and launch anyway, versus no wrapper at all
+    (a direct `python scripts/virt_team_launcher.py`, which is how developers and the test
+    suite run it - nobody there needs warning about a shell function they never installed).
+    Best-effort: unreadable means unknown means stay quiet."""
+    try:
+        home = Path.home()
+    except Exception:
+        return False
+    candidates = [home / n for n in (".bashrc", ".zshrc", ".bash_profile", ".profile")]
+    try:
+        documents = home / "Documents"
+        for sub in ("WindowsPowerShell", "PowerShell"):
+            candidates.append(documents / sub / "Microsoft.PowerShell_profile.ps1")
+    except Exception:
+        pass
+    for path in candidates:
+        try:
+            if path.is_file() and "virt-surv" in path.read_text(encoding="utf-8", errors="replace"):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _warn_if_abort_will_be_ignored() -> None:
+    """Say so when Esc is about to be overruled by an out-of-date shell wrapper.
+
+    2026-08-25 user report: "when pressing escape on the TUI it should drop to terminal,
+    instead it falls through and launches claude". The launcher's own side is correct -
+    Esc returns _ABORT and main() exits 97 with clean stdout - but honouring that is the
+    WRAPPER's job, and the `-ne 97` check only arrived in alias v7. A pre-v7 function
+    already loaded in the calling shell ignores the code and launches regardless, and no
+    child process can change its parent's loaded functions.
+
+    We can detect this precisely rather than guess: VIRT_SURV_CD_FILE is exported by the
+    v7 wrapper and by nothing else - the cd handshake and the exit-code check landed in
+    the same version (a714932) - so its absence, combined with a wrapper being installed
+    somewhere, means the abort is about to be ignored. Silence here is the worst option:
+    the user pressed Esc, a session opened anyway, and nothing explained why.
+
+    Heals the rc file first, so the "already brought up to date" claim below is true when
+    it is printed, and forces past the once-per-version stamp: the stamp records that a
+    heal RAN, which is not the same as this terminal being current."""
+    if os.environ.get("VIRT_SURV_CD_FILE"):
+        return  # v7+ wrapper - it checks the exit code, the abort will be honoured
+    if not _alias_installed_anywhere():
+        return  # no wrapper at all: a direct run, nothing to warn about
+    try:
+        _heal_stale_alias_once(force=True)
+    except Exception:
+        pass  # cosmetic tier - never let the heal cost the abort message
+    ink = _Ink()
+    print("", file=sys.stderr)
+    print(
+        f"    {ink.warn('!')} This terminal's 'virt-surv' wrapper predates Esc-to-exit, so "
+        "a session will start anyway despite the abort.",
+        file=sys.stderr,
+    )
+    print(
+        "      The rc file itself is now up to date; the loaded function is not, and no "
+        "program can change its parent shell. Run 'source ~/.bashrc' (bash) or "
+        "'. $PROFILE' (PowerShell), or open a new terminal, and Esc will return you to "
+        "the prompt as intended.",
+        file=sys.stderr,
+    )
 
 
 def _plugin_enabled(target: Path) -> bool:
@@ -993,7 +1064,9 @@ def _resume_decision(project_dir: Path) -> str:
                     ink.warn(
                         "    note: this shell's virt-surv wrapper predates folder "
                         "switching, so the session will still open in the previous "
-                        "directory. It self-heals on the next 'virt-surv go'."
+                        "directory. The rc file self-heals, but THIS terminal keeps the "
+                        "old function until you reload it (source ~/.bashrc, . $PROFILE) "
+                        "or open a new one."
                     ),
                     file=sys.stderr,
                 )
@@ -3269,7 +3342,13 @@ def main() -> int:
         decision = ""  # same reasoning - never let one piece's failure kill the other
     if decision == _ABORT:
         # Nothing on stdout, and a distinct exit code so the wrapper skips the launch
-        # entirely rather than starting a session the human just backed out of.
+        # entirely rather than starting a session the human just backed out of. An
+        # out-of-date wrapper ignores that code, so say so rather than let the session
+        # open unexplained (2026-08-25 report).
+        try:
+            _warn_if_abort_will_be_ignored()
+        except Exception:
+            pass  # the exit code is the contract; the explanation is best-effort
         return _ABORT_EXIT_CODE
     if decision:
         print(decision)  # the ONLY thing that goes to stdout

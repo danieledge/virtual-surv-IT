@@ -1360,3 +1360,75 @@ def test_menu_b_backing_out_returns_to_the_menu_not_a_launch(tmp_path, monkeypat
     out = capsys.readouterr()
     assert rc == 0
     assert out.out == ""
+
+
+# --- Esc overruled by an out-of-date shell wrapper (2026-08-25 user report) -----------------
+#
+# "when pressing escape on the TUI it should drop to terminal, instead it falls through and
+# launches claude". The launcher's own side was already right - Esc -> _ABORT -> exit 97 with
+# clean stdout - and the existing tests above proved that by stubbing _resume_decision. What
+# none of them touched was the half that actually decides the outcome: the SHELL wrapper, whose
+# `-ne 97` check only exists from alias v7. A pre-v7 function already loaded in the calling
+# shell ignores the code, and no child process can change its parent's loaded functions.
+#
+# VIRT_SURV_CD_FILE is the tell. The cd handshake and the exit-code check shipped in the same
+# version, so the env var's absence during a `go` means the wrapper will ignore the abort.
+
+
+def test_a_v7_wrapper_is_left_alone(tmp_path, monkeypatch, capsys):
+    """The env var is present, so the abort will be honoured - say nothing."""
+    mod = _load()
+    monkeypatch.setenv("VIRT_SURV_CD_FILE", str(tmp_path / "cd"))
+    mod._warn_if_abort_will_be_ignored()
+    assert capsys.readouterr().err == ""
+
+
+def test_a_direct_run_with_no_wrapper_installed_says_nothing(tmp_path, monkeypatch, capsys):
+    """Developers and this suite run the launcher directly. Warning them about a shell
+    function they never installed would be noise, and worse, wrong."""
+    mod = _load()
+    monkeypatch.delenv("VIRT_SURV_CD_FILE", raising=False)
+    monkeypatch.setattr(mod, "_alias_installed_anywhere", lambda: False)
+    mod._warn_if_abort_will_be_ignored()
+    assert capsys.readouterr().err == ""
+
+
+def test_a_stale_wrapper_is_named_and_the_fix_is_given(tmp_path, monkeypatch, capsys):
+    """The reported case. Silence here is the worst outcome: the user pressed Esc, a session
+    opened anyway, and nothing explained why."""
+    mod = _load()
+    monkeypatch.delenv("VIRT_SURV_CD_FILE", raising=False)
+    monkeypatch.setattr(mod, "_alias_installed_anywhere", lambda: True)
+    healed = []
+    monkeypatch.setattr(mod, "_heal_stale_alias_once", lambda force=False: healed.append(force))
+    mod._warn_if_abort_will_be_ignored()
+    err = capsys.readouterr().err
+    assert "predates Esc-to-exit" in err
+    assert "source ~/.bashrc" in err and "$PROFILE" in err
+    assert healed == [True], "the rc file must be healed before we claim it is up to date"
+
+
+def test_the_heal_stamp_does_not_block_a_forced_heal(tmp_path, monkeypatch):
+    """The stamp records that a heal RAN, which is not the same as this terminal being
+    current - so the abort path must be able to force past it."""
+    mod = _load()
+    cfg = tmp_path / "installer.json"
+    cfg.write_text(json.dumps({"alias_heal_checked": mod._EXPECTED_ALIAS_VERSION}), encoding="utf-8")
+    monkeypatch.setattr(mod, "_installer_config_path", lambda: cfg)
+    ran = []
+    import types
+    fake = types.SimpleNamespace(heal_stale_aliases=lambda: ran.append(1) or [], _ALIAS_VERSION=7)
+    monkeypatch.setitem(sys.modules, "install_helper_heal", fake)
+    mod._heal_stale_alias_once()          # stamped: must no-op
+    assert ran == []
+
+
+def test_alias_detection_reads_real_rc_files(tmp_path, monkeypatch):
+    """Detection must key on a real installed wrapper, not on an env var alone."""
+    mod = _load()
+    monkeypatch.setattr(mod.Path, "home", staticmethod(lambda: tmp_path))
+    assert mod._alias_installed_anywhere() is False
+    (tmp_path / ".bashrc").write_text("export FOO=1\n", encoding="utf-8")
+    assert mod._alias_installed_anywhere() is False
+    (tmp_path / ".bashrc").write_text("virt-surv() { :; } # virt-surv-it-alias-v6\n", encoding="utf-8")
+    assert mod._alias_installed_anywhere() is True
