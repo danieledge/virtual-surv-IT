@@ -1502,6 +1502,11 @@ def slug_picker_screen(project_dir: Path, mod, shown: list, output=None):
 AUTO_CANCELLED = "__auto_cancelled__"
 
 
+# One source for the keys, named once and rendered in both places. The body and the footer
+# drifted apart the moment they were separate strings.
+_PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D START unattended · Esc cancel"
+
+
 def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     """The single authorisation gate for an unattended run (2026-08-20).
 
@@ -1529,21 +1534,30 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     # unattended run has nobody to ask, and which `--permission-mode dontAsk` denies outright.
     # Both are therefore answered here, once, while a human is present.
     CAPS = (0, 10, 25, 35, 50, 100)
-    ON_BUDGET = ("park", "light", "continue")
-    # Defaults set by the owner, 2026-08-25: a $35 ceiling, and "carry on, report it" when
-    # it is reached. Note which way that leans - continuing past the ceiling is the LESS
-    # cautious rung, chosen deliberately because an unattended run that parks at the cap
-    # has produced nothing anyone can use, and the ceiling is advisory pacing rather than a
-    # hard stop. It is still reported, and the run still closes PARTIAL for sign-off.
-    state = {"data": False, "exec": False, "cap": 3, "on_budget": 2, "confirmed": False}
+    # Four rungs, because the choice at a ceiling is genuinely two different choices and
+    # collapsing them loses one (owner, 2026-08-25: "we can either say continue and notify or
+    # choose a hard cap, why don't we keep flexibility"). park/light/continue are ADVISORY -
+    # the ceiling is a threshold the run reports against and can pass. "stop" is ENFORCED,
+    # passed to the CLI as --max-budget-usd, which no run can talk its way past because it is
+    # the process that refuses. Keeping both means a ceiling can be pacing or a wall, and the
+    # human says which rather than inheriting whichever we thought better.
+    ON_BUDGET = ("park", "light", "continue", "stop")
+    # Defaults, 2026-08-25: a $35 ceiling and "carry on, report it". That leans LESS cautious
+    # deliberately - an unattended run that parks at the cap has produced nothing anyone can
+    # use - and it is still reported, and still closes PARTIAL for sign-off.
+    RUN_MODES = ("window", "headless")
+    state = {"data": False, "exec": False, "cap": 3, "on_budget": 2, "mode": 0,
+             "confirmed": False}
     idx = [0]
     rows = [
         ("data", "toggle", "Data is synthetic or masked",
          "no PII/MNPI - your attestation"),
         ("exec", "toggle", "Allow the session to RUN code unattended",
          "grants the gate here, expiring"),
+        ("mode", "cycle", "How it runs",
+         "headless has no window and can be capped"),
         ("cap", "cycle", "Spend ceiling for this engagement",
-         "advisory pacing, not a hard stop"),
+         "a threshold, or a wall - see below"),
         ("on_budget", "cycle", "At the ceiling",
          "the degrade ladder, answered up front"),
     ]
@@ -1551,10 +1565,16 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     def _value(key):
         if key == "cap":
             return "no ceiling" if CAPS[state["cap"]] == 0 else f"${CAPS[state['cap']]}"
+        if key == "mode":
+            return {
+                "window": "in its own window",
+                "headless": "headless (no window)",
+            }[RUN_MODES[state["mode"]]]
         return {
             "park": "park at next gate",
             "light": "drop to light profile",
             "continue": "carry on, report it",
+            "stop": "STOP - hard cap",
         }[ON_BUDGET[state["on_budget"]]]
 
     def _body():
@@ -1572,8 +1592,19 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
                 out.append(("class:title", f"  {_value(key)}"))
             out.append(("", "\n"))
             out.append(("class:dim", f"        {note}\n"))
+        if ON_BUDGET[state["on_budget"]] == "stop" and RUN_MODES[state["mode"]] != "headless":
+            # A hard cap is a CLI flag that exists in print mode only. Offering it against a
+            # windowed run and quietly not enforcing it would be the worst kind of setting:
+            # one that reads as a guarantee and is a preference.
+            out.append(("class:warn",
+                        "  A hard cap needs a headless run - nothing outside a windowed\n"
+                        "  session can enforce one. Switch 'How it runs' to headless.\n"))
         out.append(("", "\n"))
-        out.append(("class:dim", "    Space cycles · Enter starts · Esc cancels\n"))
+        # The keys live in the FOOTER and nowhere else. This screen used to repeat them in
+        # the body, which went stale the moment Enter stopped starting the run - two
+        # contradictory instructions at once - and then clipped at the pane edge when it was
+        # corrected. Rendering the same thing twice is what created both faults; one place
+        # fixes both (pty, 2026-08-25).
         return out
 
     def _right():
@@ -1598,7 +1629,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         return out
 
     def _footer():
-        return [("class:hint", "  Space/Enter toggle · Ctrl-D START unattended · Esc cancel")]
+        return [("class:hint", f"  {_PREFLIGHT_KEYS}")]
 
     kb = KeyBindings()
 
@@ -1653,11 +1684,20 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         return None
     if not state["confirmed"]:
         return AUTO_CANCELLED
+    rung = ON_BUDGET[state["on_budget"]]
+    mode = RUN_MODES[state["mode"]]
+    ceiling = CAPS[state["cap"]] or None
     return {
         "data_attested": state["data"],
         "allow_exec": state["exec"],
-        "engagement_usd": CAPS[state["cap"]] or None,
-        "on_budget": ON_BUDGET[state["on_budget"]],
+        "engagement_usd": ceiling,
+        "on_budget": rung,
+        "run_mode": mode,
+        # The ENFORCED cap, separate from the advisory ceiling on purpose - they are two
+        # different promises and the caller must not have to infer which was made. Only set
+        # when the human chose "stop" AND the run can actually be capped, so a caller passing
+        # this to --max-budget-usd is never passing a limit nothing will honour.
+        "hard_cap_usd": ceiling if (rung == "stop" and mode == "headless" and ceiling) else None,
     }
 
 

@@ -1339,7 +1339,11 @@ def project_root_for(target_dir) -> pathlib.Path:
 # ladder through the question tool (orchestration guide) - which an unattended run has nobody
 # to ask, and which `--permission-mode dontAsk` denies outright. So the human picks a rung
 # ONCE at the pre-flight screen and the run applies it silently.
-AUTO_ON_BUDGET = ("park", "light", "continue")
+# Four rungs since 2026-08-25. The first three are ADVISORY - the ceiling is a threshold the
+# run reports against and can pass. "stop" is ENFORCED by the CLI's own --max-budget-usd,
+# which a run cannot talk its way past because it is the process that refuses. Both kept
+# deliberately: a ceiling can be pacing or a wall, and the human says which.
+AUTO_ON_BUDGET = ("park", "light", "continue", "stop")
 
 
 def _consume_auto_handoff(project_root: pathlib.Path) -> dict:

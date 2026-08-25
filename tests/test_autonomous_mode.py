@@ -796,7 +796,9 @@ def test_at_the_ceiling_it_defaults_to_carrying_on_and_reporting():
     pacing rather than a hard stop - but it is still reported, and still closes PARTIAL."""
     src = _preflight_source()
     body = src.split("def auto_preflight_screen", 1)[1]
-    assert 'ON_BUDGET = ("park", "light", "continue")' in body
+    assert 'ON_BUDGET = ("park", "light", "continue", "stop")' in body, (
+        "four rungs: three advisory, one enforced"
+    )
     state = body.split('state = {', 1)[1].split("}", 1)[0]
     assert '"on_budget": 2' in state, "index 2 of ON_BUDGET is continue"
     assert '"continue": "carry on, report it"' in body
@@ -812,7 +814,13 @@ def test_enter_cannot_start_an_unattended_run():
     assert tail.startswith('"c-d"'), f"the commit key must be Ctrl-D, found {tail[:20]!r}"
     toggle = body.split("def _toggle(event):", 1)[0]
     assert '@kb.add("enter")' in toggle, "Enter must be bound to the harmless toggle"
-    assert "Ctrl-D START unattended" in body, "the footer must teach the real commit key"
+    # The keys are rendered from ONE constant now: the body used to repeat them, went stale
+    # when Enter stopped starting the run, and then clipped when corrected. Assert the
+    # constant and that the footer uses it, rather than a literal that can drift again.
+    src = _preflight_source()
+    assert 'Ctrl-D START unattended' in src.split("_PREFLIGHT_KEYS = ", 1)[1].split("\n", 1)[0]
+    assert "_PREFLIGHT_KEYS" in body, "the footer must render the shared constant"
+    assert body.count("Ctrl-D START unattended") == 0, "and must not repeat it as a literal"
 
 
 def test_the_two_screens_in_the_flow_agree_on_their_send_key():
@@ -876,3 +884,64 @@ def test_a_plain_new_engagement_leaves_no_request_behind(tmp_path):
     command = mod._new_command(project)  # plain [n], nothing typed
     assert command.endswith("--new") and "--request-pending" not in command
     assert not (project / ".claude" / mod._REQUEST_HANDOFF).exists()
+
+
+# --- advisory ceiling vs enforced cap (owner, 2026-08-25) -----------------------------------
+#
+# "We can either say continue and notify or choose a hard cap - why don't we keep
+# flexibility." Right: those are two different promises, and collapsing them loses one. The
+# ceiling stays a threshold the run reports against; "stop" makes it a wall the CLI enforces
+# with --max-budget-usd, which no run can talk past because it is the process that refuses.
+
+
+def _preflight_answers(**over):
+    """The dict the pre-flight returns, as the launcher consumes it."""
+    base = {"data_attested": True, "allow_exec": False, "engagement_usd": 35,
+            "on_budget": "continue", "run_mode": "window", "hard_cap_usd": None}
+    base.update(over)
+    return base
+
+
+def test_the_enforced_cap_is_separate_from_the_advisory_ceiling():
+    """Two fields, because they are two different promises and a caller must never have to
+    infer which one was made."""
+    src = _preflight_source()
+    body = src.split("def auto_preflight_screen", 1)[1]
+    assert '"engagement_usd": ceiling' in body
+    assert '"hard_cap_usd"' in body
+
+
+def test_a_hard_cap_is_only_produced_when_it_can_actually_be_enforced():
+    """--max-budget-usd exists in print mode only. Handing a caller a cap that nothing will
+    honour is the worst kind of setting: it reads as a guarantee and is a preference."""
+    src = _preflight_source()
+    body = src.split("def auto_preflight_screen", 1)[1]
+    condition = body.split('"hard_cap_usd":', 1)[1].split("\n", 1)[0]
+    assert 'rung == "stop"' in condition
+    assert 'mode == "headless"' in condition
+    assert "ceiling" in condition, "and only when a ceiling was actually set"
+
+
+def test_choosing_a_hard_cap_on_a_windowed_run_says_why_it_cannot_apply():
+    """Silently not enforcing it would be the failure. The screen names the fix."""
+    body = _preflight_source().split("def auto_preflight_screen", 1)[1]
+    assert "A hard cap needs a headless run" in body
+    assert "Switch 'How it runs' to headless" in body
+
+
+def test_the_run_mode_reaches_the_workspace(tmp_path):
+    """The handoff carries it, so the session and every gate downstream know which kind of
+    run this is without being told twice."""
+    mod = _load("virt_team_launcher")
+    src = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    assert '"run_mode": answers.get("run_mode") or "window"' in src
+    assert '"hard_cap_usd": answers.get("hard_cap_usd")' in src
+    assert mod is not None
+
+
+def test_the_state_layer_accepts_the_enforced_rung():
+    state = _load("engagement_state")
+    assert "stop" in state.AUTO_ON_BUDGET
+    assert state.AUTO_ON_BUDGET[:3] == ("park", "light", "continue"), (
+        "the advisory rungs keep their order and meaning"
+    )

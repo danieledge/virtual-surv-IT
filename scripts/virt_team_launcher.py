@@ -1575,6 +1575,8 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
                     # flag: engagement_state consumes all of it when it creates the pack, so
                     # the run never has to be told any of it.
                     "engagement_usd": answers.get("engagement_usd"),
+                    "hard_cap_usd": answers.get("hard_cap_usd"),
+                    "run_mode": answers.get("run_mode") or "window",
                     # Deliberately "park" and NOT the screen's default rung: this fires
                     # only if the pre-flight handed back a dict with no answer in it, which
                     # it never does normally. A missing answer is not the same as a chosen
@@ -1591,10 +1593,13 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
               file=err)
     cap = answers.get("engagement_usd")
     if cap:
-        print(
-            ink.dim(f"    ceiling ${cap} - at the cap it will {answers.get('on_budget', 'park')}"),
-            file=err,
+        enforced = answers.get("hard_cap_usd")
+        how = "STOPS there (enforced)" if enforced else (
+            f"it will {answers.get('on_budget', 'park')}"
         )
+        print(ink.dim(f"    ceiling ${cap} - at the cap {how}"), file=err)
+    if answers.get("run_mode") == "headless":
+        print(ink.dim("    headless - no window; watch it from here"), file=err)
     print(ink.good(f"    -> unattended run on {slug}; it will close PARTIAL for sign-off"), file=err)
     if request_text:
         return _new_command(project_dir, request_text, auto=True)

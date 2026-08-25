@@ -69,9 +69,20 @@ This needs deciding, not assuming. Today `on_budget` offers park / light / conti
   reporting threshold only. Honest, but it means "continue" buys a soft ceiling and the other
   two buy a hard one, which must be said on the screen rather than discovered.
 
-**Recommendation:** set `--max-budget-usd` to a hard ceiling in every case, and let the rung
-decide what happens *at* the ceiling. A run that cannot exceed its cap is the whole reason to
-have one.
+**Decided 2026-08-25 (owner): keep both, as separate choices.** "We can either say continue
+and notify or choose a hard cap - why don't we keep flexibility." Right, and my
+recommendation above was the poorer answer: it would have made every ceiling a wall and
+removed the option of a threshold that reports.
+
+So the ladder gains a FOURTH rung. park / light / continue stay advisory - the ceiling is a
+number the run reports against and can pass. **stop** is enforced, passed as
+`--max-budget-usd`, which no run can talk its way past because it is the process that
+refuses. The answers carry `engagement_usd` (advisory) and `hard_cap_usd` (enforced) as two
+separate fields, so a caller never has to infer which promise was made.
+
+A hard cap is only produced when it can actually be honoured - `--max-budget-usd` is print
+mode only, so choosing it against a windowed run says so on the screen and names the fix,
+rather than accepting a setting that reads as a guarantee and behaves as a preference.
 
 ## 5. Shape
 
@@ -116,7 +127,8 @@ have one.
    launcher cannot lose a run. Proven live - a run started by one process was re-attached to
    in full by a different process after the first had exited. Liveness is judged from the
    stream rather than a pid, because a pid lies after reuse and differs per platform.
-3. The pre-flight row, and `--session-id` recorded on the pack at init.
+3. ~~The pre-flight row~~ **BUILT 2026-08-25** - "How it runs: in its own window / headless",
+   plus the fourth budget rung. Still to do: recording `--session-id` on the pack at init.
 4. Monitor reads the live state.
 5. Windows verification on WINTEST.
 
