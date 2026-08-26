@@ -6053,6 +6053,7 @@ def test_advanced_submenu_full_mapping():
         "9": "cleanplugincache",
         "10": "aliasmanage",
         "11": "gitbashperf",
+        "12": "codeintel",
         "b": "back",
     }
 

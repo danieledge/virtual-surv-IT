@@ -17,3 +17,17 @@ sqlfluff>=3.0
 # with --config auto, its per-run ruleset fetch) with no reliable offline mode found - live
 # corp-proxy reports showed them hanging rather than failing fast. See code-reviewer.md and
 # scripts/check-review-tools.sh for the full removal rationale.
+
+# Code intelligence (2026-08-26). Not an analyser - these sharpen codebase ORIENTATION:
+# repo_skeleton's tree-sitter tier gives exact symbols and exact line ranges for ~15
+# languages, where without them it falls back to stdlib ast for Python and pattern matching
+# for everything else. On a Java/Scala/C#/SQL estate, which is what surveillance systems are
+# made of, that is most of the value.
+#
+# Optional in the strongest sense: the tier is a soft probe, so a machine that cannot
+# install these behaves exactly as it did before they existed. Deliberately NOT vendored -
+# ~29MB across platforms, and the core is not abi3, so it would need a wheel per Python
+# version and go stale every release. Install via `virt-surv` Advanced > Code intelligence,
+# or `python install_helper.py --code-intel`, or directly from this file.
+tree-sitter>=0.21
+tree-sitter-language-pack>=0.9

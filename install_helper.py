@@ -2169,11 +2169,14 @@ class Installer:
                 fatal=False,
             )
 
-    # The packages that light up repo_skeleton's tree-sitter tier. tree-sitter-language-pack
-    # rather than the individual grammars: one abi3 wheel covering ~100 languages, against a
-    # per-language wheel each. The core (tree-sitter) is NOT abi3, so it resolves per Python
-    # version - which is exactly why none of this is vendored.
+    # The packages live in requirements-review.txt, not in a list here (2026-08-27, owner:
+    # "there's an existing install requirements path"). Exactly right - that file already
+    # means "optional, sharpens reviews, not required to use the team", which is what these
+    # are, and a second hardcoded list would be a second place to forget to update.
+    # Named explicitly rather than installing the whole file, because the analysers in it
+    # are a separate decision the user may already have taken.
     CODE_INTEL_PACKAGES = ("tree-sitter", "tree-sitter-language-pack")
+    CODE_INTEL_REQUIREMENTS = "requirements-review.txt"
 
     def code_intel_step(self) -> None:
         """Attempt the code-intelligence extras, and treat failure as a normal outcome.
