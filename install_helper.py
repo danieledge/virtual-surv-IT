@@ -1341,6 +1341,7 @@ _ADVANCED_ACTIONS = {
     "9": "cleanplugincache",
     "10": "aliasmanage",
     "11": "gitbashperf",
+    "12": "codeintel",
     "b": "back",
 }
 
@@ -1459,6 +1460,11 @@ def choose_action(style: Style) -> str:
                     (
                         "11",
                         "Git Bash performance fix (Claude Code shell-snapshot slowness on Windows)",
+                    ),
+                    (
+                        "12",
+                        "Code intelligence (install/refresh tree-sitter - sharper codebase "
+                        "orientation; optional, degrades to pattern matching without it)",
                     ),
                     ("b", "Back"),
                 ),
@@ -3427,6 +3433,15 @@ class Installer:
         if self.subset == "daemonstart":
             return [
                 ("Guard daemon start diagnostic", self.daemon_start_step),
+            ]
+        if self.subset == "codeintel":
+            # Standalone so it can be tested and re-run on its own, rather than only as
+            # step 8 of a full install. On a machine where the install failed once - no
+            # network at the time, a proxy, a Python that has since changed - this is the
+            # retry, and it is also the honest way to CHECK the outcome: it reports
+            # "already available" without doing anything when the library is present.
+            return [
+                ("Code intelligence", self.code_intel_step),
             ]
         return [
             ("Preflight checks", self.preflight),
@@ -7627,6 +7642,14 @@ def parse_args(argv=None) -> argparse.Namespace:
         "exit. PROTOTYPE, not production - not wired into any live hook path",
     )
     parser.add_argument(
+        "--code-intel",
+        action="store_true",
+        help="standalone: install or refresh the optional code-intelligence extras "
+        "(tree-sitter), then report whether they actually load. Reports 'already "
+        "available' and changes nothing when present, so it doubles as the check. "
+        "Never fatal - without them, codebase orientation uses pattern matching",
+    )
+    parser.add_argument(
         "--check-daemon-start",
         action="store_true",
         help="standalone: starts the REAL PRODUCTION scripts/guard_daemon.py (foreground, "
@@ -8137,6 +8160,7 @@ def _main(argv=None) -> int:
         or args.check_hook_latency
         or args.check_adr014_spike
         or args.check_daemon_start
+        or args.code_intel
         or args.configure
         or args.archive
         or args.list_engagements
@@ -8230,6 +8254,8 @@ def _main(argv=None) -> int:
             rc = max(rc, spike_rc if spike_rc is not None else 0)
         if args.check_daemon_start:
             rc = max(rc, run_daemon_start_diagnostic(style, marks(), args.repo))
+        if args.code_intel:
+            Installer(args, style, marks(), subset="codeintel").run()
         if args.configure:
             rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
         if args.archive:
