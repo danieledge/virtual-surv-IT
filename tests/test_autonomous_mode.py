@@ -945,3 +945,42 @@ def test_the_state_layer_accepts_the_enforced_rung():
     assert state.AUTO_ON_BUDGET[:3] == ("park", "light", "continue"), (
         "the advisory rungs keep their order and meaning"
     )
+
+
+# --- web access is a question, not a default (owner, 2026-08-26) -----------------------------
+
+
+def test_web_search_is_off_unless_the_human_says_otherwise():
+    """An unattended run reaching the internet is a decision. Nobody is watching what it
+    fetches, or what a fetched page tells it to do - and reviewed content is DATA, never
+    instruction (CLAUDE.md §7). So it is a pre-flight question with the cautious default."""
+    src = _preflight_source()
+    body = src.split("def auto_preflight_screen", 1)[1]
+    state = body.split('state = {', 1)[1].split("}", 1)[0]
+    assert '"web": False' in state, "off by default"
+    assert '("web", "toggle", "Allow web search"' in body, "and asked, not assumed"
+
+
+def test_granting_web_access_adds_both_search_and_fetch():
+    """Search without fetch would be half a permission: the model finds a page it cannot
+    read, which is worse than not searching."""
+    mod = _load("virt_team_launcher")
+    off = mod._headless_allow_rules(False)
+    on = mod._headless_allow_rules(True)
+    assert "WebSearch" not in off and "WebFetch" not in off
+    assert "WebSearch" in on and "WebFetch" in on
+    assert set(off).issubset(set(on)), "granting web must not remove anything else"
+
+
+def test_the_answer_travels_to_the_run(tmp_path):
+    """It has to reach the handoff, or the toggle is decoration."""
+    src = (REPO_ROOT / "scripts" / "virt_team_launcher.py").read_text(encoding="utf-8")
+    assert '"allow_web": bool(answers.get("allow_web"))' in src
+    assert '_headless_allow_rules(bool(pending.get("allow_web")))' in src
+
+
+def test_a_report_written_without_the_web_is_not_silently_presented_as_researched():
+    """The live case: a vendor report was produced with WebSearch refused and nothing said
+    so. The pre-flight row states the consequence rather than only the setting."""
+    body = _preflight_source().split("def auto_preflight_screen", 1)[1]
+    assert "writes from what it knows" in body

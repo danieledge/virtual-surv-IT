@@ -1550,7 +1550,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     # deliberately - an unattended run that parks at the cap has produced nothing anyone can
     # use - and it is still reported, and still closes PARTIAL for sign-off.
     RUN_MODES = ("window", "headless")
-    state = {"data": False, "exec": False, "cap": 3, "on_budget": 2, "mode": 0,
+    state = {"data": False, "exec": False, "web": False, "cap": 3, "on_budget": 2, "mode": 0,
              "confirmed": False}
     idx = [0]
     rows = [
@@ -1558,6 +1558,13 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
          "no PII/MNPI - your attestation"),
         ("exec", "toggle", "Allow the session to RUN code unattended",
          "grants the gate here, expiring"),
+        # OFF by default (owner, 2026-08-26). An unattended run reaching the internet is a
+        # decision, not a convenience: nobody is watching what it fetches or what a fetched
+        # page tells it to do, and reviewed content is DATA rather than instruction
+        # (CLAUDE.md §7). But a research task without it writes from memory alone - a real
+        # engagement produced a vendor report with no web access at all and never said so.
+        ("web", "toggle", "Allow web search",
+         "off = it writes from what it knows"),
         ("mode", "cycle", "How it runs",
          "headless has no window and can be capped"),
         ("cap", "cycle", "Spend ceiling for this engagement",
@@ -1694,6 +1701,7 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     return {
         "data_attested": state["data"],
         "allow_exec": state["exec"],
+        "allow_web": state["web"],
         "engagement_usd": ceiling,
         "on_budget": rung,
         "run_mode": mode,

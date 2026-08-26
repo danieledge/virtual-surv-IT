@@ -1587,6 +1587,7 @@ def _auto_run_decision(project_dir: Path, ref: str, request_text: str = "") -> s
                     # the run never has to be told any of it.
                     "engagement_usd": answers.get("engagement_usd"),
                     "hard_cap_usd": answers.get("hard_cap_usd"),
+                    "allow_web": bool(answers.get("allow_web")),
                     "run_mode": answers.get("run_mode") or "window",
                     "session_id": session_id,
                     # Deliberately "park" and NOT the screen's default rung: this fires
@@ -3434,7 +3435,7 @@ def _pending_auto_slug(project_dir: Path) -> str:
     return str(_pending_auto(project_dir).get("slug") or "")
 
 
-def _headless_allow_rules() -> tuple:
+def _headless_allow_rules(allow_web: bool = False) -> tuple:
     """What an unattended run is permitted to do, beyond writing files.
 
     acceptEdits covers file writes and ordinary filesystem commands but not
@@ -3470,6 +3471,10 @@ def _headless_allow_rules() -> tuple:
         rules += tuple(install_helper.team_read_entries())
     except Exception:
         pass
+    if allow_web:
+        # Only when the human said so at the pre-flight. A page fetched by an unattended run
+        # is content nobody reviewed, and content is DATA - never instruction (CLAUDE.md §7).
+        rules += ("WebSearch", "WebFetch")
     return rules
 
 
@@ -3487,7 +3492,7 @@ def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
         return False
     cap = pending.get("hard_cap_usd")
     try:
-        allowed = _headless_allow_rules()
+        allowed = _headless_allow_rules(bool(pending.get("allow_web")))
         record = headless_run.start(
             project_dir,
             decision,
