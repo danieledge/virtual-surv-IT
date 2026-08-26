@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -52,7 +53,14 @@ def test_first_call_writes_the_cache(tmp_path):
     assert _run(proj).returncode == 0
     cache = proj / ".claude" / ".guard-interpreter"
     assert cache.is_file()
-    assert cache.read_text(encoding="utf-8").strip() in ("python3", "python", "py")
+    # F6 (2026-08-26): the cache holds the RESOLVED PATH, not the bare name - the
+    # fast path re-runs `command -v` on this value every call, and resolving a bare
+    # name walks the whole PATH (an SMB timeout per tool call on a stale corporate
+    # PATH). What matters is still WHICH interpreter was chosen, so assert on the
+    # basename rather than loosening the check.
+    _cached = cache.read_text(encoding="utf-8").strip()
+    assert os.path.isabs(_cached), f"cache must hold a resolved path, got {_cached!r}"
+    assert os.path.basename(_cached).replace(".exe", "") in ("python3", "python", "py")
 
 
 def test_second_call_reuses_the_cache_without_re_executing_others(tmp_path):
@@ -77,7 +85,10 @@ def test_stale_cache_falls_back_to_the_full_probe(tmp_path):
     proc = _run(proj)
     assert proc.returncode == 0
     cache = proj / ".claude" / ".guard-interpreter"
-    assert cache.read_text(encoding="utf-8").strip() != "definitely-not-a-real-interpreter"
+    assert (
+        os.path.basename(cache.read_text(encoding="utf-8").strip())
+        != "definitely-not-a-real-interpreter"
+    )
 
 
 def test_guard_stdin_and_exit_code_pass_through_unchanged(tmp_path):
@@ -129,7 +140,14 @@ def test_probe_order_tries_python3_first_off_windows(tmp_path):
     proc = _run_with_env(proj, {"OS": ""}, path_prefix=bindir)
     assert proc.returncode == 0
     cache = proj / ".claude" / ".guard-interpreter"
-    assert cache.read_text(encoding="utf-8").strip() == "python3"
+    # F6 (2026-08-26): the cache holds the RESOLVED PATH, not the bare name - the
+    # fast path re-runs `command -v` on this value every call, and resolving a bare
+    # name walks the whole PATH (an SMB timeout per tool call on a stale corporate
+    # PATH). What matters is still WHICH interpreter was chosen, so assert on the
+    # basename rather than loosening the check.
+    _cached = cache.read_text(encoding="utf-8").strip()
+    assert os.path.basename(_cached).replace(".exe", "") == "python3"
+    assert os.path.isabs(_cached)
 
 
 def test_probe_order_skips_python3_first_on_windows(tmp_path):
@@ -141,7 +159,14 @@ def test_probe_order_skips_python3_first_on_windows(tmp_path):
     proc = _run_with_env(proj, {"OS": "Windows_NT"}, path_prefix=bindir)
     assert proc.returncode == 0
     cache = proj / ".claude" / ".guard-interpreter"
-    assert cache.read_text(encoding="utf-8").strip() == "python"
+    # F6 (2026-08-26): the cache holds the RESOLVED PATH, not the bare name - the
+    # fast path re-runs `command -v` on this value every call, and resolving a bare
+    # name walks the whole PATH (an SMB timeout per tool call on a stale corporate
+    # PATH). What matters is still WHICH interpreter was chosen, so assert on the
+    # basename rather than loosening the check.
+    _cached = cache.read_text(encoding="utf-8").strip()
+    assert os.path.basename(_cached).replace(".exe", "") == "python"
+    assert os.path.isabs(_cached)
 
 
 # --- CLAUDE_PLUGIN_ROOT vs CLAUDE_PROJECT_DIR: project state must never resolve under

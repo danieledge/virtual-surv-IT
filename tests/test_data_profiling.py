@@ -352,5 +352,12 @@ def test_the_shell_and_python_tiers_agree_on_the_default():
     # duplicating that here would just mean two tests failing for one pending apply.
     shell = (REPO_ROOT / "scripts" / "staged_hooks" / "run-guard.sh").read_text(encoding="utf-8")
     assert "_use_daemon=1" in shell
-    assert '"default_guard_daemon" *: *false' in shell, "machine tier missing from the shell"
-    assert '"guard_daemon" *: *false' in shell, "project-off missing from the shell"
+    # F1 (2026-08-26) replaced three `grep` spawns per tool call with a builtin `case`
+    # match, so the rule is no longer spelled as a grep pattern. The property under test is
+    # unchanged - both tiers are consulted, and only an explicit false turns the daemon off -
+    # so assert the checks are present rather than how they are written.
+    assert '_json_has "$_inst" default_guard_daemon false' in shell, (
+        "machine tier missing from the shell"
+    )
+    assert '_json_has "$_prefs" guard_daemon false' in shell, "project-off missing from the shell"
+    assert '_json_has "$_prefs" guard_daemon true' in shell, "project-on missing from the shell"

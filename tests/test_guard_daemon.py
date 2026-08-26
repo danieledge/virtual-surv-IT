@@ -20,6 +20,7 @@ impossible to silently reintroduce.
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 import threading
@@ -512,15 +513,17 @@ def test_clear_start_backoff_removes_the_marker(tmp_path, monkeypatch):
 
     count, age = client._read_start_backoff(state_root)
     assert count == 0 and age is None
-    assert not client._start_backoff_marker(state_root).exists()
+    # F2: _start_backoff_marker returns a str path now, not a Path.
+    assert not os.path.exists(client._start_backoff_marker(state_root))
 
 
 def test_read_start_backoff_fails_open_on_corrupt_marker(tmp_path, monkeypatch):
     client = _load_guard_daemon_client(monkeypatch)
     state_root = tmp_path / "project"
     marker = client._start_backoff_marker(state_root)
-    marker.parent.mkdir(parents=True)
-    marker.write_text("not-a-number", encoding="utf-8")
+    os.makedirs(os.path.dirname(marker), exist_ok=True)
+    with open(marker, "w", encoding="utf-8") as handle:
+        handle.write("not-a-number")
 
     assert client._read_start_backoff(state_root) == (0, None)
 
@@ -583,7 +586,8 @@ def test_client_main_defaults_state_root_to_module_root_with_one_arg(tmp_path, m
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO("{}"))
 
     client.main()
-    assert seen["state_root"] == tmp_path
+    # main() resolves argv paths with os.path.realpath now (F2), so this is a str.
+    assert seen["state_root"] == os.path.realpath(str(tmp_path))
     assert seen["target"] == "bash_hook_dispatcher"
 
 

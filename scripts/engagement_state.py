@@ -88,8 +88,13 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as _dt
-import hashlib
 import json
+# hashlib is imported INSIDE the three functions that hash (F9, 2026-08-26 perf audit):
+# it pulls _hashlib, an OpenSSL-backed extension module, for 4.2ms of this module's
+# 37.7ms import - paid by every `python -m scripts.engagement_state ...` call, which is
+# most of them, while only a handful of subcommands hash anything. A DLL load is also one
+# of the more AV-expensive import shapes on Windows. argparse (14.7ms, the largest single
+# import here) stays at module level - every CLI invocation genuinely needs it.
 import os
 import pathlib
 import sys
@@ -507,6 +512,7 @@ def compute_fingerprint(pack: Path) -> str:
         entries.append(
             f"{STATE_FILENAME}|" + json.dumps(validity_subset, sort_keys=True, ensure_ascii=False)
         )
+    import hashlib  # deferred: see the note at the former import site
     return hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
 
 
@@ -771,6 +777,7 @@ def index_path(artifacts_dir: Path) -> Path:
 def state_hash(state: dict) -> str:
     """Stable short hash of the state content - embedded in the render, checked by the DoD."""
     canon = json.dumps(state, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    import hashlib  # deferred: see the note at the former import site
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
 
 
@@ -782,6 +789,7 @@ def content_hash(md_text: str) -> str:
     lines = [ln for ln in md_text.splitlines() if not ln.strip().startswith(_HASH_MARKER_PREFIX)]
     while lines and lines[-1] == "":
         lines.pop()  # normalise trailing blanks - splitlines drops them asymmetrically
+    import hashlib  # deferred: see the note at the former import site
     return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()[:16]
 
 
