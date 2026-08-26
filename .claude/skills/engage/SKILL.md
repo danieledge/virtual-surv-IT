@@ -157,8 +157,13 @@ first prompt. When present, this is the answer - **do not ask the question at al
   (relative to the project directory): its contents ARE the request. Treat it exactly as if
   they had typed it in-session, classify from it, and **do not re-ask what the work is**.
   It is one sanitised line, so expect terseness rather than a brief - ask about detail if
-  you need it, never about the ask itself. **Do not delete it** - creating the workspace
-  consumes it, and the launcher clears any leftover at the next `go`. Removing it by hand
+  you need it, never about the ask itself. **Read it BEFORE creating the workspace**, or read
+  it back afterwards from the pack: `engagement-state.json` carries the same text under
+  `request`, because creating the workspace consumes the file (live report 2026-08-26: init
+  ran first, the file was gone, and the session reported the request did not exist). Either
+  order works now; the file first is simply the shortest path.
+  **Do not delete it** - creating the workspace consumes it, and the launcher clears any
+  leftover at the next `go`. Removing it by hand
   needs a shell command that is not in the allow-list, so the attempt is simply refused
   (seen twice in one live unattended run, 2026-08-26) - a doomed action the mechanism had
   already handled.

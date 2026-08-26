@@ -1401,14 +1401,19 @@ def consume_request_handoff(project_root: pathlib.Path) -> str:
 def _cmd_init(args: argparse.Namespace) -> int:
     # New engagements are WORKSPACED by default (artifacts/<slug>/); an explicit --dir
     # keeps flat semantics (tests, custom layouts, pre-0.31 behaviour).
-    # The typed request is consumed here too - see consume_request_handoff for why the
-    # skill being told to delete it is not enough on its own. Its VALUE is not needed here
-    # (the session read it to classify the work); what matters is that it cannot outlive
-    # the engagement it was typed for.
+    # The typed request is consumed here too - see consume_request_handoff for why the skill
+    # being told to delete it is not enough on its own.
+    #
+    # And its VALUE IS KEPT. The first version discarded it on the reasoning that the session
+    # had already read it - which assumed an ordering nothing guarantees. Creating the
+    # workspace before reading the request deleted the human's own words and the session then
+    # reported the file did not exist (live report, 2026-08-26). The request is the
+    # engagement's brief; the pack is where it belongs, and storing it makes the read
+    # order irrelevant.
     try:
-        consume_request_handoff(project_root_for(getattr(args, "dir", None)))
+        _typed_request = consume_request_handoff(project_root_for(getattr(args, "dir", None)))
     except Exception:
-        pass  # never let handoff cleanup break workspace creation
+        _typed_request = ""  # never let handoff cleanup break workspace creation
     # Read the launcher's handoff ONCE, before the state dict is built: it carries the
     # unattended flag AND the pre-answered budget/degrade choice, and consuming it twice
     # would lose whichever half read second.
@@ -1503,6 +1508,10 @@ def _cmd_init(args: argparse.Namespace) -> int:
         # transcript reader had to do and could never do reliably.
         "run_mode": _handoff.get("run_mode") or None,
         "session_id": _handoff.get("session_id") or None,
+        # What the human actually typed at the launcher, verbatim. Recorded so it survives
+        # the one-shot handoff being consumed, and so a reader months later can see the ask
+        # the engagement answered rather than only the answer.
+        "request": _typed_request or None,
         "phase": args.phase,
         "team": [],
         "verdict": None,

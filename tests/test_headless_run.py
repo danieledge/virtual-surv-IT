@@ -698,3 +698,45 @@ def test_unreadable_settings_still_yield_a_model(tmp_path, monkeypatch):
     (project / ".claude" / "settings.json").write_text("{not json", encoding="utf-8")
     monkeypatch.setattr(launcher.Path, "home", staticmethod(lambda: tmp_path / "nohome"))
     assert launcher._headless_model(project) == "sonnet"
+
+
+def test_the_typed_request_survives_the_workspace_being_created(tmp_path):
+    """Live report, 2026-08-26: a NEW attended engagement with a typed prompt produced no
+    request file and the session said it did not exist.
+
+    Cause was mine. consume_request_handoff was called for its side effect and its RETURN
+    VALUE DISCARDED, on the reasoning that the session had already read the file - an
+    ordering nothing guarantees. Creating the workspace first deleted the human's own words.
+
+    The request is the engagement's brief; the pack is where it belongs. Storing it makes the
+    read order irrelevant, and lets a reader months later see the ask that was answered."""
+    state = _load_state()
+    project = _project(tmp_path)
+    (project / ".claude" / ".request-pending.txt").write_text(
+        "review the spoofing thresholds for Q3\n", encoding="utf-8"
+    )
+    text = state.consume_request_handoff(project)
+    assert text == "review the spoofing thresholds for Q3", "the value must come back"
+    assert not (project / ".claude" / ".request-pending.txt").exists(), "and still be consumed"
+
+
+def test_init_records_the_request_on_the_pack(tmp_path):
+    """Verified against the real init command, not the helper alone - the discarded return
+    value was in _cmd_init, which is exactly the layer a helper-only test would have missed."""
+    import subprocess
+
+    project = _project(tmp_path)
+    (project / ".claude" / ".request-pending.txt").write_text(
+        "review the spoofing thresholds for Q3\n", encoding="utf-8"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-m", "scripts.engagement_state", "init",
+         "--title", "Spoofing review", "--slug", "spoof-q3"],
+        cwd=str(project), capture_output=True, text=True, timeout=120,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+    )
+    assert proc.returncode == 0, proc.stderr[-400:]
+    pack = json.loads(
+        (project / "artifacts" / "spoof-q3" / "engagement-state.json").read_text("utf-8")
+    )
+    assert pack["request"] == "review the spoofing thresholds for Q3"
