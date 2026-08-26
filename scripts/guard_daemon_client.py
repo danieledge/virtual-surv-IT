@@ -38,11 +38,10 @@ either path (daemon-served or cold-start fallback).
 from __future__ import annotations
 
 import json
+import os
 import socket
-import subprocess  # nosec B404 - fixed argv, shell=False, invoking our own sibling scripts only
 import sys
 import time
-from pathlib import Path
 
 _CONNECT_TIMEOUT = 0.5
 _RESPONSE_TIMEOUT = 20.0
@@ -73,39 +72,83 @@ _START_BACKOFF_TTL_SECONDS = 300  # retry again after this long even while backe
 # HAPPY PATH (daemon connects immediately) the daemon's own server-side imports were paid
 # for nothing this call ever used. Inlined below instead of imported.
 #
-# `subprocess` stays a top-level import (NOT deferred to the two functions that use it,
-# though the same reasoning would suggest it): tests/test_guard_daemon.py patches it as a
-# module attribute (`monkeypatch.setattr(client.subprocess, "Popen", ...)`), which only
-# resolves if the import is module-level - a local import inside a function is never
-# reachable as `client.subprocess` from outside. Not worth breaking that established
-# patching convention for a much smaller win than the read_port_and_token inline above.
+# `subprocess` IS deferred (2026-08-26). The note here previously kept it top-level to
+# preserve tests/test_guard_daemon.py's `monkeypatch.setattr(client.subprocess, ...)`
+# convention, judging the win "much smaller" than the read_port_and_token inline - a
+# judgement made without a measurement. Measured: `-X importtime` puts subprocess at 11.9ms
+# of an ~87ms client call, and NOTHING on the happy path uses it (it appears only in
+# _start_daemon_detached and _cold_start_fallback). Every daemon-routed hook call was
+# importing a process-spawning library in order not to spawn a process.
+#
+# The patching convention is preserved exactly, by two mechanisms that work together:
+#   - the module-level __getattr__ below resolves `client.subprocess` for outside callers
+#     (PEP 562), so `monkeypatch.setattr(client.subprocess, "Popen", ...)` still finds the
+#     real module;
+#   - that patch mutates the singleton in sys.modules, so the deferred `import subprocess`
+#     inside each function retrieves the SAME already-patched object.
+# Module-level __getattr__ is not consulted for the module's own global lookups, which is
+# why each function imports it by name rather than relying on the hook.
 PORT_FILE_NAME = ".guard-daemon-port"  # must match guard_daemon.py's own PORT_FILE_NAME
 
 
-def read_port_and_token(state_root: Path):
+def __getattr__(name):
+    """Resolve `client.subprocess` on demand - see the deferral note above.
+
+    Only ever fires for an attribute this module does not define, so it costs nothing on
+    the happy path and keeps the established test-patching convention working."""
+    if name == "subprocess":
+        import subprocess  # nosec B404 - fixed argv, shell=False, our own sibling scripts
+
+        return subprocess
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def read_port_and_token(state_root):
     """Fail-open ((None, None)) on any read/parse error - a corrupt or half-written port
     file must never crash a client; it just means "no daemon available right now", the
     exact same posture as no port file existing at all. Takes the PROJECT root
-    (per-project state), never the plugin root. Kept byte-identical to guard_daemon.py's
-    own copy (this file's canonical source - see the H2 comment above for why this is a
-    deliberate inline, not drift) - tests/test_guard_daemon.py pins the two in sync."""
-    port_file = state_root / ".claude" / PORT_FILE_NAME
+    (per-project state), never the plugin root. guard_daemon.py keeps its own copy of this
+    logic (this file is the canonical source - see the H2 comment above for why that is a
+    deliberate inline, not drift); the two are pinned by the BEHAVIOURAL tests in
+    tests/test_guard_daemon.py, not by textual identity - an earlier version of this
+    docstring claimed a byte-identical pin that no test actually asserted.
+
+    F2 (2026-08-26 perf audit): os.path, not pathlib. Accepts str or Path either way."""
+    port_file = os.path.join(str(state_root), ".claude", PORT_FILE_NAME)
     try:
-        lines = port_file.read_text(encoding="utf-8").splitlines()
+        with open(port_file, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
         return int(lines[0].strip()), lines[1].strip()
     except (OSError, ValueError, IndexError):
         return None, None
 
 
-def _try_daemon(state_root: Path, target: str, payload_text: str):
+def _try_daemon(state_root, target: str, payload_text: str):
     """Returns (exit_code, stderr_text, stdout_text) on success, None on ANY
     failure - never raises, since a broken daemon connection must fall back
     cleanly, not crash the tool call it's guarding."""
     port, token = read_port_and_token(state_root)
     if port is None:
         return None
+    # F3 (2026-08-26 perf audit): a raw socket, NOT socket.create_connection.
+    # create_connection routes even a dotted-quad literal through getaddrinfo, whose C
+    # IDNA converter imports encodings.idna -> stringprep -> unicodedata. Verified:
+    # create_connection(("127.0.0.1", 1)) leaves encodings.idna imported, a bare
+    # socket().connect() does not. Measured 6.6ms per call here - and on Windows the cost
+    # is worse in kind, not just degree: getaddrinfo traverses the Winsock LSP/NSP chain,
+    # which on a corporate box routinely has DNS-client and security providers layered
+    # in, and which occasionally HANGS rather than merely being slow.
+    #
+    # Nothing is given up. The daemon binds ("127.0.0.1", 0) - always IPv4, always a
+    # literal - so there is no name to resolve and no address list to walk. connect()
+    # raises the same OSError class create_connection re-raises, so the fail-open-to-
+    # cold-start posture below is unchanged. try/finally replaces the context manager,
+    # which create_connection provided and a bare socket does not.
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=_CONNECT_TIMEOUT) as sock:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(_CONNECT_TIMEOUT)
+            sock.connect(("127.0.0.1", port))
             sock.settimeout(_RESPONSE_TIMEOUT)
             request = json.dumps({"token": token, "target": target, "payload": payload_text}) + "\n"
             sock.sendall(request.encode("utf-8"))
@@ -117,6 +160,8 @@ def _try_daemon(state_root: Path, target: str, payload_text: str):
                     break
                 chunks.append(chunk)
             raw = b"".join(chunks)
+        finally:
+            sock.close()
         response = json.loads(raw.decode("utf-8"))
     except (OSError, ValueError):
         return None
@@ -132,11 +177,13 @@ def _try_daemon(state_root: Path, target: str, payload_text: str):
     return response.get("exit_code", 0), response.get("stderr", ""), response.get("stdout", "")
 
 
-def _start_daemon_detached(module_root: Path, state_root: Path) -> None:
+def _start_daemon_detached(module_root, state_root) -> None:
     """Best-effort, never blocks and never raises - a failed daemon start is not
     this call's problem, only a missed optimisation for next time."""
+    import subprocess  # nosec B404 - deferred; see the note above
+
     try:
-        daemon_script = Path(__file__).resolve().parent / "guard_daemon.py"
+        daemon_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), "guard_daemon.py")
         kwargs = {}
         if sys.platform == "win32":
             # DETACHED_PROCESS: no console inherited from this process.
@@ -175,47 +222,49 @@ def _start_daemon_detached(module_root: Path, state_root: Path) -> None:
         pass
 
 
-def _start_backoff_marker(state_root: Path) -> Path:
-    return state_root / ".claude" / _START_BACKOFF_MARKER_NAME
+def _start_backoff_marker(state_root) -> str:
+    return os.path.join(str(state_root), ".claude", _START_BACKOFF_MARKER_NAME)
 
 
-def _read_start_backoff(state_root: Path):
+def _read_start_backoff(state_root):
     """Returns (streak_count, age_seconds) - (0, None) when the marker is absent,
     unreadable or corrupt (fail open: an unreadable marker means "no known backoff",
     same posture as read_port_and_token above). age_seconds is always populated
     together with a non-zero count, since both come from the same successful read."""
     marker = _start_backoff_marker(state_root)
     try:
-        count = int(marker.read_text(encoding="utf-8").strip())
-        age = time.time() - marker.stat().st_mtime
+        with open(marker, encoding="utf-8") as handle:
+            count = int(handle.read().strip())
+        age = time.time() - os.stat(marker).st_mtime
         return count, age
     except (OSError, ValueError):
         return 0, None
 
 
-def _record_start_attempt(state_root: Path, streak_count: int) -> None:
+def _record_start_attempt(state_root, streak_count: int) -> None:
     """Best-effort - a failed write just means the next call re-evaluates from
     scratch (falls open to "attempt the Popen"), never a reason to raise."""
     marker = _start_backoff_marker(state_root)
     try:
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text(str(streak_count), encoding="utf-8")
+        os.makedirs(os.path.dirname(marker), exist_ok=True)
+        with open(marker, "w", encoding="utf-8") as handle:
+            handle.write(str(streak_count))
     except OSError:
         pass
 
 
-def _clear_start_backoff(state_root: Path) -> None:
+def _clear_start_backoff(state_root) -> None:
     """Called once a daemon actually answers a request - the one signal this client
     ever gets that a start attempt genuinely worked. Wipes the streak so the next
     failure (if the daemon later dies) starts counting from zero again, not from
     wherever an old streak left off."""
     try:
-        _start_backoff_marker(state_root).unlink()
+        os.remove(_start_backoff_marker(state_root))
     except OSError:
         pass
 
 
-def _maybe_start_daemon(module_root: Path, state_root: Path) -> None:
+def _maybe_start_daemon(module_root, state_root) -> None:
     """Rate-limited wrapper around _start_daemon_detached: after
     _START_BACKOFF_THRESHOLD consecutive attempts with no confirmed-working daemon,
     stop spawning a fresh Popen every call until _START_BACKOFF_TTL_SECONDS has
@@ -233,10 +282,12 @@ def _maybe_start_daemon(module_root: Path, state_root: Path) -> None:
     _record_start_attempt(state_root, next_count)
 
 
-def _cold_start_fallback(module_root: Path, target: str, payload_text: str):
+def _cold_start_fallback(module_root, target: str, payload_text: str):
     """Exactly today's path - a fresh subprocess against the real target script.
     Fails open on any launch problem, same posture as run-guard.sh's own
     no-interpreter-found case: a broken fallback must not brick the tool call."""
+    import subprocess  # nosec B404 - deferred; see the note above
+
     dispatcher = module_root / "scripts" / f"{target}.py"
     try:
         proc = subprocess.run(  # nosec B603 - fixed argv, shell=False
@@ -252,8 +303,9 @@ def _cold_start_fallback(module_root: Path, target: str, payload_text: str):
 
 
 def main() -> int:
-    module_root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
-    state_root = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else module_root
+    # realpath, not abspath: Path.resolve() follows symlinks and this must keep doing so.
+    module_root = os.path.realpath(sys.argv[1]) if len(sys.argv) > 1 else os.getcwd()
+    state_root = os.path.realpath(sys.argv[2]) if len(sys.argv) > 2 else module_root
     # Backward-compat default: a caller that predates the multi-target extension
     # never passes a third argument - it only ever meant bash_hook_dispatcher.
     target = sys.argv[3] if len(sys.argv) > 3 else "bash_hook_dispatcher"

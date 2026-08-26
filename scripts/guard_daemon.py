@@ -144,12 +144,20 @@ PORT_FILE_NAME = ".guard-daemon-port"
 # it DOES do is import engage_probe, engagement_state and find_plugin_root in-function, which
 # sys.modules then caches for the daemon's lifetime - so all three are in the watch list
 # below, exactly as check_artifacts.py is for persona_anchor.
+# prompt_hook_dispatcher joined 2026-08-26 (F4 perf audit). It supersedes persona_anchor
+# and engage_probe_prefetch as the single UserPromptSubmit entry - the two of them were
+# registered separately, so every user message paid two complete launcher chains for
+# ~1.5ms of combined work. Both are KEPT in this list rather than removed: they remain
+# individually daemon-servable for any caller still wired the old way (a project whose
+# settings the human has not re-applied yet), and they are still the files whose staleness
+# matters, since the dispatcher imports them.
 _TARGET_MODULE_NAMES = (
     "bash_hook_dispatcher",
     "locked_menu_guard",
     "post_edit_lint",
     "subagent_return_budget",
     "stop_hook_dispatcher",
+    "prompt_hook_dispatcher",
     "persona_anchor",
     "engage_probe_prefetch",
 )

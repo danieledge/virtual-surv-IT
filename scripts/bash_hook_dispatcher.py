@@ -105,6 +105,12 @@ _CHECKS = (
     # infra polarity (fail_open on a missing/broken file) - it is a cost rule,
     # not a safety wall; the module itself returns 2 to deny when armed.
     ("enumeration_redirect", _SCRIPTS_DIR / "enumeration_redirect.py", {"Bash"}, False),
+    # Exploration redirect (2026-08-26): the sibling of enumeration_redirect for the two
+    # habits that actually cost the tokens - a whole-file Read of a large file, and an
+    # unbounded content-mode Grep. Same advisory infra polarity (fail_open), same
+    # engaged-sessions-only arming, and it redirects each target ONCE so a deliberate full
+    # read still succeeds on the repeat. Prose said this already; prose did not do it.
+    ("exploration_redirect", _SCRIPTS_DIR / "exploration_redirect.py", {"Read", "Grep"}, False),
 )
 
 

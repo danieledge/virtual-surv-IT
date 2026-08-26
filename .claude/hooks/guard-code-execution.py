@@ -65,10 +65,33 @@ def _exec_authorised() -> bool:
 # the tail of a filename/word (`a.py b.py` blocked read-only git/grep/wc over two .py files -
 # the third prose/argument FP, after `make` and `sh <file>.sh`; ADR-002 rec 14a).
 _PY = r"(?:python(?:3(?:\.\d+)?)?|(?<![\w.-])py)"
-
 # Path separator: forward slash OR backslash - Windows commands arrive with backslash paths
 # (`python C:\plugin\scripts\render_html.py`) and a slash-only allow-list blocked them (0.4.1).
 _SEP = r"[/\\]"
+
+# The interpreter as the TEAM_ALLOW list sees it: a bare name, OR a full path to one, with
+# or without .exe, quoted or not (2026-08-26 live report, corp Windows). Plugin mode on a
+# box with an unreliable PATH resolves `<python>` to an absolute interpreter - the real
+# command was `"C:/Python313/python.exe" "C:/Users/.../virtual-surv-IT/scripts/
+# engagement_state.py" init ...` - and bare-name-only matching meant _TEAM_ALLOW did not
+# recognise the team's OWN front-door script. CLAUDE.md §7 is explicit that the gate covers
+# the code under review and never the team's tooling, so this was the gate breaking its own
+# contract, and on the one platform least able to work around it.
+#
+# The security property is UNCHANGED because it never lived in the interpreter token: trust
+# comes from the SCRIPT side - a basename on _TEAM_SCRIPT_NAMES, directly inside a
+# `scripts/` directory. `<any python> <allow-listed team script>` is exactly as trusted as
+# `python <allow-listed team script>`; `<any python> /tmp/evil.py` stays blocked, and the
+# pinning tests below assert precisely that.
+#
+# Deliberately NOT used in _EXEC_PATTERNS - see the note there.
+_PY_ANY = (
+    rf"(?:\"[^\"]*{_SEP}(?:python(?:3(?:\.\d+)?)?|py)(?:\.exe)?\""
+    rf"|'[^']*{_SEP}(?:python(?:3(?:\.\d+)?)?|py)(?:\.exe)?'"
+    rf"|(?![\"'])\S*{_SEP}(?:python(?:3(?:\.\d+)?)?|py)(?:\.exe)?"
+    rf"|{_PY}(?:\.exe)?)"
+)
+
 
 # Commands/patterns that EXECUTE code. Evaluated PER SEGMENT (see _segments). Each carries why
 # it counts as "execution". (Hardened per docs/adr/ADR-002 Tier 1; false positives fixed in
@@ -150,6 +173,12 @@ _TEAM_SCRIPT_NAMES = (
     r"|validate_masking|validate_manifest|validate_rtm|validate_references|check_citations|eval_score"
     r"|calibrate_spoofing|check_artifacts|engagement_state|extensions|convert_sarif"
     r"|engage_probe|repo_skeleton|explain_rule|render_evidence_room"
+    # probe_codeintel (2026-08-26): the human-run capability probe that answers
+    # "can this machine use tree-sitter / ast-grep at all?" - shipped through the
+    # repo because the machines that most need answering are the ones nothing can
+    # be copied onto. Listed here so the model can run it for a user who asks, per
+    # the maintenance rule above.
+    r"|probe_codeintel"
     # 2026-08-25: launch_terminal, which opens a session in its own window. Without it a
     # plugin-mode user gets a consent prompt for the team's OWN tooling - the exact live
     # defect found on 2026-08-01 when engage_probe was missing from this list.
@@ -195,14 +224,14 @@ def _company_allowed(segment: str) -> bool:
 # pytest/unittest/pre-commit/powershell for the same reason - applied here too, zero or more
 # repetitions so chained env vars (`A=1 B=2 python ...`) also pass.
 _TEAM_ALLOW = re.compile(
-    rf"^(?:\w+=\S+\s+)*(?:{_PY}\s+-m\s+scripts\."
-    rf"|{_PY}\s+scripts{_SEP}"
-    rf"|{_PY}\s+\"[^\"]*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}\""
-    rf"|{_PY}\s+'[^']*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}'"
+    rf"^(?:\w+=\S+\s+)*(?:{_PY_ANY}\s+-m\s+scripts\."
+    rf"|{_PY_ANY}\s+scripts{_SEP}"
+    rf"|{_PY_ANY}\s+\"[^\"]*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}\""
+    rf"|{_PY_ANY}\s+'[^']*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}'"
     # Unquoted branch REJECTS a leading quote (0.29.1 tightening): the old [\"']?\S* let a
     # half-quoted `"path/scripts/render_html.py evil.py"` match without its closing quote -
     # quoted forms must now fully match the strict quoted branches above.
-    rf"|{_PY}\s+(?![\"'])\S*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}\b"
+    rf"|{_PY_ANY}\s+(?![\"'])\S*{_SEP}scripts{_SEP}{_TEAM_SCRIPT_NAMES}\b"
     rf"|bash\s+\"[^\"]*{_SEP}scripts{_SEP}check-review-tools\.sh\""
     rf"|bash\s+'[^']*{_SEP}scripts{_SEP}check-review-tools\.sh'"
     rf"|bash\s+(?![\"'])\S*{_SEP}scripts{_SEP}check-review-tools\.sh\b"

@@ -164,6 +164,56 @@ done
 # compared six times, and ${1##*/} instead of a basename subprocess call (this check
 # runs unconditionally on every single call regardless of daemon status, so it's worth
 # the same subprocess-avoidance care as the rest of this file).
+# F1 (2026-08-26 perf audit): read a boolean out of a small JSON file using SHELL BUILTINS
+# ONLY - no grep, no fork. This check runs BEFORE the daemon fast path, unconditionally, on
+# every daemon-servable call, and it was three `grep` spawns per tool call when both files
+# exist (the common case). Measured on Linux that is 5.07ms - 79% of this launcher's entire
+# shell layer - and on the corporate Git-Bash/AV host each spawn is the very thing the rest
+# of this file works to avoid. The 2026-08-14 pass replaced `cat` with `read` for exactly
+# this reason, on the very next code path, and left these standing upstream of it.
+#
+# Equivalence with the `grep '"key" *: *value'` patterns it replaces: whitespace is removed
+# everywhere (word-splitting each line and re-joining with no separator), then a single
+# `case` looks for the literal `"key":value`. That accepts any run of spaces around the
+# colon, exactly as ` *` did, and still refuses a key merely ENDING in the name -
+# `{"other_guard_daemon": false}` has no `"` before `guard_daemon`, so it does not match,
+# in both the old and the new form. Verified equivalent against the live grep patterns
+# across the spacing, embedded-key, multi-key, glob-character and empty-object cases.
+#
+# ONE DELIBERATE DIFFERENCE, found by that comparison: grep is line-based, so it could not
+# see a value sitting on the line AFTER its key -
+#     {"guard_daemon":
+#        false}
+# which is valid JSON a formatter can produce, and which grep silently ignored - leaving
+# the daemon on against the user's explicit setting. Joining the lines fixes that. It is
+# safe to fix here and nowhere near a security decision: this switch chooses between the
+# daemon and the cold-start fallback, which run the SAME guard code (see the fail-safe note
+# below), so both directions are a performance posture, never a weaker check.
+#
+# `set -f` around the split: word splitting also performs pathname expansion, so an
+# unguarded `set -- $line` would glob a `*` appearing in JSON text against the filesystem.
+# The previous flag state is restored rather than assumed.
+_json_has() {
+	_jf=$1 _jk=$2 _jv=$3 _jc=""
+	case $- in
+		*f*) _jg=1 ;;
+		*) _jg=0 ;;
+	esac
+	set -f
+	while IFS= read -r _jl || [ -n "$_jl" ]; do
+		# shellcheck disable=SC2086 # deliberate word-split; globbing disabled above
+		set -- $_jl
+		for _jw in "$@"; do
+			_jc="$_jc$_jw"
+		done
+	done <"$_jf" 2>/dev/null
+	[ "$_jg" = 1 ] || set +f
+	case "$_jc" in
+		*"\"$_jk\":$_jv"*) return 0 ;;
+	esac
+	return 1
+}
+
 _use_daemon=0
 _daemon_target=""
 case "${1##*/}" in
@@ -172,6 +222,7 @@ case "${1##*/}" in
 	post_edit_lint.py) _daemon_target="post_edit_lint" ;;
 	subagent_return_budget.py) _daemon_target="subagent_return_budget" ;;
 	stop_hook_dispatcher.py) _daemon_target="stop_hook_dispatcher" ;;
+	prompt_hook_dispatcher.py) _daemon_target="prompt_hook_dispatcher" ;;
 	persona_anchor.py) _daemon_target="persona_anchor" ;;
 	engage_probe_prefetch.py) _daemon_target="engage_probe_prefetch" ;;
 esac
@@ -189,14 +240,14 @@ if [ -n "$_daemon_target" ]; then
 	# turns it off.
 	_use_daemon=1
 	_inst="${XDG_CONFIG_HOME:-$HOME/.config}/virt-surv-it/installer.json"
-	if [ -f "$_inst" ] && grep -q '"default_guard_daemon" *: *false' "$_inst" 2>/dev/null; then
+	if [ -f "$_inst" ] && _json_has "$_inst" default_guard_daemon false; then
 		_use_daemon=0
 	fi
 	_prefs="$_project_root/.claude/team-preferences.json"
 	if [ -f "$_prefs" ]; then
-		if grep -q '"guard_daemon" *: *false' "$_prefs" 2>/dev/null; then
+		if _json_has "$_prefs" guard_daemon false; then
 			_use_daemon=0
-		elif grep -q '"guard_daemon" *: *true' "$_prefs" 2>/dev/null; then
+		elif _json_has "$_prefs" guard_daemon true; then
 			_use_daemon=1
 		fi
 	fi
@@ -220,6 +271,20 @@ DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
 # daemon-invocation branch further down handles that first call correctly; this fast path
 # only ever engages once the interpreter is already known, never before.
 #
+# 2026-08-26 perf audit: the daemon removes the guard WORK from each call but not the
+# Python START-UP that carries the request to it - the client is still a fresh interpreter
+# per tool call. `-S` skips `site` (site-packages scanning and sitecustomize), which is the
+# bulk of that start-up: measured here 93ms -> 31ms for `python3 -c pass`, i.e. roughly a
+# third, on every single daemon-routed call. Every script this launcher runs imports the
+# standard library only, or inserts its own path explicitly (persona_anchor.py and
+# engage_probe_prefetch.py both do; verified byte-identical output under -S), so nothing
+# needs the paths `site` would have added.
+#
+# `-E` is NOT used and must not be: it would also ignore PYTHONIOENCODING/PYTHONUTF8, the
+# UTF-8 pin set at the top of this file - measured, `-S` alone keeps utf8_mode=1 while
+# `-S -E` drops it to 0, which is precisely the silent cp1252 mis-decode that produced
+# false "drift" blocks in the 2026-07-31 corporate report. The pin costs nothing to keep.
+#
 # 2026-08-14 perf audit (live corp-Windows measurement, guard-daemon roundtrip
 # investigation): this fast path is the highest-frequency code path in the whole guard
 # system (every daemon-routed PreToolUse call), so its own process-spawn count matters
@@ -232,7 +297,7 @@ if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
 	if [ -f "$_fastcache" ]; then
 		IFS= read -r _fastcached <"$_fastcache" 2>/dev/null
 		if [ -n "$_fastcached" ] && command -v "$_fastcached" >/dev/null 2>&1; then
-			"$_fastcached" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
+			"$_fastcached" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 			exit $?
 		fi
 	fi
@@ -287,7 +352,7 @@ if [ -z "$_measured_ms" ] && [ -f "$CACHE" ]; then
 		# second-level precision is coarse but adequate; it only ever errs toward the floor
 		# on a genuinely fast host, which is the safe direction to be wrong in.
 		_t0=$(date +%s 2>/dev/null) || _t0=""
-		"$_known_good" -c 'pass' >/dev/null 2>&1
+		"$_known_good" -S -c 'pass' >/dev/null 2>&1
 		_t1=$(date +%s 2>/dev/null) || _t1=""
 		if [ -n "$_t0" ] && [ -n "$_t1" ] && [ "$_t1" -ge "$_t0" ] 2>/dev/null; then
 			_measured_ms=$(( (_t1 - _t0) * 1000 ))
@@ -368,10 +433,10 @@ if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)
 	if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
 		if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
-			"$cached" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
+			"$cached" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 			exit $?
 		fi
-		"$cached" "$@"
+		"$cached" -S "$@"
 		exit $?
 	fi
 fi
@@ -390,12 +455,32 @@ for interpreter in $order; do
 	if command -v "$interpreter" >/dev/null 2>&1; then
 		if "$interpreter" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
 			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
-			printf '%s' "$interpreter" >"$CACHE" 2>/dev/null
+			# F6 (2026-08-26 perf audit): cache the RESOLVED PATH, not the bare name.
+			# The fast path re-runs `command -v "$_fastcached"` on every single call, and
+			# the note above ("cheap and safe to redo every call") holds for a resolved
+			# absolute path but NOT for a bare name: resolving `python` walks every PATH
+			# entry, probing executable extensions. On a corporate Windows box - where
+			# this project's own environment notes record the PATH as stale - one dead
+			# network-drive entry ahead of the Python directory turns that into an SMB
+			# timeout on EVERY tool call. install_helper.py and virt_team_launcher.py both
+			# already write an absolute sys.executable here; only this self-warm path
+			# wrote the bare name, so a project warmed by the launcher itself was the one
+			# left on the slow form.
+			#
+			# Behaviour: `command -v` on an absolute path still validates existence, so
+			# the fast path's check is unchanged in kind, only in cost. The one real
+			# difference is that a mid-session PATH change is no longer picked up - which
+			# is arguably the point of a cache that exists to pin a version-probed
+			# interpreter. Falls back to the bare name if resolution fails, so this can
+			# never leave the cache empty.
+			_resolved=$(command -v "$interpreter" 2>/dev/null) || _resolved=""
+			[ -n "$_resolved" ] || _resolved="$interpreter"
+			printf '%s' "$_resolved" >"$CACHE" 2>/dev/null
 			if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
-				"$interpreter" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
+				"$interpreter" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 				exit $?
 			fi
-			"$interpreter" "$@"
+			"$interpreter" -S "$@"
 			exit $?
 		fi
 	fi

@@ -235,7 +235,11 @@ def test_only_applicable_checks_run_for_the_tool(monkeypatch):
     monkeypatch.setattr(bhd, "_load", fake_load)
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps({"tool_name": "Read"})))
     assert bhd.main() == 0
-    assert calls == ["guard_raw_data", "document_input_redirect"]
+    # exploration_redirect joined on 2026-08-26 (Read + Grep). The Bash-only checks must
+    # still be absent - that scoping is what this test exists to protect.
+    assert calls == ["guard_raw_data", "document_input_redirect", "exploration_redirect"]
+    assert "guard_code_execution" not in calls
+    assert "module_form_redirect" not in calls
 
 
 def test_safety_guard_crash_fails_closed(monkeypatch, capsys):

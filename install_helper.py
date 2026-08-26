@@ -1965,8 +1965,56 @@ class Installer:
                 "until this runs. A human (not this script) should run:"
             )
         )
-        self.say("    bash scripts/apply-outstanding.sh")
+        self.say(f"    cd {self.repo} && bash scripts/apply-outstanding.sh")
+        # Who is reading this matters (2026-08-26 owner report). Applying a staged safety
+        # hook is a MAINTAINER action: it edits guard code, and on a managed plugin install
+        # the next update overwrites it anyway, so the fix would silently revert. Someone
+        # running an installed copy needs a different instruction from someone standing in
+        # their own clone - and telling them to run a script that cannot help them is worse
+        # than saying nothing, because it reads as "you forgot a step" for a step that was
+        # never theirs.
+        if self._is_managed_plugin_install():
+            self.say(
+                self.style.yellow(
+                    "  This looks like an INSTALLED plugin copy, not your own clone - so "
+                    "this is not yours to apply, and a plugin update would overwrite it. "
+                    "Please report it to the plugin author instead:"
+                )
+            )
+            self.say(f"    {REPO_URL.removesuffix('.git')}/issues")
+            self.say(
+                self.style.dim(
+                    "    Quote the file name(s) above and this plugin version. Nothing is "
+                    "broken meanwhile - an unapplied fix means the OLD behaviour, never a "
+                    "disabled guard."
+                )
+            )
         self.step_skip("Pending hook fixes", f"{len(pending)} waiting - see command above")
+
+    def _is_managed_plugin_install(self) -> bool:
+        """Is self.repo a plugin install directory rather than a clone the user maintains?
+
+        Best-effort and deliberately conservative: an unclear answer returns False, so the
+        extra guidance is only ever ADDED when we are fairly sure, never substituted for
+        the apply command. Signals: the clone sits under a registered plugin install path,
+        or under a .claude/plugins directory, or has no .git at all (a marketplace copy is
+        not a checkout, so there is nothing to commit an applied fix into)."""
+        try:
+            repo = Path(self.repo).resolve()
+        except (OSError, ValueError):
+            return False
+        try:
+            for candidate in _registry_install_paths(Path.home()):
+                resolved = Path(candidate).expanduser().resolve()
+                if repo == resolved or resolved in repo.parents:
+                    return True
+        except Exception:
+            pass
+        if any(part == "plugins" for part in repo.parts) and any(
+            part in (".claude", "claude") for part in repo.parts
+        ):
+            return True
+        return not (repo / ".git").exists()
 
     def print_update_preview(self, preview: dict, branch: str, local_version) -> None:
         """Console rendering of gather_update_preview's result. Purely informational:
