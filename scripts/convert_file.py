@@ -709,13 +709,55 @@ def read_docx(source: Path, report: Report) -> dict:
     def para_text(p) -> str:
         return "".join(t.text or "" for t in p.iter(f"{{{ns['w']}}}t"))
 
+    def heading_level(p) -> int:
+        """Word heading level for a paragraph, or 0 if it is body text.
+
+        WHY THIS MATTERS MORE THAN IT LOOKS (2026-08-26). This function used to not exist:
+        only `w:t` text nodes were read, so heading STYLE was discarded at parse time and
+        every paragraph came out flat. The converted markdown of a 500-page report had no
+        headings at all - which meant there was nothing to grep, and locating one 40-line
+        table in a validation report cost a 499-line read (~30k tokens, the single largest
+        item in a live review's token-burn retrospective). The PDF path already emitted
+        `## Page N`; DOCX emitted nothing. With headings restored, `grep -n '^#'` on the
+        output IS the section index, with line numbers for free.
+
+        Matches the built-in styles ("Heading 1", "heading1", "Titre 1" and other localised
+        names all carry a trailing digit) and falls back to outline level. Anything
+        unrecognised is body text - the safe direction, since a missed heading costs what
+        the old behaviour always cost, while a false one corrupts the document's shape."""
+        pr = p.find("w:pPr", ns)
+        if pr is None:
+            return 0
+        style = pr.find("w:pStyle", ns)
+        if style is not None:
+            name = (style.get(f"{{{ns['w']}}}val") or "").strip()
+            low = name.lower().replace(" ", "").replace("-", "").replace("_", "")
+            if low.startswith("heading") or low.startswith("titre") or low.startswith("berschrift"):
+                digits = "".join(c for c in low if c.isdigit())
+                if digits:
+                    return min(int(digits[0]), 6)
+                return 1
+            if low in ("title", "titel"):
+                return 1
+        outline = pr.find("w:outlineLvl", ns)
+        if outline is not None:
+            try:
+                return min(int(outline.get(f"{{{ns['w']}}}val") or "9") + 1, 6)
+            except ValueError:
+                return 0
+        return 0
+
     blocks: list[dict] = []
     for child in body:
         tag = child.tag.split("}")[1]
         if tag == "p":
             text = para_text(child)
             if text.strip():
-                blocks.append({"kind": "para", "text": text})
+                level = heading_level(child)
+                if level:
+                    blocks.append({"kind": "heading", "level": level, "text": text})
+                else:
+                    blocks.append({"kind": "para", "text": text})
         elif tag == "tbl":
             table = []
             for tr in child.findall("w:tr", ns):
@@ -865,7 +907,15 @@ def write_document(blocks_or_pages, out: Path, fmt: str, kind: str) -> None:
             parts.append(f"## Page {i}\n\n{text.strip()}" if fmt == "md" else text.strip())
     else:  # docx blocks
         for block in blocks_or_pages["blocks"]:
-            if block["kind"] == "para":
+            if block["kind"] == "heading":
+                # Markdown gets real headings, so `grep -n '^#'` on the output is a section
+                # index with line numbers. Plain text keeps the text alone - a `#` prefix
+                # there would be noise, not structure.
+                if fmt == "md":
+                    parts.append(f"{'#' * block['level']} {block['text'].strip()}")
+                else:
+                    parts.append(block["text"])
+            elif block["kind"] == "para":
                 parts.append(block["text"])
             else:
                 rows = block["rows"]

@@ -266,11 +266,24 @@ dispatched agent alike:
 2. **Search budget**: after 2-3 misses, stop guessing synonyms - read the skeleton or
    the likeliest file whole instead. A miss spiral is the worst documented failure mode.
 3. **Read small files whole** (one Read beats three greps plus their per-turn context
-   tax); grep-plus-window only on genuinely large files.
+   tax) - **small means under ~150 lines**. Above ~400 lines, take one symbol with
+   `<python> -m scripts.repo_skeleton --slice FILE:SYMBOL` (typically ~1% of a whole-file
+   read), a window with Grep `-C`, or Read with offset/limit. Between the two, judge.
 4. **Batch independent lookups into one turn** - parallel calls, alternation patterns
    (`rg 'foo|bar'`) - never serial single greps.
 5. **Grep is pinpoint symbol lookup, never exploration or coverage proof**: search for
    names the map or a read file already gave you; "who uses X" goes to the import graph.
+   **Count before content** on anything that might hit a repeated key - `output_mode:
+   "count"` first, then a targeted block - or set `head_limit`. Two greps in one live
+   review returned 80 and 50 near-identical config lines.
+
+**Rules 3 and 5 are enforced, not merely stated** (`scripts/exploration_redirect.py`,
+2026-08-26). In an engaged session a whole-file Read of a large file, or a content-mode
+Grep with no `head_limit`, is redirected once with the cheap alternatives named; repeating
+the same call proceeds. That mechanism exists because these rules were already written,
+copied verbatim into `code-reviewer.md`, and a live review still spent an estimated 25k
+tokens doing exactly what they forbid. Advisory tier: dormant sessions are untouched, and
+`read_nudge_lines: 0` in `.claude/team-preferences.json` opts a project out.
 
 Briefs remain the sharing mechanism: exploration results travel as file lists with
 one-line roles, so downstream agents read named files instead of re-searching

@@ -10,6 +10,19 @@ pass: inventory the tree (respecting `.gitignore` where possible), extract symbo
 and emit a token-budgeted, human-and-agent-readable skeleton. Zero LLM calls, zero third-party
 hard dependencies, zero network.
 
+PRIOR ART (added 2026-08-26, after a survey asked the fair question "why build our own?").
+This is the same SHAPE as aider's repo map (Apache-2.0): symbol tags -> a file-node graph ->
+PageRank importance -> fill to a token budget. None of its code is used here, and it could
+not be: aider's tag extraction is tree-sitter, a compiled C extension that cannot be vendored
+under vendor/README.md's pure-Python rule, and it is load-bearing there - no tags, no map.
+The same constraint rules out every other well-trodden option for their own reasons: SCIP and
+LSIF need a working compile (which this repo's own execution guard blocks), LSP-based
+retrieval needs a language server per language, and the packers (Repomix, gitingest,
+code2prompt) dump a repo rather than ranking and bounding it, which is the opposite of the
+job. ADR-007 records the same credit; it is repeated here because this is the file people
+actually read. What is NOT aider-shaped: --slice, churn annotation, Mermaid output and the
+--fingerprint drift stamps.
+
 Design constraints (see docs/adr/ADR-007-codebase-map-evolution.md for the full record):
   - Tree-sitter/ctags are SOFT runtime probes only, never vendored (compiled wheels/binaries
     cannot be vendored under this repo's vendor/README.md convention) - if neither is present
@@ -203,6 +216,12 @@ def _symbols_ctags(path: Path) -> list[str] | None:
 # performance review). One parse, one walk, both answers cached. Results are cached, not the
 # trees: an AST for every file in a large repo is a lot of memory to hold for no benefit.
 _python_facts_cache: dict[str, tuple[list[str], set[str]]] = {}
+# name -> (start_line, end_line), per file. Populated by the SAME walk as the names above -
+# ast nodes already carry lineno/end_lineno, so this costs two attribute reads and was
+# simply being discarded (2026-08-26 exploration audit). Ranges are what make `--slice`
+# possible, and `--slice` is what makes "don't full-read a 2,800-line file" a cheap action
+# rather than a rule someone has to remember.
+_python_ranges_cache: dict[str, dict[str, tuple[int, int]]] = {}
 
 
 def _python_facts(path: Path) -> tuple[list[str], set[str]]:
@@ -213,21 +232,39 @@ def _python_facts(path: Path) -> tuple[list[str], set[str]]:
         return cached
     names: list[str] = []
     modules: set[str] = set()
+    ranges: dict[str, tuple[int, int]] = {}
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"), filename=key)
     except (OSError, SyntaxError, ValueError):
         _python_facts_cache[key] = ([], set())
+        _python_ranges_cache[key] = {}
         return [], set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             names.append(node.name)
+            end = getattr(node, "end_lineno", None) or node.lineno
+            # A decorated def reports lineno at the `def`, not the first decorator - take
+            # the earliest decorator so a slice includes what applies to the symbol.
+            start = node.lineno
+            for decorator in getattr(node, "decorator_list", []) or []:
+                start = min(start, getattr(decorator, "lineno", start))
+            # Last definition wins on a duplicate name, matching what the file would do.
+            ranges[node.name] = (start, end)
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 modules.add(alias.name)
         elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
             modules.add(node.module)
     _python_facts_cache[key] = (names, modules)
+    _python_ranges_cache[key] = ranges
     return names, modules
+
+
+def python_symbol_ranges(path: Path) -> dict:
+    """{symbol: (start_line, end_line)} for a Python file, exact (stdlib ast, never runs
+    the file). Empty for anything unparseable - callers fall back to reading."""
+    _python_facts(path)
+    return _python_ranges_cache.get(str(path), {})
 
 
 def _symbols_ast_python(path: Path) -> list[str] | None:
@@ -791,6 +828,88 @@ def write_fingerprints(
     return payload
 
 
+# --------------------------------------------------------------------------- slice
+
+
+# Anchors for languages with no stdlib parser. Deliberately conservative: they find where a
+# symbol STARTS; the end is inferred by brace/indent, and the tier is reported so a reader
+# knows whether a range is exact or indicative - the same honesty contract the symbol tiers
+# already carry.
+_SLICE_ANCHORS = (
+    r"^\s*(?:@\w+[^\n]*\n\s*)*(?:(?:public|private|protected|final|static|abstract|"
+    r"override|implicit|lazy|case|sealed)\s+)*"
+    r"(?:def|class|object|trait|interface|enum|record|fun|func|val|var|function)\s+{name}\b",
+    r"^\s*(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var)\s+{name}\b",
+    r"^\s*(?:CREATE\s+(?:OR\s+REPLACE\s+)?(?:PROCEDURE|FUNCTION|VIEW|TABLE))\s+{name}\b",
+    r"^\s*{name}\s*(?:=|:)\s*(?:function|\()",
+)
+
+
+def _slice_range_regex(lines: list[str], name: str) -> tuple[int, int] | None:
+    """Best-effort (start, end) for a symbol in a non-Python file.
+
+    Finds the declaration line, then walks forward closing braces from the first one seen.
+    With no braces (SQL, indent-structured text) it falls back to the next declaration at
+    the same or lower indent, and failing that a bounded window - never the whole file,
+    because "I could not find the end" must still cost less than a full read."""
+    import re as _re
+
+    for template in _SLICE_ANCHORS:
+        pattern = _re.compile(template.format(name=_re.escape(name)), _re.IGNORECASE)
+        for index, line in enumerate(lines):
+            if not pattern.search(line):
+                continue
+            start = index
+            depth = 0
+            seen_brace = False
+            for cursor in range(index, min(len(lines), index + 2000)):
+                depth += lines[cursor].count("{") - lines[cursor].count("}")
+                if "{" in lines[cursor]:
+                    seen_brace = True
+                if seen_brace and depth <= 0:
+                    return start + 1, cursor + 1
+            if not seen_brace:
+                base = len(lines[index]) - len(lines[index].lstrip())
+                for cursor in range(index + 1, len(lines)):
+                    stripped = lines[cursor].strip()
+                    if not stripped:
+                        continue
+                    indent = len(lines[cursor]) - len(lines[cursor].lstrip())
+                    if indent <= base and any(
+                        _re.compile(tpl.format(name=r"\w+"), _re.IGNORECASE).search(lines[cursor])
+                        for tpl in _SLICE_ANCHORS
+                    ):
+                        return start + 1, cursor
+                return start + 1, min(len(lines), start + 120)
+            return start + 1, min(len(lines), start + 120)
+    return None
+
+
+def slice_symbol(path: Path, name: str) -> tuple[str, str] | None:
+    """Return (text, tier) for one symbol's body, or None if it cannot be located.
+
+    THE POINT (2026-08-26 exploration audit): a review that needs one 30-line function out
+    of a 2,800-line file was reading the whole file - roughly 31,700 tokens to obtain about
+    340. Exact for Python via stdlib ast; indicative elsewhere via anchors. Never executes
+    anything it reads."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    lines = text.splitlines()
+    if path.suffix.lower() == ".py":
+        ranges = python_symbol_ranges(path)
+        found = ranges.get(name)
+        if found:
+            start, end = found
+            return "\n".join(lines[start - 1 : end]), "ast"
+    found = _slice_range_regex(lines, name)
+    if not found:
+        return None
+    start, end = found
+    return "\n".join(lines[start - 1 : end]), "regex"
+
+
 # --------------------------------------------------------------------------- CLI
 
 
@@ -800,6 +919,14 @@ def main(argv: list[str]) -> int:
         description="Deterministic, token-budgeted first-contact skeleton of a codebase."
     )
     ap.add_argument("path", nargs="?", default=".", help="root to inventory (default: .)")
+    ap.add_argument(
+        "--slice",
+        metavar="FILE:SYMBOL",
+        default=None,
+        help="print ONE symbol's body instead of an inventory, e.g. "
+        "--slice scripts/engagement_state.py:set_status . Exact for Python (stdlib ast); "
+        "best-effort elsewhere. Use this instead of reading a large file whole.",
+    )
     ap.add_argument(
         "--budget", type=int, default=_DEFAULT_BUDGET_TOKENS, help="approx. token budget"
     )
@@ -837,6 +964,32 @@ def main(argv: list[str]) -> int:
         "default: current directory (run this from the project root, the normal case)",
     )
     args = ap.parse_args(argv[1:])
+
+    if args.slice:
+        # FILE:SYMBOL - rsplit so a Windows drive letter ("C:/x/y.py:name") still splits
+        # on the right colon.
+        target, _, symbol = args.slice.rpartition(":")
+        if not target or not symbol:
+            print("--slice expects FILE:SYMBOL", file=sys.stderr)
+            return 2
+        path = Path(target).expanduser()
+        if not path.is_file():
+            print(f"not a file: {path}", file=sys.stderr)
+            return 1
+        found = slice_symbol(path, symbol)
+        if found is None:
+            print(
+                f"symbol not found: {symbol} in {path}\n"
+                "Locate it first with Grep, then slice, or read the file if it is short.",
+                file=sys.stderr,
+            )
+            return 1
+        body, tier = found
+        # The tier travels with the output, same honesty contract the symbol tiers carry:
+        # 'ast' is exact, 'regex' located the declaration and inferred the end.
+        print(f"# {path}:{symbol}  [{tier}]")
+        print(body)
+        return 0
 
     if args.fingerprint:
         map_path = args.fingerprint.expanduser().resolve()

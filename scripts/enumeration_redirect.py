@@ -91,6 +91,8 @@ def main() -> int:
                 "full-tree enumeration blocked during an engagement (map-first rule, "
                 "2026-08-17): run `<python> -m scripts.repo_skeleton <dir>` for a "
                 "deterministic, token-budgeted inventory - this works for ANY directory, "
+                "including one you just extracted. The Glob tool also enumerates by "
+                "pattern and is cheaper than a Bash walk. "
                 "including one you just extracted or downloaded. For the working project "
                 "itself, docs/codebase-map.md (when it has one) or `git ls-files` (or "
                 "`git ls-files | wc -l` for a count) are cheaper still. Targeted lookups "

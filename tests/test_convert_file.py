@@ -416,3 +416,66 @@ def test_unsupported_format_fails_clearly(tmp_path):
     src = tmp_path / "book.xlsb"
     src.write_bytes(b"not really")
     assert run(str(src), "--out", str(tmp_path / "out.csv")) == 1
+
+
+# ------------------------------------------- docx headings (2026-08-26 exploration audit)
+
+
+def _docx_with_headings(path):
+    """A minimal .docx exercising the three heading spellings Word actually emits."""
+    import zipfile
+
+    w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+
+    def para(text, style=None, outline=None):
+        pr = ""
+        if style:
+            pr = f'<w:pPr><w:pStyle w:val="{style}"/></w:pPr>'
+        elif outline is not None:
+            pr = f'<w:pPr><w:outlineLvl w:val="{outline}"/></w:pPr>'
+        return f"<w:p>{pr}<w:r><w:t>{text}</w:t></w:r></w:p>"
+
+    doc = (
+        f'<?xml version="1.0"?><w:document {w}><w:body>'
+        + para("Validation Report", "Title")
+        + para("1 Introduction", "Heading1")
+        + para("Body text.")
+        + para("1.3 Limitations", "Heading 2")
+        + para("Table follows.")
+        + para("Appendix", outline="0")
+        + "</w:body></w:document>"
+    )
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("word/document.xml", doc)
+    return path
+
+
+def test_docx_headings_become_markdown_headings(tmp_path):
+    """The largest single item in a live review's token-burn retrospective was a 499-line
+    read (~30k tokens) to find a 40-line table in a converted report. The cause was here:
+    read_docx extracted only w:t text nodes, so heading STYLE was discarded and the output
+    was flat - there was nothing to grep. The PDF path already emitted `## Page N`.
+
+    With headings restored, `grep -n '^#'` on the output IS the section index, with line
+    numbers, and no separate sidecar is needed to provide one."""
+    source = _docx_with_headings(tmp_path / "report.docx")
+    out = tmp_path / "report.converted.md"
+    assert cf.main([str(source), "--to", "md", "--out", str(out)]) == 0
+    text = out.read_text(encoding="utf-8")
+    assert "# Validation Report" in text, "Title style must become a heading"
+    assert "# 1 Introduction" in text, "Heading1 (no space) must be recognised"
+    assert "## 1.3 Limitations" in text, "'Heading 2' (with space) must map to level 2"
+    assert "# Appendix" in text, "outlineLvl must be the fallback when there is no style"
+    assert "Body text." in text and "\n# Body text." not in text, "body must stay body"
+    index = [line for line in text.splitlines() if line.startswith("#")]
+    assert len(index) == 4, f"expected a 4-entry section index, got {index}"
+
+
+def test_docx_headings_are_not_hashed_in_plain_text_output(tmp_path):
+    """`#` in a .txt is noise, not structure - the heading text still appears, unmarked."""
+    source = _docx_with_headings(tmp_path / "report.docx")
+    out = tmp_path / "report.converted.txt"
+    assert cf.main([str(source), "--to", "txt", "--out", str(out)]) == 0
+    text = out.read_text(encoding="utf-8")
+    assert "1.3 Limitations" in text
+    assert "#" not in text

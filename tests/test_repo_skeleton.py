@@ -9,6 +9,7 @@ import json
 import subprocess
 import time
 
+import scripts.repo_skeleton as rs
 from scripts.repo_skeleton import (
     build_reference_graph,
     build_skeleton,
@@ -641,3 +642,93 @@ def test_write_fingerprints_plugin_mode_import_does_not_crash(tmp_path, monkeypa
     m.write_text(_MAP_WITHOUT_PATHS, encoding="utf-8")
     payload = write_fingerprints(m)  # must not raise ModuleNotFoundError
     assert payload["entries"] == {}
+
+
+# ------------------------------------------------ --slice (2026-08-26 exploration audit)
+
+
+def test_python_symbol_ranges_are_exact_and_include_decorators(tmp_path):
+    """Ranges come free from the AST walk repo_skeleton already does - they were simply
+    being discarded. Decorators count as part of the symbol: a slice that omits the
+    decorator hides what actually applies to the function."""
+    src = tmp_path / "m.py"
+    src.write_text(
+        "import functools\n"
+        "\n"
+        "\n"
+        "@functools.cache\n"
+        "def decorated(a):\n"
+        "    return a\n"
+        "\n"
+        "\n"
+        "class Thing:\n"
+        "    def method(self):\n"
+        "        return 1\n",
+        encoding="utf-8",
+    )
+    ranges = rs.python_symbol_ranges(src)
+    assert ranges["decorated"] == (4, 6), "the decorator line must be inside the range"
+    assert ranges["Thing"][0] == 9
+    assert ranges["method"] == (10, 11)
+
+
+def test_slice_returns_one_symbol_not_the_file(tmp_path):
+    """The reason this exists: a review that needed one function out of a 2,800-line file
+    was reading the whole file - about 31,700 tokens to obtain roughly 340."""
+    src = tmp_path / "m.py"
+    body = "\n".join(f"# filler {i}" for i in range(500))
+    src.write_text(f"{body}\n\n\ndef wanted():\n    return 'here'\n", encoding="utf-8")
+    text, tier = rs.slice_symbol(src, "wanted")
+    assert tier == "ast"
+    assert text == "def wanted():\n    return 'here'"
+    assert "filler" not in text
+    assert len(text) < len(src.read_text(encoding="utf-8")) / 50
+
+
+def test_slice_is_best_effort_on_non_python_and_says_so(tmp_path):
+    """The tier travels with the output - the same honesty contract the symbol tiers carry.
+    'ast' is exact; 'regex' located the declaration and inferred the end."""
+    src = tmp_path / "Score.scala"
+    src.write_text(
+        "package a.b\n"
+        "\n"
+        "class RuleAScorer extends Pipeline.ScoreStep {\n"
+        "  final lazy val segments = Set(\"RETAIL\")\n"
+        "  override def segment(x: Txn): String = {\n"
+        "    \"HIGH\"\n"
+        "  }\n"
+        "}\n"
+        "\n"
+        "class Other extends Pipeline.ScoreStep {\n"
+        "  override def segment(x: Txn): String = \"LOW\"\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    text, tier = rs.slice_symbol(src, "RuleAScorer")
+    assert tier == "regex"
+    assert "final lazy val segments" in text
+    assert "class Other" not in text, "the slice must stop at the closing brace"
+
+
+def test_slice_returns_none_for_an_unknown_symbol(tmp_path):
+    src = tmp_path / "m.py"
+    src.write_text("def a():\n    pass\n", encoding="utf-8")
+    assert rs.slice_symbol(src, "nonexistent") is None
+
+
+def test_slice_cli_reports_the_tier_and_exits_nonzero_when_not_found(tmp_path, capsys):
+    src = tmp_path / "m.py"
+    src.write_text("def wanted():\n    return 2\n", encoding="utf-8")
+    assert rs.main(["repo_skeleton", "--slice", f"{src}:wanted", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "[ast]" in out and "def wanted():" in out
+    assert rs.main(["repo_skeleton", "--slice", f"{src}:missing", str(tmp_path)]) == 1
+
+
+def test_slice_splits_on_the_last_colon_so_windows_paths_work(tmp_path):
+    """`C:/x/y.py:symbol` must split on the symbol colon, not the drive-letter one."""
+    src = tmp_path / "m.py"
+    src.write_text("def s():\n    pass\n", encoding="utf-8")
+    spec = f"{src}:s"
+    target, _, symbol = spec.rpartition(":")
+    assert symbol == "s" and target == str(src)
