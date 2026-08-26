@@ -8159,3 +8159,43 @@ def test_an_unreadable_config_never_cries_wolf(tmp_path, monkeypatch, capsys):
     assert ih.workspace_is_trusted(tmp_path) is None
     ih.warn_if_untrusted(tmp_path, ih.Style(False), ih.marks())
     assert capsys.readouterr().out == ""
+
+
+def test_the_teams_own_scripts_can_be_run_by_absolute_path(tmp_path, monkeypatch):
+    """RECOMMENDED_ALLOW covers the module form and three scripts by path. In PLUGIN mode
+    the team lives outside the project, so the skill invokes its tools by ABSOLUTE path -
+    and engagement_state.py, the script that creates the engagement, was not among the
+    three. A live unattended run on Windows had `engagement_state.py init` refused twice
+    (2026-08-26)."""
+    import install_helper as ih
+
+    root = tmp_path / "team"
+    (root / "scripts").mkdir(parents=True)
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: root)
+    monkeypatch.setattr(ih, "_registry_install_paths", lambda home: [])
+    rules = ih.team_script_entries(home=tmp_path)
+    assert rules == (f"Bash(*{root.resolve() / 'scripts'}*)",)
+    # Scoped to the team's own directory, not "any folder called scripts".
+    assert str(root) in rules[0]
+
+
+def test_a_machine_with_no_team_directory_yields_no_script_rules(tmp_path, monkeypatch):
+    import install_helper as ih
+
+    monkeypatch.setattr(ih, "_resolve_repo_root", lambda hint=None: None)
+    monkeypatch.setattr(ih, "_registry_install_paths", lambda home: [])
+    assert ih.team_script_entries(home=tmp_path) == ()
+
+
+def test_the_skill_no_longer_tells_the_session_to_delete_the_handoff():
+    """It was instructed to `rm` the request file, which needs a shell command that is not
+    in the allow-list - so the attempt was simply refused, twice, in one live run. Creating
+    the workspace consumes that file and the launcher clears any leftover, so the deletion
+    was a doomed action the mechanism had already handled."""
+    skill = (Path(__file__).resolve().parents[1] / ".claude" / "skills" / "engage"
+             / "SKILL.md").read_text(encoding="utf-8")
+    # The BULLET, not the first mention - `--request-pending` also appears in the --auto
+    # bullet above it, and splitting on the first hit reads the wrong block entirely.
+    block = skill.split("- **`--request-pending`", 1)[1].split("\n- **", 1)[0]
+    assert "Do not delete it" in block
+    assert "Delete the file once you have read it" not in block

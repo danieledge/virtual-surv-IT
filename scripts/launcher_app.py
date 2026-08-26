@@ -1546,11 +1546,14 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
     # the process that refuses. Keeping both means a ceiling can be pacing or a wall, and the
     # human says which rather than inheriting whichever we thought better.
     ON_BUDGET = ("park", "light", "continue", "stop")
-    # Defaults, 2026-08-25: a $35 ceiling and "carry on, report it". That leans LESS cautious
-    # deliberately - an unattended run that parks at the cap has produced nothing anyone can
-    # use - and it is still reported, and still closes PARTIAL for sign-off.
+    # Defaults, 2026-08-26: a $35 ceiling and PARK at it. Park was chosen over "carry on"
+    # after watching a live run hit a hard cap mid-close: it had written a delivery report,
+    # an engagement brief, two interim analyses and the summary email, and was stopped
+    # before it could record its verdict - leaving a pack stuck at status "closing" with no
+    # verdict at all. Parking happens AT A GATE, which is a resumable place; a cap that
+    # fires wherever the run happens to be is not.
     RUN_MODES = ("window", "headless")
-    state = {"data": False, "exec": False, "web": False, "cap": 3, "on_budget": 2, "mode": 0,
+    state = {"data": False, "exec": False, "web": False, "cap": 3, "on_budget": 0, "mode": 0,
              "confirmed": False}
     idx = [0]
     rows = [

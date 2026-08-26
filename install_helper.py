@@ -125,6 +125,11 @@ def team_read_entries(home: Optional[Path] = None, repo_hint: Optional[str] = No
 
     Paths are machine-specific, so they cannot live in a static constant. Returns whatever
     resolves - a clone, an installed plugin copy, or both."""
+    return tuple(f"Read({root}/**)" for root in _team_roots(home=home, repo_hint=repo_hint))
+
+
+def _team_roots(home=None, repo_hint=None) -> tuple:
+    """Every directory that holds a copy of THIS team, resolved for this machine."""
     roots: list = []
     try:
         clone = _resolve_repo_root(repo_hint)
@@ -136,15 +141,34 @@ def team_read_entries(home: Optional[Path] = None, repo_hint: Optional[str] = No
         for candidate in _registry_install_paths(home or Path.home()):
             resolved = Path(candidate).expanduser()
             # THIS plugin only. The registry names every installed plugin, and a first pass
-            # here granted read access to four other vendors' directories - not ours to
-            # give, and nothing to do with the prompt this exists to remove.
+            # here granted access to four other vendors' directories - not ours to give.
             if not resolved.is_dir() or not _looks_like_this_plugin(resolved):
                 continue
             if resolved.resolve() not in roots:
                 roots.append(resolved.resolve())
     except Exception:
         pass
-    return tuple(f"Read({root}/**)" for root in roots)
+    return tuple(roots)
+
+
+def team_script_entries(home=None, repo_hint=None) -> tuple:
+    """`Bash(...)` rules for running the team's OWN scripts by absolute path.
+
+    RECOMMENDED_ALLOW covers the module form (`python -m scripts.x`) and three scripts by
+    path. In PLUGIN mode the team lives outside the project, so the skill invokes its tools
+    by absolute path instead - and `engagement_state.py`, the most-used script of all, was
+    not among the three. A live unattended run on Windows had its `engagement_state.py init`
+    refused twice (2026-08-26), which is the command that creates the engagement.
+
+    Scoped to the resolved team directories rather than "any folder called scripts": the
+    module form is already allowed wholesale, so this adds the same reach in path form and
+    no more."""
+    rules = []
+    for root in _team_roots(home=home, repo_hint=repo_hint):
+        scripts = root / "scripts"
+        if scripts.is_dir():
+            rules.append(f"Bash(*{scripts}*)")
+    return tuple(rules)
 
 
 def merge_allow(settings: dict, entries=RECOMMENDED_ALLOW):
@@ -3420,7 +3444,7 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
             return 1
     # The team's own files get Read rules too, resolved for this machine. Without them the
     # first action of every engagement prompts (2026-08-25).
-    reads = team_read_entries()
+    reads = team_read_entries() + team_script_entries()
     try:
         settings, added = merge_allow(settings, RECOMMENDED_ALLOW + reads)
     except InstallAbort as exc:

@@ -157,8 +157,11 @@ first prompt. When present, this is the answer - **do not ask the question at al
   (relative to the project directory): its contents ARE the request. Treat it exactly as if
   they had typed it in-session, classify from it, and **do not re-ask what the work is**.
   It is one sanitised line, so expect terseness rather than a brief - ask about detail if
-  you need it, never about the ask itself. **Delete the file once you have read it**, so a
-  later session cannot pick up a stale request.
+  you need it, never about the ask itself. **Do not delete it** - creating the workspace
+  consumes it, and the launcher clears any leftover at the next `go`. Removing it by hand
+  needs a shell command that is not in the allow-list, so the attempt is simply refused
+  (seen twice in one live unattended run, 2026-08-26) - a doomed action the mechanism had
+  already handled.
   The text travels in a file rather than in the flag because a quoted value does not
   survive PowerShell (2026-08-25: two users, same day, got only the first word - 5.1 hands
   embedded quotes to a native .exe unescaped and claude.exe re-splits the line). If the

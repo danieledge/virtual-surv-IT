@@ -790,18 +790,20 @@ def test_the_spend_ceiling_defaults_to_35():
     assert '"cap": 3' in state, "index 3 of CAPS is $35"
 
 
-def test_at_the_ceiling_it_defaults_to_carrying_on_and_reporting():
-    """The owner's choice, and worth naming: this is the LESS cautious rung. An unattended
-    run that parks at the cap has produced nothing usable, and the ceiling is advisory
-    pacing rather than a hard stop - but it is still reported, and still closes PARTIAL."""
+def test_at_the_ceiling_it_defaults_to_parking():
+    """Changed to park on 2026-08-26 after watching a live run hit a hard cap MID-CLOSE. It
+    had written a delivery report, an engagement brief, two interim analyses and the summary
+    email, then was stopped before recording its verdict - leaving the pack at status
+    "closing" with no verdict at all. Parking happens AT A GATE, which is a resumable place;
+    a cap that fires wherever the run happens to be is not."""
     src = _preflight_source()
     body = src.split("def auto_preflight_screen", 1)[1]
     assert 'ON_BUDGET = ("park", "light", "continue", "stop")' in body, (
         "four rungs: three advisory, one enforced"
     )
     state = body.split('state = {', 1)[1].split("}", 1)[0]
-    assert '"on_budget": 2' in state, "index 2 of ON_BUDGET is continue"
-    assert '"continue": "carry on, report it"' in body
+    assert '"on_budget": 0' in state, "index 0 of ON_BUDGET is park"
+    assert '"park": "park at next gate"' in body
 
 
 def test_enter_cannot_start_an_unattended_run():
