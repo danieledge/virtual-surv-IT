@@ -179,6 +179,8 @@ join_names() {
 # wasted round-trip). Cached with everything else on this same TTL.
 renderers=()
 render_missing=()
+codeintel=()
+codeintel_missing=()
 for c in python3 python py; do
   command -v "$c" >/dev/null 2>&1 && PY_PROBE="$c" && break
 done
@@ -192,6 +194,20 @@ if [ -n "${PY_PROBE:-}" ]; then
     renderers+=("python-docx (.docx export)")
   else
     render_missing+=(".docx export (python-docx)  →  pip install -r requirements-dev.txt")
+  fi
+  # Code intelligence (2026-08-27). Same reasoning as the renderer probe directly above,
+  # and the same reason it belongs HERE rather than in a script of its own: this is the
+  # existing tool probe, its result is already cached on this TTL, and Morgan already reads
+  # it at engagement open. A second probe would mean a second cache, a second staleness
+  # rule, and two places to ask one question.
+  #
+  # It PARSES, rather than merely importing. An import succeeding proves nothing on a
+  # machine where policy blocks the compiled extension from loading - that distinction is
+  # exactly what the corporate-box measurement turned on - so the probe parses a sample.
+  if "$PY_PROBE" -c "from tree_sitter_language_pack import get_parser; get_parser('python').parse(b'x = 1')" >/dev/null 2>&1; then
+    codeintel+=("tree-sitter (exact symbols + line ranges, ~15 languages)")
+  else
+    codeintel_missing+=("tree-sitter  ->  python install_helper.py --code-intel  (orientation falls back to pattern matching; nothing breaks)")
   fi
 fi
 
@@ -227,6 +243,9 @@ report="$(
   echo "Artifact renderers:"
   if [ "${#renderers[@]}" -gt 0 ]; then printf '   ✅ %s\n' "${renderers[@]}"; fi
   if [ "${#render_missing[@]}" -gt 0 ]; then printf '   ⚠️  %s\n' "${render_missing[@]}"; fi
+  echo "Code intelligence:"
+  if [ "${#codeintel[@]}" -gt 0 ]; then printf '   ✅ %s\n' "${codeintel[@]}"; fi
+  if [ "${#codeintel_missing[@]}" -gt 0 ]; then printf '   ⚠️  %s\n' "${codeintel_missing[@]}"; fi
 )"
 
 # Cache the compact form (best-effort; never fail the report if the cache can't be written).
