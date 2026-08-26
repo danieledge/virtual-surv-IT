@@ -173,6 +173,12 @@ _TEAM_SCRIPT_NAMES = (
     r"|validate_masking|validate_manifest|validate_rtm|validate_references|check_citations|eval_score"
     r"|calibrate_spoofing|check_artifacts|engagement_state|extensions|convert_sarif"
     r"|engage_probe|repo_skeleton|explain_rule|render_evidence_room"
+    # probe_codeintel (2026-08-26): the human-run capability probe that answers
+    # "can this machine use tree-sitter / ast-grep at all?" - shipped through the
+    # repo because the machines that most need answering are the ones nothing can
+    # be copied onto. Listed here so the model can run it for a user who asks, per
+    # the maintenance rule above.
+    r"|probe_codeintel"
     # 2026-08-25: launch_terminal, which opens a session in its own window. Without it a
     # plugin-mode user gets a consent prompt for the team's OWN tooling - the exact live
     # defect found on 2026-08-01 when engage_probe was missing from this list.
