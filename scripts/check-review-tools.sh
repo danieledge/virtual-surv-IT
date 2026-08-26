@@ -204,10 +204,15 @@ if [ -n "${PY_PROBE:-}" ]; then
   # It PARSES, rather than merely importing. An import succeeding proves nothing on a
   # machine where policy blocks the compiled extension from loading - that distinction is
   # exactly what the corporate-box measurement turned on - so the probe parses a sample.
-  if "$PY_PROBE" -c "from tree_sitter_language_pack import get_parser; get_parser('python').parse(b'x = 1')" >/dev/null 2>&1; then
+  # timeout, if the host has one: this runs at engagement open on a cold cache, and a
+  # probe that wedges there wedges the open. The <1.0 pin removes the runtime-download
+  # path that could hang, so this is a backstop rather than the fix.
+  if _ts_probe_cmd=("$PY_PROBE" -c "from tree_sitter_language_pack import get_parser; get_parser('python').parse(b'x = 1')") &&
+     { command -v timeout >/dev/null 2>&1 && timeout 20 "${_ts_probe_cmd[@]}" >/dev/null 2>&1 ||
+       { ! command -v timeout >/dev/null 2>&1 && "${_ts_probe_cmd[@]}" >/dev/null 2>&1; }; }; then
     codeintel+=("tree-sitter (exact symbols + line ranges, ~15 languages)")
   else
-    codeintel_missing+=("tree-sitter  ->  python install_helper.py --code-intel  (orientation falls back to pattern matching; nothing breaks)")
+    codeintel_missing+=("tree-sitter  →  python install_helper.py --code-intel  (orientation falls back to pattern matching; nothing breaks)")
   fi
 fi
 
@@ -283,6 +288,9 @@ if [ "$VERBOSE" -eq 1 ]; then
   echo "Artifact renderers:"
   if [ "${#renderers[@]}" -gt 0 ]; then printf '   ✅ %s\n' "${renderers[@]}"; fi
   if [ "${#render_missing[@]}" -gt 0 ]; then printf '   ⚠️  %s\n' "${render_missing[@]}"; fi
+  echo "Code intelligence:"
+  if [ "${#codeintel[@]}" -gt 0 ]; then printf '   ✅ %s\n' "${codeintel[@]}"; fi
+  if [ "${#codeintel_missing[@]}" -gt 0 ]; then printf '   ⚠️  %s\n' "${codeintel_missing[@]}"; fi
 else
   printf '%s\n' "$report"
 fi

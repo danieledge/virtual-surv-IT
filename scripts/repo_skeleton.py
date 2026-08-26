@@ -169,7 +169,7 @@ _TS_LANGS = {
     ".java": "java",
     ".scala": "scala",
     ".kt": "kotlin",
-    ".cs": "c_sharp",
+    ".cs": "csharp",
     ".ts": "typescript",
     ".tsx": "tsx",
     ".js": "javascript",
@@ -213,10 +213,29 @@ _TS_DECL_TYPES = {
     "val_definition",
     "var_definition",
     "constructor_declaration",
-    "create_function_statement",
-    "create_procedure_statement",
-    "create_view_statement",
-    "create_table_statement",
+    # SQL: the pack's grammar names these without a "_statement" suffix. The earlier set
+    # used the suffixed forms from a DIFFERENT sql grammar, so SQL matched nothing at all
+    # and silently fell through - "exact symbols for SQL" was advertised and never true.
+    # Verified against the shipped grammar, 2026-08-27.
+    "create_table",
+    "create_view",
+    "create_function",
+    "create_procedure",
+    "create_index",
+    "create_materialized_view",
+    # Scala 3 (verified present in the shipped grammar).
+    "given_definition",
+    "enum_definition",
+    # Kotlin names its objects differently from Scala.
+    "object_declaration",
+    # C#, which only started reaching this tier when the grammar name was corrected to
+    # "csharp" - the old "c_sharp" matched nothing, so every .cs file fell to regex.
+    "struct_declaration",
+    "delegate_declaration",
+    "property_declaration",
+    "namespace_declaration",
+    # Java @interface.
+    "annotation_type_declaration",
 }
 
 
@@ -277,7 +296,11 @@ def _ts_symbols_and_ranges(path: Path) -> tuple[list[str], dict] | None:
 
     def walk(node, depth: int = 0) -> None:
         # Bounded: a pathological file must not make orientation the expensive step.
-        if depth > 12 or len(names) >= _REGEX_MAX_SYMBOLS:
+        # Depth 40, not 12: measured, a method of an anonymous class inside a method body
+        # already sits at depth 11 in a real Java tree, so 12 pruned genuine symbols -
+        # silently, and under a tier label readers are taught to trust. The recursion is
+        # cheap and RecursionError is caught by the caller either way.
+        if depth > 40 or len(names) >= _REGEX_MAX_SYMBOLS:
             return
         if node.type in _TS_DECL_TYPES:
             ident = None
@@ -289,10 +312,31 @@ def _ts_symbols_and_ranges(path: Path) -> tuple[list[str], dict] | None:
                 if ident is not None:
                     break
             if ident is None:
+                # simple_identifier is Kotlin's: without it every `fun` was found and
+                # then dropped nameless, so Kotlin listed classes and no methods.
+                _IDENT = ("identifier", "type_identifier", "field_identifier", "simple_identifier")
+                # SQL wraps the name one level down (create_table -> object_reference ->
+                # identifier), so a direct-children-only search found nothing and SQL fell
+                # through entirely. These wrappers are descended into, one level, by name -
+                # not a general deep search, which would happily pick up an identifier from
+                # a body and label it the symbol.
+                _WRAPPERS = (
+                    "object_reference",
+                    "qualified_name",
+                    "dotted_name",
+                    "scoped_identifier",
+                )
                 for child in node.children:
-                    if child.type in ("identifier", "type_identifier", "field_identifier"):
+                    if child.type in _IDENT:
                         ident = child
                         break
+                    if child.type in _WRAPPERS:
+                        for inner in child.children:
+                            if inner.type in _IDENT:
+                                ident = inner
+                                break
+                        if ident is not None:
+                            break
             if ident is not None:
                 try:
                     name = source[ident.start_byte : ident.end_byte].decode("utf-8", "replace")
@@ -455,7 +499,10 @@ _MODS = r"(?:(?:public|private|protected|internal|static|final|abstract|override
 _REGEX_RULES: dict[str, tuple[tuple[str, str], ...]] = {
     ".java": (
         (rf"^\s*{_MODS}(?:class|interface|enum|record)\s+(\w+)", "type"),
-        (rf"^\s*{_MODS}(?:[\w<>\[\],.?\s]+\s+)?(\w+)\s*\([^;{{]*\)\s*(?:throws [\w,.\s]+)?\{{", "method"),
+        (
+            rf"^\s*{_MODS}(?:[\w<>\[\],.?\s]+\s+)?(\w+)\s*\([^;{{]*\)\s*(?:throws [\w,.\s]+)?\{{",
+            "method",
+        ),
     ),
     ".cs": (
         (rf"^\s*{_MODS}(?:class|interface|enum|struct|record)\s+(\w+)", "type"),
@@ -482,7 +529,10 @@ _REGEX_RULES: dict[str, tuple[tuple[str, str], ...]] = {
 _REGEX_RULES[".ts"] = _REGEX_RULES[".tsx"] = _REGEX_RULES[".js"] = _REGEX_RULES[".jsx"] = (
     (r"^\s*(?:export\s+)?(?:abstract\s+)?class\s+(\w+)", "class"),
     (r"^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*(\w+)", "function"),
-    (r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*=>", "arrow"),
+    (
+        r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*=>",
+        "arrow",
+    ),
 )
 
 _REGEX_COMPILED = {
@@ -491,7 +541,9 @@ _REGEX_COMPILED = {
 }
 _REGEX_MAX_LINES = 4000  # a generated 100k-line file must not cost the whole budget
 _REGEX_MAX_SYMBOLS = 40  # per file, same reasoning as the floor tier's heading cap
-_REGEX_SKIP_NAMES = frozenset({"if", "for", "while", "switch", "catch", "do", "else", "try", "using", "lock", "return"})
+_REGEX_SKIP_NAMES = frozenset(
+    {"if", "for", "while", "switch", "catch", "do", "else", "try", "using", "lock", "return"}
+)
 
 
 def _symbols_regex(path: Path) -> list[str] | None:

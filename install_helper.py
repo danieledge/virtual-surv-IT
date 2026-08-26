@@ -2175,8 +2175,40 @@ class Installer:
     # are, and a second hardcoded list would be a second place to forget to update.
     # Named explicitly rather than installing the whole file, because the analysers in it
     # are a separate decision the user may already have taken.
-    CODE_INTEL_PACKAGES = ("tree-sitter", "tree-sitter-language-pack")
+    # Read from requirements-review.txt rather than restated here (2026-08-27). The previous
+    # version kept a bare-name tuple beside a comment saying the names lived in the file,
+    # which was not only duplication: installing bare names ignored the version floors, so
+    # the <1.0 pin that keeps this offline would have been silently bypassed. Now there is
+    # one source and the pin actually applies.
     CODE_INTEL_REQUIREMENTS = "requirements-review.txt"
+    CODE_INTEL_PREFIXES = ("tree-sitter", "tree-sitter-language-pack")
+
+    def code_intel_specs(self) -> list:
+        """The pinned specs for the code-intelligence packages, from the requirements file.
+
+        Falls back to bare names only if the file cannot be read - an install without the
+        pin is worse than none, so this is logged rather than silent."""
+        path = self.repo / self.CODE_INTEL_REQUIREMENTS
+        specs = []
+        try:
+            for raw in path.read_text(encoding="utf-8").splitlines():
+                line = raw.split("#", 1)[0].strip()
+                if not line:
+                    continue
+                name = line.split(">")[0].split("<")[0].split("=")[0].strip()
+                if name in self.CODE_INTEL_PREFIXES:
+                    specs.append(line)
+        except OSError:
+            specs = []
+        if len(specs) != len(self.CODE_INTEL_PREFIXES):
+            self.say(
+                self.style.dim(
+                    f"    could not read pins from {self.CODE_INTEL_REQUIREMENTS} - "
+                    "installing unpinned names"
+                )
+            )
+            return list(self.CODE_INTEL_PREFIXES)
+        return specs
 
     def code_intel_step(self) -> None:
         """Attempt the code-intelligence extras, and treat failure as a normal outcome.
@@ -2203,6 +2235,12 @@ class Installer:
             "TypeScript and more; without them it falls back to pattern matching. Either "
             "way the plugin works - this is sharpness, not function."
         )
+        # NO PROMPT, deliberately, unlike optional_pip (owner: "attempts install by
+        # default"). The walkthrough convention is that a non-quick path keeps its own
+        # per-step question; this step departs from it because the thing being installed
+        # is optional in the strongest sense - failing to install it changes nothing a
+        # user would notice - so a question would be asking permission for something
+        # with no downside to decline and no consequence to accept.
         if self.demo:
             self.step_ok("Code intelligence", "would attempt pip install (demo)")
             return
@@ -2210,7 +2248,7 @@ class Installer:
             self.step_ok("Code intelligence", "already available - tree-sitter imports here")
             return
         proc = run_cmd(
-            [sys.executable, "-m", "pip", "install", "--quiet", *self.CODE_INTEL_PACKAGES],
+            [sys.executable, "-m", "pip", "install", "--quiet", *self.code_intel_specs()],
             timeout=600,
         )
         if proc.returncode == 0 and self._code_intel_present():
@@ -8258,7 +8296,7 @@ def _main(argv=None) -> int:
         if args.check_daemon_start:
             rc = max(rc, run_daemon_start_diagnostic(style, marks(), args.repo))
         if args.code_intel:
-            Installer(args, style, marks(), subset="codeintel").run()
+            rc = max(rc, Installer(args, style, marks(), subset="codeintel").run() or 0)
         if args.configure:
             rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
         if args.archive:

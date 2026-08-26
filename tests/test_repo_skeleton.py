@@ -703,14 +703,14 @@ def test_slice_is_best_effort_on_non_python_and_says_so(tmp_path, monkeypatch):
         "package a.b\n"
         "\n"
         "class RuleAScorer extends Pipeline.ScoreStep {\n"
-        "  final lazy val segments = Set(\"RETAIL\")\n"
+        '  final lazy val segments = Set("RETAIL")\n'
         "  override def segment(x: Txn): String = {\n"
-        "    \"HIGH\"\n"
+        '    "HIGH"\n'
         "  }\n"
         "}\n"
         "\n"
         "class Other extends Pipeline.ScoreStep {\n"
-        "  override def segment(x: Txn): String = \"LOW\"\n"
+        '  override def segment(x: Txn): String = "LOW"\n'
         "}\n",
         encoding="utf-8",
     )
@@ -821,3 +821,65 @@ def test_the_symbol_cap_applies_to_the_tree_sitter_tier_too():
             assert len(found[0]) <= rs._REGEX_MAX_SYMBOLS
     finally:
         path.unlink(missing_ok=True)
+
+
+# ------------------- per-language grammar coverage (2026-08-27 alignment review)
+
+
+# The review found the tier advertised five languages and delivered two: `.cs` was mapped to
+# "c_sharp" where the pack calls it "csharp" (so every C# file fell through forever), SQL's
+# node types were copied from a different grammar and matched nothing, and Kotlin's function
+# names were found and then dropped because its identifier node is `simple_identifier`.
+# All three degraded quietly, which is the right posture and exactly why nothing surfaced
+# them. The two languages that DID work were the two with tests. Hence one per language.
+_GRAMMAR_CASES = [
+    (
+        ".sql",
+        b"CREATE TABLE my_table (a int);\nCREATE VIEW my_view AS SELECT 1;",
+        {"my_table", "my_view"},
+    ),
+    (".kt", b"class A { fun m(): Int = 1 }\nobject B { fun n() {} }", {"A", "m", "B", "n"}),
+    (
+        ".scala",
+        b"object O { def d = 1 }\ntrait T\nenum E { case A }\ngiven g: Int = 1",
+        {"O", "d", "T", "E", "g"},
+    ),
+    (".cs", b"class A { void M(){} }\nstruct S {}\nnamespace N {}", {"A", "M", "S", "N"}),
+    (".java", b"public class A { void m() {} }\n@interface Ann {}", {"A", "m", "Ann"}),
+    (".ts", b"export class C {}\nexport function f() {}\nexport interface I {}", {"C", "f", "I"}),
+]
+
+
+@pytest.mark.skipif(not _HAS_TS, reason="tree-sitter not installed on this host")
+@pytest.mark.parametrize("suffix,source,expected", _GRAMMAR_CASES)
+def test_each_advertised_language_actually_extracts(tmp_path, suffix, source, expected):
+    """The install messaging promises 'exact symbols and line ranges for Java, Scala, C#,
+    SQL, TypeScript'. Each of those must produce symbols, or the promise is false and the
+    failure is invisible."""
+    src = tmp_path / f"sample{suffix}"
+    src.write_bytes(source)
+    found = rs._ts_symbols_and_ranges(src)
+    assert found is not None, f"{suffix} produced no symbols at all"
+    names = set(found[0])
+    missing = expected - names
+    assert not missing, f"{suffix} missed {sorted(missing)}; got {sorted(names)}"
+    for name in expected & names:
+        start, end = found[1][name]
+        assert 1 <= start <= end, f"{suffix}:{name} has a nonsense range {(start, end)}"
+
+
+def test_the_language_map_uses_names_the_pack_recognises():
+    """`c_sharp` vs `csharp` cost C# the tier entirely, silently, because an unknown grammar
+    name is indistinguishable from 'not installed'. Pin the spelling even where the library
+    is absent - this is a table lookup, not a probe."""
+    assert rs._TS_LANGS[".cs"] == "csharp"
+    assert rs._TS_LANGS[".kt"] == "kotlin"
+    assert rs._TS_LANGS[".scala"] == "scala"
+    assert rs._TS_LANGS[".sql"] == "sql"
+
+
+def test_sql_declaration_types_match_the_shipped_grammar():
+    """These were the suffixed names from a different SQL grammar, so SQL matched nothing."""
+    for node_type in ("create_table", "create_view", "create_function", "create_procedure"):
+        assert node_type in rs._TS_DECL_TYPES
+    assert "create_table_statement" not in rs._TS_DECL_TYPES, "the wrong grammar's names"

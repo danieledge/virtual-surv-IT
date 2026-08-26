@@ -30,4 +30,13 @@ sqlfluff>=3.0
 # version and go stale every release. Install via `virt-surv` Advanced > Code intelligence,
 # or `python install_helper.py --code-intel`, or directly from this file.
 tree-sitter>=0.21
-tree-sitter-language-pack>=0.9
+# PINNED BELOW 1.0 DELIBERATELY (2026-08-27). From 1.0 the pack stopped bundling
+# grammars: the wheel carries none, and the first get_parser() call fetches a manifest
+# and a ~22MB platform bundle from a GitHub release at RUNTIME, caching compiled .so
+# files under ~/.cache. Measured: with the network blocked 1.15.8 raises DownloadError,
+# and there is no offline switch. That is the exact condition that already disqualified
+# pip-audit and semgrep here - unconditional network calls with no reliable offline
+# mode, which on a corporate proxy hang rather than fail fast - and this probe runs at
+# ENGAGEMENT OPEN. 0.13.0 ships every grammar in the wheel; measured parsing python,
+# java, scala, csharp, sql, kotlin and typescript with the network unreachable.
+tree-sitter-language-pack>=0.9,<1.0
