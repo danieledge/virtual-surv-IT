@@ -8108,3 +8108,54 @@ def test_the_permissions_step_writes_the_read_rules(tmp_path, monkeypatch, capsy
     allow = written["permissions"]["allow"]
     assert f"Read({clone.resolve()}/**)" in allow
     assert "Bash(ruff *)" in allow, "the existing Bash entries must survive"
+
+
+def test_an_untrusted_workspace_is_reported_because_its_allow_rules_are_ignored(
+    tmp_path, monkeypatch, capsys
+):
+    """The finding that explains a lot of prompts: Claude Code IGNORES a project's allow
+    rules until the workspace is trusted, and says so only on stderr. So every rule this
+    installer writes can be silently inert - the user is told permissions are configured and
+    then gets prompted anyway (fresh Windows machine, 2026-08-26). In an UNATTENDED run
+    those are not prompts, they are denials.
+
+    It reports and points; it never writes trust itself. That is a security question Claude
+    Code asks for itself, and answering it from here would answer it on the user's behalf
+    without them seeing it."""
+    import install_helper as ih
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    (tmp_path / ".claude.json").write_text(json.dumps({"projects": {}}), encoding="utf-8")
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    assert ih.workspace_is_trusted(project) is False
+    ih.warn_if_untrusted(project, ih.Style(False), ih.marks())
+    out = capsys.readouterr().out
+    assert "not been TRUSTED" in out and "IGNORE every allow entry" in out
+    assert "unattended run will simply be refused" in out
+
+
+def test_a_trusted_workspace_says_nothing(tmp_path, monkeypatch, capsys):
+    import install_helper as ih
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    (tmp_path / ".claude.json").write_text(
+        json.dumps({"projects": {str(project): {"hasTrustDialogAccepted": True}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path))
+    assert ih.workspace_is_trusted(project) is True
+    ih.warn_if_untrusted(project, ih.Style(False), ih.marks())
+    assert capsys.readouterr().out == ""
+
+
+def test_an_unreadable_config_never_cries_wolf(tmp_path, monkeypatch, capsys):
+    """Unknown is not the same as untrusted. Warning on a machine we cannot read would
+    teach the reader to ignore the line."""
+    import install_helper as ih
+
+    monkeypatch.setattr(ih.Path, "home", staticmethod(lambda: tmp_path / "nowhere"))
+    assert ih.workspace_is_trusted(tmp_path) is None
+    ih.warn_if_untrusted(tmp_path, ih.Style(False), ih.marks())
+    assert capsys.readouterr().out == ""

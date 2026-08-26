@@ -3338,6 +3338,66 @@ class Installer:
 # ------------------------------------------------------------------ permissions merge
 
 
+def workspace_is_trusted(project_dir: Path, home: Optional[Path] = None) -> Optional[bool]:
+    """Has this workspace been trusted in Claude Code? None when it cannot be determined.
+
+    This matters far more than it looks. Claude Code IGNORES the allow rules in a project's
+    settings until the workspace is trusted, and says so only on stderr - "Ignoring 12
+    permissions.allow entries ... this workspace has not been trusted". So every rule this
+    installer writes can be silently inert: the user is told permissions are configured and
+    then gets prompted anyway (found on a fresh Windows machine, 2026-08-26). In an
+    UNATTENDED run those are not prompts at all, they are denials, and the run quietly does
+    less than it was asked to.
+
+    Trust is recorded per project in the user-level Claude config, under
+    projects.<path>.hasTrustDialogAccepted."""
+    config = (home or Path.home()) / ".claude.json"
+    try:
+        data = json.loads(config.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+    projects = data.get("projects")
+    if not isinstance(projects, dict):
+        return None
+    try:
+        wanted = str(Path(project_dir).expanduser().resolve())
+    except (OSError, ValueError):
+        return None
+    for key, entry in projects.items():
+        try:
+            if str(Path(key).expanduser().resolve()) != wanted:
+                continue
+        except (OSError, ValueError):
+            continue
+        return bool(entry.get("hasTrustDialogAccepted")) if isinstance(entry, dict) else None
+    return False  # config exists, no entry for this project - not trusted yet
+
+
+def warn_if_untrusted(project_dir: Path, style: Style, mark_map: dict) -> None:
+    """Say plainly when the allow rules will be ignored. Never writes trust itself.
+
+    Trusting a workspace is a security decision Claude Code asks its own question about, and
+    setting it from here would answer that question on the user's behalf without them ever
+    seeing it. So this reports and points; it does not decide."""
+    if workspace_is_trusted(project_dir) is not False:
+        return  # trusted, or genuinely unknown - do not cry wolf
+    warn = mark_map.get("warn") or "!"
+    print("")
+    print(
+        style.yellow(
+            f"  {warn} This project has not been TRUSTED in Claude Code yet, so it will "
+            "IGNORE every allow entry above."
+        )
+    )
+    print(
+        style.dim(
+            "      Open Claude Code in this folder once and accept the trust prompt. Until "
+            "then you will still be asked for permission, and an unattended run will simply "
+            "be refused."
+        )
+    )
+
+
 def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     """Standalone opt-in step: merge RECOMMENDED_ALLOW into <project>/.claude/settings.json.
 
@@ -3369,6 +3429,7 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     if not added:
         total = len(RECOMMENDED_ALLOW) + len(reads)
         print(f"{ok} {target}: all {total} recommended entries already present")
+        warn_if_untrusted(project, style, mark_map)
         return 0
     if target.is_file():
         today = datetime.now().strftime("%Y-%m-%d")
@@ -3384,6 +3445,7 @@ def run_permissions(project_dir: Path, style: Style, mark_map: dict) -> int:
     print(
         f"{ok} {target}: added {len(added)} allow entr{'y' if len(added) == 1 else 'ies'} (add-only; deny rules and hooks untouched)"
     )
+    warn_if_untrusted(project, style, mark_map)
     print(style.dim("    Inspect any time with /permissions inside Claude Code."))
     return 0
 
