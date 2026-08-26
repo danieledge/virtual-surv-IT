@@ -73,7 +73,23 @@ code is produced or changed** (a review of existing code, an analysis, a questio
 developer-handover doc is produced** (DoD "Documented for handover") - the review's own
 findings and 🔵 Developer guidance section are the deliverable.
 
-**4. Close-lite.** `set-status closing` first (marks the close window on disk - the summary
+**4. Challenge it once, before closing.** Light drops the independent reviewer by design, so
+this question is all that stands between "no reviewer" and "no review". Ask it of the work you
+just did; answer out loud in two or three lines:
+
+> **What would make this wrong, incomplete or unsafe?**
+
+Each answer carries a consequence, so none is a shrug. **Wrong** - something tagged 📊
+that is really 🧠, a figure taken on trust, a file reasoned about but never read: re-tag or
+verify it **before** the close, never in a caveat. **Incomplete** - part of the ask the
+deliverable does not cover: name it in the summary email as residual risk, since a stated gap
+is a finding and an unstated one a defect. **Unsafe** - data handling, execution, secrets or a
+regulated obligation thinned by light's reduced ceremony: an **upgrade trigger**, not a
+caveat, as is uncertainty the first pass left open - light is a ceremony choice,
+never a confidence claim. Found nothing? Say so in one line and close: a silent self-check
+reads like one that never ran.
+
+**5. Close-lite.** `set-status closing` first (marks the close window on disk - the summary
 email written next is legitimate close work, register R5); run the **citations gate**,
 unchanged from standard - `<python> -m scripts.check_citations` over the artifacts
 (`.claude/skills/engage/references/close-checklist.md` §Citations gate: anything flagged
@@ -92,6 +108,7 @@ opt-out). Light may keep NEW §2 entries minimal when the architecture genuinely
 change - the history row and corrections never are. Human sign-off remains the user's act.
 
 **Upgrade rule (standing):** the moment scope grows past light - detection logic appears, a
-regulated obligation enters, the deliverable needs the full artifact set -
+regulated obligation enters, the deliverable needs the full artifact set, or step 4's
+challenge lands on unsafe or uncertain -
 `<python> -m scripts.engagement_state set-profile standard`, say why in one line, and follow
 the full `/engage` flow from the matching phase. Never silently continue light.
