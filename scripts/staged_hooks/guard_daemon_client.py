@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import json
 import socket
-import subprocess  # nosec B404 - fixed argv, shell=False, invoking our own sibling scripts only
 import sys
 import time
 from pathlib import Path
@@ -73,13 +72,35 @@ _START_BACKOFF_TTL_SECONDS = 300  # retry again after this long even while backe
 # HAPPY PATH (daemon connects immediately) the daemon's own server-side imports were paid
 # for nothing this call ever used. Inlined below instead of imported.
 #
-# `subprocess` stays a top-level import (NOT deferred to the two functions that use it,
-# though the same reasoning would suggest it): tests/test_guard_daemon.py patches it as a
-# module attribute (`monkeypatch.setattr(client.subprocess, "Popen", ...)`), which only
-# resolves if the import is module-level - a local import inside a function is never
-# reachable as `client.subprocess` from outside. Not worth breaking that established
-# patching convention for a much smaller win than the read_port_and_token inline above.
+# `subprocess` IS deferred (2026-08-26). The note here previously kept it top-level to
+# preserve tests/test_guard_daemon.py's `monkeypatch.setattr(client.subprocess, ...)`
+# convention, judging the win "much smaller" than the read_port_and_token inline - a
+# judgement made without a measurement. Measured: `-X importtime` puts subprocess at 11.9ms
+# of an ~87ms client call, and NOTHING on the happy path uses it (it appears only in
+# _start_daemon_detached and _cold_start_fallback). Every daemon-routed hook call was
+# importing a process-spawning library in order not to spawn a process.
+#
+# The patching convention is preserved exactly, by two mechanisms that work together:
+#   - the module-level __getattr__ below resolves `client.subprocess` for outside callers
+#     (PEP 562), so `monkeypatch.setattr(client.subprocess, "Popen", ...)` still finds the
+#     real module;
+#   - that patch mutates the singleton in sys.modules, so the deferred `import subprocess`
+#     inside each function retrieves the SAME already-patched object.
+# Module-level __getattr__ is not consulted for the module's own global lookups, which is
+# why each function imports it by name rather than relying on the hook.
 PORT_FILE_NAME = ".guard-daemon-port"  # must match guard_daemon.py's own PORT_FILE_NAME
+
+
+def __getattr__(name):
+    """Resolve `client.subprocess` on demand - see the deferral note above.
+
+    Only ever fires for an attribute this module does not define, so it costs nothing on
+    the happy path and keeps the established test-patching convention working."""
+    if name == "subprocess":
+        import subprocess  # nosec B404 - fixed argv, shell=False, our own sibling scripts
+
+        return subprocess
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def read_port_and_token(state_root: Path):
@@ -135,6 +156,8 @@ def _try_daemon(state_root: Path, target: str, payload_text: str):
 def _start_daemon_detached(module_root: Path, state_root: Path) -> None:
     """Best-effort, never blocks and never raises - a failed daemon start is not
     this call's problem, only a missed optimisation for next time."""
+    import subprocess  # nosec B404 - deferred; see the note above
+
     try:
         daemon_script = Path(__file__).resolve().parent / "guard_daemon.py"
         kwargs = {}
@@ -237,6 +260,8 @@ def _cold_start_fallback(module_root: Path, target: str, payload_text: str):
     """Exactly today's path - a fresh subprocess against the real target script.
     Fails open on any launch problem, same posture as run-guard.sh's own
     no-interpreter-found case: a broken fallback must not brick the tool call."""
+    import subprocess  # nosec B404 - deferred; see the note above
+
     dispatcher = module_root / "scripts" / f"{target}.py"
     try:
         proc = subprocess.run(  # nosec B603 - fixed argv, shell=False

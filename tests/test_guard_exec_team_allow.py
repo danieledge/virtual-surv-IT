@@ -469,3 +469,78 @@ def test_block_omits_the_inline_note_for_ordinary_exec(capsys):
     assert "ad hoc inline diagnostic" not in err
     # the standard consent instructions are still present regardless
     assert "CST_ALLOW_EXEC" in err
+
+
+# ------------------------------- 2026-08-26 staged: the interpreter invoked BY PATH
+
+
+# Live report, corporate Windows, plugin mode. `virt-surv` resolves `<python>` to an absolute
+# interpreter when the PATH is unreliable (which is the whole reason that resolution exists),
+# so the team's own front door arrived as:
+#
+#   "C:/Python313/python.exe" "C:/Users/.../virtual-surv-IT/scripts/engagement_state.py" init ...
+#
+# _TEAM_ALLOW only ever matched a BARE interpreter name, so it did not recognise the team's
+# own script, fell through to the exec check, and demanded execution consent - the exact
+# thing CLAUDE.md §7 says the gate must never cover, on the one platform least able to work
+# around it.
+_ABS_INTERPRETER_CALLS = [
+    '"C:/Python313/python.exe" "C:/Users/d/virtual-surv-IT/scripts/engagement_state.py" init',
+    '"C:\\Python313\\python.exe" "C:\\Users\\d\\virtual-surv-IT\\scripts\\engagement_state.py" init',
+    "C:/Python313/python.exe C:/plug/scripts/render_html.py report.md",
+    "/usr/bin/python3 /opt/team/scripts/check_artifacts.py --fix",
+    "/usr/bin/python3.12 /opt/team/scripts/engage_probe.py",
+    "'/opt/py/bin/python' '/opt/team/scripts/validate_rtm.py'",
+]
+
+
+@pytest.mark.parametrize("command", _ABS_INTERPRETER_CALLS)
+def test_a_team_script_run_by_an_absolute_interpreter_is_allowed(command):
+    assert _allowed(command), (
+        "the team's own tooling must run consent-free however the interpreter is spelled"
+    )
+
+
+# The security property does NOT live in the interpreter token - it lives in the script side:
+# an allow-listed basename sitting directly inside a `scripts/` directory. Widening which
+# interpreters are recognised must not widen which SCRIPTS are trusted, so each of these
+# pairs the newly-accepted interpreter form with a script that has no business running.
+_STILL_BLOCKED = [
+    '"C:/Python313/python.exe" "C:/tmp/evil.py"',
+    '"C:/Python313/python.exe" "C:/tmp/scripts/evil.py"',
+    "/usr/bin/python3 /opt/team/scripts/evil.py",
+    "/usr/bin/python3 /tmp/engagement_state.py",
+    '"C:/Python313/python.exe" -m pytest',
+    "/usr/bin/python3 -c 'import os; os.system(\"rm -rf /\")'",
+]
+
+
+@pytest.mark.parametrize("command", _STILL_BLOCKED)
+def test_a_path_interpreter_does_not_launder_an_untrusted_script(command):
+    assert not _allowed(command), (
+        "the interpreter was never the trust boundary; the script basename is"
+    )
+
+
+def test_the_report_case_end_to_end():
+    """The exact command from the 2026-08-26 report, including the detail that made it
+    confusing to diagnose: it was NOT blocked for looking like Python execution.
+
+    `--title "...against source code"` matched the `\\bsource\\s+\\S+` exec pattern - the
+    shell `source` builtin - inside a quoted argument. Once _TEAM_ALLOW matches the segment
+    the exec check is never reached, so allow-listing the team's own front door fixes the
+    reported symptom whatever the arguments happen to contain."""
+    segment = (
+        '"C:/Python313/python.exe" "C:/Users/d/virtual-surv-IT/scripts/engagement_state.py" '
+        'init --title "Adversarial review of alert scoring module '
+        'against source code" --slug eng-001 --team-version "v0.37.0"'
+    )
+    assert STAGED._EXEC_RE.search(segment), "the prose really does trip an exec pattern"
+    assert _allowed(segment), "so the allow-list must match first"
+
+
+def test_widening_the_interpreter_did_not_touch_the_exec_patterns():
+    """_PY_ANY is for the allow-list only. If it ever leaks into _EXEC_PATTERNS the change
+    stops being additive, and this file's own 'nothing else loosened' guarantee is void."""
+    assert STAGED._EXEC_PATTERNS == LIVE._EXEC_PATTERNS
+    assert not any("_PY_ANY" in p for p in STAGED._EXEC_PATTERNS)

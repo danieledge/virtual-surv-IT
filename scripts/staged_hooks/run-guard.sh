@@ -220,6 +220,20 @@ DAEMON_CLIENT="$_root/scripts/guard_daemon_client.py"
 # daemon-invocation branch further down handles that first call correctly; this fast path
 # only ever engages once the interpreter is already known, never before.
 #
+# 2026-08-26 perf audit: the daemon removes the guard WORK from each call but not the
+# Python START-UP that carries the request to it - the client is still a fresh interpreter
+# per tool call. `-S` skips `site` (site-packages scanning and sitecustomize), which is the
+# bulk of that start-up: measured here 93ms -> 31ms for `python3 -c pass`, i.e. roughly a
+# third, on every single daemon-routed call. Every script this launcher runs imports the
+# standard library only, or inserts its own path explicitly (persona_anchor.py and
+# engage_probe_prefetch.py both do; verified byte-identical output under -S), so nothing
+# needs the paths `site` would have added.
+#
+# `-E` is NOT used and must not be: it would also ignore PYTHONIOENCODING/PYTHONUTF8, the
+# UTF-8 pin set at the top of this file - measured, `-S` alone keeps utf8_mode=1 while
+# `-S -E` drops it to 0, which is precisely the silent cp1252 mis-decode that produced
+# false "drift" blocks in the 2026-07-31 corporate report. The pin costs nothing to keep.
+#
 # 2026-08-14 perf audit (live corp-Windows measurement, guard-daemon roundtrip
 # investigation): this fast path is the highest-frequency code path in the whole guard
 # system (every daemon-routed PreToolUse call), so its own process-spawn count matters
@@ -232,7 +246,7 @@ if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
 	if [ -f "$_fastcache" ]; then
 		IFS= read -r _fastcached <"$_fastcache" 2>/dev/null
 		if [ -n "$_fastcached" ] && command -v "$_fastcached" >/dev/null 2>&1; then
-			"$_fastcached" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
+			"$_fastcached" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 			exit $?
 		fi
 	fi
@@ -287,7 +301,7 @@ if [ -z "$_measured_ms" ] && [ -f "$CACHE" ]; then
 		# second-level precision is coarse but adequate; it only ever errs toward the floor
 		# on a genuinely fast host, which is the safe direction to be wrong in.
 		_t0=$(date +%s 2>/dev/null) || _t0=""
-		"$_known_good" -c 'pass' >/dev/null 2>&1
+		"$_known_good" -S -c 'pass' >/dev/null 2>&1
 		_t1=$(date +%s 2>/dev/null) || _t1=""
 		if [ -n "$_t0" ] && [ -n "$_t1" ] && [ "$_t1" -ge "$_t0" ] 2>/dev/null; then
 			_measured_ms=$(( (_t1 - _t0) * 1000 ))
@@ -368,10 +382,10 @@ if [ -f "$CACHE" ]; then
 	cached=$(cat "$CACHE" 2>/dev/null)
 	if [ -n "$cached" ] && command -v "$cached" >/dev/null 2>&1; then
 		if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
-			"$cached" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
+			"$cached" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 			exit $?
 		fi
-		"$cached" "$@"
+		"$cached" -S "$@"
 		exit $?
 	fi
 fi
@@ -392,10 +406,10 @@ for interpreter in $order; do
 			mkdir -p "$(dirname "$CACHE")" 2>/dev/null
 			printf '%s' "$interpreter" >"$CACHE" 2>/dev/null
 			if [ "$_use_daemon" = 1 ] && [ -f "$DAEMON_CLIENT" ]; then
-				"$interpreter" "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
+				"$interpreter" -S "$DAEMON_CLIENT" "$_root" "$_project_root" "$_daemon_target"
 				exit $?
 			fi
-			"$interpreter" "$@"
+			"$interpreter" -S "$@"
 			exit $?
 		fi
 	fi
