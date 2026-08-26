@@ -45,7 +45,7 @@ def build_argv(
     session_id: str = "",
     budget_usd: float | None = None,
     max_turns: int | None = None,
-    permission_mode: str = "dontAsk",
+    permission_mode: str = "acceptEdits",
     allowed_tools: tuple[str, ...] = (),
     extra: tuple[str, ...] = (),
 ) -> list[str]:
@@ -56,10 +56,17 @@ def build_argv(
     the same thing by construction - no matching a session to a pack afterwards by date or
     by whichever file was modified last.
 
-    `permission_mode` defaults to `dontAsk`, which denies anything outside the allow rules
-    and denies AskUserQuestion outright. That is correct here and nowhere else: an
-    unattended run's questions were all answered at the pre-flight, so a question it could
-    ask now would be one nobody is there to hear."""
+    `permission_mode` defaults to `acceptEdits`, NOT `dontAsk`. dontAsk was the first choice
+    and it was wrong in a way that looked like success: it denies everything outside the
+    allow rules, so the run could not Write or run Bash at all - it read a few files,
+    produced no artifacts, finished in under two minutes and reported `ok`. Verified by
+    reading permission_denials off a real run (2026-08-25): Write DENIED, Bash DENIED,
+    terminal_reason "completed".
+
+    An unattended engagement's entire output is files. A mode that forbids writing them
+    does not make the run safe, it makes it pointless - and silently so. acceptEdits writes
+    files and approves the ordinary filesystem commands; anything beyond that still needs an
+    explicit allow rule, which is what `allowed_tools` carries."""
     argv = [claude, "-p", prompt, "--output-format", "stream-json", "--verbose"]
     if session_id:
         argv += ["--session-id", session_id]
@@ -102,6 +109,7 @@ def new_state() -> dict:
         "stages": [],        # subagent calls, in order
         "tool_calls": 0,
         "retries": [],
+        "denials": [],          # tools the run was refused - a blocked run is not a good one
         "rate_limited": False,
         "rate_limit_use": {},   # window -> utilisation, 0..1
         "events": 0,
@@ -211,6 +219,14 @@ def _apply_result(state: dict, event: dict) -> dict:
     except (TypeError, ValueError):
         state["cost_usd"] = 0.0
     state["by_model"] = _by_model(event.get("modelUsage"))
+    # A run that was refused its tools reports terminal_reason "completed" and is_error
+    # False - it "succeeded" at doing nothing (2026-08-25). Surface the denials so the
+    # watcher sees the difference between finished and finished-having-been-blocked.
+    denials = event.get("permission_denials")
+    if isinstance(denials, list):
+        state["denials"] = [
+            str(d.get("tool_name") or "?") for d in denials if isinstance(d, dict)
+        ]
     if not state["ok"] and not state["message"]:
         state["message"] = f"failed (HTTP {event.get('api_error_status')})"
     return state
@@ -283,6 +299,10 @@ def summary(state: dict) -> str:
             f"{len(state.get('retries') or [])} retry(ies)"
         )
     verdict = "completed" if state.get("ok") else "FAILED"
+    blocked = state.get("denials") or []
+    if blocked:
+        # Named first, because "completed" alone is actively misleading here.
+        verdict = f"{verdict} but BLOCKED ({len(blocked)} tool call(s) refused)"
     return (
         f"{verdict} - {state.get('outcome') or 'no reason given'}, "
         f"{state['turns']} turn(s), ${state['cost_usd']:.4f}"
@@ -326,7 +346,7 @@ def start(
     session_id: str = "",
     budget_usd: float | None = None,
     max_turns: int | None = None,
-    permission_mode: str = "dontAsk",
+    permission_mode: str = "acceptEdits",
     allowed_tools: tuple[str, ...] = (),
     claude: str = "claude",
     slug: str = "",

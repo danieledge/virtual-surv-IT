@@ -1879,6 +1879,17 @@ MONITOR_CLOSED = "__monitor_closed__"
 _MONITOR_REFRESH = 2.0  # seconds; the state file changes at human pace, not machine pace
 
 
+def _duration_text(ms) -> str:
+    """How long a finished run took, or "" when it is not known."""
+    try:
+        seconds = int(ms) // 1000
+    except (TypeError, ValueError):
+        return ""
+    if seconds <= 0:
+        return ""
+    return f" in {seconds // 60}m {seconds % 60:02d}s" if seconds >= 60 else f" in {seconds}s"
+
+
 def _clock() -> float:
     """Monotonic, so the elapsed line cannot go backwards when the system clock is set."""
     import time
@@ -2074,7 +2085,21 @@ def monitor_screen(project_dir: Path, mod, slug: str, ref: str = "", output=None
                 out.append(("", f"    - {text[:52]}\n"))
             if len(outstanding) > 6:
                 out.append(("class:dim", f"    +{len(outstanding) - 6} more\n"))
-        out.append(("class:dim", f"\n  watching for {_elapsed(started)}\n"))
+        head = snap.get("headless") or {}
+        if head.get("denials"):
+            # A run refused its tools reports "completed" and produces nothing. Saying so
+            # loudly is the difference between "it finished" and "it was stopped from
+            # working" (2026-08-25: dontAsk denied Write and Bash, and the run looked fine).
+            out.append(("class:warn",
+                        f"\n  {len(head['denials'])} tool call(s) REFUSED - "
+                        "this run was blocked, not merely finished\n"))
+        if head.get("finished"):
+            # Stop the clock. It kept counting after the run had ended, which reads as
+            # activity when there is none (live screenshot, 2026-08-26).
+            took = _duration_text(head.get("duration_ms"))
+            out.append(("class:dim", f"\n  run finished{took} - nothing more will change\n"))
+        else:
+            out.append(("class:dim", f"\n  watching for {_elapsed(started)}\n"))
         return out
 
     def _right():

@@ -3448,12 +3448,24 @@ def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
         return False
     cap = pending.get("hard_cap_usd")
     try:
+        # The team's own tooling needs Bash rules even under acceptEdits, which covers file
+        # writes and ordinary filesystem commands but not `python -m scripts.render_html`.
+        # Reuse the SAME list the installer merges into a project's settings, so an
+        # unattended run can do exactly what an attended one was already permitted to.
+        allowed: tuple = ()
+        try:
+            import install_helper
+
+            allowed = tuple(install_helper.RECOMMENDED_ALLOW)
+        except Exception:
+            allowed = ()
         record = headless_run.start(
             project_dir,
             decision,
             session_id=str(pending.get("session_id") or ""),
             budget_usd=float(cap) if cap else None,
             slug=str(pending.get("slug") or ""),
+            allowed_tools=allowed,
             claude=(_configured_launch_command().split() or ["claude"])[0],
         )
     except (OSError, ValueError) as exc:

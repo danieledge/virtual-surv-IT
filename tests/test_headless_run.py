@@ -93,12 +93,20 @@ def test_a_hard_budget_is_passed_when_asked_for():
     assert "--max-budget-usd" not in hr.build_argv("x")
 
 
-def test_unattended_defaults_to_dont_ask():
-    """Correct here and nowhere else: an unattended run's questions were all answered at the
-    pre-flight, so a question it could ask now would be one nobody is there to hear."""
+def test_unattended_can_actually_write_its_artifacts():
+    """dontAsk was the first choice and it was wrong in a way that looked like success: it
+    denies everything outside the allow rules, so a run could not Write or run Bash at all.
+    It read a few files, produced nothing, finished in under two minutes and reported ok
+    (live report 2026-08-26: "it says finished too quickly, no artifacts"; confirmed by
+    reading permission_denials off a real run - Write DENIED, Bash DENIED, terminal_reason
+    "completed").
+
+    An unattended engagement's entire output is files. A mode that forbids writing them does
+    not make the run safe, it makes it pointless - and silently so."""
     hr = _load()
     argv = hr.build_argv("x")
-    assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
+    assert argv[argv.index("--permission-mode") + 1] == "acceptEdits"
+    assert "dontAsk" not in argv
 
 
 def test_bare_is_refused_outright():
@@ -527,3 +535,48 @@ def _load_state():
     sys.modules["engagement_state"] = mod
     spec.loader.exec_module(mod)
     return mod
+
+
+def test_a_blocked_run_is_not_reported_as_a_clean_finish():
+    """The false green this fix exists for. A run refused its tools comes back with
+    is_error False and terminal_reason "completed" - it succeeded at doing nothing. The
+    denials have to be surfaced, or "finished" and "was stopped from working" look
+    identical."""
+    hr = _load()
+    blocked = dict(_result_ok())
+    blocked["permission_denials"] = [
+        {"tool_name": "Write", "tool_use_id": "t1"},
+        {"tool_name": "Bash", "tool_use_id": "t2"},
+    ]
+    state = hr.read_stream(_lines(_init(), blocked))
+    assert state["denials"] == ["Write", "Bash"]
+    summary = hr.summary(state)
+    assert "BLOCKED" in summary and "2 tool call(s) refused" in summary
+
+
+def test_a_clean_run_says_nothing_about_denials():
+    hr = _load()
+    state = hr.read_stream(_lines(_init(), _result_ok()))
+    assert state["denials"] == []
+    assert "BLOCKED" not in hr.summary(state)
+
+
+def test_the_launcher_passes_the_teams_own_tool_rules(tmp_path, monkeypatch):
+    """acceptEdits covers file writes and ordinary filesystem commands, not `python -m
+    scripts.render_html`. The team's tooling needs the same Bash rules the installer already
+    merges into a project's settings - so an unattended run may do exactly what an attended
+    one was already permitted to, and no more."""
+    hr = _load()
+    launcher = _launcher()
+    project = _project(tmp_path)
+    seen = {}
+    monkeypatch.setattr(launcher, "_configured_launch_command", lambda: "claude", raising=False)
+    monkeypatch.setattr(launcher, "_watch_after_launch", lambda p, s: None)
+    monkeypatch.setattr(hr, "start", lambda *a, **k: seen.update(k) or {"session_id": "s"})
+    monkeypatch.setitem(sys.modules, "headless_run", hr)
+    launcher._start_headless(project, "/engage --new --auto", _pending(tmp_path))
+
+    import install_helper
+
+    assert seen["allowed_tools"] == tuple(install_helper.RECOMMENDED_ALLOW)
+    assert any("scripts" in rule for rule in seen["allowed_tools"])
