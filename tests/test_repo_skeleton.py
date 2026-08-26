@@ -9,7 +9,9 @@ import json
 import subprocess
 import time
 
+import pytest
 import scripts.repo_skeleton as rs
+from pathlib import Path
 from scripts.repo_skeleton import (
     build_reference_graph,
     build_skeleton,
@@ -169,7 +171,11 @@ def test_ctags_probe_fails_soft_on_timeout(tmp_path, monkeypatch):
     assert _symbols_ctags(tmp_path / "x.py") is None
 
 
-def test_extract_symbols_dispatches_to_ast_tier_for_python(tmp_path):
+def test_extract_symbols_dispatches_to_ast_tier_for_python(tmp_path, monkeypatch):
+    # Silence the two tiers ABOVE ast, so this tests dispatch rather than what happens to
+    # be installed on the host (tree-sitter became a real tier on 2026-08-26).
+    monkeypatch.setattr(rs, "_symbols_tree_sitter", lambda path: None)
+    monkeypatch.setattr(rs, "_symbols_ctags", lambda path: None)
     f = tmp_path / "m.py"
     f.write_text("def foo():\n    pass\n", encoding="utf-8")
     symbols, tier = extract_symbols(f)
@@ -192,6 +198,7 @@ def test_extract_symbols_tier_order_ctags_before_ast(tmp_path, monkeypatch):
 
     f = tmp_path / "m.py"
     f.write_text("def foo():\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(rs, "_symbols_tree_sitter", lambda path: None)
     monkeypatch.setattr(rs, "_symbols_ctags", lambda path: ["from_ctags"])
     symbols, tier = extract_symbols(f)
     assert tier == _TIER_CTAGS
@@ -685,9 +692,12 @@ def test_slice_returns_one_symbol_not_the_file(tmp_path):
     assert len(text) < len(src.read_text(encoding="utf-8")) / 50
 
 
-def test_slice_is_best_effort_on_non_python_and_says_so(tmp_path):
+def test_slice_is_best_effort_on_non_python_and_says_so(tmp_path, monkeypatch):
     """The tier travels with the output - the same honesty contract the symbol tiers carry.
     'ast' is exact; 'regex' located the declaration and inferred the end."""
+    # Force the regex path: with tree-sitter installed the slice would be exact, and the
+    # point of THIS test is the best-effort tier and its honest label.
+    monkeypatch.setattr(rs, "_ts_symbols_and_ranges", lambda path: None)
     src = tmp_path / "Score.scala"
     src.write_text(
         "package a.b\n"
@@ -732,3 +742,82 @@ def test_slice_splits_on_the_last_colon_so_windows_paths_work(tmp_path):
     spec = f"{src}:s"
     target, _, symbol = spec.rpartition(":")
     assert symbol == "s" and target == str(src)
+
+
+# ------------------------------------- tree-sitter tier (2026-08-26, no longer a stub)
+
+
+_HAS_TS = rs._ts_parser(Path("x.py")) is not None
+
+
+def test_the_tier_is_absent_safe_and_that_is_the_normal_case():
+    """The property that matters most, and the one that holds on THIS box: tree-sitter is a
+    SOFT probe. Not installed - or installed and refusing to load, which is the locked-down
+    case - must be indistinguishable from before the tier existed. Never an exception, never
+    a partial result, just a fall-through to the next tier."""
+    assert rs._ts_parser(Path("nope.unknownext")) is None, "unknown language must be None"
+    assert rs._symbols_tree_sitter(Path("nope.unknownext")) is None
+    # A file that does not exist must not raise either.
+    assert rs._ts_symbols_and_ranges(Path("does-not-exist.py")) is None
+
+
+def test_python_still_resolves_without_tree_sitter(tmp_path):
+    """Python has a stdlib floor, so it must never depend on the probe."""
+    src = tmp_path / "m.py"
+    src.write_text("def a():\n    return 1\n", encoding="utf-8")
+    symbols, tier = rs.extract_symbols(src)
+    assert "a" in symbols
+    assert tier in ("tree-sitter", "ast"), f"unexpected tier {tier!r}"
+
+
+@pytest.mark.skipif(not _HAS_TS, reason="tree-sitter not installed on this host")
+def test_tree_sitter_gives_exact_symbols_and_ranges_for_scala(tmp_path):
+    """The case the tier exists for. Surveillance estates are Java/Scala/C#/SQL, and before
+    this the skeleton gave those languages regex approximations at best."""
+    src = tmp_path / "Score.scala"
+    src.write_text(
+        "package a.b\n"
+        "\n"
+        "class RuleA extends Pipeline.ScoreStep {\n"
+        "  override def segment(x: Txn): String = {\n"
+        '    "HIGH"\n'
+        "  }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    found = rs._ts_symbols_and_ranges(src)
+    assert found is not None
+    names, ranges = found
+    assert "RuleA" in names and "segment" in names
+    start, end = ranges["segment"]
+    assert start == 4 and end == 6, f"expected exact range, got {(start, end)}"
+
+
+@pytest.mark.skipif(not _HAS_TS, reason="tree-sitter not installed on this host")
+def test_slice_prefers_tree_sitter_over_the_regex_guess(tmp_path):
+    src = tmp_path / "Score.scala"
+    src.write_text(
+        "class A {\n  def m(): Int = {\n    1\n  }\n}\n",
+        encoding="utf-8",
+    )
+    text, tier = rs.slice_symbol(src, "m")
+    assert tier == "tree-sitter", "the exact tier must win when it is available"
+    assert "def m()" in text
+
+
+def test_the_symbol_cap_applies_to_the_tree_sitter_tier_too():
+    """Orientation must stay bounded whichever tier answers - a huge generated file must
+    not become the expensive step."""
+    assert rs._REGEX_MAX_SYMBOLS > 0
+    source = "\n".join(f"def f{i}():\n    pass\n" for i in range(rs._REGEX_MAX_SYMBOLS * 3))
+    import tempfile
+
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as fh:
+        fh.write(source)
+        path = Path(fh.name)
+    try:
+        found = rs._ts_symbols_and_ranges(path)
+        if found is not None:
+            assert len(found[0]) <= rs._REGEX_MAX_SYMBOLS
+    finally:
+        path.unlink(missing_ok=True)

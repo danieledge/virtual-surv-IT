@@ -2163,6 +2163,82 @@ class Installer:
                 fatal=False,
             )
 
+    # The packages that light up repo_skeleton's tree-sitter tier. tree-sitter-language-pack
+    # rather than the individual grammars: one abi3 wheel covering ~100 languages, against a
+    # per-language wheel each. The core (tree-sitter) is NOT abi3, so it resolves per Python
+    # version - which is exactly why none of this is vendored.
+    CODE_INTEL_PACKAGES = ("tree-sitter", "tree-sitter-language-pack")
+
+    def code_intel_step(self) -> None:
+        """Attempt the code-intelligence extras, and treat failure as a normal outcome.
+
+        WHY IT IS ATTEMPTED BY DEFAULT (2026-08-26). repo_skeleton's tree-sitter tier was a
+        stub for its whole life on the reasoning that a compiled extension could not work on
+        a locked-down corporate box. Measured on the actual box: it installs by plain pip,
+        loads, and parses. The objection did not survive contact. With the tier implemented,
+        having the library present is the difference between exact symbols and ranges for
+        ~15 languages and a regex approximation - and on a Java/Scala/SQL estate, which is
+        what this team reviews, that is most of the value.
+
+        WHY FAILURE IS NOT AN ERROR. It genuinely cannot be installed everywhere - this
+        project's own dev box refuses it under PEP 668 (externally-managed environment), and
+        elsewhere it will be no network, no pip, or a DLL the policy will not load. Every one
+        of those is fine: the tier is a SOFT probe, so the plugin behaves exactly as it did
+        before, using stdlib ast for Python and the regex tier for everything else. So this
+        reports the outcome and moves on. It must never fail an install, and it must never
+        leave a user thinking something is broken when nothing is.
+        """
+        self.step_intro(
+            "Optional code-intelligence extras (tree-sitter). With them, codebase "
+            "orientation gets exact symbols and line ranges for Java, Scala, C#, SQL, "
+            "TypeScript and more; without them it falls back to pattern matching. Either "
+            "way the plugin works - this is sharpness, not function."
+        )
+        if self.demo:
+            self.step_ok("Code intelligence", "would attempt pip install (demo)")
+            return
+        if self._code_intel_present():
+            self.step_ok("Code intelligence", "already available - tree-sitter imports here")
+            return
+        proc = run_cmd(
+            [sys.executable, "-m", "pip", "install", "--quiet", *self.CODE_INTEL_PACKAGES],
+            timeout=600,
+        )
+        if proc.returncode == 0 and self._code_intel_present():
+            self.step_ok("Code intelligence", "installed - exact symbols for ~15 languages")
+            return
+        # Distinguish the two failures, because they mean different things to a reader: pip
+        # refused (no network, no pip, externally-managed), versus pip succeeded and the
+        # compiled extension still will not load (the policy case). Neither is fatal.
+        reason = "pip could not install it"
+        blob = ((proc.stderr or "") + (proc.stdout or "")).lower()
+        if "externally-managed" in blob or "pep 668" in blob:
+            reason = "this Python is externally managed (PEP 668)"
+        elif "network" in blob or "resolve" in blob or "timed out" in blob:
+            reason = "no package index reachable"
+        elif proc.returncode == 0:
+            reason = "installed but the compiled extension will not load here"
+        self.say(
+            self.style.dim(
+                f"    {reason} - orientation will use the built-in pattern tier instead. "
+                "Nothing is broken; symbols are approximate rather than exact."
+            )
+        )
+        self.step_skip("Code intelligence", f"unavailable - {reason}")
+
+    def _code_intel_present(self) -> bool:
+        """Importable AND usable. A probe that only checks importability would report
+        success on a machine where the DLL fails to load, which is the one case worth
+        distinguishing."""
+        probe = (
+            "from tree_sitter_language_pack import get_parser;"
+            "get_parser('python').parse(b'x = 1')"
+        )
+        try:
+            return run_cmd([sys.executable, "-c", probe], timeout=120).returncode == 0
+        except Exception:
+            return False
+
     def say_claude_launch_trace(self) -> None:
         """One dim line naming exactly how claude is being launched - the difference
         between 'cmd.exe is blocked', 'the APPDATA exe is blocked' and 'the CLI ran
@@ -3361,6 +3437,7 @@ class Installer:
             ("Pending hook fixes", self.check_pending_hook_fixes),
             ("Quick setup or manual?", self.quick_setup_choice),
             ("Optional pip requirements", self.optional_pip),
+            ("Code intelligence (optional)", self.code_intel_step),
             ("Claude Code marketplace", self.marketplace),
             (lambda: "Plugin " + ("update" if self.mode == "update" else "install"), self.plugin),
             ("Status line", self.statusline_step),

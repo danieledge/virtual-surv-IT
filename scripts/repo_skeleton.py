@@ -161,23 +161,162 @@ _TIER_FLOOR = "floor"
 _probe_cache: dict[str, bool] = {}
 
 
-def _symbols_tree_sitter(_path: Path) -> list[str] | None:
-    """Soft probe only - tree-sitter is never vendored (compiled wheel), so this tier is
-    live only when the host environment happens to already have it installed. Not
-    implemented beyond the presence probe in this first version: a positive probe with no
-    extraction still means "unavailable for now", so callers fall through to the next tier.
-    Kept as a real tier (not deleted) so a future version can add real extraction here
-    without touching the tiering logic anywhere else."""
-    if _probe_cache.get("tree_sitter") is None:
-        try:
-            import tree_sitter  # noqa: F401
+# Which grammar to ask tree_sitter_language_pack for, per extension. Only languages this
+# team actually reviews (docs/scope-and-stack.md and the review lenses) - the pack ships
+# ~100, and listing them all would mean claiming coverage nobody has tested.
+_TS_LANGS = {
+    ".py": "python",
+    ".java": "java",
+    ".scala": "scala",
+    ".kt": "kotlin",
+    ".cs": "c_sharp",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".sql": "sql",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".go": "go",
+    ".rb": "ruby",
+    ".rs": "rust",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".hpp": "cpp",
+}
 
-            _probe_cache["tree_sitter"] = True
-        except ImportError:
-            _probe_cache["tree_sitter"] = False
-    if not _probe_cache["tree_sitter"]:
+# Node types that name a symbol worth listing, across grammars. Tree-sitter node type names
+# are per-grammar, so this is a union rather than a per-language table: an unknown type is
+# simply not collected, which degrades to fewer symbols and never to a wrong one.
+_TS_DECL_TYPES = {
+    "function_definition",
+    "function_declaration",
+    "function_item",
+    "method_definition",
+    "method_declaration",
+    "class_definition",
+    "class_declaration",
+    "class_specifier",
+    "interface_declaration",
+    "enum_declaration",
+    "record_declaration",
+    "struct_specifier",
+    "struct_item",
+    "object_definition",
+    "trait_definition",
+    "type_definition",
+    "module_definition",
+    "impl_item",
+    "decorated_definition",
+    "function_signature",
+    "val_definition",
+    "var_definition",
+    "constructor_declaration",
+    "create_function_statement",
+    "create_procedure_statement",
+    "create_view_statement",
+    "create_table_statement",
+}
+
+
+def _ts_parser(path: Path):
+    """A parser for this file's language, or None. Every failure is a None, never a raise.
+
+    The probe is cached per language: importing the pack is cheap but building a parser is
+    not, and repo_skeleton walks whole trees.
+
+    "Never a raise" is meant literally, including for an input that is not a path at all -
+    this is a fall-through tier on the orientation path, and a tier that can throw is worse
+    than a tier that is absent."""
+    try:
+        lang = _TS_LANGS.get(path.suffix.lower())
+    except AttributeError:
         return None
-    return None  # probed present, but extraction isn't implemented yet - fall through
+    if not lang:
+        return None
+    key = f"tree_sitter:{lang}"
+    if key not in _probe_cache:
+        try:
+            from tree_sitter_language_pack import get_parser
+
+            _probe_cache[key] = get_parser(lang)
+        except Exception:
+            # ImportError (not installed), LookupError (grammar missing from this pack
+            # version), OSError (the compiled extension will not load - the AppLocker case).
+            # All three mean the same thing to a caller: this tier is unavailable.
+            _probe_cache[key] = False
+    parser = _probe_cache[key]
+    return parser or None
+
+
+def _ts_symbols_and_ranges(path: Path) -> tuple[list[str], dict] | None:
+    """(names, {name: (start_line, end_line)}) via tree-sitter, or None if unavailable.
+
+    IMPLEMENTED 2026-08-26. This tier was a stub for its whole life - it probed for the
+    library and then returned None regardless, so every host fell through to the regex
+    floor even when the mature parser was sitting right there. Measured on the owner's
+    corporate Windows box: tree-sitter installs by plain pip, loads, and parses. The
+    packaging objection that kept this stubbed turned out not to hold on the machine it was
+    written for.
+
+    Still never vendored (~29MB across platforms, and the core is not abi3 so it would need
+    a wheel per Python version). It stays a SOFT probe: present means exact symbols and
+    exact ranges for ~15 languages; absent means the regex tier, exactly as before."""
+    parser = _ts_parser(path)
+    if parser is None:
+        return None
+    try:
+        source = path.read_bytes()
+        tree = parser.parse(source)
+    except Exception:
+        return None
+    names: list[str] = []
+    ranges: dict = {}
+    seen: set = set()
+
+    def walk(node, depth: int = 0) -> None:
+        # Bounded: a pathological file must not make orientation the expensive step.
+        if depth > 12 or len(names) >= _REGEX_MAX_SYMBOLS:
+            return
+        if node.type in _TS_DECL_TYPES:
+            ident = None
+            for field in ("name", "declarator"):
+                try:
+                    ident = node.child_by_field_name(field)
+                except Exception:
+                    ident = None
+                if ident is not None:
+                    break
+            if ident is None:
+                for child in node.children:
+                    if child.type in ("identifier", "type_identifier", "field_identifier"):
+                        ident = child
+                        break
+            if ident is not None:
+                try:
+                    name = source[ident.start_byte : ident.end_byte].decode("utf-8", "replace")
+                except Exception:
+                    name = ""
+                if name and name not in seen:
+                    seen.add(name)
+                    names.append(name)
+                    ranges[name] = (node.start_point[0] + 1, node.end_point[0] + 1)
+        for child in node.children:
+            walk(child, depth + 1)
+
+    try:
+        walk(tree.root_node)
+    except RecursionError:
+        return None
+    return (names, ranges) if names else None
+
+
+def _symbols_tree_sitter(path: Path) -> list[str] | None:
+    """Soft probe - tree-sitter is never vendored, so this tier is live only when the host
+    has it installed. None means "unavailable here", and the caller falls through."""
+    found = _ts_symbols_and_ranges(path)
+    return found[0] if found else None
 
 
 def _symbols_ctags(path: Path) -> list[str] | None:
@@ -903,6 +1042,13 @@ def slice_symbol(path: Path, name: str) -> tuple[str, str] | None:
         if found:
             start, end = found
             return "\n".join(lines[start - 1 : end]), "ast"
+    # tree-sitter next: exact ranges for ~15 languages when the host has it, which is the
+    # difference between an exact Scala/Java slice and an anchor-and-brace-count guess.
+    # Absent, this costs one dict lookup and falls straight through.
+    ts = _ts_symbols_and_ranges(path)
+    if ts and name in ts[1]:
+        start, end = ts[1][name]
+        return "\n".join(lines[start - 1 : end]), "tree-sitter"
     found = _slice_range_regex(lines, name)
     if not found:
         return None
