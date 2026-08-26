@@ -918,7 +918,9 @@ def test_a_hard_cap_is_only_produced_when_it_can_actually_be_enforced():
     honour is the worst kind of setting: it reads as a guarantee and is a preference."""
     src = _preflight_source()
     body = src.split("def auto_preflight_screen", 1)[1]
-    condition = body.split('"hard_cap_usd":', 1)[1].split("\n", 1)[0]
+    # The value is a multi-line expression now (the wall carries headroom above the
+    # ceiling), so read the whole block rather than the first line of it.
+    condition = body.split('"hard_cap_usd":', 1)[1].split("}", 1)[0]
     assert 'rung == "stop"' in condition
     assert 'mode == "headless"' in condition
     assert "ceiling" in condition, "and only when a ceiling was actually set"
@@ -986,3 +988,16 @@ def test_a_report_written_without_the_web_is_not_silently_presented_as_researche
     so. The pre-flight row states the consequence rather than only the setting."""
     body = _preflight_source().split("def auto_preflight_screen", 1)[1]
     assert "writes from what it knows" in body
+
+
+def test_the_enforced_wall_sits_above_the_pacing_ceiling():
+    """2026-08-26: the wall was set to the ceiling itself, so a run that paced correctly was
+    killed inside its own closing sequence - $5.08 against a $5.00 cap, twelve artifacts, no
+    verdict. The ceiling is what a run paces against; the wall exists to stop a runaway, not
+    to adjudicate the last document."""
+    src = _preflight_source()
+    body = src.split("def auto_preflight_screen", 1)[1]
+    assert "_WALL_HEADROOM" in body, "the wall must be derived from the ceiling, not equal it"
+    headroom = float(src.split("_WALL_HEADROOM = ", 1)[1].split("\n", 1)[0])
+    assert headroom > 1.0, "no headroom is the bug"
+    assert headroom <= 1.5, "a wall far above the ceiling stops being a wall"

@@ -1508,6 +1508,10 @@ AUTO_CANCELLED = "__auto_cancelled__"
 
 # One source for the keys, named once and rendered in both places. The body and the footer
 # drifted apart the moment they were separate strings.
+# How far the enforced wall sits above the pacing ceiling. A closing sequence - verdict,
+# summary email, renders - needs budget to execute, and a wall at the ceiling denies it.
+_WALL_HEADROOM = 1.25
+
 _PREFLIGHT_KEYS = "Space/Enter toggle · Ctrl-D START unattended · Esc cancel"
 
 
@@ -1712,7 +1716,17 @@ def auto_preflight_screen(project_dir: Path, mod, ref: str, output=None):
         # different promises and the caller must not have to infer which was made. Only set
         # when the human chose "stop" AND the run can actually be capped, so a caller passing
         # this to --max-budget-usd is never passing a limit nothing will honour.
-        "hard_cap_usd": ceiling if (rung == "stop" and mode == "headless" and ceiling) else None,
+        # HEADROOM above the pacing ceiling, not equal to it. Setting the wall at the same
+        # number as the target guarantees that a run which paces itself correctly is killed
+        # inside its own closing sequence - which is exactly what happened on 2026-08-26:
+        # $5.08 against a $5.00 cap, terminated mid-close, twelve artifacts and no verdict.
+        # The ceiling is what the run paces against; the wall exists to stop a runaway, not
+        # to adjudicate the last document.
+        "hard_cap_usd": (
+            round(ceiling * _WALL_HEADROOM, 2)
+            if (rung == "stop" and mode == "headless" and ceiling)
+            else None
+        ),
     }
 
 

@@ -658,3 +658,43 @@ def test_a_live_process_is_still_reported_as_running(tmp_path, monkeypatch):
     state = hr.status({"session_id": SESSION, "pid": os.getpid(), "stream": str(path)})
     assert state["live"] is True
     assert "running" in hr.summary(state)
+
+
+# --- the model must be stated, never inherited (2026-08-26) ---------------------------------
+
+
+def test_the_model_is_passed_explicitly_when_known():
+    """build_argv passed no --model at all, so a headless run silently took whatever the
+    session default happened to be. A measured run inherited OPUS for the orchestrator, which
+    docs/agent-design.md explicitly does not default to - "the orchestrator defaults to
+    sonnet ... its own cost multiplies across every skill file, hook injection and subagent
+    return that lands in its context". That inheritance was 84% of the run's cost.
+
+    An unattended run guessing its own tier is a silent, recurring overcharge."""
+    hr = _load()
+    argv = hr.build_argv("x", model="sonnet")
+    assert argv[argv.index("--model") + 1] == "sonnet"
+    assert "--model" not in hr.build_argv("x"), "empty means omit, never an empty flag value"
+
+
+def test_the_launcher_resolves_a_model_rather_than_leaving_it_to_chance(tmp_path, monkeypatch):
+    """Project choice first, then the user's, then the documented default. Never nothing."""
+    launcher = _launcher()
+    project = _project(tmp_path)
+    monkeypatch.setattr(launcher.Path, "home", staticmethod(lambda: tmp_path / "nohome"))
+    assert launcher._headless_model(project) == launcher._DEFAULT_ORCHESTRATOR_MODEL == "sonnet"
+
+    (project / ".claude" / "settings.json").write_text(
+        json.dumps({"model": "opus"}), encoding="utf-8"
+    )
+    assert launcher._headless_model(project) == "opus", "a project's own choice wins"
+
+
+def test_unreadable_settings_still_yield_a_model(tmp_path, monkeypatch):
+    """Falling through to no model is the bug this fixes; it must not come back via an
+    error path."""
+    launcher = _launcher()
+    project = _project(tmp_path)
+    (project / ".claude" / "settings.json").write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(launcher.Path, "home", staticmethod(lambda: tmp_path / "nohome"))
+    assert launcher._headless_model(project) == "sonnet"

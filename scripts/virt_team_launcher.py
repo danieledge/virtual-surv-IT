@@ -3435,6 +3435,34 @@ def _pending_auto_slug(project_dir: Path) -> str:
     return str(_pending_auto(project_dir).get("slug") or "")
 
 
+# The tier docs/agent-design.md documents for the orchestrator. Opus stays available
+# per project; it is simply not the thing to fall into by accident.
+_DEFAULT_ORCHESTRATOR_MODEL = "sonnet"
+
+
+def _headless_model(project_dir: Path) -> str:
+    """Which model the orchestrator should run on for an unattended run.
+
+    The project's configured choice if it has one, else the documented default. NEVER an
+    empty string passed through to the CLI: omitting --model lets a headless run inherit
+    whatever the session default happens to be, and a measured run inherited opus when
+    docs/agent-design.md says the orchestrator defaults to sonnet. That was 84% of the run's
+    cost and about a third more than the design intends - an unattended run guessing its own
+    tier is a silent, recurring overcharge."""
+    for settings in (
+        project_dir / ".claude" / "settings.json",
+        Path.home() / ".claude" / "settings.json",
+    ):
+        try:
+            data = json.loads(settings.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        model = data.get("model") if isinstance(data, dict) else None
+        if isinstance(model, str) and model.strip():
+            return model.strip()
+    return _DEFAULT_ORCHESTRATOR_MODEL
+
+
 def _headless_allow_rules(allow_web: bool = False) -> tuple:
     """What an unattended run is permitted to do, beyond writing files.
 
@@ -3500,6 +3528,7 @@ def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
             budget_usd=float(cap) if cap else None,
             slug=str(pending.get("slug") or ""),
             allowed_tools=allowed,
+            model=_headless_model(project_dir),
             claude=(_configured_launch_command().split() or ["claude"])[0],
         )
     except (OSError, ValueError) as exc:

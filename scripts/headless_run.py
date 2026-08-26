@@ -47,6 +47,7 @@ def build_argv(
     max_turns: int | None = None,
     permission_mode: str = "acceptEdits",
     allowed_tools: tuple[str, ...] = (),
+    model: str = "",
     extra: tuple[str, ...] = (),
 ) -> list[str]:
     """The command line for one headless run.
@@ -78,6 +79,16 @@ def build_argv(
         argv += ["--max-turns", str(max_turns)]
     if permission_mode:
         argv += ["--permission-mode", permission_mode]
+    if model:
+        # STATED, never inherited. Passing no --model means a headless run silently takes
+        # whatever the session or project default happens to be - and a measured run took
+        # opus for the orchestrator, which docs/agent-design.md explicitly does NOT default
+        # to ("the orchestrator defaults to sonnet ... the orchestrator's own cost multiplies
+        # across every skill file, hook injection and subagent return that lands in its
+        # context"). That single silent inheritance was 84% of that run's cost and about a
+        # third more than the design intends. An unattended run must not be guessing its own
+        # tier.
+        argv += ["--model", model]
     for tool in allowed_tools:
         argv += ["--allowedTools", tool]
     argv += list(extra)
@@ -356,6 +367,7 @@ def start(
     max_turns: int | None = None,
     permission_mode: str = "acceptEdits",
     allowed_tools: tuple[str, ...] = (),
+    model: str = "",
     claude: str = "claude",
     slug: str = "",
 ) -> dict:
@@ -379,6 +391,7 @@ def start(
         max_turns=max_turns,
         permission_mode=permission_mode,
         allowed_tools=allowed_tools,
+        model=model,
     )
     kwargs: dict = {"cwd": str(project_dir), "stdin": subprocess.DEVNULL}
     if os.name == "nt":
