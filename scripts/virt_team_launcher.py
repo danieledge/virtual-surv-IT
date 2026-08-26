@@ -3434,6 +3434,45 @@ def _pending_auto_slug(project_dir: Path) -> str:
     return str(_pending_auto(project_dir).get("slug") or "")
 
 
+def _headless_allow_rules() -> tuple:
+    """What an unattended run is permitted to do, beyond writing files.
+
+    acceptEdits covers file writes and ordinary filesystem commands but not
+    `python -m scripts.render_html`, and not reading the team's own references - which the
+    engage skill does on its very first step. Both come from the installer's own lists, so
+    an unattended run may do exactly what an attended, configured project was already
+    permitted to, and no more.
+
+    install_helper lives in the repo ROOT, not in scripts/, so importing it from here needs
+    the root on sys.path. It did not, the import raised, a broad `except` swallowed it and
+    ZERO rules reached the run - which then had seven tool calls refused, including the
+    command that records its own decisions (found end-to-end, 2026-08-26). Failures are
+    reported now rather than silently degrading the run."""
+    root = _scripts_dir().parent
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    try:
+        import install_helper
+    except Exception as exc:
+        print(
+            _Ink().warn(
+                f"    could not load the permission rules ({exc.__class__.__name__}) - "
+                "the run may be refused its own tooling"
+            ),
+            file=sys.stderr,
+        )
+        return ()
+    rules = tuple(install_helper.RECOMMENDED_ALLOW)
+    try:
+        # The skill reads its own references (engage-open.md, auto-mode.md) from the team's
+        # directory, which is outside the project. Without these it is refused its own
+        # instructions - measured, not guessed.
+        rules += tuple(install_helper.team_read_entries())
+    except Exception:
+        pass
+    return rules
+
+
 def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
     """Start the run with no terminal at all, and watch it. True if it started.
 
@@ -3448,17 +3487,7 @@ def _start_headless(project_dir: Path, decision: str, pending: dict) -> bool:
         return False
     cap = pending.get("hard_cap_usd")
     try:
-        # The team's own tooling needs Bash rules even under acceptEdits, which covers file
-        # writes and ordinary filesystem commands but not `python -m scripts.render_html`.
-        # Reuse the SAME list the installer merges into a project's settings, so an
-        # unattended run can do exactly what an attended one was already permitted to.
-        allowed: tuple = ()
-        try:
-            import install_helper
-
-            allowed = tuple(install_helper.RECOMMENDED_ALLOW)
-        except Exception:
-            allowed = ()
+        allowed = _headless_allow_rules()
         record = headless_run.start(
             project_dir,
             decision,

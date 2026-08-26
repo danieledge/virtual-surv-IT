@@ -578,5 +578,47 @@ def test_the_launcher_passes_the_teams_own_tool_rules(tmp_path, monkeypatch):
 
     import install_helper
 
-    assert seen["allowed_tools"] == tuple(install_helper.RECOMMENDED_ALLOW)
-    assert any("scripts" in rule for rule in seen["allowed_tools"])
+    rules = seen["allowed_tools"]
+    # The Bash rules the installer merges into a configured project, PLUS Read rules for the
+    # team's own references - the skill reads those on its first step and was being refused
+    # them (2026-08-26).
+    for rule in install_helper.RECOMMENDED_ALLOW:
+        assert rule in rules
+    assert any("scripts" in rule for rule in rules)
+
+
+def test_the_allow_rules_actually_load(tmp_path):
+    """They did not. install_helper lives in the repo ROOT, not scripts/, so importing it
+    from the launcher raised ModuleNotFoundError - and a broad `except` turned that into
+    "no rules", silently. The run then had seven tool calls refused, including the command
+    that records its own decisions, while reporting a clean finish.
+
+    Found end to end, 2026-08-26, by reading permission_denials off a real engagement. The
+    same defect class as render_html.main earlier the same week: a broad except hiding a
+    real break."""
+    launcher = _launcher()
+    rules = launcher._headless_allow_rules()
+    assert rules, "no rules at all is exactly the bug"
+    assert any(r.startswith("Bash(") for r in rules), "the team's own tooling"
+    assert any(r.startswith("Read(") for r in rules), (
+        "the engage skill reads its own references on its first step, from outside the "
+        "project - without these it is refused its own instructions"
+    )
+
+
+def test_a_failure_to_load_rules_is_reported_not_swallowed(monkeypatch, capsys):
+    """Degrading silently is what made this cost a whole engagement to find."""
+    launcher = _launcher()
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _refuse(name, *a, **k):
+        if name == "install_helper":
+            raise ImportError("nope")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", _refuse)
+    monkeypatch.delitem(sys.modules, "install_helper", raising=False)
+    assert launcher._headless_allow_rules() == ()
+    assert "could not load the permission rules" in capsys.readouterr().err
