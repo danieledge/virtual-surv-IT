@@ -705,3 +705,75 @@ def test_an_attended_run_with_no_window_still_falls_back_in_place(tmp_path, monk
 
     assert mod.main() == 0, "the wrapper launches it in place"
     assert started == [], "an attended run must not be forced headless"
+
+
+# --- Windows Terminal hosts a shell; it does not replace one (2026-08-26) ---------------
+
+
+def test_wt_runs_the_command_through_a_shell_not_as_a_bare_process(monkeypatch):
+    """The corp-box failure. `wt.exe -d <dir> claude /engage` asks Windows Terminal to spawn
+    `claude` itself: no profile loaded, no alias resolved, and whatever PATH wt inherited.
+    On a machine where the launch command is a PowerShell alias - or an npm shim that group
+    policy keeps off the bare PATH - the window opens and instantly fails, while the
+    launcher has already stood down. The command must reach a SHELL."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt.sys, "platform", "win32")
+    monkeypatch.setattr(lt, "_which", lambda n: f"C:/{n}")
+    monkeypatch.setattr(lt, "_invoking_shell", lambda: "pwsh.exe")
+    argv = lt._windows_argv("wt.exe", ["claude", "/engage --new"], Path("C:/proj"))
+    assert argv[0].endswith("wt.exe")
+    assert "-d" in argv and "C:/proj" in argv, "the window still opens in the project"
+    joined = " ".join(argv)
+    assert "pwsh.exe" in joined, "a shell must sit between wt and the command"
+    assert "-Command" in argv, "the shell must be told to RUN something"
+    assert "& " in joined, "PowerShell needs the call operator or it prints the string"
+    assert argv.index("-d") < argv.index("-Command"), "wt's own flags come first"
+
+
+def test_wt_hosts_the_shell_the_launcher_was_started_from(monkeypatch):
+    """Given a choice, spawn a window of the shell already resolving the user's command -
+    not the first one on the box. Detection failing falls back to preference order, which
+    is the pre-existing behaviour and never worse than it."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt.sys, "platform", "win32")
+    monkeypatch.setattr(lt, "_which", lambda n: f"C:/{n}")
+    monkeypatch.setattr(lt, "_invoking_shell", lambda: "powershell.exe")
+    assert lt._windows_shell() == "powershell.exe", "detected shell wins"
+    monkeypatch.setattr(lt, "_invoking_shell", lambda: "")
+    assert lt._windows_shell() == "pwsh.exe", "undetected falls back to preference order"
+
+
+def test_nothing_hands_wt_an_unescaped_semicolon(monkeypatch):
+    """`;` delimits subcommands on wt.exe's OWN command line, so an unescaped one would
+    split the launch into two wt commands and run half of it."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt.sys, "platform", "win32")
+    monkeypatch.setattr(lt, "_which", lambda n: f"C:/{n}")
+    monkeypatch.setattr(lt, "_invoking_shell", lambda: "pwsh.exe")
+    argv = lt._windows_argv("wt.exe", ["claude", "/engage; whoami"], Path("C:/proj"))
+    for part in argv:
+        for hit in range(len(part)):
+            if part[hit] == ";":
+                assert hit and part[hit - 1] == "\\", f"bare ; reaches wt: {part!r}"
+
+
+def test_the_alias_check_is_not_skipped_under_wt(monkeypatch):
+    """Both safety nets missed this path: the pre-check answered True unconditionally when
+    the terminal was wt.exe, and wt forks its own window and exits 0, so the post-spawn
+    check could not tell either. The pre-check must ask the shell wt will host."""
+    lt = _load("launch_terminal")
+    monkeypatch.setattr(lt.sys, "platform", "win32")
+    monkeypatch.setattr(lt, "_which", lambda n: None)  # not on PATH: only the shell knows
+    monkeypatch.setattr(lt, "_windows_shell", lambda: "pwsh.exe")
+    asked = {}
+
+    class _Probe:
+        returncode = 1
+
+    def _run(argv, **kwargs):
+        asked["argv"] = argv
+        return _Probe()
+
+    monkeypatch.setattr(lt.subprocess, "run", _run)
+    assert lt._shell_knows("cc", "wt.exe") is False, "an unresolvable command must be caught"
+    assert "pwsh.exe" in " ".join(asked["argv"]), "it asked the shell wt would host"

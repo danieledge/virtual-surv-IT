@@ -17,6 +17,12 @@ existence before it is used** - a corporate Windows box may have no Windows Term
 Linux box may have no X display at all, and guessing wrong means the session silently never
 starts. `available()` answers the question without launching anything, so the caller can
 fall back to launching in-place instead of stranding the user with neither.
+
+HOSTS ARE NOT SHELLS (2026-08-26). On Windows the command ALWAYS runs through a shell, and
+by preference through the shell the launcher itself was started from. Windows Terminal is a
+host that runs a shell, not an alternative to one; handing it the launch command directly
+spawned a bare process with no profile, no alias and no user PATH, which is why a corp box
+that starts sessions perfectly well by hand got a window that failed on sight.
 """
 
 from __future__ import annotations
@@ -27,9 +33,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Windows: Windows Terminal first (tabs, modern, present on Win11), then the classic hosts.
-# `start` is a cmd builtin, not an exe, hence the cmd /c wrapper.
-_WINDOWS_TIERS = ("wt.exe", "pwsh.exe", "powershell.exe", "cmd.exe")
+# Windows SHELLS, in preference order - the things that can actually resolve a launch
+# command. `start` is a cmd builtin, not an exe, hence the cmd /c wrapper further down.
+_WINDOWS_SHELLS = ("pwsh.exe", "powershell.exe", "cmd.exe")
+# Windows Terminal first (tabs, modern, present on Win11), then the shells hosting
+# themselves. wt.exe is NOT a shell: it is a terminal HOST that runs one. Treating it as a
+# peer of powershell.exe - handing it the launch command directly - is what broke the corp
+# box on 2026-08-26: wt started `claude` as a bare process, with no profile loaded and no
+# alias resolved, and the session never began. See _windows_argv.
+_WINDOWS_TIERS = ("wt.exe",) + _WINDOWS_SHELLS
 # Linux/BSD: the Debian alternatives symlink first (respects the user's own choice), then
 # the desktop-native emulators, then the universal fallback.
 # How long to wait for a spawned terminal to prove it did not die on its argv. Short enough
@@ -100,6 +112,89 @@ def available() -> str:
     return ""
 
 
+def _invoking_shell() -> str:
+    """The Windows shell this process was started FROM, or "" if it cannot be told.
+
+    THE POINT (owner, 2026-08-26: "why cant it just spawn a new window of the shell the tui
+    is running in?"). Exactly so. The launcher is already running inside a shell that
+    resolves the user's launch command - their profile, their alias, their PATH. Any other
+    shell is a guess, and on a corporate box the guess is wrong in a way nothing downstream
+    can recover from: the window opens, the command is unresolvable, and the launcher has
+    already told the caller to stand down.
+
+    Walks the PARENT CHAIN rather than reading the immediate parent, because that parent is
+    normally python.exe (or py.exe, or the console host) and the shell sits above it.
+
+    Returns "" freely - a failed detection falls back to the preference order, which is the
+    behaviour this replaces. Never raises: this runs on the launch path."""
+    if sys.platform != "win32":
+        return ""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        TH32CS_SNAPPROCESS = 0x00000002
+
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", ctypes.c_wchar * 260),
+            ]
+
+        k32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        snapshot = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if snapshot == ctypes.c_void_p(-1).value:
+            return ""
+        parents: dict[int, int] = {}
+        names: dict[int, str] = {}
+        try:
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            ok = k32.Process32FirstW(snapshot, ctypes.byref(entry))
+            while ok:
+                parents[entry.th32ProcessID] = entry.th32ParentProcessID
+                names[entry.th32ProcessID] = entry.szExeFile.lower()
+                ok = k32.Process32NextW(snapshot, ctypes.byref(entry))
+        finally:
+            k32.CloseHandle(snapshot)
+        known = {name.lower() for name in _WINDOWS_SHELLS}
+        pid = os.getpid()
+        # Bounded: a corrupt or cyclic parent map must not spin on the launch path.
+        for _ in range(12):
+            pid = parents.get(pid, 0)
+            if not pid:
+                return ""
+            name = names.get(pid, "")
+            if name in known:
+                return name
+        return ""
+    except Exception:
+        return ""
+
+
+def _windows_shell() -> str:
+    """Which shell should run the command inside the new window.
+
+    The one we were invoked from if we can tell and it is present, else the first available
+    in preference order. Returns "" only when the box has no shell at all, which cannot
+    happen in practice but must not raise if it does."""
+    found = _invoking_shell()
+    if found and _which(found):
+        return found
+    for candidate in _WINDOWS_SHELLS:
+        if _which(candidate):
+            return candidate
+    return ""
+
+
 def _posix_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
     exe = _which(terminal) or terminal
     if terminal == "tmux":
@@ -155,10 +250,18 @@ def _shell_knows(program: str, terminal: str) -> bool:
     pre-flight, and a pre-flight that blocks a launch it merely could not verify would
     recreate the bug it exists to prevent."""
     try:
-        if sys.platform == "win32" and terminal in ("pwsh.exe", "powershell.exe"):
+        if sys.platform == "win32":
+            # Ask the shell that will ACTUALLY run it. Under wt.exe this used to fall
+            # through and answer True unconditionally, so an unresolvable command sailed
+            # past the one check that exists to catch it - and because wt.exe forks its own
+            # window and exits 0 immediately, the post-spawn check could not catch it
+            # either. Both nets missed the same path (2026-08-26).
+            shell = terminal if terminal in ("pwsh.exe", "powershell.exe") else _windows_shell()
+            if shell not in ("pwsh.exe", "powershell.exe"):
+                return True  # cmd.exe has no aliases to ask about
             # The PROFILE is loaded (no -NoProfile), which is where an alias like `cc`
             # lives - the same reason it works in the window the human already has open.
-            exe = _which(terminal) or terminal
+            exe = _which(shell) or shell
             probe = subprocess.run(  # noqa: S603 - argv built here, never shell
                 # No -NoProfile, deliberately: the profile is exactly where an alias like
                 # `cc` is defined, and skipping it would make the probe answer a different
@@ -185,11 +288,16 @@ def _quote(text: str) -> str:
     return "'" + str(text).replace("'", "'\\''") + "'"
 
 
-def _windows_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
-    exe = _which(terminal) or terminal
-    if terminal == "wt.exe":
-        return [exe, "-d", str(cwd)] + command
-    if terminal in ("pwsh.exe", "powershell.exe"):
+def _shell_argv(shell: str, command: list[str], cwd: Path, set_cwd: bool = True) -> list[str]:
+    """Run `command` THROUGH a shell, so the shell resolves it.
+
+    Every Windows window path funnels through here, because "start the command" and "start
+    a shell that starts the command" are not interchangeable: only the second loads the
+    profile where the user's alias lives, and only the second gets the PATH they actually
+    have. `set_cwd` is False when the window host has already been told the directory.
+    """
+    exe = _which(shell) or shell
+    if shell in ("pwsh.exe", "powershell.exe"):
         # The CALL OPERATOR is not optional (live report 2026-08-25: PowerShell on Windows,
         # nothing launched, several minutes of nothing). Without `&`, "'claude' '/engage ...'"
         # is a STRING EXPRESSION - PowerShell evaluates it, prints it, and never runs a thing.
@@ -200,10 +308,37 @@ def _windows_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
         # -NoExit deliberately: if the session fails to start, the window must stay open
         # carrying the error. It flashing shut is how this bug stayed invisible.
         call = "& " + " ".join(_ps_quote(part) for part in command)
-        return [
-            exe, "-NoLogo", "-NoExit", "-Command",
-            f"Set-Location -LiteralPath {_ps_quote(str(cwd))}; {call}",
-        ]
+        if set_cwd:
+            call = f"Set-Location -LiteralPath {_ps_quote(str(cwd))}; {call}"
+        return [exe, "-NoLogo", "-NoExit", "-Command", call]
+    # cmd.exe: /k keeps the window open for the same reason -NoExit does.
+    return [exe, "/k"] + command
+
+
+def _wt_escape(argv: list[str]) -> list[str]:
+    """Escape `;` for wt.exe's OWN command line, where it delimits subcommands.
+
+    Unescaped, `wt -d . pwsh -Command "a; b"` opens a window running `a` and then tries to
+    run `b` as a second wt subcommand. Nothing we pass carries prose (a typed request
+    travels in a file, deliberately), so this is defence rather than a live fix."""
+    return [part.replace(";", "\\;") for part in argv]
+
+
+def _windows_argv(terminal: str, command: list[str], cwd: Path) -> list[str]:
+    exe = _which(terminal) or terminal
+    if terminal == "wt.exe":
+        # wt.exe HOSTS a shell; it does not replace one. Handing it the command directly
+        # made Windows Terminal spawn `claude` as a bare process - no profile, no alias, no
+        # user PATH - which is precisely how a corp box that launches sessions perfectly
+        # well by hand got a window that failed instantly (2026-08-26). `-d` already sets
+        # the directory, so the shell does not repeat it and the argv carries no `;`.
+        shell = _windows_shell()
+        if shell:
+            inner = _shell_argv(shell, command, cwd, set_cwd=False)
+            return [exe, "-d", str(cwd)] + _wt_escape(inner)
+        return [exe, "-d", str(cwd)] + command
+    if terminal in ("pwsh.exe", "powershell.exe"):
+        return _shell_argv(terminal, command, cwd)
     return [exe, "/c", "start", "", "/D", str(cwd)] + command
 
 
