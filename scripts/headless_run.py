@@ -383,16 +383,36 @@ def start(
     kwargs: dict = {"cwd": str(project_dir), "stdin": subprocess.DEVNULL}
     if os.name == "nt":
         # DETACHED_PROCESS is right HERE, unlike the windowed launcher where it was the bug:
-        # a headless run wants no console at all, and its output is going to a file anyway.
-        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+        # a headless run wants no console at all, and its output goes to a file anyway.
+        #
+        # CREATE_BREAKAWAY_FROM_JOB is the part that took a Windows box to find. Windows
+        # puts a process into its parent's JOB OBJECT, and a job kills everything in it when
+        # it closes - so an unattended run started over SSH, or from a terminal the human
+        # then closes, is destroyed with its launcher. Detaching does not escape a job;
+        # only breakaway does. Measured on WINTEST 2026-08-26: the run died with the SSH
+        # session, wrote zero bytes, and the identical argv run in the foreground was still
+        # working fine five minutes later.
+        base = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
             subprocess, "CREATE_NEW_PROCESS_GROUP", 0
         )
+        breakaway = getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000)
+        kwargs["creationflags"] = base | breakaway
     else:
         kwargs["start_new_session"] = True
     with stream_path.open("w", encoding="utf-8") as out, error_path.open(
         "w", encoding="utf-8"
     ) as err:
-        proc = subprocess.Popen(argv, stdout=out, stderr=err, **kwargs)  # noqa: S603
+        try:
+            proc = subprocess.Popen(argv, stdout=out, stderr=err, **kwargs)  # noqa: S603
+        except OSError:
+            # Not every job permits breakaway (JOB_OBJECT_LIMIT_BREAKAWAY_OK must be set),
+            # and CreateProcess refuses outright when it does not. Falling back keeps the
+            # run possible - tied to its launcher, which is worse than surviving and far
+            # better than not starting at all.
+            if os.name != "nt":
+                raise
+            kwargs["creationflags"] = base
+            proc = subprocess.Popen(argv, stdout=out, stderr=err, **kwargs)  # noqa: S603
     record = {
         "session_id": session_id,
         "slug": slug,
