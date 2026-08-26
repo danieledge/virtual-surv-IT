@@ -291,8 +291,16 @@ def read_file(path: Path, state: dict | None = None) -> dict:
 def summary(state: dict) -> str:
     """One line a human can read, for the launcher and for a log."""
     if not state.get("started"):
+        # "not started" is only honest while it still MIGHT start. Once the process is gone
+        # it is a failure, and saying the softer thing hides it (WINTEST, 2026-08-26).
+        if state.get("live") is False:
+            return f"STOPPED - {state.get('outcome') or 'it never started'}"
         return "not started"
     if not state.get("finished"):
+        if state.get("live") is False:
+            # Named, not implied. "running" for a dead process is the one thing a watcher
+            # must never be told.
+            return f"STOPPED - {state.get('outcome') or 'no longer running'}"
         stages = len(state.get("stages") or [])
         return (
             f"running - {state['tool_calls']} tool call(s), {stages} stage(s), "
@@ -450,6 +458,18 @@ def status(record: dict) -> dict:
         idle = 0.0
     state["idle_seconds"] = round(idle, 1)
     state["live"] = idle < _STALE_AFTER
+    # The stream stays the authority for whether a run FINISHED. The pid is consulted for
+    # one thing only, and never to declare a run alive: catching a process that died without
+    # writing anything. A stillborn run - claude exiting instantly, nothing on stdout or
+    # stderr - otherwise looked "live" for the full ten-minute staleness window, which is
+    # exactly the wrong answer at exactly the wrong moment (WINTEST, 2026-08-26).
+    if state["live"] and not is_alive(record.get("pid")):
+        state["live"] = False
+        state["outcome"] = state["outcome"] or (
+            "the process is gone and wrote nothing - it failed to start"
+            if not state["events"]
+            else "the process is gone without finishing"
+        )
     if not state["live"]:
         state["outcome"] = state["outcome"] or "no output for a long time - the run is gone"
     return state

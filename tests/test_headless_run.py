@@ -622,3 +622,39 @@ def test_a_failure_to_load_rules_is_reported_not_swallowed(monkeypatch, capsys):
     monkeypatch.delitem(sys.modules, "install_helper", raising=False)
     assert launcher._headless_allow_rules() == ()
     assert "could not load the permission rules" in capsys.readouterr().err
+
+
+def test_a_run_that_died_without_writing_is_not_reported_as_live(tmp_path, monkeypatch):
+    """WINTEST, 2026-08-26: claude exited instantly with nothing on stdout or stderr, and
+    the monitor called it "live" for the full ten-minute staleness window - the wrong answer
+    at exactly the moment someone is asking whether it worked.
+
+    The stream stays the authority for FINISHED. The pid is consulted for one thing only,
+    and never to declare a run alive: catching a process that died without a word."""
+    hr = _load()
+    record = {"session_id": SESSION, "slug": "x", "pid": 999999,
+              "stream": str(tmp_path / "empty.jsonl")}
+    (tmp_path / "empty.jsonl").write_text("", encoding="utf-8")
+    state = hr.status(record)
+    assert state["live"] is False
+    assert "failed to start" in state["outcome"]
+    assert hr.summary(state).startswith("STOPPED")
+
+
+def test_a_run_that_died_mid_stream_says_so(tmp_path, monkeypatch):
+    hr = _load()
+    path = tmp_path / "partial.jsonl"
+    path.write_text(json.dumps(_init()) + "\n", encoding="utf-8")
+    state = hr.status({"session_id": SESSION, "pid": 999999, "stream": str(path)})
+    assert state["live"] is False
+    assert "without finishing" in state["outcome"]
+
+
+def test_a_live_process_is_still_reported_as_running(tmp_path, monkeypatch):
+    """The pid must never be able to declare a run alive OR wrongly dead while it works."""
+    hr = _load()
+    path = tmp_path / "s.jsonl"
+    path.write_text(json.dumps(_init()) + "\n", encoding="utf-8")
+    state = hr.status({"session_id": SESSION, "pid": os.getpid(), "stream": str(path)})
+    assert state["live"] is True
+    assert "running" in hr.summary(state)
