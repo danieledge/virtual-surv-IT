@@ -69,8 +69,8 @@ work?**
 <project>/
   VSIT/
     README.md                     # what this folder is, for whoever finds it
-    codebase/                     # SHARED - what we know about the code itself
-      map.md                      #   curated: what an area is FOR            (committed)
+    subject/                      # SHARED - what we know about whatever is under review
+      map.md                      #   curated: what an area/document is FOR   (committed)
       map.d/<area>.md             #   overflow when map.md's section 2 grows  (committed)
       derived.json                #   the tree + fingerprints, generated      (committed)
     engagements/                  # ONE PER PIECE OF WORK
@@ -95,7 +95,7 @@ work?**
     .exec-consent                 #   stays put - see below
 ```
 
-### Why codebase/ sits one level ABOVE engagements/
+### Why subject/ sits one level ABOVE engagements/
 
 Because the map is used by **multiple engagements** and outlives all of them. That is the
 entire reason it is worth curating: ADR-003's argument is that project memory survives the
@@ -106,19 +106,58 @@ Nesting it under an engagement would say the opposite - that what we know about 
 belongs to whoever last looked at it. It would also mean engagement four cannot find what
 engagement one learned without knowing engagement one's slug.
 
-So the rule reads straight off the tree: **codebase/ is about the CODE; engagements/ is
+So the rule reads straight off the tree: **subject/ is about the THING UNDER REVIEW; engagements/ is
 about the WORK.** Anything that would still be true if this engagement had never happened
 belongs in the first.
 
-| | codebase/ | engagements/&lt;slug&gt;/ |
+| | subject/ | engagements/&lt;slug&gt;/ |
 |---|---|---|
-| Scope | the repository | one piece of work |
-| Lifetime | as long as the code | closed, then archived |
+| Scope | the codebase, or the document estate, or the data platform | one piece of work |
+| Lifetime | as long as the subject exists | closed, then archived |
 | Read by | every future engagement | its own engagement, and audit |
 | Updated | at every close, both directions | continuously, then frozen |
 | Committed | yes | no |
 
-### Why local/ is separate from codebase/
+### Not every engagement has a codebase
+
+📊 The first draft called this folder `codebase/`, which quietly assumed every engagement is
+about source code. It is not: `engage-light` names "analyses, questions, doc work" as typical
+fits, and CLAUDE.md section 1 is explicit that detection logic is "ONE deliverable, not the
+only one" - data pipelines, DQ and reconciliation jobs, reporting/MI, integrations and
+reviews all count. A comms-surveillance policy review or an assessment of a model-validation
+report has no repository at all.
+
+So the folder is named for its ROLE - what we know about the thing under review - not for one
+kind of thing. `subject/` holds:
+
+- **code work**: the codebase map, and the derived tree of symbols and ranges;
+- **document work**: an inventory of what exists and where, section indexes produced when a
+  document was converted, and what was learned about the estate;
+- **data work**: schemas, feed inventories, what a field actually means in practice.
+
+All three answer the same question - *what does the next engagement need to know before it
+starts?* - and all three are wasted if they live inside one engagement's folder.
+
+**Empty is a valid state.** A project whose first engagement is a one-off document review has
+no `subject/` until something is worth keeping, and creating an empty folder to look complete
+would be worse than not having one.
+
+### Where the tree-sitter output goes, and where it does not
+
+Worth stating plainly, because tree-sitter is three separate things and only one of them
+lands in the project:
+
+| | Where | In `VSIT/`? |
+|---|---|---|
+| the library itself | the interpreter's site-packages | no - machine-wide |
+| its grammar cache | the library's own cache directory | no - machine-wide, per user |
+| what it PRODUCES: symbols, line ranges | the derived file in subject/ | **yes** |
+
+Tree-sitter is an engine, not stored state. Which engine produced a derived file is recorded
+IN that file (the `tier` field), so a reader can tell exact extraction from a regex
+approximation - but the engine itself is never something the project carries.
+
+### Why local/ is separate from subject/
 
 Both are generated, so the instinct is to file them together - but one is a fact about the
 CODE and the other is a fact about this CHECKOUT. the derived file holds content hashes: same
