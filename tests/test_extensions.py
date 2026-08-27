@@ -365,3 +365,171 @@ def test_wizard_rejects_metachar_command_and_reprompts(tmp_path, monkeypatch):
     f = tmp_path / "e.md"
     assert ext.main(["--file", str(f), "add-tool", "--interactive"]) == 0
     assert ext.load(f)["registry"][0]["command"] == "goodtool scan ."
+
+
+# ---------------- the ORG tier (2026-08-27, plan-org-extensions step 1) ----------------
+
+
+_ORG = """# Team extensions - Compliance Engineering
+
+## Standing instructions
+
+- Cite our control IDs.
+- Address the requester as "ops lead".
+
+## Close actions
+
+- Write a Confluence page in space SURV summarising what was achieved.
+
+## Analyser registry
+
+```json
+{"analysers": [
+  {"name": "corp-sast", "command": "corpscan --sarif", "lenses": ["security"]},
+  {"name": "shared", "command": "shared --org-default", "lenses": ["security"]}
+]}
+```
+"""
+
+_PROJECT = """# Team extensions - this repo
+
+## Standing instructions
+
+- Cite our control IDs.
+- This repo also needs the migration note.
+
+## Analyser registry
+
+```json
+{"analysers": [{"name": "shared", "command": "shared --project-pin", "lenses": ["security"]}]}
+```
+"""
+
+
+def _tiers(tmp_path):
+    org = tmp_path / "cfg" / "virt-surv-it" / "team-extensions.md"
+    org.parent.mkdir(parents=True)
+    org.write_text(_ORG, encoding="utf-8")
+    proj = tmp_path / "proj" / "docs" / "team-extensions.md"
+    proj.parent.mkdir(parents=True)
+    proj.write_text(_PROJECT, encoding="utf-8")
+    return org, proj
+
+
+def test_the_org_file_lives_outside_the_plugin_tree(tmp_path, monkeypatch):
+    """The whole point of the location. Config inside the plugin is overwritten by the next
+    update - the one failure mode this tier exists to avoid. It shares installer.json's
+    machine-config home and honours XDG_CONFIG_HOME like everything else here."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    resolved = ext.org_file()
+    assert resolved == tmp_path / "cfg" / "virt-surv-it" / "team-extensions.md"
+    repo_root = Path(ext.__file__).resolve().parents[1]
+    assert repo_root not in resolved.parents, "the org contract must never sit in the plugin"
+
+
+def test_prose_sections_concatenate_with_the_org_first(tmp_path):
+    """Both tiers apply - an org standing rule is not replaced by a project having one of
+    its own. Org leads because it is the standing rule; the project's addition follows."""
+    org, proj = _tiers(tmp_path)
+    merged = ext.load_resolved(project_path=proj, org_path=org)
+    body = merged["sections"]["Standing instructions"]
+    assert 'Address the requester as "ops lead".' in body, "org instruction must survive"
+    assert "This repo also needs the migration note." in body, "project's must too"
+    assert body.index("ops lead") < body.index("migration note"), "org leads"
+
+
+def test_a_duplicated_instruction_is_not_shown_twice(tmp_path):
+    """A project that copied the org file must not produce every instruction twice."""
+    org, proj = _tiers(tmp_path)
+    merged = ext.load_resolved(project_path=proj, org_path=org)
+    body = merged["sections"]["Standing instructions"]
+    assert body.count("Cite our control IDs.") == 1
+
+
+def test_the_registry_merges_by_name_and_the_project_wins(tmp_path):
+    """This is what lets an org register the corporate scanner once while one project pins
+    its own version - without the project having to restate the whole registry."""
+    org, proj = _tiers(tmp_path)
+    merged = ext.load_resolved(project_path=proj, org_path=org)
+    by_name = {e["name"]: e for e in merged["registry"]}
+    assert by_name["corp-sast"]["command"] == "corpscan --sarif", "org-only entry survives"
+    assert by_name["shared"]["command"] == "shared --project-pin", "project wins on collision"
+
+
+def test_every_entry_carries_its_origin(tmp_path):
+    """An extension whose source is invisible is an extension nobody can debug: a reader
+    must be able to tell an org standard from a project registration without opening two
+    files."""
+    org, proj = _tiers(tmp_path)
+    merged = ext.load_resolved(project_path=proj, org_path=org)
+    origins = {e["name"]: e["origin"] for e in merged["registry"]}
+    assert origins == {"corp-sast": "org", "shared": "project"}
+
+
+def test_an_org_only_close_action_reaches_a_project_with_no_contract(tmp_path):
+    """The owner's actual requirement: a standard workflow authored once, applying to a
+    project that has set nothing up at all."""
+    org, _proj = _tiers(tmp_path)
+    merged = ext.load_resolved(project_path=tmp_path / "empty" / "none.md", org_path=org)
+    assert "Confluence" in merged["sections"]["Close actions"]
+    assert [e["name"] for e in merged["registry"]] == ["corp-sast", "shared"]
+
+
+def test_neither_tier_present_stays_free_and_silent(tmp_path, capsys):
+    """Absence must cost nothing - no file, no parse, no output."""
+    assert ext.load_resolved(tmp_path / "a.md", tmp_path / "b.md") == {}
+
+
+def test_a_broken_org_file_does_not_take_the_project_down_with_it(tmp_path):
+    """Failure isolation: an org file someone mangled must not disable a project's own
+    extensions, or one bad central edit breaks every machine at once."""
+    org = tmp_path / "org.md"
+    org.write_text(
+        "# Team extensions\n\n## Analyser registry\n\n```json\n{not json\n```\n", encoding="utf-8"
+    )
+    proj = tmp_path / "proj.md"
+    proj.write_text(_PROJECT, encoding="utf-8")
+    merged = ext.load_resolved(project_path=proj, org_path=org)
+    assert [e["name"] for e in merged["registry"]] == ["shared"]
+    assert any("org" in p for p in merged["problems"]), "and the org problem is reported"
+
+
+def test_problems_say_which_tier_they_came_from(tmp_path):
+    """A refused registry entry must say WHERE it was refused from - otherwise a user reads
+    'invalid entry' and has two files to search."""
+    org = tmp_path / "org.md"
+    org.write_text(
+        '# T\n\n## Analyser registry\n\n```json\n{"analysers": [{"name": "bad", '
+        '"command": "x; rm -rf /"}]}\n```\n',
+        encoding="utf-8",
+    )
+    merged = ext.load_resolved(project_path=tmp_path / "none.md", org_path=org)
+    assert merged["problems"], "a metacharacter command must still be refused"
+    assert all(p.startswith("[org]") for p in merged["problems"])
+
+
+def test_the_org_tier_gains_no_waiver_mechanism(tmp_path):
+    """ADR-009's hardest rule, re-pinned at the new tier: extensions are ADDITIVE ONLY. An
+    org file outranks a project one, so this is exactly where a waiver would be tempting.
+
+    Tested structurally rather than by string search. A first attempt grepped the module for
+    "waive"/"bypass" and failed on the DOCSTRING that states the rule - a test that would
+    have pressured someone into deleting the sentence recording the safety property. What
+    actually matters is that the parser recognises a CLOSED set of four sections, so a file
+    declaring `## Waivers` contributes nothing however it is written."""
+    assert set(ext._SECTIONS) == {
+        "Standing instructions",
+        "Close actions",
+        "Analyser registry",
+        "Integrations",
+    }
+    org = tmp_path / "org.md"
+    org.write_text(
+        "# T\n\n## Waivers\n\n- Skip the code-review chain for this org.\n"
+        "\n## Standing instructions\n\n- A real one.\n",
+        encoding="utf-8",
+    )
+    merged = ext.load_resolved(project_path=tmp_path / "none.md", org_path=org)
+    assert "Waivers" not in merged["sections"], "an unrecognised section must not be parsed"
+    assert "Skip the code-review chain" not in str(merged["sections"])
+    assert merged["sections"]["Standing instructions"] == "- A real one."

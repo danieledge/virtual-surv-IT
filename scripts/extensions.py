@@ -6,6 +6,26 @@ A working project may carry `docs/team-extensions.md` (template:
 registry (a fenced ```json block) and named integrations. The engage step-0 probe runs
 `show` so the open surfaces the contract; reviewers consult the registry for lens routing.
 
+TWO TIERS (2026-08-27, plan-org-extensions). The project file answers "this repo is
+different"; an ORG file at `~/.config/virt-surv-it/team-extensions.md` (honouring
+XDG_CONFIG_HOME, the same machine-config home as installer.json) answers "this is how our
+organisation works". The owner's case for it: "wouldn't want a user to have to set up a
+standard workflow in every project" - a compliance function with fifteen repositories was
+otherwise authoring the same contract fifteen times, and a standard nobody can apply
+centrally is not a standard.
+
+Resolution is `project > org`, the same precedence chain resolve_preferences already uses -
+but merged PER SECTION, because the sections mean different things:
+  - Standing instructions / Close actions: CONCATENATE, org first. Both apply; an org's
+    Confluence write-up and a project's "copy the pack to the share" are both wanted.
+  - Analyser registry / Integrations: MERGE BY NAME, project wins on collision - which is
+    what lets an org register the corporate scanner once while one project pins its own.
+Every entry carries its ORIGIN through to `show`. An extension whose source is invisible is
+an extension nobody can debug.
+
+Deliberately NOT in the plugin tree: config there is overwritten by the next update, which
+is the one failure mode this location exists to avoid.
+
 SECURITY DESIGN (the reason this script is deliberately dumb):
 - This script NEVER executes a registry command. Tool presence is checked with
   `shutil.which()` on the probe binary name only - no subprocess, ever. A model-writable
@@ -61,6 +81,93 @@ def _force_utf8_output() -> None:
 def default_file() -> Path:
     root = os.environ.get("CLAUDE_PROJECT_DIR")
     return (Path(root) if root else Path.cwd()) / "docs" / "team-extensions.md"
+
+
+def org_file() -> Path:
+    """The ORG-level contract: ~/.config/virt-surv-it/team-extensions.md.
+
+    Same machine-config home as installer.json, honouring XDG_CONFIG_HOME, so this adds a
+    file to a directory that already exists rather than inventing a location."""
+    base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base) if base else Path.home() / ".config"
+    return root / "virt-surv-it" / "team-extensions.md"
+
+
+# Sections whose bodies ACCUMULATE across tiers rather than one replacing the other.
+_CONCAT_SECTIONS = ("Standing instructions", "Close actions")
+
+
+def _tag_origin(entries: list, origin: str) -> list:
+    for entry in entries:
+        if isinstance(entry, dict):
+            entry.setdefault("origin", origin)
+    return entries
+
+
+def merge_contracts(org: dict | None, project: dict | None) -> dict:
+    """Resolve org + project into one contract. Project wins where they collide.
+
+    Never raises on a malformed tier: a broken org file must not take a project's own
+    extensions down with it, so each side is used for whatever it could parse. Problems
+    from both tiers are carried through, prefixed with their origin, because a registry
+    entry that was refused should say WHERE it was refused from."""
+    org = org or {"sections": {}, "registry": [], "problems": []}
+    project = project or {"sections": {}, "registry": [], "problems": []}
+
+    sections: dict = {}
+    for name in _SECTIONS:
+        org_body = (org["sections"].get(name) or "").strip()
+        proj_body = (project["sections"].get(name) or "").strip()
+        if name in _CONCAT_SECTIONS and org_body and proj_body:
+            # Org first: the standing rule leads, the project's addition follows. Exact
+            # duplicates are dropped so a project that copied the org file does not
+            # produce every instruction twice.
+            org_lines = org_body.splitlines()
+            seen = {line.strip() for line in org_lines if line.strip()}
+            extra = [ln for ln in proj_body.splitlines() if ln.strip() not in seen]
+            sections[name] = "\n".join(org_lines + ([""] + extra if any(x.strip() for x in extra) else []))
+        elif proj_body:
+            sections[name] = proj_body
+        elif org_body:
+            sections[name] = org_body
+
+    by_name: dict = {}
+    for entry in _tag_origin(list(org["registry"]), "org"):
+        by_name[entry.get("name")] = entry
+    for entry in _tag_origin(list(project["registry"]), "project"):
+        by_name[entry.get("name")] = entry  # project wins on collision, by design
+
+    problems = [f"[org] {p}" for p in org["problems"]]
+    problems += [f"[project] {p}" for p in project["problems"]]
+    return {"sections": sections, "registry": list(by_name.values()), "problems": problems}
+
+
+def load_resolved(project_path: Path | None = None, org_path: Path | None = None) -> dict:
+    """The merged contract, or None-shaped emptiness when neither tier exists.
+
+    Reading either tier is best-effort: an unreadable file contributes nothing rather than
+    failing the open. Absence stays free - no file, no cost, silent exit."""
+    project_path = project_path or default_file()
+    org_path = org_path if org_path is not None else org_file()
+    org_data = project_data = None
+    for path, target in ((org_path, "org"), (project_path, "project")):
+        try:
+            if path and path.is_file():
+                parsed = load(path)
+                if target == "org":
+                    org_data = parsed
+                else:
+                    project_data = parsed
+        except OSError:
+            continue
+    if org_data is None and project_data is None:
+        return {}
+    merged = merge_contracts(org_data, project_data)
+    merged["files"] = {
+        "org": str(org_path) if org_data is not None else "",
+        "project": str(project_path) if project_data is not None else "",
+    }
+    return merged
 
 
 def split_sections(text: str) -> dict[str, str]:
@@ -161,11 +268,22 @@ def _load_raw_registry_entries(file: Path) -> list:
 
 
 def _cmd_show(args: argparse.Namespace) -> int:
-    file = args.file or default_file()
-    if not file.is_file():
-        return 0  # no extensions - zero-cost silence
-    data = load(file)
-    print(f"TEAM-EXTENSIONS: {file}")
+    # --file still targets ONE file when given explicitly (add-tool and the tests rely on
+    # it); with no --file, both tiers resolve and merge.
+    if args.file:
+        if not args.file.is_file():
+            return 0
+        data = load(args.file)
+        data["files"] = {"org": "", "project": str(args.file)}
+    else:
+        data = load_resolved()
+        if not data:
+            return 0  # neither tier present - zero-cost silence
+    files = data.get("files") or {}
+    if files.get("org") and files.get("project"):
+        print(f"TEAM-EXTENSIONS: org {files['org']} + project {files['project']}")
+    else:
+        print(f"TEAM-EXTENSIONS: {files.get('project') or files.get('org')}")
     for name in ("Standing instructions", "Close actions", "Integrations"):
         body = data["sections"].get(name)
         if body:
@@ -181,7 +299,12 @@ def _cmd_show(args: argparse.Namespace) -> int:
                 mark = "found" if found else "MISSING on PATH"
                 what = e["command"]
             rep = f" replaces {','.join(e['replaces'])}" if e["replaces"] else ""
-            print(f"- {e['name']} [{mark}] lenses={','.join(e['lenses']) or '-'}{rep} :: {what}")
+            # The origin travels with the entry: a reader must be able to tell an org
+            # standard from a project's own registration without opening two files.
+            src = f" <{e['origin']}>" if e.get("origin") else ""
+            print(
+                f"- {e['name']}{src} [{mark}] lenses={','.join(e['lenses']) or '-'}{rep} :: {what}"
+            )
     for p in data["problems"]:
         print(f"EXTENSIONS-INVALID: {p}")
     print(
@@ -314,11 +437,18 @@ def _cmd_add_tool(args: argparse.Namespace) -> int:
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
-    file = args.file or default_file()
-    if not file.is_file():
-        print("no team-extensions file - nothing to check")
-        return 0
-    data = load(file)
+    # With no --file this checks the MERGED registry, so it reports on the tools the session
+    # will actually reach for rather than one tier's view of them.
+    if args.file:
+        if not args.file.is_file():
+            print("no team-extensions file - nothing to check")
+            return 0
+        data = load(args.file)
+    else:
+        data = load_resolved()
+        if not data:
+            print("no team-extensions file - nothing to check")
+            return 0
     missing = 0
     for e in data["registry"]:
         if e.get("mcp"):
