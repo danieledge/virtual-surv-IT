@@ -23,11 +23,39 @@ Five names, four containing "map" or "skeleton", and a reader cannot tell from a
 which is authored, which is derived, or which is safe to delete. A sixth would have made the
 plugin's own memory harder to reason about than the codebases it maps.
 
-## The consolidation: three tiers, named by LIFECYCLE
+## First, the two things - because the file count follows from them
 
-An earlier version of this section said "two artefacts", and that was an overclaim worth
-correcting rather than quietly dropping. The floor is three, because the three have
-genuinely different lifecycles and one of them cannot be shared:
+The owner's framing, and the right one: *"we have two things, don't we - the tree, and some
+helpful info the LLM discovers."* Yes. Everything below is storage; these are the concepts.
+
+| | What it is | Derivable? |
+|---|---|---|
+| **The tree** | files, symbols, line ranges, the import graph, importance ranking | YES - a parser produces it, nobody has to know anything |
+| **What was learned** | what an area is FOR, why it is shaped that way, what bit someone last time, which parts are generated boilerplate not worth reading | NO - it comes from a human or an LLM working through the code |
+
+📊 The second already has a home and a discipline: `docs/codebase-map.md`, with ADR-003
+making its update mandatory at every close in BOTH directions - add what is new, correct
+what is now wrong. The first has no home at all and is recomputed from scratch every run.
+
+That asymmetry is the whole problem, and it is worth stating the right way round. Keeping the
+learned half is CORRECT - it is irreplaceable, because reproducing it means redoing the
+thinking. The tree is the opposite kind of thing: fully reproducible from source, and
+therefore safe to discard in principle - but it is also the half that costs real time to
+rebuild, and it is rebuilt from scratch on every single run.
+
+So the tree is being thrown away not because keeping it would be unsafe, but because until
+now there was no way to know whether a kept copy was still valid. There is: the key is
+already computed and stored beside the map, for the map's own drift check.
+
+An earlier draft asked "can we consolidate to two files?" That was the wrong question: two is
+the CONCEPT count, and it is already right. The file count follows from how each concept has
+to be stored.
+
+## How the two concepts are stored: three files, named by LIFECYCLE
+
+Two concepts, three files - and the third is an implementation detail OF the tree, not a
+third concept. They split because they have genuinely different lifecycles and one of them
+cannot be shared:
 
 | | Artefact | Lifecycle |
 |---|---|---|
