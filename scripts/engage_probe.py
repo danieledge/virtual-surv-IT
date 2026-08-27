@@ -965,12 +965,31 @@ def build_report(plugin_root_arg: str, project_dir: Path) -> str:
         f"PARALLEL_DISPATCH_VIA_WORKFLOW={'on' if workflow_dispatch_on else 'off'}",
         f"MAP_SKELETON={'on' if map_skeleton_on else 'off'}",
     ]
+    # REQUEST_PENDING - the ABSOLUTE path, when a typed request is waiting (2026-08-27
+    # live report: "it checks plausible locations - we should tell Claude where it's
+    # written so no search is needed"). The skill named the path relative to "the project
+    # directory", which is a phrase, not a location: in plugin mode the cwd and the project
+    # root are different things, and this repo's own probe-contract already documents a
+    # corp-Windows shell that resets cwd mid-open. Given a relative path and an ambiguous
+    # anchor, a model does the reasonable thing and starts looking - which costs turns and
+    # can miss. The probe already knows the project root for certain, so it says so.
+    #
+    # Absent when there is no request waiting: no line at all, matching the zero-added-
+    # output contract every other conditional field here follows.
+    request_file = project_dir / ".claude" / ".request-pending.txt"
+    try:
+        request_waiting = request_file.is_file()
+    except OSError:
+        request_waiting = False
+
     integ_line = integrations_report_line(resolve_integrations(project_dir))
     if integ_line:
         # Absent when everything is off (docs/INTEGRATIONS.md) - when present, the
         # engage flow reads .claude/skills/engage/references/integrations.md before
         # its first outward action.
         lines.append(integ_line)
+    if request_waiting:
+        lines.append(f"REQUEST_PENDING={request_file}")
     if drift:
         # Only appended when there's something to say - map_skeleton off, no map, no
         # Paths-glob entries, or nothing drifted all mean this line doesn't exist at all,

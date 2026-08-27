@@ -6,6 +6,7 @@ parsing - the pieces where prose reproduction previously stood in for a mechanic
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from scripts.engage_probe import (
     _ascii_safe,
@@ -1306,3 +1307,39 @@ def test_build_report_carries_integrations_line_only_when_on(tmp_path, monkeypat
     )
     out = build_report("", tmp_path)
     assert "INTEGRATIONS=jira:on(close-only,key=SURV," in out
+
+
+def test_the_probe_gives_the_absolute_path_of_a_waiting_request(tmp_path):
+    """Live report: a session "checks plausible locations" for the typed request.
+
+    The skill named it relative to "the project directory" - which is a phrase, not a
+    location. In plugin mode the cwd and the project root are different things, and
+    probe-contract.md documents a corp-Windows shell that resets cwd mid-open. Given a
+    relative path and an ambiguous anchor, a model reasonably starts looking, which costs
+    turns and can miss. The probe knows the root for certain, so it says so."""
+    (tmp_path / ".claude").mkdir()
+    request = tmp_path / ".claude" / ".request-pending.txt"
+    request.write_text("write a report on comms surveillance\n", encoding="utf-8")
+    report = build_report("", tmp_path)
+    line = [ln for ln in report.splitlines() if ln.startswith("REQUEST_PENDING=")]
+    assert line, "a waiting request must be announced"
+    given = Path(line[0].split("=", 1)[1])
+    assert given.is_absolute(), "a relative path is what caused the search"
+    assert given == request
+
+
+def test_no_waiting_request_adds_no_line(tmp_path):
+    """Zero added output when there is nothing to say - the contract every other
+    conditional field in this report follows."""
+    (tmp_path / ".claude").mkdir()
+    report = build_report("", tmp_path)
+    assert "REQUEST_PENDING=" not in report
+
+
+def test_the_skill_tells_the_model_not_to_search(tmp_path):
+    """The probe field only helps if the instruction points at it. Fragments, not
+    sentences: the source is hard-wrapped."""
+    root = Path(__file__).resolve().parents[1]
+    text = (root / ".claude" / "skills" / "engage" / "SKILL.md").read_text(encoding="utf-8")
+    assert "REQUEST_PENDING=" in text, "the skill must name the field the probe emits"
+    assert "do not go looking for it" in text

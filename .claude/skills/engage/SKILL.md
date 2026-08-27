@@ -153,8 +153,14 @@ first prompt. When present, this is the answer - **do not ask the question at al
   fall back to the normal flow below and ask, same as if no flag had been given - **never
   silently proceed on stale data, and never error out unhelpfully either.**
 - **`--request-pending` (rides with `--new`)** - the human typed the request at the
-  launcher instead of waiting to be asked. **Read `.claude/.request-pending.txt` now**
-  (relative to the project directory): its contents ARE the request. Treat it exactly as if
+  launcher instead of waiting to be asked. **The step-0 probe gives you the ABSOLUTE path
+  as `REQUEST_PENDING=` - read exactly that file and do not go looking for it.** (Fallback
+  if the field is absent: `.claude/.request-pending.txt` under the project directory.) Its
+  contents ARE the request. Searching "plausible locations" for it is a bug, not
+  diligence (2026-08-27 live report): "the project directory" is a phrase, not a location -
+  in plugin mode the cwd and the project root differ, and probe-contract.md documents a
+  corp-Windows shell that resets cwd mid-open - so a relative path with an ambiguous anchor
+  is exactly what sends a session hunting. Treat it exactly as if
   they had typed it in-session, classify from it, and **do not re-ask what the work is**.
   It is one sanitised line, so expect terseness rather than a brief - ask about detail if
   you need it, never about the ask itself. **Read it BEFORE creating the workspace**, or read
