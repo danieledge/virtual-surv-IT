@@ -12,15 +12,36 @@ question each resolver answers is "where IS it", not "where should it be".
 
 from __future__ import annotations
 
+import pytest
+
 import scripts.vsit_paths as vp
+
+
+@pytest.fixture()
+def flipped(monkeypatch):
+    """Resolve as stage 2 will, once PREFER_NEW_LAYOUT is True.
+
+    Testing both settings means the flip is verified BEFORE it ships, rather than being a
+    one-line change whose effects are discovered in a suite run afterwards."""
+    monkeypatch.setattr(vp, "PREFER_NEW_LAYOUT", True)
 
 
 # ------------------------------------------------------------------ fresh project
 
 
-def test_a_fresh_project_gets_the_new_layout(tmp_path):
-    """Neither location present: the new one wins, so nothing has to be migrated before the
-    team can be used at all."""
+def test_a_fresh_project_stays_on_the_old_layout_until_the_flip(tmp_path):
+    """STAGE 1 behaviour, and the property that makes the 70-call-site refactor safe:
+    routing everything through this module changes nothing, so a green suite means
+    something. Stage 2 flips one constant."""
+    assert vp.PREFER_NEW_LAYOUT is False, "stage 2 has landed - update these expectations"
+    assert vp.engagements_dir(tmp_path) == tmp_path / "artifacts"
+    assert vp.config_dir(tmp_path) == tmp_path / ".claude"
+    assert vp.local_dir(tmp_path) == tmp_path / ".claude"
+
+
+def test_a_fresh_project_gets_the_new_layout_after_the_flip(tmp_path, flipped):
+    """STAGE 2 behaviour. Neither location present, so the new one wins and nothing has to
+    be migrated before the team can be used at all."""
     assert vp.engagements_dir(tmp_path) == tmp_path / "VSIT" / "engagements"
     assert vp.shared_dir(tmp_path) == tmp_path / "VSIT" / "shared"
     assert vp.config_dir(tmp_path) == tmp_path / "VSIT" / "config"
@@ -63,7 +84,7 @@ def test_legacy_caches_keep_resolving(tmp_path):
 # ------------------------------------------------------------------ the docs/ narrowing
 
 
-def test_a_bare_docs_folder_is_not_claimed_as_ours(tmp_path):
+def test_a_bare_docs_folder_is_not_claimed_as_ours(tmp_path, flipped):
     """`docs/` belongs to the HOST project. Almost every repository has one; very few have
     our map in it. Falling back on the folder's mere existence would have the team writing
     its files into someone else's documentation directory - which is the behaviour this
@@ -122,7 +143,7 @@ def test_an_explicit_argument_beats_the_environment(tmp_path, monkeypatch):
     assert vp.project_root(tmp_path) == tmp_path
 
 
-def test_the_root_never_walks_ancestors(tmp_path, monkeypatch):
+def test_the_root_never_walks_ancestors(tmp_path, monkeypatch, flipped):
     """A 2026-08-14 audit found the old ancestor-walk resolving a project at
     /home/user/artifacts/myproject to /home/user/artifacts - outside the project entirely,
     with every pack written there. Walking above an authoritative root can only escape it."""

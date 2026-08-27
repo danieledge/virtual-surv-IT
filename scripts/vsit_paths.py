@@ -42,6 +42,18 @@ from pathlib import Path
 
 ROOT_NAME = "VSIT"
 
+# THE FLIP (plan-project-footprint-2026-08-27, stage 2).
+#
+# While False, a project with NEITHER layout present resolves to the legacy locations - so
+# routing 70+ call sites through this module (stage 1) changes no behaviour anywhere, and a
+# green suite across that refactor actually means something. Flipping it to True is stage 2:
+# one line, one reviewable change, and the tests that encode the layout get updated
+# deliberately rather than as collateral of a large refactor.
+#
+# Projects that ALREADY have VSIT/ are unaffected either way - an existing new-layout
+# directory always wins, at both settings.
+PREFER_NEW_LAYOUT = False
+
 # New layout, relative to the project root.
 _SHARED = (ROOT_NAME, "shared")
 _ENGAGEMENTS = (ROOT_NAME, "engagements")
@@ -84,7 +96,7 @@ def _resolve(root: Path, new: tuple, legacy: tuple, legacy_leaf: str = "") -> Pa
         old = old / legacy_leaf
     if old.exists():
         return old
-    return candidate
+    return candidate if PREFER_NEW_LAYOUT else old
 
 
 def engagements_dir(project: Path | str | None = None) -> Path:
@@ -106,7 +118,7 @@ def shared_dir(project: Path | str | None = None) -> Path:
     for legacy_map in ("codebase-map.md", "CODEBASE-MAP.md"):
         if (root / "docs" / legacy_map).is_file():
             return root / "docs"
-    return candidate
+    return candidate if PREFER_NEW_LAYOUT else root / "docs"
 
 
 def reports_dir(project: Path | str | None = None) -> Path:
@@ -125,7 +137,7 @@ def config_dir(project: Path | str | None = None) -> Path:
         return candidate
     if (root / ".claude" / "team-preferences.json").is_file():
         return root / ".claude"
-    return candidate
+    return candidate if PREFER_NEW_LAYOUT else root / ".claude"
 
 
 def local_dir(project: Path | str | None = None) -> Path:
@@ -140,7 +152,7 @@ def local_dir(project: Path | str | None = None) -> Path:
         return candidate
     if (root / ".claude" / ".tool-availability").exists():
         return root / ".claude"
-    return candidate
+    return candidate if PREFER_NEW_LAYOUT else root / ".claude"
 
 
 def engagement_dir(slug: str, project: Path | str | None = None) -> Path:

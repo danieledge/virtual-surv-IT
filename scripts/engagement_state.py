@@ -155,6 +155,22 @@ def _force_utf8_output() -> None:
             pass
 
 
+def _vsit_paths():
+    """The layout resolver, imported lazily.
+
+    Lazy because this script runs standalone (`python scripts/engagement_state.py ...`)
+    from a bare clone where `scripts/` may not be on sys.path yet - the same reason the
+    other cross-script imports in this file are deferred."""
+    import sys as _sys
+
+    here = str(Path(__file__).resolve().parent)
+    if here not in _sys.path:
+        _sys.path.insert(0, here)
+    import vsit_paths
+
+    return vsit_paths
+
+
 def _default_artifacts_dir() -> Path:
     root = os.environ.get("CLAUDE_PROJECT_DIR")
     # 2026-08-14 Fable-model audit finding (C2): the ancestor-walk below used to run
@@ -170,7 +186,7 @@ def _default_artifacts_dir() -> Path:
     # artifacts/<slug>/ workspace of the CURRENT project) - CLAUDE_PROJECT_DIR being
     # set means that ambiguity doesn't exist; trust it directly.
     if root:
-        return Path(root) / "artifacts"
+        return _vsit_paths().engagements_dir(Path(root))
     base = Path.cwd()
     # A session that has cd'd INSIDE artifacts/ (e.g. into an existing workspace) must
     # not nest a new pack there - a live init from artifacts/<old>/ created
@@ -179,11 +195,19 @@ def _default_artifacts_dir() -> Path:
     # another one - and not the outermost either (2026-08-14: the original fix took
     # the outermost match, which has the identical escape risk one level down if any
     # ancestor further up cwd also happened to be named "artifacts").
+    # Recognises BOTH layouts (VSIT migration): the legacy `artifacts` directory, and
+    # `VSIT/engagements`. Without the second, a session that cd'd into a workspace under
+    # the new layout would fall through and nest a fresh pack inside it - exactly the
+    # 2026-07-30 bug this branch exists to prevent, reintroduced by the move.
     resolved = base.resolve()
-    tops = [p for p in (resolved, *resolved.parents) if p.name == "artifacts"]
+    tops = [
+        p
+        for p in (resolved, *resolved.parents)
+        if p.name == "artifacts" or (p.name == "engagements" and p.parent.name == "VSIT")
+    ]
     if tops:
         return tops[0]  # nearest match = the workspace we're actually inside
-    return base / "artifacts"
+    return _vsit_paths().engagements_dir(base)
 
 
 def _project_root_for(pack_dir: Path) -> Path:
