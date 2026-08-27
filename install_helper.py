@@ -1342,6 +1342,7 @@ _ADVANCED_ACTIONS = {
     "10": "aliasmanage",
     "11": "gitbashperf",
     "12": "codeintel",
+    "13": "extensions",
     "b": "back",
 }
 
@@ -1465,6 +1466,11 @@ def choose_action(style: Style) -> str:
                         "12",
                         "Code intelligence (install/refresh tree-sitter - sharper codebase "
                         "orientation; optional, degrades to pattern matching without it)",
+                    ),
+                    (
+                        "13",
+                        "Org extensions (review/edit the standard workflow this machine "
+                        "applies to every project - analysers, close actions, instructions)",
                     ),
                     ("b", "Back"),
                 ),
@@ -7095,6 +7101,427 @@ def run_adr014_smoke_test(
 # trace, on demand, without touching the production fire-and-forget behaviour at all.
 
 
+def org_extensions_path() -> Path:
+    """Where this machine's ORG extensions contract lives.
+
+    Kept in step with scripts/extensions.py::org_file - same machine-config home as the
+    machine defaults, honouring XDG_CONFIG_HOME. Duplicated rather than imported because
+    install_helper.py must run standalone from a bare clone with nothing on sys.path; a
+    test pins the two to the same location."""
+    base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base) if base else Path.home() / ".config"
+    return root / "virt-surv-it" / "team-extensions.md"
+
+
+# How long a synced org contract is trusted before a refresh is attempted. Long enough that
+# `go` does not hit the source on every launch, short enough that a compliance function's
+# edit reaches machines the same day.
+_EXTENSIONS_TTL_SECONDS = 12 * 3600
+
+
+def extensions_source() -> str:
+    """The configured source for this machine's org contract, or "".
+
+    Lives in the machine-defaults file beside the other machine-wide settings. A local path,
+    a UNC share, or a git URL - the three shapes a compliance function actually has."""
+    try:
+        base = os.environ.get("XDG_CONFIG_HOME")
+        root = Path(base) if base else Path.home() / ".config"
+        with open(root / "virt-surv-it" / "installer.json", encoding="utf-8-sig") as fh:
+            value = json.load(fh).get("extensions_source")
+        return value.strip() if isinstance(value, str) else ""
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def sync_org_extensions(force: bool = False, quiet: bool = True) -> tuple:
+    """Refresh the org contract from `extensions_source`. Returns (status, detail).
+
+    FAIL-OPEN, ALWAYS. Status is one of: "off" (no source configured), "fresh" (inside the
+    TTL, nothing done), "updated", "unchanged", or "failed". A failure NEVER removes or
+    invalidates the contract already on disk - stale-but-present beats absent, and absent
+    beats a launch that hangs waiting for a share. This runs on the `go` path, so the one
+    outcome that must be impossible is blocking.
+
+    The fetched file is DATA, not instructions. It is parsed by a deliberately dumb parser -
+    shutil.which only, plain-argv commands, shell metacharacters refused - and nothing
+    downstream executes it. That property is what makes syncing a file from elsewhere
+    tolerable at all, and it must not be relaxed to make a feature work.
+    """
+    source = extensions_source()
+    if not source:
+        return ("off", "")
+    target = org_extensions_path()
+    if not force and target.is_file():
+        try:
+            if time.time() - target.stat().st_mtime < _EXTENSIONS_TTL_SECONDS:
+                return ("fresh", str(target))
+        except OSError:
+            pass
+
+    fetched = None
+    try:
+        candidate = Path(source).expanduser()
+        if candidate.is_file():
+            # A plain file - a local path or a UNC share. Checked FIRST so a file that
+            # happens to be named something.git is read, not cloned.
+            fetched = candidate.read_bytes()
+        elif _looks_like_git_source(source, candidate):
+            fetched = _fetch_extensions_from_git(source)
+    except Exception as exc:  # noqa: BLE001 - fail-open is the contract
+        return ("failed", f"{type(exc).__name__}: {exc}")
+    if fetched is None:
+        return ("failed", f"could not read {source}")
+
+    # Validate BEFORE overwriting a working contract. A source that has been emptied or
+    # mangled must not silently replace one that works.
+    try:
+        import tempfile
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".md", delete=False) as fh:
+            fh.write(fetched)
+            probe = Path(fh.name)
+        sections, _problems = _parse_extensions(probe)
+        probe.unlink(missing_ok=True)
+    except Exception:
+        sections = None
+    if not sections:
+        return ("failed", "fetched contract has no recognised section - keeping the current one")
+
+    try:
+        if target.is_file() and target.read_bytes() == fetched:
+            os.utime(target, None)  # touch, so the TTL restarts without a rewrite
+            return ("unchanged", str(target))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(fetched)
+    except OSError as exc:
+        return ("failed", str(exc))
+    return ("updated", str(target))
+
+
+def _looks_like_git_source(source: str, candidate: Path) -> bool:
+    """Is this a git repo rather than a file to copy?
+
+    Three shapes a compliance function actually has: a remote URL, a local bare repo (a
+    DIRECTORY, usually ending .git - missed by a scheme-only check, which is how the first
+    version of this silently fell through to "could not read"), and a working clone."""
+    if source.startswith(("http://", "https://", "git@", "ssh://", "git://")):
+        return True
+    try:
+        if candidate.is_dir():
+            return (candidate / ".git").exists() or (candidate / "HEAD").is_file()
+    except OSError:
+        return False
+    return False
+
+
+def _fetch_extensions_from_git(url: str):
+    """team-extensions.md out of a git repo, without leaving a clone behind.
+
+    A blobless shallow clone into a temp directory: the compliance function versions its
+    standard like anything else, and a machine picks up changes without anyone editing files
+    by hand. Bounded by a timeout, because this can run on the launch path."""
+    import shutil as _shutil
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="virt-surv-ext-")
+    try:
+        proc = run_cmd(
+            ["git", "clone", "--depth", "1", "--filter=blob:none", "--quiet", url, tmp],
+            timeout=120,
+        )
+        if proc.returncode != 0:
+            return None
+        for candidate in (
+            Path(tmp) / "team-extensions.md",
+            Path(tmp) / "docs" / "team-extensions.md",
+        ):
+            if candidate.is_file():
+                return candidate.read_bytes()
+        return None
+    finally:
+        _shutil.rmtree(tmp, ignore_errors=True)
+
+
+def run_extensions_editor(style: Style, mark_map: dict) -> int:
+    """Review the resolved contract, and open a tier for editing.
+
+    DELIBERATELY NOT A FORM (plan-org-extensions-2026-08-27). The contract is markdown with
+    a fenced JSON block that people hand-maintain; a TUI that round-tripped it would risk
+    mangling a file its author owns. So this REVIEWS richly - showing which tier each entry
+    came from, which is the thing you cannot see by opening one file - and delegates editing
+    to $EDITOR, validating on save rather than constraining input.
+    """
+    ok = mark_map.get("ok") or "OK"
+    warn = mark_map.get("warn") or "!"
+    org = org_extensions_path()
+
+    while True:
+        print("")
+        print(style.bold("  Org extensions - the standard workflow for THIS MACHINE"))
+        print(
+            style.dim(
+                "  Applies to every project. A project's own docs/team-extensions.md wins "
+                "where the two collide."
+            )
+        )
+        print("")
+        configured = extensions_source()
+        print(f"  Org contract: {org}")
+        if configured:
+            print(style.dim(f"  source: {configured}"))
+        if org.is_file():
+            sections, problems = _parse_extensions(org)
+            if sections is None:
+                print(style.yellow(f"  {warn} present but unparseable - the team would ignore it"))
+            else:
+                print(style.dim(f"  sections: {', '.join(sections) or '(none recognised)'}"))
+                for problem in problems:
+                    print(style.yellow(f"  {warn} {problem}"))
+        else:
+            print(style.dim("  not installed"))
+        print("")
+        print("    1  Review the resolved contract (org + this directory's project file)")
+        print("    2  Edit the org contract in $EDITOR")
+        print("    3  Install one from a file")
+        print("    4  Check which registry tools are on PATH")
+        print("    5  Sync now from the configured source")
+        print("    b  Back")
+        choice = ask("  Choose:", "b", assume_yes=False, style=style).strip().lower()
+
+        if choice == "1":
+            _show_resolved_extensions(style)
+        elif choice == "2":
+            rc = _edit_org_extensions(org, style, mark_map)
+            if rc == 0:
+                print(f"  {ok} saved")
+        elif choice == "3":
+            path = ask("  Path to the contract file:", "", assume_yes=False, style=style).strip()
+            if path:
+                run_install_extensions(path, style, mark_map)
+        elif choice == "4":
+            _run_team_script(["extensions", "check"], style)
+        elif choice == "5":
+            status, detail = sync_org_extensions(force=True, quiet=False)
+            if status == "off":
+                print(style.dim("  no extensions_source configured for this machine."))
+                print(
+                    style.dim(
+                        '      Set one: {"extensions_source": "<git URL | path>"} in this '
+                        "machine's defaults file."
+                    )
+                )
+            elif status == "failed":
+                print(style.yellow(f"  {warn} sync failed: {detail}"))
+                print(style.dim("      The contract already on disk is untouched."))
+            else:
+                print(f"  {ok} {status}: {detail}")
+        else:
+            return 0
+
+
+def _show_resolved_extensions(style: Style) -> None:
+    """The merged view - the one thing you cannot get by opening either file."""
+    print("")
+    _run_team_script(["extensions", "show"], style)
+
+
+def _run_team_script(argv: list, style: Style) -> None:
+    """Run one of the team's own scripts and print its output verbatim.
+
+    Consent-free team tooling by design (CLAUDE.md section 7): these are the plugin's own
+    scripts, not code under review."""
+    try:
+        proc = run_cmd([sys.executable, "-m", "scripts." + argv[0], *argv[1:]], timeout=120)
+    except Exception as exc:
+        print(style.yellow(f"  could not run: {exc}"))
+        return
+    body = (proc.stdout or "").strip()
+    print(body if body else style.dim("  (no output - no extensions resolved)"))
+    if proc.stderr.strip():
+        print(style.dim("  " + proc.stderr.strip().splitlines()[-1]))
+
+
+def _edit_org_extensions(target: Path, style: Style, mark_map: dict) -> int:
+    """Open the org contract in $EDITOR, seeding the template if there is none, and
+    validate what comes back.
+
+    Validation REPORTS, it does not revert: the file belongs to whoever maintains it, and
+    silently undoing someone's edit because a parser disliked one entry would be worse than
+    telling them. The parser skips bad entries by design, so a partly-valid contract still
+    works for everything else in it."""
+    warn = mark_map.get("warn") or "!"
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+    if not editor:
+        print(style.yellow(f"  {warn} no $EDITOR or $VISUAL set - cannot open an editor."))
+        print(style.dim(f"      Edit it directly: {target}"))
+        return 1
+    if not target.is_file():
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            template = Path(__file__).resolve().parent / "docs" / "templates" / "team-extensions.md"
+            target.write_text(
+                template.read_text(encoding="utf-8") if template.is_file() else _MINIMAL_ORG,
+                encoding="utf-8",
+            )
+            print(style.dim(f"  seeded a starting contract at {target}"))
+        except OSError as exc:
+            print(style.yellow(f"  {warn} could not create it: {exc}"))
+            return 1
+    try:
+        subprocess.call([*editor.split(), str(target)])  # noqa: S603 - user's own $EDITOR
+    except Exception as exc:
+        print(style.yellow(f"  {warn} editor failed: {exc}"))
+        return 1
+    sections, problems = _parse_extensions(target)
+    if sections is None:
+        print(style.yellow(f"  {warn} the file no longer parses - the team would ignore it"))
+        return 1
+    if not sections:
+        print(style.yellow(f"  {warn} no recognised section - nothing in it would apply"))
+    for problem in problems:
+        print(style.yellow(f"  {warn} {problem}"))
+    return 0
+
+
+_MINIMAL_ORG = """# Team extensions - <YOUR ORGANISATION>
+
+## Standing instructions
+
+- <e.g. "Cite our internal control IDs (CTRL-xxx) wherever a finding maps to one.">
+
+## Close actions
+
+- <e.g. "Write a Confluence page in space SURV summarising what was achieved.">
+
+## Analyser registry
+
+```json
+{"analysers": []}
+```
+"""
+
+
+def run_install_extensions(source: str, style: Style, mark_map: dict) -> int:
+    """Install an org extensions contract for this machine, or report the current one.
+
+    WHY THIS EXISTS (plan-org-extensions-2026-08-27, step 2). The org tier is only useful
+    if a contract can actually get onto a machine. This is the day-one path: it works
+    offline, needs no network, and needs no git - which matters because the boxes that most
+    need a central standard are the ones that can least reach a server to fetch it.
+
+    VALIDATES BEFORE INSTALLING. A contract that parses to nothing is worse than none: it
+    looks installed and does nothing. So the file is parsed first and refused if it yields
+    no recognised section, and any registry entry the parser rejects is reported - it is
+    still installed in that case, because a partly-valid contract is legitimate and the
+    parser skips bad entries by design, but the user is told rather than left to discover
+    it at an engagement open.
+
+    NEVER EXECUTES the file, and neither does anything downstream - the parser is
+    deliberately dumb (shutil.which only, plain-argv commands, shell metacharacters
+    refused). That is what makes installing a file from elsewhere tolerable at all.
+    """
+    ok = mark_map.get("ok") or "OK"
+    warn = mark_map.get("warn") or "!"
+    target = org_extensions_path()
+
+    if source == "sync":
+        status, detail = sync_org_extensions(force=True, quiet=False)
+        if status == "off":
+            print(style.dim("  no extensions_source configured for this machine"))
+            return 0
+        if status == "failed":
+            print(style.yellow(f"  {warn} sync failed: {detail}"))
+            print(style.dim("      the contract already on disk is untouched"))
+            return 1
+        print(f"  {ok} {status}: {detail}")
+        return 0
+
+    if source == "show":
+        print(f"  org extensions contract: {target}")
+        if target.is_file():
+            print(style.dim(f"  installed, {target.stat().st_size} bytes"))
+            _report_extensions_contents(target, style, mark_map)
+        else:
+            print(style.dim("  not installed - projects use their own docs/team-extensions.md"))
+            print(style.dim("  install one with: python install_helper.py --extensions FILE"))
+        return 0
+
+    src = Path(source).expanduser()
+    if not src.is_file():
+        print(style.yellow(f"  {warn} not a file: {src}"))
+        return 1
+
+    sections, problems = _parse_extensions(src)
+    if sections is None:
+        print(style.yellow(f"  {warn} could not read {src}"))
+        return 1
+    if not sections:
+        # The one refusal. Everything else installs with a warning.
+        print(style.yellow(f"  {warn} {src} has no recognised section - nothing would apply."))
+        print(
+            style.dim(
+                "      Expected H2 headings: Standing instructions, Close actions, "
+                "Analyser registry, Integrations. Template: docs/templates/team-extensions.md"
+            )
+        )
+        return 1
+
+    if target.is_file():
+        backup = target.with_suffix(".md.bak")
+        try:
+            backup.write_bytes(target.read_bytes())
+            print(style.dim(f"  previous contract backed up to {backup}"))
+        except OSError as exc:
+            print(style.yellow(f"  {warn} could not back up the existing contract: {exc}"))
+            return 1
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(src.read_bytes())
+    except OSError as exc:
+        print(style.yellow(f"  {warn} could not install: {exc}"))
+        return 1
+
+    print(f"  {ok} org extensions installed: {target}")
+    print(style.dim(f"      sections: {', '.join(sections)}"))
+    for problem in problems:
+        print(style.yellow(f"  {warn} {problem}"))
+    print(
+        style.dim(
+            "      Applies to EVERY project on this machine. A project's own "
+            "docs/team-extensions.md still wins where the two collide."
+        )
+    )
+    return 0
+
+
+def _parse_extensions(path: Path):
+    """(recognised section names, problems) via the team's own parser, or (None, []).
+
+    Imported lazily and from the clone, because this runs standalone: a bare
+    `python install_helper.py` has nothing on sys.path yet."""
+    try:
+        scripts_dir = Path(__file__).resolve().parent / "scripts"
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        import extensions as ext_mod
+
+        data = ext_mod.load(path)
+    except Exception:
+        return None, []
+    return [name for name, body in data["sections"].items() if body.strip()], data["problems"]
+
+
+def _report_extensions_contents(path: Path, style: Style, mark_map: dict) -> None:
+    sections, problems = _parse_extensions(path)
+    if sections is None:
+        print(style.yellow("  could not parse it - the team would ignore it"))
+        return
+    print(style.dim(f"  sections: {', '.join(sections) or '(none recognised)'}"))
+    for problem in problems:
+        print(style.yellow(f"  {mark_map.get('warn') or '!'} {problem}"))
+
+
 def run_daemon_start_diagnostic(
     style: Style, mark_map: dict, repo_hint: Optional[str] = None
 ) -> int:
@@ -7649,6 +8076,15 @@ def parse_args(argv=None) -> argparse.Namespace:
         action="store_true",
         help="with --yes: wire the team status line into your user-level Claude settings "
         "(interactive runs simply ask)",
+    )
+    parser.add_argument(
+        "--extensions",
+        metavar="FILE",
+        help="standalone: install FILE as this machine's ORG extensions contract "
+        "(~/.config/virt-surv-it/team-extensions.md), so a standard workflow is authored "
+        "once and applies to every project instead of being set up per repo. Validates "
+        "before installing and backs up any existing copy. Pass 'show' instead of a path "
+        "to print where the contract lives and whether one is installed, or 'sync' to refresh it from the configured extensions_source",
     )
     parser.add_argument(
         "--permissions",
@@ -8260,6 +8696,7 @@ def _main(argv=None) -> int:
         or args.check_adr014_spike
         or args.check_daemon_start
         or args.code_intel
+        or args.extensions
         or args.configure
         or args.archive
         or args.list_engagements
@@ -8355,6 +8792,8 @@ def _main(argv=None) -> int:
             rc = max(rc, run_daemon_start_diagnostic(style, marks(), args.repo))
         if args.code_intel:
             rc = max(rc, Installer(args, style, marks(), subset="codeintel").run() or 0)
+        if args.extensions:
+            rc = max(rc, run_install_extensions(args.extensions, style, marks()))
         if args.configure:
             rc = max(rc, run_configure(Path(args.configure), style, marks(), args.yes, args.demo))
         if args.archive:
@@ -8412,6 +8851,8 @@ def _main(argv=None) -> int:
                 did_anything = did_anything or not args.demo
             elif action == "howto":
                 run_howto(style)  # read-only narrative - never counts as "did anything"
+            elif action == "extensions":
+                rc = max(rc, run_extensions_editor(style, marks()))
             elif action == "gitbashperf":
                 run_gitbash_perf(style, marks(), args.yes, args.demo)
                 did_anything = did_anything or not args.demo

@@ -533,3 +533,124 @@ def test_the_org_tier_gains_no_waiver_mechanism(tmp_path):
     assert "Waivers" not in merged["sections"], "an unrecognised section must not be parsed"
     assert "Skip the code-review chain" not in str(merged["sections"])
     assert merged["sections"]["Standing instructions"] == "- A real one."
+
+
+# ------------- install + sync of the org contract (steps 2-4 of the plan) -------------
+
+
+import install_helper as ih  # noqa: E402
+
+
+def _org_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    return tmp_path / "cfg" / "virt-surv-it" / "team-extensions.md"
+
+
+def test_the_installer_and_the_parser_agree_on_where_the_contract_lives(tmp_path, monkeypatch):
+    """install_helper duplicates the path rather than importing it, because it must run
+    standalone from a bare clone with nothing on sys.path. Duplication needs a pin, or the
+    two drift and a contract installs somewhere nothing reads."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    assert ih.org_extensions_path() == ext.org_file()
+
+
+def test_a_contract_with_no_recognised_section_is_refused(tmp_path, monkeypatch):
+    """The one refusal. A file that parses to nothing is worse than none: it looks
+    installed and does nothing."""
+    target = _org_env(tmp_path, monkeypatch)
+    src = tmp_path / "notes.md"
+    src.write_text("# Notes\n\nJust prose.\n", encoding="utf-8")
+    assert ih.run_install_extensions(str(src), ih.Style(False), ih.marks()) == 1
+    assert not target.exists(), "nothing must be installed when the contract is refused"
+
+
+def test_a_partly_valid_contract_installs_and_reports(tmp_path, monkeypatch, capsys):
+    """The parser skips bad entries by design, so a partly-valid contract is legitimate -
+    but the user is told rather than left to discover it at an engagement open."""
+    target = _org_env(tmp_path, monkeypatch)
+    src = tmp_path / "partial.md"
+    src.write_text(
+        "# T\n\n## Close actions\n\n- Write the page.\n\n## Analyser registry\n\n"
+        '```json\n{"analysers": [{"name": "bad", "command": "x; rm -rf /"}]}\n```\n',
+        encoding="utf-8",
+    )
+    assert ih.run_install_extensions(str(src), ih.Style(False), ih.marks()) == 0
+    assert target.is_file()
+    assert "REFUSED" in capsys.readouterr().out, "the refused entry must be reported"
+
+
+def test_installing_over_an_existing_contract_backs_it_up(tmp_path, monkeypatch):
+    target = _org_env(tmp_path, monkeypatch)
+    target.parent.mkdir(parents=True)
+    target.write_text(_ORG, encoding="utf-8")
+    src = tmp_path / "new.md"
+    src.write_text("# T\n\n## Close actions\n\n- Something else.\n", encoding="utf-8")
+    assert ih.run_install_extensions(str(src), ih.Style(False), ih.marks()) == 0
+    assert (target.with_suffix(".md.bak")).is_file(), "the previous contract must survive"
+
+
+def test_sync_is_off_when_no_source_is_configured(tmp_path, monkeypatch):
+    _org_env(tmp_path, monkeypatch)
+    assert ih.sync_org_extensions(force=True)[0] == "off"
+
+
+def test_sync_from_a_local_source_updates_then_reports_unchanged(tmp_path, monkeypatch):
+    target = _org_env(tmp_path, monkeypatch)
+    share = tmp_path / "share.md"
+    share.write_text(_ORG, encoding="utf-8")
+    (target.parent).mkdir(parents=True, exist_ok=True)
+    (target.parent / "installer.json").write_text(
+        json.dumps({"extensions_source": str(share)}), encoding="utf-8"
+    )
+    assert ih.sync_org_extensions(force=True)[0] == "updated"
+    assert target.is_file()
+    assert ih.sync_org_extensions(force=True)[0] == "unchanged"
+
+
+def test_an_emptied_source_never_replaces_a_working_contract(tmp_path, monkeypatch):
+    """The failure that would hurt most: someone truncates the central file and every
+    machine silently loses its standard on the next launch. Validate before overwriting."""
+    target = _org_env(tmp_path, monkeypatch)
+    share = tmp_path / "share.md"
+    share.write_text(_ORG, encoding="utf-8")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    (target.parent / "installer.json").write_text(
+        json.dumps({"extensions_source": str(share)}), encoding="utf-8"
+    )
+    assert ih.sync_org_extensions(force=True)[0] == "updated"
+    share.write_text("# Notes\n\nnothing recognised\n", encoding="utf-8")
+    status, _detail = ih.sync_org_extensions(force=True)
+    assert status == "failed"
+    assert "Confluence" in target.read_text(encoding="utf-8"), "the working contract survives"
+
+
+def test_an_unreachable_source_fails_open_and_keeps_what_is_there(tmp_path, monkeypatch):
+    """This runs on the `go` path. Stale-but-present beats absent; absent beats a launch
+    that hangs waiting for a share."""
+    target = _org_env(tmp_path, monkeypatch)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(_ORG, encoding="utf-8")
+    (target.parent / "installer.json").write_text(
+        json.dumps({"extensions_source": str(tmp_path / "does-not-exist.md")}), encoding="utf-8"
+    )
+    status, _ = ih.sync_org_extensions(force=True)
+    assert status == "failed"
+    assert "Confluence" in target.read_text(encoding="utf-8")
+
+
+def test_a_local_bare_repo_is_recognised_as_a_git_source(tmp_path):
+    """A scheme-only check missed a local bare repo - a DIRECTORY, usually ending .git -
+    and silently fell through to 'could not read'."""
+    bare = tmp_path / "standard.git"
+    bare.mkdir()
+    (bare / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    assert ih._looks_like_git_source(str(bare), bare) is True
+    assert ih._looks_like_git_source("https://example.com/x.git", Path("/nope")) is True
+    plain = tmp_path / "plain.md"
+    plain.write_text("x", encoding="utf-8")
+    assert ih._looks_like_git_source(str(plain), plain) is False
+
+
+def test_the_org_menu_entry_is_wired():
+    assert ih._ADVANCED_ACTIONS.get("13") == "extensions"
+    assert callable(ih.run_extensions_editor)
