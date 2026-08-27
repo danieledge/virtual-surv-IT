@@ -22,8 +22,9 @@ WHAT IT DOES
 
 REDIRECTED ONCE, NOT BLOCKED. Each distinct target gets exactly one redirect per session;
 repeating the call goes straight through. Sometimes the full read IS right - that review's
-own retrospective says the RuleC scorer "genuinely needed a full read - that one was well
-spent" - so the mechanism must cost a deliberate choice one turn, never make it impossible.
+own retrospective recorded one scorer that "genuinely needed a full read - that one was
+well spent" - so the mechanism must cost a deliberate choice one turn, never make it
+impossible.
 A rule that blocks correct work gets switched off, and then protects nothing.
 
 Dormant sessions are untouched (same session stamp as the exec gate, ADVISORY polarity: an

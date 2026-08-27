@@ -98,7 +98,7 @@ def test_a_whole_file_read_of_a_large_file_is_redirected(armed):
 
 def test_the_second_identical_read_goes_through(armed):
     """The property that decides whether this survives. That review's own retrospective
-    says the RuleC scorer 'genuinely needed a full read - that one was well spent'. A rule
+    recorded one scorer that 'genuinely needed a full read - well spent'. A rule
     that makes correct work impossible gets switched off, and then protects nothing."""
     first, _ = _run(_read(armed / "big.py"), armed)
     second, err = _run(_read(armed / "big.py"), armed)

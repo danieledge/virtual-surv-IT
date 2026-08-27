@@ -485,7 +485,7 @@ def test_block_omits_the_inline_note_for_ordinary_exec(capsys):
 # thing CLAUDE.md §7 says the gate must never cover, on the one platform least able to work
 # around it.
 _ABS_INTERPRETER_CALLS = [
-    '"C:/Python313/python.exe" "C:/Users/d/virtual-surv-IT/scripts/engagement_state.py" init',
+    '"C:/Python313/python.exe" "C:/Users/dev/virtual-surv-IT/scripts/engagement_state.py" init',
     '"C:\\Python313\\python.exe" "C:\\Users\\d\\virtual-surv-IT\\scripts\\engagement_state.py" init',
     "C:/Python313/python.exe C:/plug/scripts/render_html.py report.md",
     "/usr/bin/python3 /opt/team/scripts/check_artifacts.py --fix",
@@ -531,8 +531,8 @@ def test_the_report_case_end_to_end():
     the exec check is never reached, so allow-listing the team's own front door fixes the
     reported symptom whatever the arguments happen to contain."""
     segment = (
-        '"C:/Python313/python.exe" "C:/Users/d/virtual-surv-IT/scripts/engagement_state.py" '
-        'init --title "Adversarial review of alert scoring module '
+        '"C:/Python313/python.exe" "C:/Users/dev/virtual-surv-IT/scripts/engagement_state.py" '
+        'init --title "Adversarial review of the alert scoring module '
         'against source code" --slug eng-001 --team-version "v0.37.0"'
     )
     assert STAGED._EXEC_RE.search(segment), "the prose really does trip an exec pattern"
