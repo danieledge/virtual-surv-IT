@@ -23,15 +23,35 @@ Five names, four containing "map" or "skeleton", and a reader cannot tell from a
 which is authored, which is derived, or which is safe to delete. A sixth would have made the
 plugin's own memory harder to reason about than the codebases it maps.
 
-## The consolidation: two artefacts, one rule
+## The consolidation: three tiers, named by LIFECYCLE
 
-**Everything a HUMAN wrote lives in one place. Everything a MACHINE derived lives in one
-other place, keyed to it. Nothing else exists.**
+An earlier version of this section said "two artefacts", and that was an overclaim worth
+correcting rather than quietly dropping. The floor is three, because the three have
+genuinely different lifecycles and one of them cannot be shared:
 
-| | Artefact | Rule |
+| | Artefact | Lifecycle |
 |---|---|---|
-| **Curated** | `docs/codebase-map.md` (+ `codebase-map.d/` when it overflows) | authored, reviewed, committed, merged like code |
-| **Derived** | the map's derived sidecar | generated, never hand-edited, safe to delete, regenerated on demand |
+| **Authored** | `codebase-map.md` (+ `codebase-map.d/` when §2 overflows) | written by a human, reviewed, committed, merged like code |
+| **Derived, shareable** | codebase-map dot derived dot json | computed from source content; identical on every machine, so worth committing |
+| **Derived, machine-local** | codebase-map dot local dot json, under `.claude/` | computed from mtime/size; meaningless anywhere else, so never committed |
+
+The third exists because the mtime/size shortcut is what avoids re-hashing every mapped file
+on every open - real work, worth keeping - and mtimes differ per checkout. Committing it
+would be committing a fact about one person's disk.
+
+**The consolidation is the naming, not the count.** One prefix, three suffixes, each saying
+exactly what the file is and what may be done to it: a `.md` suffix means authored, a
+`.derived` infix means computed-and-shared, a `.local` infix means computed-and-private. Today the same three concepts
+are called the map, the fingerprints sidecar and the
+map-fingerprint probe cache - three names that share no scheme and describe
+implementation details rather than lifecycle, which is exactly why nobody can tell them
+apart. A reader who learns the suffix rule once never has to ask again which file is safe to
+delete, which to hand-edit, or which to expect in a diff.
+
+**Could it be two?** Only by folding the derived data into the committed markdown, which
+reintroduces exactly what makes derived data dangerous: a generated block someone can
+hand-edit, and a merge conflict on every regeneration. One file would look tidier and be
+worse. Three tiers whose names explain themselves is the honest floor.
 
 The derived file is **not new**. It is today's `codebase-map.fingerprints.json`, extended in
 place and eventually renamed for what it becomes. It already has exactly the right shape:
@@ -57,9 +77,9 @@ the same key. A separate file would have duplicated that key and invited the two
 }
 ```
 
-The map-fingerprint probe cache stays exactly as it is: gitignored, described there as *"a
-pure performance aid, safe to delete any time"*, never authoritative. It is the one thing
-here that genuinely is a cache rather than memory, and its name should keep saying so.
+The machine-local tier keeps its current behaviour exactly - gitignored, described in
+`.gitignore` as *"a pure performance aid, safe to delete any time"*, never authoritative -
+and gains only the naming scheme.
 
 ### The rename, and its cost
 
@@ -138,8 +158,9 @@ The tier label already travels with skeleton output. Stored memory must not laun
    `skeleton`, `symbols`, plus keyed read/write. Everything depends on this.
 2. **`--slice` served from stored ranges.**
 3. **`go`-time generation**, behind a preference, default ON once step 1 has proven itself.
-4. **The rename**, read-either / write-new - last, because it is the only step that touches
-   consuming projects.
+4. **The renames**, read-either / write-new - last, because this is the only step that
+   touches consuming projects. Both files move to the suffix scheme in one change, since
+   half a scheme is worse than none.
 
 ## What would make this wrong
 
