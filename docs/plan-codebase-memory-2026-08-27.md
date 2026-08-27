@@ -33,11 +33,21 @@ genuinely different lifecycles and one of them cannot be shared:
 |---|---|---|
 | **Authored** | `codebase-map.md` (+ `codebase-map.d/` when §2 overflows) | written by a human, reviewed, committed, merged like code |
 | **Derived, shareable** | codebase-map dot derived dot json | computed from source content; identical on every machine, so worth committing |
-| **Derived, machine-local** | codebase-map dot local dot json, under `.claude/` | computed from mtime/size; meaningless anywhere else, so never committed |
+| **Derived, machine-local** | codebase-map dot local dot json, under `.claude/` | computed from file timestamps; wrong on any other checkout, so never committed |
 
-The third exists because the mtime/size shortcut is what avoids re-hashing every mapped file
-on every open - real work, worth keeping - and mtimes differ per checkout. Committing it
-would be committing a fact about one person's disk.
+The third exists because that shortcut is what avoids re-hashing every mapped file on every
+open - real work, worth keeping.
+
+Why it cannot be shared, concretely: it stores entries of the form *"scripts/foo.py, last
+modified 2026-08-25 08:51:51, 4,210 bytes -> I hashed this already, here is the answer."*
+**Git does not preserve modification times.** A fresh clone stamps every file with the moment
+it was cloned - measured: the same file, byte-identical, reads 2026-08-25 08:51:51 in one
+checkout and 2026-08-27 21:38:34 in a clone made from it. So every cached timestamp is wrong
+on anyone else's machine, every entry misses, and the file is dead weight that also produces
+a merge conflict every time two people regenerate it.
+
+The content hash in the shareable tier has the opposite property: same bytes, same hash,
+everywhere. That difference is the entire reason these are two files and not one.
 
 **The consolidation is the naming, not the count.** One prefix, three suffixes, each saying
 exactly what the file is and what may be done to it: a `.md` suffix means authored, a
