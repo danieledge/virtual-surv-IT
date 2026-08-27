@@ -1343,6 +1343,7 @@ _ADVANCED_ACTIONS = {
     "11": "gitbashperf",
     "12": "codeintel",
     "13": "extensions",
+    "14": "reprobe",
     "b": "back",
 }
 
@@ -1471,6 +1472,11 @@ def choose_action(style: Style) -> str:
                         "13",
                         "Org extensions (review/edit the standard workflow this machine "
                         "applies to every project - analysers, close actions, instructions)",
+                    ),
+                    (
+                        "14",
+                        "Re-probe installed tools (run after installing an analyser or "
+                        "tree-sitter, so the team stops reporting it missing)",
                     ),
                     ("b", "Back"),
                 ),
@@ -2258,6 +2264,7 @@ class Installer:
                 detail = f"already available - {warmed} grammars cached for offline use"
             else:
                 detail = "already available, but no grammars are cached yet"
+            self._invalidate_tool_cache()
             self.step_ok("Code intelligence", detail)
             return
         proc = run_cmd(
@@ -2275,6 +2282,7 @@ class Installer:
                     "installed, but no grammars could be fetched - orientation will use "
                     "the pattern tier until they can be"
                 )
+            self._invalidate_tool_cache()
             self.step_ok("Code intelligence", detail)
             return
         # Distinguish the two failures, because they mean different things to a reader: pip
@@ -2336,6 +2344,32 @@ class Installer:
             return int(out[-1])
         except ValueError:
             return 0
+
+    def _invalidate_tool_cache(self) -> None:
+        """Drop the cached tool inventory, because this step just changed the answer.
+
+        The probe caches to `.claude/.tool-availability` on a 7-day TTL, and Morgan reads
+        it at engagement open. Installing tree-sitter and leaving that cache alone means
+        the team keeps reporting the tool missing for up to a week AFTER the user installed
+        it - they did the thing they were told to do and nothing changed, which is the
+        worst shape a stale cache can take.
+
+        Deleting rather than re-probing: the next `go` or open re-probes anyway, and a
+        delete cannot half-write a cache. Best-effort and silent - a cache that will not
+        delete costs freshness, never the install.
+
+        Only THIS project's cache: the install is machine-wide but the cache is per-project,
+        and there is no register of every project on the box. Others self-heal on their own
+        TTL, or on `bash scripts/check-review-tools.sh --refresh`.
+        """
+        root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+        cache = Path(root) / ".claude" / ".tool-availability"
+        try:
+            if cache.is_file():
+                cache.unlink()
+                self.say(self.style.dim("    tool inventory cache cleared - it will re-probe"))
+        except OSError:
+            pass
 
     def _code_intel_present(self) -> bool:
         """Importable AND usable. A probe that only checks importability would report
@@ -7243,6 +7277,40 @@ def _fetch_extensions_from_git(url: str):
         _shutil.rmtree(tmp, ignore_errors=True)
 
 
+def run_tool_reprobe(style: Style, mark_map: dict) -> int:
+    """Force a fresh analyser/tool probe for a project, and show what it found.
+
+    WHY A MANUAL OPTION (2026-08-27 owner request). The probe caches on a 7-day TTL and
+    Morgan reads that cache at engagement open. Install a tool and, without this, the team
+    keeps reporting it missing until the TTL lapses - the user did exactly what they were
+    told and nothing changed. The code-intel step now clears the cache itself, but that
+    only covers the tool it installs, in the project it ran from: anyone installing
+    ShellCheck, gitleaks or ctags by hand needs a way to say "look again".
+    """
+    ok, warn = mark_map.get("ok") or "OK", mark_map.get("warn") or "!"
+    default = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    answer = ask("  Project to re-probe:", default, assume_yes=False, style=style).strip()
+    project = Path(answer or default).expanduser().resolve()
+    if not project.is_dir():
+        print(style.yellow(f"  {warn} not a directory: {project}"))
+        return 1
+    script = _review_tools_script()
+    if script is None:
+        print(style.yellow(f"  {warn} scripts/check-review-tools.sh not found"))
+        return 1
+    print(style.dim(f"  re-probing {project} ..."))
+    try:
+        proc = run_cmd(["bash", str(script), "--refresh"], cwd=str(project), timeout=300)
+    except Exception as exc:
+        print(style.yellow(f"  {warn} probe failed to run: {exc}"))
+        return 1
+    body = (proc.stdout or "").strip()
+    if body:
+        print(body)
+    print(f"  {ok} inventory refreshed - the next engagement open reads this")
+    return 0
+
+
 def run_extensions_editor(style: Style, mark_map: dict) -> int:
     """Review the resolved contract, and open a tier for editing.
 
@@ -8853,6 +8921,8 @@ def _main(argv=None) -> int:
                 run_howto(style)  # read-only narrative - never counts as "did anything"
             elif action == "extensions":
                 rc = max(rc, run_extensions_editor(style, marks()))
+            elif action == "reprobe":
+                rc = max(rc, run_tool_reprobe(style, marks()))
             elif action == "gitbashperf":
                 run_gitbash_perf(style, marks(), args.yes, args.demo)
                 did_anything = did_anything or not args.demo

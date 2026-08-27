@@ -64,6 +64,12 @@ def test_the_dispatcher_emits_exactly_what_the_two_hooks_emitted(prompt):
     the prefetch hook actually produce output - an all-empty comparison would pass whatever
     the dispatcher did."""
     payload = _payload(prompt)
+    # WARM FIRST. engage_probe_prefetch writes caches on a cold run (the tool-availability
+    # inventory among them), so the very first invocation in a sequence can legitimately
+    # produce different output from the second. Comparing a cold run against a warm one
+    # tests the cache, not the dispatcher - which is exactly how this failed once the
+    # code-intel step started clearing that cache (2026-08-27).
+    _run(payload, REPO / "scripts" / "engage_probe_prefetch.py")
     _, anchor = _run(payload, REPO / "scripts" / "persona_anchor.py")
     _, prefetch = _run(payload, REPO / "scripts" / "engage_probe_prefetch.py")
     code, combined = _run(payload, DISPATCHER)

@@ -6055,6 +6055,7 @@ def test_advanced_submenu_full_mapping():
         "11": "gitbashperf",
         "12": "codeintel",
         "13": "extensions",
+        "14": "reprobe",
         "b": "back",
     }
 

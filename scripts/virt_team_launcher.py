@@ -3207,6 +3207,54 @@ def _apply_new_recommended_defaults(project_dir: Path) -> list:
     return added
 
 
+def _tool_inventory_line(project_dir: Path) -> str:
+    """A one-line summary of what the analyser probe last found, or "".
+
+    Reads `.claude/.tool-availability` - the cache check-review-tools.sh already maintains
+    on a TTL - rather than probing. This is the launch path: a banner must never be the
+    thing that runs fifteen `which` calls, and never the thing that fails a launch.
+
+    Returns "" when there is no cache yet, which is honest: the first `go` in a project
+    genuinely does not know, and inventing a number would be worse than a blank row."""
+    try:
+        cache = project_dir / ".claude" / ".tool-availability"
+        if not cache.is_file():
+            return ""
+        text = cache.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    installed = missing = ""
+    extras = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("\u2705 Installed"):
+            installed = stripped.split("(", 1)[-1].split(")", 1)[0]
+        elif stripped.startswith("\u26a0") and "Missing" in stripped:
+            missing = stripped.split("(", 1)[-1].split(")", 1)[0]
+        elif stripped.startswith("\u2705") and "tree-sitter" in stripped:
+            extras.append("tree-sitter")
+    if not installed and not missing:
+        return ""
+    parts = []
+    if installed:
+        parts.append(f"{installed} analysers")
+    if missing:
+        parts.append(f"{missing} missing")
+    if extras:
+        parts.append(", ".join(extras))
+    # Age matters: a stale inventory is the thing that makes a user think an install did
+    # not take, so say when it was taken rather than presenting it as current fact.
+    try:
+        import time as _time
+
+        days = int((_time.time() - cache.stat().st_mtime) // 86400)
+        if days >= 1:
+            parts.append(f"probed {days}d ago")
+    except OSError:
+        pass
+    return "  ".join(parts)
+
+
 def _print_project_defaults(project_dir: Path) -> None:
     """One compact table of this project's effective team settings, to STDERR, every
     `virt-surv go` (2026-08-17 user request) - the human sees at a glance what the
@@ -3238,6 +3286,15 @@ def _print_project_defaults(project_dir: Path) -> None:
     tools = raw.get("review_tools") or {}
     overrides = ", ".join(f"{k}:{v}" for k, v in sorted(tools.items()) if v != "auto")
     rows.append(("review tools", overrides or "all auto"))
+    # What the probe ACTUALLY found, not just what is configured (2026-08-27 owner
+    # request: "show what tools are available from the probe so it's clear it's
+    # available"). The two are different questions - "all auto" says nothing about whether
+    # anything is installed, and a user who has just installed a tool wants to see it
+    # counted. Read straight from the cache the probe already writes; no probing here,
+    # because this runs on the launch path.
+    inventory = _tool_inventory_line(project_dir)
+    if inventory:
+        rows.append(("tools detected", inventory))
     jira = integrations.get("jira") or {}
     if jira.get("enabled"):
         rows.append(

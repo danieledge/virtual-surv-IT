@@ -654,3 +654,91 @@ def test_a_local_bare_repo_is_recognised_as_a_git_source(tmp_path):
 def test_the_org_menu_entry_is_wired():
     assert ih._ADVANCED_ACTIONS.get("13") == "extensions"
     assert callable(ih.run_extensions_editor)
+
+
+def test_installing_code_intelligence_clears_the_stale_tool_cache(tmp_path, monkeypatch):
+    """The probe caches the tool inventory on a 7-day TTL and Morgan reads it at engagement
+    open. Installing tree-sitter and leaving that cache alone meant the team kept reporting
+    the tool missing for up to a week AFTER the user installed it - they did the thing they
+    were told to do and nothing changed, which is the worst shape a stale cache can take."""
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    cache = tmp_path / ".claude" / ".tool-availability"
+    cache.parent.mkdir(parents=True)
+    cache.write_text("=== Review/perf tooling check ===\n", encoding="utf-8")
+    obj = type("O", (), {})()
+    obj.style = ih.Style(False)
+    obj.say = lambda _m: None
+    ih.Installer._invalidate_tool_cache(obj)
+    assert not cache.exists(), "the cache must be dropped so the next probe re-runs"
+
+
+def test_clearing_the_tool_cache_never_raises_when_there_is_none(tmp_path, monkeypatch):
+    """Best-effort: a cache that will not delete costs freshness, never the install."""
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    obj = type("O", (), {})()
+    obj.style = ih.Style(False)
+    obj.say = lambda _m: None
+    ih.Installer._invalidate_tool_cache(obj)  # no cache, no .claude dir - must be silent
+
+
+# ------------- tool inventory on the go banner, and a manual re-probe -------------
+
+
+def test_the_go_banner_reports_what_the_probe_found(tmp_path):
+    """The owner's point: "all auto" says nothing about whether anything is INSTALLED, and
+    a user who has just installed a tool wants to see it counted."""
+    import scripts.virt_team_launcher as vtl
+
+    cache = tmp_path / ".claude" / ".tool-availability"
+    cache.parent.mkdir(parents=True)
+    cache.write_text(
+        "=== Review/perf tooling check ===\n"
+        "✅ Installed (9): ruff, mypy\n"
+        "⚠️  Missing (8) - reviews still run: eslint\n"
+        "Code intelligence:\n"
+        "   ✅ tree-sitter (exact symbols + line ranges, ~15 languages)\n",
+        encoding="utf-8",
+    )
+    line = vtl._tool_inventory_line(tmp_path)
+    assert "9 analysers" in line and "8 missing" in line
+    assert "tree-sitter" in line, "code intelligence must be visible, not just analysers"
+
+
+def test_no_cache_yet_says_nothing_rather_than_guessing(tmp_path):
+    """The first `go` in a project genuinely does not know. Inventing a number would be
+    worse than a blank row."""
+    import scripts.virt_team_launcher as vtl
+
+    assert vtl._tool_inventory_line(tmp_path) == ""
+
+
+def test_the_banner_never_probes_on_the_launch_path(tmp_path):
+    """A banner must never be the thing that runs fifteen `which` calls. It reads the cache
+    the probe already maintains, and reading must not create one."""
+    import scripts.virt_team_launcher as vtl
+
+    vtl._tool_inventory_line(tmp_path)
+    assert not (tmp_path / ".claude" / ".tool-availability").exists()
+
+
+def test_a_stale_inventory_says_how_old_it_is(tmp_path):
+    """A stale inventory is exactly what makes a user think an install did not take, so it
+    is dated rather than presented as current fact."""
+    import os
+    import time
+
+    import scripts.virt_team_launcher as vtl
+
+    cache = tmp_path / ".claude" / ".tool-availability"
+    cache.parent.mkdir(parents=True)
+    cache.write_text("✅ Installed (3): ruff\n", encoding="utf-8")
+    old = time.time() - 5 * 86400
+    os.utime(cache, (old, old))
+    assert "5d ago" in vtl._tool_inventory_line(tmp_path)
+
+
+def test_the_manual_reprobe_is_wired():
+    """Installing a tool by hand - ShellCheck, gitleaks, ctags - needs a way to say
+    "look again"; the code-intel step only clears the cache for the tool it installs."""
+    assert ih._ADVANCED_ACTIONS.get("14") == "reprobe"
+    assert callable(ih.run_tool_reprobe)
