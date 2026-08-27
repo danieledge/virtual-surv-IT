@@ -2245,14 +2245,31 @@ class Installer:
             self.step_ok("Code intelligence", "would attempt pip install (demo)")
             return
         if self._code_intel_present():
-            self.step_ok("Code intelligence", "already available - tree-sitter imports here")
+            warmed = self._prewarm_code_intel()
+            if warmed == -1:
+                detail = "already available - grammars bundled in the wheel"
+            elif warmed:
+                detail = f"already available - {warmed} grammars cached for offline use"
+            else:
+                detail = "already available, but no grammars are cached yet"
+            self.step_ok("Code intelligence", detail)
             return
         proc = run_cmd(
             [sys.executable, "-m", "pip", "install", "--quiet", *self.code_intel_specs()],
             timeout=600,
         )
         if proc.returncode == 0 and self._code_intel_present():
-            self.step_ok("Code intelligence", "installed - exact symbols for ~15 languages")
+            warmed = self._prewarm_code_intel()
+            if warmed == -1:
+                detail = "installed - exact symbols for ~15 languages (grammars bundled)"
+            elif warmed:
+                detail = f"installed - {warmed} grammars fetched now, none at runtime"
+            else:
+                detail = (
+                    "installed, but no grammars could be fetched - orientation will use "
+                    "the pattern tier until they can be"
+                )
+            self.step_ok("Code intelligence", detail)
             return
         # Distinguish the two failures, because they mean different things to a reader: pip
         # refused (no network, no pip, externally-managed), versus pip succeeded and the
@@ -2272,6 +2289,47 @@ class Installer:
             )
         )
         self.step_skip("Code intelligence", f"unavailable - {reason}")
+
+    def _prewarm_code_intel(self) -> int:
+        """Download every supported grammar ONCE, here, where a human is watching.
+
+        From pack 1.0 grammars are fetched on demand instead of shipping in the wheel. The
+        team refuses to let that happen at runtime (repo_skeleton checks the cache and falls
+        through rather than fetching), so if it does not happen here it does not happen -
+        the tier would silently stay on the pattern floor. Best-effort and never fatal: a
+        language that will not warm is one language less, not a failed install.
+
+        Returns how many warmed, or -1 when the version bundles its grammars and there is
+        nothing to warm."""
+        probe = (
+            "import sys\n"
+            "try:\n"
+            "    from tree_sitter_language_pack import cache_dir, get_parser\n"
+            "except ImportError:\n"
+            "    print('BUNDLED'); sys.exit(0)\n"
+            "langs = ['python','java','scala','kotlin','csharp','typescript','tsx',"
+            "'javascript','sql','bash','go','ruby','rust','c','cpp']\n"
+            "ok = 0\n"
+            "for lang in langs:\n"
+            "    try:\n"
+            "        get_parser(lang).parse(b'x'); ok += 1\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "print(ok)\n"
+        )
+        try:
+            proc = run_cmd([sys.executable, "-c", probe], timeout=900)
+        except Exception:
+            return 0
+        out = (proc.stdout or "").strip().splitlines()
+        if not out:
+            return 0
+        if out[-1] == "BUNDLED":
+            return -1
+        try:
+            return int(out[-1])
+        except ValueError:
+            return 0
 
     def _code_intel_present(self) -> bool:
         """Importable AND usable. A probe that only checks importability would report

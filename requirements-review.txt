@@ -30,13 +30,17 @@ sqlfluff>=3.0
 # version and go stale every release. Install via `virt-surv` Advanced > Code intelligence,
 # or `python install_helper.py --code-intel`, or directly from this file.
 tree-sitter>=0.21
-# PINNED BELOW 1.0 DELIBERATELY (2026-08-27). From 1.0 the pack stopped bundling
-# grammars: the wheel carries none, and the first get_parser() call fetches a manifest
-# and a ~22MB platform bundle from a GitHub release at RUNTIME, caching compiled .so
-# files under ~/.cache. Measured: with the network blocked 1.15.8 raises DownloadError,
-# and there is no offline switch. That is the exact condition that already disqualified
-# pip-audit and semgrep here - unconditional network calls with no reliable offline
-# mode, which on a corporate proxy hang rather than fail fast - and this probe runs at
-# ENGAGEMENT OPEN. 0.13.0 ships every grammar in the wheel; measured parsing python,
-# java, scala, csharp, sql, kotlin and typescript with the network unreachable.
-tree-sitter-language-pack>=0.9,<1.0
+# NOT pinned to a major (owner's call, 2026-08-27: "we don't want to pin an old out of
+# date version"). Worth knowing what that means, because it is not merely a version choice.
+# From 1.0 the pack stopped bundling grammars: the wheel carries none, and a parser request
+# for an uncached language fetches a manifest and a platform bundle from a GitHub release,
+# then dlopens the downloaded .so. Measured: warm cache offline is fine; COLD cache offline
+# raises DownloadError, and on a proxy that black-holes rather than refuses it hangs.
+#
+# So the fetch is handled where it is safe rather than forbidden: install_helper's
+# code_intel_step PRE-WARMS every language this team supports, once, with a human watching a
+# terminal - and repo_skeleton refuses to trigger a download at runtime at all (it checks the
+# grammar cache first and falls through to the pattern tier if a language is not there).
+# Runtime therefore never reaches the network on any version, and an un-warmed language
+# costs accuracy rather than a hang.
+tree-sitter-language-pack>=0.9

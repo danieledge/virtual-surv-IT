@@ -838,7 +838,12 @@ _GRAMMAR_CASES = [
         b"CREATE TABLE my_table (a int);\nCREATE VIEW my_view AS SELECT 1;",
         {"my_table", "my_view"},
     ),
-    (".kt", b"class A { fun m(): Int = 1 }\nobject B { fun n() {} }", {"A", "m", "B", "n"}),
+    # Kotlin expects A/m/n but NOT B, and that is a measured cross-version difference
+    # rather than an oversight: pack 0.x parses `object B {}` as `object_declaration`, while
+    # 1.x parses it as an infix_expression wrapping an object_literal - not a declaration at
+    # all, so no name to take. We are unpinned, so the test asserts what BOTH versions
+    # deliver. Do not "fix" this by adding a node type; 1.x does not emit one.
+    (".kt", b"class A { fun m(): Int = 1 }\nobject B { fun n() {} }", {"A", "m", "n"}),
     (
         ".scala",
         b"object O { def d = 1 }\ntrait T\nenum E { case A }\ngiven g: Int = 1",
@@ -883,3 +888,74 @@ def test_sql_declaration_types_match_the_shipped_grammar():
     for node_type in ("create_table", "create_view", "create_function", "create_procedure"):
         assert node_type in rs._TS_DECL_TYPES
     assert "create_table_statement" not in rs._TS_DECL_TYPES, "the wrong grammar's names"
+
+
+# ------------- the runtime must never reach the network (2026-08-27, unpinned)
+
+
+def test_a_bundling_build_is_never_gated_by_the_cache_check(monkeypatch):
+    """On a pack version that ships grammars in the wheel there is no cache and no download
+    - the question does not arise, and answering "unavailable" would silently disable a
+    perfectly working tier. ImportError on cache_dir IS that version."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_cache_dir(name, *args, **kwargs):
+        if name == "tree_sitter_language_pack" and args and args[2] == ("cache_dir",):
+            raise ImportError("no cache_dir on this version")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_cache_dir)
+    assert rs._ts_grammar_available("python") is True
+
+
+def test_an_uncached_grammar_is_refused_rather_than_downloaded(monkeypatch):
+    """THE safety property, and the reason the pin could be dropped.
+
+    From pack 1.0 grammars are fetched on demand, so a plain get_parser() on an uncached
+    language performs a network call - which on a corporate proxy hangs rather than fails,
+    at whatever moment the first parse happens. That moment is engagement open. The runtime
+    therefore refuses: an un-warmed language costs accuracy, never a hang.
+
+    Verified end to end as well as here: with pack 1.15.8, a cold cache and the network
+    black-holed, extract_symbols returned the regex tier in under a second and wrote nothing
+    to the cache."""
+    monkeypatch.setattr(rs, "_ts_grammar_available", lambda lang: False)
+    rs._probe_cache.pop("tree_sitter:python", None)
+    try:
+        assert rs._ts_parser(Path("x.py")) is None, "an uncached grammar must not be built"
+        assert rs._probe_cache.get("tree_sitter:python") is False, "and the refusal is cached"
+    finally:
+        rs._probe_cache.pop("tree_sitter:python", None)
+
+
+@pytest.mark.skipif(not _HAS_TS, reason="tree-sitter not installed on this host")
+def test_a_cached_grammar_is_allowed(monkeypatch, tmp_path):
+    """The other half: a warmed language must still reach the parser."""
+    libs = tmp_path / "libs"
+    libs.mkdir()
+    (libs / "libtree_sitter_c_sharp.so").write_bytes(b"")
+    monkeypatch.setattr("tree_sitter_language_pack.cache_dir", lambda: str(libs), raising=False)
+    assert rs._ts_grammar_available("csharp") is True
+
+
+def test_the_cache_check_maps_the_names_that_differ():
+    """The pack's API calls it `csharp` and caches it as `c_sharp`. Getting that wrong makes
+    a warmed grammar look absent, which silently costs the tier for C# - the same class of
+    bug as the original `c_sharp`/`csharp` mix-up, one layer down."""
+    assert rs._TS_CACHE_ALIASES["csharp"] == "c_sharp"
+
+
+@pytest.mark.skipif(not _HAS_TS, reason="tree-sitter not installed on this host")
+def test_an_unreadable_cache_dir_does_not_disable_a_working_tier(monkeypatch):
+    """This gates a capability, so an unfamiliar layout must fail toward AVAILABLE. Guessing
+    "unavailable" would turn a cosmetic surprise into a silently degraded review."""
+    import tree_sitter_language_pack  # noqa: F401  (skipped below if absent)
+
+    monkeypatch.setattr(
+        "tree_sitter_language_pack.cache_dir",
+        lambda: (_ for _ in ()).throw(RuntimeError("x")),
+        raising=False,
+    )
+    assert rs._ts_grammar_available("python") is True

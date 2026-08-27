@@ -239,6 +239,44 @@ _TS_DECL_TYPES = {
 }
 
 
+# API language name -> the basename the pack caches its compiled grammar under, where the
+# two differ. Only csharp does among the languages here; verified by pre-warming each and
+# watching which file appeared.
+_TS_CACHE_ALIASES = {"csharp": "c_sharp"}
+
+
+def _ts_grammar_available(lang: str) -> bool:
+    """Can this grammar be loaded WITHOUT reaching the network?
+
+    From pack 1.0 grammars are downloaded on demand rather than shipped in the wheel, so a
+    plain get_parser() on an uncached language performs a runtime fetch - which on a
+    corporate proxy hangs rather than fails, at whatever moment the first parse happens.
+    That moment is engagement open.
+
+    The team's answer is not to forbid the version but to move the fetch: the installer
+    pre-warms every supported language once, and this function makes the runtime refuse to
+    fetch anything that pre-warm did not get. An un-warmed language therefore costs
+    accuracy (fall through to the pattern tier) and never a hang.
+
+    Returns True on a bundling build (0.x, no cache_dir export) because the question does
+    not arise there, and True on any unexpected shape - this gates a capability, and
+    guessing "unavailable" on an unfamiliar layout would silently disable a working tier."""
+    try:
+        from tree_sitter_language_pack import cache_dir
+    except ImportError:
+        return True  # grammars ship inside the wheel on this version
+    except Exception:
+        return True
+    try:
+        folder = Path(str(cache_dir()))
+        if not folder.is_dir():
+            return False
+        stem = _TS_CACHE_ALIASES.get(lang, lang)
+        return any(folder.glob(f"*tree_sitter_{stem}.*"))
+    except Exception:
+        return True
+
+
 def _ts_parser(path: Path):
     """A parser for this file's language, or None. Every failure is a None, never a raise.
 
@@ -257,6 +295,11 @@ def _ts_parser(path: Path):
     key = f"tree_sitter:{lang}"
     if key not in _probe_cache:
         try:
+            if not _ts_grammar_available(lang):
+                # Cached as unavailable: this is the "would have to download" case, and the
+                # runtime never does. The installer's pre-warm is where that is fixed.
+                _probe_cache[key] = False
+                return None
             from tree_sitter_language_pack import get_parser
 
             _probe_cache[key] = get_parser(lang)
