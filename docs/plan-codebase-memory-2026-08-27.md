@@ -51,6 +51,29 @@ An earlier draft asked "can we consolidate to two files?" That was the wrong que
 the CONCEPT count, and it is already right. The file count follows from how each concept has
 to be stored.
 
+## Scope: per CODEBASE, never per engagement
+
+Asked directly, and worth pinning because it is the question that decides whether any of
+this pays back: *"is it stored per engagement or per codebase?"*
+
+**Per codebase.** The tree is a fact about the code, not about the piece of work someone
+happened to be doing when it was computed. Three engagements on the same repo in a week
+should share one tree, and the second and third should cost nothing.
+
+📊 Engagement workspaces live in `artifacts/<slug>/` and are gitignored - per-piece-of-work
+and disposable by design. Putting the tree there would mean every new engagement rebuilt it
+from scratch: today's waste, with extra machinery.
+
+This mirrors the learned half exactly. `docs/codebase-map.md` is per-codebase and committed,
+updated at every close, precisely so the NEXT engagement inherits it - ADR-003's whole
+argument is that project memory outlives the engagement that produced it. The tree follows
+the same rule for the same reason.
+
+The resulting boundary is clean enough to state in one line:
+
+- **Per codebase, survives engagements**: the map, and the tree.
+- **Per engagement, dies with it**: findings packs, the assumption ledger, artifacts.
+
 ## How the two concepts are stored: three files, named by LIFECYCLE
 
 Two concepts, three files - and the third is an implementation detail OF the tree, not a
