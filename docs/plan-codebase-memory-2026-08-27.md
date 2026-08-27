@@ -51,9 +51,11 @@ new has to be invented, and nothing new has to be trusted.
 ### Where each half lives, and why the split matters
 
 - **`docs/codebase-map.md`** - curated, committed, human-owned. Unchanged.
-- **`codebase-skeleton.json`, under the project's `.claude/`** (proposed, does not exist
-  yet) - derived, gitignored, machine-owned. Regenerated,
-  never merged, never reviewed, safe to delete at any moment.
+- **A derived cache under the project's `.claude/`** (proposed; named
+  codebase-skeleton dot json, written without link formatting here because it does not
+  exist yet and the reference checker rightly refuses to resolve it) - gitignored,
+  machine-owned, regenerated, never merged, never reviewed, safe to delete at any
+  moment.
 
 That boundary is the same one ADR-010 draws for artifacts and the same one
 `.claude/engage-probe.json` already occupies. Putting derived output in `docs/` would invite
