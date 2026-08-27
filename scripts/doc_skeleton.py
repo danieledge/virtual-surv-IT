@@ -2,7 +2,7 @@
 """Deterministic, token-budgeted inventory of a DOCUMENTATION tree (2026-08-25).
 
 WHY THIS EXISTS. `repo_skeleton` answers "what is in this codebase" for first contact. There
-was no equivalent for documents, so a session handed a Confluence export, an feed specification
+was no equivalent for documents, so a session handed a Confluence export, a vendor feed specification
 and three hundred supporting files had no bounded way to know what it had - only to start
 opening things, which is unbounded, non-reproducible, and pulls content into context that may
 never be needed.

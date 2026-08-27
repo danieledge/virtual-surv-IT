@@ -523,8 +523,9 @@ def test_a_path_interpreter_does_not_launder_an_untrusted_script(command):
 
 
 def test_the_report_case_end_to_end():
-    """The exact command from the 2026-08-26 report, including the detail that made it
-    confusing to diagnose: it was NOT blocked for looking like Python execution.
+    """The command shape from the 2026-08-26 report (title paraphrased to a synthetic
+    one), including the detail that made it confusing to diagnose: it was NOT blocked
+    for looking like Python execution.
 
     `--title "...against source code"` matched the `\\bsource\\s+\\S+` exec pattern - the
     shell `source` builtin - inside a quoted argument. Once _TEAM_ALLOW matches the segment
