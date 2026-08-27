@@ -2354,6 +2354,15 @@ class _Ink:
     def bold(self, t: str) -> str:
         return self._c("1", t)
 
+    # The brand banner's palette (2026-08-27): plain cyan next to `title`'s bold cyan, and
+    # the violet the wordmark gradient runs through. Same _c() gate as everything else, so
+    # NO_COLOR / a pipe / a non-VT Windows console strips them with the rest.
+    def cyan(self, t: str) -> str:
+        return self._c("36", t)
+
+    def violet(self, t: str) -> str:
+        return self._c("35", t)
+
 
 def _rule(ink: _Ink, label: str = "", note: str = "", width: int = 0) -> str:
     # width=0 means "fit the terminal" (2026-08-19): the old fixed 64 overflowed narrow
@@ -3005,17 +3014,48 @@ def _git_branch(project_dir: Path) -> str:
     return ""
 
 
-# Wordmark (2026-08-19 UX pass): an accent bar plus letter-spaced caps, NOT block-glyph
-# ASCII art - hand-drawn art at this width reads as amateur and illegible, while spaced
-# caps behind a solid bar read as a designed mark in any terminal. U+2588 is the only
-# special glyph and _can_encode gates it (cp1252 corp consoles get "|" instead).
-_WORDMARK_BAR = "█"
-_WORDMARK_TEXT = "V I R T U A L   S U R V - I T"
+# Wordmark (2026-08-27): the supplied VSIT brand banner, rendered as ASCII terminal art by
+# scripts/brand_banner.py (mascot + wordmark + tagline + strapline). It supersedes the
+# 2026-08-19 spaced-caps mark, whose note read "NOT block-glyph ASCII art - hand-drawn art
+# at this width reads as amateur and illegible". That objection is answered rather than
+# ignored: the source brand IS a dotted-outline design, so the letterforms are drawn in
+# `- . ' |` on purpose and the mark is no longer hand-improvised. The old spaced-caps form
+# survives as brand_banner's narrow tier, which is exactly the width where the objection
+# still holds. No glyph in the module needs _can_encode - it is ASCII by construction.
 _WORDMARK_TAG = "compliance surveillance engineering"
 
 
+def _brand_banner_lines() -> list:
+    """The brand banner as printable, already-painted lines - [] if anything goes wrong.
+
+    Sibling import: scripts/ is already on sys.path by the time `go` reaches the banner,
+    but this runs before that in the --configure path, so it inserts the directory itself.
+    Cosmetic tier throughout: a missing module costs looks, never the launch."""
+    try:
+        scripts_dir = _scripts_dir()
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        import brand_banner
+    except Exception:
+        return []
+    ink = _Ink()
+    painters = {
+        "plain": lambda t: t,
+        "dim": ink.dim,
+        "cyan": ink.cyan,
+        "violet": ink.violet,
+        "green": ink.good,
+        "amber": ink.warn,
+        "bold": ink.bold,
+    }
+    try:
+        return brand_banner.render(_term_cols(), lambda role, t: painters[role](t))
+    except Exception:
+        return []
+
+
 def _print_banner(project_dir: Path) -> None:
-    """The header: wordmark, then one dim identity line (project · version · branch).
+    """The header: brand banner, then one dim identity line (project · version · branch).
 
     2026-08-19 UX pass: the old header was a small boxed panel whose width matched
     nothing else on screen, so the launch read as three unrelated blocks stacked up.
@@ -3035,21 +3075,26 @@ def _print_banner(project_dir: Path) -> None:
     if branch:
         facts.append(branch)
     identity = "  ·  ".join(facts)
-    bar = _WORDMARK_BAR if _can_encode(_WORDMARK_BAR) else "|"
+    err = sys.stderr
+    # The art is printed with plain ANSI on BOTH paths, never through rich: rich would
+    # re-measure and soft-wrap it inside its capped content column, and its markup parser
+    # would have to be escaped around characters the art legitimately contains. rich still
+    # renders the identity block below, so the two stay visually of a piece.
+    art = _brand_banner_lines()
+    print("", file=err)
+    for line in art:
+        print(line, file=err)
     r = _rich_ui()
     if r:
-        r["console"].print()
-        r["console"].print(f"  [bold cyan]{bar}[/]  [bold]{_WORDMARK_TEXT}[/]")
-        r["console"].print(f"  [bold cyan]{bar}[/]  [dim]{_WORDMARK_TAG}[/]")
+        if not art:
+            r["console"].print(f"  [bold cyan]|[/]  [dim]{_WORDMARK_TAG}[/]")
         r["console"].print()
         r["console"].print(f"  [dim]{identity}[/]")
         r["console"].print(f"  [cyan]{_morgan_line()}[/]")
         return
     ink = _Ink()
-    err = sys.stderr
-    print("", file=err)
-    print(f"  {ink.title(bar)}  {ink.bold(_WORDMARK_TEXT)}", file=err)
-    print(f"  {ink.title(bar)}  {ink.dim(_WORDMARK_TAG)}", file=err)
+    if not art:
+        print(f"  {ink.title('|')}  {ink.dim(_WORDMARK_TAG)}", file=err)
     print("", file=err)
     print("  " + ink.dim(identity), file=err)
     print("  " + ink.title(_morgan_line()), file=err)

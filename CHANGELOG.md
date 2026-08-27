@@ -5,7 +5,19 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+- **The VSIT brand banner now opens both front doors** - `virt-surv go` and the
+  `virt-surv` installer menu - from one shared implementation, `scripts/brand_banner.py`:
+  the mascot, the VSIT wordmark, `AI TEAM FOR COMPLIANCE & SURVEILLANCE IT` and the
+  `SPECIALIST AI TEAM | INDEPENDENT REVIEW | HUMAN CONTROLLED` strapline, in the source
+  brand's cyan/violet/green with amber on `HUMAN CONTROLLED`. Drawn in pure ASCII, no
+  box-drawing glyphs: the source design is a dotted outline, so the corp-Windows cp1252
+  constraint costs the art nothing. Colour comes from the caller's existing detector
+  (`_Ink` / `Style`), so `NO_COLOR`, a pipe and a non-VT console all get the same text.
+  Three width tiers - the box at >= 65 columns, a compact two-line mark at >= 45, a
+  minimal mark below - so nothing wraps on a mobile/mosh screen. install_helper.py keeps
+  its own boxed banner as the fallback for the curl-bootstrapped single-file case, where
+  there is no `scripts/` sibling to import.
 
 ## [0.37.0] - 2026-08-25 - Data tools, mail formats, and a performance pass that started by finding a hang
 

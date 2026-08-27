@@ -345,6 +345,10 @@ class Style:
     def dim(self, text: str) -> str:
         return self._paint(text, "2")
 
+    def magenta(self, text: str) -> str:
+        """The violet in the brand banner's cyan -> violet -> green wordmark gradient."""
+        return self._paint(text, "35")
+
 
 def _can_encode(text: str, stream=None) -> bool:
     """True when the stream's encoding can carry every character in text."""
@@ -468,10 +472,50 @@ def _installed_cache_note() -> str:
     return ""
 
 
+def brand_banner_rows(style: Style, width: Optional[int] = None) -> list:
+    """The shared VSIT brand banner (scripts/brand_banner.py), painted with this Style.
+
+    Returns [] when the module cannot be imported, which is a real case rather than a
+    theoretical one: this helper is also distributed as a single curl-bootstrapped file
+    with no scripts/ sibling (same reason _parse_extensions and _PLUGIN_CACHE_MARKER are
+    written the way they are). print_banner falls back to its own boxed banner then - the
+    art is shared, never duplicated, and never a hard dependency."""
+    try:
+        scripts_dir = Path(__file__).resolve().parent / "scripts"
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        import brand_banner
+    except Exception:
+        return []
+    painters = {
+        "plain": lambda t: t,
+        "dim": style.dim,
+        "cyan": style.cyan,
+        "violet": style.magenta,
+        "green": style.green,
+        "amber": style.yellow,
+        "bold": style.bold,
+    }
+    if width is None:
+        width = shutil.get_terminal_size((80, 24)).columns
+    try:
+        return brand_banner.render(width, lambda role, t: painters[role](t))
+    except Exception:
+        return []
+
+
 def print_banner(style: Style, stream=None) -> None:
-    """Boxed banner (tool name + version line) and Morgan's intro."""
-    for row in render_banner([BANNER_TITLE, banner_version_line()], style, stream):
-        print(row)
+    """The brand banner (or the boxed fallback), the version line and Morgan's intro."""
+    rows = brand_banner_rows(style)
+    if rows:
+        for row in rows:
+            print(row)
+        # ASCII on purpose, like the banner above it: this line rides the same cp1252
+        # corp-console path (a middot survives cp1252, but nothing here needs to test that).
+        print(style.dim(f"  team installer  -  {banner_version_line()}"))
+    else:
+        for row in render_banner([BANNER_TITLE, banner_version_line()], style, stream):
+            print(row)
     note = _installed_cache_note()
     if note:
         print(style.yellow(note))

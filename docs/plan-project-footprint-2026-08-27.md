@@ -66,36 +66,68 @@ root, four subfolders, and the split between them answers the question that actu
 work?**
 
 ```
-<project>/
+<project>/                        # wherever `virt-surv` was started
   VSIT/
     README.md                     # what this folder is, for whoever finds it
-    subject/                      # SHARED - what we know about whatever is under review
+    shared/                       # SHARED ACROSS ENGAGEMENTS - what we know about
+                                  # the thing under review
       map.md                      #   curated: what an area/document is FOR   (committed)
       map.d/<area>.md             #   overflow when map.md's section 2 grows  (committed)
-      derived.json                #   the tree + fingerprints, generated      (committed)
-    engagements/                  # ONE PER PIECE OF WORK
+      derived.json                #   the tree: symbols, ranges, fingerprints (committed)
+    engagements/                  # ONE FOLDER PER PIECE OF WORK            (gitignored)
       <slug>/
         engagement-state.json     #   the record: status, decisions, outcomes
         engagement-brief.md       #   what was agreed
         delivery-report.md        #   what was delivered
+        START-HERE.md / .html     #   the generated index
+        engagement-summary.txt    #   Morgan's closing email
         findings/*.jsonl          #   review findings packs
         evidence/                 #   test output, analyser runs
-        engagement-summary.txt    #   Morgan's closing email
+      .archive/<slug>/            #   closed and archived
+    reports/                      # deliverables belonging to the PROJECT,   (committed)
+                                  # not to one engagement
     config/
-      extensions.md               # this project's contract                   (committed)
-      preferences.json            # this project's team settings              (committed)
-    local/                        # machine-only, never shared              (gitignored)
-      tool-availability
-      engage-probe.json
-      map-fingerprint-cache.json
-      guard-interpreter
+      extensions.md               # this project's contract                  (committed)
+      preferences.json            # this project's team settings             (committed)
+    local/                        # machine-only, never shared             (gitignored)
+      tool-availability, engage-probe.json,
+      map-fingerprint-cache.json, guard-interpreter
   .claude/                        # the HARNESS's directory - not ours
     settings.json                 #   hooks wiring, permissions
     hooks/ skills/ agents/        #   what Claude Code loads
     .exec-consent                 #   stays put - see below
 ```
 
-### Why subject/ sits one level ABOVE engagements/
+### Why `reports/` exists, which the first draft missed
+
+📊 Looking inside the real `artifacts/` rather than trusting this plan's model of it: it
+holds **41 loose files at its root**, outside any engagement folder - audits, plans, reviews.
+So today it does double duty, as a container for engagement packs AND as a general
+deliverables drawer. A layout with only `engagements/<slug>/` has nowhere to put those, and
+would have forced every future one into a slug it does not belong to.
+
+`reports/` is that home: project-level deliverables, committed, not owned by any single
+engagement.
+
+**Existing loose files stay where they are.** Retrofitting them means guessing which
+engagement produced a file from months ago, and a wrong attribution in an audit trail is
+worse than an unattributed file. New work follows the new layout; the old files are legacy
+and can be moved by hand, by someone who actually knows.
+
+
+### On the name
+
+`shared/`, not `subject/` - the owner's correction, and the right one. This plan argues the
+tree should be named by LIFECYCLE, then named that one folder by content, which is exactly
+the inconsistency that makes a layout hard to learn. With `shared/`, three of the five
+folders read as one coherent set: **shared** = kept for every engagement, **engagements** =
+kept for this job, **local** = kept for this machine. That contrast is legible in a directory
+listing; "subject" never was, and was doing abstraction the folder did not need.
+
+The one ambiguity worth pre-empting in the README: shared across ENGAGEMENTS, not shared with
+other people or teams.
+
+### Why shared/ sits one level ABOVE engagements/
 
 Because the map is used by **multiple engagements** and outlives all of them. That is the
 entire reason it is worth curating: ADR-003's argument is that project memory survives the
@@ -106,11 +138,11 @@ Nesting it under an engagement would say the opposite - that what we know about 
 belongs to whoever last looked at it. It would also mean engagement four cannot find what
 engagement one learned without knowing engagement one's slug.
 
-So the rule reads straight off the tree: **subject/ is about the THING UNDER REVIEW; engagements/ is
-about the WORK.** Anything that would still be true if this engagement had never happened
+So the rule reads straight off the tree: **shared/ is what EVERY engagement needs; engagements/ is
+what ONE piece of work produced.** Anything that would still be true if this engagement had never happened
 belongs in the first.
 
-| | subject/ | engagements/&lt;slug&gt;/ |
+| | shared/ | engagements/&lt;slug&gt;/ |
 |---|---|---|
 | Scope | the codebase, or the document estate, or the data platform | one piece of work |
 | Lifetime | as long as the subject exists | closed, then archived |
@@ -127,8 +159,8 @@ only one" - data pipelines, DQ and reconciliation jobs, reporting/MI, integratio
 reviews all count. A comms-surveillance policy review or an assessment of a model-validation
 report has no repository at all.
 
-So the folder is named for its ROLE - what we know about the thing under review - not for one
-kind of thing. `subject/` holds:
+So the folder is named for its LIFECYCLE - what every engagement needs, as opposed to what
+one piece of work produced - rather than for one kind of content. It holds:
 
 - **code work**: the codebase map, and the derived tree of symbols and ranges;
 - **document work**: an inventory of what exists and where, section indexes produced when a
@@ -139,7 +171,7 @@ All three answer the same question - *what does the next engagement need to know
 starts?* - and all three are wasted if they live inside one engagement's folder.
 
 **Empty is a valid state.** A project whose first engagement is a one-off document review has
-no `subject/` until something is worth keeping, and creating an empty folder to look complete
+no `shared/` until something is worth keeping, and creating an empty folder to look complete
 would be worse than not having one.
 
 ### Where the tree-sitter output goes, and where it does not
@@ -151,13 +183,13 @@ lands in the project:
 |---|---|---|
 | the library itself | the interpreter's site-packages | no - machine-wide |
 | its grammar cache | the library's own cache directory | no - machine-wide, per user |
-| what it PRODUCES: symbols, line ranges | the derived file in subject/ | **yes** |
+| what it PRODUCES: symbols, line ranges | the derived file in shared/ | **yes** |
 
 Tree-sitter is an engine, not stored state. Which engine produced a derived file is recorded
 IN that file (the `tier` field), so a reader can tell exact extraction from a regex
 approximation - but the engine itself is never something the project carries.
 
-### Why local/ is separate from subject/
+### Why local/ is separate from shared/
 
 Both are generated, so the instinct is to file them together - but one is a fact about the
 CODE and the other is a fact about this CHECKOUT. the derived file holds content hashes: same
