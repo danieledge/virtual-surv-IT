@@ -327,4 +327,20 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except BaseException:
+        # FAIL OPEN (2026-08-27, live report: "sometimes get a UserPromptSubmit hook error
+        # failed with non-blocking status code", at a new engagement open). This was the
+        # one entry point in the chain without a fail-open wrapper: every hook it carries
+        # has `except Exception: sys.exit(0)` in its own __main__, but an uncaught raise in
+        # the CLIENT exited 1, and Claude Code reports a non-zero hook exit as an error the
+        # user sees. The client is transport - it decides nothing - so a failure here must
+        # cost the injected context and never surface as a failed hook.
+        #
+        # BaseException deliberately: a KeyboardInterrupt or a socket-driven exception that
+        # is not an Exception subclass would otherwise escape and produce the same message.
+        # SystemExit is re-raised first so a real exit code still propagates.
+        sys.exit(0)
