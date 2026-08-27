@@ -83,6 +83,51 @@ def default_file() -> Path:
     return (Path(root) if root else Path.cwd()) / "docs" / "team-extensions.md"
 
 
+# A close action an ORG declares mandatory, written as a leading token on its bullet:
+#     - [required:confluence] Write a Confluence page in space SURV summarising the work.
+# The id is what the engagement records against, so matching is exact rather than fuzzy
+# text comparison - an action whose wording was tidied must not silently stop counting.
+_REQUIRED_RE = re.compile(r"^\s*[-*]\s*\[required:([a-z0-9][a-z0-9_-]{0,31})\]\s*(.+?)\s*$", re.I)
+
+
+def required_close_actions(org_text: str) -> list:
+    """[(id, text)] for close actions the ORG marked required.
+
+    ORG TIER ONLY, and the caller enforces that by passing only the org body. A project
+    must not be able to impose a gate on itself: an engagement inventing its own
+    pass condition is not a control, it is a way to look compliant. The org file is
+    administered by whoever sets the standard; the project file is written by whoever is
+    doing the work, and those are different people for a reason.
+
+    This is the ONE place an extension can add something a close must satisfy. It remains
+    additive in the strict sense - it can only ADD a requirement, never remove or weaken
+    one - and it cannot express anything except "this named action was recorded"."""
+    found: list = []
+    seen: set = set()
+    for line in (org_text or "").splitlines():
+        match = _REQUIRED_RE.match(line)
+        if not match:
+            continue
+        action_id = match.group(1).lower()
+        if action_id in seen:
+            continue
+        seen.add(action_id)
+        found.append((action_id, match.group(2).strip()))
+    return found
+
+
+def org_required_close_actions(org_path: Path | None = None) -> list:
+    """The required actions this machine's org contract declares, or []."""
+    path = org_path if org_path is not None else org_file()
+    try:
+        if not path or not path.is_file():
+            return []
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    return required_close_actions(split_sections(text).get("Close actions", ""))
+
+
 def org_file() -> Path:
     """The ORG-level contract: ~/.config/virt-surv-it/team-extensions.md.
 

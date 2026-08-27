@@ -256,6 +256,61 @@ _AGENT_JOIN_RE = re.compile(
 _AI_MARKER = "🤖"
 
 
+def _required_close_action_findings(artifacts_dir: Path) -> list[str]:
+    """ORG-REQUIRED-CLOSE-ACTION - a mandatory org close action was never recorded.
+
+    THE ONE PLACE AN EXTENSION CAN FAIL A CLOSE (plan-org-extensions step 5), and worth
+    stating precisely because it is a change in kind. Extensions have always been additive
+    only - they can add instructions, tools and offered steps, and can never waive a
+    disclaimer, skip the code chain or weaken a guard. This stays additive in the strict
+    sense: it can only ADD a condition, never remove one, and the only condition it can
+    express is "this named action was recorded".
+
+    ORG TIER ONLY. A project cannot declare its own requirement, because an engagement
+    inventing its own pass condition is not a control - it is a way to look compliant. The
+    org contract is administered by whoever sets the standard; the project file is written
+    by whoever is doing the work.
+
+    Fires only on CLOSED engagements: an open one has not reached the point of owing
+    anything, and nagging mid-engagement about a close step is how a gate gets resented.
+
+    Its limit is real and deliberate: the recorded evidence is an assertion plus an
+    optional note, not a verified fact - the team cannot reach into Confluence to check.
+    This stops a required step being FORGOTTEN, which is the failure that actually happens
+    at the end of a long engagement."""
+    try:
+        scripts_dir = Path(__file__).resolve().parent
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        import extensions as ext_mod
+
+        required = ext_mod.org_required_close_actions()
+    except Exception:
+        return []  # no contract, or an unreadable one - never invent a gate
+    if not required:
+        return []
+
+    findings: list[str] = []
+    for pack in sorted(p for p in artifacts_dir.rglob("engagement-state.json") if p.is_file()):
+        try:
+            state = json.loads(pack.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if str(state.get("status") or "").lower() != "closed":
+            continue
+        done = state.get("close_actions_done") or {}
+        for action_id, text in required:
+            if action_id in done:
+                continue
+            findings.append(
+                f"ORG-REQUIRED-CLOSE-ACTION: {pack.parent.name} closed without recording "
+                f"the required org close action '{action_id}' ({text}). Perform it, then: "
+                f"<python> -m scripts.engagement_state record-close-action {action_id} "
+                f"--note '<evidence>' --slug {pack.parent.name}"
+            )
+    return findings
+
+
 def _auto_mode_findings(artifacts_dir: Path) -> list[str]:
     """Unattended runs must never read as signed off (2026-08-20).
 
@@ -1983,6 +2038,7 @@ def check(artifacts_dir: Path) -> list[str]:
     # most of the engagements it exists to police - the same defect as finding C1, one level
     # down.
     findings.extend(_auto_mode_findings(artifacts_dir))
+    findings.extend(_required_close_action_findings(artifacts_dir))
 
     # The START-HERE living index: created at OPEN (with the first artifact), updated on
     # every artifact write, finalised at close (docs/templates/start-here.md). It is also

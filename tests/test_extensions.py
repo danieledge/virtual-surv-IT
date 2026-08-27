@@ -742,3 +742,102 @@ def test_the_manual_reprobe_is_wired():
     "look again"; the code-intel step only clears the cache for the tool it installs."""
     assert ih._ADVANCED_ACTIONS.get("14") == "reprobe"
     assert callable(ih.run_tool_reprobe)
+
+
+# ------------- required close actions: the ONE place an extension can gate -------------
+
+
+import scripts.check_artifacts as ca  # noqa: E402
+
+_ORG_REQUIRED = """# Team extensions - Compliance Engineering
+
+## Close actions
+
+- [required:confluence] Write a Confluence page in space SURV summarising the work.
+- Copy the pack to the share (optional, not required).
+"""
+
+
+def _closed_pack(tmp_path, done=None, status="closed"):
+    pack = tmp_path / "artifacts" / "demo"
+    pack.mkdir(parents=True, exist_ok=True)
+    state = {"slug": "demo", "status": status, "title": "x"}
+    if done:
+        state["close_actions_done"] = done
+    (pack / "engagement-state.json").write_text(json.dumps(state), encoding="utf-8")
+    return tmp_path / "artifacts"
+
+
+def _org(tmp_path, monkeypatch, text=_ORG_REQUIRED):
+    org = tmp_path / "cfg" / "virt-surv-it" / "team-extensions.md"
+    org.parent.mkdir(parents=True, exist_ok=True)
+    org.write_text(text, encoding="utf-8")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    return org
+
+
+def test_only_the_marked_action_is_required(tmp_path, monkeypatch):
+    """`[required:<id>]` opts IN. An ordinary close action stays an offer, which is what
+    every existing contract already relies on."""
+    _org(tmp_path, monkeypatch)
+    found = ext.org_required_close_actions()
+    assert [i for i, _ in found] == ["confluence"], "the unmarked action must not be required"
+
+
+def test_a_close_without_the_required_action_is_a_finding(tmp_path, monkeypatch):
+    _org(tmp_path, monkeypatch)
+    findings = ca._required_close_action_findings(_closed_pack(tmp_path))
+    assert len(findings) == 1
+    assert "ORG-REQUIRED-CLOSE-ACTION" in findings[0]
+    assert "record-close-action confluence" in findings[0], "must name the fix"
+
+
+def test_recording_it_satisfies_the_gate(tmp_path, monkeypatch):
+    _org(tmp_path, monkeypatch)
+    done = {"confluence": {"date": "2026-08-27", "note": "https://conf/x"}}
+    assert ca._required_close_action_findings(_closed_pack(tmp_path, done)) == []
+
+
+def test_an_open_engagement_is_never_nagged(tmp_path, monkeypatch):
+    """An engagement that has not reached the close does not owe a close action yet, and
+    nagging mid-engagement is how a gate gets resented and switched off."""
+    _org(tmp_path, monkeypatch)
+    assert ca._required_close_action_findings(_closed_pack(tmp_path, status="in_progress")) == []
+
+
+def test_a_project_cannot_impose_a_gate_on_itself(tmp_path, monkeypatch):
+    """THE constraint that makes this safe. An engagement inventing its own pass condition
+    is not a control - it is a way to look compliant. Only the ORG contract counts."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty-cfg"))
+    project = tmp_path / "docs" / "team-extensions.md"
+    project.parent.mkdir(parents=True)
+    project.write_text(_ORG_REQUIRED, encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    assert ext.org_required_close_actions() == []
+    assert ca._required_close_action_findings(_closed_pack(tmp_path)) == []
+
+
+def test_no_org_contract_invents_no_gate(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty-cfg"))
+    assert ca._required_close_action_findings(_closed_pack(tmp_path)) == []
+
+
+def test_an_unreadable_org_contract_never_becomes_a_gate(tmp_path, monkeypatch):
+    """Fail toward NOT gating: a broken central file must not start failing every close on
+    every machine at once."""
+    _org(tmp_path, monkeypatch, text="\x00 not markdown at all")
+    assert ca._required_close_action_findings(_closed_pack(tmp_path)) == []
+
+
+def test_the_id_is_what_matches_not_the_wording(tmp_path, monkeypatch):
+    """Matching on an id rather than fuzzy text: an action whose wording was tidied must
+    not silently stop counting as done."""
+    _org(tmp_path, monkeypatch, text=_ORG_REQUIRED.replace("summarising the work", "reworded"))
+    done = {"confluence": {"date": "2026-08-27"}}
+    assert ca._required_close_action_findings(_closed_pack(tmp_path, done)) == []
+
+
+def test_a_malformed_required_marker_is_ignored_rather_than_guessed(tmp_path, monkeypatch):
+    """A typo'd marker must not silently become a gate nobody can satisfy."""
+    _org(tmp_path, monkeypatch, text="# T\n\n## Close actions\n\n- [required] no id here\n")
+    assert ext.org_required_close_actions() == []

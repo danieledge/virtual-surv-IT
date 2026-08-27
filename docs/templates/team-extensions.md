@@ -26,6 +26,21 @@ are additionally permission-prompted by the harness.*
   description = delivery-report summary, label `virt-team`.">
 - <e.g. "Copy the engagement workspace to `\\share\surveillance\packs\<slug>-<date>/`.">
 
+**Making one mandatory (ORG contract only).** Prefix a close action with
+`[required:<id>]` and a close that never records it is a DoD finding
+(`ORG-REQUIRED-CLOSE-ACTION`), not just a missed offer:
+
+- `[required:confluence] Write a Confluence page in space SURV summarising what was achieved.`
+
+The engagement satisfies it with
+`<python> -m scripts.engagement_state record-close-action confluence --note "<page URL>"`.
+Two limits, both deliberate. It is honoured **only in the org contract** at
+`~/.config/virt-surv-it/team-extensions.md` - a project cannot impose a gate on itself,
+because an engagement inventing its own pass condition is not a control. And the record is
+an assertion with a note, **not a verified fact**: the team cannot reach into Confluence to
+check. This stops a required step being forgotten, which is the failure that actually
+happens at the end of a long engagement; it does not stop one being misreported.
+
 ## Analyser registry
 
 *Company tools the review lenses use INSTEAD of (or alongside) the bundled defaults. The

@@ -128,6 +128,9 @@ _FORBIDDEN_KEY_FRAGMENTS = ("consent", "exec")
 # remains ONLY the human-created `.claude/.exec-consent` marker (ADR-002). Every other
 # consent/exec-shaped key, at any depth, stays forbidden.
 _CONSENT_OUTCOME_KEY = "execution_consent_outcome"
+# Required ORG close actions that were performed. Written only by
+# record-close-action; read by check_artifacts's DoD gate.
+_CLOSE_ACTIONS_KEY = "close_actions_done"
 _CONSENT_OUTCOMES = ("asked", "declined")
 _CONSENT_OUTCOME_FIELDS = {"outcome", "date", "note"}
 
@@ -2207,6 +2210,34 @@ def _cmd_record_consent_outcome(args: argparse.Namespace) -> int:
     return _mutate(args, fn)
 
 
+def _cmd_record_close_action(args: argparse.Namespace) -> int:
+    """Record that a required ORG close action was performed.
+
+    EVIDENCE, NOT VERIFICATION (plan-org-extensions step 5). An org contract can declare a
+    close action mandatory; this is the only way to satisfy it, and what it writes is what
+    the DoD gate reads. Deliberately dumb: it records that the action was asserted done,
+    with an optional note - a page URL, a ticket key. It does NOT verify the action,
+    because the team cannot reach into Confluence or a share to check, and pretending
+    otherwise would be worse than being plain about it.
+
+    Read that limit as a real one: this stops a required step being FORGOTTEN, not one
+    being misreported. Forgetting is the failure that actually happens at the end of a long
+    engagement, which is why the gate is worth having anyway."""
+    action_id = str(getattr(args, "action_id", "") or "").strip().lower()
+    if not action_id:
+        print("record-close-action needs an id", file=sys.stderr)
+        return 2
+
+    def fn(state: dict) -> None:
+        done = state.setdefault(_CLOSE_ACTIONS_KEY, {})
+        rec = {"date": _dt.date.today().isoformat()}
+        if args.note:
+            rec["note"] = args.note
+        done[action_id] = rec
+
+    return _mutate(args, fn)
+
+
 def _cmd_set_runtime(args: argparse.Namespace) -> int:
     """R7: persist the step-0 run-mode probe (mode / plugin root / interpreter) so a
     resumed or compacted session re-reads it from the state instead of remembering."""
@@ -2733,6 +2764,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("outcome", choices=list(_CONSENT_OUTCOMES))
     p.add_argument("--note", default=None)
     p.set_defaults(fn=_cmd_record_consent_outcome)
+
+    p = sub.add_parser(
+        "record-close-action",
+        parents=[common],
+        help="record that a REQUIRED org close action was performed (renders). The id is "
+        "the one declared as [required:<id>] in the org extensions contract",
+    )
+    p.add_argument("action_id", help="the id from [required:<id>]")
+    p.add_argument("--note", default=None, help="what was done, e.g. a page URL")
+    p.set_defaults(fn=_cmd_record_close_action)
 
     p = sub.add_parser(
         "set-runtime",

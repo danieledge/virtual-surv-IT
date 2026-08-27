@@ -1,6 +1,6 @@
 # Plan: org-level extensions - author once, apply everywhere
 
-**Status:** proposed, 2026-08-27. Supersedes nothing; extends ADR-009.
+**Status:** steps 1-5 IMPLEMENTED, 2026-08-27. Extends ADR-009.
 
 ## The problem, in the owner's words
 
@@ -129,7 +129,11 @@ treatment rather than a new interface:
 2. **`--extensions <file>`** install path (option 1) and the docs to match.
 3. **TUI review/edit** in Advanced.
 4. **`extensions_source` sync** (option 2), freshness-gated, fail-open.
-5. **Required close actions** (option b) - only with real usage behind it.
+5. **Required close actions** (option b) - DONE. Shipped as `[required:<id>]`,
+   org-tier only, satisfied by `engagement_state record-close-action <id>`, gated
+   by check_artifacts' `ORG-REQUIRED-CLOSE-ACTION`. The "behind real usage"
+   caution was overtaken: the owner's SDLC needs the step to bite, and the
+   constraint that keeps it safe (org tier only) is mechanical, not a convention.
 
 ## What would make this wrong
 
