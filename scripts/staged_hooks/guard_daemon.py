@@ -313,6 +313,23 @@ class GuardDaemon(socketserver.ThreadingTCPServer):
                 sys.stdout = stdout_capture
                 sys.stderr = stderr_capture
                 exit_code = module.main()
+            except BaseException as exc:  # noqa: BLE001 - see below
+                # A raising target must behave the SAME served by the daemon as it does
+                # cold-started (2026-08-27). Every hook module carries its own fail-open
+                # `except Exception: sys.exit(0)` in its __main__ block - and calling
+                # module.main() directly BYPASSES that block entirely, so on this path a
+                # crash escaped, the response was never sent, and the client fell back or
+                # reported a failed hook. The daemon must reproduce what the subprocess
+                # path would have done, not lose it.
+                #
+                # Exit 0, not the subprocess path's 1: both are non-blocking to the
+                # harness, and 1 is what surfaces to the user as "hook failed with
+                # non-blocking status code" for something that is not their problem. The
+                # reason still travels, on stderr.
+                exit_code = 0
+                stderr_capture.write(
+                    f"{target} raised {type(exc).__name__}: {exc} - failing open\n"
+                )
             finally:
                 sys.stdin = old_stdin
                 sys.stdout = old_stdout

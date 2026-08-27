@@ -824,3 +824,64 @@ def test_launcher_self_locates_when_claude_plugin_root_is_unset(tmp_path):
     )
     assert lines[1] == str(project_dir)
     assert lines[2] == "bash_hook_dispatcher"
+
+
+# ------------- fail-open on both hop points (2026-08-27 live report) -------------
+
+
+def test_a_raising_target_fails_open_instead_of_escaping(monkeypatch):
+    """Live report: "sometimes get a UserPromptSubmit hook error failed with non-blocking
+    status code", at a new engagement open.
+
+    Every hook module carries its own fail-open `except Exception: sys.exit(0)` in its
+    __main__ block - and the daemon calls module.main() DIRECTLY, which bypasses that block
+    entirely. So a crash escaped dispatch, the response was never sent, and the user saw a
+    failed hook for something that is not their problem. The daemon must reproduce what the
+    subprocess path would have done, not strip it."""
+    import threading
+    import types as _types
+
+    gd = _load_guard_daemon(monkeypatch)
+
+    class _Boom:
+        @staticmethod
+        def main():
+            raise RuntimeError("hook exploded")
+
+    server = _types.SimpleNamespace(
+        dispatcher_modules={"x": _Boom}, _dispatch_lock=threading.Lock()
+    )
+    exit_code, stderr_text, _stdout = gd.GuardDaemon.dispatch(server, "x", "{}")
+    assert exit_code == 0, "a crashing hook must never fail the user's turn"
+    assert "RuntimeError" in stderr_text, "and the reason must still travel"
+
+
+def test_a_healthy_target_is_unaffected_by_the_fail_open(monkeypatch):
+    """The catch must not change the normal path - injected context still arrives."""
+    import threading
+    import types as _types
+
+    gd = _load_guard_daemon(monkeypatch)
+
+    class _Fine:
+        @staticmethod
+        def main():
+            print("injected context", end="")
+            return 0
+
+    server = _types.SimpleNamespace(
+        dispatcher_modules={"y": _Fine}, _dispatch_lock=threading.Lock()
+    )
+    assert gd.GuardDaemon.dispatch(server, "y", "{}") == (0, "", "injected context")
+
+
+def test_the_client_entry_point_fails_open_too():
+    """The client was the ONE entry point in the chain without a fail-open wrapper: every
+    hook it carries has one, but an uncaught raise in the client itself exited 1, and a
+    non-zero hook exit is reported to the user as an error. The client is transport - it
+    decides nothing - so a failure there must cost the injected context, never surface."""
+    source = (STAGED_DIR / "guard_daemon_client.py").read_text(encoding="utf-8")
+    tail = source[source.index('if __name__ == "__main__":') :]
+    assert "except BaseException" in tail, "a bare Exception catch leaves KeyboardInterrupt"
+    assert "sys.exit(0)" in tail
+    assert "except SystemExit" in tail, "a real exit code must still propagate"
