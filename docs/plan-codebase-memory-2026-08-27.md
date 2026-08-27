@@ -41,12 +41,48 @@ already reports drift at engagement open.
 That is a content-addressed key. So: **store the skeleton against the fingerprint it was
 generated from, and treat a fingerprint mismatch as "regenerate", not as "warn".**
 
-- Fingerprint matches → the cached skeleton is provably current. Serve it.
-- Fingerprint differs → it is provably stale. Regenerate or ignore it; never serve it.
-- No fingerprint → no cache. Behave exactly as today.
+- Key matches → the cached skeleton is provably current. Serve it.
+- Key differs → it is provably stale. Regenerate or ignore it; never serve it.
+- No key → no cache. Behave exactly as today.
 
 Staleness stops being a risk to manage and becomes a state the data cannot occupy. Nothing
 new has to be invented, and nothing new has to be trusted.
+
+### NO TTL. The key is everything that changes the output
+
+"If it is a day old, do we force a rebuild?" - no, and the question is the useful one,
+because it exposes what the key has to cover.
+
+**Age is a proxy for change; the key measures change directly.** A day-old entry whose key
+matches is provably current, and rebuilding it discards valid work for nothing. A
+one-minute-old entry whose key differs is provably stale, and a TTL would cheerfully serve
+it. Using both is worse than using either: it throws away good caches AND gives false
+confidence in bad ones. This is exactly where the probe cache's pattern should NOT be
+copied - that cache carries facts with no content to hash (plugin version, branch,
+preferences), so time is the only handle it has. Here there is a better one.
+
+But the source fingerprint alone is not sufficient, because two things change the OUTPUT
+from unchanged INPUT:
+
+- **the extraction tier** - tree-sitter gets installed, and the same file that yielded a
+  regex guess yesterday yields exact symbols and exact ranges today;
+- **the extractor** - `repo_skeleton` itself changes, and extracts differently from
+  identical source.
+
+So the cache key is a composite, and every part of it is something that demonstrably alters
+what would be produced:
+
+```
+key = sha256(source_fingerprint + tier + repo_skeleton_version)
+```
+
+Nothing in it is a clock. An entry is either provably reusable or provably not, and the
+answer does not drift while nobody is looking.
+
+One consequence worth stating because it is a feature, not an oversight: installing
+tree-sitter invalidates every cached area at once, which is correct - every one of them
+would now be extracted better. That is the same reasoning that made `--code-intel` clear
+the tool-availability cache.
 
 ### Where each half lives, and why the split matters
 
@@ -88,8 +124,9 @@ human is already watching a terminal."* Every word applies here, and more so: `r
 is a zero-LLM deterministic script, so paying a model turn to invoke it is pure waste.
 
 So: one more step in the `(_remember_project, _prewarm_guard_interpreter, _write_probe_cache)`
-tuple at `go`, tty-gated and freshness-gated exactly as the probe cache is, and **best-effort
-throughout** - a skeleton that will not build costs a cache, never a launch.
+tuple at `go`, tty-gated as the probe cache is - but keyed, NOT time-gated (see above), so a
+`go` on an unchanged tree does no work at all rather than rebuilding on a timer.
+**Best-effort throughout**: a skeleton that will not build costs a cache, never a launch.
 
 ## What the session then does
 
@@ -125,7 +162,9 @@ cache must not launder that.
 
 ## What would make this wrong
 
-- Serving a cache whose fingerprint was not checked, for any reason, including speed.
+- Serving a cache whose key was not checked, for any reason, including speed.
+- Adding a TTL "just in case". If the key is right it is unnecessary; if the key is
+  wrong, a TTL hides that rather than fixing it.
 - Putting derived output in `docs/` where a human might edit it.
 - Letting a cache miss, a corrupt file, or a missing fingerprint do anything except fall
   through to today's behaviour.
