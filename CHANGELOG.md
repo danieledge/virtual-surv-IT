@@ -8,7 +8,7 @@ This is a proof-of-concept; see `docs/house-rules.md` for the evidence state of 
 ### Changed
 - **The VSIT brand banner now opens both front doors** - `virt-surv go` and the
   `virt-surv` installer menu - from one shared implementation, `scripts/brand_banner.py`:
-  the mascot, the VSIT wordmark, `AI TEAM FOR COMPLIANCE & SURVEILLANCE IT` and the
+  the mascot, the VSIT wordmark, `Virtual Surveillance IT` and the
   `SPECIALIST AI TEAM | INDEPENDENT REVIEW | HUMAN CONTROLLED` strapline, in the source
   brand's cyan/violet/green with amber on `HUMAN CONTROLLED`. Drawn in pure ASCII, no
   box-drawing glyphs: the source design is a dotted outline, so the corp-Windows cp1252

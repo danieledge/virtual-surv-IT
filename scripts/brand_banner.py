@@ -99,7 +99,10 @@ def _robot() -> tuple:
     return _ROBOT_UNICODE if _can_encode("".join(_ROBOT_UNICODE)) else _ROBOT_ASCII
 
 
-TAGLINE = "AI TEAM FOR COMPLIANCE & SURVEILLANCE IT"
+# The acronym expanded, because that is what a subtitle under a wordmark is for
+# (owner, 2026-08-28). The previous line described the team; it did not say what the
+# four letters above it stood for, which is the one job the position had.
+TAGLINE = "Virtual Surveillance IT"
 FOOTER = "specialist | independent review | human controlled"
 
 INDENT = "  "
@@ -133,13 +136,13 @@ def _wordmark_segments() -> list:
 
 
 def _tagline_segments() -> list:
-    """The tagline; the two domain words carry the colour, as in the source image."""
+    """The tagline: each word takes its colour from the letter it stands for in the
+    wordmark above it (V cyan, S violet, T green), so the expansion reads as an
+    expansion rather than as a second, unrelated line of text."""
     return [
-        ("bold", "AI TEAM FOR "),
-        ("cyan", "COMPLIANCE"),
-        ("bold", " & "),
-        ("green", "SURVEILLANCE"),
-        ("bold", " IT"),
+        ("cyan", "Virtual "),
+        ("violet", "Surveillance"),
+        ("green", " IT"),
     ]
 
 

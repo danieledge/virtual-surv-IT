@@ -436,6 +436,7 @@ def settings_screen(project_dir: Path, mod, output=None):
         p = mod._ptk_ui()
         if not p:
             return None
+        from prompt_toolkit.filters import Condition
         from prompt_toolkit.key_binding import KeyBindings
     except Exception:
         return None
@@ -444,7 +445,15 @@ def settings_screen(project_dir: Path, mod, output=None):
     rows = mod._editor_rows(project_dir) or []
     if not rows:
         return None  # cannot render a settings screen without settings
+    # Group headings, parallel to `rows` and deliberately NOT part of it: a heading is
+    # not selectable, and folding it into the row list would shift every index the
+    # keyboard, the mouse and _editor_keys all agree on.
+    titles = [title for title, _l, _v, _o in (mod._editor_layout(project_dir) or [])]
     idx = [0]
+    # Inline edit mode: [buffer] while typing a value, None otherwise. Kept IN the app
+    # rather than exiting to a bare input() - tearing the screen down to ask one question
+    # is exactly the behaviour the [j] flow was corrected for on 2026-08-20.
+    editing: list = [None]
     notes: list[str] = []
 
     def _note(text: str, label: str = "") -> None:
@@ -466,6 +475,9 @@ def settings_screen(project_dir: Path, mod, output=None):
 
     def _refresh():
         rows[:] = mod._editor_rows(project_dir) or rows
+        titles[:] = [
+            title for title, _l, _v, _o in (mod._editor_layout(project_dir) or [])
+        ] or titles
 
     def _body():
         out = [("class:group", f"  {g['settings']}Project settings\n\n")]
@@ -476,10 +488,16 @@ def settings_screen(project_dir: Path, mod, output=None):
         # wrong.
         width = min(max((len(label) for label, _v, _o in rows), default=0), 24)
         for i, (label, value, on) in enumerate(rows):
+            title = titles[i] if i < len(titles) else ""
+            if title:
+                out.append(("class:group", ("\n" if i else "") + f"  {title}\n"))
             sel = idx[0] == i
             out.append(("class:sel" if sel else "", f"  {g['point']} " if sel else "    "))
             out.append(("class:sel" if sel else "", f"{label.ljust(width + 1)} "))
             mark = g["on"] if on else g["off"]
+            if sel and editing[0] is not None:
+                out.append(("class:group", f"{editing[0]}\u2588\n"))
+                continue
             # Only the HEAD of the value here ("on" / "off" / "applied"). The qualifier
             # that follows a double space ("  (machine default)") is longer than the
             # column has room for and was being clipped mid-word against the divider; the
@@ -527,7 +545,15 @@ def settings_screen(project_dir: Path, mod, output=None):
 
     def _footer():
         return [
-            ("class:hint", f"  ↑↓ move · Enter toggle · d defaults · Esc back   {project_dir.name}")
+            (
+                "class:hint",
+                (
+                    "  type the key · Enter save · Esc cancel"
+                    if editing[0] is not None
+                    else f"  ↑↓ move · Enter toggle · e edit key · d defaults · Esc back   "
+                    f"{project_dir.name}"
+                ),
+            )
         ]
 
     kb = KeyBindings()
@@ -567,19 +593,60 @@ def settings_screen(project_dir: Path, mod, output=None):
         if note:
             _note(note.strip().lstrip("-> ").strip())
 
-    @kb.add("enter")
-    @kb.add(" ")
-    def _toggle(event):
-        _apply(idx[0] + 1)
+    def _start_editing():
+        """Ask for the Jira project key in place, pre-filled with any existing value."""
+        editing[0] = mod.jira_project_key(project_dir)
 
-    @kb.add("d")
+    @kb.add("enter")
+    @kb.add(" ", filter=Condition(lambda: editing[0] is None))
+    def _toggle(event):
+        if editing[0] is not None:
+            note = mod.set_jira_project_key(project_dir, editing[0])
+            editing[0] = None
+            _refresh()
+            if note:
+                changed[0] = True
+                _note(note)
+            return
+        _apply(idx[0] + 1)
+        # Enabling Jira with no project key is a half-finished action - the screen used
+        # to name the gap ("key UNSET") and leave the fix in a JSON file (user question,
+        # 2026-08-28). Ask for it here, immediately, while the intent is on screen.
+        keys = mod._editor_keys(project_dir)
+        at = idx[0]
+        if at < len(keys) and keys[at] == mod._JIRA_KEY and mod._jira_needs_key(project_dir):
+            _start_editing()
+
+    @kb.add("d", filter=Condition(lambda: editing[0] is None))
     def _defaults(event):
         _apply("d")
 
+    @kb.add("e", filter=Condition(lambda: editing[0] is None))
+    def _edit(event):
+        """Change an already-set key without having to toggle Jira off and on again."""
+        keys = mod._editor_keys(project_dir)
+        if idx[0] < len(keys) and keys[idx[0]] == mod._JIRA_KEY:
+            _start_editing()
+
+    @kb.add("backspace", filter=Condition(lambda: editing[0] is not None))
+    def _rub(event):
+        editing[0] = editing[0][:-1]
+
+    @kb.add("<any>", filter=Condition(lambda: editing[0] is not None))
+    def _type(event):
+        data = event.data or ""
+        # Printable single characters only: control sequences arrive here too, and a
+        # stray escape code in the buffer would be written to the config file.
+        if len(data) == 1 and data.isprintable() and len(editing[0]) < 24:
+            editing[0] += data.upper()
+
     @kb.add("escape", eager=True)
     @kb.add("c-c")
-    @kb.add("q")
+    @kb.add("q", filter=Condition(lambda: editing[0] is None))
     def _esc(event):
+        if editing[0] is not None:
+            editing[0] = None  # cancel the edit, not the screen
+            return
         event.app.exit()
 
     try:

@@ -124,8 +124,11 @@ def test_every_role_emitted_is_declared():
 
 def test_the_brand_palette_reaches_the_right_words():
     painted = "\n".join(brand_banner.render(80, _paint))
-    assert "<cyan>COMPLIANCE</cyan>" in painted
-    assert "<green>SURVEILLANCE</green>" in painted
+    # The subtitle's words take their colour from the wordmark letters they expand -
+    # V cyan, S violet, T green - so the expansion reads as an expansion.
+    assert "<cyan>Virtual </cyan>" in painted
+    assert "<violet>Surveillance</violet>" in painted
+    assert "<green> IT</green>" in painted
     assert "<amber>human controlled</amber>" in painted  # the one amber item, as supplied
     assert "<violet>" in painted  # the wordmark gradient's middle stop
 
@@ -157,13 +160,28 @@ def test_narrow_terminals_get_the_compact_mark_not_a_wrapped_box():
     assert brand_banner.TAGLINE in compact[1]
 
 
-def test_the_narrowest_terminal_drops_the_tagline_too():
-    """_term_cols() floors at 40, so 40 has to render something legible."""
+def test_the_narrowest_terminal_still_says_what_VSIT_stands_for():
+    """_term_cols() floors at 40, so 40 has to render something legible.
+
+    It used to drop the tagline there, because "AI TEAM FOR COMPLIANCE & SURVEILLANCE IT"
+    could not fit. "Virtual Surveillance IT" does, so the narrowest terminal now keeps the
+    one line that explains the four letters above it - which is the whole reason the
+    subtitle exists (owner, 2026-08-28)."""
     minimal = brand_banner.render(40)
     assert len(minimal) == 2
     assert all(len(line) <= 40 for line in minimal)
-    assert brand_banner.TAGLINE not in "".join(minimal)
     assert "V S I T" in minimal[0]
+    assert brand_banner.TAGLINE in "".join(minimal)
+
+
+def test_a_terminal_too_narrow_even_for_the_tagline_still_renders():
+    """Below COMPACT_WIDTH the tagline gives way to the minimal mark. render() is called
+    with an explicit width by install_helper, so this tier is reachable by a caller even
+    though _term_cols() itself floors at 40."""
+    tiny = brand_banner.render(brand_banner.COMPACT_WIDTH - 1)
+    assert len(tiny) == 2
+    assert brand_banner.TAGLINE not in "".join(tiny)
+    assert "V S I T" in tiny[0]
 
 
 # --- both entry points render the same art -------------------------------------------

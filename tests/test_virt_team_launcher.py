@@ -341,12 +341,15 @@ def test_configured_project_prints_defaults_table_on_stderr_only(tmp_path, monke
     rc = mod.main()
     out = capsys.readouterr()
     assert rc == 0
-    assert "Project defaults" in out.err
-    # The block shows NOTABLE settings plus a folded "+N at defaults" count (2026-08-19
-    # UX pass) - it is no longer a full roll-call of every row, so assert the contract,
-    # not individual default-valued names.
-    assert "at defaults" in out.err
-    # stdout stays EXACTLY the decision - the table must never leak into the capture
+    # NOT the defaults table: `go` stopped printing it on 2026-08-28. What must survive
+    # is the banner above and the menu below, which is what this test is really pinning.
+    assert "Project defaults" not in out.err
+    assert "at defaults" not in out.err
+    assert "press [c] to change" not in out.err, (
+        "the removed line's one actionable instruction could not be followed here - "
+        "`go` prints and launches, so [c] was never pressable at that moment"
+    )
+    # stdout stays EXACTLY the decision - nothing cosmetic may leak into the capture
     assert "Project defaults" not in out.out
     assert out.out.strip() == "/compliance-surveillance-team:engage --new"
 
@@ -386,7 +389,9 @@ def test_first_time_setup_offer_accepted_runs_configure_with_stdout_redirected(
     assert argv[2] == "configure" and argv[3] == str(tmp_path)
     assert stdout is not None  # redirected, never inherited stdout
     assert "Setup complete" in out.err
-    assert "Project defaults" in out.err  # configured now - table shows on the same run
+    # No defaults table follows any more (2026-08-28) - "Setup complete" is the signal
+    # that the same run picked the new configuration up.
+    assert "Project defaults" not in out.err
     assert "install_helper" not in out.out  # stdout purity
 
 
@@ -486,11 +491,12 @@ def test_menu_c_edits_then_reasks_and_returns_decision(tmp_path, monkeypatch, ca
     out = capsys.readouterr()
     assert rc == 0
     assert out.out.strip() == "/compliance-surveillance-team:engage --new"
-    assert "Project defaults" in out.err
     # Backing out unchanged stays quiet - no table reprint (the 2026-08-17
     # duplicate-table complaint); a CHANGED exit refreshes it (see the next test).
     assert "-> no changes" in out.err
-    assert out.err.count("Project defaults") == 1
+    # And nothing above it either: `go` stopped printing the table at launch on
+    # 2026-08-28, so an unchanged visit to [c] now shows the table zero times.
+    assert out.err.count("Project defaults") == 0
 
 
 def test_menu_c_with_a_change_refreshes_the_table(tmp_path, monkeypatch, capsys):
@@ -503,14 +509,18 @@ def test_menu_c_with_a_change_refreshes_the_table(tmp_path, monkeypatch, capsys)
     mod = _load()
     monkeypatch.setattr(mod, "_refresh_tool_cache", lambda p: None)
     _mod = _load()
-    answers = iter(
-        ["c", str(_screen_position(_mod, tmp_path, "jira write-back")), "b", "n"]
-    )  # jira, done, new
+    # jira on -> the project-key prompt (skipped) -> done -> new. Enabling Jira asks for
+    # the key now (2026-08-28), so there is one more answer to give than there was.
+    answers = iter(["c", str(_screen_position(_mod, tmp_path, "jira write-back")), "", "b", "n"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     rc = mod.main()
     out = capsys.readouterr()
     assert rc == 0
-    assert out.err.count("Project defaults") == 2  # launch-time + refreshed
+    # The editor's own refresh is the ONLY place the table appears now: `go` stopped
+    # printing it at launch (owner decision 2026-08-28) - it ended "(press [c] to
+    # change)" at a moment when [c] could not be pressed. This test is about the refresh
+    # after an edit, so it asserts the delta line, which is the thing that was missing.
+    assert "-> jira write-back: on" in out.err
     assert "-> jira write-back: on" in out.err
     # the refreshed table carries the new state, and the re-rendered menu unlocks [j]
     assert "on (key UNSET)" in out.err or "jira write-back" in out.err
@@ -741,20 +751,38 @@ def test_config_editor_jira_row_toggles_the_jira_integration(tmp_path, monkeypat
     assert capsys.readouterr().out == ""  # stdout purity
 
 
-def test_config_editor_jira_enable_without_key_says_where_to_set_it(tmp_path, monkeypatch, capsys):
+def test_config_editor_jira_enable_ASKS_for_the_key(tmp_path, monkeypatch, capsys):
+    """Enabling Jira with no project key used to print a note telling you to go and edit
+    team-preferences.json - from the screen whose whole job is editing settings. It asks
+    now (user question, 2026-08-28: "on key UNSET how is the key set?")."""
     project = _plugin_enabled_project(tmp_path)
     mod = _load()
-    answers = iter([str(_editor_rows_idx(mod, project)[1]), "b"])
+    answers = iter([str(_editor_rows_idx(mod, project)[1]), "surv", "b"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     mod._config_editor(project)
     prefs = json.loads((project / ".claude" / "team-preferences.json").read_text(encoding="utf-8"))
     assert prefs["integrations"]["jira"]["enabled"] is True
-    err = capsys.readouterr().err
-    assert "no project key" in err and "INTEGRATIONS.md" in err
-    rows = mod._editor_rows(project)
+    # Upper-cased on the way in: Jira project keys are uppercase, and nobody should have
+    # to know that to type one.
+    assert prefs["integrations"]["jira"]["project_key"] == "SURV"
     # By LABEL, not position: the jira row stopped being last when the choice rows
     # (qa depth / jira mirror) were appended after it on 2026-08-20.
-    jira_row = next(r for r in rows if r[0] == mod._JIRA_ROW_LABEL)
+    jira_row = next(r for r in mod._editor_rows(project) if r[0] == mod._JIRA_ROW_LABEL)
+    assert jira_row[1] == "on (SURV)"
+
+
+def test_declining_the_key_prompt_still_says_where_to_set_it(tmp_path, monkeypatch, capsys):
+    """Pressing Enter past the prompt is allowed - the note is the fallback it always
+    was, not a dead end, so nothing is worse than before for someone who does not have
+    the key to hand."""
+    project = _plugin_enabled_project(tmp_path)
+    mod = _load()
+    answers = iter([str(_editor_rows_idx(mod, project)[1]), "", "b"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    mod._config_editor(project)
+    err = capsys.readouterr().err
+    assert "no project key" in err and "INTEGRATIONS.md" in err
+    jira_row = next(r for r in mod._editor_rows(project) if r[0] == mod._JIRA_ROW_LABEL)
     assert jira_row[1] == "on (key UNSET)"
 
 
@@ -992,10 +1020,9 @@ def test_banner_and_defaults_render_without_rich(tmp_path, monkeypatch, capsys):
     rc = mod.main()
     out = capsys.readouterr()
     assert rc == 0
-    assert "AI TEAM FOR COMPLIANCE & SURVEILLANCE IT" in out.err  # the brand banner
+    assert "Virtual Surveillance IT" in out.err  # the brand banner: VSIT, expanded
     assert "human controlled" in out.err  # lowercased with the 2026-08-28 redesign
-    assert "Project defaults" in out.err
-    assert "at defaults" in out.err  # folded default rows (2026-08-19 UX pass)
+    assert "Project defaults" not in out.err  # dropped from `go` on 2026-08-28
     assert out.out == ""
 
 
@@ -1598,8 +1625,11 @@ def test_progress_done_wipes_the_line(monkeypatch):
     monkeypatch.setattr(mod.sys, "stderr", _Tty)
     mod._progress("a rather long status label that must be fully erased...")
     mod._progress_done()
-    assert written[-1].strip() == "", "the final write must leave the line blank"
-    assert written[-1].startswith("\r") and written[-1].endswith("\r")
+    # Erase-to-end-of-line, not a run of spaces. Padding only covers the columns it
+    # counts, so anything already on screen past that point survived - which is how the
+    # probe's own message ended up spliced onto the progress line (2026-08-28).
+    assert written[-1] == "\r\x1b[K"
+    assert all(line.endswith("\x1b[K") for line in written)
 
 
 def test_the_slow_steps_all_announce_themselves():

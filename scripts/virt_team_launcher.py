@@ -677,6 +677,80 @@ def _editor_layout(project_dir: Path):
     return out
 
 
+def jira_project_key(project_dir: Path) -> str:
+    """The configured Jira project key, "" when unset."""
+    prefs_path = project_dir / ".claude" / "team-preferences.json"
+    try:
+        prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
+        return str(((prefs.get("integrations") or {}).get("jira") or {}).get("project_key") or "")
+    except Exception:
+        return ""
+
+
+def _jira_needs_key(project_dir: Path) -> bool:
+    """Jira write-back is ON but has no project key - the one state the settings screen
+    could name ("key UNSET") and offered no way to fix (user question, 2026-08-28)."""
+    prefs_path = project_dir / ".claude" / "team-preferences.json"
+    try:
+        prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    jira = (prefs.get("integrations") or {}).get("jira") or {}
+    return jira.get("enabled") is True and not str(jira.get("project_key") or "")
+
+
+def set_jira_project_key(project_dir: Path, key: str) -> str:
+    """Write integrations.jira.project_key, preserving every unrelated key. Returns a
+    short note for the user ('' when there is nothing to say).
+
+    Jira project keys are uppercase alphanumeric, so the input is upper-cased and
+    validated here rather than at each caller - both editor tiers hand raw typing over."""
+    key = (key or "").strip().upper()
+    if not key:
+        return ""
+    if not key.replace("_", "").isalnum():
+        return f"{key!r} is not a Jira project key - unchanged"
+    prefs_path = project_dir / ".claude" / "team-preferences.json"
+    try:
+        prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
+    except Exception:
+        prefs = {}
+    integrations = prefs.get("integrations")
+    if not isinstance(integrations, dict):
+        integrations = {}
+    jira = integrations.get("jira")
+    if not isinstance(jira, dict):
+        jira = {}
+    jira["project_key"] = key
+    integrations["jira"] = jira
+    prefs["integrations"] = integrations
+    try:
+        prefs_path.parent.mkdir(parents=True, exist_ok=True)
+        prefs_path.write_text(
+            json.dumps(prefs, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    except OSError:
+        return "could not write team-preferences.json - unchanged"
+    return f"jira project key: {key}"
+
+
+def _jira_key_prompt(project_dir: Path) -> str:
+    """Plain tier: ask for the project key right where the gap was created."""
+    ink, err = _Ink(), sys.stderr
+    current = jira_project_key(project_dir)
+    print(
+        ink.dim("      the Jira project new engagement issues are raised in, e.g. SURV"),
+        file=err,
+    )
+    print(ink.bold(f"      Project key [{current or 'unset'}]: "), end="", file=err)
+    try:
+        raw = input().strip()
+    except (EOFError, KeyboardInterrupt):
+        print("", file=err)
+        return ""
+    return set_jira_project_key(project_dir, raw)
+
+
 def _editor_keys(project_dir: Path):
     """The row keys, in the SAME order _editor_rows returns them.
 
@@ -1013,13 +1087,28 @@ def _config_editor(project_dir: Path) -> None:
         print("", file=err)
         _print_rule("Project settings", note="pick a number to toggle")
         width = max(len(label) for label, _v, _o in rows)
+        # Headed sections rather than a flat run of numbers (2026-08-28). The numbering
+        # stays continuous ACROSS the headings - it is a screen position, and every
+        # caller resolves it through _editor_keys - so a heading is purely a divider and
+        # can be added, renamed or reordered without touching what any number does.
+        titles = [title for title, _l, _v, _o in (_editor_layout(project_dir) or [])]
+        # "[9]" and "[10]" are different widths, so the dotted leaders stepped right by
+        # one for every double-digit row. Pad to the widest marker the screen will show.
+        marker_width = len(f"[{len(rows)}]")
         for i, (label, value, on) in enumerate(rows, 1):
+            title = titles[i - 1] if i - 1 < len(titles) else ""
+            if title:
+                if i > 1:
+                    print("", file=err)
+                print(f"    {ink.dim(title)}", file=err)
             dots = ink.dim("." * (width - len(label) + 2))
             head, _, tail = value.partition("  ")
             shown = (ink.good(head) if on else ink.dim(head)) + (
                 ink.dim("  " + tail) if tail else ""
             )
-            print(f"    {ink.bold(f'[{i}]')} {label} {dots} {shown}", file=err)
+            marker = f"[{i}]".rjust(marker_width)
+            print(f"    {ink.bold(marker)} {label} {dots} {shown}", file=err)
+        print("", file=err)
         print(f"    {ink.bold('[d]')} restore machine defaults (drop project choices)", file=err)
         print(f"    {ink.bold('[b]')} done", file=err)
         print(ink.bold("    Setting: "), end="", file=err)
@@ -1042,6 +1131,10 @@ def _config_editor(project_dir: Path) -> None:
                 at = -1
             if 0 <= at < len(keys):
                 note = _editor_apply_key(project_dir, keys[at])
+                if keys[at] == _JIRA_KEY and _jira_needs_key(project_dir):
+                    # Turning it on without a key is not a finished action, so ask now
+                    # rather than printing a note that sends someone to edit JSON.
+                    note = _jira_key_prompt(project_dir) or note
             else:
                 note = f"1-{len(keys)}, d or b, please."
         if note:
@@ -2956,22 +3049,16 @@ def _write_probe_cache(project_dir: Path) -> None:
         # a corp box this step is seconds of apparent hang, and silence reads as a stall
         # rather than as work being moved out of the session. rich's own status widget
         # when the console supports it; a plain one-line note otherwise, unchanged.
-        ink = _Ink()
-        r = _rich_ui()
-        label = "warming the engage probe cache (the slow parts run here, not in session)"
+        # NO status line of its own any more. This step used to run a rich spinner (or
+        # print a long dim note) while the caller's own progress line was live on the
+        # same row - two writers, one line, and the corporate console showed the result
+        # spliced together (2026-08-28). The caller says what is happening; this function
+        # just does it. Its work is the slow part, so the caller's line is on screen for
+        # exactly as long as it takes, which is what the spinner was for.
         plugin_root = find_plugin_root(Path.home(), project_dir)
-        if r:
-            try:
-                with r["console"].status(f"[dim]{label}[/]", spinner="dots"):
-                    report = engage_probe.build_report(plugin_root, project_dir)
-            except Exception:
-                report = engage_probe.build_report(plugin_root, project_dir)
-        else:
-            print(ink.dim(f"  {label}..."), file=sys.stderr)
-            report = engage_probe.build_report(plugin_root, project_dir)
+        report = engage_probe.build_report(plugin_root, project_dir)
         if not report:
             return
-        print(ink.good("  probe cache ready"), file=sys.stderr)
         payload = {
             "computed_at_epoch": int(time.time()),
             "computed_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
@@ -3301,7 +3388,12 @@ def _progress(label: str) -> None:
     try:
         if not sys.stderr.isatty():
             return
-        sys.stderr.write("\r  " + label.ljust(_PROGRESS_WIDTH)[:_PROGRESS_WIDTH])
+        # Erase to end of line (CSI K) rather than padding to a fixed width. Padding only
+        # covers the first _PROGRESS_WIDTH columns, so a LONGER line already on screen
+        # kept its tail and the two texts appeared spliced together - which is exactly
+        # what a photo of the corporate console showed (2026-08-28), the probe's own
+        # message still readable to the right of the progress line.
+        sys.stderr.write("\r  " + label[:_PROGRESS_WIDTH] + "\x1b[K")
         sys.stderr.flush()
     except Exception:
         pass  # cosmetic tier: a progress line must never cost a launch
@@ -3312,7 +3404,7 @@ def _progress_done() -> None:
     try:
         if not sys.stderr.isatty():
             return
-        sys.stderr.write("\r" + " " * (_PROGRESS_WIDTH + 2) + "\r")
+        sys.stderr.write("\r\x1b[K")
         sys.stderr.flush()
     except Exception:
         pass
@@ -4228,10 +4320,12 @@ def main() -> int:
             )
     except Exception:
         pass  # cosmetic - never costs the launch
-    try:
-        _print_project_defaults(project_dir)
-    except Exception:
-        pass  # cosmetic - the table must never cost the launch
+    # NO defaults table here (owner decision, 2026-08-28: "at this point I think we
+    # don't display any of it"). It ended "(press [c] to change)" at a moment when [c]
+    # cannot be pressed - `go` prints it and launches - so the one actionable thing on
+    # the line was a lie, and the rest was a wall of settings nobody had asked to see.
+    # The table still exists and is still printed by the [c] editor, where it is both
+    # asked for and actionable.
     try:
         if _expire_stale_auto_consent(project_dir):
             print(
